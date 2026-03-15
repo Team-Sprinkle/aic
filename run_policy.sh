@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -e
 
-WORKSPACE_DIR="${HOME}/projects/ws_aic/src/aic"
+WORKSPACE_DIR=$(pwd)
 
 if [ ! -d "$WORKSPACE_DIR" ]; then
     echo "Workspace not found at $WORKSPACE_DIR"
