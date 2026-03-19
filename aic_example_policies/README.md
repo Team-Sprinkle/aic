@@ -58,7 +58,69 @@ pixi run ros2 run aic_model aic_model --ros-args -p use_sim_time:=true -p policy
 
 ---
 
-### 3. RunACT - ACT Policy
+### 3. DiversifiedCheatCode - Ground Truth Data Collection Policy
+
+A trajectory-diversified variant of `CheatCode` that still uses ground-truth TF, but randomizes approach and insertion style each episode for richer demonstration data.
+
+**Purpose:** Collect varied, high-success trajectories for imitation learning / behavior cloning datasets.
+
+**Launch simulation *with ground truth*:**
+```bash
+/entrypoint.sh ground_truth:=true start_aic_engine:=true
+```
+
+For randomized setup across many episodes, generate an engine config first:
+```bash
+cd ~/ws_aic/src/aic
+python generate_random_trials_config.py \
+  --output ./outputs/configs/random_trials_10.yaml \
+  --num_trials 10 \
+  --seed 42
+```
+
+Then launch bringup with that config:
+```bash
+cd ~/ws_aic/src/aic
+/entrypoint.sh \
+  ground_truth:=true \
+  start_aic_engine:=true \
+  aic_engine_config_file:=/home/jk/ws_aic/src/aic/outputs/configs/random_trials_10.yaml
+```
+
+**Run the policy:**
+```bash
+pixi run ros2 run aic_model aic_model --ros-args -p use_sim_time:=true -p policy:=aic_example_policies.ros.DiversifiedCheatCode
+```
+
+**Optional deterministic sampling (repeatable trajectory styles):**
+```bash
+AIC_DIVERSIFIED_SEED=42 pixi run ros2 run aic_model aic_model --ros-args -p use_sim_time:=true -p policy:=aic_example_policies.ros.DiversifiedCheatCode
+```
+
+**What is randomized per episode:**
+- Time profile: `linear`, `smoothstep`, or `min_jerk`
+- Approach timing: control loop `dt` and total approach duration
+- Approach geometry: zero to two intermediate XY/Z waypoints
+- Micro-jitter: low-frequency sinusoidal XYZ offsets (small amplitude)
+- Insertion strategy: `constant`, `staged`, or `peck` descent
+- Correction gains: integrator windup bound and XY integral gain
+
+**Key implementation details:**
+- File: [`DiversifiedCheatCode.py`](./aic_example_policies/ros/DiversifiedCheatCode.py)
+- Main entrypoint: `DiversifiedCheatCode.insert_cable()`
+- Parameter sampling: `_sample_trajectory_params()`
+- Approach interpolation: `_run_interpolation_segment()`
+- Descent styles: `_run_diversified_descent()`
+
+**Data-collection tuning guidance:**
+- For higher success rate, narrow randomization ranges (smaller waypoint and jitter amplitudes).
+- For more trajectory diversity, widen approach duration/profile and waypoint ranges gradually.
+- Keep randomization bounded; extreme lateral offsets or aggressive descent can reduce insertion success.
+- Log episode seed + sampled parameters alongside trajectories so training can condition on style if needed.
+
+---
+
+### 4. RunACT - ACT Policy
 
 ![Run ACT Policy](../../media/run_act_policy.gif)
 

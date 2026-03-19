@@ -10496,6 +10496,8 @@ packages:
     target_platform: osx-arm64
   depends:
   - ros-kilted-aic-control-interfaces
+  - ros-kilted-aic-model-interfaces
+  - ros-kilted-action-msgs
   - ros-kilted-geometry-msgs
   - py-opencv
   - libopencv
@@ -10516,6 +10518,8 @@ packages:
     target_platform: linux-64
   depends:
   - ros-kilted-aic-control-interfaces
+  - ros-kilted-aic-model-interfaces
+  - ros-kilted-action-msgs
   - ros-kilted-geometry-msgs
   - py-opencv
   - libopencv

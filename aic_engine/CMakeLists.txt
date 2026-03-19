@@ -54,6 +54,12 @@ install(
   DESTINATION lib/${PROJECT_NAME}
 )
 
+install(
+  PROGRAMS
+    scripts/generate_random_trials_config.py
+  DESTINATION lib/${PROJECT_NAME}
+)
+
 # Install directories.
 install(
   DIRECTORY config
