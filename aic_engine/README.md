@@ -100,3 +100,26 @@ ros2 run aic_engine aic_engine --ros-args \
   -p skip_ready_simulator:=false \
   -p use_sim_time:=true
 ```
+
+### Generate Randomized Trial Configs
+
+For data collection, you can generate a config with randomized board/component
+placements across `N` episodes:
+
+```bash
+cd ~/ws_aic/src/aic
+python generate_random_trials_config.py \
+  --output ./outputs/configs/random_trials_50.yaml \
+  --num_trials 50 \
+  --seed 42
+```
+
+Then launch bringup with that generated config:
+
+```bash
+cd ~/ws_aic/src/aic
+pixi run ros2 launch aic_bringup aic_gz_bringup.launch.py \
+  ground_truth:=true \
+  start_aic_engine:=true \
+  aic_engine_config_file:=/home/jk/ws_aic/src/aic/outputs/configs/random_trials_50.yaml
+```
