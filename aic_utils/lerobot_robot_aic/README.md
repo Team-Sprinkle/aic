@@ -192,6 +192,34 @@ pixi run ros2 run aic_model aic_model --ros-args \
   -p policy:=aic_example_policies.ros.CheatCode
 ```
 
+Alternatively, launch all three processes (simulation, policy, recorder) in a single tmux session:
+
+```bash
+cd ~/ws_aic/src/aic
+bash ./aic_utils/lerobot_robot_aic/scripts/launch_policy_recording_tmux.sh
+```
+
+Optional (run directly without `bash`):
+```bash
+cd ~/ws_aic/src/aic
+chmod +x ./aic_utils/lerobot_robot_aic/scripts/launch_policy_recording_tmux.sh
+./aic_utils/lerobot_robot_aic/scripts/launch_policy_recording_tmux.sh
+```
+
+Common overrides:
+```bash
+cd ~/ws_aic/src/aic
+bash ./aic_utils/lerobot_robot_aic/scripts/launch_policy_recording_tmux.sh \
+  --session-name aic_run \
+  --engine-config ./outputs/configs/random_trials_10.yaml \
+  --policy-class aic_example_policies.ros.CheatCode \
+  --dataset-repo-id ${HF_USER}/aic_mixed_dataset \
+  --max-episodes 10
+```
+
+The script opens tmux windows named `simulation`, `policy`, and `recorder`.
+Use `--no-attach` if you want to start the session in the background.
+
 The generated `N` trials act as the episode budget for that run. The recorder
 will stop early if `--max_episodes` is reached first.
 

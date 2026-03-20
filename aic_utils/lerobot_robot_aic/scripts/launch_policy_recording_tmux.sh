@@ -1,0 +1,157 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+WORKSPACE_DIR_DEFAULT="$(cd "${SCRIPT_DIR}/../../.." && pwd)"
+
+SESSION_NAME="${SESSION_NAME:-aic_lerobot}"
+WORKSPACE_DIR="${WORKSPACE_DIR:-${WORKSPACE_DIR_DEFAULT}}"
+ENGINE_CONFIG_FILE="${ENGINE_CONFIG_FILE:-${WORKSPACE_DIR}/outputs/configs/random_trials_10.yaml}"
+DATASET_REPO_ID="${DATASET_REPO_ID:-${HF_USER:-local}/aic_mixed_dataset}"
+DATASET_ROOT="${DATASET_ROOT:-${WORKSPACE_DIR}/outputs/lerobot_datasets}"
+DATASET_SINGLE_TASK="${DATASET_SINGLE_TASK:-Insert cable into target port}"
+ACTION_MODE="${ACTION_MODE:-cartesian}"
+MAX_EPISODES="${MAX_EPISODES:-10}"
+POLICY_CLASS="${POLICY_CLASS:-aic_example_policies.ros.CheatCode}"
+SIM_DISTROBOX_NAME="${SIM_DISTROBOX_NAME:-aic_eval}"
+AUTO_ATTACH="${AUTO_ATTACH:-true}"
+
+usage() {
+  cat <<EOF
+Usage: $(basename "$0") [options]
+
+Launch three tmux windows for:
+1) simulation
+2) policy
+3) policy recorder
+
+Options:
+  --session-name NAME       tmux session name (default: ${SESSION_NAME})
+  --workspace-dir PATH      workspace root containing pixi.toml (default: ${WORKSPACE_DIR})
+  --engine-config PATH      aic_engine config yaml (default: ${ENGINE_CONFIG_FILE})
+  --policy-class CLASS      policy class path (default: ${POLICY_CLASS})
+  --sim-distrobox NAME      distrobox name for simulation window (default: ${SIM_DISTROBOX_NAME})
+  --dataset-repo-id ID      LeRobot dataset repo id (default: ${DATASET_REPO_ID})
+  --dataset-root PATH       LeRobot dataset root (default: ${DATASET_ROOT})
+  --dataset-single-task TXT Dataset task prompt (default: "${DATASET_SINGLE_TASK}")
+  --action-mode MODE        recorder action mode (default: ${ACTION_MODE})
+  --max-episodes N          recorder max episodes (default: ${MAX_EPISODES})
+  --no-attach               do not auto-attach to tmux session
+  -h, --help                show this help text
+
+Environment variable equivalents are also supported:
+  SESSION_NAME, WORKSPACE_DIR, ENGINE_CONFIG_FILE, POLICY_CLASS,
+  SIM_DISTROBOX_NAME, DATASET_REPO_ID, DATASET_ROOT, DATASET_SINGLE_TASK,
+  ACTION_MODE, MAX_EPISODES
+EOF
+}
+
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    --session-name)
+      SESSION_NAME="$2"
+      shift 2
+      ;;
+    --workspace-dir)
+      WORKSPACE_DIR="$2"
+      shift 2
+      ;;
+    --engine-config)
+      ENGINE_CONFIG_FILE="$2"
+      shift 2
+      ;;
+    --policy-class)
+      POLICY_CLASS="$2"
+      shift 2
+      ;;
+    --sim-distrobox)
+      SIM_DISTROBOX_NAME="$2"
+      shift 2
+      ;;
+    --dataset-repo-id)
+      DATASET_REPO_ID="$2"
+      shift 2
+      ;;
+    --dataset-root)
+      DATASET_ROOT="$2"
+      shift 2
+      ;;
+    --dataset-single-task)
+      DATASET_SINGLE_TASK="$2"
+      shift 2
+      ;;
+    --action-mode)
+      ACTION_MODE="$2"
+      shift 2
+      ;;
+    --max-episodes)
+      MAX_EPISODES="$2"
+      shift 2
+      ;;
+    --no-attach)
+      AUTO_ATTACH="false"
+      shift
+      ;;
+    -h|--help)
+      usage
+      exit 0
+      ;;
+    *)
+      echo "Unknown option: $1" >&2
+      usage
+      exit 1
+      ;;
+  esac
+done
+
+if ! command -v tmux >/dev/null 2>&1; then
+  echo "Error: tmux is required but not installed." >&2
+  exit 1
+fi
+
+if ! command -v distrobox >/dev/null 2>&1; then
+  echo "Error: distrobox is required but not installed." >&2
+  exit 1
+fi
+
+if [[ ! -d "${WORKSPACE_DIR}" ]]; then
+  echo "Error: workspace directory does not exist: ${WORKSPACE_DIR}" >&2
+  exit 1
+fi
+
+if [[ ! -f "${ENGINE_CONFIG_FILE}" ]]; then
+  echo "Error: engine config file does not exist: ${ENGINE_CONFIG_FILE}" >&2
+  echo "Hint: generate one with:" >&2
+  echo "  python generate_random_trials_config.py --output ./outputs/configs/random_trials_10.yaml --num_trials 10 --seed 2026" >&2
+  exit 1
+fi
+
+if tmux has-session -t "${SESSION_NAME}" 2>/dev/null; then
+  echo "Error: tmux session '${SESSION_NAME}' already exists." >&2
+  echo "Either attach to it with: tmux attach -t ${SESSION_NAME}" >&2
+  echo "Or use a different name via --session-name." >&2
+  exit 1
+fi
+
+SIM_CMD="/entrypoint.sh ground_truth:=true start_aic_engine:=true aic_engine_config_file:=${ENGINE_CONFIG_FILE} shutdown_on_aic_engine_exit:=true"
+SIM_CMD_IN_CONTAINER="export DBX_CONTAINER_MANAGER=docker && distrobox enter -r ${SIM_DISTROBOX_NAME} -- bash -lc 'cd \"${WORKSPACE_DIR}\" && ${SIM_CMD}'"
+POLICY_CMD="pixi run ros2 run aic_model aic_model --ros-args -p use_sim_time:=true -p policy:=${POLICY_CLASS}"
+RECORDER_CMD="pixi run aic-policy-recorder --dataset.repo_id=${DATASET_REPO_ID} --dataset.single_task=\"${DATASET_SINGLE_TASK}\" --dataset.root=${DATASET_ROOT} --dataset.fps=30 --action_mode=${ACTION_MODE} --max_episodes=${MAX_EPISODES}"
+
+tmux new-session -d -s "${SESSION_NAME}" -n simulation
+tmux send-keys -t "${SESSION_NAME}:simulation" "cd \"${WORKSPACE_DIR}\" && ${SIM_CMD_IN_CONTAINER}" C-m
+
+tmux new-window -t "${SESSION_NAME}" -n policy
+tmux send-keys -t "${SESSION_NAME}:policy" "cd \"${WORKSPACE_DIR}\" && ${POLICY_CMD}" C-m
+
+tmux new-window -t "${SESSION_NAME}" -n recorder
+tmux send-keys -t "${SESSION_NAME}:recorder" "cd \"${WORKSPACE_DIR}\" && ${RECORDER_CMD}" C-m
+
+tmux select-window -t "${SESSION_NAME}:simulation"
+
+echo "Launched tmux session '${SESSION_NAME}' with windows: simulation, policy, recorder."
+echo "Attach with: tmux attach -t ${SESSION_NAME}"
+
+if [[ "${AUTO_ATTACH}" == "true" ]]; then
+  tmux attach -t "${SESSION_NAME}"
+fi
