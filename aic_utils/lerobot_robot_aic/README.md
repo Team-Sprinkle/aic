@@ -159,12 +159,16 @@ For diversified autonomous data collection, first generate a randomized
 
 Inside the container, randomly generate the config file first.
 ```bash
-cd ~/ws_aic/src/aic
-python generate_random_trials_config.py \
+python ~/ws_aic/src/aic/aic_engine/scripts/generate_random_trials_config.py \
   --output ./outputs/configs/random_trials_10.yaml \
   --num_trials 10 \
+  --episodes_per_setup 1 \
   --seed 2026
 ```
+
+Use `--episodes_per_setup` to collect multiple episodes for each randomized
+board setup. For example, `--num_trials 10 --episodes_per_setup 3` generates
+30 total trials (3 episodes per setup).
 
 Inside the container, spin up the simulation using the engine config file generated in the previous step.
 ```bash
@@ -219,9 +223,12 @@ bash ./aic_utils/lerobot_robot_aic/scripts/launch_policy_recording_tmux.sh \
 
 The script opens tmux windows named `simulation`, `policy`, and `recorder`.
 Use `--no-attach` if you want to start the session in the background.
+By default, recorder `--max_episodes` is auto-set to the number of trials in
+`--engine-config`; use `--max-episodes` only if you want to override that.
 
-The generated `N` trials act as the episode budget for that run. The recorder
-will stop early if `--max_episodes` is reached first.
+The generated total trial count (`num_trials * episodes_per_setup`) acts as the
+episode budget for that run. The recorder will stop early if `--max_episodes`
+is reached first.
 
 ### Validating Dataset Compatibility
 

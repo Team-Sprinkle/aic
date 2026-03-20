@@ -217,7 +217,19 @@ def parse_args() -> argparse.Namespace:
         "-n",
         type=int,
         required=True,
-        help="Number of randomized trials to generate.",
+        help=(
+            "Number of randomized board setups to generate. "
+            "Total trial count is num_trials * episodes_per_setup."
+        ),
+    )
+    parser.add_argument(
+        "--episodes_per_setup",
+        type=int,
+        default=1,
+        help=(
+            "Number of repeated episodes to run for each randomized board setup "
+            "(default: 1)."
+        ),
     )
     parser.add_argument(
         "--seed",
@@ -232,6 +244,8 @@ def main() -> int:
     args = parse_args()
     if args.num_trials <= 0:
         raise ValueError("--num_trials must be > 0")
+    if args.episodes_per_setup <= 0:
+        raise ValueError("--episodes_per_setup must be > 0")
 
     with args.template.open("r", encoding="utf-8") as f:
         base = yaml.safe_load(f)
@@ -257,15 +271,21 @@ def main() -> int:
     rng = random.Random(args.seed)
 
     generated_trials: dict[str, Any] = {}
-    for idx in range(1, args.num_trials + 1):
-        generated_trials[f"trial_{idx}"] = _build_trial(rng, idx, limits)
+    trial_idx = 1
+    for setup_idx in range(1, args.num_trials + 1):
+        setup_trial = _build_trial(rng, setup_idx, limits)
+        for _ in range(args.episodes_per_setup):
+            generated_trials[f"trial_{trial_idx}"] = copy.deepcopy(setup_trial)
+            trial_idx += 1
 
     out_cfg = copy.deepcopy(base)
     out_cfg["trials"] = generated_trials
     out_cfg["generated"] = {
         "script": "aic_engine/scripts/generate_random_trials_config.py",
         "seed": args.seed,
-        "num_trials": args.num_trials,
+        "num_board_setups": args.num_trials,
+        "episodes_per_setup": args.episodes_per_setup,
+        "num_trials": len(generated_trials),
     }
 
     args.output.parent.mkdir(parents=True, exist_ok=True)
@@ -273,7 +293,9 @@ def main() -> int:
         yaml.safe_dump(out_cfg, f, sort_keys=False)
 
     print(f"Wrote randomized config: {args.output}")
-    print(f"Trials generated: {args.num_trials}")
+    print(f"Board setups generated: {args.num_trials}")
+    print(f"Episodes per board setup: {args.episodes_per_setup}")
+    print(f"Total trials generated: {len(generated_trials)}")
     if args.seed is not None:
         print(f"Seed: {args.seed}")
     return 0

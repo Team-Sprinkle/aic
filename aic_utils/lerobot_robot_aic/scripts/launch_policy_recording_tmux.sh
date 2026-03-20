@@ -11,7 +11,7 @@ DATASET_REPO_ID="${DATASET_REPO_ID:-${HF_USER:-local}/aic_mixed_dataset}"
 DATASET_ROOT="${DATASET_ROOT:-${WORKSPACE_DIR}/outputs/lerobot_datasets}"
 DATASET_SINGLE_TASK="${DATASET_SINGLE_TASK:-Insert cable into target port}"
 ACTION_MODE="${ACTION_MODE:-cartesian}"
-MAX_EPISODES="${MAX_EPISODES:-10}"
+MAX_EPISODES="${MAX_EPISODES:-}"
 POLICY_CLASS="${POLICY_CLASS:-aic_example_policies.ros.CheatCode}"
 SIM_DISTROBOX_NAME="${SIM_DISTROBOX_NAME:-aic_eval}"
 AUTO_ATTACH="${AUTO_ATTACH:-true}"
@@ -35,7 +35,7 @@ Options:
   --dataset-root PATH       LeRobot dataset root (default: ${DATASET_ROOT})
   --dataset-single-task TXT Dataset task prompt (default: "${DATASET_SINGLE_TASK}")
   --action-mode MODE        recorder action mode (default: ${ACTION_MODE})
-  --max-episodes N          recorder max episodes (default: ${MAX_EPISODES})
+  --max-episodes N          recorder max episodes (default: auto from config trials count)
   --no-attach               do not auto-attach to tmux session
   -h, --help                show this help text
 
@@ -104,6 +104,26 @@ while [[ $# -gt 0 ]]; do
   esac
 done
 
+count_trials_in_engine_config() {
+  local config_path="$1"
+  cd "${WORKSPACE_DIR}"
+  pixi run python - "${config_path}" <<'PY'
+import sys
+from pathlib import Path
+
+import yaml
+
+config_path = Path(sys.argv[1])
+data = yaml.safe_load(config_path.read_text(encoding="utf-8"))
+if not isinstance(data, dict):
+    raise SystemExit("Engine config must be a YAML map.")
+trials = data.get("trials")
+if not isinstance(trials, dict):
+    raise SystemExit("Engine config missing YAML map key: 'trials'.")
+print(len(trials))
+PY
+}
+
 if ! command -v tmux >/dev/null 2>&1; then
   echo "Error: tmux is required but not installed." >&2
   exit 1
@@ -111,6 +131,11 @@ fi
 
 if ! command -v distrobox >/dev/null 2>&1; then
   echo "Error: distrobox is required but not installed." >&2
+  exit 1
+fi
+
+if ! command -v pixi >/dev/null 2>&1; then
+  echo "Error: pixi is required but not installed." >&2
   exit 1
 fi
 
@@ -124,6 +149,19 @@ if [[ ! -f "${ENGINE_CONFIG_FILE}" ]]; then
   echo "Hint: generate one with:" >&2
   echo "  python generate_random_trials_config.py --output ./outputs/configs/random_trials_10.yaml --num_trials 10 --seed 2026" >&2
   exit 1
+fi
+
+if [[ -z "${MAX_EPISODES}" ]]; then
+  MAX_EPISODES="$(count_trials_in_engine_config "${ENGINE_CONFIG_FILE}")"
+  if ! [[ "${MAX_EPISODES}" =~ ^[0-9]+$ ]]; then
+    echo "Error: failed to determine trial count from config: ${ENGINE_CONFIG_FILE}" >&2
+    exit 1
+  fi
+  if [[ "${MAX_EPISODES}" -le 0 ]]; then
+    echo "Error: config has no trials. Cannot auto-set max episodes." >&2
+    exit 1
+  fi
+  echo "Auto-set recorder max episodes to ${MAX_EPISODES} from config trials."
 fi
 
 if tmux has-session -t "${SESSION_NAME}" 2>/dev/null; then

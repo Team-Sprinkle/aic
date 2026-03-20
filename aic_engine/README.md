@@ -104,15 +104,20 @@ ros2 run aic_engine aic_engine --ros-args \
 ### Generate Randomized Trial Configs
 
 For data collection, you can generate a config with randomized board/component
-placements across `N` episodes:
+placements across `N` board setups:
 
 ```bash
 cd ~/ws_aic/src/aic
 python generate_random_trials_config.py \
   --output ./outputs/configs/random_trials_50.yaml \
   --num_trials 50 \
+  --episodes_per_setup 1 \
   --seed 42
 ```
+
+`--episodes_per_setup` controls how many episodes are collected per randomized
+board setup. Total trial count in the generated config is:
+`num_trials * episodes_per_setup`.
 
 Then launch bringup with that generated config:
 
