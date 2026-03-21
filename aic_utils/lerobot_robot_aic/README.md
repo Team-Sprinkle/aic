@@ -160,10 +160,13 @@ For diversified autonomous data collection, first generate a randomized
 Inside the container, randomly generate the config file first.
 ```bash
 python ~/ws_aic/src/aic/aic_engine/scripts/generate_random_trials_config.py \
-  --output ./outputs/configs/random_trials_10.yaml \
+  --output ./outputs/configs/random_trials_eval_like.yaml \
   --num_trials 10 \
   --episodes_per_setup 1 \
-  --seed 2026
+  --profile qualification_eval_like \
+  --sfp_to_nic_weight 2 \
+  --sc_to_sc_weight 1 \
+  --seed 42
 ```
 
 Use `--episodes_per_setup` to collect multiple episodes for each randomized
