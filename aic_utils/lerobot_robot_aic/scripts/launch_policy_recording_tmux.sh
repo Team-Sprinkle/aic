@@ -172,9 +172,10 @@ if tmux has-session -t "${SESSION_NAME}" 2>/dev/null; then
 fi
 
 SIM_CMD="/entrypoint.sh ground_truth:=true start_aic_engine:=true aic_engine_config_file:=${ENGINE_CONFIG_FILE} shutdown_on_aic_engine_exit:=true"
+#SIM_CMD="/entrypoint.sh ground_truth:=true start_aic_engine:=true gazebo_gui:=false launch_rviz:=false aic_engine_config_file:=${ENGINE_CONFIG_FILE} shutdown_on_aic_engine_exit:=true"
 SIM_CMD_IN_CONTAINER="export DBX_CONTAINER_MANAGER=docker && distrobox enter -r ${SIM_DISTROBOX_NAME} -- bash -lc 'cd \"${WORKSPACE_DIR}\" && ${SIM_CMD}'"
 POLICY_CMD="pixi run ros2 run aic_model aic_model --ros-args -p use_sim_time:=true -p policy:=${POLICY_CLASS}"
-RECORDER_CMD="pixi run aic-policy-recorder --dataset.repo_id=${DATASET_REPO_ID} --dataset.single_task=\"${DATASET_SINGLE_TASK}\" --dataset.root=${DATASET_ROOT} --dataset.fps=30 --action_mode=${ACTION_MODE} --max_episodes=${MAX_EPISODES}"
+RECORDER_CMD="pixi run aic-policy-recorder --dataset.repo_id=${DATASET_REPO_ID} --dataset.single_task=\"${DATASET_SINGLE_TASK}\" --dataset.root=${DATASET_ROOT} --dataset.fps=30 --action_mode=${ACTION_MODE} --max_episodes=${MAX_EPISODES} --dataset.push_to_hub"
 
 tmux new-session -d -s "${SESSION_NAME}" -n simulation
 tmux send-keys -t "${SESSION_NAME}:simulation" "cd \"${WORKSPACE_DIR}\" && ${SIM_CMD_IN_CONTAINER}" C-m
