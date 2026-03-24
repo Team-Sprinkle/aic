@@ -19,6 +19,7 @@ from threading import Thread
 from typing import Any, cast
 
 import pyspacemouse
+import queue
 import rclpy
 from geometry_msgs.msg import Twist
 from lerobot.teleoperators import Teleoperator, TeleoperatorConfig
@@ -221,6 +222,7 @@ class AICSpaceMouseTeleop(Teleoperator):
         self.config = config
         self._is_connected = False
         self._device: pyspacemouse.SpaceMouseDevice | None = None
+        self.misc_keys_queue = queue.Queue()
 
         self._current_actions: MotionUpdateActionDict = {
             "linear.x": 0.0,
@@ -260,22 +262,27 @@ class AICSpaceMouseTeleop(Teleoperator):
             self._node.get_logger().warn(
                 "Calibration not supported, ensure the robot is calibrated before running teleop."
             )
-
-        self._device = pyspacemouse.open(
-            dof_callback=None,
-            # button_callback_arr=[
-            #     pyspacemouse.ButtonCallback([0], self._button_callback),  # Button 1
-            #     pyspacemouse.ButtonCallback([1], self._button_callback),  # Button 2
-            # ],
-            device=self.config.device,
-        )
+        try:
+            self._device = pyspacemouse.open(
+                dof_callback=None,
+                # button_callback_arr=[
+                #     pyspacemouse.ButtonCallback([0], self._button_callback),  # Button 1
+                #     pyspacemouse.ButtonCallback([1], self._button_callback),  # Button 2
+                # ],
+                device=self.config.device,
+            )
+        except Exception as e:
+            self._node.destroy_node()
+            raise RuntimeError(f"Failed to open SpaceMouse device: {e}") from e
 
         if self._device is None:
+            self._node.destroy_node()
             raise RuntimeError("Failed to open SpaceMouse device")
 
         self._executor = SingleThreadedExecutor()
         self._executor.add_node(self._node)
-        self._executor_thread = Thread(target=self._executor.spin)
+
+        self._executor_thread = Thread(target=self._executor.spin, daemon=True)
         self._executor_thread.start()
         self._is_connected = True
 
@@ -336,7 +343,20 @@ class AICSpaceMouseTeleop(Teleoperator):
         pass
 
     def disconnect(self) -> None:
-        if self._device:
-            self._device.close()
         self._is_connected = False
-        pass
+
+        if hasattr(self, "_executor"):
+            self._executor.shutdown()
+
+        if hasattr(self, "_executor_thread") and self._executor_thread.is_alive():
+            self._executor_thread.join(timeout=1.0)
+
+        if hasattr(self, "_node"):
+            self._node.destroy_node()
+
+        if self._device:
+            try:
+                self._device.close()
+            except:
+                pass
+            self._device = None
