@@ -233,6 +233,70 @@ The generated total trial count (`num_trials * episodes_per_setup`) acts as the
 episode budget for that run. The recorder will stop early if `--max_episodes`
 is reached first.
 
+### Post-process CheatCode phases (alignment vs descent)
+
+If your rollout rows include either timestamps or per-episode step indices, you can
+add a `phase` label after recording without changing controller/backend code:
+
+```bash
+cd ~/ws_aic/src/aic
+python3 aic_utils/lerobot_robot_aic/scripts/label_cheatcode_phases.py \
+  --input /path/to/episodes.csv
+```
+
+You can also pass a LeRobot dataset root (for example `sample_data`), and the
+script will process all `data/**/*.parquet` files:
+
+```bash
+python3 aic_utils/lerobot_robot_aic/scripts/label_cheatcode_phases.py \
+  --input sample_data
+```
+
+Defaults match `CheatCode`:
+- `alignment`: first `5.0` seconds
+- `descent`: all later timesteps
+- For `30 FPS` data without timestamps, this is a `150`-frame alignment window.
+
+Useful overrides:
+- `--timestamp-scale 1e-9` if timestamps are in nanoseconds
+- `--fps 30` to force frame-rate-based labeling when timestamp is unavailable
+- If `--fps` is omitted and `--input` points to a LeRobot dataset root, FPS is
+  read from `meta/info.json` (for `sample_data`, this is `30`)
+- `--episode-column <name>`, `--timestamp-column <name>`, `--step-column <name>`
+  to force specific column names
+- `--alignment-duration-sec` or `--sample-period-sec` if you intentionally changed
+  policy timing
+
+### Split phased dataset into separate LeRobot datasets
+
+After adding the `phase` column, you can split one dataset into one output
+dataset per phase (for example `alignment` and `descent`):
+
+```bash
+cd ~/ws_aic/src/aic
+pixi run python3 aic_utils/lerobot_robot_aic/scripts/split_lerobot_by_phase.py \
+  --input outputs/sample_datasets
+```
+
+This creates:
+- `outputs/sample_datasets_alignment`
+- `outputs/sample_datasets_descent`
+
+Include camera videos in the split outputs:
+
+```bash
+cd ~/ws_aic/src/aic
+pixi run python3 aic_utils/lerobot_robot_aic/scripts/split_lerobot_by_phase.py \
+  --input outputs/sample_datasets \
+  --include-videos
+```
+
+Useful flags:
+- `--overwrite` to replace existing output directories
+- `--phases alignment` (or `descent`) to export only selected phases
+- `--suffix-template split_{phase}` to customize output dataset names
+- `--phase-column <name>` if your phase label column is not `phase`
+
 ### Validating Dataset Compatibility
 
 Before merging datasets, validate that teleop and policy datasets are schema-compatible:
