@@ -213,11 +213,20 @@ def _build_trial(
     mount_lo = float(limits["mount_rail"]["min_translation"])
     mount_hi = float(limits["mount_rail"]["max_translation"])
 
-    scenario = rng.choices(
-        ["sfp_to_nic", "sc_to_sc"],
-        weights=[sfp_to_nic_weight, sc_to_sc_weight],
-        k=1,
-    )[0]
+    if sc_to_sc_weight == 0:
+        scenario = "sfp_to_nic"
+        assert sfp_to_nic_weight != 0, "If sc_to_sc_weight = 0, sfp_to_nic_weight != 0"
+    if sfp_to_nic_weight == 0:
+        scenario = "sc_to_sc"
+        assert sc_to_sc_weight != 0, "If sfp_to_nic_weight = 0, sc_to_sc_weight != 0"
+
+    if sc_to_sc_weight != 0 and sfp_to_nic_weight != 0:
+        scenario = rng.choices(
+            ["sfp_to_nic", "sc_to_sc"],
+            weights=[sfp_to_nic_weight, sc_to_sc_weight],
+            k=1,
+        )[0]
+
     target_nic = rng.randint(0, 4)
     target_sc = rng.randint(0, 1)
     target_sfp_port_name = rng.choice(["sfp_port_0", "sfp_port_1"])
@@ -548,10 +557,10 @@ def main() -> int:
         raise ValueError("--num_trials must be > 0")
     if args.episodes_per_setup <= 0:
         raise ValueError("--episodes_per_setup must be > 0")
-    if args.sfp_to_nic_weight <= 0:
-        raise ValueError("--sfp_to_nic_weight must be > 0")
-    if args.sc_to_sc_weight <= 0:
-        raise ValueError("--sc_to_sc_weight must be > 0")
+    if args.sfp_to_nic_weight < 0:
+        raise ValueError("--sfp_to_nic_weight must be >= 0")
+    if args.sc_to_sc_weight < 0:
+        raise ValueError("--sc_to_sc_weight must be >= 0")
 
     with args.template.open("r", encoding="utf-8") as f:
         base = yaml.safe_load(f)
