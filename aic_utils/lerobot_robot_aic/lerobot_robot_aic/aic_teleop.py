@@ -28,7 +28,10 @@ from lerobot.teleoperators.keyboard import (
 )
 from lerobot.utils.errors import DeviceAlreadyConnectedError, DeviceNotConnectedError
 from lerobot_teleoperator_devices import KeyboardJointTeleop, KeyboardJointTeleopConfig
+from rclpy.client import Client
 from rclpy.executors import SingleThreadedExecutor
+from rclpy.node import Node
+from std_srvs.srv import Empty
 
 from .aic_robot import arm_joint_names
 from .types import JointMotionUpdateActionDict, MotionUpdateActionDict
@@ -42,6 +45,8 @@ class AICKeyboardJointTeleopConfig(KeyboardJointTeleopConfig):
     )
     high_command_scaling: float = 0.05
     low_command_scaling: float = 0.02
+    next_trial_key: str = "n"
+    enable_next_trial_hotkey: bool = True
 
 
 class AICKeyboardJointTeleop(KeyboardJointTeleop):
@@ -61,6 +66,10 @@ class AICKeyboardJointTeleop(KeyboardJointTeleop):
             "wrist_2_joint": 0.0,
             "wrist_3_joint": 0.0,
         }
+        self._hotkey_node: Node | None = None
+        self._hotkey_executor: SingleThreadedExecutor | None = None
+        self._hotkey_executor_thread: Thread | None = None
+        self._cancel_task_client: Client[Empty.Request, Empty.Response] | None = None
 
     @property
     def action_features(self) -> dict:
@@ -83,6 +92,14 @@ class AICKeyboardJointTeleop(KeyboardJointTeleop):
                     self._high_scaling if is_low_scaling else self._low_scaling
                 )
                 print(f"Command scaling toggled to: {self._current_scaling}")
+                continue
+
+            if (
+                self.config.enable_next_trial_hotkey
+                and key == self.config.next_trial_key
+                and is_pressed
+            ):
+                self._advance_to_next_trial()
                 continue
 
             val = self._get_action_value(is_pressed)
@@ -121,12 +138,58 @@ class AICKeyboardJointTeleop(KeyboardJointTeleop):
 
         return cast(dict, self.curr_joint_actions)
 
+    def connect(self, calibrate: bool = True) -> None:
+        _ = calibrate
+        super().connect()
+
+        if not rclpy.ok():
+            rclpy.init()
+
+        self._hotkey_node = Node("aic_keyboard_joint_teleop_hotkeys")
+        self._cancel_task_client = self._hotkey_node.create_client(
+            Empty, "/cancel_task"
+        )
+        self._hotkey_executor = SingleThreadedExecutor()
+        self._hotkey_executor.add_node(self._hotkey_node)
+        self._hotkey_executor_thread = Thread(
+            target=self._hotkey_executor.spin, daemon=True
+        )
+        self._hotkey_executor_thread.start()
+
+    def disconnect(self) -> None:
+        if self._hotkey_node and self._hotkey_executor:
+            self._hotkey_executor.remove_node(self._hotkey_node)
+            self._hotkey_executor.shutdown()
+            self._hotkey_node.destroy_node()
+            self._hotkey_node = None
+            self._cancel_task_client = None
+            if self._hotkey_executor_thread:
+                self._hotkey_executor_thread.join(timeout=1.0)
+            self._hotkey_executor = None
+            self._hotkey_executor_thread = None
+
+        super().disconnect()
+
+    def _advance_to_next_trial(self) -> None:
+        if not self._cancel_task_client:
+            print("[AIC] Next-trial hotkey unavailable: cancel_task client not ready.")
+            return
+
+        if not self._cancel_task_client.wait_for_service(timeout_sec=0.2):
+            print("[AIC] /cancel_task service unavailable; cannot advance trial.")
+            return
+
+        self._cancel_task_client.call_async(Empty.Request())
+        print("[AIC] Requested next trial via /cancel_task (hotkey: n).")
+
 
 @TeleoperatorConfig.register_subclass("aic_keyboard_ee")
 @dataclass(kw_only=True)
 class AICKeyboardEETeleopConfig(KeyboardEndEffectorTeleopConfig):
     high_command_scaling: float = 0.1
     low_command_scaling: float = 0.02
+    next_trial_key: str = "n"
+    enable_next_trial_hotkey: bool = True
 
 
 class AICKeyboardEETeleop(KeyboardEndEffectorTeleop):
@@ -146,6 +209,10 @@ class AICKeyboardEETeleop(KeyboardEndEffectorTeleop):
             "angular.y": 0.0,
             "angular.z": 0.0,
         }
+        self._hotkey_node: Node | None = None
+        self._hotkey_executor: SingleThreadedExecutor | None = None
+        self._hotkey_executor_thread: Thread | None = None
+        self._cancel_task_client: Client[Empty.Request, Empty.Response] | None = None
 
     @property
     def action_features(self) -> dict:
@@ -168,6 +235,14 @@ class AICKeyboardEETeleop(KeyboardEndEffectorTeleop):
                     self._high_scaling if is_low_speed else self._low_scaling
                 )
                 print(f"Command scaling toggled to: {self._current_scaling}")
+                continue
+
+            if (
+                self.config.enable_next_trial_hotkey
+                and key == self.config.next_trial_key
+                and is_pressed
+            ):
+                self._advance_to_next_trial()
                 continue
 
             val = self._get_action_value(is_pressed)
@@ -205,6 +280,50 @@ class AICKeyboardEETeleop(KeyboardEndEffectorTeleop):
         self.current_pressed.clear()
 
         return cast(dict, self._current_actions)
+
+    def connect(self, calibrate: bool = True) -> None:
+        _ = calibrate
+        super().connect()
+
+        if not rclpy.ok():
+            rclpy.init()
+
+        self._hotkey_node = Node("aic_keyboard_ee_teleop_hotkeys")
+        self._cancel_task_client = self._hotkey_node.create_client(
+            Empty, "/cancel_task"
+        )
+        self._hotkey_executor = SingleThreadedExecutor()
+        self._hotkey_executor.add_node(self._hotkey_node)
+        self._hotkey_executor_thread = Thread(
+            target=self._hotkey_executor.spin, daemon=True
+        )
+        self._hotkey_executor_thread.start()
+
+    def disconnect(self) -> None:
+        if self._hotkey_node and self._hotkey_executor:
+            self._hotkey_executor.remove_node(self._hotkey_node)
+            self._hotkey_executor.shutdown()
+            self._hotkey_node.destroy_node()
+            self._hotkey_node = None
+            self._cancel_task_client = None
+            if self._hotkey_executor_thread:
+                self._hotkey_executor_thread.join(timeout=1.0)
+            self._hotkey_executor = None
+            self._hotkey_executor_thread = None
+
+        super().disconnect()
+
+    def _advance_to_next_trial(self) -> None:
+        if not self._cancel_task_client:
+            print("[AIC] Next-trial hotkey unavailable: cancel_task client not ready.")
+            return
+
+        if not self._cancel_task_client.wait_for_service(timeout_sec=0.2):
+            print("[AIC] /cancel_task service unavailable; cannot advance trial.")
+            return
+
+        self._cancel_task_client.call_async(Empty.Request())
+        print("[AIC] Requested next trial via /cancel_task (hotkey: n).")
 
 
 @TeleoperatorConfig.register_subclass("aic_spacemouse")

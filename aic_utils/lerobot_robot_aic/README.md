@@ -39,6 +39,15 @@ pixi run lerobot-teleoperate \
   --display_data=true
 ```
 
+For space mouse
+```bash
+pixi run lerobot-teleoperate \
+  --robot.type=aic_controller --robot.id=aic \
+  --teleop.type=aic_spacemouse --teleop.id=aic \
+  --robot.teleop_target_mode=cartesian --robot.teleop_frame_id=base_link \
+  --display_data=true
+```
+
 
 :warning: Note: In addition to setting `--teleop.type` you must set `--robot.teleop_target_mode` because the `AICRobotAICController` class needs to know which type of actions to send to the controller and it doesn't have access to `--teleop.type`.
 
@@ -64,6 +73,7 @@ For cartesian control, in addition to setting `--teleop.type` and `--robot.teleo
 | shift+s | -angular x |
 | shift+a | -angular y |
 | shift+d | +angular y |
+| n       | End current trial and advance to next board setup (`/cancel_task`) |
 
 Press 't' to toggle between slow and fast mode.
 
@@ -103,6 +113,7 @@ View and edit axis mappings and speed settings in `AICSpaceMouseTeleop` and `AIC
 | g   | +wrist_2       |
 | y   | -wrist_3       |
 | h   | +wrist_3       |
+| n   | End current trial and advance to next board setup (`/cancel_task`) |
 
 Press 'u' to toggle between slow and fast mode.
 
@@ -137,6 +148,71 @@ LeRobot recording keys:
 | ESC         | Stop recording   |
 
 <!-- TODO: lerobot-record doesn't load the hil processor to handle teleop events (lerobot bug?) -->
+
+### Recording Teleop Across Engine Trials (Multi-setup YAML)
+
+For teleoperation collection across many board setups defined in an
+`aic_engine` config (for example `outputs/configs/random_trials_eval_like.yaml`),
+use `aic-teleop-record` together with a passive policy:
+
+1. Launch simulation + engine with your config:
+```bash
+cd ~/ws_aic/src/aic
+/entrypoint.sh ground_truth:=true start_aic_engine:=true \
+  aic_engine_config_file:=/home/jk/ws_aic/src/aic/outputs/configs/random_trials_eval_like.yaml \
+  shutdown_on_aic_engine_exit:=true
+```
+
+2. Run `aic_model` with the `NoOp` policy (keeps task active and lets you drive via teleop):
+```bash
+cd ~/ws_aic/src/aic
+pixi run ros2 run aic_model aic_model --ros-args \
+  -p use_sim_time:=true \
+  -p policy:=aic_example_policies.ros.NoOp
+```
+
+3. Run teleop recorder (LeRobot-compatible dataset output):
+```bash
+cd ~/ws_aic/src/aic
+pixi run aic-teleop-record \
+  --robot.type=aic_controller --robot.id=aic \
+  --teleop.type=aic_keyboard_ee --teleop.id=aic \
+  --robot.teleop_target_mode=cartesian --robot.teleop_frame_id=base_link \
+  --dataset.repo_id=${HF_USER}/aic_teleop_eval_like \
+  --dataset.single_task="Insert cable into target port" \
+  --dataset.root=./outputs/lerobot_datasets \
+  --dataset.push_to_hub=true \
+  --dataset.fps=30 \
+  --save_failed_episodes=true \
+  --max_episodes=0
+```
+
+During recording:
+- Press `n` in the teleop terminal to end the current board setup.
+- `n` calls `/cancel_task`, which advances `aic_engine` to the next trial setup.
+- With `aic-teleop-record`, episode boundaries follow `/insert_cable/_action/status`, so each trial can map to one episode automatically.
+
+Alternatively, launch simulation + NoOp model + teleop recorder in one tmux
+session:
+
+```bash
+cd ~/ws_aic/src/aic
+bash ./aic_utils/lerobot_robot_aic/scripts/launch_teleop_recording_tmux.sh
+```
+
+Common overrides:
+
+```bash
+cd ~/ws_aic/src/aic
+bash ./aic_utils/lerobot_robot_aic/scripts/launch_teleop_recording_tmux.sh \
+  --session-name aic_teleop \
+  --engine-config ./outputs/configs/random_trials_eval_like.yaml \
+  --dataset-repo-id ${HF_USER}/aic_teleop_eval_like \
+  --push-to-hub true \
+  --teleop-type aic_keyboard_ee \
+  --teleop-target-mode cartesian \
+  --teleop-frame-id base_link
+```
 
 ### Recording Autonomous Policy Rollouts
 

@@ -36,7 +36,24 @@ pixi run ros2 run aic_model aic_model --ros-args -p use_sim_time:=true -p policy
 
 ---
 
-### 2. CheatCode - Ground Truth Policy
+### 2. NoOp - Teleop Assist Policy
+
+A passive policy that accepts tasks but does not command robot motion. This is
+useful when you want `aic_engine` trial sequencing while controlling the arm via
+keyboard teleoperation.
+
+**Purpose:** Keep tasks alive for teleop data collection across multi-trial engine configs.
+
+**Run the policy:**
+```bash
+pixi run ros2 run aic_model aic_model --ros-args -p use_sim_time:=true -p policy:=aic_example_policies.ros.NoOp
+```
+
+**Source:** [`NoOp.py`](./aic_example_policies/ros/NoOp.py)
+
+---
+
+### 3. CheatCode - Ground Truth Policy
 
 ![Cheat Code Policy](../../media/cheat_code_policy.gif)
 
@@ -58,7 +75,7 @@ pixi run ros2 run aic_model aic_model --ros-args -p use_sim_time:=true -p policy
 
 ---
 
-### 3. DiversifiedCheatCode - Ground Truth Data Collection Policy
+### 4. DiversifiedCheatCode - Ground Truth Data Collection Policy
 
 A trajectory-diversified variant of `CheatCode` that still uses ground-truth TF, but randomizes approach and insertion style each episode for richer demonstration data.
 
@@ -120,7 +137,7 @@ AIC_DIVERSIFIED_SEED=42 pixi run ros2 run aic_model aic_model --ros-args -p use_
 
 ---
 
-### 4. RunACT - ACT Policy
+### 5. RunACT - ACT Policy
 
 ![Run ACT Policy](../../media/run_act_policy.gif)
 
