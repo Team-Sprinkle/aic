@@ -216,10 +216,15 @@ class CheatCode(Policy):
 
         z_offset = 0.2
 
-        # Over five seconds, smoothly interpolate from the current position to
+        # Over several seconds, smoothly interpolate from the current position to
         # a position above the port.
-        for t in range(0, 100):
-            interp_fraction = t / 100.0
+        interpolation_duration_sec = 5.5
+        dt = 0.05
+        steps = int(interpolation_duration_sec / dt) 
+        self.get_logger().info(f"[CheatCode] Interpolating for {interpolation_duration_sec} seconds")
+
+        for t in range(steps+1):
+            interp_fraction = t / steps
             try:
                 self.set_pose_target(
                     move_robot=move_robot,
@@ -233,7 +238,9 @@ class CheatCode(Policy):
                 )
             except TransformException as ex:
                 self.get_logger().warn(f"TF lookup failed during interpolation: {ex}")
-            self.sleep_for(0.05)
+            self.sleep_for(dt)
+
+        self.get_logger().info("[CheatCode] Descent")
 
         # Descend until the cable is inserted into the port.
         while True:

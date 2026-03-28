@@ -59,7 +59,8 @@ ros2 run aic_engine aic_engine --ros-args \
   -p ground_truth:=false \
   -p endpoint_ready_timeout_seconds:=10 \
   -p model_discovery_timeout_seconds:=30 \
-  -p model_configuration_timeout_seconds:=60
+  -p model_configuration_timeout_seconds:=60 \
+  -p recorder_save_timeout_seconds:=60 \
   -p use_sim_time:=true
 ```
 
@@ -81,6 +82,8 @@ ros2 run aic_engine aic_engine --ros-args \
 | `model_deactivate_timeout_seconds` | int | 60 | Timeout for model deactivation |
 | `model_cleanup_timeout_seconds` | int | 60 | Timeout for model cleanup |
 | `model_shutdown_timeout_seconds` | int | 60 | Timeout for model shutdown |
+| `recorder_status_service_name` | string | "/aic_policy_recorder/get_episode_save_status" | Recorder status service to query per-goal save finalization |
+| `recorder_save_timeout_seconds` | int | 60 | Timeout for recorder save confirmation when recorder service is running. If recorder finalizes without saving or times out, engine enters error state and stops before next trial. |
 
 ### Environment Variables
 

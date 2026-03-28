@@ -31,6 +31,7 @@ and writes episodes as a standard LeRobot dataset (same schema family as
 from __future__ import annotations
 
 import argparse
+from dataclasses import dataclass
 import logging
 import math
 import time
@@ -42,6 +43,7 @@ import numpy as np
 import rclpy
 from action_msgs.msg import GoalStatus, GoalStatusArray
 from aic_control_interfaces.msg import JointMotionUpdate, MotionUpdate, TrajectoryGenerationMode
+from aic_engine_interfaces.srv import GetEpisodeSaveStatus
 from aic_model_interfaces.msg import Observation
 from lerobot.datasets.lerobot_dataset import LeRobotDataset
 from lerobot.datasets.pipeline_features import (
@@ -69,6 +71,14 @@ TERMINAL_GOAL_STATES = {
     GoalStatus.STATUS_CANCELED,
     GoalStatus.STATUS_ABORTED,
 }
+
+
+@dataclass
+class _EpisodeSaveState:
+    finalized: bool = False
+    saved: bool = False
+    terminal_state: int = 0
+    message: str = "Waiting for terminal action status."
 
 
 def _fixed_len(values: list[float], length: int) -> list[float]:
@@ -156,6 +166,7 @@ class PolicyRecorder(Node):
         pose_commands_topic: str,
         joint_commands_topic: str,
         status_topic: str,
+        status_service_name: str,
         robot_type: str,
     ):
         super().__init__("aic_policy_recorder")
@@ -187,6 +198,7 @@ class PolicyRecorder(Node):
         self._pending_terminal_state: int | None = None
         self._episodes_saved = 0
         self._unsupported_encodings_logged: set[str] = set()
+        self._episode_save_state_by_goal: dict[tuple[int, ...], _EpisodeSaveState] = {}
 
         self._latest_obs: Observation | None = None
         self._latest_motion_cmd: MotionUpdate | None = None
@@ -225,12 +237,58 @@ class PolicyRecorder(Node):
             self._status_cb,
             qos_profile_sensor_data,
         )
+        self.create_service(
+            GetEpisodeSaveStatus,
+            status_service_name,
+            self._get_episode_save_status_cb,
+        )
 
         self.create_timer(1.0 / float(self.fps), self._sample_frame)
 
         self.get_logger().info(
             "Policy recorder started. Waiting for first observation to initialize dataset..."
         )
+        self.get_logger().info(
+            f"Episode save status service ready at '{status_service_name}'."
+        )
+
+    def _set_goal_save_state(
+        self,
+        goal_id: tuple[int, ...],
+        *,
+        finalized: bool,
+        saved: bool,
+        terminal_state: int,
+        message: str,
+    ) -> None:
+        self._episode_save_state_by_goal[goal_id] = _EpisodeSaveState(
+            finalized=finalized,
+            saved=saved,
+            terminal_state=terminal_state,
+            message=message,
+        )
+
+    def _get_episode_save_status_cb(
+        self,
+        request: GetEpisodeSaveStatus.Request,
+        response: GetEpisodeSaveStatus.Response,
+    ) -> GetEpisodeSaveStatus.Response:
+        goal_id = tuple(int(x) for x in request.goal_id)
+        state = self._episode_save_state_by_goal.get(goal_id)
+        if state is None:
+            response.goal_known = False
+            response.finalized = False
+            response.saved = False
+            response.terminal_state = 0
+            response.message = f"Goal {goal_id} is unknown to recorder."
+            return response
+
+        response.goal_known = True
+        response.finalized = state.finalized
+        response.saved = state.saved
+        response.terminal_state = int(state.terminal_state)
+        response.message = state.message
+        return response
 
     def _status_cb(self, msg: GoalStatusArray) -> None:
         status_by_goal: dict[tuple[int, ...], int] = {}
@@ -244,6 +302,13 @@ class PolicyRecorder(Node):
                     self._recording = True
                     self._current_goal_id = goal_id
                     self._pending_terminal_state = None
+                    self._set_goal_save_state(
+                        goal_id,
+                        finalized=False,
+                        saved=False,
+                        terminal_state=0,
+                        message="Goal active. Waiting for terminal action status.",
+                    )
                     self.get_logger().info(
                         f"Episode started from goal {goal_id}."
                     )
@@ -256,6 +321,16 @@ class PolicyRecorder(Node):
         state = status_by_goal[self._current_goal_id]
         if state in TERMINAL_GOAL_STATES:
             self._pending_terminal_state = state
+            self._set_goal_save_state(
+                self._current_goal_id,
+                finalized=False,
+                saved=False,
+                terminal_state=state,
+                message=(
+                    f"Terminal action status {state} observed. "
+                    "Waiting for episode save finalization."
+                ),
+            )
 
     def _observation_cb(self, msg: Observation) -> None:
         self._latest_obs = msg
@@ -557,21 +632,58 @@ class PolicyRecorder(Node):
         self._dataset_ready = True
 
     def _save_or_drop_episode(self, terminal_state: int) -> None:
+        goal_id = self._current_goal_id
+        if goal_id is None:
+            return
+
         if self._dataset is None:
+            self._set_goal_save_state(
+                goal_id,
+                finalized=True,
+                saved=False,
+                terminal_state=terminal_state,
+                message="Recorder dataset is uninitialized; episode could not be saved.",
+            )
+            self._recording = False
+            self._current_goal_id = None
+            self._pending_terminal_state = None
             return
 
         success = terminal_state == GoalStatus.STATUS_SUCCEEDED
-        if success or self.save_failed_episodes:
-            self._dataset.save_episode()
-            self._episodes_saved += 1
-            self.get_logger().info(
-                f"Episode saved (success={success}). total_saved={self._episodes_saved}"
+        success = True
+        saved = False
+        status_message = ""
+        try:
+            if success or self.save_failed_episodes:
+                self._dataset.save_episode()
+                self._episodes_saved += 1
+                saved = True
+                status_message = (
+                    f"Episode saved (success={success}). total_saved={self._episodes_saved}"
+                )
+                self.get_logger().info(status_message)
+            else:
+                self._dataset.clear_episode_buffer()
+                status_message = (
+                    f"Episode dropped (terminal_state={terminal_state}) "
+                    "because save_failed_episodes is disabled."
+                )
+                self.get_logger().info(status_message)
+        except Exception as ex:
+            saved = False
+            status_message = (
+                "Episode finalization failed during save/clear: "
+                f"{type(ex).__name__}: {ex}"
             )
-        else:
-            self._dataset.clear_episode_buffer()
-            self.get_logger().info(
-                f"Episode dropped (terminal_state={terminal_state})."
-            )
+            self.get_logger().error(status_message)
+
+        self._set_goal_save_state(
+            goal_id,
+            finalized=True,
+            saved=saved,
+            terminal_state=terminal_state,
+            message=status_message,
+        )
 
         self._recording = False
         self._current_goal_id = None
@@ -719,6 +831,11 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--pose_commands_topic", default="/aic_controller/pose_commands")
     parser.add_argument("--joint_commands_topic", default="/aic_controller/joint_commands")
     parser.add_argument("--status_topic", default="/insert_cable/_action/status")
+    parser.add_argument(
+        "--status_service_name",
+        default="/aic_policy_recorder/get_episode_save_status",
+        help="Service used by aic_engine to query per-goal recorder save status.",
+    )
 
     args = parser.parse_args()
     if args.fps <= 0:
@@ -761,6 +878,7 @@ def main() -> None:
             pose_commands_topic=args.pose_commands_topic,
             joint_commands_topic=args.joint_commands_topic,
             status_topic=args.status_topic,
+            status_service_name=args.status_service_name,
             robot_type=args.robot_type,
         )
         try:
