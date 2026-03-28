@@ -229,6 +229,8 @@ Recorder behavior:
 - subscribes to `/aic_controller/pose_commands` and `/aic_controller/joint_commands` for actions
 - auto-segments episodes from `/insert_cable/_action/status`
 - saves succeeded episodes by default (failed episodes can be kept via flag)
+- exposes `/aic_policy_recorder/get_episode_save_status` so `aic_engine` can wait
+  for per-goal episode save finalization before advancing
 
 For diversified autonomous data collection, first generate a randomized
 `aic_engine` trial config and launch bringup with it:
@@ -308,6 +310,37 @@ By default, recorder `--max_episodes` is auto-set to the number of trials in
 The generated total trial count (`num_trials * episodes_per_setup`) acts as the
 episode budget for that run. The recorder will stop early if `--max_episodes`
 is reached first.
+
+If you need each episode/trial to start from a fresh bringup (new `/entrypoint.sh`
+process every time), use the per-trial launcher:
+
+```bash
+cd ~/ws_aic/src/aic
+bash ./aic_utils/lerobot_robot_aic/scripts/launch_policy_recording_per_trial.sh \
+  --engine-config ./outputs/configs/random_10_trials_sfp2nic.yaml \
+  --policy-class aic_example_policies.ros.CheatCode \
+  --dataset-repo-id ${HF_USER}/sfp2nic \
+  --dataset-root ./outputs/lerobot_datasets \
+  --push-to-hub true \
+  --require-recorder-save-log true \
+  --sudo-keepalive true
+```
+
+What this script does:
+- reads trial IDs from your multi-trial engine config
+- generates a one-trial temporary config for each trial
+- runs `/entrypoint.sh` + policy + recorder for exactly one episode (`--max_episodes=1`)
+- waits for recorder exit (episode save/finalize), then tears down remaining processes and repeats for the next trial
+- appends new episodes with `--dataset.resume` after the first trial, and also on the first trial if the target dataset root already exists
+
+Useful flags:
+- `--sudo-keepalive true` to prompt for sudo once and keep credentials warm during the run
+- `--per-trial-timeout-sec` to kill stuck trials
+- `--recorder-drain-sec` grace period for recorder finalization after simulation exits
+- `--require-recorder-save-log true` strict mode to fail a trial unless recorder log contains `Episode saved`
+- `--push-to-hub true` push to hub
+- `--continue-on-failure false` to stop on first failed trial
+- `--tmp-dir` to keep generated single-trial YAMLs and per-trial logs
 
 ### Post-process CheatCode phases (alignment vs descent)
 

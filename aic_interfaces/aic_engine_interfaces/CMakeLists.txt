@@ -22,6 +22,7 @@ find_package(rosidl_default_generators REQUIRED)
 find_package(std_msgs REQUIRED)
 
 set(srv_files
+  "srv/GetEpisodeSaveStatus.srv"
   "srv/ResetJoints.srv"
 )
 

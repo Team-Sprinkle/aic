@@ -8,6 +8,7 @@
   <license>Apache-2.0</license>
 
   <exec_depend>aic_control_interfaces</exec_depend>
+  <exec_depend>aic_engine_interfaces</exec_depend>
   <exec_depend>aic_model_interfaces</exec_depend>
   <exec_depend>action_msgs</exec_depend>
   <exec_depend>geometry_msgs</exec_depend>

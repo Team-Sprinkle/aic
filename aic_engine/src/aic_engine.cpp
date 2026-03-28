@@ -317,6 +317,11 @@ Engine::Engine(const rclcpp::NodeOptions& options)
   node_->declare_parameter("model_deactivate_timeout_seconds", 60);
   node_->declare_parameter("model_cleanup_timeout_seconds", 60);
   node_->declare_parameter("model_shutdown_timeout_seconds", 60);
+  recorder_status_service_name_ = node_->declare_parameter(
+      "recorder_status_service_name",
+      std::string("/aic_policy_recorder/get_episode_save_status"));
+  recorder_save_timeout_seconds_ =
+      node_->declare_parameter("recorder_save_timeout_seconds", 60);
 
   // Set scoring output directory from AIC_RESULTS_DIR environment variable
   // If not set or empty, default to $HOME/aic_results
@@ -495,6 +500,9 @@ EngineState Engine::initialize() {
   switch_controller_client_ =
       node_->create_client<controller_manager_msgs::srv::SwitchController>(
           "/controller_manager/switch_controller");
+  recorder_status_client_ =
+      node_->create_client<GetEpisodeSaveStatusSrv>(
+          recorder_status_service_name_);
   reset_joints_client_ =
       node_->create_client<ResetJointsSrv>("/scoring/reset_joints");
   tare_ft_client_ = node_->create_client<TriggerSrv>(
@@ -1336,6 +1344,89 @@ bool Engine::ready_scoring(const Trial& trial) {
 }
 
 //==============================================================================
+bool Engine::wait_for_episode_save_if_recorder_present(
+    const rclcpp_action::GoalUUID& goal_id, const std::string& task_id) {
+  if (recorder_status_client_ == nullptr) {
+    return true;
+  }
+
+  if (!recorder_status_client_->wait_for_service(std::chrono::milliseconds(0))) {
+    RCLCPP_INFO(
+        node_->get_logger(),
+        "Recorder status service '%s' not available; assuming no recorder is "
+        "running and skipping episode-save sync for task [%s].",
+        recorder_status_service_name_.c_str(), task_id.c_str());
+    return true;
+  }
+
+  int timeout_seconds = recorder_save_timeout_seconds_;
+  if (timeout_seconds <= 0) {
+    RCLCPP_WARN(node_->get_logger(),
+                "Invalid recorder_save_timeout_seconds=%d. Using 60 seconds.",
+                recorder_save_timeout_seconds_);
+    timeout_seconds = 60;
+  }
+
+  const rclcpp::Time start = node_->now();
+  const rclcpp::Duration timeout =
+      rclcpp::Duration::from_seconds(timeout_seconds);
+  auto request = std::make_shared<GetEpisodeSaveStatusSrv::Request>();
+  request->goal_id = goal_id;
+
+  RCLCPP_INFO(node_->get_logger(),
+              "Recorder status service detected. Waiting up to %d seconds for "
+              "episode save finalization for task [%s].",
+              timeout_seconds, task_id.c_str());
+
+  while (rclcpp::ok() && (node_->now() - start) < timeout) {
+    if (!recorder_status_client_->wait_for_service(
+            std::chrono::milliseconds(0))) {
+      RCLCPP_ERROR(node_->get_logger(),
+                   "Recorder status service '%s' disappeared while waiting for "
+                   "task [%s] save confirmation.",
+                   recorder_status_service_name_.c_str(), task_id.c_str());
+      return false;
+    }
+
+    auto future = recorder_status_client_->async_send_request(request);
+    if (!wait_for_interruptible(future, std::chrono::seconds(1))) {
+      RCLCPP_WARN(node_->get_logger(),
+                  "Timed out waiting for recorder status response for task [%s]. "
+                  "Retrying...",
+                  task_id.c_str());
+      continue;
+    }
+
+    auto response = future.get();
+    if (!response->goal_known) {
+      continue;
+    }
+    if (!response->finalized) {
+      continue;
+    }
+
+    if (!response->saved) {
+      RCLCPP_ERROR(node_->get_logger(),
+                   "Recorder finalized task [%s] without saving episode "
+                   "(terminal_state=%d): %s",
+                   task_id.c_str(), response->terminal_state,
+                   response->message.c_str());
+      return false;
+    }
+
+    RCLCPP_INFO(node_->get_logger(),
+                "Recorder confirmed episode saved for task [%s].", task_id.c_str());
+    return true;
+  }
+
+  RCLCPP_ERROR(node_->get_logger(),
+               "Timed out after %d seconds waiting for recorder save "
+               "confirmation for task [%s].",
+               timeout_seconds, task_id.c_str());
+  return false;
+}
+
+//==============================================================================
 bool Engine::tasks_started(Trial& trial) {
   RCLCPP_INFO(node_->get_logger(), "Starting tasks for active trial...");
 
@@ -1375,6 +1466,7 @@ bool Engine::tasks_started(Trial& trial) {
       current_attempt.state = TaskState::TaskRejected;
       return false;
     }
+    const auto goal_id = goal_handle->get_goal_id();
     current_attempt.time_started = this->node_->now();
     current_attempt.state = TaskState::TaskStarted;
     // TODO(luca) Scoring assumes a single task per trial, revisit this
@@ -1397,11 +1489,27 @@ bool Engine::tasks_started(Trial& trial) {
                    "Task [%s] timed out after %ld seconds. Cancelling goal.",
                    task.id.c_str(), task.time_limit);
       insert_cable_action_client_->async_cancel_goal(goal_handle);
+      if (!wait_for_episode_save_if_recorder_present(goal_id, task.id)) {
+        RCLCPP_ERROR(this->node_->get_logger(),
+                     "Recorder sync failed after timeout cancellation for task "
+                     "[%s]. Failing engine.",
+                     task.id.c_str());
+        engine_state_ = EngineState::Error;
+      }
       current_attempt.state = TaskState::TimeLimitExceeded;
       return false;
     }
 
     auto result = result_future.get();
+    if (!wait_for_episode_save_if_recorder_present(goal_id, task.id)) {
+      RCLCPP_ERROR(this->node_->get_logger(),
+                   "Recorder sync failed for task [%s]. Failing engine.",
+                   task.id.c_str());
+      current_attempt.state = TaskState::TaskFailed;
+      engine_state_ = EngineState::Error;
+      return false;
+    }
+
     if (!result.result->success) {
       RCLCPP_INFO(this->node_->get_logger(), "Task [%s] failed: %s",
                   task.id.c_str(), result.result->message.c_str());

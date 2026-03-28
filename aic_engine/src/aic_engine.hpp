@@ -19,6 +19,7 @@
 #define AIC_ENGINE_HPP_
 
 #include <aic_engine_interfaces/srv/reset_joints.hpp>
+#include <aic_engine_interfaces/srv/get_episode_save_status.hpp>
 #include <functional>
 #include <memory>
 #include <optional>
@@ -58,6 +59,7 @@ using InsertCableGoalHandle =
 using JointMotionUpdateMsg = aic_control_interfaces::msg::JointMotionUpdate;
 using JointTrajectoryPoint = trajectory_msgs::msg::JointTrajectoryPoint;
 using MotionUpdateMsg = aic_control_interfaces::msg::MotionUpdate;
+using GetEpisodeSaveStatusSrv = aic_engine_interfaces::srv::GetEpisodeSaveStatus;
 using ResetJointsSrv = aic_engine_interfaces::srv::ResetJoints;
 using SpawnEntitySrv = simulation_interfaces::srv::SpawnEntity;
 using SwitchControllerSrv = controller_manager_msgs::srv::SwitchController;
@@ -242,6 +244,14 @@ class Engine {
   /// \return True if tasks were completed successfully, false otherwise.
   bool tasks_completed_successfully(const Trial& trial);
 
+  /// \brief Wait for recorder to finalize and save the episode if recorder is
+  /// running.
+  /// \param[in] goal_id Goal UUID for the insert_cable action.
+  /// \param[in] task_id Task identifier for logging.
+  /// \return True if recorder sync passes or recorder is not running.
+  bool wait_for_episode_save_if_recorder_present(
+      const rclcpp_action::GoalUUID& goal_id, const std::string& task_id);
+
   /// \brief Spawn an entity in Gazebo.
   /// \param[in] trial The trial currently being ran
   /// \param[in] entity_name Name of the entity to spawn
@@ -337,6 +347,10 @@ class Engine {
   std::string model_get_state_service_name_;
   // Name of the service to change the lifecycle state of the model node.
   std::string model_change_state_service_name_;
+  // Recorder save status service endpoint.
+  std::string recorder_status_service_name_;
+  // Timeout when waiting for recorder save confirmation.
+  int recorder_save_timeout_seconds_;
 
   // Internal ROS 2 node.
   rclcpp::Node::SharedPtr node_;
@@ -362,6 +376,7 @@ class Engine {
       model_change_state_client_;
   rclcpp::Client<controller_manager_msgs::srv::SwitchController>::SharedPtr
       switch_controller_client_;
+  rclcpp::Client<GetEpisodeSaveStatusSrv>::SharedPtr recorder_status_client_;
   rclcpp::Client<ResetJointsSrv>::SharedPtr reset_joints_client_;
   rclcpp::Client<TriggerSrv>::SharedPtr tare_ft_client_;
 
