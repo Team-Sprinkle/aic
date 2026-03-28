@@ -311,6 +311,8 @@ The generated total trial count (`num_trials * episodes_per_setup`) acts as the
 episode budget for that run. The recorder will stop early if `--max_episodes`
 is reached first.
 
+**NOTE: We have noticed that recording multiple trials in seqeunce in a single eval container spawned sometimes results in unstable robot pose initialization at the start fo the trial. More debugging to be done here; as a bypass, follow the below instruction for spinning up eval container per trial.**
+
 If you need each episode/trial to start from a fresh bringup (new `/entrypoint.sh`
 process every time), use the per-trial launcher:
 
