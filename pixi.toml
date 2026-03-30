@@ -47,7 +47,7 @@ setuptools = ">=71.0.0,<81.0.0"                                                 
 libhidapi = ">=0.15.0,<0.16"
 vim = ">=9.2.193,<10"
 python = ">=3.11"
-
+pynput = "*"
 
 [pypi-dependencies]
 huggingface-hub = { version = "==0.35.3", extras = ["hf-transfer", "cli"] }

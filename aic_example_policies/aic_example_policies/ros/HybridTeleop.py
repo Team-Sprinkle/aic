@@ -97,7 +97,7 @@ class HybridTeleop(Policy):
         send_feedback: SendFeedbackCallback,
     ) -> bool:
 
-        self.get_logger().info(f"CheatCode.insert_cable() task: {task}")
+        self.get_logger().info(f"HybridTeleop.insert_cable() task: {task}")
         self._task = task
         # Reset state for new execution
         self._active_source = "policy"
@@ -227,71 +227,64 @@ class HybridTeleop(Policy):
         finally:
             self._done_event.set()
 
-    def _run_teleop_polling_loop(
-        self, move_robot: MoveRobotCallback, send_feedback: SendFeedbackCallback
-    ) -> str:
-        POLL_INTERVAL = 0.1  # 10 Hz polling
+    def _run_teleop_polling_loop(self, move_robot, send_feedback) -> str:
+        POLL_INTERVAL = 0.05
 
         self.get_logger().info(
-            f"Teleop loop: starting polling (mode={self._teleop_mode}, teleop={'connected' if self._teleop_instance else 'disabled'})"
-        )
-        self.get_logger().info(
-            "Teleop loop: press SPACE to toggle source (policy ↔ teleop), ENTER to exit"
+            "Teleop polling loop started with pynput (global keyboard). Press space to toggle policy <-> teleop, enter to exit."
         )
 
         while not self._teleop_loop_should_exit.is_set():
             if self._done_event.is_set():
                 return "policy_completed"
 
-            if self._toggle_source_event.is_set():
-                with self._source_lock:
-                    self._active_source = (
-                        "teleop" if self._active_source == "policy" else "policy"
-                    )
-                    self.get_logger().info(f"Source toggled to: {self._active_source}")
-                    send_feedback(f"Control source: {self._active_source}")
-                self._toggle_source_event.clear()
+            # === Check for special keys from pynput ===
+            if hasattr(self._teleop_instance, "misc_keys_queue"):
+                try:
+                    while not self._teleop_instance.misc_keys_queue.empty():
+                        signal = self._teleop_instance.misc_keys_queue.get_nowait()
+                        self.get_logger().info(
+                            f"Teleop key signal received: {signal!r}"
+                        )
 
+                        if signal == " ":
+                            with self._source_lock:
+                                self._active_source = (
+                                    "teleop"
+                                    if self._active_source == "policy"
+                                    else "policy"
+                                )
+                            self.get_logger().info(
+                                f"TOGGLE via space: Source is now {self._active_source}"
+                            )
+
+                        elif signal in ("\r", "\n"):
+                            self.get_logger().info("EXIT via enter")
+                            return "user_exited"
+
+                except queue.Empty:
+                    pass
+                except Exception as e:
+                    self.get_logger().warning(f"Error processing keyboard queue: {e}")
+
+            # === Get teleop action (WASD, etc.) and apply only when in teleop mode ===
             if self._teleop_instance:
                 try:
                     action = self._teleop_instance.get_action()
-                    self._process_teleop_action(action, move_robot, send_feedback)
-
+                    with self._source_lock:
+                        if self._active_source == "teleop":
+                            self.get_logger().debug(f"Applying teleop action: {action}")
+                            move_robot(
+                                motion_update=self._create_motion_update_from_teleop_action(
+                                    action
+                                )
+                            )
                 except Exception as e:
-                    self.get_logger().error(f"Teleop error: {e}")
-                    return "teleop_error"
+                    self.get_logger().warning(f"Error getting teleop action: {e}")
+
             self.sleep_for(POLL_INTERVAL)
+
         return "user_exited"
-
-    def _process_teleop_action(
-        self, action, move_robot: MoveRobotCallback, send_feedback: SendFeedbackCallback
-    ):
-        # Handle input keys (Toggle/Exit)
-        if hasattr(self._teleop_instance, "misc_keys_queue"):
-            try:
-                while True:
-                    key = self._teleop_instance.misc_keys_queue.get_nowait()
-                    if key == " ":  # Space key
-                        self.get_logger().info(
-                            "Teleop loop: SPACE key pressed, toggling source"
-                        )
-                        self._toggle_source_event.set()
-                    elif key == "\r":  # Enter key
-                        self.get_logger().info(
-                            "Teleop loop: ENTER key pressed, exiting teleop loop"
-                        )
-                        self._teleop_loop_should_exit.set()
-            except queue.Empty:
-                pass
-
-        motion_update = self._create_motion_update_from_teleop_action(action)
-        with self._source_lock:
-            is_teleop_active = self._active_source == "teleop"
-        if is_teleop_active and self._parent_node.is_active:
-            try:
-                move_robot(motion_update=motion_update)
-            except Exception as e:
-                self.get_logger().error(f"Teleop move error: {e}")
 
     def _create_motion_update_from_teleop_action(self, action) -> MotionUpdate:
         linear_x = action.get("linear.x", 0.0)

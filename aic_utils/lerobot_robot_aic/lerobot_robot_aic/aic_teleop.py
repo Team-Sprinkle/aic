@@ -19,7 +19,6 @@ from threading import Thread
 from typing import Any, cast
 
 import pyspacemouse
-import queue
 import rclpy
 from geometry_msgs.msg import Twist
 from lerobot.teleoperators import Teleoperator, TeleoperatorConfig
@@ -33,6 +32,27 @@ from rclpy.executors import SingleThreadedExecutor
 
 from .aic_robot import arm_joint_names
 from .types import JointMotionUpdateActionDict, MotionUpdateActionDict
+
+import logging
+import os
+import sys
+
+# --- PYNPUT CHECK BLOCK ---
+PYNPUT_AVAILABLE = True
+try:
+    if ("DISPLAY" not in os.environ) and ("linux" in sys.platform):
+        logging.info("No DISPLAY set. Skipping pynput import.")
+        raise ImportError("pynput blocked intentionally due to no display.")
+
+    from pynput import keyboard
+except ImportError:
+    keyboard = None
+    PYNPUT_AVAILABLE = False
+except Exception as e:
+    keyboard = None
+    PYNPUT_AVAILABLE = False
+    logging.info(f"Could not import pynput: {e}")
+# --------------------------
 
 
 @TeleoperatorConfig.register_subclass("aic_keyboard_joint")
@@ -133,6 +153,7 @@ class AICKeyboardEETeleopConfig(KeyboardEndEffectorTeleopConfig):
 class AICKeyboardEETeleop(KeyboardEndEffectorTeleop):
     def __init__(self, config: AICKeyboardEETeleopConfig):
         super().__init__(config)
+        self.PYNPUT_AVAILABLE = PYNPUT_AVAILABLE
         self.config = config
 
         self._high_scaling = config.high_command_scaling
@@ -147,6 +168,71 @@ class AICKeyboardEETeleop(KeyboardEndEffectorTeleop):
             "angular.y": 0.0,
             "angular.z": 0.0,
         }
+
+    def connect(self) -> None:
+        logging.info(
+            "AICKeyboardEETeleop.connect(): local_pynput_available=%s display=%s",
+            PYNPUT_AVAILABLE,
+            os.environ.get("DISPLAY"),
+        )
+        try:
+            from lerobot.teleoperators.keyboard import teleop_keyboard
+
+            logging.info(
+                "AICKeyboardEETeleop.connect(): parent_pynput_available=%s",
+                teleop_keyboard.PYNPUT_AVAILABLE,
+            )
+        except Exception as err:
+            logging.warning(
+                "AICKeyboardEETeleop.connect(): failed to read parent pynput status: %s",
+                err,
+            )
+
+        super().connect()
+
+        listener_type = (
+            type(self.listener).__name__ if self.listener is not None else None
+        )
+        listener_alive = (
+            self.listener.is_alive() if self.listener is not None else False
+        )
+        logging.info(
+            "AICKeyboardEETeleop.connect(): listener=%s alive=%s is_connected=%s",
+            listener_type,
+            listener_alive,
+            self.is_connected,
+        )
+
+    def _normalize_key(self, key: Any) -> str | None:
+        if hasattr(key, "char") and key.char is not None:
+            return key.char
+
+        if keyboard is None:
+            return None
+
+        if key == keyboard.Key.space:
+            return " "
+
+        key_enter = getattr(keyboard.Key, "enter", None)
+        key_return = getattr(keyboard.Key, "return", None)
+        if key in (key_enter, key_return):
+            return "\r"
+
+        return None
+
+    def _on_press(self, key):
+        normalized_key = self._normalize_key(key)
+        if normalized_key is not None:
+            self.event_queue.put((normalized_key, True))
+
+    def _on_release(self, key):
+        normalized_key = self._normalize_key(key)
+        if normalized_key is not None:
+            self.event_queue.put((normalized_key, False))
+
+        if keyboard is not None and key == keyboard.Key.esc:
+            logging.info("ESC pressed, disconnecting keyboard teleop.")
+            self.disconnect()
 
     @property
     def action_features(self) -> dict:
@@ -202,6 +288,10 @@ class AICKeyboardEETeleop(KeyboardEndEffectorTeleop):
                 # this will record key presses that are not part of the delta_x, delta_y, delta_z
                 # this is useful for retrieving other events like interventions for RL, episode success, etc.
                 self.misc_keys_queue.put(key)
+                if key in (" ", "\r", "\n"):
+                    logging.info(
+                        "AICKeyboardEETeleop.get_action(): queued control key=%r", key
+                    )
 
         self.current_pressed.clear()
 
