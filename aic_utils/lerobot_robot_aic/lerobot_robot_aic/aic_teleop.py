@@ -170,38 +170,7 @@ class AICKeyboardEETeleop(KeyboardEndEffectorTeleop):
         }
 
     def connect(self) -> None:
-        logging.info(
-            "AICKeyboardEETeleop.connect(): local_pynput_available=%s display=%s",
-            PYNPUT_AVAILABLE,
-            os.environ.get("DISPLAY"),
-        )
-        try:
-            from lerobot.teleoperators.keyboard import teleop_keyboard
-
-            logging.info(
-                "AICKeyboardEETeleop.connect(): parent_pynput_available=%s",
-                teleop_keyboard.PYNPUT_AVAILABLE,
-            )
-        except Exception as err:
-            logging.warning(
-                "AICKeyboardEETeleop.connect(): failed to read parent pynput status: %s",
-                err,
-            )
-
         super().connect()
-
-        listener_type = (
-            type(self.listener).__name__ if self.listener is not None else None
-        )
-        listener_alive = (
-            self.listener.is_alive() if self.listener is not None else False
-        )
-        logging.info(
-            "AICKeyboardEETeleop.connect(): listener=%s alive=%s is_connected=%s",
-            listener_type,
-            listener_alive,
-            self.is_connected,
-        )
 
     def _normalize_key(self, key: Any) -> str | None:
         if hasattr(key, "char") and key.char is not None:
@@ -288,10 +257,6 @@ class AICKeyboardEETeleop(KeyboardEndEffectorTeleop):
                 # this will record key presses that are not part of the delta_x, delta_y, delta_z
                 # this is useful for retrieving other events like interventions for RL, episode success, etc.
                 self.misc_keys_queue.put(key)
-                if key in (" ", "\r", "\n"):
-                    logging.info(
-                        "AICKeyboardEETeleop.get_action(): queued control key=%r", key
-                    )
 
         self.current_pressed.clear()
 

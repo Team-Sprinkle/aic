@@ -18,7 +18,7 @@ from aic_model.policy import (
 )
 from aic_model_interfaces.msg import Observation
 from aic_task_interfaces.msg import Task
-from geometry_msgs.msg import Twist, Vector3, Wrench
+from geometry_msgs.msg import Pose, Twist, Vector3, Wrench
 from std_msgs.msg import Header
 
 
@@ -273,7 +273,7 @@ class HybridTeleop(Policy):
                     action = self._teleop_instance.get_action()
                     with self._source_lock:
                         if self._active_source == "teleop":
-                            self.get_logger().debug(f"Applying teleop action: {action}")
+                            self.get_logger().info(f"Applying teleop action: {action}")
                             move_robot(
                                 motion_update=self._create_motion_update_from_teleop_action(
                                     action
@@ -302,7 +302,7 @@ class HybridTeleop(Policy):
                 frame_id="base_link",
                 stamp=self._parent_node.get_clock().now().to_msg(),
             ),
-            pose=None,  # Pose is not used in velocity control mode
+            pose=Pose(),
             velocity=velocity,
             target_stiffness=np.diag([30.0, 30.0, 30.0, 20.0, 20.0, 20.0]).flatten(),
             target_damping=np.diag([50.0, 50.0, 50.0, 20.0, 20.0, 20.0]).flatten(),
