@@ -437,6 +437,14 @@ Optional flags:
 - `--ignore_robot_type`: skip robot type check
 - `--json`: print machine-readable JSON summary
 
+
+### Push local dataset to Hugging Face Hub
+
+```bash
+cd ~/ws_aic/src/aic
+pixi run python aic_utils/lerobot_robot_aic/scripts/push_local_lerobot_ds_to_hub.py --local-dataset-dir <local-directory> --repo-id <huggingface-repo-id>
+```
+
 ### Training
 
 Once you have your LeRobot dataset, you can follow the [LeRobot tutorials](https://huggingface.co/docs/lerobot/en/index) for training.
