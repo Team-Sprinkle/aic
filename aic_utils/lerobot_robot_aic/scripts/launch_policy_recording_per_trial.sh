@@ -15,11 +15,11 @@ SIM_DISTROBOX_NAME="${SIM_DISTROBOX_NAME:-aic_eval}"
 SAVE_FAILED_EPISODES="${SAVE_FAILED_EPISODES:-false}"
 PER_TRIAL_TIMEOUT_SEC="${PER_TRIAL_TIMEOUT_SEC:-0}"
 STARTUP_DELAY_SEC="${STARTUP_DELAY_SEC:-8}"
-PAUSE_BETWEEN_TRIALS_SEC="${PAUSE_BETWEEN_TRIALS_SEC:-2}"
+PAUSE_BETWEEN_TRIALS_SEC="${PAUSE_BETWEEN_TRIALS_SEC:-3}"
 CONTINUE_ON_FAILURE="${CONTINUE_ON_FAILURE:-true}"
 PUSH_TO_HUB="${PUSH_TO_HUB:-false}"
 TMP_DIR="${TMP_DIR:-}"
-RECORDER_DRAIN_SEC="${RECORDER_DRAIN_SEC:-180}"
+RECORDER_DRAIN_SEC="${RECORDER_DRAIN_SEC:-120}"
 REQUIRE_RECORDER_SAVE_LOG="${REQUIRE_RECORDER_SAVE_LOG:-false}"
 SUDO_KEEPALIVE="${SUDO_KEEPALIVE:-false}"
 
@@ -252,6 +252,27 @@ terminate_process() {
   fi
 }
 
+cleanup_stale_sim_router() {
+  echo "  preflight: cleaning stale rmw_zenohd in distrobox '${SIM_DISTROBOX_NAME}'..."
+  # Best-effort host cleanup in case rmw_zenohd is bound in host namespace.
+  pkill -f rmw_zenohd >/dev/null 2>&1 || true
+  pkill -f "rmw_zenoh_cpp rmw_zenohd" >/dev/null 2>&1 || true
+
+  local attempt
+  for attempt in {1..5}; do
+    if (
+      export DBX_CONTAINER_MANAGER=docker
+      distrobox enter -r "${SIM_DISTROBOX_NAME}" -- bash -lc "pkill -f rmw_zenohd >/dev/null 2>&1 || true; pkill -f 'rmw_zenoh_cpp rmw_zenohd' >/dev/null 2>&1 || true"
+    ); then
+      return 0
+    fi
+    echo "  preflight: distrobox cleanup attempt ${attempt}/5 failed; retrying..."
+    sleep 2
+  done
+
+  echo "  preflight: WARNING unable to run distrobox cleanup after retries; stale router may remain."
+}
+
 mapfile -t TRIAL_IDS < <(list_trial_ids "${ENGINE_CONFIG_FILE}")
 TOTAL_TRIALS="${#TRIAL_IDS[@]}"
 if [[ "${TOTAL_TRIALS}" -eq 0 ]]; then
@@ -295,6 +316,8 @@ for TRIAL_ID in "${TRIAL_IDS[@]}"; do
   echo "[$(date +'%F %T')] Trial ${RUN_INDEX}/${TOTAL_TRIALS}: ${TRIAL_ID}"
   echo "  single-trial config: ${SINGLE_CONFIG_PATH}"
   echo "  logs: ${LOG_PREFIX}_{simulation,policy,recorder}.log"
+
+  cleanup_stale_sim_router
 
   SIM_CMD="/entrypoint.sh ground_truth:=true start_aic_engine:=true aic_engine_config_file:=${SINGLE_CONFIG_PATH} shutdown_on_aic_engine_exit:=true"
 
