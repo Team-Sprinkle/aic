@@ -34,7 +34,7 @@ from aic_control_interfaces.msg import (
     TrajectoryGenerationMode,
 )
 from aic_control_interfaces.srv import ChangeTargetMode
-from geometry_msgs.msg import Twist, Vector3, Wrench
+from geometry_msgs.msg import Twist, Vector3, Wrench, WrenchStamped
 from lerobot.cameras import CameraConfig, make_cameras_from_configs
 from lerobot.robots import Robot, RobotConfig
 from lerobot.utils.errors import DeviceAlreadyConnectedError, DeviceNotConnectedError
@@ -83,6 +83,12 @@ ObservationState = TypedDict(
         "joint_positions.4": float,
         "joint_positions.5": float,
         "joint_positions.6": float,
+        "wrist_wrench.force.x": float,
+        "wrist_wrench.force.y": float,
+        "wrist_wrench.force.z": float,
+        "wrist_wrench.torque.x": float,
+        "wrist_wrench.torque.y": float,
+        "wrist_wrench.torque.z": float,
     },
 )
 
@@ -123,12 +129,14 @@ class AICRos2Interface:
     joint_motion_update_pub: Publisher[JointMotionUpdate]
     controller_state_sub: Subscription[ControllerState]
     joint_states_sub: Subscription[JointState]
+    wrench_sub: Subscription[WrenchStamped]
     logger: RcutilsLogger
 
     @staticmethod
     def connect(
         controller_state_cb: Callable[[ControllerState], None],
         joint_states_cb: Callable[[JointState], None],
+        wrench_cb: Callable[[WrenchStamped], None],
     ) -> "AICRos2Interface":
         if not rclpy.ok():
             rclpy.init()
@@ -162,6 +170,9 @@ class AICRos2Interface:
         joint_states_sub = node.create_subscription(
             JointState, "/joint_states", joint_states_cb, qos_profile_sensor_data
         )
+        wrench_sub = node.create_subscription(
+            WrenchStamped, "/fts_broadcaster/wrench", wrench_cb, qos_profile_sensor_data
+        )
 
         executor = SingleThreadedExecutor()
         executor.add_node(node)
@@ -178,6 +189,7 @@ class AICRos2Interface:
             joint_motion_update_pub=joint_motion_update_pub,
             controller_state_sub=controller_state_sub,
             joint_states_sub=joint_states_sub,
+            wrench_sub=wrench_sub,
             logger=logger,
         )
 
@@ -192,6 +204,7 @@ class AICRobotAICController(Robot):
         self.ros2_interface: AICRos2Interface | None = None
         self.last_controller_state: ControllerState | None = None
         self.last_joint_states: JointState | None = None
+        self.last_wrench: WrenchStamped | None = None
 
         self._is_connected = False
 
@@ -283,8 +296,11 @@ class AICRobotAICController(Robot):
         def joint_states_cb(msg: JointState):
             self.last_joint_states = msg
 
+        def wrench_cb(msg: WrenchStamped):
+            self.last_wrench = msg
+
         self.ros2_interface = AICRos2Interface.connect(
-            controller_state_cb, joint_states_cb
+            controller_state_cb, joint_states_cb, wrench_cb
         )
 
         change_mode_req = (
@@ -320,6 +336,21 @@ class AICRobotAICController(Robot):
         tcp_velocity = self.last_controller_state.tcp_velocity
         tcp_error = self.last_controller_state.tcp_error
         joint_positions = self.last_joint_states.position
+        if self.last_wrench is None:
+            wrench_force_x = 0.0
+            wrench_force_y = 0.0
+            wrench_force_z = 0.0
+            wrench_torque_x = 0.0
+            wrench_torque_y = 0.0
+            wrench_torque_z = 0.0
+        else:
+            wrench = self.last_wrench.wrench
+            wrench_force_x = float(wrench.force.x)
+            wrench_force_y = float(wrench.force.y)
+            wrench_force_z = float(wrench.force.z)
+            wrench_torque_x = float(wrench.torque.x)
+            wrench_torque_y = float(wrench.torque.y)
+            wrench_torque_z = float(wrench.torque.z)
         controller_state_obs: ObservationState = {
             "tcp_pose.position.x": tcp_pose.position.x,
             "tcp_pose.position.y": tcp_pose.position.y,
@@ -347,6 +378,12 @@ class AICRobotAICController(Robot):
             "joint_positions.4": joint_positions[4],
             "joint_positions.5": joint_positions[5],
             "joint_positions.6": joint_positions[6],
+            "wrist_wrench.force.x": wrench_force_x,
+            "wrist_wrench.force.y": wrench_force_y,
+            "wrist_wrench.force.z": wrench_force_z,
+            "wrist_wrench.torque.x": wrench_torque_x,
+            "wrist_wrench.torque.y": wrench_torque_y,
+            "wrist_wrench.torque.z": wrench_torque_z,
         }
 
         # Capture images from cameras
