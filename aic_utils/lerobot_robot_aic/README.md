@@ -323,6 +323,8 @@ bash ./aic_utils/lerobot_robot_aic/scripts/launch_policy_recording_per_trial.sh 
   --policy-class aic_example_policies.ros.CheatCode \
   --dataset-repo-id ${HF_USER}/sfp2nic \
   --dataset-root ./outputs/lerobot_datasets \
+  --gazebo-gui true \
+  --launch-rviz true \
   --push-to-hub true \
   --require-recorder-save-log true \
   --sudo-keepalive true
@@ -343,6 +345,9 @@ Useful flags:
 - `--push-to-hub true` push to hub
 - `--continue-on-failure false` to stop on first failed trial
 - `--tmp-dir` to keep generated single-trial YAMLs and per-trial logs
+- `--gazebo-gui` whether to launch gazebo gui 
+- `--launch-rviz` whether to launch rviz in each trial. 
+- `--results-root` where the script writes the score summary and bags (default `./outputs/aic_results_per_trial`)
 
 ### Post-process CheatCode phases (alignment vs descent)
 

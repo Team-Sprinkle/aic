@@ -22,6 +22,9 @@ TMP_DIR="${TMP_DIR:-}"
 RECORDER_DRAIN_SEC="${RECORDER_DRAIN_SEC:-120}"
 REQUIRE_RECORDER_SAVE_LOG="${REQUIRE_RECORDER_SAVE_LOG:-false}"
 SUDO_KEEPALIVE="${SUDO_KEEPALIVE:-false}"
+GAZEBO_GUI="${GAZEBO_GUI:-true}"
+LAUNCH_RVIZ="${LAUNCH_RVIZ:-true}"
+RESULTS_ROOT="${RESULTS_ROOT:-${WORKSPACE_DIR}/outputs/aic_results_per_trial}"
 
 usage() {
   cat <<EOF_USAGE
@@ -59,6 +62,12 @@ Options:
                                  (default: ${REQUIRE_RECORDER_SAVE_LOG})
   --sudo-keepalive BOOL          Run one-time sudo auth + keepalive loop
                                  during this script run (default: ${SUDO_KEEPALIVE})
+  --gazebo-gui BOOL              Pass gazebo_gui:=true/false to /entrypoint.sh
+                                 (default: ${GAZEBO_GUI})
+  --launch-rviz BOOL             Pass launch_rviz:=true/false to /entrypoint.sh
+                                 (default: ${LAUNCH_RVIZ})
+  --results-root PATH            Root directory for per-trial AIC scoring outputs
+                                 (default: ${RESULTS_ROOT})
   -h, --help                     Show this help text
 
 Environment variable equivalents:
@@ -66,7 +75,8 @@ Environment variable equivalents:
   DATASET_REPO_ID, DATASET_ROOT, DATASET_SINGLE_TASK, ACTION_MODE,
   SAVE_FAILED_EPISODES, PER_TRIAL_TIMEOUT_SEC, STARTUP_DELAY_SEC,
   PAUSE_BETWEEN_TRIALS_SEC, CONTINUE_ON_FAILURE, PUSH_TO_HUB, TMP_DIR,
-  RECORDER_DRAIN_SEC, REQUIRE_RECORDER_SAVE_LOG, SUDO_KEEPALIVE
+  RECORDER_DRAIN_SEC, REQUIRE_RECORDER_SAVE_LOG, SUDO_KEEPALIVE,
+  GAZEBO_GUI, LAUNCH_RVIZ, RESULTS_ROOT
 EOF_USAGE
 }
 
@@ -90,6 +100,9 @@ while [[ $# -gt 0 ]]; do
     --recorder-drain-sec) RECORDER_DRAIN_SEC="$2"; shift 2 ;;
     --require-recorder-save-log) REQUIRE_RECORDER_SAVE_LOG="$2"; shift 2 ;;
     --sudo-keepalive) SUDO_KEEPALIVE="$2"; shift 2 ;;
+    --gazebo-gui) GAZEBO_GUI="$2"; shift 2 ;;
+    --launch-rviz) LAUNCH_RVIZ="$2"; shift 2 ;;
+    --results-root) RESULTS_ROOT="$2"; shift 2 ;;
     -h|--help) usage; exit 0 ;;
     *)
       echo "Unknown option: $1" >&2
@@ -132,12 +145,15 @@ if [[ ! -f "${ENGINE_CONFIG_FILE}" ]]; then
   echo "Error: engine config file does not exist: ${ENGINE_CONFIG_FILE}" >&2
   exit 1
 fi
+mkdir -p "${RESULTS_ROOT}"
 
 bool_or_die "${SAVE_FAILED_EPISODES}" "--save-failed-episodes"
 bool_or_die "${CONTINUE_ON_FAILURE}" "--continue-on-failure"
 bool_or_die "${PUSH_TO_HUB}" "--push-to-hub"
 bool_or_die "${REQUIRE_RECORDER_SAVE_LOG}" "--require-recorder-save-log"
 bool_or_die "${SUDO_KEEPALIVE}" "--sudo-keepalive"
+bool_or_die "${GAZEBO_GUI}" "--gazebo-gui"
+bool_or_die "${LAUNCH_RVIZ}" "--launch-rviz"
 int_or_die "${PER_TRIAL_TIMEOUT_SEC}" "--per-trial-timeout-sec"
 int_or_die "${STARTUP_DELAY_SEC}" "--startup-delay-sec"
 int_or_die "${PAUSE_BETWEEN_TRIALS_SEC}" "--pause-between-trials-sec"
@@ -291,6 +307,9 @@ echo "  temp dir: ${TMP_DIR}"
 echo "  recorder drain after sim exit: ${RECORDER_DRAIN_SEC}s"
 echo "  strict save-log check: ${REQUIRE_RECORDER_SAVE_LOG}"
 echo "  sudo keepalive: ${SUDO_KEEPALIVE}"
+echo "  gazebo gui: ${GAZEBO_GUI}"
+echo "  launch rviz: ${LAUNCH_RVIZ}"
+echo "  per-trial scoring results root: ${RESULTS_ROOT}"
 
 DATASET_EXISTS_BEFORE_RUN="false"
 if [[ -f "${DATASET_ROOT}/meta/info.json" ]]; then
@@ -300,6 +319,8 @@ fi
 
 FAILURES=0
 RUN_INDEX=0
+SCORE_SUMMARY_CSV="${RESULTS_ROOT}/score_summary.csv"
+echo "run_index,trial_id,status,total_score,scoring_yaml" > "${SCORE_SUMMARY_CSV}"
 
 for TRIAL_ID in "${TRIAL_IDS[@]}"; do
   RUN_INDEX=$((RUN_INDEX + 1))
@@ -316,14 +337,18 @@ for TRIAL_ID in "${TRIAL_IDS[@]}"; do
   echo "[$(date +'%F %T')] Trial ${RUN_INDEX}/${TOTAL_TRIALS}: ${TRIAL_ID}"
   echo "  single-trial config: ${SINGLE_CONFIG_PATH}"
   echo "  logs: ${LOG_PREFIX}_{simulation,policy,recorder}.log"
+  TRIAL_RESULTS_DIR="${RESULTS_ROOT}/trial_${RUN_INDEX}_${TRIAL_ID}"
+  SCORING_FILE="${TRIAL_RESULTS_DIR}/scoring.yaml"
+  mkdir -p "${TRIAL_RESULTS_DIR}"
+  echo "  scoring dir: ${TRIAL_RESULTS_DIR}"
 
   cleanup_stale_sim_router
 
-  SIM_CMD="/entrypoint.sh ground_truth:=true start_aic_engine:=true aic_engine_config_file:=${SINGLE_CONFIG_PATH} shutdown_on_aic_engine_exit:=true"
+  SIM_CMD="/entrypoint.sh ground_truth:=true start_aic_engine:=true gazebo_gui:=${GAZEBO_GUI} launch_rviz:=${LAUNCH_RVIZ} aic_engine_config_file:=${SINGLE_CONFIG_PATH} shutdown_on_aic_engine_exit:=true"
 
   (
     export DBX_CONTAINER_MANAGER=docker
-    distrobox enter -r "${SIM_DISTROBOX_NAME}" -- bash -lc "cd \"${WORKSPACE_DIR}\" && ${SIM_CMD}"
+    distrobox enter -r "${SIM_DISTROBOX_NAME}" -- bash -lc "cd \"${WORKSPACE_DIR}\" && export AIC_RESULTS_DIR=\"${TRIAL_RESULTS_DIR}\" && ${SIM_CMD}"
   ) >"${SIM_LOG}" 2>&1 &
   SIM_PID=$!
 
@@ -432,12 +457,20 @@ for TRIAL_ID in "${TRIAL_IDS[@]}"; do
   if [[ "${REQUIRE_RECORDER_SAVE_LOG}" == "true" && "${EPISODE_SAVED_LOG_MATCH}" != "true" ]]; then
     TRIAL_FAILED="true"
   fi
+  TRIAL_TOTAL_SCORE=""
+  if [[ -f "${SCORING_FILE}" ]]; then
+    TRIAL_TOTAL_SCORE="$(awk '/^total:/{print $2; exit}' "${SCORING_FILE}")"
+    echo "  scoring total: ${TRIAL_TOTAL_SCORE}"
+  else
+    echo "  scoring file missing: ${SCORING_FILE}"
+  fi
 
   if [[ "${TRIAL_FAILED}" == "true" ]]; then
     FAILURES=$((FAILURES + 1))
     echo "  result: FAILED"
     echo "  exit codes: sim=${SIM_EXIT}, policy=${POLICY_EXIT}, recorder=${RECORDER_EXIT}"
     echo "  inspect logs: ${SIM_LOG}"
+    echo "${RUN_INDEX},${TRIAL_ID},FAILED,${TRIAL_TOTAL_SCORE},${SCORING_FILE}" >> "${SCORE_SUMMARY_CSV}"
     if [[ "${CONTINUE_ON_FAILURE}" != "true" ]]; then
       echo "Stopping early due to failure (continue_on_failure=false)."
       exit 1
@@ -445,6 +478,7 @@ for TRIAL_ID in "${TRIAL_IDS[@]}"; do
   else
     echo "  result: OK"
     echo "  exit codes: sim=${SIM_EXIT}, policy=${POLICY_EXIT}, recorder=${RECORDER_EXIT}"
+    echo "${RUN_INDEX},${TRIAL_ID},OK,${TRIAL_TOTAL_SCORE},${SCORING_FILE}" >> "${SCORE_SUMMARY_CSV}"
   fi
 
   sleep "${PAUSE_BETWEEN_TRIALS_SEC}"
@@ -453,7 +487,9 @@ done
 echo
 if [[ "${FAILURES}" -gt 0 ]]; then
   echo "Completed with failures: ${FAILURES}/${TOTAL_TRIALS} trials failed."
+  echo "Per-trial score summary: ${SCORE_SUMMARY_CSV}"
   exit 1
 fi
 
 echo "Completed successfully: ${TOTAL_TRIALS}/${TOTAL_TRIALS} trials."
+echo "Per-trial score summary: ${SCORE_SUMMARY_CSV}"
