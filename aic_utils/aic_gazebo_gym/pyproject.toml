@@ -1,0 +1,19 @@
+[build-system]
+requires = ["setuptools>=71"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "aic-gazebo-gym"
+version = "0.1.0"
+description = "ROS-free Gazebo training integration skeleton for AIC"
+readme = "README.md"
+requires-python = ">=3.10"
+dependencies = []
+
+[tool.setuptools]
+include-package-data = false
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["aic_gazebo_gym*"]
+
