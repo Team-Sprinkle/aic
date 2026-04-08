@@ -136,6 +136,14 @@ def _angular_velocity_from_quats_xyzw(
     return axis * (angle / dt)
 
 
+def _stamp_to_sec(stamp: Any) -> float | None:
+    sec = int(getattr(stamp, "sec", 0))
+    nanosec = int(getattr(stamp, "nanosec", 0))
+    if sec == 0 and nanosec == 0:
+        return None
+    return float(sec) + float(nanosec) * 1e-9
+
+
 class _RobotTypeShim:
     def __init__(self, robot_type: str):
         self.robot_type = robot_type
@@ -203,11 +211,13 @@ class PolicyRecorder(Node):
         self._latest_obs: Observation | None = None
         self._latest_motion_cmd: MotionUpdate | None = None
         self._latest_joint_cmd: JointMotionUpdate | None = None
-        self._latest_motion_wall_time = 0.0
+        self._latest_motion_recv_time = 0.0
+        self._latest_motion_cmd_time_sec: float | None = None
         self._latest_joint_wall_time = 0.0
         self._prev_motion_pose_xyz: np.ndarray | None = None
         self._prev_motion_pose_q_xyzw: np.ndarray | None = None
-        self._prev_motion_wall_time: float | None = None
+        self._prev_motion_cmd_time_sec: float | None = None
+        self._prev_motion_recv_time: float | None = None
 
         self._teleop_action_processor, _, self._robot_observation_processor = (
             make_default_processors()
@@ -337,7 +347,11 @@ class PolicyRecorder(Node):
 
     def _motion_cmd_cb(self, msg: MotionUpdate) -> None:
         self._latest_motion_cmd = msg
-        self._latest_motion_wall_time = time.time()
+        self._latest_motion_recv_time = time.monotonic()
+        stamp_sec = _stamp_to_sec(msg.header.stamp)
+        if stamp_sec is None:
+            stamp_sec = self.get_clock().now().nanoseconds * 1e-9
+        self._latest_motion_cmd_time_sec = stamp_sec
 
     def _joint_cmd_cb(self, msg: JointMotionUpdate) -> None:
         self._latest_joint_cmd = msg
@@ -437,7 +451,7 @@ class PolicyRecorder(Node):
         return values
 
     def _cartesian_action_from_motion(self) -> dict[str, float]:
-        now = time.time()
+        now = time.monotonic()
         zero_action = {
             "linear.x": 0.0,
             "linear.y": 0.0,
@@ -449,7 +463,7 @@ class PolicyRecorder(Node):
 
         if self._latest_motion_cmd is None:
             return zero_action
-        if (now - self._latest_motion_wall_time) > self.action_timeout_sec:
+        if (now - self._latest_motion_recv_time) > self.action_timeout_sec:
             return zero_action
 
         msg = self._latest_motion_cmd
@@ -488,14 +502,20 @@ class PolicyRecorder(Node):
         if (
             self._prev_motion_pose_xyz is None
             or self._prev_motion_pose_q_xyzw is None
-            or self._prev_motion_wall_time is None
+            or self._prev_motion_cmd_time_sec is None
+            or self._latest_motion_cmd_time_sec is None
+            or self._prev_motion_recv_time is None
         ):
             self._prev_motion_pose_xyz = curr_xyz
             self._prev_motion_pose_q_xyzw = curr_q
-            self._prev_motion_wall_time = self._latest_motion_wall_time
+            self._prev_motion_cmd_time_sec = self._latest_motion_cmd_time_sec
+            self._prev_motion_recv_time = self._latest_motion_recv_time
             return zero_action
 
-        dt = max(1e-6, self._latest_motion_wall_time - self._prev_motion_wall_time)
+        dt = self._latest_motion_cmd_time_sec - self._prev_motion_cmd_time_sec
+        if dt <= 1e-6:
+            dt = self._latest_motion_recv_time - self._prev_motion_recv_time
+        dt = max(1e-6, dt)
         linear = (curr_xyz - self._prev_motion_pose_xyz) / dt
         angular = _angular_velocity_from_quats_xyzw(
             self._prev_motion_pose_q_xyzw, curr_q, dt
@@ -503,7 +523,8 @@ class PolicyRecorder(Node):
 
         self._prev_motion_pose_xyz = curr_xyz
         self._prev_motion_pose_q_xyzw = curr_q
-        self._prev_motion_wall_time = self._latest_motion_wall_time
+        self._prev_motion_cmd_time_sec = self._latest_motion_cmd_time_sec
+        self._prev_motion_recv_time = self._latest_motion_recv_time
 
         return {
             "linear.x": float(linear[0]),
