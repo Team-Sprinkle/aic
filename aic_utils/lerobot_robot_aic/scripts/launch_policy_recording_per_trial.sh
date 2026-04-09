@@ -25,6 +25,7 @@ SUDO_KEEPALIVE="${SUDO_KEEPALIVE:-false}"
 GAZEBO_GUI="${GAZEBO_GUI:-true}"
 LAUNCH_RVIZ="${LAUNCH_RVIZ:-true}"
 RESULTS_ROOT="${RESULTS_ROOT:-${WORKSPACE_DIR}/outputs/aic_results_per_trial}"
+REMOVE_BAG_DATA="${REMOVE_BAG_DATA:-true}"
 
 usage() {
   cat <<EOF_USAGE
@@ -68,6 +69,8 @@ Options:
                                  (default: ${LAUNCH_RVIZ})
   --results-root PATH            Root directory for per-trial AIC scoring outputs
                                  (default: ${RESULTS_ROOT})
+  --remove-bag-data BOOL         Remove per-trial scoring bag_* dirs after each trial
+                                 (default: ${REMOVE_BAG_DATA})
   -h, --help                     Show this help text
 
 Environment variable equivalents:
@@ -76,7 +79,7 @@ Environment variable equivalents:
   SAVE_FAILED_EPISODES, PER_TRIAL_TIMEOUT_SEC, STARTUP_DELAY_SEC,
   PAUSE_BETWEEN_TRIALS_SEC, CONTINUE_ON_FAILURE, PUSH_TO_HUB, TMP_DIR,
   RECORDER_DRAIN_SEC, REQUIRE_RECORDER_SAVE_LOG, SUDO_KEEPALIVE,
-  GAZEBO_GUI, LAUNCH_RVIZ, RESULTS_ROOT
+  GAZEBO_GUI, LAUNCH_RVIZ, RESULTS_ROOT, REMOVE_BAG_DATA
 EOF_USAGE
 }
 
@@ -103,6 +106,7 @@ while [[ $# -gt 0 ]]; do
     --gazebo-gui) GAZEBO_GUI="$2"; shift 2 ;;
     --launch-rviz) LAUNCH_RVIZ="$2"; shift 2 ;;
     --results-root) RESULTS_ROOT="$2"; shift 2 ;;
+    --remove-bag-data) REMOVE_BAG_DATA="$2"; shift 2 ;;
     -h|--help) usage; exit 0 ;;
     *)
       echo "Unknown option: $1" >&2
@@ -154,6 +158,7 @@ bool_or_die "${REQUIRE_RECORDER_SAVE_LOG}" "--require-recorder-save-log"
 bool_or_die "${SUDO_KEEPALIVE}" "--sudo-keepalive"
 bool_or_die "${GAZEBO_GUI}" "--gazebo-gui"
 bool_or_die "${LAUNCH_RVIZ}" "--launch-rviz"
+bool_or_die "${REMOVE_BAG_DATA}" "--remove-bag-data"
 int_or_die "${PER_TRIAL_TIMEOUT_SEC}" "--per-trial-timeout-sec"
 int_or_die "${STARTUP_DELAY_SEC}" "--startup-delay-sec"
 int_or_die "${PAUSE_BETWEEN_TRIALS_SEC}" "--pause-between-trials-sec"
@@ -289,6 +294,33 @@ cleanup_stale_sim_router() {
   echo "  preflight: WARNING unable to run distrobox cleanup after retries; stale router may remain."
 }
 
+cleanup_trial_bags() {
+  local trial_results_dir="$1"
+  if [[ "${REMOVE_BAG_DATA}" != "true" ]]; then
+    return
+  fi
+  if [[ ! -d "${trial_results_dir}" ]]; then
+    return
+  fi
+
+  local removed=0
+  local bag_dir
+  shopt -s nullglob
+  for bag_dir in "${trial_results_dir}"/bag_*; do
+    if [[ -d "${bag_dir}" ]]; then
+      rm -rf "${bag_dir}"
+      removed=$((removed + 1))
+    fi
+  done
+  shopt -u nullglob
+
+  if [[ "${removed}" -gt 0 ]]; then
+    echo "  removed ${removed} bag dir(s) from ${trial_results_dir}"
+  else
+    echo "  no bag dirs to remove in ${trial_results_dir}"
+  fi
+}
+
 mapfile -t TRIAL_IDS < <(list_trial_ids "${ENGINE_CONFIG_FILE}")
 TOTAL_TRIALS="${#TRIAL_IDS[@]}"
 if [[ "${TOTAL_TRIALS}" -eq 0 ]]; then
@@ -310,6 +342,7 @@ echo "  sudo keepalive: ${SUDO_KEEPALIVE}"
 echo "  gazebo gui: ${GAZEBO_GUI}"
 echo "  launch rviz: ${LAUNCH_RVIZ}"
 echo "  per-trial scoring results root: ${RESULTS_ROOT}"
+echo "  remove bag data: ${REMOVE_BAG_DATA}"
 
 DATASET_EXISTS_BEFORE_RUN="false"
 if [[ -f "${DATASET_ROOT}/meta/info.json" ]]; then
@@ -480,6 +513,8 @@ for TRIAL_ID in "${TRIAL_IDS[@]}"; do
     echo "  exit codes: sim=${SIM_EXIT}, policy=${POLICY_EXIT}, recorder=${RECORDER_EXIT}"
     echo "${RUN_INDEX},${TRIAL_ID},OK,${TRIAL_TOTAL_SCORE},${SCORING_FILE}" >> "${SCORE_SUMMARY_CSV}"
   fi
+
+  cleanup_trial_bags "${TRIAL_RESULTS_DIR}"
 
   sleep "${PAUSE_BETWEEN_TRIALS_SEC}"
 done
