@@ -347,7 +347,8 @@ Useful flags:
 - `--tmp-dir` to keep generated single-trial YAMLs and per-trial logs
 - `--gazebo-gui` whether to launch gazebo gui 
 - `--launch-rviz` whether to launch rviz in each trial. 
-- `--results-root` where the script writes the score summary and bags (default `./outputs/aic_results_per_trial`)
+- `--results-root` where the script writes per-trial scoring outputs and score summary (default `./outputs/aic_results_per_trial`)
+- `--remove-bag-data true` remove per-trial `bag_*` directories after each trial (default `true`)
 
 ### Post-process CheatCode phases (alignment vs descent)
 

@@ -28,6 +28,7 @@ from aic_task_interfaces.msg import Task
 from geometry_msgs.msg import Point, Pose, Quaternion, Transform
 from rclpy.duration import Duration
 from rclpy.time import Time
+from std_msgs.msg import String
 from tf2_ros import TransformException
 from transforms3d._gohlketransforms import quaternion_multiply, quaternion_slerp
 
@@ -40,7 +41,29 @@ class CheatCode(Policy):
         self._tip_y_error_integrator = 0.0
         self._max_integrator_windup = 0.05
         self._task = None
+        self._latest_insertion_event_namespace = ""
         super().__init__(parent_node)
+        self._insertion_event_sub = self._parent_node.create_subscription(
+            String,
+            "/scoring/insertion_event",
+            self._insertion_event_callback,
+            10,
+        )
+
+    def _insertion_event_callback(self, msg: String) -> None:
+        self._latest_insertion_event_namespace = msg.data.strip().strip("/")
+        self.get_logger().info(
+            f"Received insertion event for namespace: '{self._latest_insertion_event_namespace}'"
+        )
+
+    def _task_completed_in_simulation(self, task: Task) -> bool:
+        namespace = self._latest_insertion_event_namespace
+        if not namespace:
+            return False
+        tokens = [token for token in namespace.split("/") if token]
+        if len(tokens) < 2:
+            return False
+        return tokens[-2] == task.target_module_name and tokens[-1] == task.port_name
 
     def _wait_for_tf(
         self, target_frame: str, source_frame: str, timeout_sec: float = 10.0
@@ -193,6 +216,7 @@ class CheatCode(Policy):
     ):
         self.get_logger().info(f"CheatCode.insert_cable() task: {task}")
         self._task = task
+        self._latest_insertion_event_namespace = ""
 
         port_frame = f"task_board/{task.target_module_name}/{task.port_name}_link"
         cable_tip_frame = f"{task.cable_name}/{task.plug_name}_link"
@@ -224,6 +248,11 @@ class CheatCode(Policy):
         self.get_logger().info(f"[CheatCode] Interpolating for {interpolation_duration_sec} seconds")
 
         for t in range(steps+1):
+            if self._task_completed_in_simulation(task):
+                self.get_logger().info(
+                    "[CheatCode] Early exit: simulation reported task completion."
+                )
+                return True
             interp_fraction = t / steps
             try:
                 self.set_pose_target(
@@ -244,6 +273,11 @@ class CheatCode(Policy):
 
         # Descend until the cable is inserted into the port.
         while True:
+            if self._task_completed_in_simulation(task):
+                self.get_logger().info(
+                    "[CheatCode] Early exit: simulation reported task completion."
+                )
+                return True
             if z_offset < -0.015:
                 break
 
@@ -258,8 +292,16 @@ class CheatCode(Policy):
                 self.get_logger().warn(f"TF lookup failed during insertion: {ex}")
             self.sleep_for(0.05)
 
-        self.get_logger().info("Waiting for connector to stabilize...")
-        self.sleep_for(5.0)
+        self.get_logger().info("Waiting briefly for insertion event...")
+        wait_started = self.time_now()
+        wait_timeout = Duration(seconds=5.0)
+        while (self.time_now() - wait_started) < wait_timeout:
+            if self._task_completed_in_simulation(task):
+                self.get_logger().info(
+                    "[CheatCode] Insertion event observed before timeout."
+                )
+                break
+            self.sleep_for(0.05)
 
         self.get_logger().info("CheatCode.insert_cable() exiting...")
         return True
