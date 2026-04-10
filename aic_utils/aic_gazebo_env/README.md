@@ -34,9 +34,19 @@ Current implementation notes:
   service requests for `/world/<world>/control`, `/world/<world>/set_pose`,
   and `/world/<world>/joint_target`, and reports observation generations back
   to Python.
+- Helper startup now uses a two-stage readiness check: liveness via `ping`,
+  then sample readiness via helper status / `wait_until_ready`, so startup does
+  not report success before at least one valid state sample has been received.
 - The older Gazebo CLI observation path remains available as an explicit
   fallback / diagnostic path when the live runtime does not yield a fresh
   transport sample within the bounded timeout window.
+- `reset()` now performs an explicit bounded post-reset world advance before it
+  demands a fresh observation, and action paths perform explicit bounded world
+  advancement before post-action reads instead of relying on passive simulator
+  progress.
+- The env-facing `observation["step_count"]` is a logical episode step count.
+  Raw Gazebo iteration counts remain available in info payloads as
+  `sim_step_count_raw` / `state_text_raw` for diagnostics.
 - The package still remains training-oriented and separate from the official
   ROS + `aic_engine` evaluation flow.
 
