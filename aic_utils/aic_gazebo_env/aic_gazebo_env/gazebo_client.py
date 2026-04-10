@@ -4,12 +4,16 @@ from __future__ import annotations
 
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
+import ast
 import math
 from pathlib import Path
 import re
+import struct
 import subprocess
+import time
 import xml.etree.ElementTree as ET
 
+from .official_scoring import OfficialTier3TrackedPairScorer
 from .protocol import (
     GetObservationRequest,
     GetObservationResponse,
@@ -58,10 +62,29 @@ class GazeboCliClientConfig:
         "wrist_2_joint",
         "wrist_3_joint",
     )
+    initial_joint_positions: tuple[float, ...] | None = (
+        -0.1597,
+        -1.3542,
+        -1.6648,
+        -1.6933,
+        1.5710,
+        1.4110,
+    )
+    step_after_action: bool = True
+    joint_settle_tolerance: float = 5e-3
+    joint_settle_timeout_s: float = 3.0
+    joint_settle_poll_interval_s: float = 0.1
+    live_state_entity_ids: tuple[tuple[str, int], ...] = (
+        ("ati/tool_link", 79),
+        ("wrist_3_link", 50),
+    )
+    tabletop_position: tuple[float, float, float] = (-0.2, 0.2, 1.14)
+    tabletop_rpy: tuple[float, float, float] = (0.0, 0.0, -3.141)
     success_distance_threshold: float = 1.0
     orientation_success_threshold: float | None = None
     max_episode_steps: int | None = None
     success_bonus: float = 10.0
+    reward_mode: str = "heuristic"
 
 
 @dataclass
@@ -69,6 +92,9 @@ class GazeboCliClient(GazeboClient):
     """Client that talks to Gazebo through the `gz` CLI."""
 
     config: GazeboCliClientConfig
+
+    def __post_init__(self) -> None:
+        self._official_tier3_scorer = OfficialTier3TrackedPairScorer()
 
     def reset(self, request: ResetRequest) -> ResetResponse:
         decoded = ResetRequest.from_dict(request.to_dict())
@@ -100,6 +126,8 @@ class GazeboCliClient(GazeboClient):
                 "observation_topic": observation_response.info.get("observation_topic"),
             },
         )
+        self._remember_initial_tracked_distance(observation_response.observation)
+        self._remember_joint_positions(observation_response.observation)
         return ResetResponse.from_dict(response.to_dict())
 
     def get_observation(
@@ -108,19 +136,103 @@ class GazeboCliClient(GazeboClient):
     ) -> GetObservationResponse:
         decoded = GetObservationRequest.from_dict(request.to_dict())
         del decoded
-        topic = f"/world/{self._world_name()}/state"
-        payload = self._run(["topic", "-e", "-n", "1", "-t", topic])
-        observation = self._parse_state_text(payload)
+        world_name = self._world_name()
+        state_topic = f"/world/{world_name}/state"
+        pose_topic = f"/world/{world_name}/pose/info"
+        state_payload = self._read_topic_sample(state_topic)
+        pose_payload = self._try_run_with_timeout(
+            ["topic", "-e", "-n", "1", "-t", pose_topic],
+            timeout=min(self.config.timeout, 1.0),
+        )
+        observation = self._parse_live_observation(
+            state_payload=state_payload,
+            pose_payload=pose_payload,
+            world_name=world_name,
+        )
+        if observation["entity_count"] == 0 and observation["joint_count"] == 0:
+            observation = self._parse_state_text(state_payload)
         response = GetObservationResponse(
             observation=observation,
             info={
                 "backend": "gazebo",
                 "runtime": "gazebo",
-                "observation_topic": topic,
-                "state_text": payload,
+                "observation_topic": state_topic,
+                "pose_topic": pose_topic,
+                "state_text": state_payload,
+                "pose_text": pose_payload,
             },
         )
         return GetObservationResponse.from_dict(response.to_dict())
+
+    def _read_topic_sample(self, topic: str) -> str:
+        deadline = time.monotonic() + (self.config.timeout * 3.0)
+        last_error: Exception | None = None
+        while time.monotonic() < deadline:
+            try:
+                return self._run(["topic", "-e", "-n", "1", "-t", topic])
+            except (RuntimeError, subprocess.TimeoutExpired) as exc:
+                last_error = exc
+                if topic.endswith("/state"):
+                    fallback_payload = self._read_state_sample_after_world_step(topic)
+                    if fallback_payload is not None:
+                        return fallback_payload
+                time.sleep(0.2)
+        raise RuntimeError(f"Timed out reading Gazebo topic {topic}: {last_error}")
+
+    def _try_run_with_timeout(self, args: list[str], *, timeout: float) -> str | None:
+        try:
+            completed = subprocess.run(
+                [self.config.executable, *args],
+                check=False,
+                capture_output=True,
+                text=True,
+                timeout=timeout,
+            )
+        except subprocess.TimeoutExpired:
+            return None
+        if completed.returncode != 0:
+            return None
+        return completed.stdout.strip()
+
+    def _read_state_sample_after_world_step(self, topic: str) -> str | None:
+        process = subprocess.Popen(
+            [self.config.executable, "topic", "-e", "-n", "1", "-t", topic],
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True,
+        )
+        try:
+            time.sleep(0.5)
+            step_reply = self._try_run_with_timeout(
+                [
+                    "service",
+                    "-s",
+                    f"/world/{self._world_name()}/control",
+                    "--reqtype",
+                    "gz.msgs.WorldControl",
+                    "--reptype",
+                    "gz.msgs.Boolean",
+                    "--timeout",
+                    str(int(self.config.timeout * 1000)),
+                    "--req",
+                    "multi_step: 1",
+                ],
+                timeout=self.config.timeout,
+            )
+            if step_reply is None:
+                process.kill()
+                process.communicate()
+                return None
+            stdout, stderr = process.communicate(timeout=self.config.timeout)
+            if process.returncode not in (0, None):
+                return None
+            if stderr.strip():
+                return None
+            return stdout.strip() or None
+        except subprocess.TimeoutExpired:
+            process.kill()
+            process.communicate()
+            return None
 
     def step(self, request: StepRequest) -> StepResponse:
         decoded = StepRequest.from_dict(request.to_dict())
@@ -129,25 +241,51 @@ class GazeboCliClient(GazeboClient):
         joint_reply = self._maybe_apply_joint_action(translated_action)
         pose_reply = self._maybe_apply_pose_action(translated_action)
         multi_step = self._resolve_multi_step(translated_action)
-        reply = self._run(
-            [
-                "service",
-                "-s",
-                f"/world/{self._world_name()}/control",
-                "--reqtype",
-                "gz.msgs.WorldControl",
-                "--reptype",
-                "gz.msgs.Boolean",
-                "--timeout",
-                str(int(self.config.timeout * 1000)),
-                "--req",
-                f"multi_step: {multi_step}",
-            ]
-        )
-        observation_response = self.get_observation(GetObservationRequest())
-        reward, terminated, truncated = self._compute_step_outcome(
+        reply: str | None = None
+        settle_info: dict[str, object] = {}
+        if joint_reply is None and pose_reply is None:
+            reply = self._run(
+                [
+                    "service",
+                    "-s",
+                    f"/world/{self._world_name()}/control",
+                    "--reqtype",
+                    "gz.msgs.WorldControl",
+                    "--reptype",
+                    "gz.msgs.Boolean",
+                    "--timeout",
+                    str(int(self.config.timeout * 1000)),
+                    "--req",
+                    f"multi_step: {multi_step}",
+                ]
+            )
+            observation_response = self.get_observation(GetObservationRequest())
+        else:
+            if self.config.step_after_action:
+                reply = self._run(
+                    [
+                        "service",
+                        "-s",
+                        f"/world/{self._world_name()}/control",
+                        "--reqtype",
+                        "gz.msgs.WorldControl",
+                        "--reptype",
+                        "gz.msgs.Boolean",
+                        "--timeout",
+                        str(int(self.config.timeout * 1000)),
+                        "--req",
+                        f"multi_step: {multi_step}",
+                    ]
+                )
+            observation_response, settle_info = self._observe_after_action(
+                translated_action=translated_action,
+                joint_reply=joint_reply,
+                pose_reply=pose_reply,
+            )
+        reward, terminated, truncated, reward_details = self._compute_step_outcome(
             observation_response.observation
         )
+        self._remember_joint_positions(observation_response.observation)
         response = StepResponse(
             observation=dict(observation_response.observation),
             reward=reward,
@@ -169,12 +307,44 @@ class GazeboCliClient(GazeboClient):
                 "orientation_success_threshold": self.config.orientation_success_threshold,
                 "max_episode_steps": self.config.max_episode_steps,
                 "success_bonus": self.config.success_bonus,
+                "reward_mode": self.config.reward_mode,
                 "terminated": terminated,
                 "truncated": truncated,
                 "reward": reward,
+                "reward_details": reward_details,
+                **settle_info,
             },
         )
         return StepResponse.from_dict(response.to_dict())
+
+    def _observe_after_action(
+        self,
+        *,
+        translated_action: dict[str, object],
+        joint_reply: str | None,
+        pose_reply: str | None,
+    ) -> tuple[GetObservationResponse, dict[str, object]]:
+        """Observe the world after an action with transport-aware settling."""
+        settle_info: dict[str, object] = {}
+        joint_action = translated_action.get("set_joint_positions")
+        if joint_reply is not None and isinstance(joint_action, dict):
+            positions = joint_action.get("positions")
+            if isinstance(positions, list) and all(
+                isinstance(value, (int, float)) for value in positions
+            ):
+                observation_response, settled = self._wait_for_joint_target_settle(
+                    [float(value) for value in positions]
+                )
+                settle_info["joint_target_settled"] = settled
+                settle_info["joint_settle_tolerance"] = self.config.joint_settle_tolerance
+                settle_info["joint_settle_timeout_s"] = self.config.joint_settle_timeout_s
+                return observation_response, settle_info
+
+        if pose_reply is not None:
+            time.sleep(0.2)
+            settle_info["joint_target_settled"] = None
+
+        return self.get_observation(GetObservationRequest()), settle_info
 
     def _translate_policy_action(self, action: dict[str, object]) -> dict[str, object]:
         """Translate the canonical policy-facing action into bridge-level actions."""
@@ -238,10 +408,7 @@ class GazeboCliClient(GazeboClient):
                 "Gazebo step action 'joint_position_delta' must contain only numbers."
             )
 
-        observation_response = self.get_observation(GetObservationRequest())
-        current_joint_positions = self._lookup_current_joint_positions(
-            observation_response.observation
-        )
+        current_joint_positions = self._resolve_current_joint_positions()
         next_positions = [
             current_position + float(delta)
             for current_position, delta in zip(
@@ -249,6 +416,7 @@ class GazeboCliClient(GazeboClient):
                 joint_position_delta,
             )
         ]
+        self._last_known_joint_positions = tuple(next_positions)
         translated_action.pop("joint_position_delta")
         translated_action["set_joint_positions"] = {
             "model_name": self.config.joint_command_model_name,
@@ -272,6 +440,12 @@ class GazeboCliClient(GazeboClient):
                 f"stdout: {completed.stdout.strip()} stderr: {completed.stderr.strip()}"
             )
         return completed.stdout.strip()
+
+    def _try_run(self, args: list[str]) -> str | None:
+        try:
+            return self._run(args)
+        except (RuntimeError, subprocess.TimeoutExpired):
+            return None
 
     def _resolve_multi_step(self, action: dict[str, object]) -> int:
         """Resolve the minimal diagnostic step count from the action payload."""
@@ -491,27 +665,116 @@ class GazeboCliClient(GazeboClient):
     ) -> str:
         """Send absolute joint targets through the Gazebo-native joint bridge."""
         joint_names_text = ",".join(joint_names)
-        positions_text = ",".join(str(position) for position in positions)
+        positions_text = ",".join(self._format_joint_position(position) for position in positions)
         request_text = (
             f"model_name={model_name};"
             f"joint_names={joint_names_text};"
             f"positions={positions_text}"
         )
-        return self._run(
-            [
-                "service",
-                "-s",
-                f"/world/{self._world_name()}/joint_target",
-                "--reqtype",
-                "gz.msgs.StringMsg",
-                "--reptype",
-                "gz.msgs.Boolean",
-                "--timeout",
-                str(int(self.config.timeout * 1000)),
-                "--req",
-                f'data: "{request_text}"',
-            ]
-        )
+        last_error: Exception | None = None
+        for _ in range(3):
+            try:
+                return self._run(
+                    [
+                        "service",
+                        "-s",
+                        f"/world/{self._world_name()}/joint_target",
+                        "--reqtype",
+                        "gz.msgs.StringMsg",
+                        "--reptype",
+                        "gz.msgs.Boolean",
+                        "--timeout",
+                        str(int(self.config.timeout * 1000)),
+                        "--req",
+                        f'data: "{request_text}"',
+                    ]
+                )
+            except (RuntimeError, subprocess.TimeoutExpired) as exc:
+                last_error = exc
+                time.sleep(0.2)
+        raise RuntimeError(f"Joint target request failed after retries: {last_error}")
+
+    def _resolve_current_joint_positions(self) -> list[float]:
+        cached_positions = getattr(self, "_last_known_joint_positions", None)
+        if isinstance(cached_positions, tuple) and len(cached_positions) == len(
+            self.config.joint_names
+        ):
+            return [float(position) for position in cached_positions]
+
+        configured_positions = self.config.initial_joint_positions
+        if isinstance(configured_positions, tuple) and len(configured_positions) == len(
+            self.config.joint_names
+        ):
+            return [float(position) for position in configured_positions]
+
+        observation_response = self.get_observation(GetObservationRequest())
+        return self._lookup_current_joint_positions(observation_response.observation)
+
+    def _remember_joint_positions(self, observation: dict[str, object]) -> None:
+        try:
+            current_joint_positions = self._lookup_current_joint_positions(observation)
+        except RuntimeError:
+            return
+        self._last_known_joint_positions = tuple(current_joint_positions)
+
+    def _remember_initial_tracked_distance(self, observation: dict[str, object]) -> None:
+        tracked_distance = self._extract_tracked_distance(observation)
+        if tracked_distance is not None:
+            self._initial_tracked_distance = tracked_distance
+
+    def _resolve_initial_tracked_distance(self, observation: dict[str, object]) -> float | None:
+        initial_distance = getattr(self, "_initial_tracked_distance", None)
+        if isinstance(initial_distance, float):
+            return initial_distance
+        tracked_distance = self._extract_tracked_distance(observation)
+        if tracked_distance is not None:
+            self._initial_tracked_distance = tracked_distance
+        return tracked_distance
+
+    def _extract_tracked_distance(self, observation: dict[str, object]) -> float | None:
+        task_geometry = observation.get("task_geometry")
+        if not isinstance(task_geometry, dict):
+            return None
+        pair_geometry = task_geometry.get("robot_to_task_board")
+        if not isinstance(pair_geometry, dict):
+            pair_geometry = task_geometry.get("tracked_entity_pair")
+        if not isinstance(pair_geometry, dict):
+            return None
+        distance = pair_geometry.get("distance")
+        if not isinstance(distance, float):
+            return None
+        return distance
+
+    def _wait_for_joint_target_settle(
+        self,
+        target_positions: list[float],
+    ) -> tuple[GetObservationResponse, bool]:
+        """Poll observations until the configured joints are close to target."""
+        deadline = time.monotonic() + self.config.joint_settle_timeout_s
+        latest_observation_response: GetObservationResponse | None = None
+        while time.monotonic() < deadline:
+            latest_observation_response = self.get_observation(GetObservationRequest())
+            try:
+                current_joint_positions = self._lookup_current_joint_positions(
+                    latest_observation_response.observation
+                )
+            except RuntimeError:
+                time.sleep(self.config.joint_settle_poll_interval_s)
+                continue
+            max_error = max(
+                abs(target - current)
+                for target, current in zip(target_positions, current_joint_positions)
+            )
+            if max_error <= self.config.joint_settle_tolerance:
+                return latest_observation_response, True
+            time.sleep(self.config.joint_settle_poll_interval_s)
+
+        if latest_observation_response is None:
+            latest_observation_response = self.get_observation(GetObservationRequest())
+        return latest_observation_response, False
+
+    def _format_joint_position(self, position: float) -> str:
+        return f"{float(position):.6f}"
 
     def _parse_state_text(self, payload: str) -> dict[str, object]:
         """Parse a structured observation from `gz topic -e` text."""
@@ -538,6 +801,124 @@ class GazeboCliClient(GazeboClient):
             },
             "task_geometry": self._build_task_geometry(entities_by_name),
         }
+
+    def _parse_live_observation(
+        self,
+        *,
+        state_payload: str,
+        pose_payload: str | None,
+        world_name: str,
+    ) -> dict[str, object]:
+        """Parse a structured observation from live Gazebo pose/state topics."""
+        entities = (
+            self._extract_poses(pose_payload)
+            if isinstance(pose_payload, str) and pose_payload
+            else self._extract_live_state_entities(state_payload)
+        )
+        entities_by_name = {
+            entity["name"]: dict(entity) for entity in entities if isinstance(entity["name"], str)
+        }
+        joints = self._decode_joint_components(state_payload)
+        return {
+            "world_name": world_name,
+            "step_count": self._extract_state_step_count(state_payload),
+            "entity_count": len(entities),
+            "entity_names": [entity["name"] for entity in entities],
+            "entities": entities,
+            "entities_by_name": entities_by_name,
+            "joint_count": len(joints),
+            "joint_names": [joint["name"] for joint in joints],
+            "joint_positions": [joint["position"] for joint in joints],
+            "joints": joints,
+            "joints_by_name": {
+                joint["name"]: dict(joint) for joint in joints if isinstance(joint["name"], str)
+            },
+            "task_geometry": self._build_task_geometry(entities_by_name),
+        }
+
+    def _extract_live_state_entities(self, payload: str) -> list[dict[str, object]]:
+        entities_by_id = {
+            entity_id: name for name, entity_id in self.config.live_state_entity_ids
+        }
+        entities: list[dict[str, object]] = []
+        blocks = re.findall(
+            r"entities \{\n    key: (\d+)\n    value \{(.*?)\n    \}\n  \}",
+            payload,
+            re.S,
+        )
+        for entity_id_text, body in blocks:
+            entity_id = int(entity_id_text)
+            entity_name = entities_by_id.get(entity_id)
+            if entity_name is None:
+                continue
+            pose = self._extract_state_pose(body)
+            if pose is None:
+                continue
+            entities.append(
+                {
+                    "name": entity_name,
+                    "id": entity_id,
+                    "position": pose["position"],
+                    "orientation": pose["orientation"],
+                    "pose": dict(pose),
+                }
+            )
+
+        tabletop_orientation = self._quaternion_from_rpy(*self.config.tabletop_rpy)
+        entities.append(
+            {
+                "name": "tabletop",
+                "position": list(self.config.tabletop_position),
+                "orientation": tabletop_orientation,
+                "pose": {
+                    "position": list(self.config.tabletop_position),
+                    "orientation": tabletop_orientation,
+                },
+            }
+        )
+        return entities
+
+    def _extract_state_pose(self, payload: str) -> dict[str, list[float]] | None:
+        match = re.search(
+            r'type: 10918813941671183356\n\s+component: "([^"]+)"',
+            payload,
+            re.S,
+        )
+        if match is None:
+            return None
+        values = [float(value) for value in match.group(1).split()]
+        if len(values) != 6:
+            return None
+        x, y, z, roll, pitch, yaw = values
+        return {
+            "position": [x, y, z],
+            "orientation": self._quaternion_from_rpy(roll, pitch, yaw),
+        }
+
+    def _quaternion_from_rpy(
+        self,
+        roll: float,
+        pitch: float,
+        yaw: float,
+    ) -> list[float]:
+        cy = math.cos(yaw * 0.5)
+        sy = math.sin(yaw * 0.5)
+        cp = math.cos(pitch * 0.5)
+        sp = math.sin(pitch * 0.5)
+        cr = math.cos(roll * 0.5)
+        sr = math.sin(roll * 0.5)
+        return [
+            sr * cp * cy - cr * sp * sy,
+            cr * sp * cy + sr * cp * sy,
+            cr * cp * sy - sr * sp * cy,
+            cr * cp * cy + sr * sp * sy,
+        ]
+
+    def _extract_state_step_count(self, payload: str) -> int:
+        iterations_match = re.search(r"iterations:\s*(\d+)", payload)
+        if iterations_match is None:
+            return 0
+        return int(iterations_match.group(1))
 
     def _build_task_geometry(
         self,
@@ -623,27 +1004,48 @@ class GazeboCliClient(GazeboClient):
     def _compute_step_outcome(
         self,
         observation: dict[str, object],
-    ) -> tuple[float, bool, bool]:
+    ) -> tuple[float, bool, bool, dict[str, object]]:
         """Compute the minimal geometry-based step outcome for the real path."""
         task_geometry = observation.get("task_geometry")
         if not isinstance(task_geometry, dict):
-            return 0.0, False, self._compute_truncation(observation)
+            return 0.0, False, self._compute_truncation(observation), {
+                "mode": self.config.reward_mode,
+                "reason": "missing_task_geometry",
+            }
 
         pair_geometry = task_geometry.get("robot_to_task_board")
         if not isinstance(pair_geometry, dict):
             pair_geometry = task_geometry.get("tracked_entity_pair")
         if not isinstance(pair_geometry, dict):
-            return 0.0, False, self._compute_truncation(observation)
+            return 0.0, False, self._compute_truncation(observation), {
+                "mode": self.config.reward_mode,
+                "reason": "missing_tracked_pair",
+            }
 
         distance = pair_geometry.get("distance")
         success = pair_geometry.get("success")
         if not isinstance(distance, float) or not isinstance(success, bool):
-            return 0.0, False, self._compute_truncation(observation)
+            return 0.0, False, self._compute_truncation(observation), {
+                "mode": self.config.reward_mode,
+                "reason": "missing_distance_or_success",
+            }
 
-        reward = -distance
-        if success:
-            reward += self.config.success_bonus
-        return reward, success, self._compute_truncation(observation)
+        if self.config.reward_mode == "official_tier3":
+            reward, reward_details = self._official_tier3_scorer.score(
+                tracked_pair=pair_geometry,
+                initial_distance=self._resolve_initial_tracked_distance(observation),
+            )
+        else:
+            reward = -distance
+            if success:
+                reward += self.config.success_bonus
+            reward_details = {
+                "mode": "heuristic",
+                "distance": distance,
+                "success_bonus": self.config.success_bonus,
+                "tracked_pair_success": success,
+            }
+        return reward, success, self._compute_truncation(observation), reward_details
 
     def _compute_truncation(self, observation: dict[str, object]) -> bool:
         """Return whether the configured real episode budget has been reached."""
@@ -853,6 +1255,67 @@ class GazeboCliClient(GazeboClient):
             joints.append(joint)
         return joints
 
+    def _extract_poses(self, payload: str) -> list[dict[str, object]]:
+        """Extract entity pose data from Gazebo pose-info payloads."""
+        entities: list[dict[str, object]] = []
+        for block in self._extract_repeated_blocks(payload, "pose"):
+            name = self._extract_scalar_string(block, "name")
+            if name is None:
+                continue
+            entity: dict[str, object] = {"name": name}
+            entity_id = self._extract_scalar_int(block, "id")
+            if entity_id is not None:
+                entity["id"] = entity_id
+            position = self._extract_xyz_vector(block, "position")
+            orientation = self._extract_xyzw_vector_allow_partial(block, "orientation")
+            pose: dict[str, list[float]] = {}
+            if position is not None:
+                pose["position"] = position
+                entity["position"] = position
+            if orientation is not None:
+                pose["orientation"] = orientation
+                entity["orientation"] = orientation
+            if pose:
+                entity["pose"] = pose
+            entities.append(entity)
+        return entities
+
+    def _decode_joint_components(self, payload: str) -> list[dict[str, object]]:
+        """Decode live joint positions from SerializedStepMap component payloads."""
+        blocks = re.findall(
+            r"entities \{\n    key: (\d+)\n    value \{(.*?)\n    \}\n  \}",
+            payload,
+            re.S,
+        )
+        decoded_positions: list[float] = []
+        for _, body in blocks:
+            for match in re.finditer(
+                r'type: (\d+)\n          component: "((?:\\.|[^"])*)"',
+                body,
+                re.S,
+            ):
+                component_type, component_payload = match.groups()
+                if component_type != "8319580315957903596":
+                    continue
+                raw = self._decode_textproto_bytes(component_payload)
+                if len(raw) < 10 or raw[0] != 10 or raw[1] != 8:
+                    continue
+                decoded_positions.append(struct.unpack("<d", raw[2:10])[0])
+                break
+        if len(decoded_positions) < len(self.config.joint_names):
+            return []
+        return [
+            {"name": joint_name, "position": float(position)}
+            for joint_name, position in zip(
+                self.config.joint_names,
+                decoded_positions[: len(self.config.joint_names)],
+            )
+        ]
+
+    def _decode_textproto_bytes(self, payload: str) -> bytes:
+        """Decode an escaped textproto bytes literal into raw bytes."""
+        return ast.literal_eval(f'"{payload}"').encode("latin1")
+
     def _extract_xyz_vector(self, payload: str, key: str) -> list[float] | None:
         """Extract a three-axis vector block if all values are present."""
         block = self._extract_first_block(payload, key)
@@ -879,9 +1342,27 @@ class GazeboCliClient(GazeboClient):
             values.append(value)
         return values
 
+    def _extract_xyzw_vector_allow_partial(
+        self,
+        payload: str,
+        key: str,
+    ) -> list[float] | None:
+        """Extract a quaternion block, defaulting missing axes to zero."""
+        block = self._extract_first_block(payload, key)
+        if block is None:
+            return None
+        values: list[float] = []
+        for axis in ("x", "y", "z", "w"):
+            value = self._extract_scalar_float(block, axis)
+            values.append(0.0 if value is None else value)
+        return values
+
     def _extract_scalar_float(self, payload: str, key: str) -> float | None:
         """Extract a float scalar from a textproto-like payload."""
-        match = re.search(rf"{re.escape(key)}:\s*(-?\d+(?:\.\d+)?)", payload)
+        match = re.search(
+            rf"{re.escape(key)}:\s*(-?\d+(?:\.\d+)?(?:[eE][+-]?\d+)?)",
+            payload,
+        )
         if match is None:
             return None
         return float(match.group(1))
@@ -922,6 +1403,15 @@ class GazeboCliClient(GazeboClient):
                 return blocks
 
     def _world_name(self) -> str:
+        discovered_world_name = getattr(self, "_discovered_world_name", None)
+        if isinstance(discovered_world_name, str) and discovered_world_name:
+            return discovered_world_name
+
+        running_world_name = self._discover_running_world_name()
+        if running_world_name:
+            self._discovered_world_name = running_world_name
+            return running_world_name
+
         if self.config.world_name:
             return self.config.world_name
 
@@ -938,3 +1428,26 @@ class GazeboCliClient(GazeboClient):
                 return world_name
 
         return world_path.stem
+
+    def _discover_running_world_name(self) -> str | None:
+        service_list = self._try_run(["service", "-l"])
+        if not service_list:
+            return None
+
+        world_names: set[str] = set()
+        preferred_world_names: set[str] = set()
+        for service_name in service_list.splitlines():
+            match = re.search(r"/world/([^/\s]+)/", service_name)
+            if match is None:
+                continue
+            world_name = match.group(1)
+            world_names.add(world_name)
+            if service_name.strip().endswith(("/control", "/joint_target")):
+                preferred_world_names.add(world_name)
+
+        candidates = preferred_world_names or world_names
+        if len(candidates) == 1:
+            return next(iter(candidates))
+        if self.config.world_name in candidates:
+            return self.config.world_name
+        return None

@@ -447,7 +447,7 @@ class GazeboEnv:
             raise ValueError(f"Action '{name}' must be a list of numbers.")
         if len(value) != expected_length:
             raise ValueError(
-                f"Action '{name}' must contain exactly {expected_length} numeric values."
+                f"Action '{name}' must have length {expected_length} (exactly {expected_length} values) and contain only numeric values."
             )
         if any(not isinstance(item, (int, float)) for item in value):
             raise ValueError(f"Action '{name}' must contain only numeric values.")

@@ -183,8 +183,12 @@ Alignment notes against official eval:
   - Training env currently exposes `joint_position_delta`.
   - Official eval policies send joint or Cartesian targets through `aic_controller`.
 - Success criteria:
-  - Training env uses a simplified object-to-target distance criterion.
-  - Official eval success is task-specific cable insertion and scoring.
+  - Training env currently uses a simplified object-to-target distance criterion
+    plus optional orientation gating.
+  - Official eval success is task-specific cable insertion and scoring via
+    `aic_engine` + `aic_scoring`.
+  - The current gym reward is a training heuristic only and is not the
+    authoritative evaluation score.
 - Observation differences:
   - Training env allows privileged observations and omits cameras and wrench data.
   - Official eval observations are assembled by `aic_adapter` and include richer ROS data.
