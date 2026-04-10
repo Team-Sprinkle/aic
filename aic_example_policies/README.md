@@ -161,6 +161,74 @@ pixi run ros2 run aic_model aic_model --ros-args -p use_sim_time:=true -p policy
 
 ---
 
+### 6. RunMIP - MIP Policy (from `much-ado-about-noising`)
+
+A diffusion-based policy integration for AIC using a MIP checkpoint trained in the separate
+`much-ado-about-noising` repository.
+
+**Purpose:** Run a trained MIP policy inside `aic_model` with AIC observation/action interfaces.
+
+**Run the policy:**
+```bash
+pixi run ros2 run aic_model aic_model --ros-args -p use_sim_time:=true -p policy:=aic_example_policies.ros.RunMIP
+```
+
+**Source:** [`RunMIP.py`](./aic_example_policies/ros/RunMIP.py)
+
+#### Required artifacts in this repo
+
+`RunMIP.py` loads artifacts from:
+`aic_example_policies/aic_example_policies/assets/mip`
+
+Required files:
+- `model_latest.pt`
+- `configs/task/aic_lerobot_image_state.yaml`
+- `configs/network/_base.yaml`
+- `configs/network/mlp.yaml`
+- `configs/optimization/default.yaml`
+- `configs/log/default.yaml`
+
+#### How these are sourced from `much-ado-about-noising`
+
+Copy from `much-ado-about-noising` into this repo:
+
+```bash
+cd ~/ws_aic/src/aic
+mkdir -p aic_example_policies/aic_example_policies/assets/mip/configs/{task,network,optimization,log}
+
+cp /home/jk/much-ado-about-noising/logs/models/model_latest.pt \
+  aic_example_policies/aic_example_policies/assets/mip/
+
+cp /home/jk/much-ado-about-noising/examples/configs/task/aic_lerobot_image_state.yaml \
+  aic_example_policies/aic_example_policies/assets/mip/configs/task/
+cp /home/jk/much-ado-about-noising/examples/configs/network/_base.yaml \
+  aic_example_policies/aic_example_policies/assets/mip/configs/network/
+cp /home/jk/much-ado-about-noising/examples/configs/network/mlp.yaml \
+  aic_example_policies/aic_example_policies/assets/mip/configs/network/
+cp /home/jk/much-ado-about-noising/examples/configs/optimization/default.yaml \
+  aic_example_policies/aic_example_policies/assets/mip/configs/optimization/
+cp /home/jk/much-ado-about-noising/examples/configs/log/default.yaml \
+  aic_example_policies/aic_example_policies/assets/mip/configs/log/
+```
+
+#### Runtime path overrides
+
+- `AIC_MIP_ASSETS_DIR`: Override where `RunMIP` searches for `model_latest.pt` and configs.
+- `MIP_DATASET_ROOT`: Optional root used to resolve relative `dataset_path` from task config.
+
+Example:
+```bash
+AIC_MIP_ASSETS_DIR=/abs/path/to/assets/mip \
+MIP_DATASET_ROOT=/abs/path/to/datasets \
+pixi run ros2 run aic_model aic_model --ros-args -p use_sim_time:=true -p policy:=aic_example_policies.ros.RunMIP
+```
+
+#### Dependency note
+
+`RunMIP` requires the `mip` Python package in the Pixi environment (for example via git dependency in `pixi.toml`).
+
+---
+
 ## Scoring Examples
 
 For expected scoring results and reproducible test commands for each policy, see the [Scoring Test & Evaluation Guide](../../docs/scoring_tests.md).

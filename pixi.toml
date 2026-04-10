@@ -45,6 +45,11 @@ lerobot_teleoperator_devices = { git = "https://github.com/koonpeng/lerobot-ros"
 mujoco = "==3.5.0"
 pynput = ">=1.7.6,<2"
 pyspacemouse = ">=2.0.0, <3"
+mip = { git = "https://github.com/Team-Sprinkle/mip.git", rev = "f66bdb4e451481d1a968e77fe7118a6f0dac7d72" }
+
+[pypi-options.dependency-overrides]
+torch = { version = "==2.9.0", index = "https://download.pytorch.org/whl/cu128", env-markers = "sys_platform == 'linux' and platform_machine == 'x86_64'" }
+torchvision = { version = "==0.24.0", index = "https://download.pytorch.org/whl/cu128", env-markers = "sys_platform == 'linux' and platform_machine == 'x86_64'" }
 
 [activation]
 scripts = ["pixi_env_setup.sh"]
