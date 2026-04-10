@@ -4,9 +4,16 @@ from __future__ import annotations
 
 from pathlib import Path
 import textwrap
+import pytest
 
-from aic_gazebo_env.gazebo_client import GazeboTransportClient
+from aic_gazebo_env.gazebo_client import GazeboCliClientConfig, GazeboTransportClient
 from aic_gazebo_env.runtime import GazeboRuntime, GazeboRuntimeConfig
+from aic_gazebo_env.transport_bridge import (
+    GazeboTransportBridge,
+    GazeboTransportBridgeConfig,
+    GazeboTransportBridgeError,
+)
+from aic_gazebo_env.protocol import GetObservationRequest, ResetRequest
 
 
 class _RunningProcess:
@@ -34,11 +41,17 @@ def _write_fake_transport_bridge(path: Path) -> None:
             import sys
 
             state = {
-                "generation": 1,
+                "generation": 0,
+                "pose_generation": 0,
+                "state_callback_count": 0,
+                "pose_callback_count": 0,
+                "state_parse_failures": 0,
+                "pose_parse_failures": 0,
                 "step_count": 0,
                 "robot_position": [1.0, 2.0, 3.0],
                 "joint_positions": [0.0, 0.0, 0.0, 0.0, 0.0, 0.0],
             }
+            never_ready = "never_ready" in sys.argv[0]
 
             def state_text():
                 joints = "\\n".join(
@@ -89,6 +102,45 @@ def _write_fake_transport_bridge(path: Path) -> None:
                 op = request["op"]
                 if op == "ping":
                     pass
+                elif op == "status":
+                    response.update(
+                        {
+                            "state_generation": state["generation"],
+                            "pose_generation": state["pose_generation"],
+                            "state_callback_count": state["state_callback_count"],
+                            "state_parse_failures": state["state_parse_failures"],
+                            "pose_callback_count": state["pose_callback_count"],
+                            "pose_parse_failures": state["pose_parse_failures"],
+                        }
+                    )
+                elif op == "wait_until_ready":
+                    if never_ready:
+                        response = {
+                            "id": request["id"],
+                            "ok": False,
+                            "error": "timed out waiting for initial transport samples",
+                            "state_generation": state["generation"],
+                            "pose_generation": state["pose_generation"],
+                            "state_callback_count": state["state_callback_count"],
+                            "state_parse_failures": state["state_parse_failures"],
+                            "pose_callback_count": state["pose_callback_count"],
+                            "pose_parse_failures": state["pose_parse_failures"],
+                        }
+                    else:
+                        state["generation"] = max(state["generation"], 1)
+                        state["pose_generation"] = max(state["pose_generation"], 1)
+                        state["state_callback_count"] = max(state["state_callback_count"], 1)
+                        state["pose_callback_count"] = max(state["pose_callback_count"], 1)
+                        response.update(
+                            {
+                                "state_generation": state["generation"],
+                                "pose_generation": state["pose_generation"],
+                                "state_callback_count": state["state_callback_count"],
+                                "state_parse_failures": state["state_parse_failures"],
+                                "pose_callback_count": state["pose_callback_count"],
+                                "pose_parse_failures": state["pose_parse_failures"],
+                            }
+                        )
                 elif op == "shutdown":
                     print(json.dumps(response), flush=True)
                     sys.exit(0)
@@ -96,26 +148,41 @@ def _write_fake_transport_bridge(path: Path) -> None:
                     after_generation = int(request.get("after_generation") or 0)
                     if after_generation >= state["generation"]:
                         state["generation"] += 1
+                    state["pose_generation"] = max(state["pose_generation"], state["generation"])
+                    state["state_callback_count"] = max(state["state_callback_count"], state["generation"])
+                    state["pose_callback_count"] = max(state["pose_callback_count"], state["pose_generation"])
                     response["state_generation"] = state["generation"]
-                    response["pose_generation"] = state["generation"]
+                    response["pose_generation"] = state["pose_generation"]
                     response["state_text"] = state_text()
                     response["pose_text"] = pose_text()
                 elif op == "world_control":
                     if request.get("reset_all"):
                         state["generation"] += 1
+                        state["pose_generation"] += 1
+                        state["state_callback_count"] += 1
+                        state["pose_callback_count"] += 1
                         state["step_count"] = 0
                         state["robot_position"] = [1.0, 2.0, 3.0]
                         state["joint_positions"] = [0.0] * 6
                     if "multi_step" in request:
                         state["generation"] += 1
+                        state["pose_generation"] += 1
+                        state["state_callback_count"] += 1
+                        state["pose_callback_count"] += 1
                         state["step_count"] += int(request["multi_step"])
                     response["reply_text"] = "data: true\\n"
                 elif op == "set_pose":
                     state["generation"] += 1
+                    state["pose_generation"] += 1
+                    state["state_callback_count"] += 1
+                    state["pose_callback_count"] += 1
                     state["robot_position"] = [float(v) for v in request["position"]]
                     response["reply_text"] = "data: true\\n"
                 elif op == "joint_target":
                     state["generation"] += 1
+                    state["pose_generation"] += 1
+                    state["state_callback_count"] += 1
+                    state["pose_callback_count"] += 1
                     fields = {}
                     for field in request["request_text"].split(";"):
                         if "=" not in field:
@@ -141,6 +208,26 @@ def _write_world(path: Path) -> None:
         "<sdf version='1.9'><world name='test_world'></world></sdf>\n",
         encoding="utf-8",
     )
+
+
+class _StubBridge:
+    def __init__(self, responses):
+        self.responses = list(responses)
+        self.calls = []
+
+    def request(self, payload, *, timeout_s=None):
+        del timeout_s
+        self.calls.append(dict(payload))
+        response = self.responses.pop(0)
+        if isinstance(response, Exception):
+            raise response
+        return response
+
+    def close(self):
+        pass
+
+    def health_flags(self):
+        return {"helper_startup_ok": True, "helper_ready_ok": True}
 
 
 def test_runtime_auto_prefers_transport_helper_when_available(tmp_path: Path) -> None:
@@ -205,8 +292,134 @@ def test_transport_client_step_reads_fresh_post_action_state(tmp_path: Path) -> 
         assert observation["step_count"] == 3
         assert observation["entities_by_name"]["robot"]["position"] == [7.0, 8.0, 9.0]
         assert info["transport_backend"] == "transport"
+        assert info["sim_step_count_raw"] == 3
         assert reward == -5.196152422706632
         assert terminated is False
         assert truncated is False
     finally:
         runtime.stop()
+
+
+def test_transport_bridge_start_requires_sample_readiness(tmp_path: Path) -> None:
+    helper = tmp_path / "fake_transport_bridge_never_ready.py"
+    _write_fake_transport_bridge(helper)
+    bridge = GazeboTransportBridge(
+        GazeboTransportBridgeConfig(
+            world_name="test_world",
+            state_topic="/world/test_world/state",
+            pose_topic="/world/test_world/pose/info",
+            helper_executable=str(helper),
+            startup_timeout_s=0.2,
+        )
+    )
+    with pytest.raises(GazeboTransportBridgeError, match="failed readiness handshake"):
+        bridge.start()
+
+
+def test_transport_bridge_start_succeeds_when_helper_reports_ready(tmp_path: Path) -> None:
+    helper = tmp_path / "fake_transport_bridge_ready.py"
+    _write_fake_transport_bridge(helper)
+    bridge = GazeboTransportBridge(
+        GazeboTransportBridgeConfig(
+            world_name="test_world",
+            state_topic="/world/test_world/state",
+            pose_topic="/world/test_world/pose/info",
+            helper_executable=str(helper),
+            startup_timeout_s=0.5,
+        )
+    )
+    try:
+        bridge.start()
+        flags = bridge.health_flags()
+        assert flags["helper_startup_ok"] is True
+        assert flags["helper_ready_ok"] is True
+        assert flags["helper_last_status"]["state_generation"] > 0
+        assert flags["helper_last_status"]["state_callback_count"] > 0
+    finally:
+        bridge.close()
+
+
+def test_transport_client_reset_advances_world_before_fresh_observation(tmp_path: Path) -> None:
+    world = tmp_path / "world.sdf"
+    _write_world(world)
+    client = GazeboTransportClient(
+        GazeboCliClientConfig(
+            world_path=str(world),
+            world_name="test_world",
+            executable="gz",
+            timeout=0.2,
+            transport_backend="transport",
+        )
+    )
+    client._bridge = _StubBridge(
+        [
+            {"state_generation": 3},
+            {"requested": True, "result": True, "reply_text": "data: true\n"},
+            {"requested": True, "result": True, "reply_text": "data: true\n"},
+                {
+                    "state_generation": 4,
+                    "pose_generation": 4,
+                    "state_text": 'world: "test_world"\nstep_count: 0\nentity {\n  id: 101\n  name: "robot"\n  pose {\n    position {\n      x: 1.0\n      y: 2.0\n      z: 3.0\n    }\n    orientation {\n      x: 0.0\n      y: 0.0\n      z: 0.0\n      w: 1.0\n    }\n  }\n}\nentity {\n  id: 202\n  name: "task_board"\n  pose {\n    position {\n      x: 4.0\n      y: 5.0\n      z: 6.0\n    }\n    orientation {\n      x: 0.0\n      y: 0.0\n      z: 0.707\n      w: 0.707\n    }\n  }\n}\n',
+                    "pose_text": 'pose {\n  name: "robot"\n  id: 101\n  position {\n    x: 1.0\n    y: 2.0\n    z: 3.0\n  }\n  orientation {\n    w: 1.0\n  }\n}\npose {\n  name: "task_board"\n  id: 202\n  position {\n    x: 4.0\n    y: 5.0\n    z: 6.0\n  }\n  orientation {\n    z: 0.707\n    w: 0.707\n  }\n}\n',
+                },
+                {
+                    "state_generation": 4,
+                    "pose_generation": 4,
+                    "state_text": 'world: "test_world"\nstep_count: 0\nentity {\n  id: 101\n  name: "robot"\n  pose {\n    position {\n      x: 1.0\n      y: 2.0\n      z: 3.0\n    }\n    orientation {\n      x: 0.0\n      y: 0.0\n      z: 0.0\n      w: 1.0\n    }\n  }\n}\nentity {\n  id: 202\n  name: "task_board"\n  pose {\n    position {\n      x: 4.0\n      y: 5.0\n      z: 6.0\n    }\n    orientation {\n      x: 0.0\n      y: 0.0\n      z: 0.707\n      w: 0.707\n    }\n  }\n}\n',
+                    "pose_text": 'pose {\n  name: "robot"\n  id: 101\n  position {\n    x: 1.0\n    y: 2.0\n    z: 3.0\n  }\n  orientation {\n    w: 1.0\n  }\n}\npose {\n  name: "task_board"\n  id: 202\n  position {\n    x: 4.0\n    y: 5.0\n    z: 6.0\n  }\n  orientation {\n    z: 0.707\n    w: 0.707\n  }\n}\n',
+                },
+            ]
+        )
+    response = client.reset(ResetRequest(seed=1, options={"mode": "test"}))
+    assert response.observation["world_name"] == "test_world"
+    assert response.info["reset_ok"] is True
+    assert response.info["world_control_ok"] is True
+    assert client._bridge.calls[1]["reset_all"] is True
+    assert client._bridge.calls[2]["multi_step"] == client.config.reset_post_reset_ticks
+    assert client._bridge.calls[3]["after_generation"] == 3
+
+
+def test_transport_client_observation_fallback_only_on_transport_freshness_failure(tmp_path: Path) -> None:
+    world = tmp_path / "world.sdf"
+    _write_world(world)
+    client = GazeboTransportClient(
+        GazeboCliClientConfig(
+            world_path=str(world),
+            world_name="test_world",
+            executable="gz",
+            timeout=0.2,
+            transport_backend="transport",
+        )
+    )
+    client._bridge = _StubBridge(
+        [GazeboTransportBridgeError("timed out waiting for state sample")]
+    )
+    client._cli_read_topic_sample = lambda topic: (
+        'world: "test_world"\nstep_count: 1\nentity {\n  id: 101\n  name: "robot"\n  pose {\n    position {\n      x: 1.0\n      y: 2.0\n      z: 3.0\n    }\n    orientation {\n      x: 0.0\n      y: 0.0\n      z: 0.0\n      w: 1.0\n    }\n  }\n}\nentity {\n  id: 202\n  name: "task_board"\n  pose {\n    position {\n      x: 4.0\n      y: 5.0\n      z: 6.0\n    }\n    orientation {\n      x: 0.0\n      y: 0.0\n      z: 0.707\n      w: 0.707\n    }\n  }\n}\n'
+    )
+    client._cli_read_pose_sample = lambda topic: None
+    response = client.get_observation(GetObservationRequest())
+    assert response.info["transport_backend"] == "transport_cli_fallback"
+    assert response.info["fallback_used"] is True
+
+
+def test_transport_client_reset_failure_exposes_reset_service_category(tmp_path: Path) -> None:
+    world = tmp_path / "world.sdf"
+    _write_world(world)
+    client = GazeboTransportClient(
+        GazeboCliClientConfig(
+            world_path=str(world),
+            world_name="test_world",
+            executable="gz",
+            timeout=0.2,
+            transport_backend="transport",
+        )
+    )
+    client._bridge = _StubBridge(
+        [
+            {"state_generation": 1},
+            GazeboTransportBridgeError("world control request failed"),
+        ]
+    )
+    with pytest.raises(RuntimeError, match="reset service failure"):
+        client.reset(ResetRequest(seed=1, options={}))

@@ -234,6 +234,10 @@ class GazeboCliClientConfig:
     helper_startup_timeout_s: float = 5.0
     helper_request_timeout_s: float = 5.0
     helper_startup_settle_s: float = 3.0
+    require_pose_for_ready: bool = True
+    reset_post_reset_ticks: int = 4
+    action_post_step_ticks: int = 1
+    settle_step_ticks: int = 1
     observation_transport: str = "auto"
     persistent_topic_quiet_period_s: float = 0.05
 
@@ -248,10 +252,129 @@ class GazeboCliClient(GazeboClient):
         self._official_tier3_scorer = OfficialTier3TrackedPairScorer()
         self._state_reader: PersistentGazeboTopicReader | None = None
         self._pose_reader: PersistentGazeboTopicReader | None = None
+        self._logical_step_count = 0
 
     def _transport_backend_name(self) -> str:
         """Return the concrete transport backend label used for info/debugging."""
         return "cli"
+
+    def _transport_health_flags(self) -> dict[str, object]:
+        return {
+            "helper_startup_ok": False,
+            "helper_ready_ok": False,
+            "fallback_used": False,
+        }
+
+    def _logicalize_observation(
+        self,
+        observation: dict[str, object],
+        *,
+        step_count: int | None = None,
+    ) -> dict[str, object]:
+        logical_observation = dict(observation)
+        logical_observation["step_count"] = (
+            self._logical_step_count if step_count is None else step_count
+        )
+        return logical_observation
+
+    def _logicalize_state_text(
+        self,
+        state_text: str,
+        *,
+        step_count: int | None = None,
+    ) -> str:
+        logical_step_count = self._logical_step_count if step_count is None else step_count
+        return re.sub(
+            r"step_count:\s*-?\d+",
+            f"step_count: {logical_step_count}",
+            state_text,
+            count=1,
+        )
+
+    def _validate_observation_sane(self, observation: dict[str, object]) -> None:
+        entity_count = observation.get("entity_count")
+        joint_count = observation.get("joint_count")
+        if not isinstance(entity_count, int) or entity_count <= 0:
+            raise RuntimeError("observation sanity check failed: entity_count")
+        if not isinstance(joint_count, int) or joint_count < 0:
+            raise RuntimeError("observation sanity check failed: joint_count")
+
+    def _advance_world(self, ticks: int) -> str:
+        if ticks <= 0:
+            raise ValueError("ticks must be positive")
+        return self._run(
+            [
+                "service",
+                "-s",
+                f"/world/{self._world_name()}/control",
+                "--reqtype",
+                "gz.msgs.WorldControl",
+                "--reptype",
+                "gz.msgs.Boolean",
+                "--timeout",
+                str(int(self.config.timeout * 1000)),
+                "--req",
+                f"multi_step: {ticks}",
+            ]
+        )
+
+    def _reset_and_observe(
+        self,
+        *,
+        pre_reset_generation: int | None,
+    ) -> tuple[GetObservationResponse, dict[str, object]]:
+        reset_info: dict[str, object] = {
+            "reset_ok": False,
+            "world_control_ok": False,
+            "first_observation_ok": False,
+            "fallback_used": False,
+        }
+        try:
+            reset_reply = self._run(
+                [
+                    "service",
+                    "-s",
+                    f"/world/{self._world_name()}/control",
+                    "--reqtype",
+                    "gz.msgs.WorldControl",
+                    "--reptype",
+                    "gz.msgs.Boolean",
+                    "--timeout",
+                    str(int(self.config.timeout * 1000)),
+                    "--req",
+                    "reset: {all: true}",
+                ]
+            )
+        except Exception as exc:
+            raise RuntimeError(f"reset service failure: {exc}") from exc
+        reset_info["reset_ok"] = True
+        reset_info["reset_service"] = reset_reply
+        try:
+            step_reply = self._advance_world(self.config.reset_post_reset_ticks)
+        except Exception as exc:
+            raise RuntimeError(f"reset world advance failure: {exc}") from exc
+        reset_info["world_control_ok"] = True
+        reset_info["reset_post_reset_step_service"] = step_reply
+        try:
+            observation_response = self._get_observation_after_generation(
+                state_generation=pre_reset_generation
+                if self._uses_persistent_observation_transport()
+                else None
+            )
+            self._validate_observation_sane(observation_response.observation)
+        except TimeoutError as exc:
+            raise RuntimeError(
+                f"reset freshness failure: state publication not fresh yet: {exc}"
+            ) from exc
+        except Exception as exc:
+            raise RuntimeError(
+                f"reset observation failure: observation parse failure: {exc}"
+            ) from exc
+        reset_info["first_observation_ok"] = True
+        reset_info["fallback_used"] = (
+            observation_response.info.get("transport_backend") == "transport_cli_fallback"
+        )
+        return observation_response, reset_info
 
     @classmethod
     def transport_helper_available(
@@ -269,28 +392,16 @@ class GazeboCliClient(GazeboClient):
     def reset(self, request: ResetRequest) -> ResetResponse:
         decoded = ResetRequest.from_dict(request.to_dict())
         state_generation = self._current_state_generation()
-        reply = self._run(
-            [
-                "service",
-                "-s",
-                f"/world/{self._world_name()}/control",
-                "--reqtype",
-                "gz.msgs.WorldControl",
-                "--reptype",
-                "gz.msgs.Boolean",
-                "--timeout",
-                str(int(self.config.timeout * 1000)),
-                "--req",
-                "reset: {all: true}",
-            ]
+        observation_response, reset_details = self._reset_and_observe(
+            pre_reset_generation=state_generation
         )
-        observation_response = self._get_observation_after_generation(
-            state_generation=state_generation
-            if self._uses_persistent_observation_transport()
-            else None
+        self._logical_step_count = 0
+        normalized_observation = self._logicalize_observation(
+            observation_response.observation,
+            step_count=0,
         )
         response = ResetResponse(
-            observation=dict(observation_response.observation),
+            observation=normalized_observation,
             info={
                 "backend": "gazebo",
                 "runtime": "gazebo",
@@ -298,12 +409,14 @@ class GazeboCliClient(GazeboClient):
                 "seed": decoded.seed,
                 "options": dict(decoded.options),
                 "world_name": self._world_name(),
-                "reset_service": reply,
                 "observation_topic": observation_response.info.get("observation_topic"),
+                "sim_step_count_raw": observation_response.observation.get("step_count"),
+                **self._transport_health_flags(),
+                **reset_details,
             },
         )
-        self._remember_initial_tracked_distance(observation_response.observation)
-        self._remember_joint_positions(observation_response.observation)
+        self._remember_initial_tracked_distance(normalized_observation)
+        self._remember_joint_positions(normalized_observation)
         return ResetResponse.from_dict(response.to_dict())
 
     def get_observation(
@@ -328,15 +441,17 @@ class GazeboCliClient(GazeboClient):
         if observation["entity_count"] == 0 and observation["joint_count"] == 0:
             observation = self._parse_state_text(state_payload)
         response = GetObservationResponse(
-            observation=observation,
+            observation=self._logicalize_observation(observation),
             info={
                 "backend": "gazebo",
                 "runtime": "gazebo",
                 "transport_backend": self._transport_backend_name(),
                 "observation_topic": state_topic,
                 "pose_topic": pose_topic,
-                "state_text": state_payload,
+                "state_text": self._logicalize_state_text(state_payload),
+                "state_text_raw": state_payload,
                 "pose_text": pose_payload,
+                "sim_step_count_raw": observation.get("step_count"),
             },
         )
         return GetObservationResponse.from_dict(response.to_dict())
@@ -467,54 +582,34 @@ class GazeboCliClient(GazeboClient):
         settle_info: dict[str, object] = {}
         if joint_reply is None and pose_reply is None:
             state_generation = self._current_state_generation()
-            reply = self._run(
-                [
-                    "service",
-                    "-s",
-                    f"/world/{self._world_name()}/control",
-                    "--reqtype",
-                    "gz.msgs.WorldControl",
-                    "--reptype",
-                    "gz.msgs.Boolean",
-                    "--timeout",
-                    str(int(self.config.timeout * 1000)),
-                    "--req",
-                    f"multi_step: {multi_step}",
-                ]
-            )
+            reply = self._advance_world(multi_step)
             observation_response = self._get_observation_after_generation(
                 state_generation=state_generation
                 if self._uses_persistent_observation_transport()
                 else None
             )
+            settle_info["world_control_ok"] = True
         else:
             if self.config.step_after_action:
-                reply = self._run(
-                    [
-                        "service",
-                        "-s",
-                        f"/world/{self._world_name()}/control",
-                        "--reqtype",
-                        "gz.msgs.WorldControl",
-                        "--reptype",
-                        "gz.msgs.Boolean",
-                        "--timeout",
-                        str(int(self.config.timeout * 1000)),
-                        "--req",
-                        f"multi_step: {multi_step}",
-                    ]
-                )
+                reply = self._advance_world(multi_step)
+                settle_info["world_control_ok"] = True
             observation_response, settle_info = self._observe_after_action(
                 translated_action=translated_action,
                 joint_reply=joint_reply,
                 pose_reply=pose_reply,
             )
-        reward, terminated, truncated, reward_details = self._compute_step_outcome(
-            observation_response.observation
+        expected_step_count = self._logical_step_count + multi_step
+        logical_observation = self._logicalize_observation(
+            observation_response.observation,
+            step_count=expected_step_count,
         )
-        self._remember_joint_positions(observation_response.observation)
+        self._logical_step_count = expected_step_count
+        reward, terminated, truncated, reward_details = self._compute_step_outcome(
+            logical_observation
+        )
+        self._remember_joint_positions(logical_observation)
         response = StepResponse(
-            observation=dict(observation_response.observation),
+            observation=logical_observation,
             reward=reward,
             terminated=terminated,
             truncated=truncated,
@@ -540,6 +635,9 @@ class GazeboCliClient(GazeboClient):
                 "truncated": truncated,
                 "reward": reward,
                 "reward_details": reward_details,
+                "sim_step_count_raw": observation_response.observation.get("step_count"),
+                "first_observation_ok": True,
+                **self._transport_health_flags(),
                 **settle_info,
             },
         )
@@ -569,7 +667,9 @@ class GazeboCliClient(GazeboClient):
                 return observation_response, settle_info
 
         if pose_reply is not None:
-            time.sleep(0.2)
+            if not self.config.step_after_action:
+                self._advance_world(self.config.action_post_step_ticks)
+                settle_info["world_control_ok"] = True
             settle_info["joint_target_settled"] = None
 
         if not self._uses_persistent_observation_transport():
@@ -1000,6 +1100,7 @@ class GazeboCliClient(GazeboClient):
             )
             if max_error <= self.config.joint_settle_tolerance:
                 return latest_observation_response, True
+            self._advance_world(self.config.settle_step_ticks)
             time.sleep(self.config.joint_settle_poll_interval_s)
 
         if latest_observation_response is None:
@@ -1795,11 +1896,15 @@ class GazeboTransportClient(GazeboCliClient):
                 startup_timeout_s=self.config.helper_startup_timeout_s,
                 request_timeout_s=self.config.helper_request_timeout_s,
                 startup_settle_s=self.config.helper_startup_settle_s,
+                require_pose_for_ready=self.config.require_pose_for_ready,
             )
         )
 
     def _transport_backend_name(self) -> str:
         return "transport"
+
+    def _transport_health_flags(self) -> dict[str, object]:
+        return self._bridge.health_flags()
 
     def close(self) -> None:
         super().close()
@@ -1844,17 +1949,23 @@ class GazeboTransportClient(GazeboCliClient):
         if observation["entity_count"] == 0 and observation["joint_count"] == 0:
             observation = self._parse_state_text(state_payload)
         return GetObservationResponse(
-            observation=observation,
+            observation=self._logicalize_observation(observation),
             info={
                 "backend": "gazebo",
                 "runtime": "gazebo",
                 "transport_backend": "transport",
                 "observation_topic": state_topic,
                 "pose_topic": pose_topic,
-                "state_text": state_payload,
+                "state_text": self._logicalize_state_text(state_payload),
+                "state_text_raw": state_payload,
                 "pose_text": pose_payload,
+                "sim_step_count_raw": observation.get("step_count"),
                 "state_generation": state_generation,
                 "pose_generation": pose_generation,
+                "world_control_ok": True,
+                "first_observation_ok": True,
+                "fallback_used": False,
+                **self._transport_health_flags(),
             },
         )
 
@@ -1875,17 +1986,23 @@ class GazeboTransportClient(GazeboCliClient):
         if observation["entity_count"] == 0 and observation["joint_count"] == 0:
             observation = self._parse_state_text(state_payload)
         return GetObservationResponse(
-            observation=observation,
+            observation=self._logicalize_observation(observation),
             info={
                 "backend": "gazebo",
                 "runtime": "gazebo",
                 "transport_backend": "transport_cli_fallback",
                 "observation_topic": state_topic,
                 "pose_topic": pose_topic,
-                "state_text": state_payload,
+                "state_text": self._logicalize_state_text(state_payload),
+                "state_text_raw": state_payload,
                 "pose_text": pose_payload,
+                "sim_step_count_raw": observation.get("step_count"),
                 "state_generation": None,
                 "pose_generation": None,
+                "world_control_ok": True,
+                "first_observation_ok": True,
+                "fallback_used": True,
+                **self._transport_health_flags(),
             },
         )
 

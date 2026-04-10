@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from collections import deque
 import json
 import os
 from pathlib import Path
@@ -29,6 +30,7 @@ class GazeboTransportBridgeConfig:
     startup_timeout_s: float = 5.0
     request_timeout_s: float = 5.0
     startup_settle_s: float = 0.0
+    require_pose_for_ready: bool = True
 
 
 class GazeboTransportBridge:
@@ -39,6 +41,11 @@ class GazeboTransportBridge:
         self._process: subprocess.Popen[str] | None = None
         self._request_id = 0
         self._lock = threading.Lock()
+        self._stderr_lines: deque[str] = deque(maxlen=20)
+        self._stderr_thread: threading.Thread | None = None
+        self._startup_ok = False
+        self._ready_ok = False
+        self._last_status: dict[str, Any] | None = None
 
     @staticmethod
     def find_helper_explicit_or_on_path(helper_executable: str | None = None) -> str | None:
@@ -61,6 +68,9 @@ class GazeboTransportBridge:
         process = self._process
         if process is not None and process.poll() is None:
             return
+        self._startup_ok = False
+        self._ready_ok = False
+        self._last_status = None
 
         executable = self.find_helper_explicit_or_on_path(
             self._config.helper_executable
@@ -86,13 +96,30 @@ class GazeboTransportBridge:
             text=True,
             bufsize=1,
         )
+        self._stderr_lines.clear()
+        self._stderr_thread = threading.Thread(
+            target=self._stderr_reader_loop,
+            name="aic-gz-transport-bridge-stderr",
+            daemon=True,
+        )
+        self._stderr_thread.start()
         try:
-            self.request({"op": "ping"}, timeout_s=self._config.startup_timeout_s)
+            self._request_no_start(
+                {"op": "ping"},
+                timeout_s=self._config.startup_timeout_s,
+            )
+            self._startup_ok = True
+            self.wait_until_ready(timeout_s=self._config.startup_timeout_s)
             if self._config.startup_settle_s > 0.0:
                 time.sleep(self._config.startup_settle_s)
-        except Exception:
+        except Exception as exc:
+            status = self._last_status
+            stderr_snippet = self.recent_stderr_snippet()
             self.close()
-            raise
+            raise GazeboTransportBridgeError(
+                "transport helper failed readiness handshake"
+                f" (last_status={status}, stderr={stderr_snippet or '<empty>'}): {exc}"
+            ) from exc
 
     def close(self) -> None:
         """Shut down the helper process."""
@@ -102,7 +129,7 @@ class GazeboTransportBridge:
 
         if process.poll() is None:
             try:
-                self.request({"op": "shutdown"}, timeout_s=1.0)
+                self._request_no_start({"op": "shutdown"}, timeout_s=1.0)
             except Exception:
                 pass
             if process.poll() is None:
@@ -112,6 +139,10 @@ class GazeboTransportBridge:
                 except subprocess.TimeoutExpired:
                     process.kill()
                     process.wait(timeout=2.0)
+        thread = self._stderr_thread
+        if thread is not None and thread.is_alive():
+            thread.join(timeout=0.2)
+        self._stderr_thread = None
         self._process = None
 
     def request(
@@ -122,6 +153,15 @@ class GazeboTransportBridge:
     ) -> dict[str, Any]:
         """Send one JSON request and return one JSON response."""
         self.start()
+        return self._request_no_start(payload, timeout_s=timeout_s)
+
+    def _request_no_start(
+        self,
+        payload: dict[str, Any],
+        *,
+        timeout_s: float | None = None,
+    ) -> dict[str, Any]:
+        """Send one JSON request without recursively triggering start()."""
         process = self._process
         if process is None or process.stdin is None or process.stdout is None:
             raise GazeboTransportBridgeError("transport bridge process is not available")
@@ -145,6 +185,56 @@ class GazeboTransportBridge:
                     str(response.get("error", "transport bridge request failed"))
                 )
             return response
+
+    def wait_until_ready(self, *, timeout_s: float | None = None) -> dict[str, Any]:
+        """Block until the helper reports initial state readiness."""
+        timeout = self._config.startup_timeout_s if timeout_s is None else timeout_s
+        parse_failures_before = 0
+        try:
+            initial_status = self._request_no_start({"op": "status"}, timeout_s=min(timeout, 1.0))
+            self._last_status = initial_status
+            parse_failures_before = int(initial_status.get("state_parse_failures", 0))
+        except Exception:
+            initial_status = None
+        response = self._request_no_start(
+            {
+                "op": "wait_until_ready",
+                "timeout_ms": int(timeout * 1000),
+                "require_pose": self._config.require_pose_for_ready,
+            },
+            timeout_s=timeout + 1.0,
+        )
+        self._last_status = response
+        parse_failures_after = int(response.get("state_parse_failures", 0))
+        if parse_failures_after > parse_failures_before and int(response.get("state_generation", 0)) <= 0:
+            raise GazeboTransportBridgeError(
+                "transport helper readiness failed while state parse failures increased: "
+                f"status={response}"
+            )
+        self._ready_ok = True
+        return response
+
+    def health_flags(self) -> dict[str, Any]:
+        """Return helper health flags for runtime diagnostics."""
+        return {
+            "helper_startup_ok": self._startup_ok,
+            "helper_ready_ok": self._ready_ok,
+            "helper_last_status": self._last_status,
+        }
+
+    def recent_stderr_snippet(self) -> str:
+        """Return a recent stderr tail for diagnostics."""
+        return "\n".join(self._stderr_lines).strip()
+
+    def _stderr_reader_loop(self) -> None:
+        process = self._process
+        if process is None or process.stderr is None:
+            return
+        while True:
+            line = process.stderr.readline()
+            if not line:
+                break
+            self._stderr_lines.append(line.rstrip())
 
     def _read_line(
         self,

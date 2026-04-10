@@ -108,6 +108,9 @@ class BridgeServer {
     if (op == "status") {
       return this->HandleStatus(std::move(response));
     }
+    if (op == "wait_until_ready") {
+      return this->HandleWaitUntilReady(request, std::move(response));
+    }
     if (op == "world_control") {
       return this->HandleWorldControl(request, std::move(response));
     }
@@ -168,9 +171,28 @@ class BridgeServer {
   }
 
   rapidjson::Document HandleStatus(rapidjson::Document response) {
+    return this->PopulateStatus(std::move(response), true);
+  }
+
+  rapidjson::Document HandleWaitUntilReady(const rapidjson::Document &request,
+                                           rapidjson::Document response) {
+    const auto timeoutMs =
+        this->ReadOptionalInt(request, "timeout_ms").value_or(1000);
+    const bool requirePose =
+        !request.HasMember("require_pose") || request["require_pose"].GetBool();
+    const bool ready =
+        this->WaitUntilReady(Milliseconds(timeoutMs), requirePose);
+    response = this->PopulateStatus(std::move(response), ready);
+    if (!ready) {
+      this->AddError(response, "timed out waiting for initial transport samples");
+    }
+    return response;
+  }
+
+  rapidjson::Document PopulateStatus(rapidjson::Document response, bool ok) {
     auto &allocator = response.GetAllocator();
     std::lock_guard<std::mutex> lock(this->mutex_);
-    response.AddMember("ok", true, allocator);
+    response.AddMember("ok", ok, allocator);
     response.AddMember(
         "state_generation",
         static_cast<uint64_t>(this->state_.generation),
@@ -364,6 +386,29 @@ class BridgeServer {
       return std::nullopt;
     }
     return this->state_;
+  }
+
+  bool WaitUntilReady(Milliseconds timeout, bool requirePose) {
+    const auto deadline = Clock::now() + timeout;
+    std::unique_lock<std::mutex> lock(this->mutex_);
+    this->condition_.wait_until(lock, deadline, [this, requirePose]() {
+      const bool stateReady =
+          this->state_.generation > 0 && !this->state_.text.empty() &&
+          this->stateCallbackCount_ > 0;
+      const bool poseReady =
+          !requirePose ||
+          ((this->pose_.generation > 0 && !this->pose_.text.empty()) ||
+           this->poseCallbackCount_ > 0);
+      return stateReady && poseReady;
+    });
+    const bool stateReady =
+        this->state_.generation > 0 && !this->state_.text.empty() &&
+        this->stateCallbackCount_ > 0;
+    const bool poseReady =
+        !requirePose ||
+        ((this->pose_.generation > 0 && !this->pose_.text.empty()) ||
+         this->poseCallbackCount_ > 0);
+    return stateReady && poseReady;
   }
 
   std::optional<TopicSample> LatestPose(Milliseconds maxAge) {
