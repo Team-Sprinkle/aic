@@ -61,12 +61,25 @@ void JointTargetPlugin::Configure(
   this->modelName_ = this->model_.Name(_ecm);
 
   std::string worldName = "default";
-  const auto parentEntity = _ecm.Component<gz::sim::components::ParentEntity>(_entity);
-  if (parentEntity != nullptr) {
+  const auto worldEntity =
+      _ecm.EntityByComponents(gz::sim::components::World());
+  if (worldEntity != gz::sim::kNullEntity) {
     const auto worldNameComp =
-        _ecm.Component<gz::sim::components::Name>(parentEntity->Data());
+        _ecm.Component<gz::sim::components::Name>(worldEntity);
     if (worldNameComp != nullptr && !worldNameComp->Data().empty()) {
       worldName = worldNameComp->Data();
+    }
+  }
+
+  if (worldName == "default") {
+    const auto parentEntity =
+        _ecm.Component<gz::sim::components::ParentEntity>(_entity);
+    if (parentEntity != nullptr) {
+      const auto worldNameComp =
+          _ecm.Component<gz::sim::components::Name>(parentEntity->Data());
+      if (worldNameComp != nullptr && !worldNameComp->Data().empty()) {
+        worldName = worldNameComp->Data();
+      }
     }
   }
 

@@ -5,6 +5,8 @@ from __future__ import annotations
 from pathlib import Path
 
 from aic_gazebo_env import GazeboEnv, GazeboRuntime, GazeboRuntimeConfig, GymnasiumGazeboEnv
+from aic_gazebo_env.gazebo_client import GazeboCliClient, GazeboCliClientConfig
+from aic_gazebo_env.protocol import GetObservationResponse
 
 
 def _write_fake_gz_bridge_script(path: Path) -> None:
@@ -655,6 +657,99 @@ def test_runtime_real_geometry_uses_overridden_entity_pair_and_threshold(tmp_pat
         assert step_info["terminated"] is True
     finally:
         runtime.stop()
+
+
+def test_cli_client_waits_for_joint_target_settle_before_returning_observation(tmp_path: Path) -> None:
+    world = tmp_path / "world.sdf"
+    _write_world(world)
+    client = GazeboCliClient(
+        GazeboCliClientConfig(
+            executable="/bin/true",
+            world_path=str(world),
+            world_name="test_world",
+            timeout=0.2,
+            joint_settle_tolerance=0.01,
+            joint_settle_timeout_s=0.5,
+            joint_settle_poll_interval_s=0.0,
+        )
+    )
+
+    observations = iter(
+        [
+            GetObservationResponse(
+                observation={
+                    "joint_names": [
+                        "shoulder_pan_joint",
+                        "shoulder_lift_joint",
+                        "elbow_joint",
+                        "wrist_1_joint",
+                        "wrist_2_joint",
+                        "wrist_3_joint",
+                    ],
+                    "joint_positions": [0.0, 0.0, 0.0, 0.0, 0.0, 0.0],
+                }
+            ),
+            GetObservationResponse(
+                observation={
+                    "joint_names": [
+                        "shoulder_pan_joint",
+                        "shoulder_lift_joint",
+                        "elbow_joint",
+                        "wrist_1_joint",
+                        "wrist_2_joint",
+                        "wrist_3_joint",
+                    ],
+                    "joint_positions": [0.999, -0.999, 0.499, 0.0, 0.0, 0.0],
+                }
+            ),
+        ]
+    )
+    client.get_observation = lambda request: next(observations)
+
+    response, settled = client._wait_for_joint_target_settle(
+        [1.0, -1.0, 0.5, 0.0, 0.0, 0.0]
+    )
+
+    assert settled is True
+    assert response.observation["joint_positions"] == [0.999, -0.999, 0.499, 0.0, 0.0, 0.0]
+
+
+def test_cli_client_reports_unsettled_joint_target_after_timeout(tmp_path: Path) -> None:
+    world = tmp_path / "world.sdf"
+    _write_world(world)
+    client = GazeboCliClient(
+        GazeboCliClientConfig(
+            executable="/bin/true",
+            world_path=str(world),
+            world_name="test_world",
+            timeout=0.2,
+            joint_settle_tolerance=1e-6,
+            joint_settle_timeout_s=0.0,
+            joint_settle_poll_interval_s=0.0,
+        )
+    )
+
+    expected_response = GetObservationResponse(
+        observation={
+            "joint_names": [
+                "shoulder_pan_joint",
+                "shoulder_lift_joint",
+                "elbow_joint",
+                "wrist_1_joint",
+                "wrist_2_joint",
+                "wrist_3_joint",
+            ],
+            "joint_positions": [0.25, 0.25, 0.25, 0.25, 0.25, 0.25],
+        }
+    )
+    client.get_observation = lambda request: expected_response
+
+    response, settled = client._wait_for_joint_target_settle(
+        [1.0, 1.0, 1.0, 1.0, 1.0, 1.0]
+    )
+
+    assert settled is False
+    assert response is expected_response
 
 
 def test_runtime_real_orientation_threshold_can_gate_success(tmp_path: Path) -> None:

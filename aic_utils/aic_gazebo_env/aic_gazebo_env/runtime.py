@@ -69,6 +69,7 @@ class GazeboRuntimeConfig:
     orientation_success_threshold: float | None = None
     max_episode_steps: int | None = None
     success_bonus: float = 10.0
+    reward_mode: str = "heuristic"
 
 
 @dataclass
@@ -199,6 +200,7 @@ class GazeboRuntime(Runtime):
                     orientation_success_threshold=self.config.orientation_success_threshold,
                     max_episode_steps=self.config.max_episode_steps,
                     success_bonus=self.config.success_bonus,
+                    reward_mode=self.config.reward_mode,
                 )
             )
         return self.client

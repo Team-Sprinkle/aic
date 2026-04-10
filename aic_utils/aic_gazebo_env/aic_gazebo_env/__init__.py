@@ -6,6 +6,7 @@ from .backend import Backend, StubBackend
 from .env import GazeboEnv, MinimalTaskEnv
 from .gymnasium_env import GYMNASIUM_AVAILABLE, GymnasiumGazeboEnv
 from .observation import Observation, ObservationDict
+from .official_scoring import OfficialTier3TrackedPairScorer
 from .protocol import (
     GetObservationRequest,
     GetObservationResponse,
@@ -39,6 +40,7 @@ __all__ = [
     "MinimalTaskState",
     "Observation",
     "ObservationDict",
+    "OfficialTier3TrackedPairScorer",
     "PoseRandomizationConfig",
     "ResetRequest",
     "ResetResponse",

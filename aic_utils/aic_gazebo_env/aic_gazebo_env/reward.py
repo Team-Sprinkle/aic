@@ -1,4 +1,8 @@
-"""Simple, stable reward computation for the training-only environment."""
+"""Training-only dense reward helpers.
+
+This module is intentionally separate from the official evaluation score path.
+The authoritative trial score lives in `aic_engine` + `aic_scoring`.
+"""
 
 from __future__ import annotations
 
@@ -8,7 +12,7 @@ from math import sqrt
 
 @dataclass(frozen=True)
 class Reward:
-    """Reward configuration and computation helpers."""
+    """Reward configuration and computation helpers for shaping only."""
 
     success_bonus: float = 10.0
     action_penalty_weight: float = 0.05
