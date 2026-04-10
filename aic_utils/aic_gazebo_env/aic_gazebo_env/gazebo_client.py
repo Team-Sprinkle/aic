@@ -6,10 +6,13 @@ from abc import ABC, abstractmethod
 from dataclasses import dataclass
 import ast
 import math
+import os
 from pathlib import Path
 import re
+import select
 import struct
 import subprocess
+import threading
 import time
 import xml.etree.ElementTree as ET
 
@@ -41,6 +44,141 @@ class GazeboClient(ABC):
     @abstractmethod
     def step(self, request: StepRequest) -> StepResponse:
         """Advance the Gazebo world by one step."""
+
+
+@dataclass
+class PersistentGazeboTopicReader:
+    """Keep a live `gz topic -e` process running and cache whole samples.
+
+    Gazebo's one-shot CLI subscriptions are expensive enough to dominate RL
+    stepping latency. This reader amortizes that cost by keeping one
+    subscription process alive and slicing the byte stream into samples using a
+    short quiet period between messages.
+    """
+
+    executable: str
+    topic: str
+    quiet_period_s: float
+
+    def __post_init__(self) -> None:
+        self._process: subprocess.Popen[bytes] | None = None
+        self._thread: threading.Thread | None = None
+        self._stop_event = threading.Event()
+        self._condition = threading.Condition()
+        self._latest_sample: str | None = None
+        self._latest_generation = 0
+
+    def start(self) -> None:
+        """Start the persistent reader if it is not already running."""
+        process = self._process
+        if process is not None and process.poll() is None:
+            return
+
+        self.stop()
+        self._stop_event.clear()
+        self._process = subprocess.Popen(
+            [self.executable, "topic", "-e", "-t", self.topic],
+            stdout=subprocess.PIPE,
+            stderr=subprocess.DEVNULL,
+        )
+        self._thread = threading.Thread(
+            target=self._reader_loop,
+            name=f"gz-topic-reader:{self.topic}",
+            daemon=True,
+        )
+        self._thread.start()
+
+    def stop(self) -> None:
+        """Stop the persistent reader process and worker thread."""
+        self._stop_event.set()
+        process = self._process
+        if process is not None and process.poll() is None:
+            process.terminate()
+            try:
+                process.wait(timeout=1.0)
+            except subprocess.TimeoutExpired:
+                process.kill()
+                process.wait(timeout=1.0)
+        self._process = None
+
+        thread = self._thread
+        if thread is not None and thread.is_alive():
+            thread.join(timeout=1.0)
+        self._thread = None
+
+    def current_generation(self) -> int:
+        """Return the current sample generation counter."""
+        with self._condition:
+            return self._latest_generation
+
+    def get_sample(
+        self,
+        *,
+        after_generation: int | None = None,
+        timeout: float,
+    ) -> tuple[str, int]:
+        """Return the latest sample, optionally waiting for a newer one."""
+        self.start()
+        deadline = time.monotonic() + timeout
+        with self._condition:
+            while True:
+                latest_sample = self._latest_sample
+                latest_generation = self._latest_generation
+                if latest_sample is not None and (
+                    after_generation is None or latest_generation > after_generation
+                ):
+                    return latest_sample, latest_generation
+
+                remaining = deadline - time.monotonic()
+                if remaining <= 0.0:
+                    raise TimeoutError(
+                        f"Timed out waiting for Gazebo topic sample on {self.topic}."
+                    )
+                self._condition.wait(timeout=remaining)
+
+    def _reader_loop(self) -> None:
+        process = self._process
+        if process is None or process.stdout is None:
+            return
+
+        fd = process.stdout.fileno()
+        buffer = ""
+        last_data_time: float | None = None
+
+        while not self._stop_event.is_set():
+            if process.poll() is not None:
+                break
+
+            try:
+                ready, _, _ = select.select([fd], [], [], self.quiet_period_s)
+            except (OSError, ValueError):
+                break
+
+            if ready:
+                chunk = os.read(fd, 65536)
+                if not chunk:
+                    break
+                buffer += chunk.decode("utf-8", "replace")
+                last_data_time = time.monotonic()
+                continue
+
+            if buffer and last_data_time is not None:
+                if time.monotonic() - last_data_time >= self.quiet_period_s:
+                    self._publish_sample(buffer)
+                    buffer = ""
+                    last_data_time = None
+
+        if buffer:
+            self._publish_sample(buffer)
+
+    def _publish_sample(self, payload: str) -> None:
+        sample = payload.strip()
+        if not sample:
+            return
+        with self._condition:
+            self._latest_sample = sample
+            self._latest_generation += 1
+            self._condition.notify_all()
 
 
 @dataclass(frozen=True)
@@ -85,6 +223,8 @@ class GazeboCliClientConfig:
     max_episode_steps: int | None = None
     success_bonus: float = 10.0
     reward_mode: str = "heuristic"
+    observation_transport: str = "auto"
+    persistent_topic_quiet_period_s: float = 0.05
 
 
 @dataclass
@@ -95,6 +235,8 @@ class GazeboCliClient(GazeboClient):
 
     def __post_init__(self) -> None:
         self._official_tier3_scorer = OfficialTier3TrackedPairScorer()
+        self._state_reader: PersistentGazeboTopicReader | None = None
+        self._pose_reader: PersistentGazeboTopicReader | None = None
 
     def reset(self, request: ResetRequest) -> ResetResponse:
         decoded = ResetRequest.from_dict(request.to_dict())
@@ -139,11 +281,11 @@ class GazeboCliClient(GazeboClient):
         world_name = self._world_name()
         state_topic = f"/world/{world_name}/state"
         pose_topic = f"/world/{world_name}/pose/info"
-        state_payload = self._read_topic_sample(state_topic)
-        pose_payload = self._try_run_with_timeout(
-            ["topic", "-e", "-n", "1", "-t", pose_topic],
-            timeout=min(self.config.timeout, 1.0),
+        state_payload, _ = self._read_state_sample(
+            topic=state_topic,
+            after_generation=None,
         )
+        pose_payload = self._read_pose_sample(topic=pose_topic)
         observation = self._parse_live_observation(
             state_payload=state_payload,
             pose_payload=pose_payload,
@@ -164,6 +306,15 @@ class GazeboCliClient(GazeboClient):
         )
         return GetObservationResponse.from_dict(response.to_dict())
 
+    def close(self) -> None:
+        """Release any persistent Gazebo topic readers."""
+        if self._state_reader is not None:
+            self._state_reader.stop()
+            self._state_reader = None
+        if self._pose_reader is not None:
+            self._pose_reader.stop()
+            self._pose_reader = None
+
     def _read_topic_sample(self, topic: str) -> str:
         deadline = time.monotonic() + (self.config.timeout * 3.0)
         last_error: Exception | None = None
@@ -178,6 +329,42 @@ class GazeboCliClient(GazeboClient):
                         return fallback_payload
                 time.sleep(0.2)
         raise RuntimeError(f"Timed out reading Gazebo topic {topic}: {last_error}")
+
+    def _read_state_sample(
+        self,
+        *,
+        topic: str,
+        after_generation: int | None,
+    ) -> tuple[str, int | None]:
+        if not self._uses_persistent_observation_transport():
+            return self._read_topic_sample(topic), None
+        reader = self._state_topic_reader(topic)
+        try:
+            return reader.get_sample(
+                after_generation=after_generation,
+                timeout=min(self.config.timeout, 2.0),
+            )
+        except TimeoutError:
+            fallback_payload = self._read_state_sample_after_world_step(topic)
+            if fallback_payload is not None:
+                return fallback_payload, None
+            raise
+
+    def _read_pose_sample(self, *, topic: str) -> str | None:
+        if not self._uses_persistent_observation_transport():
+            return self._try_run_with_timeout(
+                ["topic", "-e", "-n", "1", "-t", topic],
+                timeout=min(self.config.timeout, 1.0),
+            )
+        reader = self._pose_topic_reader(topic)
+        try:
+            payload, _ = reader.get_sample(
+                after_generation=None,
+                timeout=min(self.config.timeout, 0.5),
+            )
+            return payload
+        except TimeoutError:
+            return None
 
     def _try_run_with_timeout(self, args: list[str], *, timeout: float) -> str | None:
         try:
@@ -344,7 +531,12 @@ class GazeboCliClient(GazeboClient):
             time.sleep(0.2)
             settle_info["joint_target_settled"] = None
 
-        return self.get_observation(GetObservationRequest()), settle_info
+        if not self._uses_persistent_observation_transport():
+            return self.get_observation(GetObservationRequest()), settle_info
+
+        return self._get_observation_after_generation(
+            state_generation=self._current_state_generation(),
+        ), settle_info
 
     def _translate_policy_action(self, action: dict[str, object]) -> dict[str, object]:
         """Translate the canonical policy-facing action into bridge-level actions."""
@@ -431,7 +623,7 @@ class GazeboCliClient(GazeboClient):
             check=False,
             capture_output=True,
             text=True,
-            timeout=self.config.timeout,
+            timeout=max(self.config.timeout, 1.0),
         )
         if completed.returncode != 0:
             raise RuntimeError(
@@ -772,6 +964,78 @@ class GazeboCliClient(GazeboClient):
         if latest_observation_response is None:
             latest_observation_response = self.get_observation(GetObservationRequest())
         return latest_observation_response, False
+
+    def _get_observation_after_generation(
+        self,
+        *,
+        state_generation: int | None,
+    ) -> GetObservationResponse:
+        world_name = self._world_name()
+        state_topic = f"/world/{world_name}/state"
+        pose_topic = f"/world/{world_name}/pose/info"
+        try:
+            state_payload, _ = self._read_state_sample(
+                topic=state_topic,
+                after_generation=state_generation
+                if self._uses_persistent_observation_transport()
+                else None,
+            )
+        except TimeoutError:
+            fallback_payload = self._read_state_sample_after_world_step(state_topic)
+            if fallback_payload is None:
+                raise
+            state_payload = fallback_payload
+        pose_payload = self._read_pose_sample(topic=pose_topic)
+        observation = self._parse_live_observation(
+            state_payload=state_payload,
+            pose_payload=pose_payload,
+            world_name=world_name,
+        )
+        if observation["entity_count"] == 0 and observation["joint_count"] == 0:
+            observation = self._parse_state_text(state_payload)
+        return GetObservationResponse(
+            observation=observation,
+            info={
+                "backend": "gazebo",
+                "runtime": "gazebo",
+                "observation_topic": state_topic,
+                "pose_topic": pose_topic,
+                "state_text": state_payload,
+                "pose_text": pose_payload,
+            },
+        )
+
+    def _current_state_generation(self) -> int | None:
+        if self._state_reader is None:
+            return None
+        return self._state_reader.current_generation()
+
+    def _state_topic_reader(self, topic: str) -> PersistentGazeboTopicReader:
+        if self._state_reader is None:
+            self._state_reader = PersistentGazeboTopicReader(
+                executable=self.config.executable,
+                topic=topic,
+                quiet_period_s=self.config.persistent_topic_quiet_period_s,
+            )
+        return self._state_reader
+
+    def _pose_topic_reader(self, topic: str) -> PersistentGazeboTopicReader:
+        if self._pose_reader is None:
+            self._pose_reader = PersistentGazeboTopicReader(
+                executable=self.config.executable,
+                topic=topic,
+                quiet_period_s=self.config.persistent_topic_quiet_period_s,
+            )
+        return self._pose_reader
+
+    def _uses_persistent_observation_transport(self) -> bool:
+        mode = self.config.observation_transport
+        if mode == "persistent":
+            return True
+        if mode == "one_shot":
+            return False
+        executable_name = Path(self.config.executable).name
+        return executable_name == "gz"
 
     def _format_joint_position(self, position: float) -> str:
         return f"{float(position):.6f}"

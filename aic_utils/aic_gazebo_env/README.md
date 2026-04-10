@@ -17,10 +17,21 @@ workflow.
 
 Current milestone scope:
 
-- Python package skeleton only
-- placeholder modules for env/runtime/action/observation/reward/termination
-- placeholder tests
-- no ROS dependencies
+- implemented Python env/runtime/backend modules
+- real Gazebo CLI runtime/client path alongside the fake backend
+- unit, smoke, parity, and live probe coverage under `tests/` and `scripts/`
+- no direct ROS dependency in the package API
+
+Current implementation notes:
+
+- The branch is no longer "skeleton only".
+- `GazeboRuntime` and `GazeboCliClient` provide a real no-ROS Gazebo path.
+- The bridge still uses Gazebo CLI transport for control and observation.
+- Observation transport now supports a persistent topic-reader mode to avoid
+  paying one-shot `gz topic -e -n 1` startup cost on every step when running
+  against the real `gz` binary.
+- The package still remains training-oriented and separate from the official
+  ROS + `aic_engine` evaluation flow.
 
 Backend protocol notes:
 
