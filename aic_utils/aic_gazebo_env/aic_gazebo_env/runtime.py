@@ -122,6 +122,8 @@ class GazeboRuntime(Runtime):
 
     def stop(self) -> None:
         """Stop the Gazebo subprocess cleanly, or kill it on timeout."""
+        if self.client is not None and hasattr(self.client, "close"):
+            self.client.close()
         if self.process is None:
             return
 
