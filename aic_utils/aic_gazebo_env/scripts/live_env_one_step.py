@@ -34,7 +34,7 @@ def main() -> None:
             world_name="aic_world",
             source_entity_name="ati/tool_link",
             target_entity_name="tabletop",
-            joint_command_model_name="ur5e",
+            joint_command_model_name="ur",
         )
     )
     start = time.perf_counter()

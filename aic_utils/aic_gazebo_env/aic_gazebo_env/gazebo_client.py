@@ -815,10 +815,19 @@ class GazeboCliClient(GazeboClient):
             if isinstance(pose_payload, str) and pose_payload
             else self._extract_live_state_entities(state_payload)
         )
+        state_text_entities = self._extract_entities(state_payload)
+        if len(state_text_entities) > len(entities):
+            # Prefer the richer state-text entity view when it is available.
+            # This keeps fake/textproto bridge paths and real live fallbacks on
+            # the same observation contract without weakening the live parser.
+            entities = state_text_entities
         entities_by_name = {
             entity["name"]: dict(entity) for entity in entities if isinstance(entity["name"], str)
         }
         joints = self._decode_joint_components(state_payload)
+        state_text_joints = self._extract_joints(state_payload)
+        if len(state_text_joints) > len(joints):
+            joints = state_text_joints
         return {
             "world_name": world_name,
             "step_count": self._extract_state_step_count(state_payload),
@@ -915,6 +924,9 @@ class GazeboCliClient(GazeboClient):
         ]
 
     def _extract_state_step_count(self, payload: str) -> int:
+        step_count = self._extract_scalar_int(payload, "step_count")
+        if step_count is not None:
+            return step_count
         iterations_match = re.search(r"iterations:\s*(\d+)", payload)
         if iterations_match is None:
             return 0

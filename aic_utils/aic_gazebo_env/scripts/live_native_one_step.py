@@ -176,7 +176,7 @@ def orientation_error(source: list[float], target: list[float]) -> float:
 
 def send_joint_target(targets: list[float]) -> str:
     request = (
-        'data: "model_name=ur5e;'
+        'data: "model_name=ur;'
         f"joint_names={','.join(JOINT_NAMES)};"
         f"positions={','.join(str(value) for value in targets)}\""
     )

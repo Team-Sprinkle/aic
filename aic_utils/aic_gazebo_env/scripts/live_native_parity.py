@@ -217,7 +217,7 @@ def native_step(delta: list[float], step_index: int) -> dict[str, object]:
     joints = decode_joint_positions()
     targets = [joints[name] + axis for name, axis in zip(JOINT_NAMES, delta)]
     request = (
-        'data: "model_name=ur5e;'
+        'data: "model_name=ur;'
         f"joint_names={','.join(JOINT_NAMES)};"
         f"positions={','.join(str(value) for value in targets)}\""
     )
@@ -252,7 +252,7 @@ def run_env_rollout() -> list[dict[str, object]]:
             world_name=WORLD,
             source_entity_name=SOURCE,
             target_entity_name=TARGET,
-            joint_command_model_name="ur5e",
+            joint_command_model_name="ur",
             joint_names=JOINT_NAMES,
         )
     )
