@@ -26,10 +26,17 @@ Current implementation notes:
 
 - The branch is no longer "skeleton only".
 - `GazeboRuntime` and `GazeboCliClient` provide a real no-ROS Gazebo path.
-- The bridge still uses Gazebo CLI transport for control and observation.
-- Observation transport now supports a persistent topic-reader mode to avoid
-  paying one-shot `gz topic -e -n 1` startup cost on every step when running
-  against the real `gz` binary.
+- `GazeboTransportClient` plus the repo-local `aic_gz_transport_bridge`
+  helper are now the primary live transport path for Gazebo subscriptions and
+  service calls.
+- The C++ helper keeps persistent Gazebo Transport subscriptions to
+  `/world/<world>/state` and `/world/<world>/pose/info`, issues transport
+  service requests for `/world/<world>/control`, `/world/<world>/set_pose`,
+  and `/world/<world>/joint_target`, and reports observation generations back
+  to Python.
+- The older Gazebo CLI observation path remains available as an explicit
+  fallback / diagnostic path when the live runtime does not yield a fresh
+  transport sample within the bounded timeout window.
 - The package still remains training-oriented and separate from the official
   ROS + `aic_engine` evaluation flow.
 
@@ -39,8 +46,8 @@ Backend protocol notes:
   `reset`, `step`, and `get_observation`.
 - The schema is transport-neutral and intentionally does not depend on ROS or a
   Gazebo plugin.
-- A future Gazebo implementation could map these messages onto `gz` transport
-  request/reply services without changing the public env API.
+- The current live implementation already maps these messages onto Gazebo
+  Transport request/reply services without changing the public env API.
 
 Preferred real env action interface:
 

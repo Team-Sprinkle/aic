@@ -1704,11 +1704,11 @@ def test_runtime_real_joint_delta_bridge_updates_joint_positions_and_tcp_pose(
         assert terminated is False
         assert truncated is False
         assert step_info["applied_action"] == {
-            "set_joint_positions": {
-                "model_name": "ur",
-                "joint_names": [
-                    "shoulder_pan_joint",
-                    "shoulder_lift_joint",
+                "set_joint_positions": {
+                    "model_name": "ur5e",
+                    "joint_names": [
+                        "shoulder_pan_joint",
+                        "shoulder_lift_joint",
                     "elbow_joint",
                     "wrist_1_joint",
                     "wrist_2_joint",
