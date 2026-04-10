@@ -1,13 +1,13 @@
-"""Tests for runtime executable and benchmark preflight discovery."""
+"""Tests for runtime executable and live preflight discovery."""
 
 from __future__ import annotations
 
-from importlib.util import module_from_spec, spec_from_file_location
 from pathlib import Path
 
 import pytest
 
-from aic_gazebo_env.discovery import ExecutableResolution, resolve_transport_helper_executable
+from aic_gazebo_env.discovery import resolve_transport_helper_executable
+from aic_gazebo_env.live_runtime import LiveRuntimeManager
 from aic_gazebo_env.transport_bridge import GazeboTransportBridge, GazeboTransportBridgeConfig
 
 
@@ -16,20 +16,6 @@ def _fake_repo_root(tmp_path: Path) -> Path:
     (repo_root / "docs").mkdir(parents=True)
     (repo_root / "aic_utils").mkdir()
     return repo_root
-
-
-def _load_benchmark_module():
-    script_path = (
-        Path(__file__).resolve().parents[1]
-        / "scripts"
-        / "live_transport_benchmark.py"
-    )
-    spec = spec_from_file_location("test_live_transport_benchmark", script_path)
-    if spec is None or spec.loader is None:
-        raise RuntimeError(f"Could not load benchmark script from {script_path}")
-    module = module_from_spec(spec)
-    spec.loader.exec_module(module)
-    return module
 
 
 def test_helper_discovery_from_repo_relative_install_path(tmp_path: Path) -> None:
@@ -71,37 +57,32 @@ def test_transport_bridge_error_includes_searched_locations(tmp_path: Path) -> N
     assert str(tmp_path / "missing_helper") in message
 
 
-def test_benchmark_preflight_classifies_missing_gz_and_helper(monkeypatch: pytest.MonkeyPatch) -> None:
-    module = _load_benchmark_module()
-    monkeypatch.setattr(module, "find_repo_root", lambda _: Path("/repo"))
+def test_live_preflight_classifies_missing_gz_and_helper(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    repo_root = _fake_repo_root(tmp_path)
+    manager = LiveRuntimeManager(repo_root=repo_root)
     monkeypatch.setattr(
-        module,
-        "resolve_gz_executable",
-        lambda *_args, **_kwargs: ExecutableResolution(
-            requested_name="gz",
-            resolved_path=None,
-            searched_locations=("/usr/bin/gz",),
-            discovered_setup_script="/tmp/ws_overlay/install/setup.bash",
-            setup_explanation="found nearby overlay setup script",
-            status="gz_not_found",
-            setup_status="workspace_setup_script_found_but_not_sourced",
-        ),
-    )
-    monkeypatch.setattr(
-        module,
-        "resolve_transport_helper_executable",
-        lambda *_args, **_kwargs: ExecutableResolution(
-            requested_name="aic_gz_transport_bridge",
-            resolved_path=None,
-            searched_locations=("/tmp/ws_overlay/install/aic_gazebo_transport_bridge/lib/aic_gazebo_transport_bridge/aic_gz_transport_bridge",),
-            discovered_setup_script="/tmp/ws_overlay/install/setup.bash",
-            setup_explanation="found nearby overlay setup script",
-            status="helper_not_found",
-            setup_status="workspace_setup_script_found_but_not_sourced",
-        ),
+        "aic_gazebo_env.live_runtime.live_prerequisites",
+        lambda _repo_root: {
+            "repo_root": str(repo_root),
+            "setup_script": "/tmp/ws_overlay/install/setup.bash",
+            "setup_explanation": "found nearby overlay setup script",
+            "searched_setup_locations": ["/tmp/ws_overlay/install/setup.bash"],
+            "gz_resolved_path": None,
+            "gz_status": "gz_not_found",
+            "gz_setup_status": "workspace_setup_script_found_but_not_sourced",
+            "searched_gz_locations": ["/usr/bin/gz"],
+            "helper_resolved_path": None,
+            "helper_status": "helper_not_found",
+            "helper_setup_status": "workspace_setup_script_found_but_not_sourced",
+            "searched_helper_locations": ["/tmp/ws_overlay/install/aic_gazebo_transport_bridge/lib/aic_gazebo_transport_bridge/aic_gz_transport_bridge"],
+            "distrobox_path": "/usr/bin/distrobox",
+            "docker_path": "/usr/bin/docker",
+            "colcon_path": "/usr/bin/colcon",
+            "ros_setup_exists": True,
+        },
     )
 
-    preflight = module.build_preflight()
+    preflight = manager.preflight()
 
     assert preflight["gz_status"] == "gz_not_found"
     assert preflight["helper_status"] == "helper_not_found"
@@ -109,15 +90,14 @@ def test_benchmark_preflight_classifies_missing_gz_and_helper(monkeypatch: pytes
         preflight["helper_setup_status"]
         == "workspace_setup_script_found_but_not_sourced"
     )
-    assert preflight["discovered_setup_script"] == "/tmp/ws_overlay/install/setup.bash"
+    assert preflight["setup_script"] == "/tmp/ws_overlay/install/setup.bash"
+    assert "source /tmp/ws_overlay/install/setup.bash" in preflight["recommendation"]
 
 
-def test_benchmark_recommendation_includes_source_command(monkeypatch: pytest.MonkeyPatch) -> None:
-    module = _load_benchmark_module()
-    monkeypatch.setattr(module, "find_repo_root", lambda _: Path("/repo"))
-
-    recommendation = module.build_source_recommendation("/tmp/ws_overlay/install/setup.bash")
+def test_live_recommendation_includes_source_command(tmp_path: Path) -> None:
+    repo_root = _fake_repo_root(tmp_path)
+    manager = LiveRuntimeManager(repo_root=repo_root)
+    recommendation = manager.source_recommendation("/tmp/ws_overlay/install/setup.bash")
 
     assert "source /tmp/ws_overlay/install/setup.bash" in recommendation
-    assert "python3 " in recommendation
-    assert "live_transport_benchmark.py" in recommendation
+    assert "python3 aic_utils/aic_gazebo_env/scripts/run_live_e2e.py" in recommendation

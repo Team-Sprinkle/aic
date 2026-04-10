@@ -290,7 +290,63 @@ Common live benchmark flow:
 3. Run the benchmark:
    `PYTHONPATH=aic_utils/aic_gazebo_env python3 aic_utils/aic_gazebo_env/scripts/live_transport_benchmark.py`
 
-If you prefer the script to re-exec itself through a discovered setup script:
+If you want the benchmark to reuse the same automatic prep path as the e2e runner:
 
-- `PYTHONPATH=aic_utils/aic_gazebo_env python3 aic_utils/aic_gazebo_env/scripts/live_transport_benchmark.py --reexec-with-setup`
+- `PYTHONPATH=aic_utils/aic_gazebo_env python3 aic_utils/aic_gazebo_env/scripts/live_transport_benchmark.py --auto-build --auto-launch`
+
+Canonical live e2e workflow:
+
+- Preferred command:
+  `PYTHONPATH=aic_utils/aic_gazebo_env python3 aic_utils/aic_gazebo_env/scripts/run_live_e2e.py --auto-build --auto-launch`
+- What it does automatically when possible:
+  - discovers repo/workspace/container context
+  - builds `aic_gz_transport_bridge` with a targeted `colcon build --packages-select aic_gazebo_transport_bridge`
+  - attaches to an existing `aic_eval` distrobox container when available
+  - launches the official world headlessly via the supported entrypoint or launch file when requested
+  - waits for live health before smoke/parity checks
+  - runs smoke stages and a small parity-oriented action sequence
+- The canonical live command does not replace the official eval path. It reuses the supported launch path (`/entrypoint.sh` or sourced `aic_bringup`) to exercise the separate training-only runtime against a known-good live world.
+
+Live health/e2e stages:
+
+- `gz` reachable
+- helper reachable
+- world control service reachable
+- state topic live
+- first observation succeeds
+- reset succeeds
+- no-op step succeeds
+- smoke sequence:
+  - get observation
+  - reset
+  - no-op step
+  - bounded pose-delta step
+  - bounded joint-delta step
+- parity sequence:
+  - validates world/entity/tracked-pair sanity
+  - checks success flag presence and types
+  - checks logical/raw step counts are monotonic
+  - checks repeated no-op stability within tolerance
+
+Gated live pytest:
+
+- Live e2e tests are skipped by default.
+- Enable them explicitly:
+  - `AIC_GAZEBO_ENV_RUN_LIVE_E2E=1 python3 -m pytest aic_utils/aic_gazebo_env/tests/test_live_e2e.py -q`
+- Optional automation flags for the test subprocess:
+  - `AIC_GAZEBO_ENV_AUTO_BUILD=1`
+  - `AIC_GAZEBO_ENV_AUTO_LAUNCH=1`
+
+Expected successful live e2e output:
+
+- JSON with:
+  - `preflight`
+  - `context`
+  - `result.health`
+  - `result.smoke`
+  - `result.parity`
+- On success:
+  - `result.health.no_op_step_ok == true`
+  - `result.smoke.ok == true`
+  - `result.parity.ok == true`
    - reason: the package does not expose a dedicated training entrypoint yet, and this validation pass is limited to smoke scripts over the existing public env API.

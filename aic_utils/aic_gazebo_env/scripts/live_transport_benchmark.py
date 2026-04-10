@@ -5,23 +5,20 @@ from __future__ import annotations
 
 import argparse
 import json
-import os
 from pathlib import Path
-import shlex
 import statistics
 import sys
 import time
 
-from aic_gazebo_env.discovery import (
-    find_repo_root,
-    resolve_gz_executable,
-    resolve_transport_helper_executable,
+from aic_gazebo_env.live_runtime import (
+    DEFAULT_WORLD_NAME,
+    LiveRuntimeManager,
 )
 from aic_gazebo_env.gazebo_client import GazeboCliClient, GazeboCliClientConfig, GazeboTransportClient
 from aic_gazebo_env.protocol import GetObservationRequest, ResetRequest, StepRequest
 
 
-WORLD_NAME = "aic_world"
+WORLD_NAME = DEFAULT_WORLD_NAME
 WORLD_PATH = "/tmp/aic.sdf"
 SOURCE_ENTITY = "ati/tool_link"
 TARGET_ENTITY = "tabletop"
@@ -36,101 +33,17 @@ JOINT_NAMES = (
 INITIAL_JOINTS = (-0.1597, -1.3542, -1.6648, -1.6933, 1.5710, 1.4110)
 JOINT_DELTA = (0.02, -0.01, 0.015, 0.0, 0.0, 0.0)
 SAMPLES = 5
-REEXEC_GUARD = "AIC_GAZEBO_ENV_BENCHMARK_REEXECED"
-
-
 def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser = argparse.ArgumentParser()
-    parser.add_argument(
-        "--reexec-with-setup",
-        action="store_true",
-        help="If a nearby setup script is found, re-exec this benchmark inside a sourced bash shell.",
-    )
+    parser.add_argument("--auto-build", action="store_true")
+    parser.add_argument("--auto-launch", action="store_true")
+    parser.add_argument("--worker-benchmark", action="store_true")
     parser.add_argument(
         "--json-only",
         action="store_true",
         help="Print only the final JSON payload.",
     )
     return parser.parse_args(argv)
-
-
-def build_preflight() -> dict[str, object]:
-    repo_root = find_repo_root(Path(__file__))
-    gz = resolve_gz_executable("gz", repo_root=repo_root)
-    helper = resolve_transport_helper_executable(None, repo_root=repo_root)
-    helper_dir = (
-        str(Path(helper.resolved_path).parent)
-        if helper.resolved_path is not None
-        else None
-    )
-    helper_dir_in_path = (
-        helper_dir is not None
-        and helper_dir in os.environ.get("PATH", "").split(os.pathsep)
-    )
-    recommendation = None
-    setup_script = helper.discovered_setup_script or gz.discovered_setup_script
-    if setup_script is not None and (gz.resolved_path is None or helper.resolved_path is None):
-        recommendation = build_source_recommendation(setup_script)
-    return {
-        "repo_root": str(repo_root),
-        "gz_resolved_path": gz.resolved_path,
-        "gz_status": gz.status,
-        "gz_setup_status": gz.setup_status,
-        "helper_resolved_path": helper.resolved_path,
-        "helper_status": helper.status,
-        "helper_setup_status": helper.setup_status,
-        "discovered_setup_script": setup_script,
-        "setup_explanation": helper.setup_explanation or gz.setup_explanation,
-        "helper_dir_in_path": helper_dir_in_path,
-        "searched_gz_locations": list(gz.searched_locations),
-        "searched_helper_locations": list(helper.searched_locations),
-        "recommendation": recommendation,
-    }
-
-
-def build_source_recommendation(setup_script: str) -> str:
-    script_path = Path(__file__).resolve()
-    repo_root = find_repo_root(script_path)
-    try:
-        script_arg = str(script_path.relative_to(repo_root))
-    except ValueError:
-        script_arg = str(script_path)
-    command = (
-        f"cd {shlex.quote(str(repo_root))} && "
-        f"source {shlex.quote(setup_script)} && "
-        f"python3 {shlex.quote(script_arg)}"
-    )
-    return f"bash -lc {shlex.quote(command)}"
-
-
-def maybe_reexec_with_setup(args: argparse.Namespace, preflight: dict[str, object]) -> None:
-    if not args.reexec_with_setup:
-        return
-    if os.environ.get(REEXEC_GUARD) == "1":
-        return
-    setup_script = preflight.get("discovered_setup_script")
-    if not isinstance(setup_script, str):
-        return
-    if preflight.get("gz_resolved_path") and preflight.get("helper_resolved_path"):
-        return
-
-    script_path = Path(__file__).resolve()
-    repo_root = find_repo_root(script_path)
-    forward_args = [arg for arg in sys.argv[1:] if arg != "--reexec-with-setup"]
-    try:
-        script_arg = str(script_path.relative_to(repo_root))
-    except ValueError:
-        script_arg = str(script_path)
-    command = (
-        f"cd {shlex.quote(str(repo_root))} && "
-        f"source {shlex.quote(setup_script)} && "
-        f"{shlex.quote(sys.executable)} {shlex.quote(script_arg)}"
-    )
-    if forward_args:
-        command += " " + " ".join(shlex.quote(arg) for arg in forward_args)
-    env = dict(os.environ)
-    env[REEXEC_GUARD] = "1"
-    os.execvpe("bash", ["bash", "-lc", command], env)
 
 
 def _base_health(mode: str) -> dict[str, object]:
@@ -375,15 +288,44 @@ def run_benchmark() -> dict[str, object]:
 
 def main(argv: list[str] | None = None) -> None:
     args = parse_args(argv)
-    preflight = build_preflight()
-    maybe_reexec_with_setup(args, preflight)
+    if args.worker_benchmark:
+        print(json.dumps(run_benchmark(), indent=None if args.json_only else 2, sort_keys=True))
+        return
+
+    manager = LiveRuntimeManager(world_name=WORLD_NAME, world_path=WORLD_PATH)
+    preflight = manager.preflight()
+    context = manager.prepare(auto_build=args.auto_build, auto_launch=args.auto_launch)
+    health = manager.wait_for_health(context, timeout_s=120.0).to_dict()
+    if health.get("no_op_step_ok"):
+        script_path = Path(__file__).resolve()
+        command = (
+            f"PYTHONPATH={manager.repo_root / 'aic_utils' / 'aic_gazebo_env'} "
+            f"{sys.executable} {script_path} --worker-benchmark --json-only"
+        )
+        result = manager.run_context_command(context, command, timeout_s=300.0)
+        benchmark_results = json.loads(result.stdout) if result.returncode == 0 else {
+            "benchmark_error": {
+                "category": "benchmark_worker_failed",
+                "message": result.stderr or result.stdout,
+            }
+        }
+    else:
+        benchmark_results = {
+            "benchmark_error": {
+                "category": "live_health_unavailable",
+                "message": health.get("diagnostics", {}).get("last_error", "live health checks did not pass"),
+            }
+        }
     payload = {
         "preflight": preflight,
-        "results": run_benchmark(),
+        "context": context.to_dict(),
+        "health": health,
+        "results": benchmark_results,
     }
-    if not args.json_only and preflight.get("recommendation"):
-        print(f"benchmark_preflight_recommendation: {preflight['recommendation']}", file=sys.stderr)
-    print(json.dumps(payload, indent=2, sort_keys=True))
+    recommendation = preflight.get("recommendation")
+    if not args.json_only and recommendation:
+        print(f"benchmark_preflight_recommendation: {recommendation}", file=sys.stderr)
+    print(json.dumps(payload, indent=None if args.json_only else 2, sort_keys=True))
 
 
 if __name__ == "__main__":
