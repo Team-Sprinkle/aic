@@ -49,6 +49,15 @@ class GazeboCliClientConfig:
     world_name: str | None = None
     source_entity_name: str = "robot"
     target_entity_name: str = "task_board"
+    joint_command_model_name: str = "ur"
+    joint_names: tuple[str, ...] = (
+        "shoulder_pan_joint",
+        "shoulder_lift_joint",
+        "elbow_joint",
+        "wrist_1_joint",
+        "wrist_2_joint",
+        "wrist_3_joint",
+    )
     success_distance_threshold: float = 1.0
     orientation_success_threshold: float | None = None
     max_episode_steps: int | None = None
@@ -116,6 +125,8 @@ class GazeboCliClient(GazeboClient):
     def step(self, request: StepRequest) -> StepResponse:
         decoded = StepRequest.from_dict(request.to_dict())
         translated_action = self._translate_policy_action(decoded.action)
+        translated_action = self._translate_joint_delta_action(translated_action)
+        joint_reply = self._maybe_apply_joint_action(translated_action)
         pose_reply = self._maybe_apply_pose_action(translated_action)
         multi_step = self._resolve_multi_step(translated_action)
         reply = self._run(
@@ -147,6 +158,7 @@ class GazeboCliClient(GazeboClient):
                 "runtime": "gazebo",
                 "world_name": self._world_name(),
                 "applied_action": dict(translated_action),
+                "joint_target_service": joint_reply,
                 "pose_service": pose_reply,
                 "multi_step": multi_step,
                 "step_service": reply,
@@ -195,6 +207,56 @@ class GazeboCliClient(GazeboClient):
         translated_action["delta_source_pose"] = delta_source_pose
         return translated_action
 
+    def _translate_joint_delta_action(
+        self,
+        action: dict[str, object],
+    ) -> dict[str, object]:
+        """Translate env-facing joint deltas into absolute joint targets."""
+        translated_action = dict(action)
+        joint_position_delta = translated_action.get("joint_position_delta")
+        if joint_position_delta is None:
+            return translated_action
+        if translated_action.get("set_joint_positions") is not None:
+            raise ValueError(
+                "Gazebo step action must not combine 'joint_position_delta' with 'set_joint_positions'."
+            )
+        if any(
+            translated_action.get(key) is not None
+            for key in ("set_entity_position", "set_entity_pose", "delta_source_pose")
+        ):
+            raise ValueError(
+                "Gazebo step action 'joint_position_delta' must not be combined with pose actions."
+            )
+        if not isinstance(joint_position_delta, list) or len(joint_position_delta) != len(
+            self.config.joint_names
+        ):
+            raise ValueError(
+                "Gazebo step action 'joint_position_delta' must be a list with one value per configured joint."
+            )
+        if not all(isinstance(value, (int, float)) for value in joint_position_delta):
+            raise ValueError(
+                "Gazebo step action 'joint_position_delta' must contain only numbers."
+            )
+
+        observation_response = self.get_observation(GetObservationRequest())
+        current_joint_positions = self._lookup_current_joint_positions(
+            observation_response.observation
+        )
+        next_positions = [
+            current_position + float(delta)
+            for current_position, delta in zip(
+                current_joint_positions,
+                joint_position_delta,
+            )
+        ]
+        translated_action.pop("joint_position_delta")
+        translated_action["set_joint_positions"] = {
+            "model_name": self.config.joint_command_model_name,
+            "joint_names": list(self.config.joint_names),
+            "positions": next_positions,
+        }
+        return translated_action
+
     def _run(self, args: list[str]) -> str:
         completed = subprocess.run(
             [self.config.executable, *args],
@@ -217,6 +279,49 @@ class GazeboCliClient(GazeboClient):
         if not isinstance(multi_step, int) or multi_step <= 0:
             raise ValueError("Gazebo step action requires positive integer 'multi_step'.")
         return multi_step
+
+    def _maybe_apply_joint_action(self, action: dict[str, object]) -> str | None:
+        """Apply a Gazebo-native joint target action if provided."""
+        joint_action = action.get("set_joint_positions")
+        if joint_action is None:
+            return None
+        if any(
+            action.get(key) is not None
+            for key in ("set_entity_position", "set_entity_pose", "delta_source_pose")
+        ):
+            raise ValueError(
+                "Gazebo step action must not combine 'set_joint_positions' with pose actions."
+            )
+        if not isinstance(joint_action, dict):
+            raise ValueError("Gazebo step action 'set_joint_positions' must be a dict.")
+        model_name = joint_action.get("model_name", self.config.joint_command_model_name)
+        joint_names = joint_action.get("joint_names")
+        positions = joint_action.get("positions")
+        if not isinstance(model_name, str) or not model_name:
+            raise ValueError(
+                "Gazebo step action 'set_joint_positions.model_name' must be a non-empty str."
+            )
+        if not isinstance(joint_names, list) or not joint_names:
+            raise ValueError(
+                "Gazebo step action 'set_joint_positions.joint_names' must be a non-empty list."
+            )
+        if not all(isinstance(name, str) and name for name in joint_names):
+            raise ValueError(
+                "Gazebo step action 'set_joint_positions.joint_names' must contain only non-empty strings."
+            )
+        if not isinstance(positions, list) or len(positions) != len(joint_names):
+            raise ValueError(
+                "Gazebo step action 'set_joint_positions.positions' must match the joint_names list length."
+            )
+        if not all(isinstance(value, (int, float)) for value in positions):
+            raise ValueError(
+                "Gazebo step action 'set_joint_positions.positions' must contain only numbers."
+            )
+        return self._send_joint_target_request(
+            model_name=model_name,
+            joint_names=joint_names,
+            positions=[float(value) for value in positions],
+        )
 
     def _maybe_apply_pose_action(self, action: dict[str, object]) -> str | None:
         """Apply the minimal real action if the caller provided one."""
@@ -377,11 +482,43 @@ class GazeboCliClient(GazeboClient):
             ]
         )
 
+    def _send_joint_target_request(
+        self,
+        *,
+        model_name: str,
+        joint_names: list[str],
+        positions: list[float],
+    ) -> str:
+        """Send absolute joint targets through the Gazebo-native joint bridge."""
+        joint_names_text = ",".join(joint_names)
+        positions_text = ",".join(str(position) for position in positions)
+        request_text = (
+            f"model_name={model_name};"
+            f"joint_names={joint_names_text};"
+            f"positions={positions_text}"
+        )
+        return self._run(
+            [
+                "service",
+                "-s",
+                f"/world/{self._world_name()}/joint_target",
+                "--reqtype",
+                "gz.msgs.StringMsg",
+                "--reptype",
+                "gz.msgs.Boolean",
+                "--timeout",
+                str(int(self.config.timeout * 1000)),
+                "--req",
+                f'data: "{request_text}"',
+            ]
+        )
+
     def _parse_state_text(self, payload: str) -> dict[str, object]:
         """Parse a structured observation from `gz topic -e` text."""
         world_name = self._extract_scalar_string(payload, "world") or self._world_name()
         step_count = self._extract_scalar_int(payload, "step_count")
         entities = self._extract_entities(payload)
+        joints = self._extract_joints(payload)
         entities_by_name = {
             entity["name"]: dict(entity) for entity in entities if isinstance(entity["name"], str)
         }
@@ -392,6 +529,13 @@ class GazeboCliClient(GazeboClient):
             "entity_names": [entity["name"] for entity in entities],
             "entities": entities,
             "entities_by_name": entities_by_name,
+            "joint_count": len(joints),
+            "joint_names": [joint["name"] for joint in joints],
+            "joint_positions": [joint["position"] for joint in joints],
+            "joints": joints,
+            "joints_by_name": {
+                joint["name"]: dict(joint) for joint in joints if isinstance(joint["name"], str)
+            },
             "task_geometry": self._build_task_geometry(entities_by_name),
         }
 
@@ -522,6 +666,45 @@ class GazeboCliClient(GazeboClient):
             return None
         return entity
 
+    def _lookup_current_joint_positions(
+        self,
+        observation: dict[str, object],
+    ) -> list[float]:
+        """Return current joint positions in configured joint order."""
+        joints_by_name = observation.get("joints_by_name")
+        if isinstance(joints_by_name, dict):
+            positions: list[float] = []
+            for joint_name in self.config.joint_names:
+                joint_state = joints_by_name.get(joint_name)
+                if not isinstance(joint_state, dict):
+                    break
+                position = joint_state.get("position")
+                if not isinstance(position, float):
+                    break
+                positions.append(position)
+            if len(positions) == len(self.config.joint_names):
+                return positions
+
+        joint_names = observation.get("joint_names")
+        joint_positions = observation.get("joint_positions")
+        if (
+            isinstance(joint_names, list)
+            and isinstance(joint_positions, list)
+            and len(joint_names) == len(joint_positions)
+        ):
+            positions_by_name = {
+                name: position
+                for name, position in zip(joint_names, joint_positions)
+                if isinstance(name, str) and isinstance(position, float)
+            }
+            positions = [positions_by_name.get(joint_name) for joint_name in self.config.joint_names]
+            if all(isinstance(position, float) for position in positions):
+                return [float(position) for position in positions]
+
+        raise RuntimeError(
+            "Real observation did not contain joint positions for all configured joints."
+        )
+
     def _lookup_entity_position(self, entity: dict[str, object]) -> list[float] | None:
         """Return an entity position if the parsed payload contains one."""
         position = entity.get("position")
@@ -650,6 +833,25 @@ class GazeboCliClient(GazeboClient):
                     entity["pose"] = pose
             entities.append(entity)
         return entities
+
+    def _extract_joints(self, payload: str) -> list[dict[str, object]]:
+        """Extract joint position data from a textproto-like world-state payload."""
+        joints: list[dict[str, object]] = []
+        for block in self._extract_repeated_blocks(payload, "joint"):
+            name = self._extract_scalar_string(block, "name")
+            if name is None:
+                continue
+            joint: dict[str, object] = {"name": name}
+            position = self._extract_scalar_float(block, "position")
+            if position is None:
+                axis1_block = self._extract_first_block(block, "axis1")
+                if axis1_block is not None:
+                    position = self._extract_scalar_float(axis1_block, "position")
+            if position is None:
+                continue
+            joint["position"] = position
+            joints.append(joint)
+        return joints
 
     def _extract_xyz_vector(self, payload: str, key: str) -> list[float] | None:
         """Extract a three-axis vector block if all values are present."""

@@ -332,6 +332,7 @@ class GazeboEnv:
 
         normalized_action = dict(action)
         ee_delta_action = normalized_action.get("ee_delta_action")
+        joint_position_delta = normalized_action.get("joint_position_delta")
         has_position_delta = "position_delta" in normalized_action
         has_orientation_delta = "orientation_delta" in normalized_action
         policy_action = normalized_action.get("policy_action")
@@ -339,9 +340,20 @@ class GazeboEnv:
             raise ValueError("Action 'policy_action' must be a dict.")
         if ee_delta_action is not None and not isinstance(ee_delta_action, dict):
             raise ValueError("Action 'ee_delta_action' must be a dict.")
+        if joint_position_delta is not None and not isinstance(joint_position_delta, list):
+            raise ValueError("Action 'joint_position_delta' must be a list of numbers.")
         if ee_delta_action is not None and (policy_action is not None or has_position_delta or has_orientation_delta):
             raise ValueError(
                 "Action must use either 'ee_delta_action', top-level tracked-source deltas, or 'policy_action', not multiple action forms."
+            )
+        if joint_position_delta is not None and (
+            ee_delta_action is not None
+            or policy_action is not None
+            or has_position_delta
+            or has_orientation_delta
+        ):
+            raise ValueError(
+                "Action must use either 'joint_position_delta', 'ee_delta_action', top-level tracked-source deltas, or 'policy_action', not multiple action forms."
             )
         if ee_delta_action is not None:
             normalized_action.pop("ee_delta_action")
@@ -381,6 +393,17 @@ class GazeboEnv:
                 )
             has_position_delta = "position_delta" in normalized_action
             has_orientation_delta = "orientation_delta" in normalized_action
+        if joint_position_delta is not None:
+            normalized_action["joint_position_delta"] = self._validate_numeric_vector(
+                name="joint_position_delta",
+                value=joint_position_delta,
+                expected_length=6,
+            )
+            multi_step = normalized_action.get("multi_step", 1)
+            if not isinstance(multi_step, int) or multi_step < 1:
+                raise ValueError("Action 'multi_step' must be a positive integer.")
+            normalized_action["multi_step"] = multi_step
+            return normalized_action
         if policy_action is not None and (has_position_delta or has_orientation_delta):
             raise ValueError(
                 "Action must use either top-level tracked-source deltas or 'policy_action', not both."

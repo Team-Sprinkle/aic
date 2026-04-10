@@ -56,6 +56,15 @@ class GazeboRuntimeConfig:
     world_name: str | None = None
     source_entity_name: str = "robot"
     target_entity_name: str = "task_board"
+    joint_command_model_name: str = "ur"
+    joint_names: tuple[str, ...] = (
+        "shoulder_pan_joint",
+        "shoulder_lift_joint",
+        "elbow_joint",
+        "wrist_1_joint",
+        "wrist_2_joint",
+        "wrist_3_joint",
+    )
     success_distance_threshold: float = 1.0
     orientation_success_threshold: float | None = None
     max_episode_steps: int | None = None
@@ -184,6 +193,8 @@ class GazeboRuntime(Runtime):
                     world_name=self.config.world_name,
                     source_entity_name=self.config.source_entity_name,
                     target_entity_name=self.config.target_entity_name,
+                    joint_command_model_name=self.config.joint_command_model_name,
+                    joint_names=self.config.joint_names,
                     success_distance_threshold=self.config.success_distance_threshold,
                     orientation_success_threshold=self.config.orientation_success_threshold,
                     max_episode_steps=self.config.max_episode_steps,
