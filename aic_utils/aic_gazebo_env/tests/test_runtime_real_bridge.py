@@ -19,37 +19,67 @@ def _write_fake_gz_bridge_script(path: Path) -> None:
             "import time",
             "",
             "state_file = Path(sys.argv[0]).with_suffix('.state')",
-            "if not state_file.exists():",
-            "    state_file.write_text(",
-            "        json.dumps(",
-            "            {",
-            "                'step_count': 0,",
-            "                'entities': {",
-            "                    'robot': {",
-            "                        'id': 101,",
-            "                        'position': [1.0, 2.0, 3.0],",
-            "                        'orientation': [0.0, 0.0, 0.0, 1.0],",
-            "                    },",
-            "                    'task_board': {",
-            "                        'id': 202,",
-            "                        'position': [4.0, 5.0, 6.0],",
-            "                        'orientation': [0.0, 0.0, 0.707, 0.707],",
-            "                    },",
-            "                    'inspection_target': {",
-            "                        'id': 303,",
-            "                        'position': [10.0, 12.0, 14.0],",
-            "                        'orientation': [0.0, 0.0, 0.0, 1.0],",
-            "                    },",
-            "                },",
-            "            }",
-            "        ),",
-            "        encoding='utf-8',",
-            "    )",
             "",
             "def _read_state():",
             "    return json.loads(state_file.read_text(encoding='utf-8'))",
             "",
+            "def _joint_names():",
+            "    return [",
+            "        'shoulder_pan_joint',",
+            "        'shoulder_lift_joint',",
+            "        'elbow_joint',",
+            "        'wrist_1_joint',",
+            "        'wrist_2_joint',",
+            "        'wrist_3_joint',",
+            "    ]",
+            "",
+            "def _tcp_pose_from_joints(joints):",
+            "    return {",
+            "        'position': [",
+            "            1.0 + joints['shoulder_pan_joint'] + 0.5 * joints['shoulder_lift_joint'],",
+            "            2.0 + joints['elbow_joint'] + 0.5 * joints['wrist_1_joint'],",
+            "            3.0 + joints['wrist_2_joint'] + 0.5 * joints['wrist_3_joint'],",
+            "        ],",
+            "        'orientation': [0.0, 0.0, 0.0, 1.0],",
+            "    }",
+            "",
+            "def _base_state():",
+            "    joints = {name: 0.0 for name in _joint_names()}",
+            "    tcp_pose = _tcp_pose_from_joints(joints)",
+            "    return {",
+            "        'step_count': 0,",
+            "        'joints': joints,",
+            "        'entities': {",
+            "            'robot': {",
+            "                'id': 101,",
+            "                'position': [1.0, 2.0, 3.0],",
+            "                'orientation': [0.0, 0.0, 0.0, 1.0],",
+            "            },",
+            "            'task_board': {",
+            "                'id': 202,",
+            "                'position': [4.0, 5.0, 6.0],",
+            "                'orientation': [0.0, 0.0, 0.707, 0.707],",
+            "            },",
+            "            'inspection_target': {",
+            "                'id': 303,",
+            "                'position': [10.0, 12.0, 14.0],",
+            "                'orientation': [0.0, 0.0, 0.0, 1.0],",
+            "            },",
+            "            'gripper/tcp': {",
+            "                'id': 404,",
+            "                'position': list(tcp_pose['position']),",
+            "                'orientation': list(tcp_pose['orientation']),",
+            "            },",
+            "        },",
+            "    }",
+            "",
+            "def _refresh_tcp_entity(state):",
+            "    tcp_pose = _tcp_pose_from_joints(state['joints'])",
+            "    state['entities']['gripper/tcp']['position'] = list(tcp_pose['position'])",
+            "    state['entities']['gripper/tcp']['orientation'] = list(tcp_pose['orientation'])",
+            "",
             "def _write_state(state):",
+            "    _refresh_tcp_entity(state)",
             "    state_file.write_text(json.dumps(state), encoding='utf-8')",
             "",
             "def _exit_cleanly(signum, frame):",
@@ -62,6 +92,9 @@ def _write_fake_gz_bridge_script(path: Path) -> None:
             "    print('fake gz sim running', flush=True)",
             "    while True:",
             "        time.sleep(0.1)",
+            "",
+            "if not state_file.exists():",
+            "    _write_state(_base_state())",
             "",
             "if sys.argv[1:3] == ['topic', '-e']:",
             "    topic = sys.argv[-1]",
@@ -120,6 +153,47 @@ def _write_fake_gz_bridge_script(path: Path) -> None:
             "    }}",
             "  }}",
             "}}",
+            "entity {{",
+            "  id: {state['entities']['gripper/tcp']['id']}",
+            "  name: \"gripper/tcp\"",
+            "  pose {{",
+            "    position {{",
+            "      x: {state['entities']['gripper/tcp']['position'][0]}",
+            "      y: {state['entities']['gripper/tcp']['position'][1]}",
+            "      z: {state['entities']['gripper/tcp']['position'][2]}",
+            "    }}",
+            "    orientation {{",
+            "      x: {state['entities']['gripper/tcp']['orientation'][0]}",
+            "      y: {state['entities']['gripper/tcp']['orientation'][1]}",
+            "      z: {state['entities']['gripper/tcp']['orientation'][2]}",
+            "      w: {state['entities']['gripper/tcp']['orientation'][3]}",
+            "    }}",
+            "  }}",
+            "}}",
+            "joint {{",
+            "  name: \"shoulder_pan_joint\"",
+            "  position: {state['joints']['shoulder_pan_joint']}",
+            "}}",
+            "joint {{",
+            "  name: \"shoulder_lift_joint\"",
+            "  position: {state['joints']['shoulder_lift_joint']}",
+            "}}",
+            "joint {{",
+            "  name: \"elbow_joint\"",
+            "  position: {state['joints']['elbow_joint']}",
+            "}}",
+            "joint {{",
+            "  name: \"wrist_1_joint\"",
+            "  position: {state['joints']['wrist_1_joint']}",
+            "}}",
+            "joint {{",
+            "  name: \"wrist_2_joint\"",
+            "  position: {state['joints']['wrist_2_joint']}",
+            "}}",
+            "joint {{",
+            "  name: \"wrist_3_joint\"",
+            "  position: {state['joints']['wrist_3_joint']}",
+            "}}",
             "topic: \"{topic}\"''',",
             "        flush=True,",
             "    )",
@@ -133,26 +207,7 @@ def _write_fake_gz_bridge_script(path: Path) -> None:
             "        increment = int(request_payload.split('multi_step:', 1)[1].strip())",
             "        state['step_count'] += increment",
             "    if 'reset:' in request_payload:",
-            "        state = {",
-            "            'step_count': 0,",
-            "            'entities': {",
-            "                'robot': {",
-            "                    'id': 101,",
-            "                    'position': [1.0, 2.0, 3.0],",
-            "                    'orientation': [0.0, 0.0, 0.0, 1.0],",
-            "                },",
-            "                'task_board': {",
-            "                    'id': 202,",
-            "                    'position': [4.0, 5.0, 6.0],",
-            "                    'orientation': [0.0, 0.0, 0.707, 0.707],",
-            "                },",
-            "                'inspection_target': {",
-            "                    'id': 303,",
-            "                    'position': [10.0, 12.0, 14.0],",
-            "                    'orientation': [0.0, 0.0, 0.0, 1.0],",
-            "                },",
-            "            },",
-            "        }",
+            "        state = _base_state()",
             "    if service.endswith('/set_pose'):",
             "        name_match = re.search(r'name:\\s*\"([^\"]+)\"', request_payload)",
             "        position_match = re.search(",
@@ -176,6 +231,19 @@ def _write_fake_gz_bridge_script(path: Path) -> None:
             "                float(orientation_match.group(3)),",
             "                float(orientation_match.group(4)),",
             "            ]",
+            "    if service.endswith('/joint_target'):",
+            "        data_match = re.search(r'data:\\s*\"([^\"]+)\"', request_payload)",
+            "        if data_match:",
+            "            fields = {}",
+            "            for field in data_match.group(1).split(';'):",
+            "                if '=' not in field:",
+            "                    continue",
+            "                key, value = field.split('=', 1)",
+            "                fields[key] = value",
+            "            joint_names = [name for name in fields.get('joint_names', '').split(',') if name]",
+            "            positions = [float(value) for value in fields.get('positions', '').split(',') if value]",
+            "            for joint_name, position in zip(joint_names, positions):",
+            "                state['joints'][joint_name] = position",
             "    _write_state(state)",
             "    print(",
             "        json.dumps(",
@@ -228,8 +296,18 @@ def test_runtime_can_get_real_observation_and_reset_via_client(tmp_path: Path) -
         observation, info = runtime.get_observation()
         assert observation["world_name"] == "test_world"
         assert observation["step_count"] == 0
-        assert observation["entity_count"] == 3
-        assert observation["entity_names"] == ["robot", "task_board", "inspection_target"]
+        assert observation["entity_count"] == 4
+        assert observation["entity_names"] == ["robot", "task_board", "inspection_target", "gripper/tcp"]
+        assert observation["joint_count"] == 6
+        assert observation["joint_names"] == [
+            "shoulder_pan_joint",
+            "shoulder_lift_joint",
+            "elbow_joint",
+            "wrist_1_joint",
+            "wrist_2_joint",
+            "wrist_3_joint",
+        ]
+        assert observation["joint_positions"] == [0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
         assert observation["entities"] == [
             {
                 "name": "robot",
@@ -261,10 +339,21 @@ def test_runtime_can_get_real_observation_and_reset_via_client(tmp_path: Path) -
                     "orientation": [0.0, 0.0, 0.0, 1.0],
                 },
             },
+            {
+                "name": "gripper/tcp",
+                "id": 404,
+                "position": [1.0, 2.0, 3.0],
+                "orientation": [0.0, 0.0, 0.0, 1.0],
+                "pose": {
+                    "position": [1.0, 2.0, 3.0],
+                    "orientation": [0.0, 0.0, 0.0, 1.0],
+                },
+            },
         ]
         assert observation["entities_by_name"]["robot"] == observation["entities"][0]
         assert observation["entities_by_name"]["task_board"] == observation["entities"][1]
         assert observation["entities_by_name"]["inspection_target"] == observation["entities"][2]
+        assert observation["entities_by_name"]["gripper/tcp"] == observation["entities"][3]
         assert observation["task_geometry"] == {
             "tracked_entity_pair": {
                 "source": "robot",
@@ -320,8 +409,10 @@ def test_runtime_can_get_real_observation_and_reset_via_client(tmp_path: Path) -
         )
         assert step_observation["world_name"] == "test_world"
         assert step_observation["step_count"] == 3
-        assert step_observation["entity_count"] == 3
-        assert step_observation["entity_names"] == ["robot", "task_board", "inspection_target"]
+        assert step_observation["entity_count"] == 4
+        assert step_observation["entity_names"] == ["robot", "task_board", "inspection_target", "gripper/tcp"]
+        assert step_observation["joint_count"] == 6
+        assert step_observation["joint_positions"] == [0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
         assert step_observation["entities"] == [
             {
                 "name": "robot",
@@ -350,6 +441,16 @@ def test_runtime_can_get_real_observation_and_reset_via_client(tmp_path: Path) -
                 "orientation": [0.0, 0.0, 0.0, 1.0],
                 "pose": {
                     "position": [10.0, 12.0, 14.0],
+                    "orientation": [0.0, 0.0, 0.0, 1.0],
+                },
+            },
+            {
+                "name": "gripper/tcp",
+                "id": 404,
+                "position": [1.0, 2.0, 3.0],
+                "orientation": [0.0, 0.0, 0.0, 1.0],
+                "pose": {
+                    "position": [1.0, 2.0, 3.0],
                     "orientation": [0.0, 0.0, 0.0, 1.0],
                 },
             },
@@ -1328,7 +1429,7 @@ def test_gymnasium_wrapper_real_step_preserves_env_behavior(tmp_path: Path) -> N
         observation, info = wrapper.reset(seed=55, options={"mode": "gym-wrapper"})
         assert observation["world_name"] == "test_world"
         assert observation["step_count"] == 0
-        assert observation["entity_count"] == 3
+        assert observation["entity_count"] == 4
         assert observation["task_geometry"]["tracked_entity_pair"]["relative_position"] == [3.0, 3.0, 3.0]
         assert observation["task_geometry"]["tracked_entity_pair"]["source_orientation"] == [0.0, 0.0, 0.0, 1.0]
         assert wrapper.observation_space.spaces["step_count"].shape == (1,)
@@ -1342,7 +1443,7 @@ def test_gymnasium_wrapper_real_step_preserves_env_behavior(tmp_path: Path) -> N
         )
         assert first_observation["entities_by_name"]["robot"]["position"] == [2.0, 2.0, 3.0]
         assert first_observation["step_count"] == 1
-        assert first_observation["entity_count"] == 3
+        assert first_observation["entity_count"] == 4
         assert first_observation["task_geometry"]["tracked_entity_pair"]["relative_position"] == [2.0, 3.0, 3.0]
         assert first_observation["task_geometry"]["tracked_entity_pair"]["distance"] == -first_reward
         assert first_reward == -4.69041575982343
@@ -1426,7 +1527,7 @@ def test_gymnasium_wrapper_real_flattened_mode_matches_raw_observation(tmp_path:
         assert step_observation == wrapper.unwrapped_env.flatten_observation(raw_observation)
         assert step_observation == [
             1.0,
-            3.0,
+            4.0,
             2.0,
             3.0,
             3.0,
@@ -1456,3 +1557,78 @@ def test_gymnasium_wrapper_real_flattened_mode_matches_raw_observation(tmp_path:
         }
     finally:
         wrapper.close()
+
+
+def test_runtime_real_joint_delta_bridge_updates_joint_positions_and_tcp_pose(
+    tmp_path: Path,
+) -> None:
+    fake_gz = tmp_path / "fake_gz.py"
+    world = tmp_path / "world.sdf"
+    _write_fake_gz_bridge_script(fake_gz)
+    _write_world(world)
+
+    runtime = GazeboRuntime(
+        GazeboRuntimeConfig(
+            world_path=str(world),
+            world_name="test_world",
+            timeout=0.2,
+            executable=str(fake_gz),
+            source_entity_name="gripper/tcp",
+            target_entity_name="task_board",
+        )
+    )
+
+    runtime.start()
+    try:
+        reset_observation, _ = runtime.reset(seed=91, options={"mode": "joint-bridge"})
+        assert reset_observation["joint_positions"] == [0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
+        assert reset_observation["entities_by_name"]["gripper/tcp"]["position"] == [1.0, 2.0, 3.0]
+
+        step_observation, reward, terminated, truncated, step_info = runtime.step(
+            {
+                "joint_position_delta": [0.2, -0.1, 0.3, 0.0, 0.0, 0.0],
+                "multi_step": 2,
+            }
+        )
+
+        assert step_observation["joint_names"] == [
+            "shoulder_pan_joint",
+            "shoulder_lift_joint",
+            "elbow_joint",
+            "wrist_1_joint",
+            "wrist_2_joint",
+            "wrist_3_joint",
+        ]
+        assert step_observation["joint_positions"] == [0.2, -0.1, 0.3, 0.0, 0.0, 0.0]
+        assert step_observation["entities_by_name"]["gripper/tcp"]["position"] == [1.15, 2.3, 3.0]
+        assert step_observation["entities_by_name"]["gripper/tcp"]["orientation"] == [0.0, 0.0, 0.0, 1.0]
+        assert step_observation["task_geometry"]["tracked_entity_pair"]["source"] == "gripper/tcp"
+        assert step_observation["task_geometry"]["tracked_entity_pair"]["relative_position"] == [2.85, 2.7, 3.0]
+        assert step_observation["step_count"] == 2
+        assert reward == -4.940900727600181
+        assert terminated is False
+        assert truncated is False
+        assert step_info["applied_action"] == {
+            "set_joint_positions": {
+                "model_name": "ur",
+                "joint_names": [
+                    "shoulder_pan_joint",
+                    "shoulder_lift_joint",
+                    "elbow_joint",
+                    "wrist_1_joint",
+                    "wrist_2_joint",
+                    "wrist_3_joint",
+                ],
+                "positions": [0.2, -0.1, 0.3, 0.0, 0.0, 0.0],
+            },
+            "multi_step": 2,
+        }
+        assert step_info["joint_target_service"] is not None
+        assert '"/world/test_world/joint_target"' in step_info["joint_target_service"]
+        assert step_info["pose_service"] is None
+
+        updated_observation, _ = runtime.get_observation()
+        assert updated_observation["joint_positions"] == [0.2, -0.1, 0.3, 0.0, 0.0, 0.0]
+        assert updated_observation["entities_by_name"]["gripper/tcp"]["position"] == [1.15, 2.3, 3.0]
+    finally:
+        runtime.stop()

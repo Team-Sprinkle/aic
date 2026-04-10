@@ -101,6 +101,20 @@ install(
   DESTINATION lib/${PROJECT_NAME}
 )
 
+add_library(JointTargetPlugin
+  SHARED
+  src/JointTargetPlugin.cc
+)
+
+target_link_libraries(JointTargetPlugin PRIVATE
+  gz-sim${GZ_SIM_VER}::gz-sim${GZ_SIM_VER}
+)
+
+install(
+  TARGETS JointTargetPlugin
+  DESTINATION lib/${PROJECT_NAME}
+)
+
 add_library(WorldSdfGeneratorPlugin
   SHARED
   src/WorldSdfGeneratorPlugin.cc

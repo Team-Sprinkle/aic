@@ -258,6 +258,28 @@ def test_env_clean_action_omits_orientation_and_defaults_multi_step() -> None:
     assert info["applied_action"] == runtime.last_action
 
 
+def test_env_accepts_joint_position_delta_action_and_forwards_it() -> None:
+    runtime = RecordingRuntime()
+    env = GazeboEnv(runtime=runtime)
+
+    observation, reward, terminated, truncated, info = env.step(
+        {
+            "joint_position_delta": [0.1, -0.1, 0.2, 0.0, 0.0, 0.0],
+            "multi_step": 3,
+        }
+    )
+
+    assert runtime.last_action == {
+        "joint_position_delta": [0.1, -0.1, 0.2, 0.0, 0.0, 0.0],
+        "multi_step": 3,
+    }
+    assert observation["last_action"] == runtime.last_action
+    assert reward == 0.0
+    assert terminated is False
+    assert truncated is False
+    assert info["applied_action"] == runtime.last_action
+
+
 def test_env_clean_action_accepts_orientation_only() -> None:
     runtime = RecordingRuntime()
     env = GazeboEnv(runtime=runtime)
