@@ -8,11 +8,12 @@ import json
 import os
 from pathlib import Path
 import select
-import shutil
 import subprocess
 import threading
 import time
 from typing import Any
+
+from .discovery import resolve_transport_helper_executable
 
 
 class GazeboTransportBridgeError(RuntimeError):
@@ -50,18 +51,8 @@ class GazeboTransportBridge:
     @staticmethod
     def find_helper_explicit_or_on_path(helper_executable: str | None = None) -> str | None:
         """Resolve the helper executable from explicit config, env, or PATH."""
-        candidates = [
-            helper_executable,
-            os.environ.get("AIC_GZ_TRANSPORT_BRIDGE_EXECUTABLE"),
-            shutil.which("aic_gz_transport_bridge"),
-        ]
-        for candidate in candidates:
-            if not candidate:
-                continue
-            resolved = shutil.which(candidate) if os.sep not in candidate else candidate
-            if resolved and Path(resolved).exists():
-                return resolved
-        return None
+        resolution = resolve_transport_helper_executable(helper_executable)
+        return resolution.resolved_path
 
     def start(self) -> None:
         """Start the helper process and verify it responds."""
@@ -72,14 +63,20 @@ class GazeboTransportBridge:
         self._ready_ok = False
         self._last_status = None
 
-        executable = self.find_helper_explicit_or_on_path(
-            self._config.helper_executable
-        )
+        resolution = resolve_transport_helper_executable(self._config.helper_executable)
+        executable = resolution.resolved_path
         if executable is None:
+            searched = "\n".join(f"  - {path}" for path in resolution.searched_locations)
+            setup_hint = ""
+            if resolution.discovered_setup_script:
+                setup_hint = (
+                    "\nSetup script found but not sourced. Try:\n"
+                    f"  bash -lc \"source {resolution.discovered_setup_script} && <your command>\""
+                )
             raise FileNotFoundError(
                 "Could not resolve `aic_gz_transport_bridge`. "
-                "Set `AIC_GZ_TRANSPORT_BRIDGE_EXECUTABLE` or source a workspace "
-                "that installs the helper."
+                f"status={resolution.status}. setup_status={resolution.setup_status}. "
+                f"Searched:\n{searched}{setup_hint}"
             )
 
         self._process = subprocess.Popen(

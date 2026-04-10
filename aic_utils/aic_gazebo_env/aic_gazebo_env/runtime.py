@@ -10,6 +10,7 @@ import time
 from typing import Any
 
 from .backend import Backend, StubBackend
+from .discovery import resolve_gz_executable
 from .gazebo_client import (
     GazeboCliClient,
     GazeboCliClientConfig,
@@ -99,6 +100,23 @@ class GazeboRuntime(Runtime):
     process: subprocess.Popen[str] | None = None
     client: GazeboClient | None = None
 
+    def _resolved_executable(self) -> str:
+        resolution = resolve_gz_executable(self.config.executable)
+        if resolution.resolved_path is None:
+            searched = "\n".join(f"  - {path}" for path in resolution.searched_locations)
+            setup_hint = ""
+            if resolution.discovered_setup_script:
+                setup_hint = (
+                    "\nSetup script found but not sourced. Try:\n"
+                    f"  bash -lc \"source {resolution.discovered_setup_script} && <your command>\""
+                )
+            raise FileNotFoundError(
+                f"Gazebo executable was not found: {self.config.executable}. "
+                f"status={resolution.status}. setup_status={resolution.setup_status}. "
+                f"Searched:\n{searched}{setup_hint}"
+            )
+        return resolution.resolved_path
+
     def start(self) -> None:
         """Start the Gazebo subprocess and verify it survives initial startup."""
         if self.process is not None and self.process.poll() is None:
@@ -110,19 +128,13 @@ class GazeboRuntime(Runtime):
                 f"Gazebo world file does not exist: {world_path}"
             )
 
-        command = self._build_command(world_path)
-        try:
-            self.process = subprocess.Popen(
-                command,
-                stdout=subprocess.PIPE,
-                stderr=subprocess.PIPE,
-                text=True,
-            )
-        except FileNotFoundError as exc:
-            raise FileNotFoundError(
-                f"Gazebo executable was not found: {self.config.executable}"
-            ) from exc
-
+        command = self._build_command(world_path, executable=self._resolved_executable())
+        self.process = subprocess.Popen(
+            command,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True,
+        )
         deadline = time.monotonic() + self.config.timeout
         while time.monotonic() < deadline:
             if self.process.poll() is not None:
@@ -191,9 +203,9 @@ class GazeboRuntime(Runtime):
         response = self._client().get_observation(GetObservationRequest())
         return dict(response.observation), dict(response.info)
 
-    def _build_command(self, world_path: Path) -> list[str]:
+    def _build_command(self, world_path: Path, *, executable: str | None = None) -> list[str]:
         """Build the subprocess command line for `gz sim`."""
-        command = [self.config.executable, "sim"]
+        command = [executable or self._resolved_executable(), "sim"]
         if self.config.headless:
             command.append("-s")
         command.append(str(world_path))

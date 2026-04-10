@@ -258,4 +258,39 @@ Run these from the repo root:
 
 4. Tiny training smoke:
    - not added
+
+Live benchmark setup:
+
+- Live benchmarking needs:
+  - a Gazebo CLI executable resolvable as `gz`
+  - the helper binary `aic_gz_transport_bridge` built into a workspace install
+  - a running world such as the official eval container world
+- The helper is built by colcon as package `aic_gazebo_transport_bridge` and is
+  installed at:
+  `install/aic_gazebo_transport_bridge/lib/aic_gazebo_transport_bridge/aic_gz_transport_bridge`
+- The benchmark now performs a preflight before probing the live runtime. It
+  reports:
+  - repo root
+  - resolved `gz` path or `null`
+  - resolved helper path or `null`
+  - nearby setup script, if one was found
+  - whether the helper directory is already on `PATH`
+  - searched locations for `gz` and the helper
+- If binaries are missing but a nearby workspace setup script exists, the
+  benchmark prints an exact `bash -lc "source ... && python3 ..."` command to
+  rerun inside the sourced environment.
+
+Common live benchmark flow:
+
+1. Build the helper in a sourced workspace:
+   `source /opt/ros/kilted/setup.bash`
+   `colcon build --packages-select aic_gazebo_transport_bridge`
+2. Source the workspace:
+   `source install/setup.bash`
+3. Run the benchmark:
+   `PYTHONPATH=aic_utils/aic_gazebo_env python3 aic_utils/aic_gazebo_env/scripts/live_transport_benchmark.py`
+
+If you prefer the script to re-exec itself through a discovered setup script:
+
+- `PYTHONPATH=aic_utils/aic_gazebo_env python3 aic_utils/aic_gazebo_env/scripts/live_transport_benchmark.py --reexec-with-setup`
    - reason: the package does not expose a dedicated training entrypoint yet, and this validation pass is limited to smoke scripts over the existing public env API.
