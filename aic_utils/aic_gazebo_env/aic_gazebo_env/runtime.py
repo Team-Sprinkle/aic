@@ -10,7 +10,12 @@ import time
 from typing import Any
 
 from .backend import Backend, StubBackend
-from .gazebo_client import GazeboCliClient, GazeboCliClientConfig, GazeboClient
+from .gazebo_client import (
+    GazeboCliClient,
+    GazeboCliClientConfig,
+    GazeboClient,
+    GazeboTransportClient,
+)
 from .protocol import GetObservationRequest, ResetRequest, StepRequest
 
 
@@ -56,7 +61,7 @@ class GazeboRuntimeConfig:
     world_name: str | None = None
     source_entity_name: str = "robot"
     target_entity_name: str = "task_board"
-    joint_command_model_name: str = "ur"
+    joint_command_model_name: str = "ur5e"
     joint_names: tuple[str, ...] = (
         "shoulder_pan_joint",
         "shoulder_lift_joint",
@@ -70,6 +75,11 @@ class GazeboRuntimeConfig:
     max_episode_steps: int | None = None
     success_bonus: float = 10.0
     reward_mode: str = "heuristic"
+    transport_backend: str = "auto"
+    transport_helper_executable: str | None = None
+    helper_startup_timeout_s: float = 5.0
+    helper_request_timeout_s: float = 5.0
+    helper_startup_settle_s: float = 3.0
 
 
 @dataclass
@@ -188,23 +198,35 @@ class GazeboRuntime(Runtime):
     def _client(self) -> GazeboClient:
         """Return the configured real Gazebo client."""
         if self.client is None:
-            self.client = GazeboCliClient(
-                GazeboCliClientConfig(
-                    executable=self.config.executable,
-                    world_path=self.config.world_path,
-                    timeout=self.config.timeout,
-                    world_name=self.config.world_name,
-                    source_entity_name=self.config.source_entity_name,
-                    target_entity_name=self.config.target_entity_name,
-                    joint_command_model_name=self.config.joint_command_model_name,
-                    joint_names=self.config.joint_names,
-                    success_distance_threshold=self.config.success_distance_threshold,
-                    orientation_success_threshold=self.config.orientation_success_threshold,
-                    max_episode_steps=self.config.max_episode_steps,
-                    success_bonus=self.config.success_bonus,
-                    reward_mode=self.config.reward_mode,
-                )
+            client_config = GazeboCliClientConfig(
+                executable=self.config.executable,
+                world_path=self.config.world_path,
+                timeout=self.config.timeout,
+                world_name=self.config.world_name,
+                source_entity_name=self.config.source_entity_name,
+                target_entity_name=self.config.target_entity_name,
+                joint_command_model_name=self.config.joint_command_model_name,
+                joint_names=self.config.joint_names,
+                success_distance_threshold=self.config.success_distance_threshold,
+                orientation_success_threshold=self.config.orientation_success_threshold,
+                max_episode_steps=self.config.max_episode_steps,
+                success_bonus=self.config.success_bonus,
+                reward_mode=self.config.reward_mode,
+                transport_backend=self.config.transport_backend,
+                transport_helper_executable=self.config.transport_helper_executable,
+                helper_startup_timeout_s=self.config.helper_startup_timeout_s,
+                helper_request_timeout_s=self.config.helper_request_timeout_s,
+                helper_startup_settle_s=self.config.helper_startup_settle_s,
             )
+            backend = self.config.transport_backend
+            if backend == "transport" or (
+                backend == "auto"
+                and Path(self.config.executable).name == "gz"
+                and GazeboCliClient.transport_helper_available(client_config)
+            ):
+                self.client = GazeboTransportClient(client_config)
+            else:
+                self.client = GazeboCliClient(client_config)
         return self.client
 
     def _ensure_running(self, operation: str) -> None:

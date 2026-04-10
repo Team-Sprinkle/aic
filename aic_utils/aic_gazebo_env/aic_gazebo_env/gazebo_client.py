@@ -9,6 +9,7 @@ import math
 import os
 from pathlib import Path
 import re
+import shutil
 import select
 import struct
 import subprocess
@@ -24,6 +25,11 @@ from .protocol import (
     ResetResponse,
     StepRequest,
     StepResponse,
+)
+from .transport_bridge import (
+    GazeboTransportBridge,
+    GazeboTransportBridgeConfig,
+    GazeboTransportBridgeError,
 )
 
 
@@ -191,7 +197,7 @@ class GazeboCliClientConfig:
     world_name: str | None = None
     source_entity_name: str = "robot"
     target_entity_name: str = "task_board"
-    joint_command_model_name: str = "ur"
+    joint_command_model_name: str = "ur5e"
     joint_names: tuple[str, ...] = (
         "shoulder_pan_joint",
         "shoulder_lift_joint",
@@ -223,6 +229,11 @@ class GazeboCliClientConfig:
     max_episode_steps: int | None = None
     success_bonus: float = 10.0
     reward_mode: str = "heuristic"
+    transport_backend: str = "cli"
+    transport_helper_executable: str | None = None
+    helper_startup_timeout_s: float = 5.0
+    helper_request_timeout_s: float = 5.0
+    helper_startup_settle_s: float = 3.0
     observation_transport: str = "auto"
     persistent_topic_quiet_period_s: float = 0.05
 
@@ -238,8 +249,26 @@ class GazeboCliClient(GazeboClient):
         self._state_reader: PersistentGazeboTopicReader | None = None
         self._pose_reader: PersistentGazeboTopicReader | None = None
 
+    def _transport_backend_name(self) -> str:
+        """Return the concrete transport backend label used for info/debugging."""
+        return "cli"
+
+    @classmethod
+    def transport_helper_available(
+        cls,
+        config: GazeboCliClientConfig,
+    ) -> bool:
+        """Return whether the persistent C++ transport helper is available."""
+        return (
+            GazeboTransportBridge.find_helper_explicit_or_on_path(
+                config.transport_helper_executable
+            )
+            is not None
+        )
+
     def reset(self, request: ResetRequest) -> ResetResponse:
         decoded = ResetRequest.from_dict(request.to_dict())
+        state_generation = self._current_state_generation()
         reply = self._run(
             [
                 "service",
@@ -255,12 +284,17 @@ class GazeboCliClient(GazeboClient):
                 "reset: {all: true}",
             ]
         )
-        observation_response = self.get_observation(GetObservationRequest())
+        observation_response = self._get_observation_after_generation(
+            state_generation=state_generation
+            if self._uses_persistent_observation_transport()
+            else None
+        )
         response = ResetResponse(
             observation=dict(observation_response.observation),
             info={
                 "backend": "gazebo",
                 "runtime": "gazebo",
+                "transport_backend": self._transport_backend_name(),
                 "seed": decoded.seed,
                 "options": dict(decoded.options),
                 "world_name": self._world_name(),
@@ -298,6 +332,7 @@ class GazeboCliClient(GazeboClient):
             info={
                 "backend": "gazebo",
                 "runtime": "gazebo",
+                "transport_backend": self._transport_backend_name(),
                 "observation_topic": state_topic,
                 "pose_topic": pose_topic,
                 "state_text": state_payload,
@@ -431,6 +466,7 @@ class GazeboCliClient(GazeboClient):
         reply: str | None = None
         settle_info: dict[str, object] = {}
         if joint_reply is None and pose_reply is None:
+            state_generation = self._current_state_generation()
             reply = self._run(
                 [
                     "service",
@@ -446,7 +482,11 @@ class GazeboCliClient(GazeboClient):
                     f"multi_step: {multi_step}",
                 ]
             )
-            observation_response = self.get_observation(GetObservationRequest())
+            observation_response = self._get_observation_after_generation(
+                state_generation=state_generation
+                if self._uses_persistent_observation_transport()
+                else None
+            )
         else:
             if self.config.step_after_action:
                 reply = self._run(
@@ -481,6 +521,7 @@ class GazeboCliClient(GazeboClient):
             info={
                 "backend": "gazebo",
                 "runtime": "gazebo",
+                "transport_backend": self._transport_backend_name(),
                 "world_name": self._world_name(),
                 "applied_action": dict(translated_action),
                 "joint_target_service": joint_reply,
@@ -1691,6 +1732,13 @@ class GazeboCliClient(GazeboClient):
         if self.config.world_name:
             return self.config.world_name
 
+        return self._world_name_from_path()
+
+    def _world_name_from_path(self) -> str:
+        """Infer the configured world name from the world file."""
+        if self.config.world_name:
+            return self.config.world_name
+
         world_path = Path(self.config.world_path)
         try:
             root = ET.parse(world_path).getroot()
@@ -1727,3 +1775,380 @@ class GazeboCliClient(GazeboClient):
         if self.config.world_name in candidates:
             return self.config.world_name
         return None
+
+
+@dataclass
+class GazeboTransportClient(GazeboCliClient):
+    """Persistent Gazebo Transport client backed by the C++ helper process."""
+
+    def __post_init__(self) -> None:
+        super().__post_init__()
+        world_name = self._world_name_from_path()
+        self._last_state_generation: int | None = None
+        self._last_pose_generation: int | None = None
+        self._bridge = GazeboTransportBridge(
+            GazeboTransportBridgeConfig(
+                world_name=world_name,
+                state_topic=f"/world/{world_name}/state",
+                pose_topic=f"/world/{world_name}/pose/info",
+                helper_executable=self.config.transport_helper_executable,
+                startup_timeout_s=self.config.helper_startup_timeout_s,
+                request_timeout_s=self.config.helper_request_timeout_s,
+                startup_settle_s=self.config.helper_startup_settle_s,
+            )
+        )
+
+    def _transport_backend_name(self) -> str:
+        return "transport"
+
+    def close(self) -> None:
+        super().close()
+        self._bridge.close()
+
+    def get_observation(
+        self,
+        request: GetObservationRequest,
+    ) -> GetObservationResponse:
+        decoded = GetObservationRequest.from_dict(request.to_dict())
+        del decoded
+        world_name = self._world_name()
+        state_topic = f"/world/{world_name}/state"
+        pose_topic = f"/world/{world_name}/pose/info"
+        try:
+            response = self._bridge.request(
+                {
+                    "op": "get_observation",
+                    "timeout_ms": int(self.config.timeout * 1000),
+                    "pose_timeout_ms": int(min(self.config.timeout, 1.0) * 1000),
+                }
+            )
+        except GazeboTransportBridgeError:
+            return self._get_observation_via_cli_fallback(
+                world_name=world_name,
+                state_topic=state_topic,
+                pose_topic=pose_topic,
+            )
+        state_payload = response["state_text"]
+        pose_payload = response.get("pose_text")
+        state_generation = response.get("state_generation")
+        pose_generation = response.get("pose_generation")
+        if isinstance(state_generation, int):
+            self._last_state_generation = state_generation
+        if isinstance(pose_generation, int):
+            self._last_pose_generation = pose_generation
+        observation = self._parse_live_observation(
+            state_payload=state_payload,
+            pose_payload=pose_payload if isinstance(pose_payload, str) else None,
+            world_name=world_name,
+        )
+        if observation["entity_count"] == 0 and observation["joint_count"] == 0:
+            observation = self._parse_state_text(state_payload)
+        return GetObservationResponse(
+            observation=observation,
+            info={
+                "backend": "gazebo",
+                "runtime": "gazebo",
+                "transport_backend": "transport",
+                "observation_topic": state_topic,
+                "pose_topic": pose_topic,
+                "state_text": state_payload,
+                "pose_text": pose_payload,
+                "state_generation": state_generation,
+                "pose_generation": pose_generation,
+            },
+        )
+
+    def _get_observation_via_cli_fallback(
+        self,
+        *,
+        world_name: str,
+        state_topic: str,
+        pose_topic: str,
+    ) -> GetObservationResponse:
+        state_payload = self._cli_read_topic_sample(state_topic)
+        pose_payload = self._cli_read_pose_sample(pose_topic)
+        observation = self._parse_live_observation(
+            state_payload=state_payload,
+            pose_payload=pose_payload,
+            world_name=world_name,
+        )
+        if observation["entity_count"] == 0 and observation["joint_count"] == 0:
+            observation = self._parse_state_text(state_payload)
+        return GetObservationResponse(
+            observation=observation,
+            info={
+                "backend": "gazebo",
+                "runtime": "gazebo",
+                "transport_backend": "transport_cli_fallback",
+                "observation_topic": state_topic,
+                "pose_topic": pose_topic,
+                "state_text": state_payload,
+                "pose_text": pose_payload,
+                "state_generation": None,
+                "pose_generation": None,
+            },
+        )
+
+    def _read_state_sample(
+        self,
+        *,
+        topic: str,
+        after_generation: int | None,
+    ) -> tuple[str, int | None]:
+        try:
+            response = self._bridge.request(
+                {
+                    "op": "get_observation",
+                    "after_generation": after_generation,
+                    "timeout_ms": int(self.config.timeout * 1000),
+                    "pose_timeout_ms": 0,
+                }
+            )
+        except GazeboTransportBridgeError as exc:
+            message = str(exc)
+            if "timed out waiting for state sample" in message or "timed out waiting for transport bridge response" in message:
+                raise TimeoutError(message) from exc
+            raise
+        payload = response["state_text"]
+        generation = response.get("state_generation")
+        if isinstance(generation, int):
+            self._last_state_generation = generation
+            return payload, generation
+        return payload, None
+
+    def _read_pose_sample(self, *, topic: str) -> str | None:
+        del topic
+        try:
+            response = self._bridge.request(
+                {
+                    "op": "get_observation",
+                    "timeout_ms": int(self.config.timeout * 1000),
+                    "pose_timeout_ms": int(min(self.config.timeout, 1.0) * 1000),
+                }
+            )
+        except GazeboTransportBridgeError:
+            return None
+        pose_payload = response.get("pose_text")
+        pose_generation = response.get("pose_generation")
+        if isinstance(pose_generation, int):
+            self._last_pose_generation = pose_generation
+        return pose_payload if isinstance(pose_payload, str) else None
+
+    def _read_state_sample_after_world_step(self, topic: str) -> str | None:
+        try:
+            response = self._bridge.request(
+                {
+                    "op": "world_control",
+                    "service": f"/world/{self._world_name()}/control",
+                    "multi_step": 1,
+                    "timeout_ms": int(self.config.timeout * 1000),
+                }
+            )
+            if not response:
+                return None
+            state_response = self._bridge.request(
+                {
+                    "op": "get_observation",
+                    "timeout_ms": int(min(self.config.timeout, 2.0) * 1000),
+                    "pose_timeout_ms": 0,
+                }
+            )
+        except Exception:
+            return self._cli_read_state_sample_after_world_step(topic)
+        state_text = state_response.get("state_text")
+        return state_text if isinstance(state_text, str) else None
+
+    def _current_state_generation(self) -> int | None:
+        try:
+            response = self._bridge.request({"op": "status"})
+        except Exception:
+            return self._last_state_generation
+        generation = response.get("state_generation")
+        if isinstance(generation, int):
+            self._last_state_generation = generation
+            return generation
+        return self._last_state_generation
+
+    def _cli_run(self, args: list[str]) -> str:
+        completed = subprocess.run(
+            [self.config.executable, *args],
+            check=False,
+            capture_output=True,
+            text=True,
+            timeout=max(self.config.timeout, 1.0),
+        )
+        if completed.returncode != 0:
+            raise RuntimeError(
+                f"Gazebo CLI command failed with exit code {completed.returncode}: "
+                f"{[self.config.executable, *args]!r}. "
+                f"stdout: {completed.stdout.strip()} stderr: {completed.stderr.strip()}"
+            )
+        return completed.stdout.strip()
+
+    def _cli_try_run_with_timeout(self, args: list[str], *, timeout: float) -> str | None:
+        try:
+            completed = subprocess.run(
+                [self.config.executable, *args],
+                check=False,
+                capture_output=True,
+                text=True,
+                timeout=timeout,
+            )
+        except subprocess.TimeoutExpired:
+            return None
+        if completed.returncode != 0:
+            return None
+        return completed.stdout.strip()
+
+    def _cli_read_topic_sample(self, topic: str) -> str:
+        deadline = time.monotonic() + (self.config.timeout * 3.0)
+        last_error: Exception | None = None
+        while time.monotonic() < deadline:
+            try:
+                return self._cli_run(["topic", "-e", "-n", "1", "-t", topic])
+            except (RuntimeError, subprocess.TimeoutExpired) as exc:
+                last_error = exc
+                if topic.endswith("/state"):
+                    fallback_payload = self._cli_read_state_sample_after_world_step(topic)
+                    if fallback_payload is not None:
+                        return fallback_payload
+                time.sleep(0.2)
+        raise RuntimeError(f"Timed out reading Gazebo topic {topic}: {last_error}")
+
+    def _cli_read_pose_sample(self, topic: str) -> str | None:
+        return self._cli_try_run_with_timeout(
+            ["topic", "-e", "-n", "1", "-t", topic],
+            timeout=min(self.config.timeout, 1.0),
+        )
+
+    def _cli_read_state_sample_after_world_step(self, topic: str) -> str | None:
+        process = subprocess.Popen(
+            [self.config.executable, "topic", "-e", "-n", "1", "-t", topic],
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True,
+        )
+        try:
+            time.sleep(0.5)
+            step_reply = self._cli_try_run_with_timeout(
+                [
+                    "service",
+                    "-s",
+                    f"/world/{self._world_name()}/control",
+                    "--reqtype",
+                    "gz.msgs.WorldControl",
+                    "--reptype",
+                    "gz.msgs.Boolean",
+                    "--timeout",
+                    str(int(self.config.timeout * 1000)),
+                    "--req",
+                    "multi_step: 1",
+                ],
+                timeout=self.config.timeout,
+            )
+            if step_reply is None:
+                process.kill()
+                process.communicate()
+                return None
+            stdout, stderr = process.communicate(timeout=self.config.timeout)
+            if process.returncode not in (0, None):
+                return None
+            if stderr.strip():
+                return None
+            return stdout.strip() or None
+        except subprocess.TimeoutExpired:
+            process.kill()
+            process.communicate()
+            return None
+
+    def _run(self, args: list[str]) -> str:
+        if args[:2] == ["service", "-l"]:
+            # Service discovery remains a CLI-only fallback; use configured world
+            # names for the transport path.
+            fallback = super()._try_run(args)
+            if fallback is None:
+                raise RuntimeError("Gazebo service discovery is not available")
+            return fallback
+
+        if len(args) < 2 or args[0] != "service" or args[1] != "-s":
+            raise RuntimeError(f"Unsupported transport helper command: {args!r}")
+
+        service = args[2]
+        timeout_ms = int(self.config.timeout * 1000)
+        if "--timeout" in args:
+            timeout_ms = int(args[args.index("--timeout") + 1])
+
+        if service.endswith("/control"):
+            request_text = args[args.index("--req") + 1]
+            payload: dict[str, object] = {
+                "op": "world_control",
+                "service": service,
+                "timeout_ms": timeout_ms,
+            }
+            multi_step_match = re.search(r"multi_step:\s*(\d+)", request_text)
+            if multi_step_match is not None:
+                payload["multi_step"] = int(multi_step_match.group(1))
+            if "reset:" in request_text and "all: true" in request_text:
+                payload["reset_all"] = True
+            response = self._bridge.request(payload)
+            return response["reply_text"]
+
+        if service.endswith("/set_pose"):
+            request_text = args[args.index("--req") + 1]
+            name_match = re.search(r'name:\s*"([^"]+)"', request_text)
+            position_match = re.search(
+                r"position:\s*\{x:\s*([^,]+),\s*y:\s*([^,]+),\s*z:\s*([^}]+)\}",
+                request_text,
+            )
+            orientation_match = re.search(
+                r"orientation:\s*\{x:\s*([^,]+),\s*y:\s*([^,]+),\s*z:\s*([^,]+),\s*w:\s*([^}]+)\}",
+                request_text,
+            )
+            if name_match is None or position_match is None or orientation_match is None:
+                raise RuntimeError(f"Could not parse set_pose request: {request_text}")
+            response = self._bridge.request(
+                {
+                    "op": "set_pose",
+                    "service": service,
+                    "name": name_match.group(1),
+                    "position": [
+                        float(position_match.group(1)),
+                        float(position_match.group(2)),
+                        float(position_match.group(3)),
+                    ],
+                    "orientation": [
+                        float(orientation_match.group(1)),
+                        float(orientation_match.group(2)),
+                        float(orientation_match.group(3)),
+                        float(orientation_match.group(4)),
+                    ],
+                    "timeout_ms": timeout_ms,
+                }
+            )
+            return response["reply_text"]
+
+        if service.endswith("/joint_target"):
+            request_text = args[args.index("--req") + 1]
+            data_match = re.search(r'data:\s*"([^"]+)"', request_text)
+            if data_match is None:
+                raise RuntimeError(f"Could not parse joint_target request: {request_text}")
+            response = self._bridge.request(
+                {
+                    "op": "joint_target",
+                    "service": service,
+                    "request_text": data_match.group(1),
+                    "timeout_ms": timeout_ms,
+                }
+            )
+            return response["reply_text"]
+
+        raise RuntimeError(f"Unsupported service for transport helper: {service}")
+
+    def _try_run(self, args: list[str]) -> str | None:
+        try:
+            return self._run(args)
+        except Exception:
+            return None
+
+    def _uses_persistent_observation_transport(self) -> bool:
+        return True
