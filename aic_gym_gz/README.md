@@ -38,6 +38,84 @@ pixi run python -m aic_gym_gz.deterministic_policy_parity
 pixi run python -m aic_gym_gz.live_training_smoke
 ```
 
+## How to use for RL
+
+Recommended workflow:
+
+1. Launch the official Gazebo+ROS stack in the container and wait until `aic_controller` is active.
+2. Run the deterministic parity gate once.
+3. Run the training smoke script.
+4. Start your learner against `make_live_env(...)`.
+
+Recommended live configuration today:
+
+- `attach_to_existing=True`
+- `transport_backend="cli"`
+- `include_images=False` for first training runs
+- enable images only after state-only training is stable
+
+Minimal Gym-style usage:
+
+```python
+import numpy as np
+
+from aic_gym_gz.env import make_live_env
+
+env = make_live_env(
+    include_images=False,
+    enable_randomization=False,
+    attach_to_existing=True,
+    transport_backend="cli",
+    ticks_per_step=8,
+)
+
+observation, info = env.reset(seed=123)
+
+done = False
+while not done:
+    action = np.zeros(6, dtype=np.float32)
+    observation, reward, terminated, truncated, step_info = env.step(action)
+    done = terminated or truncated
+
+env.close()
+```
+
+Observation keys in state-only mode:
+
+- `joint_positions`
+- `joint_velocities`
+- `gripper_state`
+- `tcp_pose`
+- `tcp_velocity`
+- `plug_pose`
+- `target_port_pose`
+- `plug_to_port_relative`
+- `wrench`
+- `off_limit_contact`
+- `sim_tick`
+- `sim_time`
+
+Additional keys in image mode:
+
+- `images["left"]`
+- `images["center"]`
+- `images["right"]`
+- `image_timestamps`
+
+Useful pre-training checks:
+
+```bash
+pixi run python -m aic_gym_gz.deterministic_policy_parity
+pixi run python -m aic_gym_gz.live_training_smoke
+pixi run python -m aic_gym_gz.live_training_smoke --include-images
+```
+
+Artifacts worth checking:
+
+- deterministic parity: `artifacts/deterministic_policy_state/`
+- training smoke: `artifacts/training_smoke/`
+- live benchmark: `artifacts/live_benchmark_state.json` and `artifacts/live_benchmark_image.json`
+
 ## What is real today
 
 - deterministic `reset(seed=...)`
@@ -48,6 +126,7 @@ pixi run python -m aic_gym_gz.live_training_smoke
 - live fixed-rollout parity against the official toolkit in state-only and state+image modes
 - live benchmark reports for the official control path versus the `aic_gym_gz` attached replay path
 - deterministic state-only parity regression artifacts under `artifacts/deterministic_policy_state`
+- state-only and image-mode live smoke artifacts under `artifacts/training_smoke`
 
 ## What is still approximate
 

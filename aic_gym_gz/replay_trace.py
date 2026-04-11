@@ -107,7 +107,13 @@ def replay_trace_against_attached_runtime(
             "records": [],
         }
         if camera_subscriber is not None and candidate["initial_images"] is None:
-            if not camera_subscriber.wait_until_ready(timeout_s=20.0):
+            if not camera_subscriber.wait_until_ready(timeout_s=5.0):
+                zero = np.zeros(6, dtype=np.float64)
+                for _ in range(5):
+                    runtime.step(zero, ticks=2)
+                    if camera_subscriber.wait_until_ready(timeout_s=2.0):
+                        break
+            if not camera_subscriber.wait_until_ready(timeout_s=2.0):
                 raise TimeoutError("Timed out waiting for wrist camera images for replay trace.")
             candidate["initial_images"] = summarize_image_batch(*camera_subscriber.latest_images())
         reset_wall_s = time.perf_counter() - start_wall
