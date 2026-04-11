@@ -26,7 +26,7 @@ DEFAULT_WORLD_NAME = "aic_world"
 DEFAULT_SOURCE_ENTITY = "ati/tool_link"
 DEFAULT_TARGET_ENTITY = "tabletop"
 DEFAULT_WORLD_PATH = "/tmp/aic.sdf"
-DEFAULT_CONTAINER_NAME = "aic_eval"
+DEFAULT_CONTAINER_NAME = "aic_eval_gym"
 DEFAULT_CONTAINER_IMAGE = "ghcr.io/intrinsic-dev/aic/aic_eval:latest"
 DEFAULT_FALLBACK_CONTAINER_IMAGES = ("aic_eval_local:latest", "aic_eval_local")
 DEFAULT_ENTRYPOINT_LOG = "/tmp/aic_gazebo_env_entrypoint.log"
@@ -172,6 +172,16 @@ class LiveRuntimeManager:
         if self._container_exists():
             return LiveEnvironmentContext(
                 repo_root=str(self.repo_root),
+                mode="docker_direct",
+                setup_script="/ws_aic/install/setup.bash",
+                workspace_root="/ws_aic",
+                container_name=self.container_name,
+                container_image=self.container_image,
+                diagnostics=preflight,
+            )
+        if self._container_exists():
+            return LiveEnvironmentContext(
+                repo_root=str(self.repo_root),
                 mode="distrobox_attach",
                 setup_script="/ws_aic/install/setup.bash",
                 workspace_root="/ws_aic",
@@ -202,12 +212,20 @@ class LiveRuntimeManager:
         auto_launch: bool = False,
     ) -> LiveEnvironmentContext:
         context = self.discover_context()
-        if context.mode in {"local_sourced", "distrobox_attach"} and auto_build:
-            self._maybe_build_helper_locally(context)
+        if auto_launch and context.mode == "local_sourced" and shutil.which("docker") is not None:
+            self._maybe_create_container()
             context = self.discover_context()
         if context.mode == "unavailable" and auto_launch:
             self._maybe_create_container()
             context = self.discover_context()
+        if context.mode in {"local_sourced", "distrobox_attach", "docker_direct"} and auto_build:
+            self._maybe_build_helper_locally(context)
+            context = self.discover_context()
+        if context.mode == "docker_direct" and auto_launch:
+            if not self._training_world_ready(context):
+                self._cleanup_runtime_processes(context)
+                self._maybe_create_container(force_recreate=True)
+                context = self.discover_context()
         if context.mode == "distrobox_attach" and auto_launch:
             if not self._training_world_ready(context):
                 self._cleanup_runtime_processes(context)
@@ -386,42 +404,51 @@ class LiveRuntimeManager:
             f"requested={self.container_image} diagnostics={diagnostics}"
         )
 
-    def _maybe_create_container(self) -> None:
-        distrobox = shutil.which("distrobox")
-        if distrobox is None:
-            raise RuntimeError("container_create_failed: distrobox is not available for container launch")
+    def _maybe_create_container(self, *, force_recreate: bool = False) -> None:
+        docker = shutil.which("docker")
+        if docker is None:
+            raise RuntimeError("container_create_failed: docker is not available for container launch")
+        if force_recreate and self._container_exists():
+            subprocess.run(
+                [docker, "rm", "-f", self.container_name],
+                check=False,
+                capture_output=True,
+                text=True,
+                timeout=60.0,
+            )
         if self._container_exists():
             return
-        env = dict(os.environ)
-        env["DBX_CONTAINER_MANAGER"] = "docker"
         selected_image, image_diagnostics = self._select_container_image()
-        command = [
-            distrobox,
-            "create",
-            "-r",
-            "-i",
-            selected_image,
-            self.container_name,
-        ]
+        command = [docker, "run", "-d", "--name", self.container_name]
         if shutil.which("nvidia-smi") is not None:
-            command.insert(3, "--nvidia")
+            command.extend(["--gpus", "all"])
+        command.extend(
+            [
+                "-v",
+                f"{self.repo_root}:/home/ubuntu/ws_aic/src/aic",
+                "-v",
+                "/tmp:/tmp",
+                selected_image,
+            ]
+        )
+        command.extend(self._training_launch_arguments().split(" "))
         completed = subprocess.run(
             command,
             check=False,
             capture_output=True,
             text=True,
-            env=env,
+            timeout=180.0,
         )
         if completed.returncode != 0:
             raise RuntimeError(
-                "container_create_failed: failed to create distrobox container.\n"
+                "container_create_failed: failed to create training runtime container.\n"
                 f"image_diagnostics={image_diagnostics}\n"
                 f"stdout:\n{completed.stdout}\nstderr:\n{completed.stderr}"
             )
 
     def _maybe_build_helper_locally(self, context: LiveEnvironmentContext) -> None:
         clean_prefix = ""
-        if context.mode != "distrobox_attach":
+        if context.mode not in {"distrobox_attach", "docker_direct"}:
             if resolve_transport_helper_executable(None, repo_root=self.repo_root).resolved_path:
                 return
         else:
@@ -434,7 +461,8 @@ class LiveRuntimeManager:
         build_command = (
             f"{source_prefix}cd {shlex.quote(str(self.repo_root))} && "
             f"{clean_prefix}"
-            "colcon build --packages-select aic_gazebo_transport_bridge --executor sequential"
+            "colcon build --base-paths aic_utils/aic_gazebo_transport_bridge "
+            "--packages-select aic_gazebo_transport_bridge --executor sequential"
         )
         result = self._run_context_shell(context, build_command, timeout_s=600.0)
         if result.returncode != 0:
@@ -498,8 +526,10 @@ class LiveRuntimeManager:
         return bool(payload.get("ok"))
 
     def _training_launch_command(self) -> str:
+        return "ros2 launch aic_bringup aic_gz_bringup.launch.py " + self._training_launch_arguments()
+
+    def _training_launch_arguments(self) -> str:
         return (
-            "ros2 launch aic_bringup aic_gz_bringup.launch.py "
             "ground_truth:=false start_aic_engine:=false "
             "gazebo_gui:=false launch_rviz:=false "
             "spawn_task_board:=true spawn_cable:=true attach_cable_to_gripper:=true "
@@ -508,7 +538,7 @@ class LiveRuntimeManager:
         )
 
     def _cleanup_runtime_processes(self, context: LiveEnvironmentContext) -> None:
-        if context.mode == "distrobox_attach" and context.container_name is not None:
+        if context.mode in {"distrobox_attach", "docker_direct"} and context.container_name is not None:
             docker = shutil.which("docker")
             if docker is not None:
                 try:
@@ -596,12 +626,12 @@ class LiveRuntimeManager:
                 text=True,
                 timeout=timeout_s,
             )
-        elif context.mode == "distrobox_attach":
+        elif context.mode in {"distrobox_attach", "docker_direct"}:
             if context.container_name is None:
-                raise RuntimeError("distrobox_attach context is missing container_name")
+                raise RuntimeError(f"{context.mode} context is missing container_name")
             docker = shutil.which("docker")
             if docker is None:
-                raise RuntimeError("workspace_source_failed: docker is not available for distrobox_attach execution")
+                raise RuntimeError("workspace_source_failed: docker is not available for container execution")
             if not self._container_is_running(context.container_name):
                 start = subprocess.run(
                     [docker, "start", context.container_name],

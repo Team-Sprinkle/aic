@@ -1,0 +1,1 @@
+Invoking command in '/home/ubuntu/ws_aic/src/aic/build/aic_gazebo_transport_bridge': CMAKE_PREFIX_PATH=${CMAKE_PREFIX_PATH}:/opt/ros/kilted /usr/bin/cmake /home/ubuntu/ws_aic/src/aic/aic_utils/aic_gazebo_transport_bridge -DCMAKE_INSTALL_PREFIX=/home/ubuntu/ws_aic/src/aic/install/aic_gazebo_transport_bridge
