@@ -88,6 +88,9 @@ def replay_trace_against_attached_runtime(
     )
     camera_bridge = CameraBridgeSidecar() if include_images else None
     camera_subscriber = RosCameraSubscriber() if include_images else None
+    start_wall = time.perf_counter()
+    reset_wall_s: float | None = None
+    step_wall_s: list[float] = []
     try:
         if camera_bridge is not None:
             camera_bridge.start()
@@ -103,17 +106,19 @@ def replay_trace_against_attached_runtime(
             "initial_images": None,
             "records": [],
         }
+        if camera_subscriber is not None and candidate["initial_images"] is None:
+            if not camera_subscriber.wait_until_ready(timeout_s=20.0):
+                raise TimeoutError("Timed out waiting for wrist camera images for replay trace.")
+            candidate["initial_images"] = summarize_image_batch(*camera_subscriber.latest_images())
+        reset_wall_s = time.perf_counter() - start_wall
         for record in trace_report.get("records", []):
+            step_start = time.perf_counter()
             action = record["action"]
             vector = np.asarray(
                 list(action["linear_xyz"]) + list(action["angular_xyz"]),
                 dtype=np.float64,
             )
             runtime.step(vector, ticks=int(action["sim_steps"]))
-            if camera_subscriber is not None and candidate["initial_images"] is None:
-                if not camera_subscriber.wait_until_ready(timeout_s=20.0):
-                    raise TimeoutError("Timed out waiting for wrist camera images for replay trace.")
-                candidate["initial_images"] = summarize_image_batch(*camera_subscriber.latest_images())
             candidate["records"].append(
                 _candidate_record(
                     step_idx=int(record["step_idx"]),
@@ -125,6 +130,37 @@ def replay_trace_against_attached_runtime(
                 candidate["records"][-1]["images"] = summarize_image_batch(
                     *camera_subscriber.latest_images()
                 )
+            step_wall_s.append(time.perf_counter() - step_start)
+        total_wall_s = time.perf_counter() - start_wall
+        initial_sim_time = candidate["initial_native"].get("sim_time")
+        final_sim_time = (
+            candidate["records"][-1]["native"].get("sim_time")
+            if candidate["records"]
+            else initial_sim_time
+        )
+        simulated_seconds = None
+        if isinstance(initial_sim_time, (int, float)) and isinstance(final_sim_time, (int, float)):
+            simulated_seconds = max(0.0, float(final_sim_time) - float(initial_sim_time))
+        if simulated_seconds is None or simulated_seconds == 0.0:
+            simulated_seconds = sum(
+                float(record["action"].get("sim_steps", 0)) * 0.001
+                for record in candidate["records"]
+            )
+        candidate["timing"] = {
+            "ready_to_first_sane_state_latency_s": reset_wall_s,
+            "step_latency_s": step_wall_s,
+            "mean_step_latency_s": (
+                sum(step_wall_s) / len(step_wall_s) if step_wall_s else None
+            ),
+            "total_wall_s": total_wall_s,
+            "simulated_seconds": simulated_seconds,
+            "simulated_seconds_per_wall_second": (
+                simulated_seconds / total_wall_s if total_wall_s > 0.0 else None
+            ),
+            "samples_per_second": (
+                len(candidate["records"]) / total_wall_s if total_wall_s > 0.0 else None
+            ),
+        }
         return candidate
     finally:
         if camera_bridge is not None:

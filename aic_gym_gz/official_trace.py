@@ -607,6 +607,9 @@ def capture_official_and_native_trace(
     )
     target_mode_note: str | None = None
     pose_command_note: str | None = None
+    start_wall = time.perf_counter()
+    reset_wall_s: float | None = None
+    step_wall_s: list[float] = []
     try:
         try:
             node.set_cartesian_target_mode()
@@ -640,9 +643,11 @@ def capture_official_and_native_trace(
         if include_images:
             _wait_for_camera_images_with_steps(timeout_s=20.0)
             initial_images = node.image_summary()
+        reset_wall_s = time.perf_counter() - start_wall
 
         records: list[dict[str, Any]] = []
         for step_idx, action in enumerate(actions):
+            step_start = time.perf_counter()
             effective_ticks = action.sim_steps + (image_settle_ticks if include_images else 0)
             node.publish_velocity_command(action)
             for _ in range(8):
@@ -671,6 +676,22 @@ def capture_official_and_native_trace(
                     "images": node.image_summary() if include_images else None,
                 }
             )
+            step_wall_s.append(time.perf_counter() - step_start)
+
+        total_wall_s = time.perf_counter() - start_wall
+        initial_sim_time = _extract_trace_fields(
+            initial_observation,
+            controller_state=node.latest_controller_state,
+        ).get("sim_time")
+        final_sim_time = records[-1]["native"].get("sim_time") if records else initial_sim_time
+        simulated_seconds = None
+        if isinstance(initial_sim_time, (int, float)) and isinstance(final_sim_time, (int, float)):
+            simulated_seconds = max(0.0, float(final_sim_time) - float(initial_sim_time))
+        if simulated_seconds is None or simulated_seconds == 0.0:
+            simulated_seconds = sum(
+                float(record["action"].get("sim_steps", 0)) * 0.001
+                for record in records
+            )
 
         report = {
             "mode": "official_ros_control_vs_native_gazebo_observation_same_world",
@@ -694,6 +715,21 @@ def capture_official_and_native_trace(
             ]
             + ([target_mode_note] if target_mode_note is not None else [])
             + ([pose_command_note] if pose_command_note is not None else []),
+            "timing": {
+                "ready_to_first_sane_state_latency_s": reset_wall_s,
+                "step_latency_s": step_wall_s,
+                "mean_step_latency_s": (
+                    sum(step_wall_s) / len(step_wall_s) if step_wall_s else None
+                ),
+                "total_wall_s": total_wall_s,
+                "simulated_seconds": simulated_seconds,
+                "simulated_seconds_per_wall_second": (
+                    simulated_seconds / total_wall_s if total_wall_s > 0.0 else None
+                ),
+                "samples_per_second": (
+                    len(records) / total_wall_s if total_wall_s > 0.0 else None
+                ),
+            },
         }
         if pause_note is not None:
             report["approximation_notes"].append(pause_note)
