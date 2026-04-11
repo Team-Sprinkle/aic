@@ -1,0 +1,15 @@
+[0.296s] Invoking command in '/home/ubuntu/ws_aic/src/aic/build/aic_gazebo_transport_bridge': CMAKE_PREFIX_PATH=${CMAKE_PREFIX_PATH}:/opt/ros/kilted /usr/bin/cmake /home/ubuntu/ws_aic/src/aic/aic_utils/aic_gazebo_transport_bridge -DCMAKE_INSTALL_PREFIX=/home/ubuntu/ws_aic/src/aic/install/aic_gazebo_transport_bridge
+[3.146s] -- The C compiler identification is GNU 13.3.0
+[10.534s] -- The CXX compiler identification is GNU 13.3.0
+[12.420s] -- Detecting C compiler ABI info
+[24.330s] -- Detecting C compiler ABI info - done
+[24.331s] -- Check for working C compiler: /usr/bin/cc - skipped
+[24.331s] -- Detecting C compile features
+[24.331s] -- Detecting C compile features - done
+[25.530s] -- Detecting CXX compiler ABI info
+[28.659s] -- Detecting CXX compiler ABI info - done
+[28.663s] -- Check for working CXX compiler: /usr/bin/c++ - skipped
+[28.663s] -- Detecting CXX compile features
+[28.663s] -- Detecting CXX compile features - done
+[28.664s] -- Found ament_cmake: 2.7.5 (/opt/ros/kilted/share/ament_cmake/cmake)
+[38.194s] -- Found Python3: /usr/bin/python3 (found version "3.12.3") found components: Interpreter 
