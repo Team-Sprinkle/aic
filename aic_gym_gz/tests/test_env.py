@@ -4,7 +4,7 @@ import unittest
 
 import numpy as np
 
-from aic_gym_gz.env import make_default_env
+from aic_gym_gz.env import live_env_health_check, make_default_env
 
 
 class EnvTest(unittest.TestCase):
@@ -46,6 +46,9 @@ class EnvTest(unittest.TestCase):
         self.assertEqual(obs["images"]["left"].dtype, np.uint8)
         self.assertEqual(obs["image_timestamps"].shape, (3,))
         env.close()
+
+    def test_live_health_check_signature_works_for_mock_free_import(self) -> None:
+        self.assertTrue(callable(live_env_health_check))
 
 
 if __name__ == "__main__":

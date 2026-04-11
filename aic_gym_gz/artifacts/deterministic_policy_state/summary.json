@@ -1,0 +1,11 @@
+{
+  "image_pass": true,
+  "mode": "state_only",
+  "passed": true,
+  "score_pass": true,
+  "state_pass": true,
+  "tolerances": {
+    "joint_max_abs_error": 0.001,
+    "state_default_max_abs_error": 0.001
+  }
+}

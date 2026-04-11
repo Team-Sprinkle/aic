@@ -7,6 +7,7 @@ from dataclasses import dataclass
 import math
 from pathlib import Path
 import re
+import subprocess
 import sys
 import time
 from typing import Any
@@ -120,6 +121,8 @@ class ScenarioGymGzBackend(RuntimeBackend):
                 GazeboRuntime,
                 GazeboRuntimeConfig,
             )
+            from aic_gazebo_env.gazebo_client import GazeboCliClient, GazeboCliClientConfig  # type: ignore
+            from aic_gazebo_env.protocol import GetObservationRequest  # type: ignore
         except ModuleNotFoundError as exc:
             raise ModuleNotFoundError(
                 "The live Gazebo backend depends on `aic_utils/aic_gazebo_env`. "
@@ -128,26 +131,31 @@ class ScenarioGymGzBackend(RuntimeBackend):
 
         self._runtime_type = GazeboAttachedRuntime if attach_to_existing else GazeboRuntime
         self._runtime_config_type = GazeboRuntimeConfig
+        self._cli_client_type = GazeboCliClient
+        self._cli_config_type = GazeboCliClientConfig
+        self._get_observation_request_type = GetObservationRequest
 
     def reset(self, *, seed: int | None, scenario: AicScenario) -> RuntimeState:
         del scenario
         if self._runtime is None:
             self._start_runtime()
-        observation, info = self._runtime.reset(seed=seed, options={})
         self._action[:] = 0.0
-        self._last_observation = dict(observation)
-        self._last_info = dict(info)
-        self._last_state = self._runtime_state_from_observation(observation, info)
-        return self._last_state
+        if self._attach_to_existing:
+            return self.connect_existing_world()
+        observation, info = self._runtime.reset(seed=seed, options={})
+        return self._await_runtime_state(observation=observation, info=info, timeout_s=self._timeout)
 
     def connect_existing_world(self) -> RuntimeState:
         if self._runtime is None:
             self._start_runtime()
         deadline = time.monotonic() + self._timeout
         last_error: Exception | None = None
+        bootstrap_state = self._bootstrap_existing_world_state()
+        if bootstrap_state is not None:
+            return bootstrap_state
         while time.monotonic() < deadline:
-            observation, info = self._runtime.get_observation()
             try:
+                observation, info = self._runtime.get_observation()
                 self._action[:] = 0.0
                 self._last_observation = dict(observation)
                 self._last_info = dict(info)
@@ -155,6 +163,11 @@ class ScenarioGymGzBackend(RuntimeBackend):
                 return self._last_state
             except RuntimeError as exc:
                 last_error = exc
+                self._tick_existing_world_for_sample()
+                time.sleep(0.1)
+            except TimeoutError as exc:
+                last_error = exc
+                self._tick_existing_world_for_sample()
                 time.sleep(0.1)
         raise RuntimeError(f"Timed out waiting for attached world readiness: {last_error}")
 
@@ -265,6 +278,109 @@ class ScenarioGymGzBackend(RuntimeBackend):
             )
         )
         self._runtime.start()
+
+    def _tick_existing_world_for_sample(self) -> None:
+        try:
+            subprocess.run(
+                [
+                    "gz",
+                    "service",
+                    "-s",
+                    f"/world/{self._world_name}/control",
+                    "--reqtype",
+                    "gz.msgs.WorldControl",
+                    "--reptype",
+                    "gz.msgs.Boolean",
+                    "--timeout",
+                    str(int(self._timeout * 1000.0)),
+                    "--req",
+                    "multi_step: 1",
+                ],
+                check=False,
+                capture_output=True,
+                text=True,
+                timeout=max(self._timeout, 1.0),
+            )
+        except Exception:
+            if self._runtime is None:
+                return
+            try:
+                self._runtime.step({"multi_step": 1})
+            except Exception:
+                return
+
+    def _await_runtime_state(
+        self,
+        *,
+        observation: dict[str, Any],
+        info: dict[str, Any],
+        timeout_s: float,
+    ) -> RuntimeState:
+        deadline = time.monotonic() + timeout_s
+        last_error: Exception | None = None
+        current_observation = observation
+        current_info = info
+        while True:
+            try:
+                self._last_observation = dict(current_observation)
+                self._last_info = dict(current_info)
+                self._last_state = self._runtime_state_from_observation(
+                    current_observation,
+                    current_info,
+                )
+                return self._last_state
+            except RuntimeError as exc:
+                last_error = exc
+                if time.monotonic() >= deadline:
+                    raise RuntimeError(
+                        f"Timed out waiting for a sane live observation after reset: {last_error}"
+                    ) from exc
+                time.sleep(0.1)
+                current_observation, current_info = self._runtime.get_observation()
+
+    def _bootstrap_existing_world_state(self) -> RuntimeState | None:
+        try:
+            client = self._cli_client_type(
+                self._cli_config_type(
+                    executable="gz",
+                    world_path=self._world_path,
+                    timeout=self._timeout,
+                    world_name=self._world_name,
+                    source_entity_name=self._source_entity_name,
+                    target_entity_name=self._target_entity_name,
+                    transport_backend="cli",
+                    observation_transport="one_shot",
+                )
+            )
+        except Exception:
+            return None
+        try:
+            deadline = time.monotonic() + self._timeout
+            last_error: Exception | None = None
+            while time.monotonic() < deadline:
+                try:
+                    response = client.get_observation(self._get_observation_request_type())
+                    observation = dict(response.observation)
+                    info = dict(response.info)
+                    self._action[:] = 0.0
+                    self._last_observation = observation
+                    self._last_info = info
+                    self._last_state = self._runtime_state_from_observation(observation, info)
+                    return self._last_state
+                except Exception as exc:
+                    last_error = exc
+                    self._tick_existing_world_for_sample()
+                    time.sleep(0.1)
+            if last_error is not None:
+                raise last_error
+        except Exception:
+            return None
+        finally:
+            try:
+                client.close()
+            except Exception:
+                pass
+        return None
 
     def _runtime_state_from_observation(
         self,

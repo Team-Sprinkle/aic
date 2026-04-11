@@ -1,0 +1,397 @@
+{
+  "initial_images": null,
+  "initial_native": {
+    "distance_to_target": 0.6530924177643538,
+    "entity_count": 128,
+    "force_magnitude": 0.0,
+    "joint_count": 6,
+    "joint_positions": [
+      -0.15985311567783356,
+      -1.354264736175537,
+      -1.6669918298721313,
+      -1.6911156177520752,
+      1.5710909366607666,
+      1.4108394384384155
+    ],
+    "joint_velocities": [],
+    "off_limit_contact": false,
+    "orientation_error": 3.1413041411165574,
+    "plug_entity_name": "lc_plug_link",
+    "plug_orientation": [
+      -0.19165955829817655,
+      -0.10467322415614255,
+      0.9117763359056202,
+      0.34781316569260007
+    ],
+    "plug_position": [
+      -0.024359262282418637,
+      -0.030181795849562487,
+      -0.013292305110314762
+    ],
+    "relative_position": [
+      -0.37158980963161514,
+      0.19465661053571454,
+      -0.5005592107772829
+    ],
+    "sim_time": 498.404,
+    "step_count_raw": 0,
+    "success_like": true,
+    "target_entity_name": "tabletop",
+    "target_orientation": [
+      0.0,
+      0.0,
+      -0.9999999560952156,
+      0.0002963267905598908
+    ],
+    "target_position": [
+      -0.2,
+      0.2,
+      1.14
+    ],
+    "tcp_entity_name": "ati/tool_link",
+    "tcp_orientation": [
+      0.0003483281607326052,
+      -0.9999999188423149,
+      -0.0001442656579431578,
+      -3.1778677894378286e-05
+    ],
+    "tcp_position": [
+      0.1715898096316151,
+      0.005343389464285462,
+      1.6405592107772828
+    ]
+  },
+  "mode": "aic_gym_gz_attached_runtime_replay",
+  "records": [
+    {
+      "action": {
+        "angular_xyz": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "command_sim_steps": 10,
+        "frame_id": "base_link",
+        "linear_xyz": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "sim_steps": 10
+      },
+      "native": {
+        "distance_to_target": 0.6530924177643538,
+        "entity_count": 128,
+        "force_magnitude": 0.0,
+        "joint_count": 6,
+        "joint_positions": [
+          -0.15985311567783356,
+          -1.354264736175537,
+          -1.6669918298721313,
+          -1.6911156177520752,
+          1.5710909366607666,
+          1.4108394384384155
+        ],
+        "joint_velocities": [],
+        "off_limit_contact": false,
+        "orientation_error": 3.1413041411165574,
+        "plug_entity_name": "lc_plug_link",
+        "plug_orientation": [
+          -0.1916578592328113,
+          -0.10467305550508021,
+          0.9117787535495934,
+          0.3478077294463219
+        ],
+        "plug_position": [
+          -0.024358942344292034,
+          -0.030182144670310995,
+          -0.013292153454455502
+        ],
+        "relative_position": [
+          -0.37158980963161514,
+          0.19465661053571454,
+          -0.5005592107772829
+        ],
+        "sim_time": 0.0,
+        "step_count_raw": 10,
+        "success_like": true,
+        "target_entity_name": "tabletop",
+        "target_orientation": [
+          0.0,
+          0.0,
+          -0.9999999560952156,
+          0.0002963267905598908
+        ],
+        "target_position": [
+          -0.2,
+          0.2,
+          1.14
+        ],
+        "tcp_entity_name": "ati/tool_link",
+        "tcp_orientation": [
+          0.0003483281607326052,
+          -0.9999999188423149,
+          -0.0001442656579431578,
+          -3.1778677894378286e-05
+        ],
+        "tcp_position": [
+          0.1715898096316151,
+          0.005343389464285462,
+          1.6405592107772828
+        ]
+      },
+      "step_idx": 0
+    },
+    {
+      "action": {
+        "angular_xyz": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "command_sim_steps": 25,
+        "frame_id": "base_link",
+        "linear_xyz": [
+          0.01,
+          0.0,
+          0.0
+        ],
+        "sim_steps": 25
+      },
+      "native": {
+        "distance_to_target": 0.6530924177643538,
+        "entity_count": 128,
+        "force_magnitude": 0.0,
+        "joint_count": 6,
+        "joint_positions": [
+          -0.15985311567783356,
+          -1.354264736175537,
+          -1.6669918298721313,
+          -1.6911156177520752,
+          1.5710909366607666,
+          1.4108394384384155
+        ],
+        "joint_velocities": [],
+        "off_limit_contact": false,
+        "orientation_error": 3.1413041411165574,
+        "plug_entity_name": "lc_plug_link",
+        "plug_orientation": [
+          -0.1916578592328113,
+          -0.10467305550508021,
+          0.9117787535495934,
+          0.3478077294463219
+        ],
+        "plug_position": [
+          -0.024358942344292034,
+          -0.030182144670310995,
+          -0.013292153454455502
+        ],
+        "relative_position": [
+          -0.37158980963161514,
+          0.19465661053571454,
+          -0.5005592107772829
+        ],
+        "sim_time": 0.0,
+        "step_count_raw": 35,
+        "success_like": true,
+        "target_entity_name": "tabletop",
+        "target_orientation": [
+          0.0,
+          0.0,
+          -0.9999999560952156,
+          0.0002963267905598908
+        ],
+        "target_position": [
+          -0.2,
+          0.2,
+          1.14
+        ],
+        "tcp_entity_name": "ati/tool_link",
+        "tcp_orientation": [
+          0.0003483281607326052,
+          -0.9999999188423149,
+          -0.0001442656579431578,
+          -3.1778677894378286e-05
+        ],
+        "tcp_position": [
+          0.1715898096316151,
+          0.005343389464285462,
+          1.6405592107772828
+        ]
+      },
+      "step_idx": 1
+    },
+    {
+      "action": {
+        "angular_xyz": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "command_sim_steps": 25,
+        "frame_id": "base_link",
+        "linear_xyz": [
+          0.0,
+          -0.01,
+          0.0
+        ],
+        "sim_steps": 25
+      },
+      "native": {
+        "distance_to_target": 0.6530924177643538,
+        "entity_count": 128,
+        "force_magnitude": 0.0,
+        "joint_count": 6,
+        "joint_positions": [
+          -0.15985311567783356,
+          -1.354264736175537,
+          -1.6669918298721313,
+          -1.6911156177520752,
+          1.5710909366607666,
+          1.4108394384384155
+        ],
+        "joint_velocities": [],
+        "off_limit_contact": false,
+        "orientation_error": 3.1413041411165574,
+        "plug_entity_name": "lc_plug_link",
+        "plug_orientation": [
+          -0.19165703416524915,
+          -0.10467335874769335,
+          0.9117788805634268,
+          0.34780771374940866
+        ],
+        "plug_position": [
+          -0.02435891268433793,
+          -0.030182236580767574,
+          -0.013292189421400202
+        ],
+        "relative_position": [
+          -0.37158980963161514,
+          0.19465661053571454,
+          -0.5005592107772829
+        ],
+        "sim_time": 0.0,
+        "step_count_raw": 60,
+        "success_like": true,
+        "target_entity_name": "tabletop",
+        "target_orientation": [
+          0.0,
+          0.0,
+          -0.9999999560952156,
+          0.0002963267905598908
+        ],
+        "target_position": [
+          -0.2,
+          0.2,
+          1.14
+        ],
+        "tcp_entity_name": "ati/tool_link",
+        "tcp_orientation": [
+          0.0003483281607326052,
+          -0.9999999188423149,
+          -0.0001442656579431578,
+          -3.1778677894378286e-05
+        ],
+        "tcp_position": [
+          0.1715898096316151,
+          0.005343389464285462,
+          1.6405592107772828
+        ]
+      },
+      "step_idx": 2
+    },
+    {
+      "action": {
+        "angular_xyz": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "command_sim_steps": 25,
+        "frame_id": "base_link",
+        "linear_xyz": [
+          0.0,
+          0.0,
+          -0.01
+        ],
+        "sim_steps": 25
+      },
+      "native": {
+        "distance_to_target": 0.6530924177643538,
+        "entity_count": 128,
+        "force_magnitude": 0.0,
+        "joint_count": 6,
+        "joint_positions": [
+          -0.15985311567783356,
+          -1.354264736175537,
+          -1.6669918298721313,
+          -1.6911156177520752,
+          1.5710909366607666,
+          1.4108394384384155
+        ],
+        "joint_velocities": [],
+        "off_limit_contact": false,
+        "orientation_error": 3.1413041411165574,
+        "plug_entity_name": "lc_plug_link",
+        "plug_orientation": [
+          -0.19165481217564206,
+          -0.10467367027018676,
+          0.9117809839653876,
+          0.34780355666918267
+        ],
+        "plug_position": [
+          -0.024358717146193587,
+          -0.030182375439859688,
+          -0.01329208871998061
+        ],
+        "relative_position": [
+          -0.37158980963161514,
+          0.19465661053571454,
+          -0.5005592107772829
+        ],
+        "sim_time": 0.0,
+        "step_count_raw": 85,
+        "success_like": true,
+        "target_entity_name": "tabletop",
+        "target_orientation": [
+          0.0,
+          0.0,
+          -0.9999999560952156,
+          0.0002963267905598908
+        ],
+        "target_position": [
+          -0.2,
+          0.2,
+          1.14
+        ],
+        "tcp_entity_name": "ati/tool_link",
+        "tcp_orientation": [
+          0.0003483281607326052,
+          -0.9999999188423149,
+          -0.0001442656579431578,
+          -3.1778677894378286e-05
+        ],
+        "tcp_position": [
+          0.1715898096316151,
+          0.005343389464285462,
+          1.6405592107772828
+        ]
+      },
+      "step_idx": 3
+    }
+  ],
+  "timing": {
+    "mean_step_latency_s": 0.03957949175037356,
+    "ready_to_first_sane_state_latency_s": 3.0476940510015993,
+    "samples_per_second": 1.2476541419674254,
+    "simulated_seconds": 0.085,
+    "simulated_seconds_per_wall_second": 0.02651265051680779,
+    "step_latency_s": [
+      0.11654337300205952,
+      0.014794038001127774,
+      0.011974602999544004,
+      0.01500595299876295
+    ],
+    "total_wall_s": 3.2060166880000907
+  }
+}

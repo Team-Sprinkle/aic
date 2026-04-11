@@ -44,6 +44,8 @@ class AicInsertionEnv(gym.Env[dict[str, Any], np.ndarray]):
             trial_id=str(options.get("trial_id", self.trial_id)) if options.get("trial_id", self.trial_id) else None,
         )
         state = self.runtime.reset(seed=seed, scenario=scenario)
+        if self.task.include_images:
+            state = self._warm_images_on_reset(state)
         self.task.reset(scenario=scenario, initial_state=state)
         self._scenario = scenario
         self._state = state
@@ -90,6 +92,70 @@ class AicInsertionEnv(gym.Env[dict[str, Any], np.ndarray]):
         self.io.close()
         self.runtime.close()
 
+    def _warm_images_on_reset(self, state):
+        try:
+            self.io.observation_from_state(
+                state,
+                include_images=True,
+                step_count=0,
+            )
+            return state
+        except TimeoutError:
+            zero_action = np.zeros(6, dtype=np.float32)
+            warmed_state = state
+            for _ in range(5):
+                warmed_state = self.runtime.step(zero_action, ticks=2)
+                try:
+                    self.io.observation_from_state(
+                        warmed_state,
+                        include_images=True,
+                        step_count=0,
+                    )
+                    return warmed_state
+                except TimeoutError:
+                    continue
+            return warmed_state
+
+
+def live_env_health_check(
+    *,
+    include_images: bool = False,
+    enable_randomization: bool = False,
+    ticks_per_step: int = 8,
+    world_path: str | None = None,
+    attach_to_existing: bool = False,
+    transport_backend: str = "transport",
+    seed: int = 123,
+) -> dict[str, Any]:
+    env = make_live_env(
+        include_images=include_images,
+        enable_randomization=enable_randomization,
+        ticks_per_step=ticks_per_step,
+        world_path=world_path,
+        attach_to_existing=attach_to_existing,
+        transport_backend=transport_backend,
+    )
+    try:
+        observation, info = env.reset(seed=seed)
+        summary = {
+            "trial_id": info["trial_id"],
+            "sim_tick": int(observation["sim_tick"]),
+            "sim_time": float(observation["sim_time"]),
+            "joint_count": int(observation["joint_positions"].shape[0]),
+            "images_ready": False,
+            "observation_keys": sorted(observation.keys()),
+        }
+        if include_images:
+            summary["images_ready"] = all(
+                observation["images"][name].shape == (64, 64, 3)
+                and observation["images"][name].dtype == np.uint8
+                and int(observation["images"][name].sum()) > 0
+                for name in ("left", "center", "right")
+            )
+        return summary
+    finally:
+        env.close()
+
 
 def make_default_env(
     *,
@@ -118,12 +184,14 @@ def make_live_env(
     ticks_per_step: int = 8,
     world_path: str | None = None,
     attach_to_existing: bool = False,
+    transport_backend: str = "transport",
 ) -> AicInsertionEnv:
     return AicInsertionEnv(
         runtime=AicGazeboRuntime(
             backend=ScenarioGymGzBackend(
                 world_path=world_path,
                 attach_to_existing=attach_to_existing,
+                transport_backend=transport_backend,
             ),
             ticks_per_step=ticks_per_step,
         ),
