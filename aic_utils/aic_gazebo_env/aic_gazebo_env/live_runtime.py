@@ -72,6 +72,8 @@ class LiveHealthReport:
     first_observation_ok: bool = False
     reset_ok: bool = False
     no_op_step_ok: bool = False
+    action_step_ok: bool = False
+    stage_timings_ms: dict[str, float] = field(default_factory=dict)
     diagnostics: dict[str, Any] = field(default_factory=dict)
 
     def to_dict(self) -> dict[str, Any]:
@@ -250,6 +252,8 @@ class LiveRuntimeManager:
                     first_observation_ok=bool(payload.get("first_observation_ok")),
                     reset_ok=bool(payload.get("reset_ok")),
                     no_op_step_ok=bool(payload.get("no_op_step_ok")),
+                    action_step_ok=bool(payload.get("action_step_ok")),
+                    stage_timings_ms=dict(payload.get("stage_timings_ms") or {}),
                     diagnostics=payload,
                 )
             except Exception as exc:
@@ -273,7 +277,7 @@ class LiveRuntimeManager:
         timeout_s: float = 120.0,
     ) -> dict[str, Any]:
         health = self.wait_for_health(context, timeout_s=timeout_s)
-        if not health.no_op_step_ok:
+        if not health.no_op_step_ok or not health.action_step_ok:
             return {
                 "health": health.to_dict(),
                 "smoke": None,
@@ -493,16 +497,33 @@ def perform_live_health_check(*, world_name: str, world_path: str) -> dict[str, 
         "first_observation_ok": False,
         "reset_ok": False,
         "no_op_step_ok": False,
+        "action_step_ok": False,
+        "stage_timings_ms": {},
     }
+    stage_starts: dict[str, float] = {}
+
+    def _start_stage(name: str) -> None:
+        stage_starts[name] = time.perf_counter()
+
+    def _finish_stage(name: str) -> None:
+        start = stage_starts.get(name)
+        if start is not None:
+            report["stage_timings_ms"][name] = round((time.perf_counter() - start) * 1000.0, 3)
+
+    _start_stage("gz_reachable")
     gz = resolve_gz_executable("gz")
     report["gz_reachable"] = gz.resolved_path is not None
+    _finish_stage("gz_reachable")
+    _start_stage("helper_reachable")
     helper = resolve_transport_helper_executable(None)
     report["helper_reachable"] = helper.resolved_path is not None
+    _finish_stage("helper_reachable")
     if not report["gz_reachable"] or not report["helper_reachable"]:
         return report
 
     import subprocess as _subprocess
 
+    _start_stage("world_control_reachable")
     services = _subprocess.run(
         ["gz", "service", "-l"],
         check=False,
@@ -512,9 +533,11 @@ def perform_live_health_check(*, world_name: str, world_path: str) -> dict[str, 
     )
     if services.returncode != 0:
         report["services_stderr"] = services.stderr
+        _finish_stage("world_control_reachable")
         return report
     report["world_control_reachable"] = f"/world/{world_name}/control" in services.stdout
     report["service_list"] = services.stdout
+    _finish_stage("world_control_reachable")
     if not report["world_control_reachable"]:
         return report
 
@@ -533,16 +556,29 @@ def perform_live_health_check(*, world_name: str, world_path: str) -> dict[str, 
         )
     )
     try:
+        _start_stage("first_observation")
         observation = client.get_observation(GetObservationRequest())
         report["state_topic_live"] = True
         report["first_observation_ok"] = True
         report["first_observation_info"] = observation.info
+        _finish_stage("first_observation")
+        _start_stage("reset")
         reset_response = client.reset(ResetRequest(seed=0, options={"mode": "health"}))
         report["reset_ok"] = True
         report["reset_info"] = reset_response.info
+        _finish_stage("reset")
+        _start_stage("no_op_step")
         step_response = client.step(StepRequest(action={"multi_step": 1}))
         report["no_op_step_ok"] = True
         report["no_op_step_info"] = step_response.info
+        _finish_stage("no_op_step")
+        _start_stage("action_step")
+        action_response = client.step(
+            StepRequest(action={"position_delta": [0.001, 0.0, 0.0], "multi_step": 1})
+        )
+        report["action_step_ok"] = True
+        report["action_step_info"] = action_response.info
+        _finish_stage("action_step")
     finally:
         client.close()
     return report
@@ -619,6 +655,7 @@ def perform_live_smoke_sequence(*, world_name: str, world_path: str) -> dict[str
 
 def perform_live_parity_sequence(*, world_name: str, world_path: str) -> dict[str, Any]:
     from .gazebo_client import GazeboCliClientConfig, GazeboTransportClient
+    from .official_scoring import OfficialTier3TrackedPairScorer
     from .protocol import ResetRequest, StepRequest
 
     client = GazeboTransportClient(
@@ -632,6 +669,7 @@ def perform_live_parity_sequence(*, world_name: str, world_path: str) -> dict[st
             transport_backend="transport",
         )
     )
+    scorer = OfficialTier3TrackedPairScorer()
     sequence = [
         {"multi_step": 1},
         {"multi_step": 1},
@@ -650,6 +688,22 @@ def perform_live_parity_sequence(*, world_name: str, world_path: str) -> dict[st
     relative_positions = [pair.get("relative_position") for pair in tracked]
     distances = [pair.get("distance") for pair in tracked]
     success_flags = [pair.get("success") for pair in tracked]
+    initial_distance = distances[0] if isinstance(distances[0], float) else None
+    official_scores: list[dict[str, Any]] = []
+    for pair in tracked:
+        if isinstance(pair, dict):
+            score_value, score_details = scorer.score(
+                tracked_pair=pair,
+                initial_distance=initial_distance,
+            )
+            official_scores.append(
+                {
+                    "score": score_value,
+                    "details": score_details,
+                }
+            )
+        else:
+            official_scores.append({"score": 0.0, "details": {"reason": "missing_pair"}})
 
     parity_checks = {
         "world_name_matches": all(obs.get("world_name") == world_name for obs in observations),
@@ -662,6 +716,10 @@ def perform_live_parity_sequence(*, world_name: str, world_path: str) -> dict[st
         "sim_step_count_raw_monotonic": _is_monotonic(raw_counts),
         "repeated_no_op_stable": _no_op_stable(relative_positions[:3], tolerance=1e-4),
         "distance_changes_sensibly": len({round(value, 6) for value in distances if isinstance(value, float)}) >= 2,
+        "official_score_slice_present": all(
+            isinstance(item.get("score"), float) and isinstance(item.get("details"), dict)
+            for item in official_scores
+        ),
     }
     return {
         "ok": all(parity_checks.values()),
@@ -670,6 +728,7 @@ def perform_live_parity_sequence(*, world_name: str, world_path: str) -> dict[st
         "sim_step_count_raw": raw_counts,
         "distances": distances,
         "relative_positions": relative_positions,
+        "official_scores": official_scores,
     }
 
 

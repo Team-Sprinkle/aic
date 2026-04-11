@@ -50,6 +50,86 @@ Current implementation notes:
 - The package still remains training-oriented and separate from the official
   ROS + `aic_engine` evaluation flow.
 
+Canonical workflow:
+
+- Live bringup:
+  `PYTHONPATH=aic_utils/aic_gazebo_env python3 aic_utils/aic_gazebo_env/scripts/run_live_e2e.py --auto-build --auto-launch`
+- Live e2e:
+  `PYTHONPATH=aic_utils/aic_gazebo_env python3 aic_utils/aic_gazebo_env/scripts/run_live_e2e.py --auto-build --auto-launch --json-only`
+- Live benchmark:
+  `PYTHONPATH=aic_utils/aic_gazebo_env python3 aic_utils/aic_gazebo_env/scripts/live_transport_benchmark.py --auto-build --auto-launch --output /tmp/aic_live_benchmark.json`
+- Live parity:
+  `PYTHONPATH=aic_utils/aic_gazebo_env python3 aic_utils/aic_gazebo_env/scripts/run_live_parity.py --auto-build --auto-launch --output /tmp/aic_live_parity.json`
+- PPO smoke training:
+  `PYTHONPATH=aic_utils/aic_gazebo_env python3 aic_utils/aic_gazebo_env/scripts/train_sb3_ppo.py --auto-build --auto-launch --smoke --run-dir /tmp/aic_ppo_smoke`
+
+What these commands do automatically:
+
+- discover `gz`, `aic_gz_transport_bridge`, setup scripts, and likely workspaces
+- attach to a usable live context when one already exists
+- optionally build `aic_gz_transport_bridge` with a targeted `colcon build`
+- optionally create and attach to the official `aic_eval` distrobox container
+- launch the supported official Gazebo world headlessly
+- wait for strict live health before smoke, benchmark, parity, or training
+
+What must still exist on the machine:
+
+- Docker and distrobox for the `aic_eval` auto-launch path
+- access to `ghcr.io/intrinsic-dev/aic/aic_eval:latest` if the image is not already local
+- for PPO training only: Python packages `numpy`, `gymnasium`, and `stable_baselines3`
+
+Structured live health model:
+
+- `gz_reachable`
+- `helper_reachable`
+- `world_control_reachable`
+- `state_topic_live`
+- `first_observation_ok`
+- `reset_ok`
+- `no_op_step_ok`
+- `action_step_ok`
+- `stage_timings_ms`
+
+The benchmark and parity scripts reuse the same health gate. If the runtime is
+not healthy, they report the blocker instead of silently skipping it.
+
+Stable RL-facing API for this branch:
+
+- `StableRLGazeboEnv` is the baseline PPO-facing wrapper.
+- Action contract:
+  - 3D continuous position delta only
+  - input range `[-1, 1]` per dimension
+  - clipped then scaled by `max_position_delta`
+  - converted to `{"policy_action": {"position_delta": [...]}, "multi_step": N}`
+- Observation contract:
+  - flattened tracked-pair vector
+  - fixed length `18`
+  - raw structured observation remains in `info["raw_observation"]`
+- Episode semantics:
+  - optional `episode_step_limit`
+  - time-limit truncation signaled with `info["time_limit_reached"]`
+- Rich diagnostics remain in `info`; the compact training observation stays stable.
+
+Expected artifacts:
+
+- benchmark JSON report from `live_transport_benchmark.py`
+- parity JSON report from `run_live_parity.py`
+- PPO run directory containing:
+  - `config.json`
+  - `result.json`
+  - `final_model.zip`
+  - `checkpoints/`
+  - `eval/`
+  - `tensorboard/`
+
+What “usable for RL training” means on this branch:
+
+- the no-ROS runtime can attach to the official live world
+- transport-helper startup/readiness/reset/action health is checked before training
+- the RL-facing API is frozen to one compact observation mode and one baseline action mode
+- PPO smoke training has a canonical entry point
+- parity remains a tracked-pair / score-slice check against signals derived from the official world, not a replacement for `aic_engine`
+
 Backend protocol notes:
 
 - The package includes backend-agnostic Python request/response schema for
@@ -256,8 +336,15 @@ Run these from the repo root:
    - a summary with start/end x position and step count
    - a final `smoke_constant_action: OK`
 
-4. Tiny training smoke:
-   - not added
+4. Tiny PPO smoke:
+   `PYTHONPATH=aic_utils/aic_gazebo_env python3 aic_utils/aic_gazebo_env/scripts/train_sb3_ppo.py --smoke --json-only`
+   Validates:
+   - training dependency preflight
+   - stable RL API construction
+   - live runtime gating before PPO starts
+   Expected output:
+   - a JSON payload with `training.ok == true` on a provisioned machine
+   - otherwise a clear dependency or live-runtime blocker category
 
 Live benchmark setup:
 
