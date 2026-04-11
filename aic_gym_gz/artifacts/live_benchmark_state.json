@@ -1,0 +1,193 @@
+{
+  "aic_gym_gz_path": {
+    "mean_step_latency_s": 0.04101962900040235,
+    "num_steps": 4,
+    "ready_to_first_sane_state_latency_s": 3.047740411999257,
+    "samples_per_second": 1.2453985842088304,
+    "simulated_seconds": 0.085,
+    "simulated_seconds_per_wall_second": 0.02646471991443765,
+    "total_wall_s": 3.211823146997631
+  },
+  "comparison": {
+    "reset_latency_speedup": 11.227775026139879,
+    "samples_per_second_speedup": 12.596809972498837,
+    "simulated_seconds_per_wall_second_speedup": 12.59680997249884,
+    "step_latency_speedup": 38.02674467717585
+  },
+  "mode": "state_only",
+  "notes": [
+    "The official reset metric is a ready-to-first-sane-state surrogate, not /gz_server/reset_simulation latency, because reset is unstable in the official bringup on this machine.",
+    "The aic_gym_gz benchmark path is the attached live replay path against the same fixed rollout, which isolates hot-loop overhead on the same machine and same world.",
+    "Scaling beyond one environment is not measured here because the current exact-step parity harness is single-world and the official control path is not multi-env capable."
+  ],
+  "official_path": {
+    "mean_step_latency_s": 1.559842958750778,
+    "num_steps": 4,
+    "ready_to_first_sane_state_latency_s": 34.219343684002524,
+    "samples_per_second": 0.09886618810061956,
+    "simulated_seconds": 0.085,
+    "simulated_seconds_per_wall_second": 0.0021009064971381657,
+    "total_wall_s": 40.45872584800236
+  },
+  "parity": {
+    "images": null,
+    "scores": {
+      "approximation_notes": [
+        "This report uses the aic_gym_gz official-like score calculator on both traces rather than invoking aic_engine or aic_scoring directly.",
+        "Force and off-limit contact terms are limited to what the current live trace schema records.",
+        "Tier 3 wrong-port and partial-insertion branches remain approximate unless the trace carries explicit insertion/contact outcomes."
+      ],
+      "candidate": {
+        "message": "Cable insertion successful.",
+        "tier2": {
+          "contacts": 0.0,
+          "duration": 12.0,
+          "insertion_force": 0.0,
+          "trajectory_efficiency": 6.0,
+          "trajectory_smoothness": 6.0
+        },
+        "tier3": {
+          "score": 75.0
+        },
+        "total_score": 100.0
+      },
+      "deltas": {
+        "message_match": true,
+        "tier2": {
+          "contacts": {
+            "abs_error": 0.0,
+            "candidate": 0.0,
+            "reference": 0.0
+          },
+          "duration": {
+            "abs_error": 0.0,
+            "candidate": 12.0,
+            "reference": 12.0
+          },
+          "insertion_force": {
+            "abs_error": 0.0,
+            "candidate": 0.0,
+            "reference": 0.0
+          },
+          "trajectory_efficiency": {
+            "abs_error": 0.0,
+            "candidate": 6.0,
+            "reference": 6.0
+          },
+          "trajectory_smoothness": {
+            "abs_error": 0.0,
+            "candidate": 6.0,
+            "reference": 6.0
+          }
+        },
+        "tier3_score_abs_error": 0.0,
+        "total_score_abs_error": 0.0
+      },
+      "reference": {
+        "message": "Cable insertion successful.",
+        "tier2": {
+          "contacts": 0.0,
+          "duration": 12.0,
+          "insertion_force": 0.0,
+          "trajectory_efficiency": 6.0,
+          "trajectory_smoothness": 6.0
+        },
+        "tier3": {
+          "score": 75.0
+        },
+        "total_score": 100.0
+      }
+    },
+    "state": {
+      "final_success_like_match": true,
+      "metrics": [
+        {
+          "max_abs_error": 0.0,
+          "mean_abs_error": 0.0,
+          "name": "tcp_x"
+        },
+        {
+          "max_abs_error": 0.0,
+          "mean_abs_error": 0.0,
+          "name": "tcp_y"
+        },
+        {
+          "max_abs_error": 0.0,
+          "mean_abs_error": 0.0,
+          "name": "tcp_z"
+        },
+        {
+          "max_abs_error": 5.247669313324099e-05,
+          "mean_abs_error": 3.9581654065201644e-05,
+          "name": "plug_x"
+        },
+        {
+          "max_abs_error": 0.00013534906196333019,
+          "mean_abs_error": 0.000101896326542672,
+          "name": "plug_y"
+        },
+        {
+          "max_abs_error": 4.566726383814501e-05,
+          "mean_abs_error": 3.441035040821494e-05,
+          "name": "plug_z"
+        },
+        {
+          "max_abs_error": 0.0,
+          "mean_abs_error": 0.0,
+          "name": "target_x"
+        },
+        {
+          "max_abs_error": 0.0,
+          "mean_abs_error": 0.0,
+          "name": "target_y"
+        },
+        {
+          "max_abs_error": 0.0,
+          "mean_abs_error": 0.0,
+          "name": "target_z"
+        },
+        {
+          "max_abs_error": 0.0,
+          "mean_abs_error": 0.0,
+          "name": "distance_to_target"
+        },
+        {
+          "max_abs_error": 0.0,
+          "mean_abs_error": 0.0,
+          "name": "orientation_error"
+        },
+        {
+          "max_abs_error": 0.0,
+          "mean_abs_error": 0.0,
+          "name": "joint_0"
+        },
+        {
+          "max_abs_error": 0.0,
+          "mean_abs_error": 0.0,
+          "name": "joint_1"
+        },
+        {
+          "max_abs_error": 0.0,
+          "mean_abs_error": 0.0,
+          "name": "joint_2"
+        },
+        {
+          "max_abs_error": 0.0,
+          "mean_abs_error": 0.0,
+          "name": "joint_3"
+        },
+        {
+          "max_abs_error": 0.0,
+          "mean_abs_error": 0.0,
+          "name": "joint_4"
+        },
+        {
+          "max_abs_error": 0.0,
+          "mean_abs_error": 0.0,
+          "name": "joint_5"
+        }
+      ],
+      "num_steps": 4
+    }
+  }
+}

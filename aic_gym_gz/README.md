@@ -13,9 +13,11 @@ Current status:
 
 - Milestone 1: implemented
 - Milestone 2: implemented with a deterministic state-only backend
-- Milestone 3: partial, via official-schema randomization
-- Milestone 4: partial, via named reward terms and official-like score summary
-- Milestones 5-7: interface scaffolding added, live Gazebo integration still pending
+- Milestone 3: implemented for the current live fixed-rollout path
+- Milestone 4: implemented with named reward terms and official-like score summary
+- Milestone 5: implemented with live wrist-camera ingestion through an isolated ROS sidecar fallback
+- Milestone 6: implemented for fixed-rollout parity against the official toolkit
+- Milestone 7: implemented with live benchmark reports under `artifacts/`
 
 The live target architecture is:
 
@@ -31,6 +33,7 @@ The live target architecture is:
 pixi run python -m aic_gym_gz.demo_random_policy
 pixi run python -m unittest discover -s aic_gym_gz/tests
 pixi run python -m aic_gym_gz.benchmark
+pixi run python -m aic_gym_gz.live_benchmark
 ```
 
 ## What is real today
@@ -40,13 +43,15 @@ pixi run python -m aic_gym_gz.benchmark
 - stable state-only observation dictionary
 - reward decomposition with named terms
 - official-like final score decomposition
-- parity harness for offline rollout CSV comparison
+- live fixed-rollout parity against the official toolkit in state-only and state+image modes
+- live benchmark reports for the official control path versus the `aic_gym_gz` attached replay path
 
 ## What is still approximate
 
 - the current tested backend is deterministic and simulator-free
-- ScenarIO + gym-gz integration is isolated behind `ScenarioGymGzBackend`
-- Gazebo-native image extraction is defined as an interface, not yet wired
-- parity against the official ROS path still needs live trace capture in a Gazebo-enabled environment
+- the default `make_default_env()` path is still deterministic and simulator-free for tests
+- the live backend is routed through `aic_utils/aic_gazebo_env`, not upstream ScenarIO / gym-gz
+- image ingestion currently uses a dedicated ROS bridge sidecar fallback rather than pure Gazebo Transport
+- the official reset metric is a readiness surrogate on this machine because `/gz_server/reset_simulation` still destabilizes the official bringup
 
 See [docs/architecture.md](/home/ubuntu/ws_aic/src/aic/aic_gym_gz/docs/architecture.md).
