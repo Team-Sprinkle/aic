@@ -93,6 +93,8 @@ def capture_official_and_native_trace(
     import numpy as np
     import rclpy
     from rclpy.node import Node
+    from rclpy.qos import QoSProfile
+    from rclpy.qos import ReliabilityPolicy, DurabilityPolicy, HistoryPolicy
     from rclpy.qos import qos_profile_sensor_data
     from geometry_msgs.msg import Twist, Vector3, Wrench
     from aic_control_interfaces.msg import (
@@ -121,12 +123,23 @@ def capture_official_and_native_trace(
                 10,
             )
             self.latest_controller_state: ControllerState | None = None
-            self.create_subscription(
-                ControllerState,
-                "/aic_controller/controller_state",
-                self._controller_state_callback,
-                10,
+            controller_state_qos = QoSProfile(
+                reliability=ReliabilityPolicy.RELIABLE,
+                durability=DurabilityPolicy.VOLATILE,
+                history=HistoryPolicy.KEEP_LAST,
+                depth=10,
             )
+            for topic in (
+                "/aic_controller/controller_state",
+                "/controller_manager/aic_controller/controller_state",
+                "/controller_manager/controller_state",
+            ):
+                self.create_subscription(
+                    ControllerState,
+                    topic,
+                    self._controller_state_callback,
+                    controller_state_qos,
+                )
             self.latest_images: dict[str, np.ndarray] = {}
             self.latest_image_timestamps: dict[str, float] = {}
             if include_images:
@@ -406,6 +419,40 @@ def capture_official_and_native_trace(
             time.sleep(0.05)
         return None
 
+    def _try_promote_to_sane_observation(
+        observation: dict[str, Any],
+        *,
+        action: FixedVelocityAction | None,
+        allow_cli_fallback: bool,
+        timeout_s: float,
+    ) -> tuple[dict[str, Any], str] | None:
+        source = "transport"
+        if _observation_is_sane(observation) and not _transport_sample_looks_stale(
+            observation,
+            controller_state=node.latest_controller_state,
+            previous_observation=last_native_observation,
+            action=action,
+        ):
+            return observation, source
+
+        deadline = time.monotonic() + timeout_s
+        while time.monotonic() < deadline:
+            if allow_cli_fallback:
+                fallback = _fetch_sane_cli_fallback(timeout_s=0.25)
+                if fallback is not None:
+                    return fallback, "cli_fallback"
+            rclpy.spin_once(node, timeout_sec=0.05)
+            time.sleep(0.02)
+            candidate = native_client.get_observation(GetObservationRequest()).observation
+            if _observation_is_sane(candidate) and not _transport_sample_looks_stale(
+                candidate,
+                controller_state=node.latest_controller_state,
+                previous_observation=last_native_observation,
+                action=action,
+            ):
+                return candidate, "transport"
+        return None
+
     def _world_control_cli(*, request: str, timeout_s: float) -> str:
         completed = subprocess.run(
             [
@@ -483,35 +530,30 @@ def capture_official_and_native_trace(
             state_generation = response.info.get("state_generation")
             if not isinstance(state_generation, int):
                 observation = response.observation
-                source = "transport"
-                if _transport_sample_looks_stale(
+                promoted = _try_promote_to_sane_observation(
                     observation,
-                    controller_state=node.latest_controller_state,
-                    previous_observation=last_native_observation,
                     action=action,
-                ):
-                    fallback = _fetch_sane_cli_fallback(timeout_s=0.75)
-                    if fallback is not None:
-                        observation = fallback
-                        source = "cli_fallback"
-                last_native_observation = observation
-                return observation, source
+                    allow_cli_fallback=True,
+                    timeout_s=1.0,
+                )
+                if promoted is not None:
+                    observation, source = promoted
+                    last_native_observation = observation
+                    return observation, source
+                continue
             if last_state_generation is None or state_generation > last_state_generation:
-                last_state_generation = state_generation
                 observation = response.observation
-                source = "transport"
-                if _transport_sample_looks_stale(
+                promoted = _try_promote_to_sane_observation(
                     observation,
-                    controller_state=node.latest_controller_state,
-                    previous_observation=last_native_observation,
                     action=action,
-                ):
-                    fallback = _fetch_sane_cli_fallback(timeout_s=0.75)
-                    if fallback is not None:
-                        observation = fallback
-                        source = "cli_fallback"
-                last_native_observation = observation
-                return observation, source
+                    allow_cli_fallback=True,
+                    timeout_s=1.0,
+                )
+                if promoted is not None:
+                    last_state_generation = state_generation
+                    observation, source = promoted
+                    last_native_observation = observation
+                    return observation, source
         raise TimeoutError("Timed out waiting for a fresh native Gazebo state sample after stepping.")
 
     def _wait_for_native_world_ready(*, timeout_s: float) -> dict[str, Any]:
