@@ -34,6 +34,8 @@ pixi run python -m aic_gym_gz.demo_random_policy
 pixi run python -m unittest discover -s aic_gym_gz/tests
 pixi run python -m aic_gym_gz.benchmark
 pixi run python -m aic_gym_gz.live_benchmark
+pixi run python -m aic_gym_gz.deterministic_policy_parity
+pixi run python -m aic_gym_gz.live_training_smoke
 ```
 
 ## What is real today
@@ -45,6 +47,7 @@ pixi run python -m aic_gym_gz.live_benchmark
 - official-like final score decomposition
 - live fixed-rollout parity against the official toolkit in state-only and state+image modes
 - live benchmark reports for the official control path versus the `aic_gym_gz` attached replay path
+- deterministic state-only parity regression artifacts under `artifacts/deterministic_policy_state`
 
 ## What is still approximate
 
@@ -53,5 +56,6 @@ pixi run python -m aic_gym_gz.live_benchmark
 - the live backend is routed through `aic_utils/aic_gazebo_env`, not upstream ScenarIO / gym-gz
 - image ingestion currently uses a dedicated ROS bridge sidecar fallback rather than pure Gazebo Transport
 - the official reset metric is a readiness surrogate on this machine because `/gz_server/reset_simulation` still destabilizes the official bringup
+- repeated env-style live training startup is still less stable than the fixed-rollout parity path; the deterministic parity gate is currently the stronger readiness check
 
 See [docs/architecture.md](/home/ubuntu/ws_aic/src/aic/aic_gym_gz/docs/architecture.md).

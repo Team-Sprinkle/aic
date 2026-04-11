@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
+import subprocess
 import threading
 import time
 from typing import Any
@@ -248,14 +249,54 @@ class RosCameraSubscriber:
                 self._ready_event.set()
 
 
+class CameraBridgeSidecar:
+    """Dedicated non-lazy bridge for wrist camera topics."""
+
+    def __init__(self) -> None:
+        self._process: subprocess.Popen[str] | None = None
+
+    def start(self) -> None:
+        if self._process is not None and self._process.poll() is None:
+            return
+        self._process = subprocess.Popen(
+            [
+                "ros2",
+                "run",
+                "ros_gz_bridge",
+                "parameter_bridge",
+                "/left_camera/image@sensor_msgs/msg/Image[gz.msgs.Image",
+                "/center_camera/image@sensor_msgs/msg/Image[gz.msgs.Image",
+                "/right_camera/image@sensor_msgs/msg/Image[gz.msgs.Image",
+            ],
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+            text=True,
+        )
+        time.sleep(1.0)
+
+    def close(self) -> None:
+        if self._process is None:
+            return
+        if self._process.poll() is None:
+            self._process.terminate()
+            try:
+                self._process.wait(timeout=3.0)
+            except subprocess.TimeoutExpired:
+                self._process.kill()
+                self._process.wait(timeout=3.0)
+        self._process = None
+
+
 @dataclass
 class RosCameraSidecarIO(AicGazeboIO):
     """Live IO path with ROS-only image fallback."""
 
     camera_subscriber: RosCameraSubscriber = field(default_factory=RosCameraSubscriber)
+    camera_bridge: CameraBridgeSidecar = field(default_factory=CameraBridgeSidecar)
     ready_timeout_s: float = 10.0
 
     def __post_init__(self) -> None:
+        self.camera_bridge.start()
         self.camera_subscriber.start()
 
     def observation_from_state(
@@ -283,6 +324,7 @@ class RosCameraSidecarIO(AicGazeboIO):
 
     def close(self) -> None:
         self.camera_subscriber.close()
+        self.camera_bridge.close()
 
 
 def _ros_image_to_array(message: Any, *, expected_shape: tuple[int, int, int]) -> np.ndarray:

@@ -1,0 +1,161 @@
+{
+  "images": null,
+  "scores": {
+    "approximation_notes": [
+      "This report uses the aic_gym_gz official-like score calculator on both traces rather than invoking aic_engine or aic_scoring directly.",
+      "Force and off-limit contact terms are limited to what the current live trace schema records.",
+      "Tier 3 wrong-port and partial-insertion branches remain approximate unless the trace carries explicit insertion/contact outcomes."
+    ],
+    "candidate": {
+      "message": "Cable insertion successful.",
+      "tier2": {
+        "contacts": 0.0,
+        "duration": 12.0,
+        "insertion_force": 0.0,
+        "trajectory_efficiency": 6.0,
+        "trajectory_smoothness": 6.0
+      },
+      "tier3": {
+        "score": 75.0
+      },
+      "total_score": 100.0
+    },
+    "deltas": {
+      "message_match": true,
+      "tier2": {
+        "contacts": {
+          "abs_error": 0.0,
+          "candidate": 0.0,
+          "reference": 0.0
+        },
+        "duration": {
+          "abs_error": 0.0,
+          "candidate": 12.0,
+          "reference": 12.0
+        },
+        "insertion_force": {
+          "abs_error": 0.0,
+          "candidate": 0.0,
+          "reference": 0.0
+        },
+        "trajectory_efficiency": {
+          "abs_error": 0.0,
+          "candidate": 6.0,
+          "reference": 6.0
+        },
+        "trajectory_smoothness": {
+          "abs_error": 0.0,
+          "candidate": 6.0,
+          "reference": 6.0
+        }
+      },
+      "tier3_score_abs_error": 0.0,
+      "total_score_abs_error": 0.0
+    },
+    "reference": {
+      "message": "Cable insertion successful.",
+      "tier2": {
+        "contacts": 0.0,
+        "duration": 12.0,
+        "insertion_force": 0.0,
+        "trajectory_efficiency": 6.0,
+        "trajectory_smoothness": 6.0
+      },
+      "tier3": {
+        "score": 75.0
+      },
+      "total_score": 100.0
+    }
+  },
+  "state": {
+    "final_success_like_match": true,
+    "metrics": [
+      {
+        "max_abs_error": 0.0,
+        "mean_abs_error": 0.0,
+        "name": "tcp_x"
+      },
+      {
+        "max_abs_error": 0.0,
+        "mean_abs_error": 0.0,
+        "name": "tcp_y"
+      },
+      {
+        "max_abs_error": 0.0,
+        "mean_abs_error": 0.0,
+        "name": "tcp_z"
+      },
+      {
+        "max_abs_error": 8.538447654943271e-05,
+        "mean_abs_error": 6.466325003606777e-05,
+        "name": "plug_x"
+      },
+      {
+        "max_abs_error": 8.530683594432098e-05,
+        "mean_abs_error": 6.471747810954387e-05,
+        "name": "plug_y"
+      },
+      {
+        "max_abs_error": 3.685879163151107e-05,
+        "mean_abs_error": 2.806691273853079e-05,
+        "name": "plug_z"
+      },
+      {
+        "max_abs_error": 0.0,
+        "mean_abs_error": 0.0,
+        "name": "target_x"
+      },
+      {
+        "max_abs_error": 0.0,
+        "mean_abs_error": 0.0,
+        "name": "target_y"
+      },
+      {
+        "max_abs_error": 0.0,
+        "mean_abs_error": 0.0,
+        "name": "target_z"
+      },
+      {
+        "max_abs_error": 0.0,
+        "mean_abs_error": 0.0,
+        "name": "distance_to_target"
+      },
+      {
+        "max_abs_error": 0.0,
+        "mean_abs_error": 0.0,
+        "name": "orientation_error"
+      },
+      {
+        "max_abs_error": 0.0,
+        "mean_abs_error": 0.0,
+        "name": "joint_0"
+      },
+      {
+        "max_abs_error": 0.0,
+        "mean_abs_error": 0.0,
+        "name": "joint_1"
+      },
+      {
+        "max_abs_error": 0.0,
+        "mean_abs_error": 0.0,
+        "name": "joint_2"
+      },
+      {
+        "max_abs_error": 0.0,
+        "mean_abs_error": 0.0,
+        "name": "joint_3"
+      },
+      {
+        "max_abs_error": 0.0,
+        "mean_abs_error": 0.0,
+        "name": "joint_4"
+      },
+      {
+        "max_abs_error": 0.0,
+        "mean_abs_error": 0.0,
+        "name": "joint_5"
+      }
+    ],
+    "num_steps": 4
+  }
+}

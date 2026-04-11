@@ -1,0 +1,42 @@
+{
+  "episodes": [
+    {
+      "episode_index": 0,
+      "evaluation": null,
+      "final_distance_to_target": 1.1929129709098754,
+      "final_sim_tick": 34,
+      "images_present": true,
+      "steps": 4,
+      "terminated": false,
+      "total_reward": 5.521793275395411,
+      "trial_id": "trial_1",
+      "truncated": false
+    }
+  ],
+  "health": {
+    "images_ready": true,
+    "joint_count": 6,
+    "observation_keys": [
+      "gripper_state",
+      "image_timestamps",
+      "images",
+      "joint_positions",
+      "joint_velocities",
+      "off_limit_contact",
+      "plug_pose",
+      "plug_to_port_relative",
+      "sim_tick",
+      "sim_time",
+      "step_count",
+      "target_port_pose",
+      "tcp_pose",
+      "tcp_velocity",
+      "wrench"
+    ],
+    "sim_tick": 2,
+    "sim_time": 0.0,
+    "trial_id": "trial_1"
+  },
+  "include_images": true,
+  "policy": "scripted"
+}

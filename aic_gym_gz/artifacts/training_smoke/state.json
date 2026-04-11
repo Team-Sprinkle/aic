@@ -1,0 +1,52 @@
+{
+  "episodes": [
+    {
+      "episode_index": 0,
+      "evaluation": null,
+      "final_distance_to_target": 1.1948269310514377,
+      "final_sim_tick": 64,
+      "images_present": false,
+      "steps": 8,
+      "terminated": false,
+      "total_reward": 4.926522882895332,
+      "trial_id": "trial_1",
+      "truncated": false
+    },
+    {
+      "episode_index": 1,
+      "evaluation": null,
+      "final_distance_to_target": 1.1946996585967375,
+      "final_sim_tick": 128,
+      "images_present": false,
+      "steps": 8,
+      "terminated": false,
+      "total_reward": 5.179344643223335,
+      "trial_id": "trial_1",
+      "truncated": false
+    }
+  ],
+  "health": {
+    "images_ready": false,
+    "joint_count": 6,
+    "observation_keys": [
+      "gripper_state",
+      "joint_positions",
+      "joint_velocities",
+      "off_limit_contact",
+      "plug_pose",
+      "plug_to_port_relative",
+      "sim_tick",
+      "sim_time",
+      "step_count",
+      "target_port_pose",
+      "tcp_pose",
+      "tcp_velocity",
+      "wrench"
+    ],
+    "sim_tick": 0,
+    "sim_time": 0.0,
+    "trial_id": "trial_1"
+  },
+  "include_images": false,
+  "policy": "scripted"
+}

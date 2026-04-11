@@ -1,0 +1,441 @@
+{
+  "approximation_notes": [
+    "Commands are published through the official aic_controller ROS interface.",
+    "Simulation control uses exact stepped progression through /gz_server/step_simulation while paused.",
+    "Native Gazebo state is read immediately after each exact step window through the training-side Gazebo client.",
+    "If the transport-backed native sample is stale relative to official controller motion, a sane one-shot CLI observation is used for that step and recorded in native_observation_source.",
+    "Controller-state snapshots are captured from /aic_controller/controller_state to prove that the official controller advanced its references during the same stepped rollout.",
+    "This harness intentionally avoids /gz_server/reset_simulation because the current official bringup crashes under reset on this machine.",
+    "Image capture currently uses a dedicated non-lazy ROS parameter_bridge sidecar because the composed lazy bridge is unreliable in this container.",
+    "Failed to call /aic_controller/change_target_mode; continuing under the assumption that the official controller is already in Cartesian target mode. Error: Timed out waiting for service /aic_controller/change_target_mode.",
+    "Timed out waiting for /aic_controller/pose_commands subscriber count to become visible; continuing because the official controller may still be active even when publisher-side discovery is lagging. Error: Timed out waiting for /aic_controller/pose_commands subscriber."
+  ],
+  "control_surface": "official_ros_motion_update",
+  "image_surface": null,
+  "initial_images": null,
+  "initial_native": {
+    "controller_reference_tcp_position": null,
+    "controller_target_mode": null,
+    "controller_tcp_position": null,
+    "controller_tcp_velocity": null,
+    "distance_to_target": 0.6530924177643538,
+    "entity_count": 768,
+    "force_magnitude": 0.0,
+    "joint_count": 6,
+    "joint_positions": [
+      -0.15985311567783356,
+      -1.354264736175537,
+      -1.6669918298721313,
+      -1.6911156177520752,
+      1.5710909366607666,
+      1.4108394384384155
+    ],
+    "joint_velocities": [],
+    "off_limit_contact": false,
+    "orientation_error": 3.1413041411165574,
+    "plug_entity_name": "lc_plug_link",
+    "plug_orientation": [
+      -0.19249432426486934,
+      -0.10464535610017095,
+      0.9109651207843981,
+      0.3494823124371521
+    ],
+    "plug_position": [
+      -0.02445410586340374,
+      -0.030086833052242357,
+      -0.013333386279457238
+    ],
+    "relative_position": [
+      -0.37158980963161514,
+      0.19465661053571454,
+      -0.5005592107772829
+    ],
+    "sim_time": null,
+    "step_count_raw": 0,
+    "success_like": true,
+    "target_entity_name": "tabletop",
+    "target_orientation": [
+      0.0,
+      0.0,
+      -0.9999999560952156,
+      0.0002963267905598908
+    ],
+    "target_position": [
+      -0.2,
+      0.2,
+      1.14
+    ],
+    "tcp_entity_name": "ati/tool_link",
+    "tcp_orientation": [
+      0.0003483281607326052,
+      -0.9999999188423149,
+      -0.0001442656579431578,
+      -3.1778677894378286e-05
+    ],
+    "tcp_position": [
+      0.1715898096316151,
+      0.005343389464285462,
+      1.6405592107772828
+    ]
+  },
+  "initial_native_observation_source": "transport",
+  "mode": "official_ros_control_vs_native_gazebo_observation_same_world",
+  "num_steps": 4,
+  "observation_surface": "gazebo_native_post_step_readout",
+  "records": [
+    {
+      "action": {
+        "angular_xyz": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "command_sim_steps": 10,
+        "frame_id": "base_link",
+        "linear_xyz": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "sim_steps": 10
+      },
+      "images": null,
+      "native": {
+        "controller_reference_tcp_position": null,
+        "controller_target_mode": null,
+        "controller_tcp_position": null,
+        "controller_tcp_velocity": null,
+        "distance_to_target": 0.6530924177643538,
+        "entity_count": 6528,
+        "force_magnitude": 0.0,
+        "joint_count": 6,
+        "joint_positions": [
+          -0.15985311567783356,
+          -1.354264736175537,
+          -1.6669918298721313,
+          -1.6911156177520752,
+          1.5710909366607666,
+          1.4108394384384155
+        ],
+        "joint_velocities": [],
+        "off_limit_contact": false,
+        "orientation_error": 3.1413041411165574,
+        "plug_entity_name": "lc_plug_link",
+        "plug_orientation": [
+          -0.19240809110345974,
+          -0.10464602377216226,
+          0.9110491907156079,
+          0.3493102722804685
+        ],
+        "plug_position": [
+          -0.024444326820841467,
+          -0.030096837834366674,
+          -0.013329012246087013
+        ],
+        "relative_position": [
+          -0.37158980963161514,
+          0.19465661053571454,
+          -0.5005592107772829
+        ],
+        "sim_time": null,
+        "step_count_raw": 0,
+        "success_like": true,
+        "target_entity_name": "tabletop",
+        "target_orientation": [
+          0.0,
+          0.0,
+          -0.9999999560952156,
+          0.0002963267905598908
+        ],
+        "target_position": [
+          -0.2,
+          0.2,
+          1.14
+        ],
+        "tcp_entity_name": "ati/tool_link",
+        "tcp_orientation": [
+          0.0003483281607326052,
+          -0.9999999188423149,
+          -0.0001442656579431578,
+          -3.1778677894378286e-05
+        ],
+        "tcp_position": [
+          0.1715898096316151,
+          0.005343389464285462,
+          1.6405592107772828
+        ]
+      },
+      "native_observation_source": "transport",
+      "step_idx": 0
+    },
+    {
+      "action": {
+        "angular_xyz": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "command_sim_steps": 25,
+        "frame_id": "base_link",
+        "linear_xyz": [
+          0.01,
+          0.0,
+          0.0
+        ],
+        "sim_steps": 25
+      },
+      "images": null,
+      "native": {
+        "controller_reference_tcp_position": null,
+        "controller_target_mode": null,
+        "controller_tcp_position": null,
+        "controller_tcp_velocity": null,
+        "distance_to_target": 0.6530924177643538,
+        "entity_count": 9216,
+        "force_magnitude": 0.0,
+        "joint_count": 6,
+        "joint_positions": [
+          -0.15985311567783356,
+          -1.354264736175537,
+          -1.6669918298721313,
+          -1.6911156177520752,
+          1.5710909366607666,
+          1.4108394384384155
+        ],
+        "joint_velocities": [],
+        "off_limit_contact": false,
+        "orientation_error": 3.1413041411165574,
+        "plug_entity_name": "lc_plug_link",
+        "plug_orientation": [
+          -0.19228994768796298,
+          -0.10465913639157887,
+          0.9111546342372018,
+          0.3490964695559587
+        ],
+        "plug_position": [
+          -0.0244322246294571,
+          -0.030108702941510024,
+          -0.013324015487406471
+        ],
+        "relative_position": [
+          -0.37158980963161514,
+          0.19465661053571454,
+          -0.5005592107772829
+        ],
+        "sim_time": null,
+        "step_count_raw": 0,
+        "success_like": true,
+        "target_entity_name": "tabletop",
+        "target_orientation": [
+          0.0,
+          0.0,
+          -0.9999999560952156,
+          0.0002963267905598908
+        ],
+        "target_position": [
+          -0.2,
+          0.2,
+          1.14
+        ],
+        "tcp_entity_name": "ati/tool_link",
+        "tcp_orientation": [
+          0.0003483281607326052,
+          -0.9999999188423149,
+          -0.0001442656579431578,
+          -3.1778677894378286e-05
+        ],
+        "tcp_position": [
+          0.1715898096316151,
+          0.005343389464285462,
+          1.6405592107772828
+        ]
+      },
+      "native_observation_source": "transport",
+      "step_idx": 1
+    },
+    {
+      "action": {
+        "angular_xyz": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "command_sim_steps": 25,
+        "frame_id": "base_link",
+        "linear_xyz": [
+          0.0,
+          -0.01,
+          0.0
+        ],
+        "sim_steps": 25
+      },
+      "images": null,
+      "native": {
+        "controller_reference_tcp_position": null,
+        "controller_target_mode": null,
+        "controller_tcp_position": null,
+        "controller_tcp_velocity": null,
+        "distance_to_target": 0.6530924177643538,
+        "entity_count": 10752,
+        "force_magnitude": 0.0,
+        "joint_count": 6,
+        "joint_positions": [
+          -0.15985311567783356,
+          -1.354264736175537,
+          -1.6669918298721313,
+          -1.6911156177520752,
+          1.5710909366607666,
+          1.4108394384384155
+        ],
+        "joint_velocities": [],
+        "off_limit_contact": false,
+        "orientation_error": 3.1413041411165574,
+        "plug_entity_name": "lc_plug_link",
+        "plug_orientation": [
+          -0.19215656738153447,
+          -0.10466361853017608,
+          0.9112837782827794,
+          0.34883135222956907
+        ],
+        "plug_position": [
+          -0.024417170750894945,
+          -0.03012389438089791,
+          -0.013317582113638149
+        ],
+        "relative_position": [
+          -0.37158980963161514,
+          0.19465661053571454,
+          -0.5005592107772829
+        ],
+        "sim_time": null,
+        "step_count_raw": 0,
+        "success_like": true,
+        "target_entity_name": "tabletop",
+        "target_orientation": [
+          0.0,
+          0.0,
+          -0.9999999560952156,
+          0.0002963267905598908
+        ],
+        "target_position": [
+          -0.2,
+          0.2,
+          1.14
+        ],
+        "tcp_entity_name": "ati/tool_link",
+        "tcp_orientation": [
+          0.0003483281607326052,
+          -0.9999999188423149,
+          -0.0001442656579431578,
+          -3.1778677894378286e-05
+        ],
+        "tcp_position": [
+          0.1715898096316151,
+          0.005343389464285462,
+          1.6405592107772828
+        ]
+      },
+      "native_observation_source": "transport",
+      "step_idx": 2
+    },
+    {
+      "action": {
+        "angular_xyz": [
+          0.0,
+          0.0,
+          0.0
+        ],
+        "command_sim_steps": 25,
+        "frame_id": "base_link",
+        "linear_xyz": [
+          0.0,
+          0.0,
+          -0.01
+        ],
+        "sim_steps": 25
+      },
+      "images": null,
+      "native": {
+        "controller_reference_tcp_position": null,
+        "controller_target_mode": null,
+        "controller_tcp_position": null,
+        "controller_tcp_velocity": null,
+        "distance_to_target": 0.6530924177643538,
+        "entity_count": 11776,
+        "force_magnitude": 0.0,
+        "joint_count": 6,
+        "joint_positions": [
+          -0.15985311567783356,
+          -1.354264736175537,
+          -1.6669918298721313,
+          -1.6911156177520752,
+          1.5710909366607666,
+          1.4108394384384155
+        ],
+        "joint_velocities": [],
+        "off_limit_contact": false,
+        "orientation_error": 3.1413041411165574,
+        "plug_entity_name": "lc_plug_link",
+        "plug_orientation": [
+          -0.19201549934054382,
+          -0.1046657009729221,
+          0.9114257538617745,
+          0.3485372611418499
+        ],
+        "plug_position": [
+          -0.024400445318066344,
+          -0.03014059629203647,
+          -0.013310242854114307
+        ],
+        "relative_position": [
+          -0.37158980963161514,
+          0.19465661053571454,
+          -0.5005592107772829
+        ],
+        "sim_time": null,
+        "step_count_raw": 0,
+        "success_like": true,
+        "target_entity_name": "tabletop",
+        "target_orientation": [
+          0.0,
+          0.0,
+          -0.9999999560952156,
+          0.0002963267905598908
+        ],
+        "target_position": [
+          -0.2,
+          0.2,
+          1.14
+        ],
+        "tcp_entity_name": "ati/tool_link",
+        "tcp_orientation": [
+          0.0003483281607326052,
+          -0.9999999188423149,
+          -0.0001442656579431578,
+          -3.1778677894378286e-05
+        ],
+        "tcp_position": [
+          0.1715898096316151,
+          0.005343389464285462,
+          1.6405592107772828
+        ]
+      },
+      "native_observation_source": "transport",
+      "step_idx": 3
+    }
+  ],
+  "timing": {
+    "mean_step_latency_s": 1.6389425795005081,
+    "ready_to_first_sane_state_latency_s": 35.17313724300038,
+    "samples_per_second": 0.09585678389750277,
+    "simulated_seconds": 0.085,
+    "simulated_seconds_per_wall_second": 0.002036956657821934,
+    "step_latency_s": [
+      1.3924146960016515,
+      1.6115040570002748,
+      1.7569537640010822,
+      1.7948978009990242
+    ],
+    "total_wall_s": 41.728919304001465
+  }
+}
