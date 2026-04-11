@@ -8,9 +8,9 @@ from typing import Any
 import gymnasium as gym
 import numpy as np
 
-from .io import AicGazeboIO, MockGazeboIO
+from .io import AicGazeboIO, MockGazeboIO, RosCameraSidecarIO
 from .randomizer import AicEnvRandomizer
-from .runtime import AicGazeboRuntime, MockStepperBackend
+from .runtime import AicGazeboRuntime, MockStepperBackend, ScenarioGymGzBackend
 from .task import AicInsertionTask
 
 
@@ -87,6 +87,7 @@ class AicInsertionEnv(gym.Env[dict[str, Any], np.ndarray]):
         return observation, reward, terminated, truncated, info
 
     def close(self) -> None:
+        self.io.close()
         self.runtime.close()
 
 
@@ -106,5 +107,30 @@ def make_default_env(
             include_images=include_images,
         ),
         io=MockGazeboIO(),
+        randomizer=AicEnvRandomizer(enable_randomization=enable_randomization),
+    )
+
+
+def make_live_env(
+    *,
+    include_images: bool = False,
+    enable_randomization: bool = True,
+    ticks_per_step: int = 8,
+    world_path: str | None = None,
+    attach_to_existing: bool = False,
+) -> AicInsertionEnv:
+    return AicInsertionEnv(
+        runtime=AicGazeboRuntime(
+            backend=ScenarioGymGzBackend(
+                world_path=world_path,
+                attach_to_existing=attach_to_existing,
+            ),
+            ticks_per_step=ticks_per_step,
+        ),
+        task=AicInsertionTask(
+            hold_action_ticks=ticks_per_step,
+            include_images=include_images,
+        ),
+        io=RosCameraSidecarIO() if include_images else MockGazeboIO(),
         randomizer=AicEnvRandomizer(enable_randomization=enable_randomization),
     )

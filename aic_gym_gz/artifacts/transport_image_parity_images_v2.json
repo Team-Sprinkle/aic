@@ -1,0 +1,72 @@
+{
+  "cameras": {
+    "center": {
+      "candidate_present_all_steps": true,
+      "candidate_shape": [
+        64,
+        64,
+        3
+      ],
+      "candidate_timestamp_monotonic": true,
+      "pixel_sum_metric": {
+        "max_abs_error": 4325.0,
+        "mean_abs_error": 4257.75,
+        "name": "center_pixel_sum"
+      },
+      "reference_present_all_steps": true,
+      "reference_shape": [
+        64,
+        64,
+        3
+      ],
+      "reference_timestamp_monotonic": true
+    },
+    "left": {
+      "candidate_present_all_steps": true,
+      "candidate_shape": [
+        64,
+        64,
+        3
+      ],
+      "candidate_timestamp_monotonic": true,
+      "pixel_sum_metric": {
+        "max_abs_error": 10082.0,
+        "mean_abs_error": 8802.75,
+        "name": "left_pixel_sum"
+      },
+      "reference_present_all_steps": true,
+      "reference_shape": [
+        64,
+        64,
+        3
+      ],
+      "reference_timestamp_monotonic": true
+    },
+    "right": {
+      "candidate_present_all_steps": true,
+      "candidate_shape": [
+        64,
+        64,
+        3
+      ],
+      "candidate_timestamp_monotonic": true,
+      "pixel_sum_metric": {
+        "max_abs_error": 6598.0,
+        "mean_abs_error": 6446.0,
+        "name": "right_pixel_sum"
+      },
+      "reference_present_all_steps": true,
+      "reference_shape": [
+        64,
+        64,
+        3
+      ],
+      "reference_timestamp_monotonic": true
+    }
+  },
+  "notes": [
+    "Absolute timestamps are not compared across runs because official and candidate traces come from different fresh launches.",
+    "Image parity checks presence, declared shape, monotonic timestamps, and coarse pixel statistics."
+  ],
+  "num_steps": 4
+}

@@ -5,7 +5,6 @@ stack. It reuses official scene and scoring definitions where possible while
 keeping the inner RL loop free of ROS-specific orchestration.
 """
 
-from .env import AicInsertionEnv, make_default_env
 from .io import AicGazeboIO, GazeboNativeIOPlaceholder, MockGazeboIO
 from .parity import AicParityHarness
 from .randomizer import AicEnvRandomizer
@@ -17,7 +16,17 @@ from .runtime import (
     RuntimeState,
     ScenarioGymGzBackend,
 )
-from .task import AicInsertionTask
+
+try:
+    from .env import AicInsertionEnv, make_default_env, make_live_env
+    from .task import AicInsertionTask
+except ModuleNotFoundError as exc:
+    if exc.name != "gymnasium":
+        raise
+    AicInsertionEnv = None
+    AicInsertionTask = None
+    make_default_env = None
+    make_live_env = None
 
 __all__ = [
     "AicEvaluationSummary",
@@ -36,4 +45,5 @@ __all__ = [
     "RuntimeState",
     "ScenarioGymGzBackend",
     "make_default_env",
+    "make_live_env",
 ]

@@ -39,6 +39,14 @@ class EnvTest(unittest.TestCase):
         self.assertIn("total_score", info["evaluation"])
         env.close()
 
+    def test_image_schema_present_when_enabled(self) -> None:
+        env = make_default_env(include_images=True)
+        obs, _ = env.reset(seed=3)
+        self.assertEqual(obs["images"]["left"].shape, (64, 64, 3))
+        self.assertEqual(obs["images"]["left"].dtype, np.uint8)
+        self.assertEqual(obs["image_timestamps"].shape, (3,))
+        env.close()
+
 
 if __name__ == "__main__":
     unittest.main()
