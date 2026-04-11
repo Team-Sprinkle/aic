@@ -28,6 +28,7 @@ DEFAULT_TARGET_ENTITY = "tabletop"
 DEFAULT_WORLD_PATH = "/tmp/aic.sdf"
 DEFAULT_CONTAINER_NAME = "aic_eval"
 DEFAULT_CONTAINER_IMAGE = "ghcr.io/intrinsic-dev/aic/aic_eval:latest"
+DEFAULT_FALLBACK_CONTAINER_IMAGES = ("aic_eval_local:latest", "aic_eval_local")
 DEFAULT_ENTRYPOINT_LOG = "/tmp/aic_gazebo_env_entrypoint.log"
 
 
@@ -168,14 +169,6 @@ class LiveRuntimeManager:
                 workspace_root=_workspace_root_from_setup(setup_script),
                 diagnostics=preflight,
             )
-        if isinstance(setup_script, str):
-            return LiveEnvironmentContext(
-                repo_root=str(self.repo_root),
-                mode="local_sourced",
-                setup_script=setup_script,
-                workspace_root=_workspace_root_from_setup(setup_script),
-                diagnostics=preflight,
-            )
         if self._container_exists():
             return LiveEnvironmentContext(
                 repo_root=str(self.repo_root),
@@ -184,6 +177,14 @@ class LiveRuntimeManager:
                 workspace_root="/ws_aic",
                 container_name=self.container_name,
                 container_image=self.container_image,
+                diagnostics=preflight,
+            )
+        if isinstance(setup_script, str):
+            return LiveEnvironmentContext(
+                repo_root=str(self.repo_root),
+                mode="local_sourced",
+                setup_script=setup_script,
+                workspace_root=_workspace_root_from_setup(setup_script),
                 diagnostics=preflight,
             )
         return LiveEnvironmentContext(
@@ -201,28 +202,25 @@ class LiveRuntimeManager:
         auto_launch: bool = False,
     ) -> LiveEnvironmentContext:
         context = self.discover_context()
-        if context.mode == "local_sourced" and auto_build:
+        if context.mode in {"local_sourced", "distrobox_attach"} and auto_build:
             self._maybe_build_helper_locally(context)
             context = self.discover_context()
         if context.mode == "unavailable" and auto_launch:
             self._maybe_create_container()
             context = self.discover_context()
         if context.mode == "distrobox_attach" and auto_launch:
-            if not self._world_ready(context):
-                launch_command = (
-                    "/entrypoint.sh ground_truth:=false start_aic_engine:=true "
-                    "gazebo_gui:=false launch_rviz:=false"
-                )
-                self._launch_background(context, launch_command, timeout_s=15.0)
+            if not self._training_world_ready(context):
+                self._cleanup_runtime_processes(context)
+                self._maybe_create_container()
+                context = self.discover_context()
+                launch_command = self._training_launch_command()
+                self._launch_background(context, launch_command, timeout_s=60.0)
                 context.launch_command = launch_command
         elif context.mode == "local_sourced" and auto_launch:
-            if not self._world_ready(context):
-                launch_command = (
-                    "ros2 launch aic_bringup aic_gz_bringup.launch.py "
-                    "ground_truth:=false start_aic_engine:=true "
-                    "gazebo_gui:=false launch_rviz:=false"
-                )
-                self._launch_background(context, launch_command, timeout_s=15.0)
+            if not self._training_world_ready(context):
+                self._cleanup_runtime_processes(context)
+                launch_command = self._training_launch_command()
+                self._launch_background(context, launch_command, timeout_s=60.0)
                 context.launch_command = launch_command
         return context
 
@@ -244,7 +242,7 @@ class LiveRuntimeManager:
             try:
                 result = self._run_worker(context, "health", timeout_s=45.0)
                 payload = json.loads(result.stdout)
-                return LiveHealthReport(
+                report = LiveHealthReport(
                     gz_reachable=bool(payload.get("gz_reachable")),
                     helper_reachable=bool(payload.get("helper_reachable")),
                     world_control_reachable=bool(payload.get("world_control_reachable")),
@@ -256,9 +254,12 @@ class LiveRuntimeManager:
                     stage_timings_ms=dict(payload.get("stage_timings_ms") or {}),
                     diagnostics=payload,
                 )
+                if self._is_health_report_ready(report):
+                    return report
             except Exception as exc:
                 report.diagnostics["last_error"] = str(exc)
-                time.sleep(1.0)
+            time.sleep(1.0)
+        report.diagnostics.setdefault("last_error", "health_timeout: live runtime did not become healthy before the deadline")
         return report
 
     def run_context_command(
@@ -294,6 +295,18 @@ class LiveRuntimeManager:
         }
 
     def _container_exists(self) -> bool:
+        docker = shutil.which("docker")
+        if docker is not None:
+            completed = subprocess.run(
+                [docker, "ps", "-a", "--format", "{{.Names}}"],
+                check=False,
+                capture_output=True,
+                text=True,
+            )
+            if completed.returncode == 0 and any(
+                line.strip() == self.container_name for line in completed.stdout.splitlines()
+            ):
+                return True
         distrobox = shutil.which("distrobox")
         if distrobox is None:
             return False
@@ -302,6 +315,7 @@ class LiveRuntimeManager:
             check=False,
             capture_output=True,
             text=True,
+            env={**os.environ, "DBX_CONTAINER_MANAGER": "docker"},
         )
         if completed.returncode != 0:
             return False
@@ -311,14 +325,41 @@ class LiveRuntimeManager:
             for line in completed.stdout.splitlines()
         )
 
-    def _maybe_create_container(self) -> None:
-        distrobox = shutil.which("distrobox")
-        if distrobox is None:
-            raise RuntimeError("distrobox is not available for container launch")
-        if self._container_exists():
-            return
-        env = dict(os.environ)
-        env["DBX_CONTAINER_MANAGER"] = "docker"
+    def _container_is_running(self, container_name: str) -> bool:
+        docker = shutil.which("docker")
+        if docker is None:
+            return False
+        completed = subprocess.run(
+            [docker, "inspect", "-f", "{{.State.Running}}", container_name],
+            check=False,
+            capture_output=True,
+            text=True,
+            timeout=10.0,
+        )
+        return completed.returncode == 0 and completed.stdout.strip() == "true"
+
+    def _image_exists_locally(self, image: str) -> bool:
+        docker = shutil.which("docker")
+        if docker is None:
+            return False
+        completed = subprocess.run(
+            [docker, "image", "inspect", image],
+            check=False,
+            capture_output=True,
+            text=True,
+        )
+        return completed.returncode == 0
+
+    def _select_container_image(self) -> tuple[str, dict[str, Any]]:
+        diagnostics: dict[str, Any] = {
+            "requested_container_image": self.container_image,
+            "selected_container_image": None,
+            "image_source": None,
+        }
+        if self._image_exists_locally(self.container_image):
+            diagnostics["selected_container_image"] = self.container_image
+            diagnostics["image_source"] = "local_requested"
+            return self.container_image, diagnostics
         docker = shutil.which("docker")
         if docker is not None:
             pull = subprocess.run(
@@ -326,19 +367,40 @@ class LiveRuntimeManager:
                 check=False,
                 capture_output=True,
                 text=True,
-                env=env,
+                timeout=1800.0,
             )
-            if pull.returncode != 0:
-                raise RuntimeError(
-                    "Failed to pull aic_eval image.\n"
-                    f"stdout:\n{pull.stdout}\nstderr:\n{pull.stderr}"
-                )
+            diagnostics["pull_returncode"] = pull.returncode
+            diagnostics["pull_stdout_tail"] = pull.stdout[-4000:]
+            diagnostics["pull_stderr_tail"] = pull.stderr[-4000:]
+            if pull.returncode == 0:
+                diagnostics["selected_container_image"] = self.container_image
+                diagnostics["image_source"] = "pulled_requested"
+                return self.container_image, diagnostics
+        for fallback in DEFAULT_FALLBACK_CONTAINER_IMAGES:
+            if self._image_exists_locally(fallback):
+                diagnostics["selected_container_image"] = fallback
+                diagnostics["image_source"] = "local_fallback"
+                return fallback, diagnostics
+        raise RuntimeError(
+            "image_pull_failed: unable to resolve an eval image. "
+            f"requested={self.container_image} diagnostics={diagnostics}"
+        )
+
+    def _maybe_create_container(self) -> None:
+        distrobox = shutil.which("distrobox")
+        if distrobox is None:
+            raise RuntimeError("container_create_failed: distrobox is not available for container launch")
+        if self._container_exists():
+            return
+        env = dict(os.environ)
+        env["DBX_CONTAINER_MANAGER"] = "docker"
+        selected_image, image_diagnostics = self._select_container_image()
         command = [
             distrobox,
             "create",
             "-r",
             "-i",
-            self.container_image,
+            selected_image,
             self.container_name,
         ]
         if shutil.which("nvidia-smi") is not None:
@@ -352,30 +414,32 @@ class LiveRuntimeManager:
         )
         if completed.returncode != 0:
             raise RuntimeError(
-                "Failed to create distrobox container.\n"
+                "container_create_failed: failed to create distrobox container.\n"
+                f"image_diagnostics={image_diagnostics}\n"
                 f"stdout:\n{completed.stdout}\nstderr:\n{completed.stderr}"
             )
 
     def _maybe_build_helper_locally(self, context: LiveEnvironmentContext) -> None:
-        if context.setup_script is None:
-            return
-        if resolve_transport_helper_executable(None, repo_root=self.repo_root).resolved_path:
-            return
-        ros_setup = "/opt/ros/kilted/setup.bash"
-        source_prefix = (
-            f"source {shlex.quote(ros_setup)} && "
-            if Path(ros_setup).exists()
-            else f"source {shlex.quote(context.setup_script)} && "
-        )
-        workspace_root = context.workspace_root or str(self.repo_root)
+        clean_prefix = ""
+        if context.mode != "distrobox_attach":
+            if resolve_transport_helper_executable(None, repo_root=self.repo_root).resolved_path:
+                return
+        else:
+            clean_prefix = (
+                "rm -rf build/aic_gazebo_transport_bridge "
+                "install/aic_gazebo_transport_bridge "
+                "log/build_* log/latest_build* && "
+            )
+        source_prefix = self._context_source_prefix(context)
         build_command = (
-            f"{source_prefix}cd {shlex.quote(workspace_root)} && "
+            f"{source_prefix}cd {shlex.quote(str(self.repo_root))} && "
+            f"{clean_prefix}"
             "colcon build --packages-select aic_gazebo_transport_bridge --executor sequential"
         )
         result = self._run_context_shell(context, build_command, timeout_s=600.0)
         if result.returncode != 0:
             raise RuntimeError(
-                "Targeted helper build failed.\n"
+                "helper_build_failed: targeted helper build failed.\n"
                 f"stdout:\n{result.stdout}\nstderr:\n{result.stderr}"
             )
 
@@ -391,6 +455,85 @@ class LiveRuntimeManager:
         if result.returncode != 0:
             return False
         return f"/world/{self.world_name}/control" in result.stdout
+
+    def _training_world_ready(self, context: LiveEnvironmentContext) -> bool:
+        if not self._world_ready(context):
+            return False
+        helper_path = resolve_transport_helper_executable(None, repo_root=self.repo_root).resolved_path
+        if helper_path is None:
+            return False
+        script = (
+            "import json\n"
+            "from aic_gazebo_env.gazebo_client import GazeboCliClientConfig, GazeboTransportClient\n"
+            "from aic_gazebo_env.protocol import GetObservationRequest\n"
+            "client = GazeboTransportClient(GazeboCliClientConfig("
+            f"executable='gz', world_path={self.world_path!r}, timeout=10.0, "
+            f"world_name={self.world_name!r}, source_entity_name={DEFAULT_SOURCE_ENTITY!r}, "
+            f"target_entity_name={DEFAULT_TARGET_ENTITY!r}, transport_backend='transport'))\n"
+            "try:\n"
+            "    response = client.get_observation(GetObservationRequest())\n"
+            "    observation = response.observation\n"
+            "    entities = observation.get('entities_by_name', {})\n"
+            "    tracked = observation.get('task_geometry', {}).get('tracked_entity_pair')\n"
+            "    ok = "
+            f"{DEFAULT_SOURCE_ENTITY!r} in entities and {DEFAULT_TARGET_ENTITY!r} in entities and isinstance(tracked, dict) and bool(tracked)\n"
+            "    print(json.dumps({'ok': ok, 'entity_names': sorted(entities.keys())[:20], 'entity_count': observation.get('entity_count')}))\n"
+            "finally:\n"
+            "    client.close()\n"
+        )
+        command = (
+            f"PYTHONPATH={shlex.quote(str(self.repo_root / 'aic_utils' / 'aic_gazebo_env'))} "
+            f"{shlex.quote(sys.executable)} - <<'PY'\n{script}PY"
+        )
+        try:
+            result = self._run_context_shell(context, command, timeout_s=30.0)
+        except Exception:
+            return False
+        if result.returncode != 0:
+            return False
+        try:
+            payload = json.loads(result.stdout.strip().splitlines()[-1])
+        except Exception:
+            return False
+        return bool(payload.get("ok"))
+
+    def _training_launch_command(self) -> str:
+        return (
+            "ros2 launch aic_bringup aic_gz_bringup.launch.py "
+            "ground_truth:=false start_aic_engine:=false "
+            "gazebo_gui:=false launch_rviz:=false "
+            "spawn_task_board:=true spawn_cable:=true attach_cable_to_gripper:=true "
+            "nic_card_mount_0_present:=true sc_port_0_present:=true "
+            "sfp_mount_rail_0_present:=true cable_type:=sfp_sc_cable"
+        )
+
+    def _cleanup_runtime_processes(self, context: LiveEnvironmentContext) -> None:
+        if context.mode == "distrobox_attach" and context.container_name is not None:
+            docker = shutil.which("docker")
+            if docker is not None:
+                try:
+                    subprocess.run(
+                        [docker, "rm", "-f", context.container_name],
+                        check=False,
+                        capture_output=True,
+                        text=True,
+                        timeout=60.0,
+                    )
+                    return
+                except Exception:
+                    pass
+        cleanup_command = (
+            "pkill -f 'ros2 launch aic_bringup aic_gz_bringup.launch.py' || true; "
+            "pkill -f '/entrypoint.sh' || true; "
+            "pkill -f 'ruby /root/.local/bin/zenoh-bridge-ros2dds' || true; "
+            "pkill -f '/root/.local/bin/zenohd' || true; "
+            "pkill -f 'gz sim' || true; "
+            "sleep 2"
+        )
+        try:
+            self._run_context_shell(context, cleanup_command, timeout_s=20.0)
+        except Exception:
+            pass
 
     def _launch_background(
         self,
@@ -438,20 +581,16 @@ class LiveRuntimeManager:
         if context.mode == "local_direct":
             shell_command = f"cd {repo_root} && {command}"
             process = subprocess.run(
-                ["bash", "-lc", shell_command],
+                ["bash", "--noprofile", "--norc", "-lc", shell_command],
                 check=False,
                 capture_output=True,
                 text=True,
                 timeout=timeout_s,
             )
         elif context.mode == "local_sourced":
-            if context.setup_script is None:
-                raise RuntimeError("local_sourced context is missing setup_script")
-            shell_command = (
-                f"source {shlex.quote(context.setup_script)} && cd {repo_root} && {command}"
-            )
+            shell_command = f"{self._context_source_prefix(context)}cd {repo_root} && {command}"
             process = subprocess.run(
-                ["bash", "-lc", shell_command],
+                ["bash", "--noprofile", "--norc", "-lc", shell_command],
                 check=False,
                 capture_output=True,
                 text=True,
@@ -460,18 +599,42 @@ class LiveRuntimeManager:
         elif context.mode == "distrobox_attach":
             if context.container_name is None:
                 raise RuntimeError("distrobox_attach context is missing container_name")
-            inner = (
-                f"source /ws_aic/install/setup.bash && cd {repo_root} && {command}"
-            )
+            docker = shutil.which("docker")
+            if docker is None:
+                raise RuntimeError("workspace_source_failed: docker is not available for distrobox_attach execution")
+            if not self._container_is_running(context.container_name):
+                start = subprocess.run(
+                    [docker, "start", context.container_name],
+                    check=False,
+                    capture_output=True,
+                    text=True,
+                    timeout=min(timeout_s, 30.0),
+                )
+                if start.returncode != 0:
+                    raise RuntimeError(
+                        "container_create_failed: failed to start existing eval container.\n"
+                        f"stdout:\n{start.stdout}\nstderr:\n{start.stderr}"
+                    )
+                exec_ready_deadline = time.monotonic() + min(timeout_s, 30.0)
+                while True:
+                    probe = subprocess.run(
+                        [docker, "exec", context.container_name, "bash", "--noprofile", "--norc", "-lc", "true"],
+                        check=False,
+                        capture_output=True,
+                        text=True,
+                        timeout=min(timeout_s, 10.0),
+                    )
+                    if probe.returncode == 0:
+                        break
+                    if time.monotonic() >= exec_ready_deadline:
+                        raise RuntimeError(
+                            "container_create_failed: eval container started but did not become exec-ready.\n"
+                            f"stdout:\n{probe.stdout}\nstderr:\n{probe.stderr}"
+                        )
+                    time.sleep(1.0)
+            inner = f"{self._context_source_prefix(context, container=True)}cd {repo_root} && {command}"
             process = subprocess.run(
-                [
-                    "bash",
-                    "-lc",
-                    (
-                        f"DBX_CONTAINER_MANAGER=docker distrobox enter -r "
-                        f"{shlex.quote(context.container_name)} -- bash -lc {shlex.quote(inner)}"
-                    ),
-                ],
+                [docker, "exec", context.container_name, "bash", "--noprofile", "--norc", "-lc", inner],
                 check=False,
                 capture_output=True,
                 text=True,
@@ -484,6 +647,48 @@ class LiveRuntimeManager:
             returncode=process.returncode,
             stdout=process.stdout,
             stderr=process.stderr,
+        )
+
+    def _context_source_prefix(
+        self,
+        context: LiveEnvironmentContext,
+        *,
+        container: bool = False,
+    ) -> str:
+        setup_sources: list[str] = []
+        if container:
+            setup_sources.append("source /ws_aic/install/setup.bash")
+            overlay_setup = self.repo_root / "install" / "setup.bash"
+            overlay_local = self.repo_root / "install" / "local_setup.bash"
+            if overlay_setup.exists():
+                setup_sources.append(f"source {shlex.quote(str(overlay_setup))}")
+            elif overlay_local.exists():
+                setup_sources.append(f"source {shlex.quote(str(overlay_local))}")
+        else:
+            ros_setup = Path("/opt/ros/kilted/setup.bash")
+            if ros_setup.exists():
+                setup_sources.append(f"source {shlex.quote(str(ros_setup))}")
+            if context.setup_script is not None:
+                setup_sources.append(f"source {shlex.quote(context.setup_script)}")
+            overlay_setup = self.repo_root / "install" / "setup.bash"
+            overlay_local = self.repo_root / "install" / "local_setup.bash"
+            if overlay_setup.exists():
+                setup_sources.append(f"source {shlex.quote(str(overlay_setup))}")
+            elif overlay_local.exists():
+                setup_sources.append(f"source {shlex.quote(str(overlay_local))}")
+        if not setup_sources:
+            raise RuntimeError("workspace_source_failed: no setup script is available for this context")
+        return " && ".join(setup_sources) + " && "
+
+    def _is_health_report_ready(self, report: LiveHealthReport) -> bool:
+        return (
+            report.gz_reachable
+            and report.helper_reachable
+            and report.world_control_reachable
+            and report.first_observation_ok
+            and report.reset_ok
+            and report.no_op_step_ok
+            and report.action_step_ok
         )
 
 
@@ -556,17 +761,15 @@ def perform_live_health_check(*, world_name: str, world_path: str) -> dict[str, 
         )
     )
     try:
-        _start_stage("first_observation")
-        observation = client.get_observation(GetObservationRequest())
-        report["state_topic_live"] = True
-        report["first_observation_ok"] = True
-        report["first_observation_info"] = observation.info
-        _finish_stage("first_observation")
         _start_stage("reset")
         reset_response = client.reset(ResetRequest(seed=0, options={"mode": "health"}))
         report["reset_ok"] = True
         report["reset_info"] = reset_response.info
         _finish_stage("reset")
+        report["state_topic_live"] = True
+        report["first_observation_ok"] = True
+        report["first_observation_info"] = reset_response.info
+        report["stage_timings_ms"]["first_observation"] = report["stage_timings_ms"]["reset"]
         _start_stage("no_op_step")
         step_response = client.step(StepRequest(action={"multi_step": 1}))
         report["no_op_step_ok"] = True
@@ -600,7 +803,6 @@ def perform_live_smoke_sequence(*, world_name: str, world_path: str) -> dict[str
         )
     )
     try:
-        observation = client.get_observation(GetObservationRequest())
         reset_response = client.reset(ResetRequest(seed=7, options={"mode": "live-e2e"}))
         no_op = client.step(StepRequest(action={"multi_step": 1}))
         pose_step = client.step(
@@ -624,7 +826,7 @@ def perform_live_smoke_sequence(*, world_name: str, world_path: str) -> dict[str
 
     return {
         "ok": True,
-        "observation": _summarize_observation(observation.observation),
+        "observation": _summarize_observation(reset_response.observation),
         "reset": {
             "info": reset_response.info,
             "observation": _summarize_observation(reset_response.observation),
