@@ -60,14 +60,6 @@ class BridgeServer {
       error = "failed to subscribe to pose topic " + this->poseTopic_;
       return false;
     }
-    if (!this->WaitForTopicPublisher(this->stateTopic_, Milliseconds(5000))) {
-      error = "timed out discovering state topic publisher on " + this->stateTopic_;
-      return false;
-    }
-    if (!this->WaitForTopicPublisher(this->poseTopic_, Milliseconds(5000))) {
-      error = "timed out discovering pose topic publisher on " + this->poseTopic_;
-      return false;
-    }
     return true;
   }
 
@@ -486,19 +478,6 @@ class BridgeServer {
       }
     }
     result = false;
-    return false;
-  }
-
-  bool WaitForTopicPublisher(const std::string &topic, Milliseconds timeout) {
-    const auto deadline = Clock::now() + timeout;
-    while (Clock::now() < deadline) {
-      std::vector<gz::transport::MessagePublisher> publishers;
-      std::vector<gz::transport::MessagePublisher> subscribers;
-      if (this->node_.TopicInfo(topic, publishers, subscribers) && !publishers.empty()) {
-        return true;
-      }
-      std::this_thread::sleep_for(Milliseconds(100));
-    }
     return false;
   }
 

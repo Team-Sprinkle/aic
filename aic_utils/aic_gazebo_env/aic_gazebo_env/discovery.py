@@ -151,26 +151,30 @@ def resolve_transport_helper_executable(
     searched_locations: list[str] = []
     candidates: list[str] = []
 
-    for candidate in (
-        helper_executable,
-        os.environ.get("AIC_GZ_TRANSPORT_BRIDGE_EXECUTABLE"),
-        shutil.which("aic_gz_transport_bridge"),
-    ):
-        if candidate and candidate not in candidates:
-            candidates.append(candidate)
+    explicit_helper = helper_executable is not None
+    if explicit_helper:
+        candidates.append(helper_executable)
+    else:
+        for candidate in (
+            os.environ.get("AIC_GZ_TRANSPORT_BRIDGE_EXECUTABLE"),
+            shutil.which("aic_gz_transport_bridge"),
+        ):
+            if candidate and candidate not in candidates:
+                candidates.append(candidate)
 
-    for workspace_root in _candidate_workspace_roots(repo):
-        candidate = (
-            workspace_root
-            / "install"
-            / "aic_gazebo_transport_bridge"
-            / "lib"
-            / "aic_gazebo_transport_bridge"
-            / "aic_gz_transport_bridge"
-        )
-        candidate_text = str(candidate)
-        if candidate_text not in candidates:
-            candidates.append(candidate_text)
+    if not explicit_helper:
+        for workspace_root in _candidate_workspace_roots(repo):
+            candidate = (
+                workspace_root
+                / "install"
+                / "aic_gazebo_transport_bridge"
+                / "lib"
+                / "aic_gazebo_transport_bridge"
+                / "aic_gz_transport_bridge"
+            )
+            candidate_text = str(candidate)
+            if candidate_text not in candidates:
+                candidates.append(candidate_text)
 
     for candidate in candidates:
         searched_locations.append(str(candidate))

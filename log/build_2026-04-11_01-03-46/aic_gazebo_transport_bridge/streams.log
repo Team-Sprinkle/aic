@@ -1,0 +1,70 @@
+[0.053s] Invoking command in '/home/ubuntu/ws_aic/src/aic/build/aic_gazebo_transport_bridge': CMAKE_PREFIX_PATH=${CMAKE_PREFIX_PATH}:/opt/ros/kilted /usr/bin/cmake /home/ubuntu/ws_aic/src/aic/aic_utils/aic_gazebo_transport_bridge -DCMAKE_INSTALL_PREFIX=/home/ubuntu/ws_aic/src/aic/install/aic_gazebo_transport_bridge
+[7.798s] -- The C compiler identification is GNU 13.3.0
+[8.579s] -- The CXX compiler identification is GNU 13.3.0
+[9.913s] -- Detecting C compiler ABI info
+[11.197s] -- Detecting C compiler ABI info - done
+[11.319s] -- Check for working C compiler: /usr/bin/cc - skipped
+[11.319s] -- Detecting C compile features
+[11.324s] -- Detecting C compile features - done
+[11.375s] -- Detecting CXX compiler ABI info
+[19.718s] -- Detecting CXX compiler ABI info - done
+[19.930s] -- Check for working CXX compiler: /usr/bin/c++ - skipped
+[19.940s] -- Detecting CXX compile features
+[19.953s] -- Detecting CXX compile features - done
+[20.210s] -- Found ament_cmake: 2.7.5 (/opt/ros/kilted/share/ament_cmake/cmake)
+[32.217s] -- Found Python3: /usr/bin/python3 (found version "3.12.3") found components: Interpreter 
+[42.228s] -- Found gz_transport_vendor: 0.2.4 (/ws_aic/install/share/gz_transport_vendor/cmake)
+[42.835s] -- Looking for gz-transport14 -- found version 14.2.0
+[43.432s] -- Searching for dependencies of gz-transport14
+[53.175s] -- Found Protobuf: /usr/lib/x86_64-linux-gnu/libprotobuf.so (found version "3.21.12") 
+[54.316s] -- Config-file not installed for ZeroMQ -- checking for pkg-config
+[54.430s] -- Checking for module 'libzmq >= 4'
+[54.641s] --   Found libzmq, version 4.3.5
+[57.870s] -- Found ZeroMQ: TRUE (Required is at least version "4") 
+[58.856s] -- Checking for module 'uuid'
+[60.628s] --   Found uuid, version 2.39.3
+[61.009s] -- Found UUID: TRUE  
+[62.786s] -- Looking for gz-utils3 -- found version 3.1.1
+[62.790s] -- Searching for dependencies of gz-utils3
+[62.798s] -- Searching for <gz-utils3> component [cli]
+[63.262s] -- Looking for gz-utils3-cli -- found version 3.1.1
+[63.262s] -- Searching for dependencies of gz-utils3-cli
+[63.283s] -- Looking for gz-msgs11 -- found version 11.1.0
+[63.286s] -- Searching for dependencies of gz-msgs11
+[70.941s] -- Looking for gz-utils3 -- found version 3.1.1
+[70.941s] -- Looking for gz-math8 -- found version 8.2.0
+[70.942s] -- Searching for dependencies of gz-math8
+[70.942s] -- Looking for gz-utils3 -- found version 3.1.1
+[70.943s] -- Checking for module 'tinyxml2'
+[70.959s] --   Found tinyxml2, version 10.0.0
+[72.052s] -- Looking for gz-msgs11 -- found version 11.1.0
+[72.083s] -- Found ament_lint_auto: 0.19.2 (/opt/ros/kilted/share/ament_lint_auto/cmake)
+[72.667s] -- Configuring done (72.6s)
+[72.739s] -- Generating done (0.0s)
+[72.761s] -- Build files have been written to: /home/ubuntu/ws_aic/src/aic/build/aic_gazebo_transport_bridge
+[72.835s] Invoked command in '/home/ubuntu/ws_aic/src/aic/build/aic_gazebo_transport_bridge' returned '0': CMAKE_PREFIX_PATH=${CMAKE_PREFIX_PATH}:/opt/ros/kilted /usr/bin/cmake /home/ubuntu/ws_aic/src/aic/aic_utils/aic_gazebo_transport_bridge -DCMAKE_INSTALL_PREFIX=/home/ubuntu/ws_aic/src/aic/install/aic_gazebo_transport_bridge
+[72.848s] Invoking command in '/home/ubuntu/ws_aic/src/aic/build/aic_gazebo_transport_bridge': CMAKE_PREFIX_PATH=${CMAKE_PREFIX_PATH}:/opt/ros/kilted /usr/bin/cmake --build /home/ubuntu/ws_aic/src/aic/build/aic_gazebo_transport_bridge -- -j8 -l8
+[74.071s] [ 50%] Building CXX object CMakeFiles/aic_gz_transport_bridge.dir/src/aic_gz_transport_bridge.cc.o
+[112.270s] [100%] Linking CXX executable aic_gz_transport_bridge
+[118.044s] [100%] Built target aic_gz_transport_bridge
+[121.815s] Invoked command in '/home/ubuntu/ws_aic/src/aic/build/aic_gazebo_transport_bridge' returned '0': CMAKE_PREFIX_PATH=${CMAKE_PREFIX_PATH}:/opt/ros/kilted /usr/bin/cmake --build /home/ubuntu/ws_aic/src/aic/build/aic_gazebo_transport_bridge -- -j8 -l8
+[121.825s] Invoking command in '/home/ubuntu/ws_aic/src/aic/build/aic_gazebo_transport_bridge': CMAKE_PREFIX_PATH=${CMAKE_PREFIX_PATH}:/opt/ros/kilted /usr/bin/cmake --install /home/ubuntu/ws_aic/src/aic/build/aic_gazebo_transport_bridge
+[122.471s] -- Install configuration: ""
+[122.473s] -- Installing: /home/ubuntu/ws_aic/src/aic/install/aic_gazebo_transport_bridge/lib/aic_gazebo_transport_bridge/aic_gz_transport_bridge
+[123.314s] -- Set non-toolchain portion of runtime path of "/home/ubuntu/ws_aic/src/aic/install/aic_gazebo_transport_bridge/lib/aic_gazebo_transport_bridge/aic_gz_transport_bridge" to ""
+[123.316s] -- Installing: /home/ubuntu/ws_aic/src/aic/install/aic_gazebo_transport_bridge/share/ament_index/resource_index/package_run_dependencies/aic_gazebo_transport_bridge
+[123.317s] -- Installing: /home/ubuntu/ws_aic/src/aic/install/aic_gazebo_transport_bridge/share/ament_index/resource_index/parent_prefix_path/aic_gazebo_transport_bridge
+[123.319s] -- Installing: /home/ubuntu/ws_aic/src/aic/install/aic_gazebo_transport_bridge/share/aic_gazebo_transport_bridge/environment/ament_prefix_path.sh
+[123.323s] -- Installing: /home/ubuntu/ws_aic/src/aic/install/aic_gazebo_transport_bridge/share/aic_gazebo_transport_bridge/environment/ament_prefix_path.dsv
+[123.323s] -- Installing: /home/ubuntu/ws_aic/src/aic/install/aic_gazebo_transport_bridge/share/aic_gazebo_transport_bridge/environment/path.sh
+[123.324s] -- Installing: /home/ubuntu/ws_aic/src/aic/install/aic_gazebo_transport_bridge/share/aic_gazebo_transport_bridge/environment/path.dsv
+[123.325s] -- Installing: /home/ubuntu/ws_aic/src/aic/install/aic_gazebo_transport_bridge/share/aic_gazebo_transport_bridge/local_setup.bash
+[123.326s] -- Installing: /home/ubuntu/ws_aic/src/aic/install/aic_gazebo_transport_bridge/share/aic_gazebo_transport_bridge/local_setup.sh
+[123.327s] -- Installing: /home/ubuntu/ws_aic/src/aic/install/aic_gazebo_transport_bridge/share/aic_gazebo_transport_bridge/local_setup.zsh
+[123.329s] -- Installing: /home/ubuntu/ws_aic/src/aic/install/aic_gazebo_transport_bridge/share/aic_gazebo_transport_bridge/local_setup.dsv
+[123.330s] -- Installing: /home/ubuntu/ws_aic/src/aic/install/aic_gazebo_transport_bridge/share/aic_gazebo_transport_bridge/package.dsv
+[123.332s] -- Installing: /home/ubuntu/ws_aic/src/aic/install/aic_gazebo_transport_bridge/share/ament_index/resource_index/packages/aic_gazebo_transport_bridge
+[123.332s] -- Installing: /home/ubuntu/ws_aic/src/aic/install/aic_gazebo_transport_bridge/share/aic_gazebo_transport_bridge/cmake/aic_gazebo_transport_bridgeConfig.cmake
+[123.333s] -- Installing: /home/ubuntu/ws_aic/src/aic/install/aic_gazebo_transport_bridge/share/aic_gazebo_transport_bridge/cmake/aic_gazebo_transport_bridgeConfig-version.cmake
+[123.334s] -- Installing: /home/ubuntu/ws_aic/src/aic/install/aic_gazebo_transport_bridge/share/aic_gazebo_transport_bridge/package.xml
+[123.341s] Invoked command in '/home/ubuntu/ws_aic/src/aic/build/aic_gazebo_transport_bridge' returned '0': CMAKE_PREFIX_PATH=${CMAKE_PREFIX_PATH}:/opt/ros/kilted /usr/bin/cmake --install /home/ubuntu/ws_aic/src/aic/build/aic_gazebo_transport_bridge
