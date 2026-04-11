@@ -1,0 +1,67 @@
+{
+  "approximation_notes": [
+    "This report uses the aic_gym_gz official-like score calculator on both traces rather than invoking aic_engine or aic_scoring directly.",
+    "Force and off-limit contact terms are limited to what the current live trace schema records.",
+    "Tier 3 wrong-port and partial-insertion branches remain approximate unless the trace carries explicit insertion/contact outcomes."
+  ],
+  "candidate": {
+    "message": "Cable insertion successful.",
+    "tier2": {
+      "contacts": 0.0,
+      "duration": 12.0,
+      "insertion_force": 0.0,
+      "trajectory_efficiency": 6.0,
+      "trajectory_smoothness": 6.0
+    },
+    "tier3": {
+      "score": 75.0
+    },
+    "total_score": 100.0
+  },
+  "deltas": {
+    "message_match": true,
+    "tier2": {
+      "contacts": {
+        "abs_error": 0.0,
+        "candidate": 0.0,
+        "reference": 0.0
+      },
+      "duration": {
+        "abs_error": 0.0,
+        "candidate": 12.0,
+        "reference": 12.0
+      },
+      "insertion_force": {
+        "abs_error": 0.0,
+        "candidate": 0.0,
+        "reference": 0.0
+      },
+      "trajectory_efficiency": {
+        "abs_error": 0.0,
+        "candidate": 6.0,
+        "reference": 6.0
+      },
+      "trajectory_smoothness": {
+        "abs_error": 0.0,
+        "candidate": 6.0,
+        "reference": 6.0
+      }
+    },
+    "tier3_score_abs_error": 0.0,
+    "total_score_abs_error": 0.0
+  },
+  "reference": {
+    "message": "Cable insertion successful.",
+    "tier2": {
+      "contacts": 0.0,
+      "duration": 12.0,
+      "insertion_force": 0.0,
+      "trajectory_efficiency": 6.0,
+      "trajectory_smoothness": 6.0
+    },
+    "tier3": {
+      "score": 75.0
+    },
+    "total_score": 100.0
+  }
+}
