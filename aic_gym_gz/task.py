@@ -60,6 +60,12 @@ class AicInsertionTask:
             base_spaces["images"] = gym.spaces.Dict(
                 {"left": image_space, "center": image_space, "right": image_space}
             )
+            base_spaces["image_timestamps"] = gym.spaces.Box(
+                0.0,
+                np.inf,
+                shape=(3,),
+                dtype=np.float32,
+            )
         self.observation_space = gym.spaces.Dict(base_spaces)
         self._trace: EpisodeTrace | None = None
         self._task: TaskDefinition | None = None

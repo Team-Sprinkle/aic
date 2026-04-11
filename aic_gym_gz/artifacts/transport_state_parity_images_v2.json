@@ -1,0 +1,91 @@
+{
+  "final_success_like_match": true,
+  "metrics": [
+    {
+      "max_abs_error": 5.55515289405728e-05,
+      "mean_abs_error": 3.395229578496278e-05,
+      "name": "tcp_x"
+    },
+    {
+      "max_abs_error": 8.885562419916858e-05,
+      "mean_abs_error": 8.249282836498943e-05,
+      "name": "tcp_y"
+    },
+    {
+      "max_abs_error": 0.0017114877700803444,
+      "mean_abs_error": 0.0016867518424987238,
+      "name": "tcp_z"
+    },
+    {
+      "max_abs_error": 0.0013382661458137268,
+      "mean_abs_error": 0.001298889871713338,
+      "name": "plug_x"
+    },
+    {
+      "max_abs_error": 0.0037287242067217674,
+      "mean_abs_error": 0.003682924913007729,
+      "name": "plug_y"
+    },
+    {
+      "max_abs_error": 0.004839860713412525,
+      "mean_abs_error": 0.004828739192539677,
+      "name": "plug_z"
+    },
+    {
+      "max_abs_error": 0.0,
+      "mean_abs_error": 0.0,
+      "name": "target_x"
+    },
+    {
+      "max_abs_error": 0.0,
+      "mean_abs_error": 0.0,
+      "name": "target_y"
+    },
+    {
+      "max_abs_error": 0.0,
+      "mean_abs_error": 0.0,
+      "name": "target_z"
+    },
+    {
+      "max_abs_error": 0.0013192823014498423,
+      "mean_abs_error": 0.0012864527446540541,
+      "name": "distance_to_target"
+    },
+    {
+      "max_abs_error": 0.0002300254389533407,
+      "mean_abs_error": 0.00022525983865551158,
+      "name": "orientation_error"
+    },
+    {
+      "max_abs_error": 0.00015717744827270508,
+      "mean_abs_error": 0.00015532970428466797,
+      "name": "joint_0"
+    },
+    {
+      "max_abs_error": 0.0006647109985351562,
+      "mean_abs_error": 0.0006102621555328369,
+      "name": "joint_1"
+    },
+    {
+      "max_abs_error": 0.0050182342529296875,
+      "mean_abs_error": 0.004919916391372681,
+      "name": "joint_2"
+    },
+    {
+      "max_abs_error": 0.004744052886962891,
+      "mean_abs_error": 0.004692196846008301,
+      "name": "joint_3"
+    },
+    {
+      "max_abs_error": 0.00017404556274414062,
+      "mean_abs_error": 0.00016707181930541992,
+      "name": "joint_4"
+    },
+    {
+      "max_abs_error": 0.0001518726348876953,
+      "mean_abs_error": 0.0001500546932220459,
+      "name": "joint_5"
+    }
+  ],
+  "num_steps": 4
+}
