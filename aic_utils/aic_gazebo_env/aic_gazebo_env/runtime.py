@@ -258,6 +258,100 @@ class GazeboRuntime(Runtime):
 
 
 @dataclass
+class GazeboAttachedRuntime(Runtime):
+    """Runtime that attaches to an already-running Gazebo world."""
+
+    config: GazeboRuntimeConfig
+    client: GazeboClient | None = None
+    is_started: bool = False
+
+    def start(self) -> None:
+        if self.is_started:
+            return
+        self._client()
+        self.is_started = True
+
+    def stop(self) -> None:
+        if self.client is not None and hasattr(self.client, "close"):
+            self.client.close()
+        self.client = None
+        self.is_started = False
+
+    def reset(
+        self,
+        seed: int | None = None,
+        options: dict[str, Any] | None = None,
+    ) -> tuple[dict[str, Any], dict[str, Any]]:
+        self._ensure_started("reset")
+        response = self._client().reset(
+            ResetRequest(seed=seed, options=dict(options or {}))
+        )
+        return dict(response.observation), dict(response.info)
+
+    def step(
+        self,
+        action: dict[str, Any],
+    ) -> tuple[dict[str, Any], float, bool, bool, dict[str, Any]]:
+        self._ensure_started("step")
+        response = self._client().step(StepRequest(action=dict(action)))
+        return (
+            dict(response.observation),
+            response.reward,
+            response.terminated,
+            response.truncated,
+            dict(response.info),
+        )
+
+    def get_observation(self) -> tuple[dict[str, Any], dict[str, Any]]:
+        self._ensure_started("get observation")
+        response = self._client().get_observation(GetObservationRequest())
+        return dict(response.observation), dict(response.info)
+
+    def _client(self) -> GazeboClient:
+        if self.client is None:
+            client_config = GazeboCliClientConfig(
+                executable=self.config.executable,
+                world_path=self.config.world_path,
+                timeout=self.config.timeout,
+                world_name=self.config.world_name,
+                source_entity_name=self.config.source_entity_name,
+                target_entity_name=self.config.target_entity_name,
+                joint_command_model_name=self.config.joint_command_model_name,
+                joint_names=self.config.joint_names,
+                success_distance_threshold=self.config.success_distance_threshold,
+                orientation_success_threshold=self.config.orientation_success_threshold,
+                max_episode_steps=self.config.max_episode_steps,
+                success_bonus=self.config.success_bonus,
+                reward_mode=self.config.reward_mode,
+                transport_backend=self.config.transport_backend,
+                transport_helper_executable=self.config.transport_helper_executable,
+                helper_startup_timeout_s=self.config.helper_startup_timeout_s,
+                helper_request_timeout_s=self.config.helper_request_timeout_s,
+                helper_startup_settle_s=self.config.helper_startup_settle_s,
+                require_pose_for_ready=self.config.require_pose_for_ready,
+                reset_post_reset_ticks=self.config.reset_post_reset_ticks,
+                action_post_step_ticks=self.config.action_post_step_ticks,
+                settle_step_ticks=self.config.settle_step_ticks,
+            )
+            backend = self.config.transport_backend
+            if backend == "transport" or (
+                backend == "auto"
+                and Path(self.config.executable).name == "gz"
+                and GazeboCliClient.transport_helper_available(client_config)
+            ):
+                self.client = GazeboTransportClient(client_config)
+            else:
+                self.client = GazeboCliClient(client_config)
+        return self.client
+
+    def _ensure_started(self, operation: str) -> None:
+        if not self.is_started:
+            raise RuntimeError(
+                f"Cannot {operation} before GazeboAttachedRuntime.start()."
+            )
+
+
+@dataclass
 class FakeRuntime(Runtime):
     """Stub runtime used by the public env API during early milestones.
 

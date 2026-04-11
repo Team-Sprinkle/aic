@@ -16,7 +16,8 @@ from .protocol import (
     StepResponse,
 )
 from .reward import Reward
-from .runtime import FakeRuntime, GazeboRuntime, GazeboRuntimeConfig, Runtime
+from .rl import StableRLEnvConfig, StableRLGazeboEnv, training_api_report
+from .runtime import FakeRuntime, GazeboAttachedRuntime, GazeboRuntime, GazeboRuntimeConfig, Runtime
 from .task import MinimalTask, MinimalTaskSamplerConfig, MinimalTaskState, PoseRandomizationConfig
 from .termination import Termination
 
@@ -28,6 +29,7 @@ __all__ = [
     "check_alignment_invariants",
     "FakeRuntime",
     "GazeboEnv",
+    "GazeboAttachedRuntime",
     "GazeboRuntime",
     "GazeboRuntimeConfig",
     "GYMNASIUM_AVAILABLE",
@@ -45,9 +47,12 @@ __all__ = [
     "ResetRequest",
     "ResetResponse",
     "Reward",
+    "StableRLEnvConfig",
+    "StableRLGazeboEnv",
     "Runtime",
     "StepRequest",
     "StepResponse",
     "StubBackend",
     "Termination",
+    "training_api_report",
 ]
