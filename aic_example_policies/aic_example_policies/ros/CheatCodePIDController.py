@@ -29,23 +29,43 @@ from aic_task_interfaces.msg import Task
 from geometry_msgs.msg import Point, Pose, Quaternion, Transform
 from rclpy.duration import Duration
 from rclpy.time import Time
+from std_msgs.msg import String
 from tf2_ros import TransformException
 from transforms3d._gohlketransforms import quaternion_multiply, quaternion_slerp
 
 QuaternionTuple = tuple[float, float, float, float]
 
 
-class CheatCodePidController(Policy):
+class CheatCodePIDController(Policy):
     def __init__(self, parent_node):
-        self._tip_x_error_integrator = 0.0
-        self._tip_y_error_integrator = 0.0
-        self._max_integrator_windup = 0.05
-        
-        self.pid_x = PIDController(kp=0.8, ki=0.1, kd=0.02)
-        self.pid_y = PIDController(kp=0.8, ki=0.1, kd=0.02)
-        
+        self.pid_x = PIDController(kp=0.8, ki=0.0, kd=0.0)
+        self.pid_y = PIDController(kp=0.8, ki=0.0, kd=0.0)
+        self.xy_alignment_tolerance_m = 0.01
+        self.xy_alignment_stable_cycles = 5
         self._task = None
+        self._latest_insertion_event_namespace = ""
         super().__init__(parent_node)
+        self._insertion_event_sub = self._parent_node.create_subscription(
+            String,
+            "/scoring/insertion_event",
+            self._insertion_event_callback,
+            10,
+        )
+
+    def _insertion_event_callback(self, msg: String) -> None:
+        self._latest_insertion_event_namespace = msg.data.strip().strip("/")
+        self.get_logger().info(
+            f"Received insertion event for namespace: '{self._latest_insertion_event_namespace}'"
+        )
+
+    def _task_completed_in_simulation(self, task: Task) -> bool:
+        namespace = self._latest_insertion_event_namespace
+        if not namespace:
+            return False
+        tokens = [token for token in namespace.split("/") if token]
+        if len(tokens) < 2:
+            return False
+        return tokens[-2] == task.target_module_name and tokens[-1] == task.port_name
 
     def _wait_for_tf(
         self, target_frame: str, source_frame: str, timeout_sec: float = 10.0
@@ -81,9 +101,13 @@ class CheatCodePidController(Policy):
         position_fraction: float = 1.0,
         z_offset: float = 0.1,
         reset_pids: bool = False,
-        dt: float = 0.05
+        dt: float = 0.05,
     ) -> Pose:
         """Find the gripper pose that results in plug alignment."""
+        if reset_pids:
+            self.pid_x.reset()
+            self.pid_y.reset()
+
         q_port = (
             port_transform.rotation.w,
             port_transform.rotation.x,
@@ -137,13 +161,6 @@ class CheatCodePidController(Policy):
             plug_tf_stamped.transform.translation.z,
         )
 
-        #TODO: Discard a simple i_gain error reduction to PID controller
-        # add dt as arg in calc_gripper_pose
-        # Understand what plug_tip_gripper_offset is for
-        # adj_x = self.pid_x.update(setpoint=port_xy[0], measurement=plug_xyz[0], dt=dt)
-        # adj_y = self.pid_y.update(setpoint=port_xy[1], measurement=plug_xyz[1], dt=dt)
-
-
         plug_tip_gripper_offset = (
             gripper_xyz[0] - plug_xyz[0],
             gripper_xyz[1] - plug_xyz[1],
@@ -153,12 +170,11 @@ class CheatCodePidController(Policy):
         adj_x = self.pid_x.update(setpoint=port_xy[0], measurement=plug_xyz[0], dt=dt)
         adj_y = self.pid_y.update(setpoint=port_xy[1], measurement=plug_xyz[1], dt=dt)
 
-
         self.get_logger().info(
-        f"[PID Log] Z-Offset: {z_offset:0.3f} | "
-        f"ErrX: {self.pid_x.last_error:0.4f} (Adj: {adj_x:0.4f}) | "
-        f"ErrY: {self.pid_y.last_error:0.4f} (Adj: {adj_y:0.4f})"
-    )
+            f"[PID Log] Z-Offset: {z_offset:0.3f} | "
+            f"ErrX: {self.pid_x.last_error:0.4f} (Adj: {adj_x:0.4f}) | "
+            f"ErrY: {self.pid_y.last_error:0.4f} (Adj: {adj_y:0.4f})"
+        )
 
         target_x = port_xy[0] + adj_x
         target_y = port_xy[1] + adj_y
@@ -184,6 +200,12 @@ class CheatCodePidController(Policy):
             ),
         )
 
+    def _xy_error_is_aligned(self) -> bool:
+        return (
+            abs(self.pid_x.last_error) <= self.xy_alignment_tolerance_m
+            and abs(self.pid_y.last_error) <= self.xy_alignment_tolerance_m
+        )
+
     def insert_cable(
         self,
         task: Task,
@@ -191,8 +213,11 @@ class CheatCodePidController(Policy):
         move_robot: MoveRobotCallback,
         send_feedback: SendFeedbackCallback,
     ):
-        self.get_logger().info(f"CheatCodePidController.insert_cable() task: {task}")
+        self.get_logger().info(f"CheatCodePIDController.insert_cable() task: {task}")
         self._task = task
+        self._latest_insertion_event_namespace = ""
+        self.pid_x.reset()
+        self.pid_y.reset()
 
         port_frame = f"task_board/{task.target_module_name}/{task.port_name}_link"
         cable_tip_frame = f"{task.cable_name}/{task.plug_name}_link"
@@ -216,13 +241,18 @@ class CheatCodePidController(Policy):
 
         z_offset = 0.2
 
-        duration = 5.0 # 20HZ TODO: check what good frequency should be 
+        duration = 5.0  # 20HZ TODO: check what good frequency should be
         dt = 0.05
         steps = int(duration / dt)
 
         for t in range(steps):
+            if self._task_completed_in_simulation(task):
+                self.get_logger().info(
+                    "[CheatCodePID] Early exit: simulation reported task completion."
+                )
+                return True
             interp_fraction = t / float(steps)
-            should_reset = (t == 0)
+            should_reset = t == 0
             try:
                 self.set_pose_target(
                     move_robot=move_robot,
@@ -231,8 +261,8 @@ class CheatCodePidController(Policy):
                         slerp_fraction=interp_fraction,
                         position_fraction=interp_fraction,
                         z_offset=z_offset,
-                        reset_pids =should_reset,
-                        dt = dt
+                        reset_pids=should_reset,
+                        dt=dt,
                     ),
                 )
             except TransformException as ex:
@@ -240,23 +270,60 @@ class CheatCodePidController(Policy):
             self.sleep_for(0.05)
 
         # Descend until the cable is inserted into the port.
+        aligned_cycles = 0
         while True:
+            if self._task_completed_in_simulation(task):
+                self.get_logger().info(
+                    "[CheatCodePID] Early exit: simulation reported task completion."
+                )
+                return True
             if z_offset < -0.015:
                 break
 
-            z_offset -= 0.0005
-            self.get_logger().info(f"z_offset: {z_offset:0.5}")
             try:
-                self.set_pose_target(
-                    move_robot=move_robot,
-                    pose=self.calc_gripper_pose(port_transform, z_offset=z_offset),
-                )
+                pose = self.calc_gripper_pose(port_transform, z_offset=z_offset)
+                self.set_pose_target(move_robot=move_robot, pose=pose)
             except TransformException as ex:
                 self.get_logger().warn(f"TF lookup failed during insertion: {ex}")
+                aligned_cycles = 0
+                self.sleep_for(0.05)
+                continue
+
+            if self._xy_error_is_aligned():
+                aligned_cycles += 1
+            else:
+                aligned_cycles = 0
+
+            if aligned_cycles >= self.xy_alignment_stable_cycles:
+                z_offset -= 0.0005
+                aligned_cycles = 0
+                self.get_logger().info(
+                    f"[CheatCodePID] XY aligned within "
+                    f"{self.xy_alignment_tolerance_m * 1000.0:0.1f} mm; "
+                    f"advancing z_offset to {z_offset:0.5f}"
+                )
+            else:
+                self.get_logger().info(
+                    f"[CheatCodePID] Holding z_offset {z_offset:0.5f} until XY error "
+                    f"is <= {self.xy_alignment_tolerance_m * 1000.0:0.1f} mm for "
+                    f"{self.xy_alignment_stable_cycles} cycles "
+                    f"(current: {aligned_cycles}/{self.xy_alignment_stable_cycles})"
+                )
             self.sleep_for(0.05)
 
-        self.get_logger().info("Waiting for connector to stabilize...")
-        self.sleep_for(5.0)
+        self.get_logger().info("Waiting briefly for insertion event...")
+        wait_started = self.time_now()
+        wait_timeout = Duration(seconds=5.0)
+        while (self.time_now() - wait_started) < wait_timeout:
+            if self._task_completed_in_simulation(task):
+                self.get_logger().info(
+                    "[CheatCodePID] Insertion event observed before timeout."
+                )
+                return True
+            self.sleep_for(0.05)
 
-        self.get_logger().info("CheatCodePidController.insert_cable() exiting...")
-        return True
+        self.get_logger().info("CheatCodePIDController.insert_cable() exiting...")
+        return False
+
+
+CheatCodePidController = CheatCodePIDController
