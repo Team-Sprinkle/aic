@@ -319,13 +319,13 @@ process every time), use the per-trial launcher:
 ```bash
 cd ~/ws_aic/src/aic
 bash ./aic_utils/lerobot_robot_aic/scripts/launch_policy_recording_per_trial.sh \
-  --engine-config ./outputs/configs/random_10_trials_sfp2nic.yaml \
+  --engine-config ./outputs/configs/random_50_trials_sfp2nic.yaml \
   --policy-class aic_example_policies.ros.CheatCode \
   --dataset-repo-id ${HF_USER}/sfp2nic \
-  --dataset-root ./outputs/lerobot_datasets \
-  --gazebo-gui true \
-  --launch-rviz true \
-  --push-to-hub true \
+  --dataset-root ./outputs/sfp2nic_simtime_5_dataset \
+  --results-root ./outputs/sfp2nic_simtime_5_scores \
+  --gazebo-gui false \
+  --launch-rviz false \
   --require-recorder-save-log true \
   --sudo-keepalive true
 ```
@@ -457,7 +457,7 @@ Once you have your LeRobot dataset, you can follow the [LeRobot tutorials](https
 
 ```bash
 cd ~/ws_aic/src/aic
-pixi run lerobot-train \
+./aic_utils/lerobot_robot_aic/scripts/run_lerobot_train.sh \
   --dataset.repo_id=${HF_USER}/your_dataset \
   --policy.type=your_policy_type \
   --output_dir=outputs/train/act_your_dataset \
@@ -466,3 +466,5 @@ pixi run lerobot-train \
   --wandb.enable=true \
   --policy.repo_id=${HF_USER}/act_policy
 ```
+
+If you see an OpenCV import error like `libtiff.so.6: undefined symbol: jpeg12_write_raw_data`, use this wrapper script instead of `pixi run lerobot-train` directly. It preloads Pixi's `libjpeg`/`libtiff` to avoid system library conflicts.
