@@ -89,9 +89,19 @@ Observation keys in state-only mode:
 - `tcp_velocity`
 - `plug_pose`
 - `target_port_pose`
+- `target_port_entrance_pose`
 - `plug_to_port_relative`
 - `wrench`
+- `wrench_timestamp`
 - `off_limit_contact`
+- `controller_tcp_pose`
+- `controller_reference_tcp_pose`
+- `controller_tcp_velocity`
+- `controller_tcp_error`
+- `controller_reference_joint_state`
+- `controller_target_mode`
+- `fts_tare_wrench`
+- `score_geometry`
 - `sim_tick`
 - `sim_time`
 
@@ -101,6 +111,22 @@ Additional keys in image mode:
 - `images["center"]`
 - `images["right"]`
 - `image_timestamps`
+- `camera_info`
+
+Runtime parity audit:
+
+```bash
+pixi run python -m aic_gym_gz.audit_runtime \
+  --output-json /tmp/aic_gym_runtime_audit.json \
+  --output-markdown /tmp/aic_gym_runtime_audit.md
+```
+
+Runtime checkpoint export:
+
+```bash
+pixi run python -m aic_gym_gz.export_runtime_checkpoint \
+  --output /tmp/aic_gym_checkpoint.json
+```
 
 Useful pre-training checks:
 
