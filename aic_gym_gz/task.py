@@ -16,11 +16,17 @@ from .scenario import AicScenario, TaskDefinition
 @dataclass
 class EpisodeTrace:
     initial_distance: float
+    initial_plug_pose: np.ndarray
+    target_port_pose: np.ndarray
+    target_port_entrance_pose: np.ndarray | None
     sim_time: list[float] = field(default_factory=list)
     tcp_positions: list[np.ndarray] = field(default_factory=list)
     tcp_linear_velocity: list[np.ndarray] = field(default_factory=list)
     distances: list[float] = field(default_factory=list)
+    plug_positions: list[np.ndarray] = field(default_factory=list)
     force_magnitudes: list[float] = field(default_factory=list)
+    wrench_samples: list[np.ndarray] = field(default_factory=list)
+    wrench_time: list[float] = field(default_factory=list)
     off_limit_contacts: list[bool] = field(default_factory=list)
     success: bool = False
     wrong_port: bool = False
@@ -51,9 +57,27 @@ class AicInsertionTask:
             "tcp_velocity": gym.spaces.Box(-np.inf, np.inf, shape=(6,), dtype=np.float32),
             "plug_pose": gym.spaces.Box(-np.inf, np.inf, shape=(7,), dtype=np.float32),
             "target_port_pose": gym.spaces.Box(-np.inf, np.inf, shape=(7,), dtype=np.float32),
+            "target_port_entrance_pose": gym.spaces.Box(-np.inf, np.inf, shape=(7,), dtype=np.float32),
             "plug_to_port_relative": gym.spaces.Box(-np.inf, np.inf, shape=(4,), dtype=np.float32),
             "wrench": gym.spaces.Box(-np.inf, np.inf, shape=(6,), dtype=np.float32),
+            "wrench_timestamp": gym.spaces.Box(0.0, np.inf, shape=(1,), dtype=np.float32),
             "off_limit_contact": gym.spaces.Box(0.0, 1.0, shape=(1,), dtype=np.float32),
+            "controller_tcp_pose": gym.spaces.Box(-np.inf, np.inf, shape=(7,), dtype=np.float32),
+            "controller_reference_tcp_pose": gym.spaces.Box(-np.inf, np.inf, shape=(7,), dtype=np.float32),
+            "controller_tcp_velocity": gym.spaces.Box(-np.inf, np.inf, shape=(6,), dtype=np.float32),
+            "controller_tcp_error": gym.spaces.Box(-np.inf, np.inf, shape=(6,), dtype=np.float32),
+            "controller_reference_joint_state": gym.spaces.Box(-np.inf, np.inf, shape=(6,), dtype=np.float32),
+            "controller_target_mode": gym.spaces.Box(-np.inf, np.inf, shape=(1,), dtype=np.float32),
+            "fts_tare_wrench": gym.spaces.Box(-np.inf, np.inf, shape=(6,), dtype=np.float32),
+            "score_geometry": gym.spaces.Dict(
+                {
+                    "distance_to_target": gym.spaces.Box(-np.inf, np.inf, shape=(1,), dtype=np.float32),
+                    "distance_threshold": gym.spaces.Box(-np.inf, np.inf, shape=(1,), dtype=np.float32),
+                    "plug_to_port_depth": gym.spaces.Box(-np.inf, np.inf, shape=(1,), dtype=np.float32),
+                    "port_to_entrance_depth": gym.spaces.Box(-np.inf, np.inf, shape=(1,), dtype=np.float32),
+                    "partial_insertion": gym.spaces.Box(0.0, 1.0, shape=(1,), dtype=np.float32),
+                }
+            ),
         }
         if self.include_images:
             image_space = gym.spaces.Box(0, 255, shape=(64, 64, 3), dtype=np.uint8)
@@ -66,6 +90,18 @@ class AicInsertionTask:
                 shape=(3,),
                 dtype=np.float32,
             )
+            base_spaces["camera_info"] = gym.spaces.Dict(
+                {
+                    name: gym.spaces.Dict(
+                        {
+                            "size": gym.spaces.Box(0.0, np.inf, shape=(2,), dtype=np.float32),
+                            "k": gym.spaces.Box(-np.inf, np.inf, shape=(9,), dtype=np.float32),
+                            "p": gym.spaces.Box(-np.inf, np.inf, shape=(12,), dtype=np.float32),
+                        }
+                    )
+                    for name in ("left", "center", "right")
+                }
+            )
         self.observation_space = gym.spaces.Dict(base_spaces)
         self._trace: EpisodeTrace | None = None
         self._task: TaskDefinition | None = None
@@ -75,7 +111,16 @@ class AicInsertionTask:
         initial_distance = float(
             np.linalg.norm(initial_state.plug_pose[:3] - initial_state.target_port_pose[:3])
         )
-        self._trace = EpisodeTrace(initial_distance=initial_distance)
+        self._trace = EpisodeTrace(
+            initial_distance=initial_distance,
+            initial_plug_pose=initial_state.plug_pose.copy(),
+            target_port_pose=initial_state.target_port_pose.copy(),
+            target_port_entrance_pose=(
+                None
+                if initial_state.target_port_entrance_pose is None
+                else initial_state.target_port_entrance_pose.copy()
+            ),
+        )
         self._record(initial_state)
 
     def evaluate_step(
@@ -105,6 +150,7 @@ class AicInsertionTask:
             off_limit_contact=bool(current_state.off_limit_contact),
             success=self._trace.success,
             wrong_port=wrong_port,
+            partial_insertion=bool(current_state.score_geometry.get("partial_insertion", False)),
         )
         terminated = self._trace.success or wrong_port
         truncated = step_count >= self.max_episode_steps
@@ -115,6 +161,7 @@ class AicInsertionTask:
             "distance_to_target": current_dist,
             "success": self._trace.success,
             "wrong_port": wrong_port,
+            "score_label": "gym_reward",
         }
         return breakdown.total, terminated, truncated, info
 
@@ -128,17 +175,24 @@ class AicInsertionTask:
                 "tcp_positions": self._trace.tcp_positions,
                 "tcp_linear_velocity": self._trace.tcp_linear_velocity,
                 "distances": self._trace.distances,
+                "plug_positions": self._trace.plug_positions,
+                "target_port_pose": self._trace.target_port_pose,
+                "target_port_entrance_pose": self._trace.target_port_entrance_pose,
                 "force_magnitudes": self._trace.force_magnitudes,
+                "wrench_time": self._trace.wrench_time,
+                "wrench_samples": self._trace.wrench_samples,
                 "off_limit_contacts": self._trace.off_limit_contacts,
                 "success": self._trace.success,
                 "wrong_port": self._trace.wrong_port,
             }
         )
         return {
+            "score_label": "gym_reward",
             "tier2": summary.tier2,
             "tier3": summary.tier3,
             "total_score": summary.total_score,
             "message": summary.message,
+            "parity_notes": summary.parity_notes,
         }
 
     def _record(self, state: RuntimeState) -> None:
@@ -146,8 +200,11 @@ class AicInsertionTask:
         self._trace.sim_time.append(float(state.sim_time))
         self._trace.tcp_positions.append(state.tcp_pose[:3].copy())
         self._trace.tcp_linear_velocity.append(state.tcp_velocity[:3].copy())
+        self._trace.plug_positions.append(state.plug_pose[:3].copy())
         self._trace.distances.append(
             float(np.linalg.norm(state.plug_pose[:3] - state.target_port_pose[:3]))
         )
         self._trace.force_magnitudes.append(float(np.linalg.norm(state.wrench[:3])))
+        self._trace.wrench_samples.append(state.wrench.copy())
+        self._trace.wrench_time.append(float(state.wrench_timestamp or state.sim_time))
         self._trace.off_limit_contacts.append(bool(state.off_limit_contact))

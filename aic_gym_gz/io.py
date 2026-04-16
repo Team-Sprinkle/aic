@@ -52,11 +52,67 @@ def _base_observation(
         "tcp_velocity": state.tcp_velocity.astype(np.float32).copy(),
         "plug_pose": state.plug_pose.astype(np.float32).copy(),
         "target_port_pose": state.target_port_pose.astype(np.float32).copy(),
+        "target_port_entrance_pose": (
+            np.zeros(7, dtype=np.float32)
+            if state.target_port_entrance_pose is None
+            else state.target_port_entrance_pose.astype(np.float32).copy()
+        ),
         "plug_to_port_relative": np.concatenate(
             [relative, np.array([np.linalg.norm(relative)], dtype=np.float64)]
         ).astype(np.float32),
         "wrench": state.wrench.astype(np.float32).copy(),
+        "wrench_timestamp": np.array([state.wrench_timestamp], dtype=np.float32),
         "off_limit_contact": np.array([float(state.off_limit_contact)], dtype=np.float32),
+        "controller_tcp_pose": _controller_array(
+            state.controller_state.get("tcp_pose"),
+            size=7,
+        ),
+        "controller_reference_tcp_pose": _controller_array(
+            state.controller_state.get("reference_tcp_pose"),
+            size=7,
+        ),
+        "controller_tcp_velocity": _controller_array(
+            state.controller_state.get("tcp_velocity"),
+            size=6,
+        ),
+        "controller_tcp_error": _controller_array(
+            state.controller_state.get("tcp_error"),
+            size=6,
+        ),
+        "controller_reference_joint_state": _controller_array(
+            state.controller_state.get("reference_joint_state"),
+            size=6,
+        ),
+        "controller_target_mode": np.array(
+            [float(state.controller_state.get("target_mode", 0))],
+            dtype=np.float32,
+        ),
+        "fts_tare_wrench": _controller_array(
+            state.controller_state.get("fts_tare_offset"),
+            size=6,
+        ),
+        "score_geometry": {
+            "distance_to_target": np.array(
+                [float(state.score_geometry.get("distance_to_target", 0.0))],
+                dtype=np.float32,
+            ),
+            "distance_threshold": np.array(
+                [float(state.score_geometry.get("distance_threshold", 0.0))],
+                dtype=np.float32,
+            ),
+            "plug_to_port_depth": np.array(
+                [float(state.score_geometry.get("plug_to_port_depth", 0.0))],
+                dtype=np.float32,
+            ),
+            "port_to_entrance_depth": np.array(
+                [float(state.score_geometry.get("port_to_entrance_depth", 0.0))],
+                dtype=np.float32,
+            ),
+            "partial_insertion": np.array(
+                [1.0 if state.score_geometry.get("partial_insertion", False) else 0.0],
+                dtype=np.float32,
+            ),
+        },
     }
 
 
@@ -85,6 +141,20 @@ def summarize_image_batch(
             "present": bool(image.size > 0 and int(image.sum()) > 0),
         }
     return summary
+
+
+def _controller_array(value: Any, *, size: int) -> np.ndarray:
+    if isinstance(value, np.ndarray):
+        array = value.astype(np.float32, copy=True)
+    elif isinstance(value, (list, tuple)):
+        array = np.asarray(value, dtype=np.float32)
+    else:
+        array = np.zeros(size, dtype=np.float32)
+    if array.shape[0] < size:
+        padded = np.zeros(size, dtype=np.float32)
+        padded[: array.shape[0]] = array
+        return padded
+    return array[:size]
 
 
 @dataclass(frozen=True)
@@ -128,6 +198,10 @@ class MockGazeboIO(AicGazeboIO):
                 "right": blank[2],
             }
             observation["image_timestamps"] = np.zeros(3, dtype=np.float32)
+            observation["camera_info"] = {
+                name: _default_camera_info()
+                for name in ("left", "center", "right")
+            }
         return observation
 
     def sanitize_action(self, action: np.ndarray) -> np.ndarray:
@@ -158,6 +232,9 @@ class RosCameraSubscriber:
             name: np.zeros(image_shape, dtype=np.uint8) for name in self._topic_map
         }
         self._latest_timestamps: dict[str, float] = {name: 0.0 for name in self._topic_map}
+        self._latest_camera_info: dict[str, dict[str, np.ndarray]] = {
+            name: _default_camera_info() for name in self._topic_map
+        }
         self._lock = threading.Lock()
         self._stop_event = threading.Event()
         self._ready_event = threading.Event()
@@ -177,11 +254,15 @@ class RosCameraSubscriber:
         self.start()
         return self._ready_event.wait(timeout_s)
 
-    def latest_images(self) -> tuple[dict[str, np.ndarray], dict[str, float]]:
+    def latest_images(self) -> tuple[dict[str, np.ndarray], dict[str, float], dict[str, dict[str, np.ndarray]]]:
         with self._lock:
             return (
                 {name: image.copy() for name, image in self._latest_images.items()},
                 dict(self._latest_timestamps),
+                {
+                    name: {key: value.copy() for key, value in info.items()}
+                    for name, info in self._latest_camera_info.items()
+                },
             )
 
     def close(self) -> None:
@@ -216,7 +297,7 @@ class RosCameraSubscriber:
         from rclpy.executors import SingleThreadedExecutor
         from rclpy.node import Node
         from rclpy.qos import qos_profile_sensor_data
-        from sensor_msgs.msg import Image
+        from sensor_msgs.msg import CameraInfo, Image
 
         context = Context()
         rclpy.init(context=context)
@@ -235,6 +316,12 @@ class RosCameraSubscriber:
                 lambda message, camera_name=name: self._image_callback(camera_name, message),
                 qos_profile_sensor_data,
             )
+            node.create_subscription(
+                CameraInfo,
+                topic.replace("/image", "/camera_info"),
+                lambda message, camera_name=name: self._camera_info_callback(camera_name, message),
+                qos_profile_sensor_data,
+            )
 
         while rclpy.ok(context=context) and not self._stop_event.is_set():
             executor.spin_once(timeout_sec=0.1)
@@ -247,6 +334,14 @@ class RosCameraSubscriber:
             self._latest_timestamps[camera_name] = timestamp
             if all(value > 0.0 for value in self._latest_timestamps.values()):
                 self._ready_event.set()
+
+    def _camera_info_callback(self, camera_name: str, message: Any) -> None:
+        with self._lock:
+            self._latest_camera_info[camera_name] = {
+                "size": np.array([float(message.width), float(message.height)], dtype=np.float32),
+                "k": np.asarray(message.k, dtype=np.float32),
+                "p": np.asarray(message.p, dtype=np.float32),
+            }
 
 
 class CameraBridgeSidecar:
@@ -265,8 +360,11 @@ class CameraBridgeSidecar:
                 "ros_gz_bridge",
                 "parameter_bridge",
                 "/left_camera/image@sensor_msgs/msg/Image[gz.msgs.Image",
+                "/left_camera/camera_info@sensor_msgs/msg/CameraInfo[gz.msgs.CameraInfo",
                 "/center_camera/image@sensor_msgs/msg/Image[gz.msgs.Image",
+                "/center_camera/camera_info@sensor_msgs/msg/CameraInfo[gz.msgs.CameraInfo",
                 "/right_camera/image@sensor_msgs/msg/Image[gz.msgs.Image",
+                "/right_camera/camera_info@sensor_msgs/msg/CameraInfo[gz.msgs.CameraInfo",
             ],
             stdout=subprocess.DEVNULL,
             stderr=subprocess.DEVNULL,
@@ -311,12 +409,13 @@ class RosCameraSidecarIO(AicGazeboIO):
             return observation
         if not self.camera_subscriber.wait_until_ready(timeout_s=self.ready_timeout_s):
             raise TimeoutError("Timed out waiting for wrist camera images.")
-        images, timestamps = self.camera_subscriber.latest_images()
+        images, timestamps, camera_info = self.camera_subscriber.latest_images()
         observation["images"] = images
         observation["image_timestamps"] = np.array(
             [timestamps["left"], timestamps["center"], timestamps["right"]],
             dtype=np.float32,
         )
+        observation["camera_info"] = camera_info
         return observation
 
     def sanitize_action(self, action: np.ndarray) -> np.ndarray:
@@ -344,3 +443,11 @@ def _ros_image_to_array(message: Any, *, expected_shape: tuple[int, int, int]) -
         col_index = np.linspace(0, width - 1, expected_width, dtype=np.int64)
         array = array[row_index][:, col_index]
     return array.copy()
+
+
+def _default_camera_info() -> dict[str, np.ndarray]:
+    return {
+        "size": np.zeros(2, dtype=np.float32),
+        "k": np.zeros(9, dtype=np.float32),
+        "p": np.zeros(12, dtype=np.float32),
+    }

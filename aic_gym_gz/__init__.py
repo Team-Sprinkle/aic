@@ -13,6 +13,7 @@ from .runtime import (
     AicGazeboRuntime,
     MockStepperBackend,
     RuntimeBackend,
+    RuntimeCheckpoint,
     RuntimeState,
     ScenarioGymGzBackend,
 )
@@ -41,6 +42,7 @@ __all__ = [
     "GazeboNativeIOPlaceholder",
     "MockGazeboIO",
     "MockStepperBackend",
+    "RuntimeCheckpoint",
     "RuntimeBackend",
     "RuntimeState",
     "ScenarioGymGzBackend",
