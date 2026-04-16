@@ -38,8 +38,9 @@ QuaternionTuple = tuple[float, float, float, float]
 
 class CheatCodePIDController(Policy):
     def __init__(self, parent_node):
-        self.pid_x = PIDController(kp=0.8, ki=0.0, kd=0.0)
-        self.pid_y = PIDController(kp=0.8, ki=0.0, kd=0.0)
+        # Match CheatCode's I-only XY correction behavior.
+        self.pid_x = PIDController(kp=0.0, ki=3.0, kd=0.0)
+        self.pid_y = PIDController(kp=0.0, ki=3.0, kd=0.0)
         self.xy_alignment_tolerance_m = 0.01
         self.xy_alignment_stable_cycles = 5
         self._task = None
@@ -252,7 +253,6 @@ class CheatCodePIDController(Policy):
                 )
                 return True
             interp_fraction = t / float(steps)
-            should_reset = t == 0
             try:
                 self.set_pose_target(
                     move_robot=move_robot,
@@ -261,7 +261,7 @@ class CheatCodePIDController(Policy):
                         slerp_fraction=interp_fraction,
                         position_fraction=interp_fraction,
                         z_offset=z_offset,
-                        reset_pids=should_reset,
+                        reset_pids=True,
                         dt=dt,
                     ),
                 )
