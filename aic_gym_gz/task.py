@@ -8,7 +8,7 @@ from typing import Any
 import gymnasium as gym
 import numpy as np
 
-from .reward import AicRewardBreakdown, AicScoreCalculator
+from .reward import AicRewardMetrics, AicRlRewardCalculator, AicScoreCalculator
 from .runtime import RuntimeState
 from .scenario import AicScenario, TaskDefinition
 
@@ -28,6 +28,9 @@ class EpisodeTrace:
     wrench_samples: list[np.ndarray] = field(default_factory=list)
     wrench_time: list[float] = field(default_factory=list)
     off_limit_contacts: list[bool] = field(default_factory=list)
+    rl_step_rewards: list[float] = field(default_factory=list)
+    last_reward_metrics: AicRewardMetrics | None = None
+    last_action: np.ndarray | None = None
     success: bool = False
     wrong_port: bool = False
 
@@ -40,6 +43,7 @@ class AicInsertionTask:
     frame: str = "base_link"
     max_episode_steps: int = 512
     include_images: bool = False
+    rl_reward_calculator: AicRlRewardCalculator = field(default_factory=AicRlRewardCalculator)
     score_calculator: AicScoreCalculator = field(default_factory=AicScoreCalculator)
 
     def __post_init__(self) -> None:
@@ -50,6 +54,9 @@ class AicInsertionTask:
             dtype=np.float32,
         )
         base_spaces: dict[str, gym.Space[Any]] = {
+            "step_count": gym.spaces.Box(0.0, np.inf, shape=(), dtype=np.float32),
+            "sim_tick": gym.spaces.Box(0.0, np.inf, shape=(), dtype=np.float32),
+            "sim_time": gym.spaces.Box(0.0, np.inf, shape=(), dtype=np.float32),
             "joint_positions": gym.spaces.Box(-np.inf, np.inf, shape=(6,), dtype=np.float32),
             "joint_velocities": gym.spaces.Box(-np.inf, np.inf, shape=(6,), dtype=np.float32),
             "gripper_state": gym.spaces.Box(-np.inf, np.inf, shape=(1,), dtype=np.float32),
@@ -75,6 +82,10 @@ class AicInsertionTask:
                     "distance_threshold": gym.spaces.Box(-np.inf, np.inf, shape=(1,), dtype=np.float32),
                     "plug_to_port_depth": gym.spaces.Box(-np.inf, np.inf, shape=(1,), dtype=np.float32),
                     "port_to_entrance_depth": gym.spaces.Box(-np.inf, np.inf, shape=(1,), dtype=np.float32),
+                    "distance_to_entrance": gym.spaces.Box(-np.inf, np.inf, shape=(1,), dtype=np.float32),
+                    "lateral_misalignment": gym.spaces.Box(-np.inf, np.inf, shape=(1,), dtype=np.float32),
+                    "orientation_error": gym.spaces.Box(-np.inf, np.inf, shape=(1,), dtype=np.float32),
+                    "insertion_progress": gym.spaces.Box(-np.inf, np.inf, shape=(1,), dtype=np.float32),
                     "partial_insertion": gym.spaces.Box(0.0, 1.0, shape=(1,), dtype=np.float32),
                 }
             ),
@@ -122,6 +133,8 @@ class AicInsertionTask:
             ),
         )
         self._record(initial_state)
+        self._trace.last_reward_metrics = self.rl_reward_calculator.metrics_from_state(initial_state)
+        self._trace.last_action = np.zeros(self.action_space.shape, dtype=np.float64)
 
     def evaluate_step(
         self,
@@ -134,36 +147,50 @@ class AicInsertionTask:
         if self._trace is None:
             raise RuntimeError("Task must be reset before evaluate_step().")
         self._record(current_state)
-        prev_dist = float(np.linalg.norm(previous_state.plug_pose[:3] - previous_state.target_port_pose[:3]))
-        current_dist = self._trace.distances[-1]
+        previous_metrics = (
+            self._trace.last_reward_metrics
+            if self._trace.last_reward_metrics is not None
+            else self.rl_reward_calculator.metrics_from_state(previous_state)
+        )
+        current_metrics = self.rl_reward_calculator.metrics_from_state(current_state)
+        current_dist = current_metrics.target_distance
         success = bool(current_state.insertion_event)
         wrong_port = bool(current_state.insertion_event) and current_state.insertion_event != (
             f"{self._task.target_module_name}/{self._task.port_name}" if self._task else ""
         )
         self._trace.success = success and not wrong_port
         self._trace.wrong_port = wrong_port
-        breakdown = self.score_calculator.step_breakdown(
-            previous_distance=prev_dist,
-            current_distance=current_dist,
+        breakdown = self.rl_reward_calculator.evaluate_step(
+            previous_state=previous_state,
+            current_state=current_state,
             action=action,
-            force_magnitude=self._trace.force_magnitudes[-1],
-            off_limit_contact=bool(current_state.off_limit_contact),
+            previous_action=self._trace.last_action,
+            previous_metrics=previous_metrics,
+            current_metrics=current_metrics,
             success=self._trace.success,
             wrong_port=wrong_port,
-            partial_insertion=bool(current_state.score_geometry.get("partial_insertion", False)),
+            distance_history=self._trace.distances,
         )
+        rl_step_reward = breakdown.total
+        self._trace.rl_step_rewards.append(rl_step_reward)
+        self._trace.last_reward_metrics = current_metrics
+        self._trace.last_action = action.astype(np.float64, copy=True)
         terminated = self._trace.success or wrong_port
         truncated = step_count >= self.max_episode_steps
         if current_state.off_limit_contact:
             terminated = True
         info = {
+            "reward_label": "rl_step_reward",
+            "rl_step_reward": rl_step_reward,
             "reward_terms": breakdown.to_dict(),
+            "reward_metrics": current_metrics.to_dict(),
             "distance_to_target": current_dist,
+            "distance_to_entrance": current_metrics.entrance_distance,
+            "training_reward_total": float(sum(self._trace.rl_step_rewards)),
             "success": self._trace.success,
             "wrong_port": wrong_port,
-            "score_label": "gym_reward",
         }
-        return breakdown.total, terminated, truncated, info
+        return rl_step_reward, terminated, truncated, info
 
     def final_evaluation(self) -> dict[str, Any]:
         if self._trace is None:
@@ -187,12 +214,18 @@ class AicInsertionTask:
             }
         )
         return {
-            "score_label": "gym_reward",
+            "score_label": "gym_final_score",
+            "gym_reward": summary.total_score,
+            "gym_final_score": summary.total_score,
+            "official_eval_score": None,
             "tier2": summary.tier2,
             "tier3": summary.tier3,
             "total_score": summary.total_score,
+            "training_reward_label": "rl_step_reward",
+            "training_reward_total": float(sum(self._trace.rl_step_rewards)),
             "message": summary.message,
             "parity_notes": summary.parity_notes,
+            "approximation_notes": summary.parity_notes,
         }
 
     def _record(self, state: RuntimeState) -> None:

@@ -1,6 +1,8 @@
 # Gazebo-Gym Runtime Parity
 
-This branch upgrades the foundational `aic_gym_gz` path so it is closer to the official runtime and scoring interfaces before teacher-layer features are stacked on top.
+This branch upgrades the foundational `aic_gym_gz` path so it is closer to the
+official runtime and scoring interfaces before teacher-layer features are stacked
+on top.
 
 ## Fixed in this branch
 
@@ -8,7 +10,8 @@ This branch upgrades the foundational `aic_gym_gz` path so it is closer to the o
 - Controller-state semantics are propagated into the gym observation path from `/aic_controller/controller_state`.
 - CameraInfo semantics are propagated alongside wrist images when `include_images=True`.
 - The runtime now attempts to resolve the actual task port and port-entrance entities instead of treating `tabletop` as the scoring target.
-- `gym_reward` now uses official-style duration, efficiency, contact, insertion-force, and partial-insertion logic as closely as the local runtime allows.
+- `rl_step_reward` is now a dense Isaac-Lab-style local training reward with explicit per-step reward terms.
+- `gym_final_score` remains a separate trajectory-level local score path using duration, efficiency, contact, insertion-force, and partial-insertion logic as closely as the local runtime allows.
 - Mock runtime checkpoint/restore is exact. Live runtime checkpoint export is reset-and-rerun only and is explicitly labeled approximate.
 
 ## Remaining gaps
@@ -20,6 +23,8 @@ This branch upgrades the foundational `aic_gym_gz` path so it is closer to the o
 
 ## Score labels
 
-- `gym_reward`: local gazebo-gym reward/scoring path in `aic_gym_gz`
+- `rl_step_reward`: dense local RL training reward returned by `env.step()`
+- `gym_final_score`: local gazebo-gym final episode score reported by `final_evaluation()`
+- `gym_reward`: umbrella label for the local gazebo-gym reward/scoring family in `aic_gym_gz`
 - `teacher_official_style_score`: higher-level teacher-side approximation on `feat/agent-teacher`
 - `official_eval_score`: actual official toolkit evaluation path

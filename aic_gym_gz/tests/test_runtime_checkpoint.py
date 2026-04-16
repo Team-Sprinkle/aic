@@ -17,8 +17,14 @@ class RuntimeCheckpointTest(unittest.TestCase):
         checkpoint = runtime.export_checkpoint()
         advanced = runtime.step(np.array([-0.01, 0.0, 0.0, 0.0, 0.0, 0.0], dtype=np.float64))
         restored = runtime.restore_checkpoint(checkpoint)
+        self.assertTrue(checkpoint.exact)
+        self.assertEqual(checkpoint.mode, "mock_exact")
         np.testing.assert_allclose(restored.tcp_pose, first.tcp_pose)
         np.testing.assert_allclose(restored.plug_pose, first.plug_pose)
+        self.assertEqual(
+            restored.score_geometry.get("insertion_progress"),
+            first.score_geometry.get("insertion_progress"),
+        )
         self.assertEqual(restored.sim_tick, first.sim_tick)
         self.assertNotEqual(advanced.sim_tick, restored.sim_tick)
         runtime.close()

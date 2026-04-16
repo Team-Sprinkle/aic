@@ -949,25 +949,47 @@ def _build_score_geometry(
     entrance_pose: np.ndarray | None,
     tracked_pair: dict[str, Any],
 ) -> dict[str, Any]:
+    target_distance = float(np.linalg.norm(target_pose[:3] - plug_pose[:3]))
     geometry: dict[str, Any] = {
         "plug_name": plug_name,
         "target_port_name": target_name,
         "port_entrance_name": entrance_name,
-        "distance_to_target": float(np.linalg.norm(target_pose[:3] - plug_pose[:3])),
+        "distance_to_target": target_distance,
         "tracked_distance": tracked_pair.get("distance"),
         "orientation_error": tracked_pair.get("orientation_error"),
     }
     if entrance_pose is not None:
-        geometry["distance_threshold"] = float(abs(entrance_pose[2] - target_pose[2]))
-        geometry["partial_insertion"] = bool(
-            abs(plug_pose[0] - target_pose[0]) < 0.005
-            and abs(plug_pose[1] - target_pose[1]) < 0.005
-            and plug_pose[2] < entrance_pose[2]
-            and plug_pose[2] - target_pose[2] > -0.01
+        insertion_axis = target_pose[:3] - entrance_pose[:3]
+        insertion_length = float(np.linalg.norm(insertion_axis))
+        axis_unit = (
+            insertion_axis / insertion_length
+            if insertion_length > 1e-8
+            else np.array([0.0, 0.0, 1.0], dtype=np.float64)
         )
+        plug_offset = plug_pose[:3] - entrance_pose[:3]
+        axial_depth = float(np.dot(plug_offset, axis_unit))
+        clipped_axial_depth = float(np.clip(axial_depth, 0.0, insertion_length))
+        lateral_offset = plug_offset - (axial_depth * axis_unit)
+        lateral_misalignment = float(np.linalg.norm(lateral_offset))
+        distance_to_entrance = float(np.linalg.norm(entrance_pose[:3] - plug_pose[:3]))
+        partial_insertion = bool(
+            lateral_misalignment < 0.005 and clipped_axial_depth > 0.0 and clipped_axial_depth < insertion_length + 0.01
+        )
+        geometry["distance_threshold"] = insertion_length
+        geometry["distance_to_entrance"] = distance_to_entrance
+        geometry["partial_insertion"] = partial_insertion
         geometry["plug_to_port_depth"] = float(plug_pose[2] - target_pose[2])
         geometry["port_to_entrance_depth"] = float(entrance_pose[2] - target_pose[2])
+        geometry["corridor_axis"] = axis_unit.tolist()
+        geometry["lateral_misalignment"] = lateral_misalignment
+        geometry["axial_depth"] = axial_depth
+        geometry["insertion_progress"] = (
+            0.0 if insertion_length <= 1e-8 else clipped_axial_depth / insertion_length
+        )
     else:
+        geometry["distance_to_entrance"] = target_distance
+        geometry["lateral_misalignment"] = 0.0
+        geometry["insertion_progress"] = 0.0
         geometry["partial_insertion"] = False
     return geometry
 

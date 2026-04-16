@@ -29,6 +29,12 @@ def main() -> None:
                     "mode": checkpoint.mode,
                     "exact": checkpoint.exact,
                     "limitations": checkpoint.limitations,
+                    "summary": {
+                        "checkpoint_label": "runtime_checkpoint",
+                        "mock_restore_semantics": "exact" if checkpoint.exact else "approximate",
+                        "step_reward_label": "rl_step_reward",
+                        "final_score_label": "gym_final_score",
+                    },
                     "payload": checkpoint.payload,
                 },
                 indent=2,

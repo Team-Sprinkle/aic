@@ -41,7 +41,7 @@ OBSERVATION_AUDIT: list[dict[str, str]] = [
         "current_gym_availability": "Available as flattened observation fields and RuntimeState.controller_state",
         "source_file_function": "aic_gym_gz/runtime.py:_controller_state_from_ros_sample, aic_gym_gz/io.py:_base_observation",
         "status": "matched",
-        "notes": "Requires ROS controller_state topic; without it fields zero-fill.",
+        "notes": "Requires ROS controller_state topic; without it fields zero-fill and the reward path stays local-state-only.",
     },
     {
         "official_item": "image timestamps",
@@ -53,13 +53,48 @@ OBSERVATION_AUDIT: list[dict[str, str]] = [
 ]
 
 
+OBSERVATION_DEPENDENCIES: list[dict[str, str]] = [
+    {
+        "field_group": "wrench / wrench_timestamp",
+        "dependency": "ROS wrench topic (`/fts_broadcaster/wrench`)",
+        "fallback_behavior": "Zero wrench and zero timestamp",
+        "notes": "RL reward force penalty becomes inactive without the topic; final score force term stays approximate.",
+    },
+    {
+        "field_group": "controller_* / fts_tare_wrench",
+        "dependency": "ROS controller_state topic",
+        "fallback_behavior": "Zero-filled controller arrays",
+        "notes": "Observation schema remains stable even when the live topic is absent.",
+    },
+    {
+        "field_group": "off_limit_contact",
+        "dependency": "ROS off-limit contact topic",
+        "fallback_behavior": "False",
+        "notes": "Terminal contact penalty is only exact when the topic is present.",
+    },
+    {
+        "field_group": "images / image_timestamps / camera_info",
+        "dependency": "ROS image + CameraInfo sidecar topics when include_images=True",
+        "fallback_behavior": "Mock path uses zeros; live path waits for sidecar readiness",
+        "notes": "Image-mode parity still depends on the sidecar bridge rather than pure Gazebo transport.",
+    },
+]
+
+
 SCORING_AUDIT: list[dict[str, str]] = [
     {
         "official_metric": "tier2.duration",
         "current_gym_implementation": "Same inverse score range used locally",
         "source_file_function": "aic_gym_gz/reward.py:AicScoreCalculator.evaluate",
         "status": "matched",
-        "notes": "Local path labeled gym_reward.",
+        "notes": "Local path labeled gym_final_score / gym_reward.",
+    },
+    {
+        "official_metric": "rl_step_reward",
+        "current_gym_implementation": "Dense Isaac-Lab-style local shaping with potential-based progress, local penalties, and terminal bonus/penalty",
+        "source_file_function": "aic_gym_gz/reward.py:AicRlRewardCalculator.evaluate_step",
+        "status": "local_only",
+        "notes": "Used for RL optimization only; it is intentionally not an exact decomposition of the final score.",
     },
     {
         "official_metric": "tier2.trajectory_smoothness / jerk",
@@ -128,10 +163,13 @@ REPLAY_AUDIT: dict[str, Any] = {
 def generate_runtime_audit() -> dict[str, Any]:
     return {
         "observation_parity": OBSERVATION_AUDIT,
+        "observation_dependencies": OBSERVATION_DEPENDENCIES,
         "scoring_parity": SCORING_AUDIT,
         "replay_support": REPLAY_AUDIT,
         "score_labels": {
-            "gym_reward": "Local gazebo-gym reward/scoring path in aic_gym_gz.",
+            "rl_step_reward": "Dense local RL training reward returned by env.step().",
+            "gym_final_score": "Local gazebo-gym final episode score reported by final_evaluation().",
+            "gym_reward": "Umbrella label for the local gazebo-gym reward/score family; in practice use rl_step_reward for step reward and gym_final_score for episode scoring.",
             "teacher_official_style_score": "Teacher-side approximation that may exist on feat/agent-teacher, not computed here.",
             "official_eval_score": "Actual official toolkit evaluation score, not computed by this audit unless run separately.",
         },
@@ -159,6 +197,19 @@ def _render_markdown(report: dict[str, Any]) -> str:
     for row in report["observation_parity"]:
         lines.append(
             f"| {row['official_item']} | {row['current_gym_availability']} | {row['source_file_function']} | {row['status']} | {row['notes']} |"
+        )
+    lines.extend(
+        [
+            "",
+            "## Observation Dependencies",
+            "",
+            "| Observation group | Live dependency | Fallback behavior | Notes |",
+            "| --- | --- | --- | --- |",
+        ]
+    )
+    for row in report["observation_dependencies"]:
+        lines.append(
+            f"| {row['field_group']} | {row['dependency']} | {row['fallback_behavior']} | {row['notes']} |"
         )
     lines.extend(
         [

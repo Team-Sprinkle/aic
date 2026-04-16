@@ -8,7 +8,14 @@ keeping the inner RL loop free of ROS-specific orchestration.
 from .io import AicGazeboIO, GazeboNativeIOPlaceholder, MockGazeboIO
 from .parity import AicParityHarness
 from .randomizer import AicEnvRandomizer
-from .reward import AicEvaluationSummary, AicRewardBreakdown, AicScoreCalculator
+from .reward import (
+    AicEvaluationSummary,
+    AicRewardMetrics,
+    AicRlRewardBreakdown,
+    AicRlRewardCalculator,
+    AicRlRewardWeights,
+    AicScoreCalculator,
+)
 from .runtime import (
     AicGazeboRuntime,
     MockStepperBackend,
@@ -37,7 +44,10 @@ __all__ = [
     "AicInsertionEnv",
     "AicInsertionTask",
     "AicParityHarness",
-    "AicRewardBreakdown",
+    "AicRewardMetrics",
+    "AicRlRewardBreakdown",
+    "AicRlRewardCalculator",
+    "AicRlRewardWeights",
     "AicScoreCalculator",
     "GazeboNativeIOPlaceholder",
     "MockGazeboIO",
