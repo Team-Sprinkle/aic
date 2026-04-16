@@ -76,7 +76,7 @@ def main() -> int:
     print(f"[push] private={args.private}")
     print(f"[push] tags={tags}")
 
-    dataset.push_to_hub(repo_id=args.repo_id, tags=tags, private=args.private)
+    dataset.push_to_hub(tags=tags, private=args.private)
 
     print("[done] Push complete.")
     return 0

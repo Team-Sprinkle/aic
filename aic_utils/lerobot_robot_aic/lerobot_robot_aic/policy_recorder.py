@@ -45,12 +45,12 @@ from action_msgs.msg import GoalStatus, GoalStatusArray
 from aic_control_interfaces.msg import JointMotionUpdate, MotionUpdate, TrajectoryGenerationMode
 from aic_engine_interfaces.srv import GetEpisodeSaveStatus
 from aic_model_interfaces.msg import Observation
+from lerobot.datasets.feature_utils import build_dataset_frame, combine_feature_dicts
 from lerobot.datasets.lerobot_dataset import LeRobotDataset
 from lerobot.datasets.pipeline_features import (
     aggregate_pipeline_dataset_features,
     create_initial_features,
 )
-from lerobot.datasets.utils import build_dataset_frame, combine_feature_dicts
 from lerobot.processor import make_default_processors
 from lerobot.utils.constants import ACTION, OBS_STR
 from lerobot.utils.control_utils import sanity_check_dataset_robot_compatibility
