@@ -270,7 +270,7 @@ class CheatCodePIDController(Policy):
             self.sleep_for(0.05)
 
         # Descend until the cable is inserted into the port.
-        aligned_cycles = 0
+        # aligned_cycles = 0
         while True:
             if self._task_completed_in_simulation(task):
                 self.get_logger().info(
@@ -280,35 +280,36 @@ class CheatCodePIDController(Policy):
             if z_offset < -0.015:
                 break
 
+            z_offset -= 0.0005
+            self.get_logger().info(f"z_offset: {z_offset:0.5}")
             try:
                 pose = self.calc_gripper_pose(port_transform, z_offset=z_offset)
                 self.set_pose_target(move_robot=move_robot, pose=pose)
             except TransformException as ex:
                 self.get_logger().warn(f"TF lookup failed during insertion: {ex}")
-                aligned_cycles = 0
                 self.sleep_for(0.05)
                 continue
 
-            if self._xy_error_is_aligned():
-                aligned_cycles += 1
-            else:
-                aligned_cycles = 0
+            # if self._xy_error_is_aligned():
+            #     aligned_cycles += 1
+            # else:
+            #     aligned_cycles = 0
 
-            if aligned_cycles >= self.xy_alignment_stable_cycles:
-                z_offset -= 0.0005
-                aligned_cycles = 0
-                self.get_logger().info(
-                    f"[CheatCodePID] XY aligned within "
-                    f"{self.xy_alignment_tolerance_m * 1000.0:0.1f} mm; "
-                    f"advancing z_offset to {z_offset:0.5f}"
-                )
-            else:
-                self.get_logger().info(
-                    f"[CheatCodePID] Holding z_offset {z_offset:0.5f} until XY error "
-                    f"is <= {self.xy_alignment_tolerance_m * 1000.0:0.1f} mm for "
-                    f"{self.xy_alignment_stable_cycles} cycles "
-                    f"(current: {aligned_cycles}/{self.xy_alignment_stable_cycles})"
-                )
+            # if aligned_cycles >= self.xy_alignment_stable_cycles:
+            #     z_offset -= 0.0005
+            #     aligned_cycles = 0
+            #     self.get_logger().info(
+            #         f"[CheatCodePID] XY aligned within "
+            #         f"{self.xy_alignment_tolerance_m * 1000.0:0.1f} mm; "
+            #         f"advancing z_offset to {z_offset:0.5f}"
+            #     )
+            # else:
+            #     self.get_logger().info(
+            #         f"[CheatCodePID] Holding z_offset {z_offset:0.5f} until XY error "
+            #         f"is <= {self.xy_alignment_tolerance_m * 1000.0:0.1f} mm for "
+            #         f"{self.xy_alignment_stable_cycles} cycles "
+            #         f"(current: {aligned_cycles}/{self.xy_alignment_stable_cycles})"
+            #     )
             self.sleep_for(0.05)
 
         self.get_logger().info("Waiting briefly for insertion event...")
