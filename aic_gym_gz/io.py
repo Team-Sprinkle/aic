@@ -108,6 +108,22 @@ def _base_observation(
                 [float(state.score_geometry.get("port_to_entrance_depth", 0.0))],
                 dtype=np.float32,
             ),
+            "distance_to_entrance": np.array(
+                [float(state.score_geometry.get("distance_to_entrance", 0.0))],
+                dtype=np.float32,
+            ),
+            "lateral_misalignment": np.array(
+                [float(state.score_geometry.get("lateral_misalignment", 0.0))],
+                dtype=np.float32,
+            ),
+            "orientation_error": np.array(
+                [float(state.score_geometry.get("orientation_error", 0.0) or 0.0)],
+                dtype=np.float32,
+            ),
+            "insertion_progress": np.array(
+                [float(state.score_geometry.get("insertion_progress", 0.0))],
+                dtype=np.float32,
+            ),
             "partial_insertion": np.array(
                 [1.0 if state.score_geometry.get("partial_insertion", False) else 0.0],
                 dtype=np.float32,

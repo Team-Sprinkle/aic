@@ -11,6 +11,7 @@ def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--episodes", type=int, default=1)
     parser.add_argument("--seed", type=int, default=123)
+    parser.add_argument("--print-every", type=int, default=0)
     args = parser.parse_args()
 
     env = make_default_env()
@@ -23,12 +24,22 @@ def main() -> None:
             action = env.action_space.sample()
             observation, reward, terminated, truncated, step_info = env.step(action)
             total_reward += reward
+            if args.print_every > 0 and observation["step_count"] % args.print_every == 0:
+                print(
+                    "  step",
+                    f"step_count={observation['step_count']}",
+                    f"rl_step_reward={reward:.4f}",
+                    f"distance={step_info['distance_to_target']:.4f}",
+                    f"terms={step_info['reward_terms']}",
+                )
+        final_report = step_info["final_evaluation"]
         print(
             "  finished",
             f"steps={observation['step_count']}",
-            f"reward={total_reward:.3f}",
+            f"rl_step_reward_total={total_reward:.3f}",
             f"distance={step_info['distance_to_target']:.4f}",
-            f"evaluation={step_info['evaluation']['total_score']:.2f}",
+            f"gym_final_score={final_report['gym_final_score']:.2f}",
+            f"final_reward_terms={step_info['reward_terms']}",
         )
     env.close()
 

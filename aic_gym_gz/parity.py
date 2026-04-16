@@ -130,14 +130,20 @@ class AicParityHarness:
         candidate_tier3 = float(candidate_summary.tier3.get("score", 0.0))
         return {
             "reference": {
-                "score_label": "gym_reward",
+                "score_label": "gym_final_score",
+                "gym_reward": reference_summary.total_score,
+                "gym_final_score": reference_summary.total_score,
+                "official_eval_score": None,
                 "tier2": reference_summary.tier2,
                 "tier3": reference_summary.tier3,
                 "total_score": reference_summary.total_score,
                 "message": reference_summary.message,
             },
             "candidate": {
-                "score_label": "gym_reward",
+                "score_label": "gym_final_score",
+                "gym_reward": candidate_summary.total_score,
+                "gym_final_score": candidate_summary.total_score,
+                "official_eval_score": None,
                 "tier2": candidate_summary.tier2,
                 "tier3": candidate_summary.tier3,
                 "total_score": candidate_summary.total_score,
@@ -152,7 +158,7 @@ class AicParityHarness:
                 "message_match": reference_summary.message == candidate_summary.message,
             },
             "approximation_notes": [
-                "This report uses the local `gym_reward` score path on both traces rather than invoking the official toolkit.",
+                "This report uses the local `gym_final_score` / `gym_reward` path on both traces rather than invoking the official toolkit.",
                 "If you need `official_eval_score`, run the official `aic_scoring` / toolkit path directly against the ROS/Gazebo rollout.",
                 "Force and off-limit contact terms are limited to what the current live trace schema records.",
             ],
