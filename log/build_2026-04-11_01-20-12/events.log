@@ -1,0 +1,72 @@
+[0.000000] (-) TimerEvent: {}
+[0.000186] (-) JobUnselected: {'identifier': 'aic_adapter'}
+[0.000244] (-) JobUnselected: {'identifier': 'aic_assets'}
+[0.000268] (-) JobUnselected: {'identifier': 'aic_bringup'}
+[0.000288] (-) JobUnselected: {'identifier': 'aic_control_interfaces'}
+[0.000306] (-) JobUnselected: {'identifier': 'aic_controller'}
+[0.000322] (-) JobUnselected: {'identifier': 'aic_description'}
+[0.000338] (-) JobUnselected: {'identifier': 'aic_engine'}
+[0.000353] (-) JobUnselected: {'identifier': 'aic_engine_interfaces'}
+[0.000368] (-) JobUnselected: {'identifier': 'aic_example_policies'}
+[0.000383] (-) JobUnselected: {'identifier': 'aic_gazebo'}
+[0.000399] (-) JobUnselected: {'identifier': 'aic_model'}
+[0.000417] (-) JobUnselected: {'identifier': 'aic_model_interfaces'}
+[0.000433] (-) JobUnselected: {'identifier': 'aic_mujoco'}
+[0.000449] (-) JobUnselected: {'identifier': 'aic_scoring'}
+[0.000464] (-) JobUnselected: {'identifier': 'aic_task'}
+[0.000479] (-) JobUnselected: {'identifier': 'aic_task_interfaces'}
+[0.000494] (-) JobUnselected: {'identifier': 'aic_teleoperation'}
+[0.000508] (-) JobUnselected: {'identifier': 'lerobot_robot_aic'}
+[0.000526] (aic_gazebo_transport_bridge) JobQueued: {'identifier': 'aic_gazebo_transport_bridge', 'dependencies': OrderedDict()}
+[0.000984] (aic_gazebo_transport_bridge) JobStarted: {'identifier': 'aic_gazebo_transport_bridge'}
+[0.011818] (aic_gazebo_transport_bridge) JobProgress: {'identifier': 'aic_gazebo_transport_bridge', 'progress': 'cmake'}
+[0.012828] (aic_gazebo_transport_bridge) JobProgress: {'identifier': 'aic_gazebo_transport_bridge', 'progress': 'build'}
+[0.012863] (aic_gazebo_transport_bridge) Command: {'cmd': ['/usr/bin/cmake', '--build', '/home/ubuntu/ws_aic/src/aic/build/aic_gazebo_transport_bridge', '--', '-j8', '-l8'], 'cwd': '/home/ubuntu/ws_aic/src/aic/build/aic_gazebo_transport_bridge', 'env': OrderedDict({'GZ_SIM_SYSTEM_PLUGIN_PATH': '/ws_aic/install/lib/aic_gazebo/', 'GZ_SIM_RESOURCE_PATH': '/ws_aic/install/share/aic_assets/models:/ws_aic/install/share', 'USER': 'root', 'GZ_CONFIG_PATH': '/ws_aic/install/share/gz:/opt/ros/kilted/opt/sdformat_vendor/share/gz', 'XAUTHLOCALHOSTNAME': '', 'HOSTNAME': 'aic_eval.ip-172-31-65-30', 'ROS_PACKAGE_PATH': '/ws_aic/install', 'SHLVL': '0', 'LD_LIBRARY_PATH': '/ws_aic/install/lib:/opt/ros/kilted/opt/zenoh_cpp_vendor/lib:/opt/ros/kilted/opt/sdformat_vendor/lib:/opt/ros/kilted/opt/gz_math_vendor/lib:/opt/ros/kilted/opt/gz_utils_vendor/lib:/opt/ros/kilted/opt/rviz_ogre_vendor/lib:/opt/ros/kilted/lib/x86_64-linux-gnu:/opt/ros/kilted/opt/gz_tools_vendor/lib:/opt/ros/kilted/opt/gz_ogre_next_vendor/lib:/opt/ros/kilted/opt/gz_dartsim_vendor/lib:/opt/ros/kilted/opt/gz_cmake_vendor/lib:/opt/ros/kilted/lib', 'HOME': '/home/ubuntu', 'OLDPWD': '/', 'ROS_PYTHON_VERSION': '3', 'container': 'sudo docker', 'COLCON_PREFIX_PATH': '/ws_aic/install', 'ROS_DISTRO': 'kilted', '_': '/usr/bin/colcon', 'ROS_VERSION': '2', 'PKG_CONFIG_PATH': '/ws_aic/install/lib/x86_64-linux-gnu/pkgconfig:/ws_aic/install/lib/pkgconfig', 'TERMINFO_DIRS': '/usr/share/terminfo:/run/host/usr/share/terminfo', 'PATH': '/ws_aic/install/bin:/opt/ros/kilted/opt/gz_tools_vendor/bin:/opt/ros/kilted/opt/gz_ogre_next_vendor/bin:/opt/ros/kilted/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin', 'DISPLAY': '', 'LANG': 'C.UTF-8', 'XAUTHORITY': '', 'AMENT_PREFIX_PATH': '/ws_aic/install:/opt/ros/kilted', 'SHELL': '/bin/bash', 'ROS_AUTOMATIC_DISCOVERY_RANGE': 'SUBNET', 'PWD': '/home/ubuntu/ws_aic/src/aic/build/aic_gazebo_transport_bridge', 'LC_ALL': 'C.UTF-8', 'PYTHONPATH': '/ws_aic/install/lib/python3.12/site-packages:/opt/ros/kilted/lib/python3.12/site-packages', 'COLCON': '1', 'CMAKE_PREFIX_PATH': '/ws_aic/install:/opt/ros/kilted/opt/sdformat_vendor:/opt/ros/kilted/opt/gz_math_vendor:/opt/ros/kilted/opt/gz_utils_vendor:/opt/ros/kilted/opt/gz_tools_vendor:/opt/ros/kilted/opt/gz_ogre_next_vendor:/opt/ros/kilted/opt/gz_dartsim_vendor:/opt/ros/kilted/opt/gz_cmake_vendor:/opt/ros/kilted'}), 'shell': False}
+[0.069775] (aic_gazebo_transport_bridge) StdoutLine: {'line': b'[ 50%] Building CXX object CMakeFiles/aic_gz_transport_bridge.dir/src/aic_gz_transport_bridge.cc.o\n'}
+[0.099795] (-) TimerEvent: {}
+[0.199946] (-) TimerEvent: {}
+[0.300095] (-) TimerEvent: {}
+[0.400242] (-) TimerEvent: {}
+[0.500387] (-) TimerEvent: {}
+[0.600549] (-) TimerEvent: {}
+[0.700717] (-) TimerEvent: {}
+[0.800883] (-) TimerEvent: {}
+[0.901050] (-) TimerEvent: {}
+[1.001244] (-) TimerEvent: {}
+[1.101412] (-) TimerEvent: {}
+[1.201583] (-) TimerEvent: {}
+[1.301754] (-) TimerEvent: {}
+[1.401939] (-) TimerEvent: {}
+[1.502097] (-) TimerEvent: {}
+[1.602254] (-) TimerEvent: {}
+[1.702382] (-) TimerEvent: {}
+[1.802508] (-) TimerEvent: {}
+[1.902653] (-) TimerEvent: {}
+[1.953332] (aic_gazebo_transport_bridge) StdoutLine: {'line': b'[100%] Linking CXX executable aic_gz_transport_bridge\n'}
+[2.002775] (-) TimerEvent: {}
+[2.063602] (aic_gazebo_transport_bridge) StdoutLine: {'line': b'[100%] Built target aic_gz_transport_bridge\n'}
+[2.074435] (aic_gazebo_transport_bridge) CommandEnded: {'returncode': 0}
+[2.075032] (aic_gazebo_transport_bridge) JobProgress: {'identifier': 'aic_gazebo_transport_bridge', 'progress': 'install'}
+[2.083764] (aic_gazebo_transport_bridge) Command: {'cmd': ['/usr/bin/cmake', '--install', '/home/ubuntu/ws_aic/src/aic/build/aic_gazebo_transport_bridge'], 'cwd': '/home/ubuntu/ws_aic/src/aic/build/aic_gazebo_transport_bridge', 'env': OrderedDict({'GZ_SIM_SYSTEM_PLUGIN_PATH': '/ws_aic/install/lib/aic_gazebo/', 'GZ_SIM_RESOURCE_PATH': '/ws_aic/install/share/aic_assets/models:/ws_aic/install/share', 'USER': 'root', 'GZ_CONFIG_PATH': '/ws_aic/install/share/gz:/opt/ros/kilted/opt/sdformat_vendor/share/gz', 'XAUTHLOCALHOSTNAME': '', 'HOSTNAME': 'aic_eval.ip-172-31-65-30', 'ROS_PACKAGE_PATH': '/ws_aic/install', 'SHLVL': '0', 'LD_LIBRARY_PATH': '/ws_aic/install/lib:/opt/ros/kilted/opt/zenoh_cpp_vendor/lib:/opt/ros/kilted/opt/sdformat_vendor/lib:/opt/ros/kilted/opt/gz_math_vendor/lib:/opt/ros/kilted/opt/gz_utils_vendor/lib:/opt/ros/kilted/opt/rviz_ogre_vendor/lib:/opt/ros/kilted/lib/x86_64-linux-gnu:/opt/ros/kilted/opt/gz_tools_vendor/lib:/opt/ros/kilted/opt/gz_ogre_next_vendor/lib:/opt/ros/kilted/opt/gz_dartsim_vendor/lib:/opt/ros/kilted/opt/gz_cmake_vendor/lib:/opt/ros/kilted/lib', 'HOME': '/home/ubuntu', 'OLDPWD': '/', 'ROS_PYTHON_VERSION': '3', 'container': 'sudo docker', 'COLCON_PREFIX_PATH': '/ws_aic/install', 'ROS_DISTRO': 'kilted', '_': '/usr/bin/colcon', 'ROS_VERSION': '2', 'PKG_CONFIG_PATH': '/ws_aic/install/lib/x86_64-linux-gnu/pkgconfig:/ws_aic/install/lib/pkgconfig', 'TERMINFO_DIRS': '/usr/share/terminfo:/run/host/usr/share/terminfo', 'PATH': '/ws_aic/install/bin:/opt/ros/kilted/opt/gz_tools_vendor/bin:/opt/ros/kilted/opt/gz_ogre_next_vendor/bin:/opt/ros/kilted/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin', 'DISPLAY': '', 'LANG': 'C.UTF-8', 'XAUTHORITY': '', 'AMENT_PREFIX_PATH': '/ws_aic/install:/opt/ros/kilted', 'SHELL': '/bin/bash', 'ROS_AUTOMATIC_DISCOVERY_RANGE': 'SUBNET', 'PWD': '/home/ubuntu/ws_aic/src/aic/build/aic_gazebo_transport_bridge', 'LC_ALL': 'C.UTF-8', 'PYTHONPATH': '/ws_aic/install/lib/python3.12/site-packages:/opt/ros/kilted/lib/python3.12/site-packages', 'COLCON': '1', 'CMAKE_PREFIX_PATH': '/ws_aic/install:/opt/ros/kilted/opt/sdformat_vendor:/opt/ros/kilted/opt/gz_math_vendor:/opt/ros/kilted/opt/gz_utils_vendor:/opt/ros/kilted/opt/gz_tools_vendor:/opt/ros/kilted/opt/gz_ogre_next_vendor:/opt/ros/kilted/opt/gz_dartsim_vendor:/opt/ros/kilted/opt/gz_cmake_vendor:/opt/ros/kilted'}), 'shell': False}
+[2.092004] (aic_gazebo_transport_bridge) StdoutLine: {'line': b'-- Install configuration: ""\n'}
+[2.092273] (aic_gazebo_transport_bridge) StdoutLine: {'line': b'-- Installing: /home/ubuntu/ws_aic/src/aic/install/lib/aic_gazebo_transport_bridge/aic_gz_transport_bridge\n'}
+[2.093153] (aic_gazebo_transport_bridge) StdoutLine: {'line': b'-- Set non-toolchain portion of runtime path of "/home/ubuntu/ws_aic/src/aic/install/lib/aic_gazebo_transport_bridge/aic_gz_transport_bridge" to ""\n'}
+[2.093419] (aic_gazebo_transport_bridge) StdoutLine: {'line': b'-- Up-to-date: /home/ubuntu/ws_aic/src/aic/install/share/ament_index/resource_index/package_run_dependencies/aic_gazebo_transport_bridge\n'}
+[2.093626] (aic_gazebo_transport_bridge) StdoutLine: {'line': b'-- Up-to-date: /home/ubuntu/ws_aic/src/aic/install/share/ament_index/resource_index/parent_prefix_path/aic_gazebo_transport_bridge\n'}
+[2.093725] (aic_gazebo_transport_bridge) StdoutLine: {'line': b'-- Up-to-date: /home/ubuntu/ws_aic/src/aic/install/share/aic_gazebo_transport_bridge/environment/ament_prefix_path.sh\n'}
+[2.093824] (aic_gazebo_transport_bridge) StdoutLine: {'line': b'-- Up-to-date: /home/ubuntu/ws_aic/src/aic/install/share/aic_gazebo_transport_bridge/environment/ament_prefix_path.dsv\n'}
+[2.093923] (aic_gazebo_transport_bridge) StdoutLine: {'line': b'-- Up-to-date: /home/ubuntu/ws_aic/src/aic/install/share/aic_gazebo_transport_bridge/environment/path.sh\n'}
+[2.094008] (aic_gazebo_transport_bridge) StdoutLine: {'line': b'-- Up-to-date: /home/ubuntu/ws_aic/src/aic/install/share/aic_gazebo_transport_bridge/environment/path.dsv\n'}
+[2.094169] (aic_gazebo_transport_bridge) StdoutLine: {'line': b'-- Up-to-date: /home/ubuntu/ws_aic/src/aic/install/share/aic_gazebo_transport_bridge/local_setup.bash\n'}
+[2.094260] (aic_gazebo_transport_bridge) StdoutLine: {'line': b'-- Up-to-date: /home/ubuntu/ws_aic/src/aic/install/share/aic_gazebo_transport_bridge/local_setup.sh\n'}
+[2.094320] (aic_gazebo_transport_bridge) StdoutLine: {'line': b'-- Up-to-date: /home/ubuntu/ws_aic/src/aic/install/share/aic_gazebo_transport_bridge/local_setup.zsh\n'}
+[2.094374] (aic_gazebo_transport_bridge) StdoutLine: {'line': b'-- Up-to-date: /home/ubuntu/ws_aic/src/aic/install/share/aic_gazebo_transport_bridge/local_setup.dsv\n'}
+[2.094427] (aic_gazebo_transport_bridge) StdoutLine: {'line': b'-- Installing: /home/ubuntu/ws_aic/src/aic/install/share/aic_gazebo_transport_bridge/package.dsv\n'}
+[2.094482] (aic_gazebo_transport_bridge) StdoutLine: {'line': b'-- Up-to-date: /home/ubuntu/ws_aic/src/aic/install/share/ament_index/resource_index/packages/aic_gazebo_transport_bridge\n'}
+[2.094536] (aic_gazebo_transport_bridge) StdoutLine: {'line': b'-- Up-to-date: /home/ubuntu/ws_aic/src/aic/install/share/aic_gazebo_transport_bridge/cmake/aic_gazebo_transport_bridgeConfig.cmake\n'}
+[2.094590] (aic_gazebo_transport_bridge) StdoutLine: {'line': b'-- Up-to-date: /home/ubuntu/ws_aic/src/aic/install/share/aic_gazebo_transport_bridge/cmake/aic_gazebo_transport_bridgeConfig-version.cmake\n'}
+[2.094642] (aic_gazebo_transport_bridge) StdoutLine: {'line': b'-- Up-to-date: /home/ubuntu/ws_aic/src/aic/install/share/aic_gazebo_transport_bridge/package.xml\n'}
+[2.095090] (aic_gazebo_transport_bridge) CommandEnded: {'returncode': 0}
+[2.102955] (-) TimerEvent: {}
+[2.110038] (aic_gazebo_transport_bridge) JobEnded: {'identifier': 'aic_gazebo_transport_bridge', 'rc': 0}
+[2.110626] (-) EventReactorShutdown: {}
