@@ -20,15 +20,52 @@ from .runtime import (
 try:
     from .env import AicInsertionEnv, make_default_env, make_live_env
     from .task import AicInsertionTask
+    from .teacher import (
+        AgentTeacherController,
+        OfficialStyleScore,
+        OfficialStyleScoreEvaluator,
+        TeacherConfig,
+        TeacherCandidateSearch,
+        TeacherContextExtractor,
+        TeacherReplayArtifact,
+        TeacherReplayComparator,
+        TeacherReplayRunner,
+        TeacherRolloutResult,
+        TeacherSearchConfig,
+        TeacherSearchResult,
+        TemporalObservationBuffer,
+        export_selected_candidate_to_replay,
+        load_teacher_replay,
+        run_teacher_rollout,
+        save_teacher_replay,
+    )
 except ModuleNotFoundError as exc:
     if exc.name != "gymnasium":
         raise
     AicInsertionEnv = None
     AicInsertionTask = None
+    AgentTeacherController = None
+    OfficialStyleScore = None
+    OfficialStyleScoreEvaluator = None
+    TeacherConfig = None
+    TeacherCandidateSearch = None
+    TeacherContextExtractor = None
+    TeacherReplayArtifact = None
+    TeacherReplayComparator = None
+    TeacherReplayRunner = None
+    TeacherRolloutResult = None
+    TeacherSearchConfig = None
+    TeacherSearchResult = None
+    TemporalObservationBuffer = None
+    export_selected_candidate_to_replay = None
+    load_teacher_replay = None
+    run_teacher_rollout = None
+    save_teacher_replay = None
     make_default_env = None
     make_live_env = None
 
 __all__ = [
+    "AgentTeacherController",
     "AicEvaluationSummary",
     "AicEnvRandomizer",
     "AicGazeboIO",
@@ -41,9 +78,25 @@ __all__ = [
     "GazeboNativeIOPlaceholder",
     "MockGazeboIO",
     "MockStepperBackend",
+    "OfficialStyleScore",
+    "OfficialStyleScoreEvaluator",
     "RuntimeBackend",
     "RuntimeState",
     "ScenarioGymGzBackend",
+    "TeacherCandidateSearch",
+    "TeacherConfig",
+    "TeacherContextExtractor",
+    "TeacherReplayArtifact",
+    "TeacherReplayComparator",
+    "TeacherReplayRunner",
+    "TeacherRolloutResult",
+    "TeacherSearchConfig",
+    "TeacherSearchResult",
+    "TemporalObservationBuffer",
+    "export_selected_candidate_to_replay",
+    "load_teacher_replay",
     "make_default_env",
     "make_live_env",
+    "run_teacher_rollout",
+    "save_teacher_replay",
 ]
