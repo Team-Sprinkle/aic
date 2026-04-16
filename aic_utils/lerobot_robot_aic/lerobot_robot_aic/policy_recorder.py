@@ -627,17 +627,14 @@ class PolicyRecorder(Node):
         )
 
         if self.resume:
-            self._dataset = LeRobotDataset(
+            self._dataset = LeRobotDataset.resume(
                 self.repo_id,
                 root=self.root,
                 batch_encoding_size=self.video_encoding_batch_size,
                 vcodec=self.vcodec,
+                image_writer_processes=self.image_writer_processes if self.video else 0,
+                image_writer_threads=self.image_writer_threads_per_camera * 3 if self.video else 0,
             )
-            if self.video:
-                self._dataset.start_image_writer(
-                    num_processes=self.image_writer_processes,
-                    num_threads=self.image_writer_threads_per_camera * 3,
-                )
             sanity_check_dataset_robot_compatibility(
                 self._dataset,
                 _RobotTypeShim(self.robot_type),
