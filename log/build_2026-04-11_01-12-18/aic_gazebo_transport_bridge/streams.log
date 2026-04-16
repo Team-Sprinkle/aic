@@ -1,0 +1,34 @@
+[0.010s] Invoking command in '/home/ubuntu/ws_aic/src/aic/build/aic_gazebo_transport_bridge': CMAKE_PREFIX_PATH=${CMAKE_PREFIX_PATH}:/opt/ros/kilted /usr/bin/cmake /home/ubuntu/ws_aic/src/aic/aic_utils/aic_gazebo_transport_bridge -DCMAKE_INSTALL_PREFIX=/home/ubuntu/ws_aic/src/aic/install
+[0.067s] -- The C compiler identification is GNU 13.3.0
+[0.121s] -- The CXX compiler identification is GNU 13.3.0
+[0.137s] -- Detecting C compiler ABI info
+[0.224s] -- Detecting C compiler ABI info - done
+[0.232s] -- Check for working C compiler: /usr/bin/cc - skipped
+[0.232s] -- Detecting C compile features
+[0.233s] -- Detecting C compile features - done
+[0.242s] -- Detecting CXX compiler ABI info
+[0.337s] -- Detecting CXX compiler ABI info - done
+[0.346s] -- Check for working CXX compiler: /usr/bin/c++ - skipped
+[0.346s] -- Detecting CXX compile features
+[0.347s] -- Detecting CXX compile features - done
+[0.352s] -- Found ament_cmake: 2.7.5 (/opt/ros/kilted/share/ament_cmake/cmake)
+[0.494s] -- Found Python3: /usr/bin/python3 (found version "3.12.3") found components: Interpreter 
+[0.632s] CMake Error at CMakeLists.txt:10 (find_package):
+[0.632s]   By not providing "Findgz_transport_vendor.cmake" in CMAKE_MODULE_PATH this
+[0.632s]   project has asked CMake to find a package configuration file provided by
+[0.632s]   "gz_transport_vendor", but CMake did not find one.
+[0.632s] 
+[0.632s]   Could not find a package configuration file provided by
+[0.633s]   "gz_transport_vendor" with any of the following names:
+[0.633s] 
+[0.633s]     gz_transport_vendorConfig.cmake
+[0.633s]     gz_transport_vendor-config.cmake
+[0.633s] 
+[0.633s]   Add the installation prefix of "gz_transport_vendor" to CMAKE_PREFIX_PATH
+[0.633s]   or set "gz_transport_vendor_DIR" to a directory containing one of the above
+[0.633s]   files.  If "gz_transport_vendor" provides a separate development package or
+[0.633s]   SDK, be sure it has been installed.
+[0.633s] 
+[0.633s] 
+[0.633s] -- Configuring incomplete, errors occurred!
+[0.637s] Invoked command in '/home/ubuntu/ws_aic/src/aic/build/aic_gazebo_transport_bridge' returned '1': CMAKE_PREFIX_PATH=${CMAKE_PREFIX_PATH}:/opt/ros/kilted /usr/bin/cmake /home/ubuntu/ws_aic/src/aic/aic_utils/aic_gazebo_transport_bridge -DCMAKE_INSTALL_PREFIX=/home/ubuntu/ws_aic/src/aic/install

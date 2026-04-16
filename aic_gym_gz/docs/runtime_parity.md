@@ -1,30 +1,139 @@
 # Gazebo-Gym Runtime Parity
 
-This branch upgrades the foundational `aic_gym_gz` path so it is closer to the
-official runtime and scoring interfaces before teacher-layer features are stacked
-on top.
+This document describes how the current `aic_gym_gz` implementation relates to
+the official AIC rollout surface and where parity is still approximate.
 
-## Fixed in this branch
+## Current parity goal
 
-- Live wrench parity is improved by subscribing to `/fts_broadcaster/wrench` and subtracting the controller FT tare offset when available.
-- Controller-state semantics are propagated into the gym observation path from `/aic_controller/controller_state`.
-- CameraInfo semantics are propagated alongside wrist images when `include_images=True`.
-- The runtime now attempts to resolve the actual task port and port-entrance entities instead of treating `tabletop` as the scoring target.
-- `rl_step_reward` is now a dense Isaac-Lab-style local training reward with explicit per-step reward terms.
-- `gym_final_score` remains a separate trajectory-level local score path using duration, efficiency, contact, insertion-force, and partial-insertion logic as closely as the local runtime allows.
-- Mock runtime checkpoint/restore is exact. Live runtime checkpoint export is reset-and-rerun only and is explicitly labeled approximate.
+`aic_gym_gz` is trying to be:
 
-## Remaining gaps
+- good enough for gym-style RL training
+- explicit about what is local versus official
+- close enough to the official rollout surface that policies and teacher systems
+  can be developed against it
 
-- `official_eval_score` is still not computed inside `aic_gym_gz`; that requires running the official toolkit path.
-- Live midpoint restore is still unavailable because the Gazebo training transport path does not expose a world snapshot / restore service.
-- Jerk parity is improved but still uses env-side velocity history rather than the official scorer's TF-buffer implementation.
-- Observation parity still depends on ROS topics being present for wrench, controller state, contacts, and camera_info.
+It is not trying to claim full official parity unless that has been explicitly
+measured.
 
-## Score labels
+## Score and reward labels
+
+Use these labels exactly:
 
 - `rl_step_reward`: dense local RL training reward returned by `env.step()`
-- `gym_final_score`: local gazebo-gym final episode score reported by `final_evaluation()`
-- `gym_reward`: umbrella label for the local gazebo-gym reward/scoring family in `aic_gym_gz`
-- `teacher_official_style_score`: higher-level teacher-side approximation on `feat/agent-teacher`
-- `official_eval_score`: actual official toolkit evaluation path
+- `gym_final_score`: local episode-level score returned by `final_evaluation()`
+- `official_eval_score`: official toolkit score, only when the official toolkit
+  is actually run
+- `teacher_official_style_score`: teacher-side approximation outside
+  `aic_gym_gz`
+
+Important:
+
+- `rl_step_reward` is for RL optimization
+- `gym_final_score` is for local trajectory-level evaluation
+- `gym_final_score` is not `official_eval_score`
+
+## What is aligned today
+
+- explicit target-port and target-port-entrance geometry are propagated into the
+  observation and score geometry
+- controller-state semantics are flattened into the public observation when the
+  ROS topic exists
+- current wrench semantics are propagated into the observation when the live ROS
+  wrench topic exists
+- image timestamps and `CameraInfo` are propagated in image mode when the sidecar
+  ROS topics exist
+- local episode scoring uses the strongest available local geometry and traces
+- mock checkpoint/restore is exact
+
+## Observation parity notes
+
+The public observation schema includes:
+
+- current `wrench`
+- `wrench_timestamp`
+- `tcp_pose`
+- `tcp_velocity`
+- flattened controller-state fields
+- images, image timestamps, and `camera_info` in image mode
+- score geometry such as:
+  - `distance_to_target`
+  - `distance_to_entrance`
+  - `orientation_error`
+  - `insertion_progress`
+  - `lateral_misalignment`
+  - `partial_insertion`
+
+### F/T and temporal behavior
+
+- The policy sees the current wrench sample only.
+- No built-in wrench history is provided.
+- If `ticks_per_step > 1`, the observation contains the final sample for the
+  held-action window, not a max or window summary.
+- That means transient force/contact spikes can be missed at the policy level.
+
+This is an important parity boundary. A policy that needs temporal memory should
+build it explicitly.
+
+## Reward parity notes
+
+`rl_step_reward` is intentionally not a per-step decomposition of the final
+score. It is a dense local training reward with Isaac-Lab-style shaping.
+
+That means:
+
+- reward parity to the official toolkit is not the goal for `rl_step_reward`
+- behavior alignment and optimization usefulness are the goals
+
+`gym_final_score` is the local score path that is closer in shape to the
+official scoring decomposition, but it still remains local to `aic_gym_gz`.
+
+## Final-score parity notes
+
+`gym_final_score` uses:
+
+- target-port geometry
+- target-port-entrance geometry
+- plug path
+- TCP path
+- timing trace
+- wrench trace when available
+- off-limit contact trace when available
+
+It stays approximate relative to the official toolkit because:
+
+- `official_eval_score` is not run here
+- jerk still comes from env-side velocity history
+- live wrench/contact exactness still depends on ROS topics
+
+## Live dependencies
+
+In live mode, the following fields depend on ROS topics being available:
+
+- `wrench` / `wrench_timestamp`
+- controller-state fields
+- `off_limit_contact`
+- images
+- image timestamps
+- `camera_info`
+
+The schema remains stable when those topics are missing. The missing live fields
+are zero-filled or false-filled rather than dropped.
+
+## Checkpoint parity notes
+
+- mock backend checkpoint/restore: exact
+- live checkpoint export: approximate reset-and-rerun artifact only
+- live midpoint restore: not available
+
+## Official compatibility statement
+
+`aic_gym_gz` is compatible with the official rollout surface at the level of:
+
+- explicit observation fields
+- fixed-rollout parity tooling
+- local score-shape analysis
+
+It is not a replacement for final validation with the official toolkit.
+
+Before making any official-quality claim, run the official toolkit and report
+`official_eval_score`.

@@ -1,7 +1,9 @@
 # aic_gym_gz
 
 `aic_gym_gz` is a standalone Gym-style training path for the AIC cable insertion
-challenge.
+challenge. It is intended to be a usable RL substrate with synchronous
+`reset()` / `step()` semantics while staying as behaviorally aligned as practical
+with the official AIC rollout surface.
 
 It is separate from the official ROS-first evaluation flow. The package reuses:
 
@@ -9,129 +11,92 @@ It is separate from the official ROS-first evaluation flow. The package reuses:
 - the official task board and cable geometry definitions from `aic_description`
 - the official scoring shape from `aic_scoring/src/ScoringTier2.cc`
 
-Current status:
-
-- Milestone 1: implemented
-- Milestone 2: implemented with a deterministic state-only backend
-- Milestone 3: implemented for the current live fixed-rollout path
-- Milestone 4: implemented with named dense RL reward terms and a separate final-score summary
-- Milestone 5: implemented with live wrist-camera ingestion through an isolated ROS sidecar fallback
-- Milestone 6: implemented for fixed-rollout parity against the official toolkit
-- Milestone 7: implemented with live benchmark reports under `artifacts/`
-
-The live target architecture is:
-
-- `AicGazeboRuntime`: owns synchronous stepping and exact tick advancement
-- `AicInsertionTask`: action space, observation space, reward, done, truncation
-- `AicGazeboIO`: Gazebo-native observations and action application
-- `AicEnvRandomizer`: official-schema-aligned scenario randomization
-- `AicParityHarness`: rollout comparison tooling
-
 ## Quick start
 
 ```bash
-pixi run python -m aic_gym_gz.demo_random_policy
-pixi run python -m aic_gym_gz.demo_heuristic_policy
-pixi run python -m aic_gym_gz.compare_reward_to_final_score --policy heuristic
 pixi run python -m unittest discover -s aic_gym_gz/tests
-pixi run python -m aic_gym_gz.benchmark
-pixi run python -m aic_gym_gz.live_benchmark
-pixi run python -m aic_gym_gz.deterministic_policy_parity
-pixi run python -m aic_gym_gz.live_training_smoke
-```
-
-## How to use for RL
-
-Recommended workflow:
-
-1. Launch the official Gazebo+ROS stack in the container and wait until `aic_controller` is active.
-2. Run the deterministic parity gate once.
-3. Run the training smoke script.
-4. Start your learner against `make_live_env(...)`.
-
-Recommended live configuration today:
-
-- `attach_to_existing=True`
-- `transport_backend="cli"`
-- `include_images=False` for first training runs
-- enable images only after state-only training is stable
-
-Minimal Gym-style usage:
-
-```python
-import numpy as np
-
-from aic_gym_gz.env import make_live_env
-
-env = make_live_env(
-    include_images=False,
-    enable_randomization=False,
-    attach_to_existing=True,
-    transport_backend="cli",
-    ticks_per_step=8,
-)
-
-observation, info = env.reset(seed=123)
-
-done = False
-while not done:
-    action = np.zeros(6, dtype=np.float32)
-    observation, reward, terminated, truncated, step_info = env.step(action)
-    done = terminated or truncated
-
-print(step_info["reward_label"], reward)
-print(step_info["reward_terms"])
-if done:
-    print(step_info["final_evaluation"]["score_label"])
-    print(step_info["final_evaluation"]["gym_final_score"])
-
-env.close()
+pixi run python -m aic_gym_gz.demo_random_policy --print-every 16
+pixi run python -m aic_gym_gz.demo_heuristic_policy
+pixi run python -m aic_gym_gz.compare_reward_to_final_score \
+  --policies random heuristic toward_target away_from_target oscillate_in_place collide_intentionally \
+  --episodes 8
+pixi run python -m aic_gym_gz.validate_reward_behavior \
+  --output-dir aic_gym_gz/artifacts/validation/reward_behavior
+pixi run python -m aic_gym_gz.validate_observation_temporal \
+  --output-dir aic_gym_gz/artifacts/validation/observation_temporal
 ```
 
 ## Reward and score labels
 
-Use these labels literally:
+Use these labels literally and consistently.
 
-- `rl_step_reward`: dense local RL training reward returned by `env.step()`
-- `reward_terms`: per-step RL reward breakdown for the returned `rl_step_reward`
-- `gym_final_score`: local gazebo-gym final episode score reported by `final_evaluation()`
-- `gym_reward`: umbrella label for the local gazebo-gym reward/score family
-- `teacher_official_style_score`: teacher-layer approximation on `feat/agent-teacher`
-- `official_eval_score`: true official toolkit score only when the official toolkit is actually run
+| Name | Computed Where | Purpose | Exact vs Approx |
+| --- | --- | --- | --- |
+| `rl_step_reward` | `env.step()` via `AicInsertionTask.evaluate_step()` | Dense per-step RL training reward | Local shaped reward, intentionally not equal to final score |
+| `gym_final_score` | `task.final_evaluation()` at episode end | Episode-level evaluation and analysis inside `aic_gym_gz` | Local trajectory-level approximation using the strongest available geometry and traces |
+| `official_eval_score` | Outside `aic_gym_gz`, via the official toolkit path | Ground-truth official evaluation and leaderboard-facing result | Official source of truth only when actually run |
+| `gym_reward` | Naming umbrella only | Refers to the local gazebo-gym reward/score family | Do not use this in place of the more precise labels above |
+| `teacher_official_style_score` | Teacher-side systems such as `feat/agent-teacher` | Teacher-layer approximation or ranking helper | Teacher-specific approximation, not official |
 
-`rl_step_reward` is not intended to exactly sum to `gym_final_score`, and neither
-should be called `official_eval_score`.
+### `rl_step_reward`
+
+- `rl_step_reward` is the per-step training reward returned by `env.step()`.
+- It is dense, local, shaped, and intended for optimization.
+- It follows Isaac-Lab-style reward design rather than trying to exactly
+  reconstruct the final score trajectory term by term.
+- It should not be interpreted as an official score.
+
+### `gym_final_score`
+
+- `gym_final_score` is computed at episode end from the full trajectory stored
+  by the task.
+- It uses local geometry, timing, wrench/contact traces, and local final-score
+  logic.
+- It is useful for evaluation, analysis, ablations, and teacher-side ranking.
+- It is not the same thing as `official_eval_score`.
+
+### `official_eval_score`
+
+- `official_eval_score` is not computed inside `aic_gym_gz`.
+- It requires running the official toolkit / official rollout path.
+- If you need leaderboard-relevant or ground-truth numbers, you must use the
+  official toolkit path.
 
 ## RL reward design
 
-The per-step RL reward follows Isaac-Lab-style shaping with:
+The per-step RL reward follows Isaac-Lab-style shaping with configurable local
+terms. The weights live in `aic_gym_gz.reward.AicRlRewardWeights`.
+
+Current reward shaping includes:
 
 - potential-based target progress
 - potential-based target-entrance progress
 - potential-based insertion-corridor progress
 - orientation-alignment progress
-- corridor-alignment shaping
-- local action, action-delta, and TCP-velocity-delta penalties
-- local wrench/contact penalties when those live fields are available
+- lateral corridor-alignment shaping
+- local action magnitude penalty
+- local action-delta penalty
+- local TCP-velocity-delta penalty
+- local force penalty from the current wrench sample
+- local off-limit contact penalty
 - short-history oscillation penalty
-- time penalty
-- terminal success bonus and wrong-port penalty
+- per-step time penalty
+- partial-insertion bonus
+- terminal success bonus
+- terminal wrong-port penalty
 
-All RL reward weights live in one place: `aic_gym_gz.reward.AicRlRewardWeights`.
+Important:
 
-## Final score design
+- The sum of `rl_step_reward` over an episode is not designed to equal
+  `gym_final_score`.
+- Training should optimize `rl_step_reward`.
+- Analysis and model-selection reports may also look at `gym_final_score`.
 
-`final_evaluation()` remains separate from RL training reward. It reports:
+## Observation schema
 
-- `gym_final_score`: the local trajectory-level gazebo-gym score
-- `training_reward_total`: episode sum of `rl_step_reward`
-- `official_eval_score`: `None` unless an external official toolkit run provided it
+The public observation dictionary is stable and explicit.
 
-The final score uses the strongest locally available episode trace, including
-`target_port_entrance_pose`, plug pose trace, TCP trace, wrench trace, contact
-trace, and timing trace.
-
-Observation keys in state-only mode:
+State-mode keys:
 
 - `step_count`
 - `sim_tick`
@@ -165,23 +130,151 @@ Observation keys in state-only mode:
 - `score_geometry.insertion_progress`
 - `score_geometry.partial_insertion`
 
-Additional keys in image mode:
+Additional image-mode keys:
 
 - `images["left"]`
 - `images["center"]`
 - `images["right"]`
 - `image_timestamps`
-- `camera_info`
+- `camera_info["left"|"center"|"right"]`
 
-Live observation dependencies:
+### F/T sensor behavior
 
-- `wrench` / `wrench_timestamp` depend on the ROS wrench topic
-- `controller_*` and `fts_tare_wrench` depend on the ROS controller-state topic
-- `off_limit_contact` depends on the ROS contact topic
-- `images`, `image_timestamps`, and `camera_info` depend on ROS sidecar topics when `include_images=True`
+- The policy receives only the current `wrench` sample for the current step.
+- No built-in wrench history is provided in the public observation.
+- This is closer to the official participant-facing observation surface than
+  providing an implicit history buffer inside the environment.
 
-The schema stays stable when those topics are absent; the fields are zero-filled or
-false-filled rather than dropped.
+### Temporal behavior
+
+- One `env.step()` corresponds to one policy observation timestep.
+- In the default configuration, the policy sees one observation per held action.
+- If `ticks_per_step > 1`, transient contact or force spikes that occur inside
+  the held-action window may be missed because only the final sample of the step
+  is returned.
+- There is currently no built-in within-step max or window summary for F/T.
+
+### Recommended usage for temporal signals
+
+- Build temporal memory at the policy level.
+- Use stacking, recurrence, or external history buffers if your policy depends
+  on contact transients or settling behavior.
+- Treat `wrench` as a current sample, not a trajectory summary.
+
+Example: stack recent wrench samples yourself.
+
+```python
+from collections import deque
+
+wrench_history = deque(maxlen=8)
+
+observation, info = env.reset(seed=123)
+wrench_history.append(observation["wrench"].copy())
+
+action = env.action_space.sample()
+observation, reward, terminated, truncated, step_info = env.step(action)
+wrench_history.append(observation["wrench"].copy())
+
+stacked_wrench = list(wrench_history)
+```
+
+## Using this environment for RL training
+
+This environment is suitable for gym-style RL training as long as you keep the
+current limitations in mind.
+
+Best practices:
+
+- optimize `rl_step_reward`, not `gym_final_score`
+- maintain your own observation history if temporal context matters
+- start with state-only training before enabling images
+- use `reward_terms` and `reward_metrics` from `step_info` to debug shaping
+- tune reward weights if your learner exploits weak penalties
+
+Recommended interpretation:
+
+- `rl_step_reward` is for learning
+- `gym_final_score` is for local episode analysis
+- `official_eval_score` is for final external validation only
+
+Current limitations for RL:
+
+- the mock backend can be overly forgiving
+- the local penalties do not necessarily suppress every undesirable behavior
+- reward-vs-final-score correlation is only approximate
+- F/T is current-sample-only, so transient spikes may be missed
+
+## Compatibility with official AIC evaluation
+
+The observation interface is designed to stay close to the official toolkit and
+official rollout surface, but it is not identical to running the official
+toolchain.
+
+What is intentionally aligned:
+
+- explicit task geometry in observation
+- current-sample state exposure rather than built-in history
+- controller-state propagation when available
+- wrench/contact/image/camera-info propagation when the live dependencies exist
+
+Key differences and caveats:
+
+- the policy must maintain its own temporal memory
+- some live fields depend on ROS topics being present
+- `gym_final_score` is a local final-score path, not the official toolkit score
+- final validation must be done with the official toolkit path
+
+State this explicitly:
+
+- `gym_final_score != official_eval_score`
+- `official_eval_score` must be treated as the official ground truth
+
+## Example usage
+
+### Step the environment
+
+```python
+import numpy as np
+
+from aic_gym_gz.env import make_default_env
+
+env = make_default_env()
+observation, info = env.reset(seed=123)
+
+action = np.zeros(6, dtype=np.float32)
+observation, reward, terminated, truncated, step_info = env.step(action)
+
+print(step_info["reward_label"], reward)
+print(step_info["reward_terms"])
+print(step_info["reward_metrics"])
+
+if terminated or truncated:
+    print(step_info["final_evaluation"]["gym_final_score"])
+
+env.close()
+```
+
+### Interpret reward versus final score
+
+```python
+training_reward_total = 0.0
+
+observation, info = env.reset(seed=123)
+done = False
+while not done:
+    action = env.action_space.sample()
+    observation, reward, terminated, truncated, step_info = env.step(action)
+    training_reward_total += reward
+    done = terminated or truncated
+
+final_report = step_info.get("final_evaluation") or env.task.final_evaluation()
+
+print("training reward total:", training_reward_total)
+print("gym final score:", final_report["gym_final_score"])
+print("official eval score:", final_report["official_eval_score"])
+```
+
+## Runtime parity and checkpoints
 
 Runtime parity audit:
 
@@ -198,44 +291,53 @@ pixi run python -m aic_gym_gz.export_runtime_checkpoint \
   --output /tmp/aic_gym_checkpoint.json
 ```
 
-Useful pre-training checks:
+Checkpoint status:
 
-```bash
-pixi run python -m aic_gym_gz.deterministic_policy_parity
-pixi run python -m aic_gym_gz.live_training_smoke
-pixi run python -m aic_gym_gz.live_training_smoke --include-images
-```
+- mock backend checkpoint/restore is exact
+- live checkpoint export is reset-and-rerun metadata only
+- live midpoint restore is still approximate / unavailable
 
-Artifacts worth checking:
+## Validation summary
 
-- deterministic parity: `artifacts/deterministic_policy_state/`
-- training smoke: `artifacts/training_smoke/`
-- live benchmark: `artifacts/live_benchmark_state.json` and `artifacts/live_benchmark_image.json`
+Current validation status, based on the checked-in validation report and recent
+branch checks:
+
+- reward is dense and usable for RL experiments, but imperfect
+- reward-vs-score correlation exists, but is inflated in the mock backend
+- F/T is current-sample-only, so within-step transients may be missed
+- live parity exists in branch artifacts, but was not fully revalidated in every
+  environment / shell
+
+The detailed validation write-up is in
+[docs/validation_report.md](/home/ubuntu/ws_aic/src/aic/aic_gym_gz/docs/validation_report.md).
 
 ## What is real today
 
 - deterministic `reset(seed=...)`
 - exact synchronous `step(action)` over a configured number of ticks
-- stable state-only observation dictionary
-- dense RL reward decomposition with named local shaping terms
-- separate local final episode score decomposition
-- live fixed-rollout parity against the official toolkit in state-only and state+image modes
-- live benchmark reports for the official control path versus the `aic_gym_gz` attached replay path
-- deterministic state-only parity regression artifacts under `artifacts/deterministic_policy_state`
-- state-only and image-mode live smoke artifacts under `artifacts/training_smoke`
+- explicit state-only observation schema
+- optional image observations with timestamps and `camera_info`
+- dense `rl_step_reward` with explicit reward-term breakdown
+- separate `gym_final_score` at episode end
+- validation scripts for reward behavior, temporal observation behavior, and
+  reward-vs-final-score correlation
+- checked-in live parity artifacts for official-path comparison
 
 ## What is still approximate
 
-- the current tested backend is deterministic and simulator-free
-- the default `make_default_env()` path is still deterministic and simulator-free for tests
-- the live backend is routed through `aic_utils/aic_gazebo_env`, not upstream ScenarIO / gym-gz
-- image ingestion currently uses a dedicated ROS bridge sidecar fallback rather than pure Gazebo Transport
-- the official reset metric is a readiness surrogate on this machine because `/gz_server/reset_simulation` still destabilizes the official bringup
-- repeated env-style live training startup is still less stable than the fixed-rollout parity path; the deterministic parity gate is currently the stronger readiness check
-- live force/contact/controller parity depends on ROS topic availability
-- live midpoint restore remains approximate; only the mock backend checkpoint/restore path is exact
+- the default tested backend in this shell is deterministic and simulator-free
+- the live backend is routed through `aic_utils/aic_gazebo_env`, not upstream
+  ScenarIO / gym-gz
+- image ingestion still uses a ROS sidecar fallback rather than pure Gazebo
+  Transport
+- live wrench/contact/controller parity depends on ROS topic availability
 - `official_eval_score` is not computed inside `aic_gym_gz`
+- short-horizon mock rollouts can make `gym_final_score` look less
+  discriminative than a real official rollout
 
-See [docs/architecture.md](/home/ubuntu/ws_aic/src/aic/aic_gym_gz/docs/architecture.md),
-[docs/runtime_parity.md](/home/ubuntu/ws_aic/src/aic/aic_gym_gz/docs/runtime_parity.md),
-and [docs/rl_reward_design.md](/home/ubuntu/ws_aic/src/aic/aic_gym_gz/docs/rl_reward_design.md).
+See also:
+
+- [docs/architecture.md](/home/ubuntu/ws_aic/src/aic/aic_gym_gz/docs/architecture.md)
+- [docs/runtime_parity.md](/home/ubuntu/ws_aic/src/aic/aic_gym_gz/docs/runtime_parity.md)
+- [docs/rl_reward_design.md](/home/ubuntu/ws_aic/src/aic/aic_gym_gz/docs/rl_reward_design.md)
+- [docs/validation_report.md](/home/ubuntu/ws_aic/src/aic/aic_gym_gz/docs/validation_report.md)
