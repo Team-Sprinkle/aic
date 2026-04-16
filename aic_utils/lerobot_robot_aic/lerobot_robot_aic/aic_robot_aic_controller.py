@@ -23,7 +23,6 @@ from functools import cached_property
 from threading import Thread
 from typing import Any, Callable, TypedDict, cast
 
-import cv2
 import numpy as np
 import rclpy
 from aic_control_interfaces.msg import (
@@ -52,6 +51,12 @@ from .aic_robot import aic_cameras, arm_joint_names
 from .types import JointMotionUpdateActionDict, MotionUpdateActionDict
 
 logger = logging.getLogger(__name__)
+
+
+def _get_cv2():
+    import cv2
+
+    return cv2
 
 
 ObservationState = TypedDict(
@@ -394,6 +399,7 @@ class AICRobotAICController(Robot):
                 if data is not None and data.size > 0:
                     image_scale = self.config.camera_image_scaling[cam_key]
                     if image_scale != 1:
+                        cv2 = _get_cv2()
                         cam_obs[cam_key] = cv2.resize(
                             data,
                             None,
