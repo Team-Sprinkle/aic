@@ -242,7 +242,7 @@ class CheatCodePIDController(Policy):
 
         z_offset = 0.2
 
-        duration = 5.0  # 20HZ TODO: check what good frequency should be
+        duration = 5.5
         dt = 0.05
         steps = int(duration / dt)
 
