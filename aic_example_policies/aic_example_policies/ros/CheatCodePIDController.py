@@ -261,7 +261,7 @@ class CheatCodePIDController(Policy):
                         slerp_fraction=interp_fraction,
                         position_fraction=interp_fraction,
                         z_offset=z_offset,
-                        reset_pids=True,
+                        reset_pids=False,
                         dt=dt,
                     ),
                 )
