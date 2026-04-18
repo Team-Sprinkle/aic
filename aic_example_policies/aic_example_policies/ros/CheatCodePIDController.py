@@ -14,6 +14,9 @@
 #  limitations under the License.
 #
 
+import os
+from pathlib import Path
+import re
 
 import numpy as np
 
@@ -33,19 +36,31 @@ from std_msgs.msg import String
 from tf2_ros import TransformException
 from transforms3d._gohlketransforms import quaternion_multiply, quaternion_slerp
 
+import matplotlib
+
+matplotlib.use("Agg")
+import matplotlib.pyplot as plt
+
 QuaternionTuple = tuple[float, float, float, float]
 
 
 class CheatCodePIDController(Policy):
     def __init__(self, parent_node):
-        # Match CheatCode's I-only XY correction behavior.
-        self.pid_x = PIDController(kp=0.0, ki=3.0, kd=0.0)
-        self.pid_y = PIDController(kp=0.0, ki=3.0, kd=0.0)
+        self.pid_x = PIDController(kp=17.0, ki=0.08, kd=2.0)
+        self.pid_y = PIDController(kp=17.0, ki=0.08, kd=2.0)
         self.xy_alignment_tolerance_m = 0.01
         self.xy_alignment_stable_cycles = 5
         self._task = None
         self._latest_insertion_event_namespace = ""
+        self._plot_output_dir = self._resolve_plot_output_dir()
         super().__init__(parent_node)
+
+        # --- NEW: Initialize tracking attributes ---
+        self.history_time = []
+        self.history_err_x = []
+        self.history_err_y = []
+        self.start_time = None
+
         self._insertion_event_sub = self._parent_node.create_subscription(
             String,
             "/scoring/insertion_event",
@@ -94,6 +109,111 @@ class CheatCodePIDController(Policy):
             f"Transform '{source_frame}' not available after {timeout_sec}s"
         )
         return False
+
+    def _safe_plot_errors(self, success: bool = False):
+        """Call plot_errors() without letting exceptions crash the caller."""
+        try:
+            self.plot_errors(success=success)
+        except Exception as ex:
+            self.get_logger().error(f"Failed to save PID telemetry plot: {ex}")
+
+    def plot_errors(self, success: bool = False):
+        """Helper to visualize PID performance."""
+        if not self.history_time:
+            self.get_logger().warn("No history recorded to plot.")
+            return
+
+        plt.figure(figsize=(10, 6))
+        err_x_mm = [e * 1e3 for e in self.history_err_x]
+        err_y_mm = [e * 1e3 for e in self.history_err_y]
+
+        plt.plot(
+            self.history_time,
+            err_x_mm,
+            label="Error X (mm)",
+            color="red",
+            linewidth=1.5,
+        )
+        plt.plot(
+            self.history_time,
+            err_y_mm,
+            label="Error Y (mm)",
+            color="blue",
+            linewidth=1.5,
+        )
+
+        final_x = err_x_mm[-1]
+        final_y = err_y_mm[-1]
+
+        plt.axhline(0, color="black", linestyle="--", alpha=0.5)
+        plt.xlabel("Time (s)")
+        plt.ylabel("Error (mm)")
+
+        task_label = self._task.target_module_name if self._task else "Task"
+        status = "SUCCESS" if success else "FAILURE"
+        plt.title(
+            f"PID Performance: {task_label} [{status}]\n"
+            f"X: Kp={self.pid_x.kp} Ki={self.pid_x.ki} Kd={self.pid_x.kd}  |  "
+            f"Y: Kp={self.pid_y.kp} Ki={self.pid_y.ki} Kd={self.pid_y.kd}\n"
+            f"Final Error: X={final_x:.3f} mm, Y={final_y:.3f} mm"
+        )
+
+        if hasattr(self, "_pre_descent_index") and self._pre_descent_index < len(
+            self.history_time
+        ):
+            plt.axvline(
+                self.history_time[self._pre_descent_index],
+                color="green",
+                linestyle=":",
+                label="Descent Start",
+            )
+
+        plt.legend(loc="upper right")
+        plt.grid(True, which="both", linestyle="--", alpha=0.5)
+
+        plt.annotate(
+            f"FINAL ERROR\nX: {final_x:.3f} mm\nY: {final_y:.3f} mm",
+            xy=(self.history_time[-1], (final_x + final_y) / 2),
+            xytext=(10, 20),
+            textcoords="offset points",
+            arrowprops=dict(arrowstyle="->", connectionstyle="arc3"),
+            bbox=dict(boxstyle="round,pad=0.5", fc="yellow", alpha=0.3),
+        )
+
+        plt.tight_layout()
+
+        # Save to file (recommended for ROS/Sim environments)
+        plot_path = self._build_plot_path()
+        plot_path.parent.mkdir(parents=True, exist_ok=True)
+        plt.savefig(plot_path)
+        plt.close()
+        self.get_logger().info(f"Telemetry plot saved as {plot_path}")
+        # plt.show() # Uncomment if you have a display/GUI
+
+    def _resolve_plot_output_dir(self) -> Path:
+        configured_dir = os.environ.get("AIC_PID_TUNING_PLOTS_DIR")
+        if configured_dir:
+            return Path(configured_dir).expanduser()
+        return Path.cwd() / "outputs" / "pid_tuning_plots"
+
+    def _build_plot_path(self) -> Path:
+        task_name = "task"
+        if self._task is not None:
+            task_name = f"{self._task.target_module_name}_{self._task.port_name}"
+        safe_task_name = re.sub(r"[^A-Za-z0-9._-]+", "_", task_name).strip("_")
+        if not safe_task_name:
+            safe_task_name = "task"
+        timestamp_ns = self.time_now().nanoseconds
+        return self._plot_output_dir / f"{safe_task_name}_{timestamp_ns}.png"
+
+    def _record_telemetry(self):
+        """Records current PID errors and time for plotting."""
+        if self.start_time is None:
+            self.start_time = self.time_now().nanoseconds / 1e9
+        current_time = (self.time_now().nanoseconds / 1e9) - self.start_time
+        self.history_time.append(current_time)
+        self.history_err_x.append(self.pid_x.last_error)
+        self.history_err_y.append(self.pid_y.last_error)
 
     def calc_gripper_pose(
         self,
@@ -171,11 +291,7 @@ class CheatCodePIDController(Policy):
         adj_x = self.pid_x.update(setpoint=port_xy[0], measurement=plug_xyz[0], dt=dt)
         adj_y = self.pid_y.update(setpoint=port_xy[1], measurement=plug_xyz[1], dt=dt)
 
-        self.get_logger().info(
-            f"[PID Log] Z-Offset: {z_offset:0.3f} | "
-            f"ErrX: {self.pid_x.last_error:0.4f} (Adj: {adj_x:0.4f}) | "
-            f"ErrY: {self.pid_y.last_error:0.4f} (Adj: {adj_y:0.4f})"
-        )
+        self._record_telemetry()
 
         target_x = port_xy[0] + adj_x
         target_y = port_xy[1] + adj_y
@@ -217,6 +333,12 @@ class CheatCodePIDController(Policy):
         self.get_logger().info(f"CheatCodePIDController.insert_cable() task: {task}")
         self._task = task
         self._latest_insertion_event_namespace = ""
+
+        # Reset telemetry and PIDs
+        self.history_time = []
+        self.history_err_x = []
+        self.history_err_y = []
+        self.start_time = None
         self.pid_x.reset()
         self.pid_y.reset()
 
@@ -251,6 +373,7 @@ class CheatCodePIDController(Policy):
                 self.get_logger().info(
                     "[CheatCodePID] Early exit: simulation reported task completion."
                 )
+                self._safe_plot_errors(success=True)
                 return True
             interp_fraction = t / float(steps)
             try:
@@ -269,6 +392,13 @@ class CheatCodePIDController(Policy):
                 self.get_logger().warn(f"TF lookup failed during interpolation: {ex}")
             self.sleep_for(0.05)
 
+        self._pre_descent_index = len(self.history_err_x) - 1
+        self.get_logger().info(
+            f"[CheatCodePID] Pre-descent XY error: "
+            f"ErrX={self.pid_x.last_error * 1e3:.3f} mm, "
+            f"ErrY={self.pid_y.last_error * 1e3:.3f} mm"
+        )
+
         # Descend until the cable is inserted into the port.
         # aligned_cycles = 0
         while True:
@@ -276,6 +406,7 @@ class CheatCodePIDController(Policy):
                 self.get_logger().info(
                     "[CheatCodePID] Early exit: simulation reported task completion."
                 )
+                self._safe_plot_errors(success=True)
                 return True
             if z_offset < -0.015:
                 break
@@ -310,7 +441,7 @@ class CheatCodePIDController(Policy):
             #         f"{self.xy_alignment_stable_cycles} cycles "
             #         f"(current: {aligned_cycles}/{self.xy_alignment_stable_cycles})"
             #     )
-            self.sleep_for(0.05)
+            # self.sleep_for(0.05)
 
         self.get_logger().info("Waiting briefly for insertion event...")
         wait_started = self.time_now()
@@ -320,10 +451,14 @@ class CheatCodePIDController(Policy):
                 self.get_logger().info(
                     "[CheatCodePID] Insertion event observed before timeout."
                 )
+                self._safe_plot_errors(success=True)
                 return True
             self.sleep_for(0.05)
 
         self.get_logger().info("CheatCodePIDController.insert_cable() exiting...")
+
+        self._safe_plot_errors()
+
         return False
 
 

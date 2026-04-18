@@ -16,6 +16,7 @@ POLICY_CLASS="${POLICY_CLASS:-aic_example_policies.ros.CheatCode}"
 SIM_DISTROBOX_NAME="${SIM_DISTROBOX_NAME:-aic_eval}"
 AUTO_ATTACH="${AUTO_ATTACH:-true}"
 RESULTS_ROOT="${RESULTS_ROOT:-${WORKSPACE_DIR}/outputs/scores/$(basename "${DATASET_ROOT}")}"
+PID_TUNING_PLOTS_DIR="${PID_TUNING_PLOTS_DIR:-${WORKSPACE_DIR}/outputs/pid_tuning_plots}"
 REMOVE_BAG_DATA="${REMOVE_BAG_DATA:-true}"
 GAZEBO_GUI="${GAZEBO_GUI:-true}"
 LAUNCH_RVIZ="${LAUNCH_RVIZ:-true}"
@@ -41,6 +42,7 @@ Options:
   --action-mode MODE        recorder action mode (default: ${ACTION_MODE})
   --max-episodes N          recorder max episodes (default: auto from config trials count)
   --results-root PATH       root directory for scoring outputs (default: ${RESULTS_ROOT})
+  --pid-plots-dir PATH      directory for PID tuning plots (default: ${PID_TUNING_PLOTS_DIR})
   --remove-bag-data BOOL    remove per-trial bag_* dirs after run (default: ${REMOVE_BAG_DATA})
   --gazebo-gui BOOL         pass gazebo_gui:=true/false to /entrypoint.sh (default: ${GAZEBO_GUI})
   --launch-rviz BOOL        pass launch_rviz:=true/false to /entrypoint.sh (default: ${LAUNCH_RVIZ})
@@ -51,7 +53,7 @@ Environment variable equivalents are also supported:
   SESSION_NAME, WORKSPACE_DIR, ENGINE_CONFIG_FILE, POLICY_CLASS,
   SIM_DISTROBOX_NAME, DATASET_REPO_ID, DATASET_ROOT, DATASET_SINGLE_TASK,
   ACTION_MODE, MAX_EPISODES, RESULTS_ROOT, REMOVE_BAG_DATA, GAZEBO_GUI,
-  LAUNCH_RVIZ
+  LAUNCH_RVIZ, PID_TUNING_PLOTS_DIR
 EOF
 }
 
@@ -99,6 +101,10 @@ while [[ $# -gt 0 ]]; do
       ;;
     --results-root)
       RESULTS_ROOT="$2"
+      shift 2
+      ;;
+    --pid-plots-dir)
+      PID_TUNING_PLOTS_DIR="$2"
       shift 2
       ;;
     --remove-bag-data)
@@ -210,6 +216,7 @@ if tmux has-session -t "${SESSION_NAME}" 2>/dev/null; then
 fi
 
 mkdir -p "${RESULTS_ROOT}"
+mkdir -p "${PID_TUNING_PLOTS_DIR}"
 
 SCORE_SUMMARY_CSV="${RESULTS_ROOT}/score_summary.csv"
 SCORING_YAML="${RESULTS_ROOT}/scoring.yaml"
@@ -301,8 +308,8 @@ POSTSIM
 chmod +x "${POST_SIM_SCRIPT}"
 
 SIM_CMD="/entrypoint.sh ground_truth:=true start_aic_engine:=true gazebo_gui:=${GAZEBO_GUI} launch_rviz:=${LAUNCH_RVIZ} aic_engine_config_file:=${ENGINE_CONFIG_FILE} shutdown_on_aic_engine_exit:=true"
-SIM_CMD_IN_CONTAINER="export DBX_CONTAINER_MANAGER=docker && distrobox enter -r ${SIM_DISTROBOX_NAME} -- bash -lc 'cd \"${WORKSPACE_DIR}\" && export AIC_RESULTS_DIR=\"${RESULTS_ROOT}\" && ${SIM_CMD}'"
-POLICY_CMD="pixi run ros2 run aic_model aic_model --ros-args -p use_sim_time:=true -p policy:=${POLICY_CLASS}"
+SIM_CMD_IN_CONTAINER="export DBX_CONTAINER_MANAGER=docker && distrobox enter ${SIM_DISTROBOX_NAME} -- bash -lc 'cd \"${WORKSPACE_DIR}\" && export AIC_RESULTS_DIR=\"${RESULTS_ROOT}\" && ${SIM_CMD}'"
+POLICY_CMD="export AIC_PID_TUNING_PLOTS_DIR=\"${PID_TUNING_PLOTS_DIR}\" && pixi run ros2 run aic_model aic_model --ros-args -p use_sim_time:=true -p policy:=${POLICY_CLASS}"
 RECORDER_CMD="pixi run aic-policy-recorder --dataset.repo_id=${DATASET_REPO_ID} --dataset.single_task=\"${DATASET_SINGLE_TASK}\" --dataset.root=${DATASET_ROOT} --dataset.fps=30 --action_mode=${ACTION_MODE} --max_episodes=${MAX_EPISODES} --dataset.push_to_hub"
 
 tmux new-session -d -s "${SESSION_NAME}" -n simulation
@@ -318,6 +325,7 @@ tmux select-window -t "${SESSION_NAME}:simulation"
 
 echo "Launched tmux session '${SESSION_NAME}' with windows: simulation, policy, recorder."
 echo "  scoring results dir: ${RESULTS_ROOT}"
+echo "  PID tuning plots dir: ${PID_TUNING_PLOTS_DIR}"
 echo "  scoring yaml (after sim exits): ${SCORING_YAML}"
 echo "  score summary csv (after sim exits): ${SCORE_SUMMARY_CSV}"
 echo "  remove bag data: ${REMOVE_BAG_DATA}"
