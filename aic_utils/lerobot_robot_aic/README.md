@@ -457,16 +457,25 @@ Once you have your LeRobot dataset, you can follow the [LeRobot tutorials](https
 
 ```bash
 pixi run lerobot-train\
- --dataset.repo_id=jskim/sfp2nic_ge80_1\
+ --dataset.repo_id=jskim/fixed_single_board_sfp2nic\
  --policy.type=act\
- --output_dir=outputs/train/act_test\
- --job_name=act_your_dataset\
+ --output_dir=outputs/train/act_fixed_single_board\
+ --job_name=act_fixed_single_board\
  --policy.device=cuda\
- --wandb.enable=true
- --policy.repo_id=jskim/act_policy\
+ --wandb.enable=true\
+ --policy.repo_id=jskim/act_policy_fixed_single_board\
  --num_workers=1\
  --batch_size=8\
- --dataset.video_backend=pyav
+ --lr=1e-4\
+ --steps=100000\
+ --dataset.video_backend=pyav\
+ --save_freq 5000
+ ```
 
+### Merging Lerobot Datasets by score (assuming you have associated score files for each of the datasets, as outlined in this README's "Recording Autonomous Policy Rollouts" section)
 
-If you see an OpenCV import error like `libtiff.so.6: undefined symbol: jpeg12_write_raw_data`, use this wrapper script instead of `pixi run lerobot-train` directly. It preloads Pixi's `libjpeg`/`libtiff` to avoid system library conflicts.
+pixi run python aic_utils/lerobot_robot_aic/scripts/filter_merge_lerobot_by_score.py\
+  --datasets outputs/fixed_20_trials_sfp2nic_0_dataset outputs/fixed_20_trials_sfp2nic_1_dataset outputs/fixed_20_trials_sfp2nic_2_dataset outputs/fixed_20_trials_sfp2nic_3_dataset outputs/fixed_20_trials_sfp2nic_4_dataset outputs/fixed_20_trials_sfp2nic_5_dataset outputs/fixed_20_trials_sfp2nic_6_dataset\
+  --min-score 90\
+  --output outputs/fixed_20_trials_sfp2nic_filtered_dataset\
+  --include-videos
