@@ -11,7 +11,7 @@ DATASET_ROOT="${DATASET_ROOT:-${WORKSPACE_DIR}/outputs/lerobot_datasets}"
 DATASET_SINGLE_TASK="${DATASET_SINGLE_TASK:-Insert cable into target port}"
 ACTION_MODE="${ACTION_MODE:-cartesian}"
 POLICY_CLASS="${POLICY_CLASS:-aic_example_policies.ros.CheatCode}"
-SIM_DISTROBOX_NAME="${SIM_DISTROBOX_NAME:-aic_eval}"
+SIM_DISTROBOX_NAME="${SIM_DISTROBOX_NAME:-aic_eval_0415}"
 SAVE_FAILED_EPISODES="${SAVE_FAILED_EPISODES:-false}"
 PER_TRIAL_TIMEOUT_SEC="${PER_TRIAL_TIMEOUT_SEC:-0}"
 STARTUP_DELAY_SEC="${STARTUP_DELAY_SEC:-8}"
@@ -274,24 +274,26 @@ terminate_process() {
 }
 
 cleanup_stale_sim_router() {
-  echo "  preflight: cleaning stale rmw_zenohd in distrobox '${SIM_DISTROBOX_NAME}'..."
+  # echo "  preflight: cleaning stale rmw_zenohd in distrobox '${SIM_DISTROBOX_NAME}'..."
   # Best-effort host cleanup in case rmw_zenohd is bound in host namespace.
   pkill -f rmw_zenohd >/dev/null 2>&1 || true
   pkill -f "rmw_zenoh_cpp rmw_zenohd" >/dev/null 2>&1 || true
 
-  local attempt
-  for attempt in {1..5}; do
-    if (
-      export DBX_CONTAINER_MANAGER=docker
-      distrobox enter -r "${SIM_DISTROBOX_NAME}" -- bash -lc "pkill -f rmw_zenohd >/dev/null 2>&1 || true; pkill -f 'rmw_zenoh_cpp rmw_zenohd' >/dev/null 2>&1 || true"
-    ); then
-      return 0
-    fi
-    echo "  preflight: distrobox cleanup attempt ${attempt}/5 failed; retrying..."
-    sleep 2
-  done
+  sleep 10
 
-  echo "  preflight: WARNING unable to run distrobox cleanup after retries; stale router may remain."
+  # local attempt
+  # for attempt in {1..5}; do
+  #   if (
+  #     export DBX_CONTAINER_MANAGER=docker
+  #     distrobox enter -r "${SIM_DISTROBOX_NAME}" -- bash -lc "pkill -f rmw_zenohd >/dev/null 2>&1 || true; pkill -f 'rmw_zenoh_cpp rmw_zenohd' >/dev/null 2>&1 || true"
+  #   ); then
+  #     return 0
+  #   fi
+  #   echo "  preflight: distrobox cleanup attempt ${attempt}/5 failed; retrying..."
+  #   sleep 2
+  # done
+
+  # echo "  preflight: WARNING unable to run distrobox cleanup after retries; stale router may remain."
 }
 
 cleanup_trial_bags() {
