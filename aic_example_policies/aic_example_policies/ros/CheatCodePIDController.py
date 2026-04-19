@@ -36,10 +36,15 @@ from std_msgs.msg import String
 from tf2_ros import TransformException
 from transforms3d._gohlketransforms import quaternion_multiply, quaternion_slerp
 
-import matplotlib
+try:
+    import matplotlib
 
-matplotlib.use("Agg")
-import matplotlib.pyplot as plt
+    matplotlib.use("Agg")
+    import matplotlib.pyplot as plt
+
+    _HAS_MATPLOTLIB = True
+except ImportError:
+    _HAS_MATPLOTLIB = False
 
 QuaternionTuple = tuple[float, float, float, float]
 
@@ -52,7 +57,15 @@ class CheatCodePIDController(Policy):
         self.xy_alignment_stable_cycles = 5
         self._task = None
         self._latest_insertion_event_namespace = ""
+        self._pid_plots_enabled = (
+            os.environ.get("AIC_PID_TUNING_PLOTS", "false").lower() == "true"
+        )
         self._plot_output_dir = self._resolve_plot_output_dir()
+        if self._pid_plots_enabled and not _HAS_MATPLOTLIB:
+            raise RuntimeError(
+                "PID tuning plots are enabled but matplotlib is not installed. "
+                "Hint: pixi add matplotlib"
+            )
         super().__init__(parent_node)
 
         # --- NEW: Initialize tracking attributes ---
@@ -112,6 +125,8 @@ class CheatCodePIDController(Policy):
 
     def _safe_plot_errors(self, success: bool = False):
         """Call plot_errors() without letting exceptions crash the caller."""
+        if not self._pid_plots_enabled:
+            return
         try:
             self.plot_errors(success=success)
         except Exception as ex:
@@ -161,11 +176,23 @@ class CheatCodePIDController(Policy):
         if hasattr(self, "_pre_descent_index") and self._pre_descent_index < len(
             self.history_time
         ):
+            desc_idx = self._pre_descent_index
             plt.axvline(
-                self.history_time[self._pre_descent_index],
+                self.history_time[desc_idx],
                 color="green",
                 linestyle=":",
                 label="Descent Start",
+            )
+            desc_x = err_x_mm[desc_idx]
+            desc_y = err_y_mm[desc_idx]
+            plt.annotate(
+                f"DESCENT START\nX: {desc_x:.3f} mm\nY: {desc_y:.3f} mm",
+                xy=(self.history_time[desc_idx], max(desc_x, desc_y)),
+                xytext=(-10, 20),
+                textcoords="offset points",
+                arrowprops=dict(arrowstyle="->", connectionstyle="arc3"),
+                bbox=dict(boxstyle="round,pad=0.5", fc="lightgreen", alpha=0.3),
+                ha="right",
             )
 
         plt.legend(loc="upper right")
@@ -364,9 +391,13 @@ class CheatCodePIDController(Policy):
 
         z_offset = 0.2
 
-        duration = 5.5
+        duration = 5.0
         dt = 0.05
         steps = int(duration / dt)
+
+        def cubic_polynomial_trajectory(t_frac: float) -> float:
+            """3rd-order polynomial (C1 continuity): smooth acceleration/deceleration."""
+            return 3 * (t_frac**2) - 2 * (t_frac**3)
 
         for t in range(steps):
             if self._task_completed_in_simulation(task):
@@ -375,7 +406,8 @@ class CheatCodePIDController(Policy):
                 )
                 self._safe_plot_errors(success=True)
                 return True
-            interp_fraction = t / float(steps)
+            raw_fraction = t / float(steps)
+            interp_fraction = cubic_polynomial_trajectory(raw_fraction)
             try:
                 self.set_pose_target(
                     move_robot=move_robot,
@@ -420,28 +452,6 @@ class CheatCodePIDController(Policy):
                 self.get_logger().warn(f"TF lookup failed during insertion: {ex}")
                 self.sleep_for(0.05)
                 continue
-
-            # if self._xy_error_is_aligned():
-            #     aligned_cycles += 1
-            # else:
-            #     aligned_cycles = 0
-
-            # if aligned_cycles >= self.xy_alignment_stable_cycles:
-            #     z_offset -= 0.0005
-            #     aligned_cycles = 0
-            #     self.get_logger().info(
-            #         f"[CheatCodePID] XY aligned within "
-            #         f"{self.xy_alignment_tolerance_m * 1000.0:0.1f} mm; "
-            #         f"advancing z_offset to {z_offset:0.5f}"
-            #     )
-            # else:
-            #     self.get_logger().info(
-            #         f"[CheatCodePID] Holding z_offset {z_offset:0.5f} until XY error "
-            #         f"is <= {self.xy_alignment_tolerance_m * 1000.0:0.1f} mm for "
-            #         f"{self.xy_alignment_stable_cycles} cycles "
-            #         f"(current: {aligned_cycles}/{self.xy_alignment_stable_cycles})"
-            #     )
-            # self.sleep_for(0.05)
 
         self.get_logger().info("Waiting briefly for insertion event...")
         wait_started = self.time_now()
