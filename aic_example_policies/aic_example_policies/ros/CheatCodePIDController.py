@@ -29,8 +29,9 @@ from aic_model.policy import (
 )
 from aic_model_interfaces.msg import Observation
 from aic_task_interfaces.msg import Task
-from geometry_msgs.msg import Point, Pose, Quaternion, Transform
+from geometry_msgs.msg import Point, Pose, Quaternion, Transform, Vector3
 from rclpy.duration import Duration
+from rclpy.qos import qos_profile_sensor_data
 from rclpy.time import Time
 from std_msgs.msg import String
 from tf2_ros import TransformException
@@ -61,6 +62,35 @@ class CheatCodePIDController(Policy):
             os.environ.get("AIC_PID_TUNING_PLOTS", "false").lower() == "true"
         )
         self._plot_output_dir = self._resolve_plot_output_dir()
+        self._collision_injection_enabled = (
+            os.environ.get("AIC_PID_COLLISION_INJECTION", "true").lower()
+            not in ("0", "false", "no", "off")
+        )
+        self._collision_injection_start_z_offset_m = float(
+            os.environ.get("AIC_PID_COLLISION_INJECTION_START_Z_OFFSET_M", "0.2")
+        )
+        self._collision_injection_xy_bias_m = float(
+            os.environ.get("AIC_PID_COLLISION_INJECTION_XY_BIAS_M", "0.025")
+        )
+        self._collision_injection_xy_noise_m = float(
+            os.environ.get("AIC_PID_COLLISION_INJECTION_XY_NOISE_M", "0.003")
+        )
+        self._collision_injection_ramp_duration_sec = float(
+            os.environ.get("AIC_PID_COLLISION_INJECTION_RAMP_DURATION_SEC", "2.0")
+        )
+        self._collision_injection_seed = int(
+            os.environ.get("AIC_PID_COLLISION_INJECTION_SEED", "7")
+        )
+        self._collision_injection_rng = np.random.default_rng(
+            self._collision_injection_seed
+        )
+        self._collision_injection_target_xy_offset_m = None
+        self._collision_injection_start_time_sec = None
+        self._collision_injection_logged = False
+        self._force_log_interval_sec = float(
+            os.environ.get("AIC_PID_FORCE_LOG_INTERVAL_SEC", "0.25")
+        )
+        self._last_force_log_time_sec = None
         if self._pid_plots_enabled and not _HAS_MATPLOTLIB:
             raise RuntimeError(
                 "PID tuning plots are enabled but matplotlib is not installed. "
@@ -80,12 +110,176 @@ class CheatCodePIDController(Policy):
             self._insertion_event_callback,
             10,
         )
+        self._collision_force_threshold_n = 20.0
+        self._collision_duration_threshold_sec = 1.0
+        self._collision_detected = False
+        # Contact/collision guideline:
+        # - Soft contact: sustained tared force above the low contact threshold,
+        #   below the scoring collision threshold. Useful for early "something is
+        #   touching" diagnostics, but not sufficient to prove blocked descent.
+        # - Lateral contact: sustained lateral force or high lateral-force ratio.
+        #   This catches off-axis binding that may be visually obvious before the
+        #   total force crosses 20 N.
+        # - Blocked descent: the policy keeps commanding downward z_offset
+        #   motion, but the plug-to-port Z progress stalls while contact force is
+        #   present. This is the best diagnostic for "robot is naively pushing
+        #   while blocked" even when total force is below 20 N.
+        # - Insertion collision: scoring guideline only, tared |F| > 20 N for
+        #   > 1 s. Keep this separate from contact diagnostics.
+        self._contact_force_threshold_n = float(
+            os.environ.get("AIC_PID_CONTACT_FORCE_THRESHOLD_N", "5.0")
+        )
+        self._contact_duration_threshold_sec = float(
+            os.environ.get("AIC_PID_CONTACT_DURATION_THRESHOLD_SEC", "1.0")
+        )
+        self._contact_detected = False
+        self._lateral_contact_force_threshold_n = float(
+            os.environ.get("AIC_PID_LATERAL_CONTACT_FORCE_THRESHOLD_N", "10.0")
+        )
+        self._lateral_contact_ratio_threshold = float(
+            os.environ.get("AIC_PID_LATERAL_CONTACT_RATIO_THRESHOLD", "0.65")
+        )
+        self._lateral_contact_duration_threshold_sec = float(
+            os.environ.get("AIC_PID_LATERAL_CONTACT_DURATION_THRESHOLD_SEC", "0.3")
+        )
+        self._lateral_contact_detected = False
+        self._lateral_contact_sec = 0.0
+        self._blocked_descent_duration_threshold_sec = float(
+            os.environ.get("AIC_PID_BLOCKED_DESCENT_DURATION_THRESHOLD_SEC", "0.5")
+        )
+        self._blocked_descent_progress_threshold_m = float(
+            os.environ.get("AIC_PID_BLOCKED_DESCENT_PROGRESS_THRESHOLD_M", "0.0001")
+        )
+        self._blocked_descent_detected = False
+        self._blocked_descent_sec = 0.0
+        self._last_blocked_descent_check_time_sec = None
+        self._last_plug_port_z_m = None
+        self._latest_force_mag_n = 0.0
+        self._latest_lateral_force_mag_n = 0.0
+        self._latest_lateral_force_ratio = 0.0
+        self._max_force_mag_n = 0.0
+        self._force_above_threshold_sec = 0.0
+        self._contact_force_sec = 0.0
+        self._last_force_sample_time_sec = None
+        self._obs_sub = self._parent_node.create_subscription(
+            Observation,
+            "/observations",
+            self._observation_callback,
+            qos_profile_sensor_data,
+        )
 
     def _insertion_event_callback(self, msg: String) -> None:
         self._latest_insertion_event_namespace = msg.data.strip().strip("/")
         self.get_logger().info(
             f"Received insertion event for namespace: '{self._latest_insertion_event_namespace}'"
         )
+
+    def _observation_callback(self, msg: Observation) -> None:
+        raw_force = msg.wrist_wrench.wrench.force
+        tare = msg.controller_state.fts_tare_offset.wrench.force
+        tared_force = np.array(
+            [
+                raw_force.x - tare.x,
+                raw_force.y - tare.y,
+                raw_force.z - tare.z,
+            ]
+        )
+        self._latest_force_mag_n = float(np.linalg.norm(tared_force))
+        self._latest_lateral_force_mag_n = float(np.linalg.norm(tared_force[:2]))
+        self._latest_lateral_force_ratio = self._latest_lateral_force_mag_n / max(
+            self._latest_force_mag_n, 1e-6
+        )
+        self._max_force_mag_n = max(self._max_force_mag_n, self._latest_force_mag_n)
+
+        stamp = msg.wrist_wrench.header.stamp
+        sample_time_sec = stamp.sec + stamp.nanosec / 1e9
+        if sample_time_sec <= 0.0:
+            sample_time_sec = self.time_now().nanoseconds / 1e9
+
+        dt = 0.0
+        if self._last_force_sample_time_sec is not None:
+            dt = max(0.0, sample_time_sec - self._last_force_sample_time_sec)
+        self._last_force_sample_time_sec = sample_time_sec
+
+        if self._latest_force_mag_n > self._collision_force_threshold_n:
+            self._force_above_threshold_sec += dt
+        elif self._latest_force_mag_n >= self._contact_force_threshold_n:
+            self._contact_force_sec += dt
+
+        lateral_contact_active = (
+            self._latest_lateral_force_mag_n
+            >= self._lateral_contact_force_threshold_n
+            or (
+                self._latest_force_mag_n >= self._contact_force_threshold_n
+                and self._latest_lateral_force_ratio
+                >= self._lateral_contact_ratio_threshold
+            )
+        )
+        if lateral_contact_active:
+            self._lateral_contact_sec += dt
+
+        if (
+            self._force_log_interval_sec > 0.0
+            and (
+                self._last_force_log_time_sec is None
+                or sample_time_sec - self._last_force_log_time_sec
+                >= self._force_log_interval_sec
+            )
+        ):
+            self.get_logger().info(
+                "Tared force: "
+                f"|F|={self._latest_force_mag_n:.2f} N, "
+                f"Fx={tared_force[0]:.2f} N, "
+                f"Fy={tared_force[1]:.2f} N, "
+                f"Fz={tared_force[2]:.2f} N, "
+                f"Fxy={self._latest_lateral_force_mag_n:.2f} N, "
+                f"lateral_ratio={self._latest_lateral_force_ratio:.2f}, "
+                f"contact_time={self._contact_force_sec:.2f} s, "
+                f"lateral_contact_time={self._lateral_contact_sec:.2f} s, "
+                f"blocked_descent_time={self._blocked_descent_sec:.2f} s, "
+                f"time_above_20N={self._force_above_threshold_sec:.2f} s"
+            )
+            self._last_force_log_time_sec = sample_time_sec
+
+        if (
+            not self._contact_detected
+            and self._contact_force_sec > self._contact_duration_threshold_sec
+        ):
+            self.get_logger().warn(
+                "Contact detected: sustained tared force between "
+                f"{self._contact_force_threshold_n:.1f} N and "
+                f"{self._collision_force_threshold_n:.1f} N for "
+                f"{self._contact_force_sec:.2f} seconds. "
+                "This is contact or blocked descent, not a scoring insertion collision."
+            )
+            self._contact_detected = True
+
+        if (
+            not self._lateral_contact_detected
+            and self._lateral_contact_sec
+            > self._lateral_contact_duration_threshold_sec
+        ):
+            self.get_logger().warn(
+                "Lateral contact detected: sustained off-axis tared force. "
+                f"Fxy={self._latest_lateral_force_mag_n:.2f} N, "
+                f"|F|={self._latest_force_mag_n:.2f} N, "
+                f"lateral_ratio={self._latest_lateral_force_ratio:.2f}, "
+                f"duration={self._lateral_contact_sec:.2f} s. "
+                "This indicates binding/contact even before scoring collision."
+            )
+            self._lateral_contact_detected = True
+
+        if (
+            not self._collision_detected
+            and self._force_above_threshold_sec > self._collision_duration_threshold_sec
+        ):
+            self.get_logger().warn(
+                "Collision detected: insertion force above "
+                f"{self._collision_force_threshold_n:.1f} N for "
+                f"{self._force_above_threshold_sec:.2f} seconds. "
+                f"Max tared force: {self._max_force_mag_n:.2f} N"
+            )
+            self._collision_detected = True
 
     def _task_completed_in_simulation(self, task: Task) -> bool:
         namespace = self._latest_insertion_event_namespace
@@ -95,6 +289,107 @@ class CheatCodePIDController(Policy):
         if len(tokens) < 2:
             return False
         return tokens[-2] == task.target_module_name and tokens[-1] == task.port_name
+
+    def _build_collision_test_port_transform(
+        self, port_transform: Transform, z_offset: float
+    ) -> Transform:
+        """Artificially add smooth XY target noise during descent to create collision."""
+        if (
+            not self._collision_injection_enabled
+            or z_offset > self._collision_injection_start_z_offset_m
+        ):
+            return port_transform
+
+        if self._collision_injection_target_xy_offset_m is None:
+            bias = self._collision_injection_xy_bias_m * np.array([1.0, 0.6])
+            noise = self._collision_injection_rng.normal(
+                loc=0.0, scale=self._collision_injection_xy_noise_m, size=2
+            )
+            self._collision_injection_target_xy_offset_m = bias + noise
+            self._collision_injection_start_time_sec = (
+                self.time_now().nanoseconds / 1e9
+            )
+
+        current_time_sec = self.time_now().nanoseconds / 1e9
+        elapsed_sec = current_time_sec - self._collision_injection_start_time_sec
+        if self._collision_injection_ramp_duration_sec <= 0.0:
+            ramp_fraction = 1.0
+        else:
+            ramp_fraction = min(
+                max(elapsed_sec / self._collision_injection_ramp_duration_sec, 0.0),
+                1.0,
+            )
+        smooth_fraction = 3.0 * ramp_fraction**2 - 2.0 * ramp_fraction**3
+        xy_offset = self._collision_injection_target_xy_offset_m * smooth_fraction
+
+        if not self._collision_injection_logged:
+            self.get_logger().warn(
+                "Injecting smooth descent XY drift to induce insertion collision: "
+                f"target_offset=({self._collision_injection_target_xy_offset_m[0] * 1e3:.1f}, "
+                f"{self._collision_injection_target_xy_offset_m[1] * 1e3:.1f}) mm, "
+                f"ramp_duration={self._collision_injection_ramp_duration_sec:.2f} s, "
+                f"start_z_offset={self._collision_injection_start_z_offset_m:.3f} m"
+            )
+            self._collision_injection_logged = True
+
+        return Transform(
+            translation=Vector3(
+                x=port_transform.translation.x + float(xy_offset[0]),
+                y=port_transform.translation.y + float(xy_offset[1]),
+                z=port_transform.translation.z,
+            ),
+            rotation=port_transform.rotation,
+        )
+
+    def _update_blocked_descent_detection(
+        self, port_transform: Transform, cable_tip_frame: str
+    ) -> None:
+        try:
+            plug_tf_stamped = self._parent_node._tf_buffer.lookup_transform(
+                "base_link",
+                cable_tip_frame,
+                Time(),
+            )
+        except TransformException:
+            return
+
+        current_time_sec = self.time_now().nanoseconds / 1e9
+        plug_port_z_m = (
+            plug_tf_stamped.transform.translation.z - port_transform.translation.z
+        )
+
+        if (
+            self._last_plug_port_z_m is None
+            or self._last_blocked_descent_check_time_sec is None
+        ):
+            self._last_plug_port_z_m = plug_port_z_m
+            self._last_blocked_descent_check_time_sec = current_time_sec
+            return
+
+        dt = max(0.0, current_time_sec - self._last_blocked_descent_check_time_sec)
+        z_progress_m = self._last_plug_port_z_m - plug_port_z_m
+        self._last_plug_port_z_m = plug_port_z_m
+        self._last_blocked_descent_check_time_sec = current_time_sec
+
+        contact_present = self._latest_force_mag_n >= self._contact_force_threshold_n
+        progress_stalled = z_progress_m < self._blocked_descent_progress_threshold_m
+        if contact_present and progress_stalled:
+            self._blocked_descent_sec += dt
+
+        if (
+            not self._blocked_descent_detected
+            and self._blocked_descent_sec
+            > self._blocked_descent_duration_threshold_sec
+        ):
+            self.get_logger().warn(
+                "Blocked descent detected: z_offset is still decreasing, "
+                "but plug-to-port Z progress is stalled under contact force. "
+                f"plug_port_z={plug_port_z_m:.4f} m, "
+                f"last_progress={z_progress_m * 1e3:.2f} mm, "
+                f"|F|={self._latest_force_mag_n:.2f} N, "
+                f"blocked_time={self._blocked_descent_sec:.2f} s"
+            )
+            self._blocked_descent_detected = True
 
     def _wait_for_tf(
         self, target_frame: str, source_frame: str, timeout_sec: float = 10.0
@@ -360,6 +655,28 @@ class CheatCodePIDController(Policy):
         self.get_logger().info(f"CheatCodePIDController.insert_cable() task: {task}")
         self._task = task
         self._latest_insertion_event_namespace = ""
+        self._collision_detected = False
+        self._contact_detected = False
+        self._lateral_contact_detected = False
+        self._blocked_descent_detected = False
+        self._latest_force_mag_n = 0.0
+        self._latest_lateral_force_mag_n = 0.0
+        self._latest_lateral_force_ratio = 0.0
+        self._max_force_mag_n = 0.0
+        self._force_above_threshold_sec = 0.0
+        self._contact_force_sec = 0.0
+        self._lateral_contact_sec = 0.0
+        self._blocked_descent_sec = 0.0
+        self._last_force_sample_time_sec = None
+        self._last_force_log_time_sec = None
+        self._last_blocked_descent_check_time_sec = None
+        self._last_plug_port_z_m = None
+        self._collision_injection_rng = np.random.default_rng(
+            self._collision_injection_seed
+        )
+        self._collision_injection_target_xy_offset_m = None
+        self._collision_injection_start_time_sec = None
+        self._collision_injection_logged = False
 
         # Reset telemetry and PIDs
         self.history_time = []
@@ -446,8 +763,17 @@ class CheatCodePIDController(Policy):
             z_offset -= 0.0005
             self.get_logger().info(f"z_offset: {z_offset:0.5}")
             try:
-                pose = self.calc_gripper_pose(port_transform, z_offset=z_offset)
+                insertion_port_transform = self._build_collision_test_port_transform(
+                    port_transform, z_offset
+                )
+                pose = self.calc_gripper_pose(
+                    insertion_port_transform, z_offset=z_offset
+                )
                 self.set_pose_target(move_robot=move_robot, pose=pose)
+                self._update_blocked_descent_detection(
+                    port_transform, cable_tip_frame
+                )
+                self.sleep_for(0.05)
             except TransformException as ex:
                 self.get_logger().warn(f"TF lookup failed during insertion: {ex}")
                 self.sleep_for(0.05)
