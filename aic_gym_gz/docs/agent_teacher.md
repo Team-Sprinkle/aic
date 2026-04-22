@@ -164,6 +164,81 @@ pixi run python -m aic_gym_gz.export_teacher_dataset \
   --format jsonl
 ```
 
+## Evaluating OpenAI teacher outputs
+
+The evaluation helpers are intentionally analysis-first. They do not change the
+base env semantics or infer official scores.
+
+### Rollout evaluation
+
+`aic_gym_gz.evaluate_teacher_rollout` summarizes:
+
+- phase sequence
+- planner call count
+- candidate count
+- segment count
+- `rl_step_reward_total`
+- `gym_final_score`
+- teacher official-style score when available
+- signal-quality flags
+- outcome / failure mode
+- path length, duration, and smoothness
+- warnings such as collapse, weak adaptation, or dependence on approximate
+  signals
+
+### Search evaluation
+
+`aic_gym_gz.evaluate_teacher_search` compares all ranked candidates and reports:
+
+- top-K ranking summary
+- whether quality penalties changed rank order
+- candidate diversity / near-duplicate detection
+- whether search materially beats the best single planner candidate
+- whether the ranking appears dominated by one signal
+
+### Replay evaluation
+
+`aic_gym_gz.evaluate_teacher_replay` replays an artifact and labels the result:
+
+- `faithful`
+- `approximately faithful`
+- `poor replay match`
+
+The thresholds are local and conservative. They are based on step drift, final
+TCP drift, final plug-target drift, reward drift, and local `gym_final_score`
+drift.
+
+### Example commands
+
+```bash
+pixi run python -m aic_gym_gz.evaluate_teacher_rollout \
+  --artifact /tmp/teacher_rollout_openai.json \
+  --output-json /tmp/teacher_rollout_eval.json \
+  --output-markdown /tmp/teacher_rollout_eval.md
+
+pixi run python -m aic_gym_gz.evaluate_teacher_search \
+  --artifact /tmp/teacher_search_openai.json \
+  --output-json /tmp/teacher_search_eval.json \
+  --output-markdown /tmp/teacher_search_eval.md
+
+pixi run python -m aic_gym_gz.evaluate_teacher_replay \
+  --artifact aic_gym_gz/artifacts/teacher_selected_replay.json \
+  --output-json /tmp/teacher_replay_eval.json \
+  --output-markdown /tmp/teacher_replay_eval.md
+```
+
+## Current practical findings
+
+Current OpenAI planning is functional, but evaluation can still reveal:
+
+- planner collapse into one dominant phase
+- near-duplicate search candidates
+- small gains from search over a single plan
+- strong local scores despite non-insertion outcomes
+
+For that reason, treat the teacher stack as useful for local analysis and data
+generation, but not yet as a proxy for official evaluation.
+
 ## Still approximate relative to official rollout
 
 - live wrench quality still depends on the downstream bridge exposing real data

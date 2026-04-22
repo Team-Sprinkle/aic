@@ -260,6 +260,46 @@ pixi run python -m aic_gym_gz.export_teacher_dataset \
   --format jsonl
 ```
 
+## Evaluating OpenAI teacher outputs
+
+The teacher stack now has explicit evaluation helpers for rollout quality,
+search usefulness, and replay faithfulness.
+
+What to inspect first:
+
+- rollout quality:
+  phase sequence, planner calls, segment count, local scores, signal quality,
+  outcome, path length, duration, and warnings
+- search usefulness:
+  whether top candidates are genuinely different, whether rank order changes
+  when quality penalties apply, and whether search beats the best single plan
+- replay faithfulness:
+  step drift, final TCP / plug-target drift, reward drift, and local
+  `gym_final_score` drift
+
+Interpret trust conservatively:
+
+- real wrench/controller/camera-info signals increase confidence
+- approximate or missing signals reduce confidence and may trigger warnings
+- `gym_final_score` and teacher-style scoring remain local analysis tools, not
+  official evaluation
+
+Example evaluation commands:
+
+```bash
+pixi run python -m aic_gym_gz.evaluate_teacher_rollout \
+  --artifact /tmp/teacher_rollout_openai.json \
+  --output-markdown /tmp/teacher_rollout_eval.md
+
+pixi run python -m aic_gym_gz.evaluate_teacher_search \
+  --artifact /tmp/teacher_search_openai.json \
+  --output-markdown /tmp/teacher_search_eval.md
+
+pixi run python -m aic_gym_gz.evaluate_teacher_replay \
+  --artifact aic_gym_gz/artifacts/teacher_selected_replay.json \
+  --output-markdown /tmp/teacher_replay_eval.md
+```
+
 ## Compatibility with official AIC evaluation
 
 The observation interface is designed to stay close to the official toolkit and

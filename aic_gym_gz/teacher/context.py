@@ -47,6 +47,7 @@ class TeacherContextExtractor:
             "wrench_timestamp": float(state.wrench_timestamp),
             "off_limit_contact": bool(state.off_limit_contact),
             "distance_to_target": float(np.linalg.norm(state.plug_pose[:3] - state.target_port_pose[:3])),
+            "score_geometry": serialize_nested(state.score_geometry),
         }
         oracle_context = {
             "task_board_pose_xyz_rpy": list(scenario.task_board.pose_xyz_rpy),
