@@ -13,6 +13,7 @@ Freshly executed in this turn:
 - `pixi run python -m unittest discover -s aic_gym_gz/tests`
 - `pixi run python -m aic_gym_gz.validate_reward_behavior`
 - `pixi run python -m aic_gym_gz.validate_observation_temporal`
+- `pixi run python -m aic_gym_gz.validate_force_transients`
 - `pixi run python -m aic_gym_gz.compare_reward_to_final_score`
 
 Not freshly executable in this shell:
@@ -161,7 +162,9 @@ The mock public observation schema includes the expected fields:
 
 ### Result
 
-Partially correct.
+Current observation semantics remain official-compatible, and auxiliary
+within-step summaries now expose the transient aliasing that used to be hidden
+under coarse stepping.
 
 ### Fresh temporal validation
 
@@ -186,16 +189,41 @@ From `aic_gym_gz/artifacts/validation/observation_temporal/observation_temporal_
 
 - The mock “collision then backoff” sequence did not produce a wrench spike:
   `max_wrench_force_l2_norm = 0.0` in all three temporal experiments.
-- There is no policy-level within-step max or summary for F/T. Only the final
-  sample of each env step is observable.
-- This means transient spikes can be lost when `ticks_per_step > 1`.
+- The public observation still exposes only the final/current sample for each
+  env step.
+- Auxiliary within-step summaries are non-official and therefore must not be
+  treated as part of the participant-facing observation contract.
+
+### Fresh transient-aliasing validation
+
+From `aic_gym_gz/artifacts/validation/force_transients/force_transient_validation_report.json`:
+
+- Scenario A (`scenario_a_obstacle_contact_transient`)
+  - `current_wrench_force_l2_norm = 0.0`
+  - `wrench_max_force_abs_recent ≈ 60.0`
+  - `had_contact_recent = true`
+  - `aliasing_detected = true`
+- Scenario B (`scenario_b_no_contact_control`)
+  - `had_contact_recent_step_count = 0`
+  - `max_recent_force_l2_norm = 0.0`
+- Scenario C (`scenario_c_repeated_coarse_boundary_crossing`)
+  - `aliasing_detected_step_count = 4`
+  - `current_contact_step_count = 0`
+  - `had_contact_recent_step_count = 4`
+
+The new validator also reports:
+
+- direct Isaac Lab parity tested: `false`
+- conceptual Isaac-Lab-style expectation check passed: `true`
+- direct official path parity tested: `false`
 
 ### Conclusion
 
-- Contact observation: partially correct
-- Wrench temporal fidelity: partially correct at best in mock, and not
-  validated on live this turn
-- Transient preservation across multi-tick steps: not preserved at policy level
+- Official-compatible current observation: preserved
+- Non-official auxiliary within-step transient visibility: now validated on the
+  mock backend
+- Direct official-path parity for this transient validator: not run in this
+  report
 
 ## 5. Gym vs official rollout comparison
 

@@ -25,6 +25,10 @@ class RuntimeCheckpointTest(unittest.TestCase):
             restored.score_geometry.get("insertion_progress"),
             first.score_geometry.get("insertion_progress"),
         )
+        self.assertEqual(
+            restored.auxiliary_force_contact_summary.sample_count,
+            first.auxiliary_force_contact_summary.sample_count,
+        )
         self.assertEqual(restored.sim_tick, first.sim_tick)
         self.assertNotEqual(advanced.sim_tick, restored.sim_tick)
         runtime.close()
