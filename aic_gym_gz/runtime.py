@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
+from collections import deque
 from dataclasses import dataclass, field
 import math
 from pathlib import Path
@@ -15,6 +16,55 @@ from typing import Any
 import numpy as np
 
 from .scenario import AicScenario
+
+
+@dataclass(frozen=True)
+class AuxiliaryForceContactSummary:
+    """Auxiliary within-step force/contact summary.
+
+    This payload is explicitly non-official and is not part of the
+    official-compatible observation surface. It exists to summarize internal
+    sub-samples collected during one `env.step()`.
+    """
+
+    is_official_observation: bool = False
+    source: str = "final_sample_only"
+    substep_tick_count: int = 0
+    sample_count: int = 0
+    wrench_current: np.ndarray = field(default_factory=lambda: np.zeros(6, dtype=np.float64))
+    wrench_max_abs_recent: np.ndarray = field(default_factory=lambda: np.zeros(6, dtype=np.float64))
+    wrench_mean_recent: np.ndarray = field(default_factory=lambda: np.zeros(6, dtype=np.float64))
+    wrench_max_force_abs_recent: float = 0.0
+    wrench_max_torque_abs_recent: float = 0.0
+    had_contact_recent: bool = False
+    max_contact_indicator_recent: float = 0.0
+    first_wrench_recent: np.ndarray = field(default_factory=lambda: np.zeros(6, dtype=np.float64))
+    last_wrench_recent: np.ndarray = field(default_factory=lambda: np.zeros(6, dtype=np.float64))
+    time_of_peak_within_step: float | None = None
+    limitations: tuple[str, ...] = ()
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "is_official_observation": bool(self.is_official_observation),
+            "source": self.source,
+            "substep_tick_count": int(self.substep_tick_count),
+            "sample_count": int(self.sample_count),
+            "wrench_current": self.wrench_current.astype(np.float32).copy(),
+            "wrench_max_abs_recent": self.wrench_max_abs_recent.astype(np.float32).copy(),
+            "wrench_mean_recent": self.wrench_mean_recent.astype(np.float32).copy(),
+            "wrench_max_force_abs_recent": float(self.wrench_max_force_abs_recent),
+            "wrench_max_torque_abs_recent": float(self.wrench_max_torque_abs_recent),
+            "had_contact_recent": bool(self.had_contact_recent),
+            "max_contact_indicator_recent": float(self.max_contact_indicator_recent),
+            "first_wrench_recent": self.first_wrench_recent.astype(np.float32).copy(),
+            "last_wrench_recent": self.last_wrench_recent.astype(np.float32).copy(),
+            "time_of_peak_within_step": (
+                None
+                if self.time_of_peak_within_step is None
+                else float(self.time_of_peak_within_step)
+            ),
+            "limitations": list(self.limitations),
+        }
 
 
 @dataclass(frozen=True)
@@ -35,6 +85,9 @@ class RuntimeState:
     insertion_event: str | None = None
     controller_state: dict[str, Any] = field(default_factory=dict)
     score_geometry: dict[str, Any] = field(default_factory=dict)
+    auxiliary_force_contact_summary: AuxiliaryForceContactSummary = field(
+        default_factory=AuxiliaryForceContactSummary
+    )
 
 
 @dataclass(frozen=True)
@@ -43,6 +96,15 @@ class RuntimeCheckpoint:
     payload: dict[str, Any]
     exact: bool
     limitations: list[str] = field(default_factory=list)
+
+
+@dataclass(frozen=True)
+class MockTransientContactConfig:
+    """Optional deterministic narrow-band contact model for validation."""
+
+    contact_band_z: tuple[float, float] | None = None
+    peak_force_newtons: float = 30.0
+    peak_torque_newton_meters: float = 3.0
 
 
 class RuntimeBackend(ABC):
@@ -96,6 +158,76 @@ class AicGazeboRuntime:
 
     def restore_checkpoint(self, checkpoint: RuntimeCheckpoint) -> RuntimeState:
         return self.backend.restore_checkpoint(checkpoint)
+
+
+def _single_sample_force_contact_summary(
+    *,
+    wrench: np.ndarray,
+    contact: bool,
+    substep_tick_count: int,
+    source: str,
+    limitations: list[str] | tuple[str, ...] = (),
+) -> AuxiliaryForceContactSummary:
+    return AuxiliaryForceContactSummary(
+        source=source,
+        substep_tick_count=int(substep_tick_count),
+        sample_count=1,
+        wrench_current=wrench.copy(),
+        wrench_max_abs_recent=np.abs(wrench),
+        wrench_mean_recent=wrench.copy(),
+        wrench_max_force_abs_recent=float(np.linalg.norm(wrench[:3])),
+        wrench_max_torque_abs_recent=float(np.linalg.norm(wrench[3:])),
+        had_contact_recent=bool(contact),
+        max_contact_indicator_recent=1.0 if contact else 0.0,
+        first_wrench_recent=wrench.copy(),
+        last_wrench_recent=wrench.copy(),
+        time_of_peak_within_step=0.0,
+        limitations=tuple(str(item) for item in limitations),
+    )
+
+
+def _force_contact_summary_from_samples(
+    *,
+    wrench_samples: list[np.ndarray],
+    timestamps: list[float],
+    contact_indicators: list[float],
+    substep_tick_count: int,
+    source: str,
+    limitations: list[str] | tuple[str, ...] = (),
+) -> AuxiliaryForceContactSummary:
+    if not wrench_samples:
+        return _single_sample_force_contact_summary(
+            wrench=np.zeros(6, dtype=np.float64),
+            contact=False,
+            substep_tick_count=substep_tick_count,
+            source=source,
+            limitations=list(limitations) + ["No within-step samples were available."],
+        )
+    stack = np.stack([np.asarray(sample, dtype=np.float64) for sample in wrench_samples], axis=0)
+    force_norms = np.linalg.norm(stack[:, :3], axis=1)
+    torque_norms = np.linalg.norm(stack[:, 3:], axis=1)
+    peak_index = int(np.argmax(force_norms)) if force_norms.size else 0
+    if timestamps:
+        start_time = float(timestamps[0])
+        peak_time = float(timestamps[min(peak_index, len(timestamps) - 1)]) - start_time
+    else:
+        peak_time = None
+    return AuxiliaryForceContactSummary(
+        source=source,
+        substep_tick_count=int(substep_tick_count),
+        sample_count=int(stack.shape[0]),
+        wrench_current=stack[-1].copy(),
+        wrench_max_abs_recent=np.max(np.abs(stack), axis=0),
+        wrench_mean_recent=np.mean(stack, axis=0),
+        wrench_max_force_abs_recent=float(force_norms.max(initial=0.0)),
+        wrench_max_torque_abs_recent=float(torque_norms.max(initial=0.0)),
+        had_contact_recent=bool(any(indicator > 0.0 for indicator in contact_indicators)),
+        max_contact_indicator_recent=float(max(contact_indicators, default=0.0)),
+        first_wrench_recent=stack[0].copy(),
+        last_wrench_recent=stack[-1].copy(),
+        time_of_peak_within_step=peak_time,
+        limitations=tuple(str(item) for item in limitations),
+    )
 
 
 class ScenarioGymGzBackend(RuntimeBackend):
@@ -212,6 +344,7 @@ class ScenarioGymGzBackend(RuntimeBackend):
         tick_count = int(tick_count)
         if tick_count <= 0:
             raise ValueError("tick_count must be positive.")
+        step_window_start = time.monotonic()
         position_delta = (np.clip(self._action[:3], -0.25, 0.25) * 0.002 * tick_count).tolist()
         rotation_delta = _angular_delta_to_quaternion(
             np.clip(self._action[3:], -2.0, 2.0) * 0.002 * tick_count
@@ -226,9 +359,15 @@ class ScenarioGymGzBackend(RuntimeBackend):
                 "multi_step": tick_count,
             }
         )
+        step_window_end = time.monotonic()
         self._last_observation = dict(observation)
         self._last_info = dict(info)
-        self._last_state = self._runtime_state_from_observation(observation, info)
+        self._last_state = self._runtime_state_from_observation(
+            observation,
+            info,
+            step_tick_count=tick_count,
+            wall_time_window=(step_window_start, step_window_end),
+        )
         return self._last_state
 
     def close(self) -> None:
@@ -440,6 +579,9 @@ class ScenarioGymGzBackend(RuntimeBackend):
         self,
         observation: dict[str, Any],
         info: dict[str, Any],
+        *,
+        step_tick_count: int = 0,
+        wall_time_window: tuple[float, float] | None = None,
     ) -> RuntimeState:
         entities_by_name = observation.get("entities_by_name") or {}
         source_name, source = _resolve_named_entity(
@@ -502,6 +644,49 @@ class ScenarioGymGzBackend(RuntimeBackend):
         wrench, wrench_timestamp = _wrench_from_ros_sample(ros_sample)
         controller_state = _controller_state_from_ros_sample(ros_sample)
         off_limit_contact = bool(ros_sample.get("off_limit_contact", False))
+        auxiliary_summary = _single_sample_force_contact_summary(
+            wrench=wrench,
+            contact=off_limit_contact,
+            substep_tick_count=step_tick_count,
+            source="final_sample_only",
+            limitations=(
+                []
+                if step_tick_count <= 1
+                else [
+                    "Exact simulator sub-sample history is not exposed on this live path; only the current sample is guaranteed."
+                ]
+            ),
+        )
+        if (
+            self._ros_observer is not None
+            and wall_time_window is not None
+            and step_tick_count > 0
+        ):
+            window_samples = self._ros_observer.history_between(*wall_time_window)
+            wrench_samples = [item["wrench"] for item in window_samples["wrench_samples"]]
+            timestamps = [float(item["timestamp"]) for item in window_samples["wrench_samples"]]
+            contact_indicators = [
+                float(item["indicator"]) for item in window_samples["contact_samples"]
+            ]
+            if wrench_samples or contact_indicators:
+                if not wrench_samples:
+                    wrench_samples = [wrench.copy()]
+                    timestamps = [float(wrench_timestamp)]
+                if not contact_indicators:
+                    contact_indicators = [1.0 if off_limit_contact else 0.0]
+                limitations: list[str] = []
+                if window_samples["timestamp_basis"] != "ros_header":
+                    limitations.append(
+                        "Within-step live aggregation is derived from ROS callback arrival windows rather than exact simulator substeps."
+                    )
+                auxiliary_summary = _force_contact_summary_from_samples(
+                    wrench_samples=wrench_samples,
+                    timestamps=timestamps,
+                    contact_indicators=contact_indicators,
+                    substep_tick_count=step_tick_count,
+                    source=window_samples["source"],
+                    limitations=limitations,
+                )
         score_geometry = _build_score_geometry(
             plug_name=plug_name,
             target_name=target_name,
@@ -529,6 +714,7 @@ class ScenarioGymGzBackend(RuntimeBackend):
             insertion_event=None,
             controller_state=controller_state,
             score_geometry=score_geometry,
+            auxiliary_force_contact_summary=auxiliary_summary,
         )
 
     def _plug_candidates(self) -> tuple[str, ...]:
@@ -568,12 +754,18 @@ class ScenarioGymGzBackend(RuntimeBackend):
 class MockStepperBackend(RuntimeBackend):
     """Deterministic backend used for tests and the random-policy demo."""
 
-    def __init__(self, *, sim_dt: float = 0.002) -> None:
+    def __init__(
+        self,
+        *,
+        sim_dt: float = 0.002,
+        transient_contact_config: MockTransientContactConfig | None = None,
+    ) -> None:
         self._sim_dt = sim_dt
         self._rng = np.random.default_rng(0)
         self._state: RuntimeState | None = None
         self._action = np.zeros(6, dtype=np.float64)
         self._scenario: AicScenario | None = None
+        self._transient_contact_config = transient_contact_config or MockTransientContactConfig()
 
     def reset(self, *, seed: int | None, scenario: AicScenario) -> RuntimeState:
         self._rng = np.random.default_rng(seed if seed is not None else 0)
@@ -624,6 +816,12 @@ class MockStepperBackend(RuntimeBackend):
                 entrance_pose=entrance_pose,
                 tracked_pair={},
             ),
+            auxiliary_force_contact_summary=_single_sample_force_contact_summary(
+                wrench=np.zeros(6, dtype=np.float64),
+                contact=False,
+                substep_tick_count=0,
+                source="mock_reset",
+            ),
         )
         return self._state
 
@@ -638,6 +836,9 @@ class MockStepperBackend(RuntimeBackend):
             raise ValueError("tick_count must be positive.")
 
         state = self._state
+        wrench_samples: list[np.ndarray] = []
+        timestamps: list[float] = []
+        contact_indicators: list[float] = []
         for _ in range(tick_count):
             linear = np.clip(self._action[:3], -0.25, 0.25)
             angular = np.clip(self._action[3:], -2.0, 2.0)
@@ -663,7 +864,30 @@ class MockStepperBackend(RuntimeBackend):
                 insertion_event = f"{next(iter(['nic_card_mount_0']))}/{next(iter(['sfp_port_0']))}"
             off_limit_contact = bool(next_tcp_pose[2] < 1.0)
             force_mag = max(0.0, (0.02 - distance) * 1800.0)
-            wrench = np.array([0.0, 0.0, force_mag, 0.0, 0.0, 0.0], dtype=np.float64)
+            torque_mag = 0.0
+            contact_band = self._transient_contact_config.contact_band_z
+            if contact_band is not None:
+                band_lo, band_hi = sorted((float(contact_band[0]), float(contact_band[1])))
+                band_center = 0.5 * (band_lo + band_hi)
+                half_width = max(0.5 * (band_hi - band_lo), 1e-6)
+                band_overlap = max(0.0, 1.0 - abs(float(next_tcp_pose[2]) - band_center) / half_width)
+                if band_overlap > 0.0:
+                    off_limit_contact = True
+                    speed_scale = 1.0 + min(abs(float(linear[2])) / 0.25, 1.0)
+                    force_mag = max(
+                        force_mag,
+                        self._transient_contact_config.peak_force_newtons * band_overlap * speed_scale,
+                    )
+                    torque_mag = (
+                        self._transient_contact_config.peak_torque_newton_meters
+                        * band_overlap
+                        * speed_scale
+                    )
+            wrench = np.array([0.0, 0.0, force_mag, 0.0, torque_mag, 0.0], dtype=np.float64)
+            sample_timestamp = state.sim_time + self._sim_dt
+            wrench_samples.append(wrench.copy())
+            timestamps.append(sample_timestamp)
+            contact_indicators.append(1.0 if off_limit_contact else 0.0)
 
             state = RuntimeState(
                 sim_tick=state.sim_tick + 1,
@@ -677,7 +901,7 @@ class MockStepperBackend(RuntimeBackend):
                 target_port_pose=state.target_port_pose,
                 target_port_entrance_pose=state.target_port_entrance_pose,
                 wrench=wrench,
-                wrench_timestamp=state.sim_time + self._sim_dt,
+                wrench_timestamp=sample_timestamp,
                 off_limit_contact=off_limit_contact,
                 insertion_event=insertion_event,
                 controller_state=state.controller_state,
@@ -689,6 +913,13 @@ class MockStepperBackend(RuntimeBackend):
                     target_pose=state.target_port_pose,
                     entrance_pose=state.target_port_entrance_pose,
                     tracked_pair={},
+                ),
+                auxiliary_force_contact_summary=_force_contact_summary_from_samples(
+                    wrench_samples=wrench_samples,
+                    timestamps=timestamps,
+                    contact_indicators=contact_indicators,
+                    substep_tick_count=tick_count,
+                    source="mock_substeps_exact",
                 ),
             )
         self._state = state
@@ -707,6 +938,15 @@ class MockStepperBackend(RuntimeBackend):
                 "state": _serialize_runtime_state(self._state),
                 "action": self._action.tolist(),
                 "rng_state": self._rng.bit_generator.state,
+                "transient_contact_config": {
+                    "contact_band_z": None
+                    if self._transient_contact_config.contact_band_z is None
+                    else list(self._transient_contact_config.contact_band_z),
+                    "peak_force_newtons": self._transient_contact_config.peak_force_newtons,
+                    "peak_torque_newton_meters": (
+                        self._transient_contact_config.peak_torque_newton_meters
+                    ),
+                },
             },
         )
 
@@ -717,6 +957,18 @@ class MockStepperBackend(RuntimeBackend):
         self._action = np.asarray(checkpoint.payload.get("action", np.zeros(6)), dtype=np.float64)
         self._rng = np.random.default_rng()
         self._rng.bit_generator.state = checkpoint.payload["rng_state"]
+        transient_config = checkpoint.payload.get("transient_contact_config", {})
+        self._transient_contact_config = MockTransientContactConfig(
+            contact_band_z=(
+                None
+                if transient_config.get("contact_band_z") is None
+                else tuple(transient_config["contact_band_z"])
+            ),
+            peak_force_newtons=float(transient_config.get("peak_force_newtons", 30.0)),
+            peak_torque_newton_meters=float(
+                transient_config.get("peak_torque_newton_meters", 3.0)
+            ),
+        )
         return self._state
 
 
@@ -730,6 +982,8 @@ class _RuntimeRosObserver:
 
     def __init__(self) -> None:
         self._data: dict[str, Any] = {}
+        self._wrench_history: deque[dict[str, Any]] = deque(maxlen=4096)
+        self._contact_history: deque[dict[str, Any]] = deque(maxlen=4096)
         self._lock = None
         self._stop_event = None
         self._thread = None
@@ -750,6 +1004,39 @@ class _RuntimeRosObserver:
             return {}
         with self._lock:
             return dict(self._data)
+
+    def history_between(self, start_time: float, end_time: float) -> dict[str, Any]:
+        if not self._ready or self._lock is None:
+            return {
+                "wrench_samples": [],
+                "contact_samples": [],
+                "timestamp_basis": "unavailable",
+                "source": "final_sample_only",
+            }
+        with self._lock:
+            wrench_samples = [
+                {
+                    "wrench": item["wrench"].copy(),
+                    "timestamp": float(item["timestamp"]),
+                }
+                for item in self._wrench_history
+                if start_time <= float(item["wall_time"]) <= end_time
+            ]
+            contact_samples = [
+                {
+                    "indicator": float(item["indicator"]),
+                    "timestamp": float(item["timestamp"]),
+                }
+                for item in self._contact_history
+                if start_time <= float(item["wall_time"]) <= end_time
+            ]
+            timestamp_basis = "ros_header" if wrench_samples else "wall_time"
+        return {
+            "wrench_samples": wrench_samples,
+            "contact_samples": contact_samples,
+            "timestamp_basis": timestamp_basis,
+            "source": "ros_callback_window",
+        }
 
     def close(self) -> None:
         if not self._ready or self._stop_event is None:
@@ -790,14 +1077,36 @@ class _RuntimeRosObserver:
                 self._data[key] = value
 
         def wrench_callback(message: WrenchStamped) -> None:
-            set_value("wrench", message)
+            wall_time = time.monotonic()
+            wrench, timestamp = _wrench_from_ros_sample({"wrench": message})
+            assert self._lock is not None
+            with self._lock:
+                self._data["wrench"] = message
+                self._wrench_history.append(
+                    {
+                        "wrench": wrench,
+                        "timestamp": timestamp if timestamp > 0.0 else wall_time,
+                        "wall_time": wall_time,
+                    }
+                )
 
         def controller_callback(message: ControllerState) -> None:
             set_value("controller_state", message)
 
         def contact_callback(message: Contacts) -> None:
             active = bool(getattr(message, "contacts", []) or getattr(message, "states", []))
-            set_value("off_limit_contact", active)
+            wall_time = time.monotonic()
+            timestamp = _message_stamp_seconds(message)
+            assert self._lock is not None
+            with self._lock:
+                self._data["off_limit_contact"] = active
+                self._contact_history.append(
+                    {
+                        "indicator": 1.0 if active else 0.0,
+                        "timestamp": timestamp if timestamp is not None else wall_time,
+                        "wall_time": wall_time,
+                    }
+                )
 
         node.create_subscription(
             WrenchStamped,
@@ -849,6 +1158,18 @@ def _resolve_named_entity(
     return None, None
 
 
+def _message_stamp_seconds(message: Any) -> float | None:
+    header = getattr(message, "header", None)
+    stamp = getattr(header, "stamp", None)
+    if stamp is None:
+        return None
+    sec = getattr(stamp, "sec", None)
+    nanosec = getattr(stamp, "nanosec", None)
+    if sec is None or nanosec is None:
+        return None
+    return float(sec) + float(nanosec) * 1e-9
+
+
 def _wrench_from_ros_sample(sample: dict[str, Any]) -> tuple[np.ndarray, float]:
     wrench_msg = sample.get("wrench")
     controller_msg = sample.get("controller_state")
@@ -878,7 +1199,7 @@ def _wrench_from_ros_sample(sample: dict[str, Any]) -> tuple[np.ndarray, float]:
         ],
         dtype=np.float64,
     ) - tare
-    timestamp = float(wrench_msg.header.stamp.sec) + float(wrench_msg.header.stamp.nanosec) * 1e-9
+    timestamp = _message_stamp_seconds(wrench_msg) or 0.0
     return wrench, timestamp
 
 
@@ -994,6 +1315,59 @@ def _build_score_geometry(
     return geometry
 
 
+def _serialize_auxiliary_force_contact_summary(
+    summary: AuxiliaryForceContactSummary,
+) -> dict[str, Any]:
+    return {
+        "is_official_observation": bool(summary.is_official_observation),
+        "source": summary.source,
+        "substep_tick_count": int(summary.substep_tick_count),
+        "sample_count": int(summary.sample_count),
+        "wrench_current": summary.wrench_current.tolist(),
+        "wrench_max_abs_recent": summary.wrench_max_abs_recent.tolist(),
+        "wrench_mean_recent": summary.wrench_mean_recent.tolist(),
+        "wrench_max_force_abs_recent": float(summary.wrench_max_force_abs_recent),
+        "wrench_max_torque_abs_recent": float(summary.wrench_max_torque_abs_recent),
+        "had_contact_recent": bool(summary.had_contact_recent),
+        "max_contact_indicator_recent": float(summary.max_contact_indicator_recent),
+        "first_wrench_recent": summary.first_wrench_recent.tolist(),
+        "last_wrench_recent": summary.last_wrench_recent.tolist(),
+        "time_of_peak_within_step": summary.time_of_peak_within_step,
+        "limitations": list(summary.limitations),
+    }
+
+
+def _deserialize_auxiliary_force_contact_summary(
+    payload: dict[str, Any],
+) -> AuxiliaryForceContactSummary:
+    if not payload:
+        return AuxiliaryForceContactSummary()
+    return AuxiliaryForceContactSummary(
+        is_official_observation=bool(payload.get("is_official_observation", False)),
+        source=str(payload.get("source", "final_sample_only")),
+        substep_tick_count=int(payload.get("substep_tick_count", 0)),
+        sample_count=int(payload.get("sample_count", 0)),
+        wrench_current=np.asarray(payload.get("wrench_current", np.zeros(6)), dtype=np.float64),
+        wrench_max_abs_recent=np.asarray(
+            payload.get("wrench_max_abs_recent", np.zeros(6)),
+            dtype=np.float64,
+        ),
+        wrench_mean_recent=np.asarray(payload.get("wrench_mean_recent", np.zeros(6)), dtype=np.float64),
+        wrench_max_force_abs_recent=float(payload.get("wrench_max_force_abs_recent", 0.0)),
+        wrench_max_torque_abs_recent=float(payload.get("wrench_max_torque_abs_recent", 0.0)),
+        had_contact_recent=bool(payload.get("had_contact_recent", False)),
+        max_contact_indicator_recent=float(payload.get("max_contact_indicator_recent", 0.0)),
+        first_wrench_recent=np.asarray(payload.get("first_wrench_recent", np.zeros(6)), dtype=np.float64),
+        last_wrench_recent=np.asarray(payload.get("last_wrench_recent", np.zeros(6)), dtype=np.float64),
+        time_of_peak_within_step=(
+            None
+            if payload.get("time_of_peak_within_step") is None
+            else float(payload["time_of_peak_within_step"])
+        ),
+        limitations=tuple(str(item) for item in payload.get("limitations", [])),
+    )
+
+
 def _serialize_runtime_state(state: RuntimeState) -> dict[str, Any]:
     return {
         "sim_tick": state.sim_tick,
@@ -1017,6 +1391,9 @@ def _serialize_runtime_state(state: RuntimeState) -> dict[str, Any]:
             for key, value in state.controller_state.items()
         },
         "score_geometry": dict(state.score_geometry),
+        "auxiliary_force_contact_summary": _serialize_auxiliary_force_contact_summary(
+            state.auxiliary_force_contact_summary
+        ),
     }
 
 
@@ -1047,6 +1424,9 @@ def _deserialize_runtime_state(payload: dict[str, Any]) -> RuntimeState:
         insertion_event=payload.get("insertion_event"),
         controller_state=controller_state,
         score_geometry=dict(payload.get("score_geometry", {})),
+        auxiliary_force_contact_summary=_deserialize_auxiliary_force_contact_summary(
+            payload.get("auxiliary_force_contact_summary", {})
+        ),
     )
 
 

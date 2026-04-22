@@ -85,6 +85,13 @@ class AicInsertionEnv(gym.Env[dict[str, Any], np.ndarray]):
             action=sanitized,
             step_count=self._step_count,
         )
+        info["official_compatible_observation_semantics"] = {
+            "wrench_is_current_sample_only": True,
+            "auxiliary_force_contact_summary_is_non_official": True,
+        }
+        info["auxiliary_force_contact_summary"] = (
+            current_state.auxiliary_force_contact_summary.to_dict()
+        )
         if terminated or truncated:
             final_evaluation = self.task.final_evaluation()
             info["final_evaluation"] = final_evaluation

@@ -74,6 +74,40 @@ The public observation schema includes:
 This is an important parity boundary. A policy that needs temporal memory should
 build it explicitly.
 
+### Auxiliary within-step summaries
+
+`aic_gym_gz` now also emits an explicitly non-official
+`auxiliary_force_contact_summary` in `step_info`.
+
+This summary is not part of the official-compatible observation contract. It is
+an auxiliary training/debugging surface that can preserve within-step evidence
+such as:
+
+- `wrench_current`
+- `wrench_max_abs_recent`
+- `wrench_mean_recent`
+- `wrench_max_force_abs_recent`
+- `wrench_max_torque_abs_recent`
+- `had_contact_recent`
+- `max_contact_indicator_recent`
+- `first_wrench_recent`
+- `last_wrench_recent`
+- `time_of_peak_within_step`
+
+Important:
+
+- `observation["wrench"]` remains the current sample only
+- `observation["off_limit_contact"]` remains the current sample only
+- the auxiliary summary must not be described as an official observation field
+
+Source quality depends on backend:
+
+- mock backend: exact internal sub-step aggregation
+- live backend: best-effort aggregation from real ROS callback history when
+  available
+- if exact sub-step access is not available on a live path, the summary records
+  that limitation instead of claiming exact simulator parity
+
 ## Reward parity notes
 
 `rl_step_reward` is intentionally not a per-step decomposition of the final
@@ -130,6 +164,7 @@ are zero-filled or false-filled rather than dropped.
 `aic_gym_gz` is compatible with the official rollout surface at the level of:
 
 - explicit observation fields
+- current-sample-only wrench/contact observation semantics
 - fixed-rollout parity tooling
 - local score-shape analysis
 
@@ -137,3 +172,23 @@ It is not a replacement for final validation with the official toolkit.
 
 Before making any official-quality claim, run the official toolkit and report
 `official_eval_score`.
+
+## Transient-contact validation
+
+Use `aic_gym_gz.validate_force_transients` when you want to audit coarse-step
+aliasing directly.
+
+That validator checks:
+
+- obstacle/contact transient case where the final sample can be quiet while the
+  auxiliary within-step summary still detects contact
+- no-contact control case to guard against false positives
+- repeated coarse boundary-crossing to confirm consistent surfacing of hidden
+  transients
+
+The validator also reports:
+
+- whether direct Isaac Lab parity was tested
+- if not, which conceptual Isaac-Lab-style expectations were checked instead
+- whether direct official AIC parity was tested
+- if not, what limitation prevented it
