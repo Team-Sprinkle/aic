@@ -1,76 +1,67 @@
 # Agent Teacher Audit
 
-This audit summarizes parity gaps between the current teacher path and the
-official evaluation path, plus dataset-export compatibility.
+This audit summarizes the current teacher-layer parity state on top of the
+merged base environment.
 
 ## Observation parity
 
-| Official observation item | Current gym/teacher availability | Exact source file/function | Status |
-|---|---|---|---|
-| Wrist camera images | Live teacher path receives images through ROS sidecar; mock path uses placeholders | `aic_gym_gz/io.py:RosCameraSidecarIO.observation_from_state`, `aic_gym_gz/teacher/runner.py:_observation_summary` | Matched |
-| Image timestamps | Stored in env obs, temporal buffer, and planner state | `aic_gym_gz/io.py:RosCameraSidecarIO.observation_from_state`, `aic_gym_gz/teacher/context.py:TeacherContextExtractor.build_planning_state` | Matched |
-| Wrist wrench | Synthetic in mock path; live gym runtime currently does not yet propagate official wrench end-to-end | `aic_gym_gz/runtime.py:ScenarioGymGzBackend._runtime_state_from_observation`, `aic_gym_gz/runtime.py:MockStepperBackend.step_ticks` | Approximate |
-| TCP pose | Present in teacher obs and replay logs | `aic_gym_gz/runtime.py:_runtime_state_from_observation`, `aic_gym_gz/io.py:_base_observation` | Matched |
-| TCP velocity | Present in teacher obs and replay logs | `aic_gym_gz/runtime.py:_runtime_state_from_observation`, `aic_gym_gz/io.py:_base_observation` | Matched |
-| Joint states | Present in teacher obs and replay logs | `aic_gym_gz/runtime.py:_runtime_state_from_observation`, `aic_gym_gz/io.py:_base_observation` | Matched |
-| Official `controller_state` | Not exposed directly in planner state | `aic_interfaces/aic_model_interfaces/msg/Observation.msg`, `aic_adapter/src/aic_adapter.cpp` | Missing |
-| CameraInfo | Not exposed in planner state | `aic_interfaces/aic_model_interfaces/msg/Observation.msg`, `aic_adapter/src/aic_adapter.cpp` | Missing |
-| Teacher oracle board/plug/target context | Explicitly exposed only in teacher mode | `aic_gym_gz/teacher/context.py` | Matched |
+| Official observation item | Current teacher status | Status |
+| --- | --- | --- |
+| Wrist camera images | Live teacher path receives images through the ROS sidecar; mock path still uses placeholders | Approximate |
+| Image timestamps | Preserved in current observation view, temporal history, planning state, replay, and export | Matched |
+| Wrist wrench | Propagated when runtime publishes timestamped wrench data; otherwise marked synthetic or missing | Approximate |
+| Controller state / reference TCP / TCP error | Included in teacher planning state, rollout logs, replay, and export when runtime exposes it | Approximate |
+| CameraInfo | Included in teacher planning state and logs when the sidecar provides it; placeholder or missing cases are flagged | Approximate |
+| Current observation vs memory separation | Explicitly split between base env observation and teacher-side temporal history | Matched |
 
-Notes:
+## Ranking and scoring behavior
 
-- The smallest end-to-end extension needed for the teacher planner path was to
-  preserve image timestamps and compact image summaries in the temporal buffer
-  and planning state. That is now implemented.
-- Full official observation parity would require bringing controller-state and
-  camera-info semantics into the teacher observation pipeline, not just the gym
-  state dict.
+Teacher search now keeps these signals separate in ranked artifacts:
 
-## Reward / scoring parity
+- `teacher_official_style_score`
+- `gym_final_score`
+- `rl_step_reward_total`
+- signal-quality metadata
+- quality-aware ranking penalties
 
-| Official metric/term | Current gym implementation | Exact source file/function | Status |
-|---|---|---|---|
-| Tier 2 jerk / smoothness | Teacher selection uses official-style quadratic-window jerk; env reward still uses a simpler approximation | `aic_scoring/src/ScoringTier2.cc:GetTrajectoryJerkScore`, `aic_gym_gz/teacher/scoring.py`, `aic_gym_gz/reward.py:_average_linear_jerk` | Approximate |
-| Duration | Thresholds and interpolation match docs / scorer | `aic_scoring/src/ScoringTier2.cc:GetTaskDurationScore`, `aic_gym_gz/teacher/scoring.py` | Matched |
-| Trajectory efficiency | Thresholds and interpolation match docs / scorer | `aic_scoring/src/ScoringTier2.cc:GetTrajectoryEfficiencyScore`, `aic_gym_gz/teacher/scoring.py` | Matched |
-| Insertion force penalty | Formula matches, but live accuracy depends on wrench availability | `aic_scoring/src/ScoringTier2.cc:GetInsertionForceScore`, `aic_gym_gz/teacher/scoring.py` | Approximate |
-| Off-limit contact penalty | Matches | `aic_scoring/src/ScoringTier2.cc:GetContactsScore`, `aic_gym_gz/teacher/scoring.py` | Matched |
-| Successful insertion / wrong port | Matches | `aic_scoring/src/ScoringTier2.cc:ComputeTier3Score`, `aic_gym_gz/task.py:evaluate_step`, `aic_gym_gz/teacher/scoring.py` | Matched |
-| Partial insertion depth | Approximated from target pose and configured depth because official port entrance TF is unavailable in gym artifacts | `aic_scoring/src/ScoringTier2.cc:GetDistanceScore`, `aic_gym_gz/teacher/scoring.py` | Approximate |
-| Tier 1 validity | Assumed locally, still official-only in real submission loop | `docs/scoring.md`, `aic_model/aic_model/aic_model.py` | Approximate |
+Conservative handling now implemented:
 
-Notes:
+- missing or synthetic wrench reduces ranking trust
+- missing controller state reduces ranking trust
+- approximate partial-insertion depth is labeled and penalized
+- Tier 1 validity remains explicitly approximate
 
-- Exact parity is not currently possible for partial insertion because the gym
-  teacher path does not expose the official port entrance transform used by
-  `aic_scoring`.
-- Candidate search now uses the most official-faithful local score available and
-  records parity notes inside each ranked candidate.
+## Replay and export behavior
 
-## Dataset export compatibility
+Replay artifacts and dataset exports now preserve:
 
-| Target export path | Current status | Exact source file/function | Status |
-|---|---|---|---|
-| exp/data LeRobot schema family | Teacher exporter uses the same observation/action key family as `policy_recorder` from `origin/exp/data` | `origin/exp/data:aic_utils/lerobot_robot_aic/lerobot_robot_aic/policy_recorder.py`, `aic_gym_gz/teacher/dataset_export.py` | Matched |
-| Rich teacher metadata | Exported as sidecar metadata JSON | `aic_gym_gz/teacher/dataset_export.py` | Matched |
-| Controller error fields | Synthesized from commanded target vs observed TCP | `origin/exp/data:aic_utils/lerobot_robot_aic/lerobot_robot_aic/policy_recorder.py`, `aic_gym_gz/teacher/dataset_export.py` | Approximate |
-| Teleop/policy dataset merge checks | Compatibility tool restored into current branch | `aic_utils/lerobot_robot_aic/lerobot_robot_aic/validate_dataset_compatibility.py` | Matched |
+- scenario metadata
+- task metadata
+- planner metadata
+- final metrics
+- selected candidate ranking metrics
+- signal-quality flags
+- history metadata
 
-Notes:
+JSONL export includes per-step data-quality and history summaries. LeRobot
+export now prefers logged controller TCP error when available.
 
-- `aic_training_interfaces` / `aic_training_utils` from `exp/data` appear to be
-  bringup helpers, not dataset schema owners, so the direct reuse point is the
-  `lerobot_robot_aic` dataset path.
-- Teacher export now supports:
-  1. JSONL with full teacher metadata per step
-  2. Native LeRobot-compatible dataset export with sidecar metadata
+## Still approximate
 
-## Official replay limitations
+- live wrench fidelity remains limited by runtime bridge availability
+- controller-state parity is limited by runtime observer inputs
+- camera-info fidelity depends on the ROS sidecar path
+- partial insertion depth remains a local approximation
+- Tier 1 validity remains approximate unless executed through official
+  `aic_model`
+- teacher scoring is more official-like than RL reward, but they remain
+  intentionally separate
 
-- The selected replay path is `aic_model`-compatible and publishes normal
-  `MotionUpdate` velocity commands through `TeacherReplayPolicy`.
-- This is robust for replay-style execution, but it is still approximate with
-  respect to exact original controller timing because the official controller
-  closes the loop on its own state and scheduling.
-- Intermediate live simulator checkpoint/restore remains unavailable, so search
-  ranking is exact only on deterministic reset/replay paths.
+## Validation commands
+
+```bash
+pixi run python -m aic_gym_gz.run_teacher_audit \
+  --output aic_gym_gz/artifacts/teacher_audit.json
+
+pixi run python -m unittest discover -s aic_gym_gz/tests -p 'test_teacher*.py'
+```

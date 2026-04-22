@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 import json
 from pathlib import Path
 from typing import Any, Callable
@@ -10,6 +10,7 @@ from typing import Any, Callable
 from ..env import AicInsertionEnv
 from ..planners.base import PlannerBackend
 from .policy import AgentTeacherController, TeacherConfig
+from .quality import ranking_quality_adjustment
 from .replay import TeacherReplayArtifact, save_teacher_replay
 from .runner import TeacherRolloutResult, run_teacher_rollout
 from .scoring import OfficialStyleScoreEvaluator
@@ -165,10 +166,17 @@ class TeacherCandidateSearch:
             "Exact intermediate-state cloning is unavailable; candidate search replays from the same seed/trial reset.",
             "Search is exact on the deterministic mock path and best-effort on live Gazebo depending on reset determinism.",
         ]
+        planner_backend = self.planner_factory()
+        search_budget_key = f"teacher_search:{seed}:{trial_id or 'default'}:{planner_backend.backend_name}"
+        if hasattr(planner_backend, "reset_search_budget"):
+            planner_backend.reset_search_budget(search_budget_key)
         for spec in self.generator.generate():
             env = self.env_factory()
             try:
-                planner = CandidatePlannerBackend(self.planner_factory(), spec)
+                base_backend = self.planner_factory()
+                if hasattr(base_backend, "set_search_budget_key"):
+                    base_backend.set_search_budget_key(search_budget_key)
+                planner = CandidatePlannerBackend(base_backend, spec)
                 controller = AgentTeacherController(
                     planner=planner,
                     config=TeacherConfig(
@@ -183,31 +191,40 @@ class TeacherCandidateSearch:
                     seed=seed,
                     trial_id=trial_id,
                 )
-                score = self.score_evaluator.evaluate_rollout(rollout.artifact.to_dict())
+                artifact_dict = rollout.artifact.to_dict()
+                score = self.score_evaluator.evaluate_rollout(artifact_dict)
+                ranking_metrics = self._ranking_metrics(
+                    artifact=artifact_dict,
+                    teacher_score=score.to_dict(),
+                )
                 ranked.append(
                     {
                         "candidate_spec": spec.to_dict(),
-                        "artifact": rollout.artifact.to_dict(),
+                        "artifact": artifact_dict,
+                        "teacher_official_style_score": score.to_dict(),
                         "official_style_score": score.to_dict(),
+                        "ranking_metrics": ranking_metrics,
                     }
                 )
             finally:
                 env.close()
         ranked.sort(
-            key=lambda item: float(item["official_style_score"]["total_score"]),
+            key=lambda item: float(item["ranking_metrics"]["composite_score"]),
             reverse=True,
         )
         for index, entry in enumerate(ranked):
             entry["rank"] = index + 1
             entry["selected_top_k"] = index < self.config.top_k
-            entry["near_perfect"] = bool(entry["official_style_score"]["selection"]["near_perfect"])
+            entry["near_perfect"] = bool(
+                entry["teacher_official_style_score"]["selection"]["near_perfect"]
+            )
         payload = {
             "metadata": {
                 "seed": seed,
                 "trial_id": trial_id,
                 "near_perfect_threshold": self.config.near_perfect_threshold,
                 "top_k": self.config.top_k,
-                "planner_backend": self.planner_factory().backend_name,
+                "planner_backend": planner_backend.backend_name,
             },
             "ranked_candidates": ranked,
             "top_candidates": ranked[: self.config.top_k],
@@ -217,6 +234,38 @@ class TeacherCandidateSearch:
         if output_path is not None:
             Path(output_path).write_text(json.dumps(payload, indent=2, sort_keys=True), encoding="utf-8")
         return TeacherSearchResult(payload=payload, output_path=output_path)
+
+    def _ranking_metrics(
+        self,
+        *,
+        artifact: dict[str, Any],
+        teacher_score: dict[str, Any],
+    ) -> dict[str, Any]:
+        metadata = artifact.get("metadata", {})
+        final_metrics = metadata.get("final_metrics", {})
+        data_quality = metadata.get("data_quality", {})
+        quality_adjustment, quality_penalties = ranking_quality_adjustment(data_quality)
+        gym_final_score = final_metrics.get("gym_final_score")
+        rl_step_reward_total = float(final_metrics.get("rl_step_reward_total", 0.0))
+        teacher_total = float(teacher_score["total_score"])
+        composite_score = teacher_total
+        if gym_final_score is not None:
+            composite_score += 0.15 * float(gym_final_score)
+        composite_score += 0.02 * max(min(rl_step_reward_total, 100.0), -100.0)
+        composite_score += quality_adjustment
+        return {
+            "teacher_official_style_score": teacher_total,
+            "gym_final_score": gym_final_score,
+            "rl_step_reward_total": rl_step_reward_total,
+            "data_quality": data_quality,
+            "quality_adjustment": quality_adjustment,
+            "quality_penalties": quality_penalties,
+            "composite_score": composite_score,
+            "signals_exact_vs_approximate": {
+                signal: quality.get("source")
+                for signal, quality in data_quality.items()
+            },
+        }
 
 
 def export_selected_candidate_to_replay(
@@ -233,6 +282,8 @@ def export_selected_candidate_to_replay(
         "candidate_rank": candidate_rank,
         "candidate_mode": selected["candidate_spec"]["mode"],
         "official_style_score": selected["official_style_score"],
+        "teacher_official_style_score": selected["teacher_official_style_score"],
+        "ranking_metrics": selected["ranking_metrics"],
     }
     artifact = TeacherReplayArtifact(
         metadata=artifact_payload["metadata"],

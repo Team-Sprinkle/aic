@@ -10,6 +10,7 @@ import numpy as np
 from ..runtime import RuntimeState
 from ..scenario import AicScenario
 from .history import TemporalObservationBuffer
+from .quality import controller_state_summary, serialize_nested
 from .types import ObstacleSummary, TeacherPlanningState
 
 
@@ -37,7 +38,13 @@ class TeacherContextExtractor:
             "tcp_velocity": state.tcp_velocity.astype(float).tolist(),
             "plug_pose": state.plug_pose.astype(float).tolist(),
             "target_port_pose": state.target_port_pose.astype(float).tolist(),
+            "target_port_entrance_pose": (
+                None
+                if state.target_port_entrance_pose is None
+                else state.target_port_entrance_pose.astype(float).tolist()
+            ),
             "wrench": state.wrench.astype(float).tolist(),
+            "wrench_timestamp": float(state.wrench_timestamp),
             "off_limit_contact": bool(state.off_limit_contact),
             "distance_to_target": float(np.linalg.norm(state.plug_pose[:3] - state.target_port_pose[:3])),
         }
@@ -71,6 +78,25 @@ class TeacherContextExtractor:
             image_timestamps=dict(latest_frame.image_timestamps) if include_images else {},
             image_summaries=dict(latest_frame.image_summaries) if include_images else {},
             recent_probe_results=recent_probe_results[-4:],
+            controller_context={
+                "controller_state": controller_state_summary(state.controller_state),
+                "reference_tcp_pose": serialize_nested(state.controller_state.get("reference_tcp_pose")),
+                "tcp_error": serialize_nested(state.controller_state.get("tcp_error")),
+                "controller_target_mode": serialize_nested(state.controller_state.get("target_mode")),
+            },
+            camera_context={
+                "camera_info": serialize_nested(latest_frame.camera_info) if include_images else {},
+                "image_refs": image_refs,
+                "image_timestamps": dict(latest_frame.image_timestamps) if include_images else {},
+            },
+            temporal_context=temporal_buffer.teacher_memory_summary(),
+            data_quality=dict(latest_frame.signal_quality),
+            planning_metadata={
+                "include_images": bool(include_images),
+                "history_window_size": len(temporal_buffer),
+                "teacher_history_is_additive": True,
+                "official_current_observation_only": temporal_buffer.current_observation_view(),
+            },
             last_teacher_rationale=last_teacher_rationale,
         )
 

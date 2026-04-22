@@ -1,138 +1,176 @@
 # Agent Teacher
 
-This document describes the training-time agent-teacher stack added on top of
-the existing `feat/gazebo-gym-scn` architecture.
+This document describes the additive teacher stack layered on top of the merged
+`feat/gazebo-gym-scn` base environment.
 
-## Design goals
+## Layering rules
 
-- keep changes additive and namespaced
-- expose normal rollout-time context plus teacher-only oracle context
-- plan in segments instead of per-tick actions
-- use temporal windows rather than single frames
-- support active probing to estimate cable dynamics
-- export replayable artifacts for later data generation and comparison
+- The base env remains the source of truth for `rl_step_reward`,
+  `gym_final_score`, observation schema, and runtime parity semantics.
+- Teacher code builds temporal memory, planning, ranking, replay, and export on
+  top of the base env.
+- Teacher artifacts never claim `official_eval_score` unless the official
+  external path is actually run.
 
-## Package layout
+## Teacher planner state parity
 
-- `aic_gym_gz/teacher/history.py`
-  Rolling history of runtime state, action history, optional image references,
-  timestamps, and derived cable-dynamics metrics.
-- `aic_gym_gz/teacher/context.py`
-  Builds a compact `TeacherPlanningState` with:
-  policy-visible context, task metadata, oracle scene context, obstacle
-  summaries, recent probe results, and dynamics summaries.
-- `aic_gym_gz/probes/library.py`
-  Safe micro-probes:
-  `hold_settle`, `micro_sweep_xy`, `yaw_wiggle`, `lift_and_hold`.
-- `aic_gym_gz/planners/base.py`
-  Structured planner interface.
-- `aic_gym_gz/planners/mock.py`
-  Deterministic backend for tests and smoke runs.
-- `aic_gym_gz/planners/openai_backend.py`
-  OpenAI backend scaffold using `OPENAI_API_KEY`.
-- `aic_gym_gz/trajectory/smoothing.py`
-  Minimum-jerk densification from sparse waypoints to low-jerk dense segments.
-- `aic_gym_gz/teacher/policy.py`
-  Hierarchical controller with phase tracking and branch-and-evaluate candidate selection.
-- `aic_gym_gz/teacher/replay.py`
-  Replay artifact format, serializer, replay runner, and comparison helper.
-- `aic_gym_gz/teacher/runner.py`
-  End-to-end teacher rollout driver.
+`TeacherPlanningState` now carries four distinct views:
 
-## Rollout flow
+- `policy_context`: current-observation-style fields from the base env only.
+- `controller_context`: controller-derived fields such as reference TCP pose,
+  TCP error, and controller target mode when available.
+- `camera_context`: image refs, timestamps, and camera-info summaries when
+  available.
+- `temporal_context`: teacher-side memory built above the env rather than added
+  to the env observation contract.
 
-1. Reset `AicInsertionEnv` with a deterministic seed and optional `trial_id`.
-2. Seed `TemporalObservationBuffer` from the initial `RuntimeState`.
-3. Build `TeacherPlanningState` from:
-   rollout context, oracle context, obstacle summaries, dynamics summaries, and recent probe results.
-4. Query one or more planner candidates through the planner backend.
-5. Smooth each sparse plan to a dense low-jerk segment.
-6. Score the candidates and keep the best segment.
-7. If cable settling looks poor or the planner requests it, execute a probe.
-8. Execute the selected dense segment, logging timing and dynamics information.
-9. Save the rollout as a replay artifact for deterministic mock replay or best-effort live replay.
+The planner state also includes `data_quality`, which marks whether each signal
+is real, synthetic, or missing. Current tracked signals include:
 
-## Temporal metrics
+- `wrench`
+- `controller_state`
+- `camera_info`
+- `target_port_entrance_pose`
+- `partial_insertion_depth`
+- `tier1_validity`
 
-The temporal buffer computes:
+Missing data is explicit. The teacher layer does not silently treat zero-filled
+or unavailable signals as official-quality observations.
 
-- plug oscillation magnitude
-- cable settling score
-- recent motion energy
-- quasi-static detection
-- time since last significant cable motion
-- wrench energy
+## Temporal history wrapper
 
-These metrics are intentionally compact. They are designed for planner prompts
-and diagnostics rather than direct policy learning tensors.
+`TemporalObservationBuffer` is the reusable history helper for teacher planning
+and future policy wrappers.
 
-## Planner contract
+It stores:
 
-Input is a compact structured planning state, not raw image tensors or full
-simulator dumps.
+- wrench history and timestamps
+- action history
+- TCP velocity history
+- controller-state history when present
+- image timestamp history
+- image summaries and camera-info snapshots
+- signal-quality snapshots
 
-Required output fields:
+Two views are intentionally separated:
 
-- `next_phase`
-- `waypoints`
-- `motion_mode`
-- `caution_flag`
-- `should_probe`
-- `segment_horizon_steps`
-- `segment_granularity`
-- `rationale_summary`
+- `current_observation_view()`: official-compatible current observation only
+- `teacher_memory_summary()`: additive teacher-side memory/history
 
-The planner does not emit per-tick actions directly.
+This keeps the base env observation contract stable while allowing richer
+teacher-side planning.
 
-## OpenAI integration scaffold
+Example:
 
-The current OpenAI backend is intentionally a scaffold.
+```bash
+pixi run python -m aic_gym_gz.demo_teacher_history_context
+```
 
-- Secrets are read from `OPENAI_API_KEY` only.
-- No keys are written to config files, artifacts, or logs.
-- `OpenAIPlannerBackend.build_request_payload(...)` serializes the compact planning state.
-- The actual API invocation and strict response parsing are left as a follow-up.
+## Planner backends
 
-Recommended next step:
+### Mock planner
 
-1. Add a small adapter that calls the OpenAI Responses API.
-2. Enforce a strict JSON schema for planner output.
-3. Map the response into `TeacherPlan`.
-4. Keep planner prompts and tool settings in runtime config, not committed secrets.
+`aic_gym_gz.planners.mock.DeterministicMockPlannerBackend` remains the default
+test and smoke backend.
 
-## Replay and determinism
+### OpenAI Responses planner
 
-Current replay guarantees:
+`aic_gym_gz.planners.openai_backend.OpenAIPlannerBackend` now performs real
+Responses API requests with strict JSON Schema output validation.
 
-- deterministic mock backend:
-  exact reset plus replay of dense segments
-- live Gazebo path:
-  same scenario/settings replay and comparison, but not exact arbitrary mid-rollout restore
+Implemented behavior:
 
-Current limitation:
+- runtime API key lookup from `OPENAI_API_KEY`
+- strict schema validation before converting model output into `TeacherPlan`
+- retry and timeout handling
+- per-episode planner call limits
+- per-search planner call limits
+- optional plan caching keyed by normalized planning input
 
-- exact simulator checkpoint/restore at arbitrary intermediate states is not
-  implemented in the current live architecture
+The backend is conservative about secret handling:
 
-Practical approximation implemented now:
+- it reads the key only from the environment
+- it does not print or serialize the key
+- it strips API-key-like fields out of planner metadata exports
 
-- deterministic reset from seed and scenario
-- action/segment replay
-- deterministic planner candidate branching
-- explicit limitation recorded in replay artifacts
-
-## Commands
+Example rollout:
 
 ```bash
 pixi run python -m aic_gym_gz.demo_teacher_rollout \
-  --output aic_gym_gz/artifacts/teacher_rollout.json
-
-pixi run python -m aic_gym_gz.record_teacher_temporal_diagnostics --steps 8
-pixi run python -m aic_gym_gz.run_teacher_probe_experiment --probe micro_sweep_xy
-pixi run python -m aic_gym_gz.replay_teacher_artifact \
-  --artifact aic_gym_gz/artifacts/teacher_rollout.json
-pixi run python -m aic_gym_gz.compare_teacher_replay \
-  --artifact aic_gym_gz/artifacts/teacher_rollout.json
-pixi run python -m aic_gym_gz.benchmark_teacher_planner --episodes 3
-pixi run python -m unittest discover -s aic_gym_gz/tests -p 'test_teacher*.py'
+  --planner-backend openai \
+  --openai-model gpt-5.4-mini \
+  --openai-timeout 20 \
+  --openai-max-retries 2 \
+  --output aic_gym_gz/artifacts/teacher_rollout_openai.json
 ```
+
+Example search:
+
+```bash
+pixi run python -m aic_gym_gz.run_teacher_search \
+  --planner-backend openai \
+  --openai-model gpt-5.4-mini \
+  --openai-max-calls-per-search 64 \
+  --output aic_gym_gz/artifacts/teacher_search_openai.json
+```
+
+## Candidate ranking under approximate signals
+
+Teacher search now keeps explicit ranking signals separate:
+
+- `teacher_official_style_score`
+- `gym_final_score`
+- `rl_step_reward_total`
+- signal-quality metadata and penalties
+
+Ranking remains conservative:
+
+- missing or synthetic wrench data reduces ranking trust
+- missing controller state reduces ranking trust
+- approximate partial-insertion depth is labeled and penalized
+- Tier 1 validity remains marked approximate locally
+
+The ranked search artifact preserves full metric breakdowns for all candidates,
+not only the selected top candidate.
+
+## Replay and export
+
+Teacher replay and dataset export now preserve:
+
+- scenario metadata
+- task metadata
+- planner metadata
+- selected candidate metrics
+- signal-quality flags
+- history metadata
+
+JSONL export writes per-step quality flags and history summaries. LeRobot export
+uses logged controller TCP error when present and falls back to synthesized
+target-vs-observed error only when necessary.
+
+Representative commands:
+
+```bash
+pixi run python -m aic_gym_gz.run_teacher_search \
+  --output aic_gym_gz/artifacts/teacher_search.json
+
+pixi run python -m aic_gym_gz.export_teacher_official_replay \
+  --search-artifact aic_gym_gz/artifacts/teacher_search.json \
+  --output aic_gym_gz/artifacts/teacher_selected_replay.json
+
+pixi run python -m aic_gym_gz.export_teacher_dataset \
+  --search-artifact aic_gym_gz/artifacts/teacher_search.json \
+  --output-dir aic_gym_gz/artifacts/teacher_dataset \
+  --format jsonl
+```
+
+## Still approximate relative to official rollout
+
+- live wrench quality still depends on the downstream bridge exposing real data
+- controller-state parity is only as good as what the runtime observer receives
+- camera-info parity depends on the ROS camera sidecar path
+- partial-insertion depth is still a local approximation
+- Tier 1 validity is still local-only unless the trajectory is run through
+  official `aic_model`
+- the base RL reward remains intentionally simpler than official-like teacher
+  scoring

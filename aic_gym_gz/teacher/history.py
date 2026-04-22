@@ -9,6 +9,7 @@ from typing import Any
 import numpy as np
 
 from ..runtime import RuntimeState
+from .quality import controller_state_summary, serialize_nested
 from .types import DynamicsSummary
 
 
@@ -20,11 +21,15 @@ class TemporalFrame:
     tcp_velocity: np.ndarray
     plug_pose: np.ndarray
     wrench: np.ndarray
+    wrench_timestamp: float
     off_limit_contact: bool
     action: np.ndarray
+    controller_state: dict[str, Any]
     image_refs: tuple[str, ...]
     image_timestamps: dict[str, float]
     image_summaries: dict[str, dict[str, Any]]
+    camera_info: dict[str, Any]
+    signal_quality: dict[str, Any]
 
 
 class TemporalObservationBuffer:
@@ -49,6 +54,8 @@ class TemporalObservationBuffer:
         images: dict[str, Any] | None = None,
         image_timestamps: dict[str, float] | None = None,
         image_summaries: dict[str, dict[str, Any]] | None = None,
+        camera_info: dict[str, Any] | None = None,
+        signal_quality: dict[str, Any] | None = None,
     ) -> None:
         image_refs = tuple(sorted((images or {}).keys()))
         self._frames.append(
@@ -59,11 +66,15 @@ class TemporalObservationBuffer:
                 tcp_velocity=np.asarray(state.tcp_velocity, dtype=np.float64).copy(),
                 plug_pose=np.asarray(state.plug_pose, dtype=np.float64).copy(),
                 wrench=np.asarray(state.wrench, dtype=np.float64).copy(),
+                wrench_timestamp=float(state.wrench_timestamp),
                 off_limit_contact=bool(state.off_limit_contact),
                 action=np.asarray(action, dtype=np.float64).copy(),
+                controller_state=_copy_mapping(state.controller_state),
                 image_refs=image_refs,
                 image_timestamps={key: float(value) for key, value in (image_timestamps or {}).items()},
                 image_summaries={key: dict(value) for key, value in (image_summaries or {}).items()},
+                camera_info=_copy_mapping(camera_info or {}),
+                signal_quality=_copy_mapping(signal_quality or {}),
             )
         )
 
@@ -127,14 +138,63 @@ class TemporalObservationBuffer:
         )
 
     def compact_state(self) -> dict[str, Any]:
+        return self.teacher_memory_summary()
+
+    def current_observation_view(self) -> dict[str, Any]:
+        latest = self.latest()
+        return {
+            "sim_tick": latest.sim_tick,
+            "sim_time": latest.sim_time,
+            "tcp_pose": latest.tcp_pose.astype(float).tolist(),
+            "tcp_velocity": latest.tcp_velocity.astype(float).tolist(),
+            "plug_pose": latest.plug_pose.astype(float).tolist(),
+            "wrench": latest.wrench.astype(float).tolist(),
+            "wrench_timestamp": latest.wrench_timestamp,
+            "off_limit_contact": latest.off_limit_contact,
+            "controller_state": controller_state_summary(latest.controller_state),
+            "image_refs": list(latest.image_refs),
+            "image_timestamps": dict(latest.image_timestamps),
+            "image_summaries": dict(latest.image_summaries),
+            "camera_info": serialize_nested(latest.camera_info),
+            "signal_quality": dict(latest.signal_quality),
+        }
+
+    def teacher_memory_summary(self, *, max_items: int = 4) -> dict[str, Any]:
         latest = self.latest()
         summary = self.dynamics_summary()
+        frames = list(self._frames)[-max_items:]
         return {
             "window_size": len(self._frames),
+            "history_items": len(frames),
             "latest_sim_tick": latest.sim_tick,
             "latest_sim_time": latest.sim_time,
-            "latest_image_refs": list(latest.image_refs),
-            "latest_image_timestamps": dict(latest.image_timestamps),
+            "latest_signal_quality": dict(latest.signal_quality),
+            "action_history": [frame.action.astype(float).tolist() for frame in frames],
+            "wrench_history": [frame.wrench.astype(float).tolist() for frame in frames],
+            "wrench_timestamp_history": [float(frame.wrench_timestamp) for frame in frames],
+            "tcp_velocity_history": [frame.tcp_velocity.astype(float).tolist() for frame in frames],
+            "controller_state_history": [
+                controller_state_summary(frame.controller_state) for frame in frames
+            ],
+            "image_ref_history": [list(frame.image_refs) for frame in frames],
+            "image_timestamp_history": [dict(frame.image_timestamps) for frame in frames],
             "latest_image_summaries": dict(latest.image_summaries),
+            "latest_camera_info": serialize_nested(latest.camera_info),
             "dynamics_summary": summary.to_dict(),
         }
+
+
+def _copy_mapping(mapping: dict[str, Any]) -> dict[str, Any]:
+    copied: dict[str, Any] = {}
+    for key, value in mapping.items():
+        if isinstance(value, np.ndarray):
+            copied[key] = value.copy()
+        elif isinstance(value, dict):
+            copied[key] = _copy_mapping(value)
+        elif isinstance(value, list):
+            copied[key] = list(value)
+        elif isinstance(value, tuple):
+            copied[key] = tuple(value)
+        else:
+            copied[key] = value
+    return copied

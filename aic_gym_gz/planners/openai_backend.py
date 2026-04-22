@@ -1,18 +1,54 @@
-"""OpenAI planner backend scaffold.
+"""OpenAI planner backend for teacher segment planning.
 
-This module keeps all secret handling outside the repo. The API key is expected
-to be supplied at runtime through the `OPENAI_API_KEY` environment variable.
+This backend uses the OpenAI Responses API with strict JSON Schema output. The
+API key is read only from the configured environment variable.
 """
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
+import hashlib
 import json
 import os
-from typing import Any
+from pathlib import Path
+import socket
+from typing import Any, ClassVar, Literal
+from urllib.error import HTTPError, URLError
+from urllib.request import Request, urlopen
+
+from pydantic import BaseModel, ConfigDict, Field, ValidationError
 
 from .base import PlannerBackend
-from ..teacher.types import TeacherPlan, TeacherPlanningState
+from ..teacher.types import TeacherPlan, TeacherPlanningState, TeacherWaypoint
+
+
+class _WaypointPayload(BaseModel):
+    model_config = ConfigDict(extra="forbid", strict=True)
+
+    position_xyz: tuple[float, float, float]
+    yaw: float = 0.0
+    speed_scale: float = Field(default=1.0, ge=0.0, le=1.5)
+    clearance_hint: float = Field(default=0.0, ge=0.0, le=0.25)
+
+
+class _PlanPayload(BaseModel):
+    model_config = ConfigDict(extra="forbid", strict=True)
+
+    next_phase: Literal[
+        "free_space_approach",
+        "obstacle_avoidance",
+        "cable_probe",
+        "pre_insert_align",
+        "guarded_insert",
+        "backoff_and_retry",
+    ]
+    waypoints: list[_WaypointPayload] = Field(min_length=1, max_length=4)
+    motion_mode: Literal["coarse_cartesian", "fine_cartesian", "guarded_insert", "hold"]
+    caution_flag: bool
+    should_probe: bool
+    segment_horizon_steps: int = Field(ge=1, le=64)
+    segment_granularity: Literal["coarse", "fine", "guarded"]
+    rationale_summary: str = Field(min_length=1, max_length=400)
 
 
 @dataclass(frozen=True)
@@ -20,34 +56,63 @@ class OpenAIPlannerConfig:
     model: str = "gpt-5.4-mini"
     temperature: float = 0.1
     max_output_tokens: int = 1200
+    timeout_s: float = 20.0
+    max_retries: int = 2
+    max_calls_per_episode: int = 8
+    max_calls_per_search: int = 64
     api_key_env_var: str = "OPENAI_API_KEY"
-    base_url: str | None = None
+    base_url: str = "https://api.openai.com/v1/responses"
     enabled: bool = False
+    use_cache: bool = True
+    cache_dir: str | None = None
 
 
 @dataclass
 class OpenAIPlannerBackend(PlannerBackend):
     config: OpenAIPlannerConfig
+    _episode_call_count: int = field(default=0, init=False)
+    _search_budget_key: str | None = field(default=None, init=False)
+    _plan_cache: dict[str, TeacherPlan] = field(default_factory=dict, init=False)
+
+    _search_call_counts: ClassVar[dict[str, int]] = {}
 
     @property
     def backend_name(self) -> str:
         return "openai"
 
+    def reset_episode_budget(self) -> None:
+        self._episode_call_count = 0
+
+    def set_search_budget_key(self, key: str) -> None:
+        self._search_budget_key = key
+
+    @classmethod
+    def reset_search_budget(cls, key: str) -> None:
+        cls._search_call_counts[key] = 0
+
     def plan(self, state: TeacherPlanningState, *, candidate_index: int = 0) -> TeacherPlan:
         if not self.config.enabled:
-            raise RuntimeError(
-                "OpenAI planner backend is disabled. Enable it in config before use."
-            )
-        api_key = os.environ.get(self.config.api_key_env_var)
-        if not api_key:
-            raise RuntimeError(
-                f"Missing OpenAI API key in environment variable {self.config.api_key_env_var}."
-            )
-        raise NotImplementedError(
-            "OpenAI planner execution is intentionally left as a scaffold. "
-            "Use `build_request_payload()` to serialize state and map the JSON "
-            "response back into `TeacherPlan` in a future integration."
-        )
+            raise RuntimeError("OpenAI planner backend is disabled. Enable it in config before use.")
+        self._require_api_key()
+        cache_key = self._cache_key(state=state, candidate_index=candidate_index)
+        cached = self._load_cached_plan(cache_key)
+        if cached is not None:
+            return cached
+
+        last_error: Exception | None = None
+        for attempt in range(self.config.max_retries + 1):
+            try:
+                self._consume_budget()
+                payload = self.build_request_payload(state, candidate_index=candidate_index)
+                response_payload = self._post_responses_request(payload)
+                plan = self._parse_response_payload(response_payload)
+                self._store_cached_plan(cache_key, plan)
+                return plan
+            except (RuntimeError, ValidationError, json.JSONDecodeError, HTTPError, URLError, TimeoutError, socket.timeout) as exc:
+                last_error = exc
+                if attempt >= self.config.max_retries:
+                    break
+        raise RuntimeError(f"OpenAI planner request failed after retries: {last_error}") from last_error
 
     def build_request_payload(
         self,
@@ -59,10 +124,154 @@ class OpenAIPlannerBackend(PlannerBackend):
             "model": self.config.model,
             "temperature": self.config.temperature,
             "max_output_tokens": self.config.max_output_tokens,
-            "candidate_index": candidate_index,
-            "planning_state_json": json.dumps(state.__dict__, sort_keys=True),
-            "instructions": (
-                "Return a compact JSON object with fields: next_phase, waypoints, motion_mode, "
-                "caution_flag, should_probe, segment_horizon_steps, segment_granularity, rationale_summary."
-            ),
+            "store": False,
+            "input": [
+                {
+                    "role": "system",
+                    "content": (
+                        "You are planning one short, conservative teacher segment for a cable insertion task. "
+                        "Use only the provided planning state. Respect data_quality metadata: if signals are "
+                        "missing or approximate, remain conservative and do not pretend they are official."
+                    ),
+                },
+                {
+                    "role": "user",
+                    "content": json.dumps(
+                        {
+                            "candidate_index": candidate_index,
+                            "planning_state": state.to_dict(),
+                        },
+                        sort_keys=True,
+                    ),
+                },
+            ],
+            "text": {
+                "format": {
+                    "type": "json_schema",
+                    "name": "teacher_segment_plan",
+                    "strict": True,
+                    "schema": _PlanPayload.model_json_schema(),
+                }
+            },
         }
+
+    def _parse_response_payload(self, response_payload: dict[str, Any]) -> TeacherPlan:
+        refusal = response_payload.get("refusal")
+        if refusal:
+            raise RuntimeError(f"OpenAI planner refused the request: {refusal}")
+        text = self._extract_output_text(response_payload)
+        payload = _PlanPayload.model_validate_json(text)
+        return TeacherPlan(
+            next_phase=payload.next_phase,
+            waypoints=tuple(
+                TeacherWaypoint(
+                    position_xyz=tuple(float(axis) for axis in waypoint.position_xyz),
+                    yaw=float(waypoint.yaw),
+                    speed_scale=float(waypoint.speed_scale),
+                    clearance_hint=float(waypoint.clearance_hint),
+                )
+                for waypoint in payload.waypoints
+            ),
+            motion_mode=payload.motion_mode,
+            caution_flag=bool(payload.caution_flag),
+            should_probe=bool(payload.should_probe),
+            segment_horizon_steps=int(payload.segment_horizon_steps),
+            segment_granularity=payload.segment_granularity,
+            rationale_summary=payload.rationale_summary.strip(),
+        )
+
+    def _post_responses_request(self, payload: dict[str, Any]) -> dict[str, Any]:
+        encoded = json.dumps(payload).encode("utf-8")
+        request = Request(
+            self.config.base_url,
+            data=encoded,
+            headers={
+                "Authorization": f"Bearer {self._require_api_key()}",
+                "Content-Type": "application/json",
+            },
+            method="POST",
+        )
+        with urlopen(request, timeout=self.config.timeout_s) as response:
+            return json.loads(response.read().decode("utf-8"))
+
+    def _extract_output_text(self, response_payload: dict[str, Any]) -> str:
+        if isinstance(response_payload.get("output_text"), str) and response_payload["output_text"].strip():
+            return str(response_payload["output_text"])
+        texts: list[str] = []
+
+        def visit(node: Any) -> None:
+            if isinstance(node, dict):
+                node_type = node.get("type")
+                if node_type in {"output_text", "text"} and isinstance(node.get("text"), str):
+                    texts.append(node["text"])
+                    return
+                for value in node.values():
+                    visit(value)
+            elif isinstance(node, list):
+                for item in node:
+                    visit(item)
+
+        visit(response_payload.get("output", []))
+        if not texts:
+            raise RuntimeError("OpenAI planner response did not contain any text output.")
+        return "\n".join(texts).strip()
+
+    def _cache_key(self, *, state: TeacherPlanningState, candidate_index: int) -> str:
+        normalized = json.dumps(
+            {
+                "model": self.config.model,
+                "temperature": self.config.temperature,
+                "candidate_index": candidate_index,
+                "planning_state": state.to_dict(),
+            },
+            sort_keys=True,
+        )
+        return hashlib.sha256(normalized.encode("utf-8")).hexdigest()
+
+    def _load_cached_plan(self, cache_key: str) -> TeacherPlan | None:
+        if cache_key in self._plan_cache:
+            return self._plan_cache[cache_key]
+        if not self.config.use_cache or not self.config.cache_dir:
+            return None
+        path = Path(self.config.cache_dir) / f"{cache_key}.json"
+        if not path.exists():
+            return None
+        payload = json.loads(path.read_text(encoding="utf-8"))
+        plan = self._parse_response_payload({"output_text": json.dumps(payload)})
+        self._plan_cache[cache_key] = plan
+        return plan
+
+    def _store_cached_plan(self, cache_key: str, plan: TeacherPlan) -> None:
+        if not self.config.use_cache:
+            return
+        self._plan_cache[cache_key] = plan
+        if not self.config.cache_dir:
+            return
+        cache_dir = Path(self.config.cache_dir)
+        cache_dir.mkdir(parents=True, exist_ok=True)
+        (cache_dir / f"{cache_key}.json").write_text(
+            json.dumps(plan.to_dict(), indent=2, sort_keys=True),
+            encoding="utf-8",
+        )
+
+    def _consume_budget(self) -> None:
+        if self._episode_call_count >= self.config.max_calls_per_episode:
+            raise RuntimeError(
+                f"OpenAI planner exceeded max_calls_per_episode={self.config.max_calls_per_episode}."
+            )
+        if self._search_budget_key is not None:
+            used = self._search_call_counts.get(self._search_budget_key, 0)
+            if used >= self.config.max_calls_per_search:
+                raise RuntimeError(
+                    f"OpenAI planner exceeded max_calls_per_search={self.config.max_calls_per_search}."
+                )
+            self._search_call_counts[self._search_budget_key] = used + 1
+        self._episode_call_count += 1
+
+    def _require_api_key(self) -> str:
+        api_key = os.environ.get(self.config.api_key_env_var)
+        if not api_key:
+            raise RuntimeError(
+                f"Missing OpenAI API key in environment variable {self.config.api_key_env_var}."
+            )
+        return api_key

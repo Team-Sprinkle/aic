@@ -62,7 +62,12 @@ class AgentTeacherController:
         for candidate_index in range(self.config.candidate_plan_count):
             plan = self.planner.plan(planning_state, candidate_index=candidate_index)
             segment = self.smoother.smooth(state=state, plan=plan)
-            score = self._score_candidate(plan=plan, segment=segment, dynamics=planning_state.dynamics_summary)
+            score = self._score_candidate(
+                plan=plan,
+                segment=segment,
+                dynamics=planning_state.dynamics_summary,
+                data_quality=planning_state.data_quality,
+            )
             candidates.append(
                 CandidateEvaluation(
                     name=f"candidate_{candidate_index}",
@@ -70,6 +75,12 @@ class AgentTeacherController:
                     plan=plan.to_dict(),
                     segment=segment.to_dict(),
                     notes="selected" if best_score is None or score > best_score else "",
+                    metrics={
+                        "candidate_index": candidate_index,
+                        "history_window_size": planning_state.temporal_context.get("window_size", 0),
+                        "cable_settling_score": planning_state.dynamics_summary.get("cable_settling_score", 0.0),
+                    },
+                    data_quality=planning_state.data_quality,
                 )
             )
             if best_score is None or score > best_score:
@@ -99,9 +110,12 @@ class AgentTeacherController:
         plan: TeacherPlan,
         segment: TrajectorySegment,
         dynamics: dict[str, Any],
+        data_quality: dict[str, Any],
     ) -> float:
         duration_penalty = segment.expected_duration_s
         caution_penalty = 0.15 if plan.caution_flag else 0.0
         settling_bonus = float(dynamics["cable_settling_score"])
         granularity_bonus = 0.1 if plan.segment_granularity == "guarded" else 0.0
-        return settling_bonus + granularity_bonus - duration_penalty - caution_penalty
+        controller_bonus = 0.05 if data_quality.get("controller_state", {}).get("is_real", False) else 0.0
+        wrench_penalty = 0.1 if not data_quality.get("wrench", {}).get("is_real", False) else 0.0
+        return settling_bonus + granularity_bonus + controller_bonus - duration_penalty - caution_penalty - wrench_penalty

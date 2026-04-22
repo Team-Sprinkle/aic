@@ -11,7 +11,14 @@ from aic_gym_gz.teacher.replay import TeacherReplayArtifact
 class TeacherReplayTest(unittest.TestCase):
     def test_replay_artifact_round_trip(self) -> None:
         artifact = TeacherReplayArtifact(
-            metadata={"trial_id": "trial_0", "task_id": "task_0", "seed": 123},
+            metadata={
+                "trial_id": "trial_0",
+                "task_id": "task_0",
+                "seed": 123,
+                "scenario_metadata": {"name": "scenario"},
+                "task_metadata": {"port_name": "port_0"},
+                "data_quality": {"wrench": {"is_real": False}},
+            },
             trajectory_segments=[{"points": [{"action": [0, 0, 0, 0, 0, 0]}]}],
             probe_results=[],
             planner_candidates=[],
@@ -24,6 +31,7 @@ class TeacherReplayTest(unittest.TestCase):
             save_teacher_replay(artifact, path)
             loaded = load_teacher_replay(path)
         self.assertEqual(loaded.metadata["trial_id"], "trial_0")
+        self.assertIn("data_quality", loaded.metadata)
 
     def test_replay_runner_reexecutes_dense_segment(self) -> None:
         env = make_default_env(enable_randomization=True)

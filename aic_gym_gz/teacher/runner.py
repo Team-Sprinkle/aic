@@ -14,6 +14,12 @@ from ..env import AicInsertionEnv
 from ..io import summarize_image_batch
 from .history import TemporalObservationBuffer
 from .policy import AgentTeacherController
+from .quality import (
+    build_signal_quality_snapshot,
+    controller_state_summary,
+    serialize_nested,
+    summarize_camera_info,
+)
 from .replay import TeacherReplayArtifact, save_teacher_replay
 from .types import TeacherRolloutLog, TeacherStepLog
 
@@ -33,6 +39,8 @@ def run_teacher_rollout(
     output_path: Path | None = None,
     probe_name: str = "hold_settle",
 ) -> TeacherRolloutResult:
+    if hasattr(controller.planner, "reset_episode_budget"):
+        controller.planner.reset_episode_budget()
     observation, info = env.reset(seed=seed, options={"trial_id": trial_id} if trial_id else {})
     initial_observation = dict(observation)
     scenario = env._scenario
@@ -48,6 +56,12 @@ def run_teacher_rollout(
         images=observation.get("images"),
         image_timestamps=_image_timestamp_map(observation),
         image_summaries=_image_summary_map(observation),
+        camera_info=observation.get("camera_info"),
+        signal_quality=build_signal_quality_snapshot(
+            state,
+            include_images=include_images,
+            camera_info=observation.get("camera_info"),
+        ),
     )
     start_wall = time.perf_counter()
     probe_results: list[dict[str, Any]] = []
@@ -84,6 +98,12 @@ def run_teacher_rollout(
                     images=observation.get("images"),
                     image_timestamps=_image_timestamp_map(observation),
                     image_summaries=_image_summary_map(observation),
+                    camera_info=observation.get("camera_info"),
+                    signal_quality=build_signal_quality_snapshot(
+                        state,
+                        include_images=include_images,
+                        camera_info=observation.get("camera_info"),
+                    ),
                 )
                 if terminated or truncated:
                     break
@@ -111,6 +131,12 @@ def run_teacher_rollout(
                 images=observation.get("images"),
                 image_timestamps=_image_timestamp_map(observation),
                 image_summaries=_image_summary_map(observation),
+                camera_info=observation.get("camera_info"),
+                signal_quality=build_signal_quality_snapshot(
+                    state,
+                    include_images=include_images,
+                    camera_info=observation.get("camera_info"),
+                ),
             )
             step_logs.append(
                 TeacherStepLog(
@@ -123,7 +149,13 @@ def run_teacher_rollout(
                     planner_rationale=controller.last_rationale or "",
                     trajectory_point=point.to_dict(),
                     dynamics_summary=history.dynamics_summary().to_dict(),
-                    observation_summary=_observation_summary(observation),
+                    observation_summary=_observation_summary(
+                        observation,
+                        state=state,
+                        include_images=include_images,
+                    ),
+                    history_summary=history.teacher_memory_summary(),
+                    data_quality=dict(history.latest().signal_quality),
                     probe_result=probe_results[-1] if probe_results else None,
                 ).to_dict()
             )
@@ -132,6 +164,9 @@ def run_teacher_rollout(
         if terminated or truncated:
             break
     total_wall_s = time.perf_counter() - start_wall
+    final_history_summary = history.teacher_memory_summary()
+    final_data_quality = dict(history.latest().signal_quality)
+    final_metrics = _final_metrics(last_info=last_info, step_logs=step_logs)
     rollout_log = TeacherRolloutLog(
         trial_id=scenario.trial_id,
         task_id=task_id,
@@ -150,6 +185,8 @@ def run_teacher_rollout(
             "sim_time": float(initial_observation["sim_time"]) if "sim_time" in initial_observation else 0.0,
             "distance_to_target": float(initial_observation["plug_to_port_relative"][3]),
         },
+        data_quality=final_data_quality,
+        history_metadata=final_history_summary,
         planner_candidates=planner_candidates,
         probe_results=probe_results,
         trajectory_segments=trajectory_segments,
@@ -166,6 +203,12 @@ def run_teacher_rollout(
             "teacher_version": "0.1.0",
             "include_images": include_images,
             "hold_action_ticks": env.task.hold_action_ticks,
+            "scenario_metadata": dict(scenario.metadata),
+            "task_metadata": _task_metadata(scenario, task_id),
+            "data_quality": final_data_quality,
+            "history_metadata": final_history_summary,
+            "planner_metadata": _planner_metadata(controller),
+            "final_metrics": final_metrics,
         },
         trajectory_segments=trajectory_segments,
         probe_results=probe_results,
@@ -193,7 +236,17 @@ def _image_summary_map(observation: dict[str, Any]) -> dict[str, dict[str, Any]]
     return summarize_image_batch(observation["images"], _image_timestamp_map(observation))
 
 
-def _observation_summary(observation: dict[str, Any]) -> dict[str, Any]:
+def _observation_summary(
+    observation: dict[str, Any],
+    *,
+    state,
+    include_images: bool,
+) -> dict[str, Any]:
+    data_quality = build_signal_quality_snapshot(
+        state,
+        include_images=include_images,
+        camera_info=observation.get("camera_info"),
+    )
     summary = {
         "sim_tick": int(observation["sim_tick"]),
         "sim_time": float(observation["sim_time"]),
@@ -203,11 +256,76 @@ def _observation_summary(observation: dict[str, Any]) -> dict[str, Any]:
         "tcp_velocity": np.asarray(observation["tcp_velocity"], dtype=np.float64).tolist(),
         "plug_pose": np.asarray(observation["plug_pose"], dtype=np.float64).tolist(),
         "target_port_pose": np.asarray(observation["target_port_pose"], dtype=np.float64).tolist(),
+        "target_port_entrance_pose": np.asarray(
+            observation["target_port_entrance_pose"], dtype=np.float64
+        ).tolist(),
         "wrench": np.asarray(observation["wrench"], dtype=np.float64).tolist(),
+        "wrench_timestamp": float(np.asarray(observation["wrench_timestamp"], dtype=np.float64).reshape(-1)[0]),
         "off_limit_contact": bool(np.asarray(observation["off_limit_contact"]).reshape(-1)[0] > 0.5),
         "plug_to_port_relative": np.asarray(observation["plug_to_port_relative"], dtype=np.float64).tolist(),
+        "controller_tcp_pose": np.asarray(observation["controller_tcp_pose"], dtype=np.float64).tolist(),
+        "controller_reference_tcp_pose": np.asarray(
+            observation["controller_reference_tcp_pose"], dtype=np.float64
+        ).tolist(),
+        "controller_tcp_velocity": np.asarray(
+            observation["controller_tcp_velocity"], dtype=np.float64
+        ).tolist(),
+        "controller_tcp_error": np.asarray(observation["controller_tcp_error"], dtype=np.float64).tolist(),
+        "controller_reference_joint_state": np.asarray(
+            observation["controller_reference_joint_state"], dtype=np.float64
+        ).tolist(),
+        "controller_target_mode": float(
+            np.asarray(observation["controller_target_mode"], dtype=np.float64).reshape(-1)[0]
+        ),
+        "fts_tare_wrench": np.asarray(observation["fts_tare_wrench"], dtype=np.float64).tolist(),
+        "score_geometry": serialize_nested(observation.get("score_geometry", {})),
+        "controller_state_summary": controller_state_summary(state.controller_state),
+        "data_quality": data_quality,
     }
     if "images" in observation:
         summary["image_summaries"] = _image_summary_map(observation)
         summary["image_timestamps"] = _image_timestamp_map(observation)
+        summary["camera_info"] = summarize_camera_info(observation.get("camera_info"))
     return summary
+
+
+def _planner_metadata(controller: AgentTeacherController) -> dict[str, Any]:
+    metadata = {
+        "backend_name": controller.planner.backend_name,
+        "candidate_plan_count": controller.config.candidate_plan_count,
+        "segment_limit": controller.config.segment_limit,
+        "hold_ticks_per_action": controller.config.hold_ticks_per_action,
+        "enable_probes": controller.config.enable_probes,
+    }
+    planner_config = getattr(controller.planner, "config", None)
+    if planner_config is not None:
+        metadata["backend_config"] = {
+            key: value
+            for key, value in vars(planner_config).items()
+            if "api_key" not in key.lower()
+        }
+    return metadata
+
+
+def _task_metadata(scenario, task_id: str) -> dict[str, Any]:
+    task = scenario.tasks[task_id]
+    return {
+        "plug_name": task.plug_name,
+        "cable_name": task.cable_name,
+        "cable_type": task.cable_type,
+        "target_module_name": task.target_module_name,
+        "port_name": task.port_name,
+    }
+
+
+def _final_metrics(*, last_info: dict[str, Any], step_logs: list[dict[str, Any]]) -> dict[str, Any]:
+    final_evaluation = dict(last_info.get("final_evaluation") or {})
+    reward_total = float(
+        final_evaluation.get("training_reward_total", sum(float(step["reward"]) for step in step_logs))
+    )
+    gym_final_score = final_evaluation.get("gym_final_score")
+    return {
+        "rl_step_reward_total": reward_total,
+        "gym_final_score": None if gym_final_score is None else float(gym_final_score),
+        "official_eval_score": final_evaluation.get("official_eval_score"),
+    }

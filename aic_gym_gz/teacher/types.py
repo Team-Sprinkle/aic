@@ -85,7 +85,15 @@ class TeacherPlanningState:
     image_timestamps: dict[str, float]
     image_summaries: dict[str, dict[str, Any]]
     recent_probe_results: list[dict[str, Any]]
+    controller_context: dict[str, Any] = field(default_factory=dict)
+    camera_context: dict[str, Any] = field(default_factory=dict)
+    temporal_context: dict[str, Any] = field(default_factory=dict)
+    data_quality: dict[str, dict[str, Any]] = field(default_factory=dict)
+    planning_metadata: dict[str, Any] = field(default_factory=dict)
     last_teacher_rationale: str | None = None
+
+    def to_dict(self) -> dict[str, Any]:
+        return asdict(self)
 
 
 @dataclass(frozen=True)
@@ -148,6 +156,8 @@ class CandidateEvaluation:
     segment: dict[str, Any]
     mode: str = "planner_waypoint"
     notes: str = ""
+    metrics: dict[str, Any] = field(default_factory=dict)
+    data_quality: dict[str, Any] = field(default_factory=dict)
 
     def to_dict(self) -> dict[str, Any]:
         return asdict(self)
@@ -165,6 +175,8 @@ class TeacherStepLog:
     trajectory_point: dict[str, Any]
     dynamics_summary: dict[str, Any]
     observation_summary: dict[str, Any]
+    history_summary: dict[str, Any] = field(default_factory=dict)
+    data_quality: dict[str, Any] = field(default_factory=dict)
     probe_result: dict[str, Any] | None = None
 
     def to_dict(self) -> dict[str, Any]:
@@ -181,6 +193,8 @@ class TeacherRolloutLog:
     scenario_metadata: dict[str, Any]
     timing: dict[str, Any]
     initial_observation_summary: dict[str, Any]
+    data_quality: dict[str, Any] = field(default_factory=dict)
+    history_metadata: dict[str, Any] = field(default_factory=dict)
     planner_candidates: list[dict[str, Any]] = field(default_factory=list)
     probe_results: list[dict[str, Any]] = field(default_factory=list)
     trajectory_segments: list[dict[str, Any]] = field(default_factory=list)
