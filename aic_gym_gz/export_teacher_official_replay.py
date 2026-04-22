@@ -7,6 +7,7 @@ import json
 from pathlib import Path
 
 from aic_gym_gz.teacher.search import export_selected_candidate_to_replay
+from aic_gym_gz.utils import to_jsonable
 
 
 def main() -> None:
@@ -24,12 +25,14 @@ def main() -> None:
     )
     print(
         json.dumps(
-            {
-                "output": args.output,
-                "trial_id": artifact.metadata["trial_id"],
-                "task_id": artifact.metadata["task_id"],
-                "candidate_rank": artifact.metadata["candidate_rank"],
-            },
+            to_jsonable(
+                {
+                    "output": args.output,
+                    "trial_id": artifact.metadata["trial_id"],
+                    "task_id": artifact.metadata["task_id"],
+                    "candidate_rank": artifact.metadata["candidate_rank"],
+                }
+            ),
             indent=2,
             sort_keys=True,
         )

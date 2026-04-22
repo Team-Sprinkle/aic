@@ -7,6 +7,7 @@ import json
 from pathlib import Path
 
 from aic_gym_gz.teacher.analysis import analyze_search_payload, load_json_file
+from aic_gym_gz.utils import to_jsonable
 
 
 def main() -> None:
@@ -20,12 +21,12 @@ def main() -> None:
     result = analyze_search_payload(payload)
     if args.output_json:
         Path(args.output_json).write_text(
-            json.dumps(result.summary, indent=2, sort_keys=True),
+            json.dumps(to_jsonable(result.summary), indent=2, sort_keys=True),
             encoding="utf-8",
         )
     if args.output_markdown:
         Path(args.output_markdown).write_text(result.markdown, encoding="utf-8")
-    print(json.dumps(result.summary, indent=2, sort_keys=True))
+    print(json.dumps(to_jsonable(result.summary), indent=2, sort_keys=True))
 
 
 if __name__ == "__main__":

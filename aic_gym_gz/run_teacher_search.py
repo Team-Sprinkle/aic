@@ -10,6 +10,7 @@ from aic_gym_gz.env import make_default_env, make_live_env
 from aic_gym_gz.planners.mock import DeterministicMockPlannerBackend
 from aic_gym_gz.planners.openai_backend import OpenAIPlannerBackend, OpenAIPlannerConfig
 from aic_gym_gz.teacher.search import TeacherCandidateSearch, TeacherSearchConfig
+from aic_gym_gz.utils import to_jsonable
 
 
 def main() -> None:
@@ -69,18 +70,20 @@ def main() -> None:
     top = result.payload["top_candidates"][0] if result.payload["top_candidates"] else None
     print(
         json.dumps(
-            {
-                "output": str(result.output_path),
-                "candidate_count": len(result.payload["ranked_candidates"]),
-                "top_candidate": None
-                if top is None
-                else {
-                    "name": top["candidate_spec"]["name"],
-                    "score": top["teacher_official_style_score"]["total_score"],
-                    "composite_score": top["ranking_metrics"]["composite_score"],
-                    "near_perfect": top["near_perfect"],
-                },
-            },
+            to_jsonable(
+                {
+                    "output": str(result.output_path),
+                    "candidate_count": len(result.payload["ranked_candidates"]),
+                    "top_candidate": None
+                    if top is None
+                    else {
+                        "name": top["candidate_spec"]["name"],
+                        "score": top["teacher_official_style_score"]["total_score"],
+                        "composite_score": top["ranking_metrics"]["composite_score"],
+                        "near_perfect": top["near_perfect"],
+                    },
+                }
+            ),
             indent=2,
             sort_keys=True,
         )

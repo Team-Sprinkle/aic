@@ -2,6 +2,9 @@ from __future__ import annotations
 
 import tempfile
 import unittest
+from pathlib import Path
+
+import json
 
 from aic_gym_gz.env import make_default_env
 from aic_gym_gz.planners.mock import DeterministicMockPlannerBackend
@@ -28,6 +31,23 @@ class TeacherSearchTest(unittest.TestCase):
         self.assertGreaterEqual(top_score, bottom_score)
         self.assertIn("ranking_metrics", result.payload["top_candidates"][0])
         self.assertIn("data_quality", result.payload["top_candidates"][0]["ranking_metrics"])
+
+    def test_candidate_search_output_serializes_numpy_values(self) -> None:
+        search = TeacherCandidateSearch(
+            env_factory=lambda: make_default_env(enable_randomization=True, include_images=False),
+            planner_factory=lambda: DeterministicMockPlannerBackend(),
+            config=TeacherSearchConfig(
+                planner_candidate_count=1,
+                local_perturbation_count=0,
+                top_k=1,
+            ),
+        )
+        with tempfile.TemporaryDirectory() as tmpdir:
+            output_path = Path(tmpdir) / "search.json"
+            search.run(seed=123, output_path=output_path)
+            payload = json.loads(output_path.read_text(encoding="utf-8"))
+        self.assertIn("ranked_candidates", payload)
+        self.assertEqual(payload["metadata"]["seed"], 123)
 
     def test_quality_adjustment_penalizes_missing_wrench_and_controller(self) -> None:
         search = TeacherCandidateSearch(

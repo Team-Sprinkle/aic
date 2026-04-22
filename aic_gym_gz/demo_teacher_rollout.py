@@ -10,6 +10,7 @@ from aic_gym_gz.env import make_default_env, make_live_env
 from aic_gym_gz.planners.mock import DeterministicMockPlannerBackend
 from aic_gym_gz.planners.openai_backend import OpenAIPlannerBackend, OpenAIPlannerConfig
 from aic_gym_gz.teacher import AgentTeacherController, TeacherConfig, run_teacher_rollout
+from aic_gym_gz.utils import to_jsonable
 
 
 def main() -> None:
@@ -62,17 +63,19 @@ def main() -> None:
         )
         print(
             json.dumps(
-                {
-                    "output": str(result.output_path),
-                    "trial_id": result.artifact.metadata["trial_id"],
-                    "task_id": result.artifact.metadata["task_id"],
-                    "planner_backend": result.artifact.metadata["planner_backend"],
-                    "segment_count": len(result.artifact.trajectory_segments),
-                    "step_count": len(result.artifact.step_logs),
-                    "probe_count": len(result.artifact.probe_results),
-                    "final_distance_to_target": result.artifact.final_info.get("distance_to_target"),
-                    "data_quality": result.artifact.metadata.get("data_quality"),
-                },
+                to_jsonable(
+                    {
+                        "output": str(result.output_path),
+                        "trial_id": result.artifact.metadata["trial_id"],
+                        "task_id": result.artifact.metadata["task_id"],
+                        "planner_backend": result.artifact.metadata["planner_backend"],
+                        "segment_count": len(result.artifact.trajectory_segments),
+                        "step_count": len(result.artifact.step_logs),
+                        "probe_count": len(result.artifact.probe_results),
+                        "final_distance_to_target": result.artifact.final_info.get("distance_to_target"),
+                        "data_quality": result.artifact.metadata.get("data_quality"),
+                    }
+                ),
                 indent=2,
                 sort_keys=True,
             )
