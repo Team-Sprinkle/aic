@@ -1,0 +1,63 @@
+[0.000000] (-) TimerEvent: {}
+[0.000539] (-) JobUnselected: {'identifier': 'aic_adapter'}
+[0.000578] (-) JobUnselected: {'identifier': 'aic_assets'}
+[0.000601] (-) JobUnselected: {'identifier': 'aic_bringup'}
+[0.000619] (-) JobUnselected: {'identifier': 'aic_control_interfaces'}
+[0.000637] (-) JobUnselected: {'identifier': 'aic_controller'}
+[0.000654] (-) JobUnselected: {'identifier': 'aic_description'}
+[0.000669] (-) JobUnselected: {'identifier': 'aic_engine'}
+[0.000685] (-) JobUnselected: {'identifier': 'aic_engine_interfaces'}
+[0.000700] (-) JobUnselected: {'identifier': 'aic_example_policies'}
+[0.000715] (-) JobUnselected: {'identifier': 'aic_gazebo'}
+[0.000730] (-) JobUnselected: {'identifier': 'aic_model'}
+[0.000745] (-) JobUnselected: {'identifier': 'aic_model_interfaces'}
+[0.000760] (-) JobUnselected: {'identifier': 'aic_mujoco'}
+[0.000774] (-) JobUnselected: {'identifier': 'aic_scoring'}
+[0.000788] (-) JobUnselected: {'identifier': 'aic_task_interfaces'}
+[0.000803] (-) JobUnselected: {'identifier': 'aic_teleoperation'}
+[0.000817] (-) JobUnselected: {'identifier': 'lerobot_robot_aic'}
+[0.000834] (aic_gazebo_transport_bridge) JobQueued: {'identifier': 'aic_gazebo_transport_bridge', 'dependencies': OrderedDict()}
+[0.000854] (aic_gazebo_transport_bridge) JobStarted: {'identifier': 'aic_gazebo_transport_bridge'}
+[0.009171] (aic_gazebo_transport_bridge) JobProgress: {'identifier': 'aic_gazebo_transport_bridge', 'progress': 'cmake'}
+[0.009654] (aic_gazebo_transport_bridge) Command: {'cmd': ['/usr/bin/cmake', '/home/ubuntu/ws_aic/src/aic/aic_utils/aic_gazebo_transport_bridge', '-DCMAKE_INSTALL_PREFIX=/home/ubuntu/ws_aic/src/aic/install'], 'cwd': '/home/ubuntu/ws_aic/src/aic/build/aic_gazebo_transport_bridge', 'env': OrderedDict({'USER': 'root', 'GZ_CONFIG_PATH': '/opt/ros/kilted/opt/sdformat_vendor/share/gz', 'XAUTHLOCALHOSTNAME': '', 'HOSTNAME': 'aic_eval.ip-172-31-65-30', 'SHLVL': '0', 'LD_LIBRARY_PATH': '/opt/ros/kilted/opt/zenoh_cpp_vendor/lib:/opt/ros/kilted/opt/sdformat_vendor/lib:/opt/ros/kilted/opt/gz_math_vendor/lib:/opt/ros/kilted/opt/gz_utils_vendor/lib:/opt/ros/kilted/opt/rviz_ogre_vendor/lib:/opt/ros/kilted/lib/x86_64-linux-gnu:/opt/ros/kilted/opt/gz_tools_vendor/lib:/opt/ros/kilted/opt/gz_ogre_next_vendor/lib:/opt/ros/kilted/opt/gz_dartsim_vendor/lib:/opt/ros/kilted/opt/gz_cmake_vendor/lib:/opt/ros/kilted/lib', 'HOME': '/home/ubuntu', 'OLDPWD': '/', 'ROS_PYTHON_VERSION': '3', 'container': 'sudo docker', 'ROS_DISTRO': 'kilted', '_': '/usr/bin/colcon', 'ROS_VERSION': '2', 'TERMINFO_DIRS': '/usr/share/terminfo:/run/host/usr/share/terminfo', 'PATH': '/opt/ros/kilted/opt/gz_tools_vendor/bin:/opt/ros/kilted/opt/gz_ogre_next_vendor/bin:/opt/ros/kilted/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin', 'DISPLAY': '', 'LANG': 'C.UTF-8', 'XAUTHORITY': '', 'AMENT_PREFIX_PATH': '/opt/ros/kilted', 'SHELL': '/bin/bash', 'ROS_AUTOMATIC_DISCOVERY_RANGE': 'SUBNET', 'PWD': '/home/ubuntu/ws_aic/src/aic/build/aic_gazebo_transport_bridge', 'LC_ALL': 'C.UTF-8', 'PYTHONPATH': '/opt/ros/kilted/lib/python3.12/site-packages', 'COLCON': '1', 'CMAKE_PREFIX_PATH': '/opt/ros/kilted/opt/sdformat_vendor:/opt/ros/kilted/opt/gz_math_vendor:/opt/ros/kilted/opt/gz_utils_vendor:/opt/ros/kilted/opt/gz_tools_vendor:/opt/ros/kilted/opt/gz_ogre_next_vendor:/opt/ros/kilted/opt/gz_dartsim_vendor:/opt/ros/kilted/opt/gz_cmake_vendor:/opt/ros/kilted'}), 'shell': False}
+[0.067623] (aic_gazebo_transport_bridge) StdoutLine: {'line': b'-- The C compiler identification is GNU 13.3.0\n'}
+[0.099819] (-) TimerEvent: {}
+[0.121624] (aic_gazebo_transport_bridge) StdoutLine: {'line': b'-- The CXX compiler identification is GNU 13.3.0\n'}
+[0.138104] (aic_gazebo_transport_bridge) StdoutLine: {'line': b'-- Detecting C compiler ABI info\n'}
+[0.199925] (-) TimerEvent: {}
+[0.224302] (aic_gazebo_transport_bridge) StdoutLine: {'line': b'-- Detecting C compiler ABI info - done\n'}
+[0.232956] (aic_gazebo_transport_bridge) StdoutLine: {'line': b'-- Check for working C compiler: /usr/bin/cc - skipped\n'}
+[0.233215] (aic_gazebo_transport_bridge) StdoutLine: {'line': b'-- Detecting C compile features\n'}
+[0.233638] (aic_gazebo_transport_bridge) StdoutLine: {'line': b'-- Detecting C compile features - done\n'}
+[0.242995] (aic_gazebo_transport_bridge) StdoutLine: {'line': b'-- Detecting CXX compiler ABI info\n'}
+[0.300033] (-) TimerEvent: {}
+[0.338079] (aic_gazebo_transport_bridge) StdoutLine: {'line': b'-- Detecting CXX compiler ABI info - done\n'}
+[0.346846] (aic_gazebo_transport_bridge) StdoutLine: {'line': b'-- Check for working CXX compiler: /usr/bin/c++ - skipped\n'}
+[0.347115] (aic_gazebo_transport_bridge) StdoutLine: {'line': b'-- Detecting CXX compile features\n'}
+[0.347571] (aic_gazebo_transport_bridge) StdoutLine: {'line': b'-- Detecting CXX compile features - done\n'}
+[0.353180] (aic_gazebo_transport_bridge) StdoutLine: {'line': b'-- Found ament_cmake: 2.7.5 (/opt/ros/kilted/share/ament_cmake/cmake)\n'}
+[0.400109] (-) TimerEvent: {}
+[0.494389] (aic_gazebo_transport_bridge) StdoutLine: {'line': b'-- Found Python3: /usr/bin/python3 (found version "3.12.3") found components: Interpreter \n'}
+[0.500197] (-) TimerEvent: {}
+[0.600343] (-) TimerEvent: {}
+[0.632729] (aic_gazebo_transport_bridge) StderrLine: {'line': b'CMake Error at CMakeLists.txt:10 (find_package):\n'}
+[0.633011] (aic_gazebo_transport_bridge) StderrLine: {'line': b'  By not providing "Findgz_transport_vendor.cmake" in CMAKE_MODULE_PATH this\n'}
+[0.633087] (aic_gazebo_transport_bridge) StderrLine: {'line': b'  project has asked CMake to find a package configuration file provided by\n'}
+[0.633147] (aic_gazebo_transport_bridge) StderrLine: {'line': b'  "gz_transport_vendor", but CMake did not find one.\n'}
+[0.633203] (aic_gazebo_transport_bridge) StderrLine: {'line': b'\n'}
+[0.633258] (aic_gazebo_transport_bridge) StderrLine: {'line': b'  Could not find a package configuration file provided by\n'}
+[0.633314] (aic_gazebo_transport_bridge) StderrLine: {'line': b'  "gz_transport_vendor" with any of the following names:\n'}
+[0.633382] (aic_gazebo_transport_bridge) StderrLine: {'line': b'\n'}
+[0.633439] (aic_gazebo_transport_bridge) StderrLine: {'line': b'    gz_transport_vendorConfig.cmake\n'}
+[0.633493] (aic_gazebo_transport_bridge) StderrLine: {'line': b'    gz_transport_vendor-config.cmake\n'}
+[0.633578] (aic_gazebo_transport_bridge) StderrLine: {'line': b'\n'}
+[0.633636] (aic_gazebo_transport_bridge) StderrLine: {'line': b'  Add the installation prefix of "gz_transport_vendor" to CMAKE_PREFIX_PATH\n'}
+[0.633690] (aic_gazebo_transport_bridge) StderrLine: {'line': b'  or set "gz_transport_vendor_DIR" to a directory containing one of the above\n'}
+[0.633746] (aic_gazebo_transport_bridge) StderrLine: {'line': b'  files.  If "gz_transport_vendor" provides a separate development package or\n'}
+[0.633800] (aic_gazebo_transport_bridge) StderrLine: {'line': b'  SDK, be sure it has been installed.\n'}
+[0.633853] (aic_gazebo_transport_bridge) StderrLine: {'line': b'\n'}
+[0.633906] (aic_gazebo_transport_bridge) StderrLine: {'line': b'\n'}
+[0.633958] (aic_gazebo_transport_bridge) StdoutLine: {'line': b'-- Configuring incomplete, errors occurred!\n'}
+[0.637282] (aic_gazebo_transport_bridge) CommandEnded: {'returncode': 1}
+[0.658026] (aic_gazebo_transport_bridge) JobEnded: {'identifier': 'aic_gazebo_transport_bridge', 'rc': 1}
+[0.668698] (-) EventReactorShutdown: {}

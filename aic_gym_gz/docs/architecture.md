@@ -2,19 +2,20 @@
 
 ## Goal
 
-Build a standalone RL training path with synchronous `reset()` / `step()` semantics
-that stays behaviorally aligned with the official AIC evaluation stack, while
-keeping ROS out of the hot loop wherever possible.
+Build a standalone RL training path with synchronous `reset()` / `step()`
+semantics that stays as behaviorally aligned as practical with the official AIC
+evaluation stack, while keeping the training hot loop independent of the full
+ROS orchestration layer wherever possible.
 
 ## Official source of truth
 
 The new path reuses these official definitions directly:
 
 - Scene schema: `aic_engine/config/sample_config.yaml`
-- Task board and cable geometry knobs:
+- Task board and cable geometry:
   - `aic_description/urdf/task_board.urdf.xacro`
   - `aic_description/urdf/cable.sdf.xacro`
-- World export / scene container:
+- World export:
   - `aic_description/world/aic.sdf`
 - Action semantics:
   - `aic_interfaces/aic_control_interfaces/msg/MotionUpdate.msg`
@@ -28,122 +29,132 @@ The new path reuses these official definitions directly:
   - `docs/scoring.md`
   - `aic_scoring/src/ScoringTier2.cc`
 
-## What is replaced
+## Architectural split
 
-The training path does not use these in the hot loop:
-
-- `aic_engine`
-- `aic_adapter`
-- `ros_gz_bridge`
-- ROS lifecycle / action orchestration
-
-Instead it introduces:
-
-- `AicGazeboRuntime`
-  - exact synchronous stepping
-  - deterministic `reset(seed=...)`
-  - one action held for `K` sim ticks
-- `AicInsertionTask`
-  - simulator-agnostic reward / termination / evaluation logic
-- `AicGazeboIO`
-  - Gazebo-native observation extraction and command application interface
-- `AicEnvRandomizer`
-  - official-schema-aligned reset sampling
-- `AicParityHarness`
-  - rollout comparison tooling
-
-## Runtime shape
-
-The current implementation deliberately separates:
+The implementation separates:
 
 1. Env API
-2. Task / reward logic
-3. Observation / action IO
+2. Task and reward logic
+3. Observation and action IO
 4. Runtime stepping
 5. Backend simulator integration
 
 That split allows:
 
-- a deterministic fake backend for local tests
-- a future ScenarIO + gym-gz backend without rewriting env logic
-- a Gazebo Transport image/state bridge without coupling reward logic to Gazebo APIs
+- a deterministic mock backend for local tests and reward validation
+- a live Gazebo-backed path without rewriting env/task logic
+- parity tooling that compares fixed rollouts without changing the RL interface
 
-## State-only observation contract
+## Core components
 
-Phase 1 exposes:
+- `AicInsertionEnv`
+  - public Gymnasium API
+  - returns `rl_step_reward` from `step()`
+  - attaches `final_evaluation()` output at termination/truncation
+- `AicInsertionTask`
+  - owns action space and observation space
+  - computes `rl_step_reward`
+  - records episode traces for `gym_final_score`
+- `AicGazeboRuntime`
+  - owns exact synchronous stepping
+  - delegates to the active backend
+- `AicGazeboIO`
+  - converts internal runtime state to the public observation schema
+- `AicParityHarness`
+  - compares rollouts and local score reports
 
-- `joint_positions`
-- `joint_velocities`
-- `gripper_state`
-- `tcp_pose`
-- `tcp_velocity`
-- `plug_pose`
-- `target_port_pose`
-- `plug_to_port_relative`
-- `wrench`
-- `off_limit_contact`
+## Observation architecture
 
-This is intentionally close to the union of:
+The public observation contract is explicit and stable.
 
-- `Observation.msg`
-- `ControllerState.msg`
-- scoring-time plug / port TFs
+State fields include:
 
-## Image observation plan
+- robot state
+- TCP state
+- plug and target geometry
+- current wrench and timestamp
+- current contact flag
+- flattened controller-state fields
+- score geometry fields such as:
+  - `distance_to_target`
+  - `distance_to_entrance`
+  - `orientation_error`
+  - `insertion_progress`
+  - `lateral_misalignment`
+  - `partial_insertion`
 
-Planned order:
+Image mode adds:
 
-1. Gazebo Transport subscription to the three wrist image topics
-2. Gazebo system plugin for direct frame extraction if transport alone is insufficient
-3. ROS sidecar only as an isolated fallback
+- wrist RGB images
+- image timestamps
+- `camera_info`
 
-The current package includes only the IO seam for this work.
+### Temporal semantics
 
-## Reward and score alignment
+The observation model is current-sample-based.
 
-Per-step reward uses named terms:
+- one `env.step()` produces one policy observation
+- no built-in observation history is provided
+- if `ticks_per_step > 1`, the policy sees the final sample for that held action
+  window
 
-- `success_reward`
-- `wrong_port_penalty`
-- `partial_insertion_reward`
-- `proximity_reward`
-- `progress_reward`
-- `duration_penalty`
-- `path_efficiency_term`
-- `smoothness_term`
-- `excessive_force_penalty`
-- `off_limit_contact_penalty`
+This is important for F/T interpretation. Policies that need temporal memory
+must build it themselves.
 
-Final evaluation mirrors the official decomposition shape:
+## Reward and score architecture
 
-- Tier 2:
-  - duration
-  - trajectory smoothness
-  - trajectory efficiency
-  - insertion force
-  - contacts
-- Tier 3:
-  - success / wrong-port / partial insertion / proximity
+The implementation deliberately separates training reward from episode scoring.
+
+### `rl_step_reward`
+
+`rl_step_reward` is:
+
+- dense
+- per-step
+- local
+- shaped for optimization
+
+It follows Isaac-Lab-style reward shaping rather than trying to exactly
+reconstruct the final score.
+
+### `gym_final_score`
+
+`gym_final_score` is:
+
+- computed at episode end
+- based on the accumulated episode trace
+- useful for local evaluation and analysis
+
+### `official_eval_score`
+
+`official_eval_score` is external to `aic_gym_gz`.
+
+The architecture intentionally leaves it outside the local training loop because
+it requires the official toolkit path.
+
+## Live-path dependencies
+
+The live path still depends on ROS topics for some fields:
+
+- wrench
+- controller state
+- off-limit contacts
+- images
+- image timestamps
+- `camera_info`
+
+When these are absent, the observation schema stays stable and the missing live
+fields are zero-filled or false-filled.
+
+## Checkpoint architecture
+
+- mock backend checkpoint/restore is exact
+- live checkpoint export is a reset-and-rerun artifact only
+- live midpoint restore is not currently available
 
 ## What remains approximate
 
-- The tested backend is not Gazebo-backed in this shell.
-- The live ScenarIO + gym-gz backend is represented as `ScenarioGymGzBackend`
-  but cannot be exercised until those dependencies are available.
-- The image path is unimplemented.
-- Parity against the official ROS flow still needs live trace capture in a Gazebo-enabled environment.
-
-## TODO
-
-- [x] Load official scenario YAML and expose a clean scenario model.
-- [x] Implement deterministic reset and exact-tick synchronous stepping.
-- [x] Add state-only observation mode with a stable schema.
-- [x] Add named reward terms and official-like final score summary.
-- [x] Add random-policy demo and unit tests.
-- [x] Add parity harness for offline rollout comparisons.
-- [x] Add benchmark helper for the standalone env.
-- [ ] Implement real ScenarIO + gym-gz runtime backend.
-- [ ] Implement Gazebo Transport observation extraction for state signals.
-- [ ] Add Gazebo-native three-camera RGB ingestion.
-- [ ] Capture official ROS rollout traces and finish parity validation.
-- [ ] Measure throughput versus the official ROS evaluation path on the same machine.
+- the default tested backend in this shell is mock, not Gazebo-backed
+- live parity depends on external ROS/Gazebo availability
+- local final scoring is still distinct from the official toolkit
+- policy-level F/T currently exposes only the final sample per step

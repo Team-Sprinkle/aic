@@ -60,6 +60,8 @@ class ParityTest(unittest.TestCase):
         self.assertIn("reference", report)
         self.assertIn("candidate", report)
         self.assertIn("deltas", report)
+        self.assertEqual(report["reference"]["score_label"], "gym_final_score")
+        self.assertIsNone(report["reference"]["official_eval_score"])
         self.assertEqual(report["deltas"]["total_score_abs_error"], 0.0)
 
     def test_image_parity_report_structure(self) -> None:
