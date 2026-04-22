@@ -21,6 +21,7 @@ def _state(*, sim_tick: int, sim_time: float, plug_xyz: tuple[float, float, floa
         tcp_velocity=np.zeros(6, dtype=np.float64),
         plug_pose=plug_pose,
         target_port_pose=np.array([0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 1.0], dtype=np.float64),
+        target_port_entrance_pose=np.array([0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 1.0], dtype=np.float64),
         wrench=np.array([0.0, 0.0, force_z, 0.0, 0.0, 0.0], dtype=np.float64),
         off_limit_contact=False,
     )
