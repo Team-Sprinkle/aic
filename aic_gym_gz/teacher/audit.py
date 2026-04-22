@@ -38,14 +38,14 @@ def observation_parity_rows() -> list[AuditRow]:
             current_availability="Matched in live teacher path; zeros in mock path",
             source="aic_gym_gz/io.py:RosCameraSidecarIO.observation_from_state; aic_gym_gz/teacher/context.py:TeacherContextExtractor.build_planning_state",
             status="matched",
-            notes="Teacher planning state now includes timestamp map and image summaries.",
+            notes="Teacher planning state and temporal history now keep explicit current-vs-history image timestamp views.",
         ),
         AuditRow(
             item="force/torque sensor data",
-            current_availability="Approximate in live gym path, synthetic in mock path",
-            source="aic_gym_gz/runtime.py:ScenarioGymGzBackend._runtime_state_from_observation; aic_gym_gz/runtime.py:MockStepperBackend.step_ticks",
+            current_availability="Approximate in live gym path, synthetic in mock path, explicitly flagged in teacher metadata",
+            source="aic_gym_gz/runtime.py:ScenarioGymGzBackend._runtime_state_from_observation; aic_gym_gz/teacher/quality.py:build_signal_quality_snapshot",
             status="approximate",
-            notes="Official path uses `Observation.wrist_wrench`; live gym runtime still fills zeros today unless downstream bridge exposes wrench.",
+            notes="Teacher planning, ranking, replay, and export now record whether wrench is real, synthetic, or missing instead of assuming parity.",
         ),
         AuditRow(
             item="TCP pose",
@@ -68,17 +68,17 @@ def observation_parity_rows() -> list[AuditRow]:
         ),
         AuditRow(
             item="controller state / reference tcp pose / tcp_error",
-            current_availability="Missing in teacher planner path",
-            source="aic_interfaces/aic_model_interfaces/msg/Observation.msg; aic_adapter/src/aic_adapter.cpp",
-            status="missing",
-            notes="Official ROS observations include `controller_state`; teacher path currently logs only the gym observation slice.",
+            current_availability="Available in teacher planner path when runtime exposes it; otherwise explicitly marked missing",
+            source="aic_gym_gz/runtime.py:_controller_state_from_ros_sample; aic_gym_gz/teacher/context.py:TeacherContextExtractor.build_planning_state",
+            status="approximate",
+            notes="Teacher planning state now carries controller context, reference TCP pose, TCP error, and quality flags.",
         ),
         AuditRow(
             item="camera info",
-            current_availability="Missing in teacher planner path",
-            source="aic_interfaces/aic_model_interfaces/msg/Observation.msg; aic_adapter/src/aic_adapter.cpp",
-            status="missing",
-            notes="Official policy receives `CameraInfo`; teacher planner currently only uses image arrays and timestamps.",
+            current_availability="Available in teacher planner path when the sidecar provides it; placeholder/missing cases are flagged",
+            source="aic_gym_gz/io.py:RosCameraSidecarIO.observation_from_state; aic_gym_gz/teacher/context.py:TeacherContextExtractor.build_planning_state",
+            status="approximate",
+            notes="Teacher planning state now carries camera-info summaries plus real-vs-placeholder availability flags.",
         ),
         AuditRow(
             item="plug pose / target pose / privileged oracle board metadata",
@@ -113,10 +113,10 @@ def scoring_parity_rows() -> list[AuditRow]:
         ),
         AuditRow(
             item="insertion force penalty",
-            current_availability="Matched in formula, limited by live wrench availability",
-            source="aic_scoring/src/ScoringTier2.cc:GetInsertionForceScore; aic_gym_gz/teacher/scoring.py:OfficialStyleScoreEvaluator.evaluate_rollout",
+            current_availability="Matched in formula, quality-aware in ranking, limited by live wrench availability",
+            source="aic_scoring/src/ScoringTier2.cc:GetInsertionForceScore; aic_gym_gz/teacher/scoring.py:OfficialStyleScoreEvaluator.evaluate_rollout; aic_gym_gz/teacher/search.py:TeacherCandidateSearch._ranking_metrics",
             status="approximate",
-            notes="Thresholds match; live teacher accuracy depends on wrench propagation from runtime.",
+            notes="Ranking now penalizes missing/synthetic wrench so zero-filled signals do not get over-trusted.",
         ),
         AuditRow(
             item="off-limit contact penalty",
@@ -140,9 +140,9 @@ def scoring_parity_rows() -> list[AuditRow]:
         AuditRow(
             item="tier1 validity",
             current_availability="Approximate",
-            source="docs/scoring.md; aic_model/aic_model/aic_model.py",
+            source="docs/scoring.md; aic_model/aic_model/aic_model.py; aic_gym_gz/teacher/quality.py:build_signal_quality_snapshot",
             status="approximate",
-            notes="Teacher search assumes valid rollouts locally; official Tier 1 still requires running through `aic_model`.",
+            notes="Teacher artifacts now mark Tier 1 validity as approximate explicitly instead of silently implying official validity.",
         ),
     ]
 
@@ -158,16 +158,16 @@ def dataset_compatibility_rows() -> list[AuditRow]:
         ),
         AuditRow(
             item="rich planner/scenario/score metadata",
-            current_availability="Available via sidecar metadata JSON",
+            current_availability="Available in replay metadata and dataset sidecars",
             source="aic_gym_gz/teacher/dataset_export.py",
             status="matched",
-            notes="Native LeRobot frames do not natively carry all teacher metadata, so sidecar export is used.",
+            notes="Replay and dataset export now preserve scenario/task metadata, ranking metrics, and signal-quality flags.",
         ),
         AuditRow(
             item="controller-state-specific fields",
-            current_availability="Approximate compatibility",
-            source="origin/exp/data:aic_utils/lerobot_robot_aic/lerobot_robot_aic/policy_recorder.py; aic_gym_gz/teacher/dataset_export.py",
+            current_availability="Improved compatibility with direct controller error when present",
+            source="origin/exp/data:aic_utils/lerobot_robot_aic/lerobot_robot_aic/policy_recorder.py; aic_gym_gz/teacher/dataset_export.py:_lerobot_observation_from_step",
             status="approximate",
-            notes="`tcp_error.*` is synthesized from commanded target vs observed TCP because gym teacher artifacts do not carry official controller error directly.",
+            notes="Exporter uses logged controller TCP error if present and falls back to synthesized target-vs-observed error otherwise.",
         ),
     ]

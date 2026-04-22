@@ -15,8 +15,13 @@ class TeacherDatasetExportTest(unittest.TestCase):
             "selected_top_k": True,
             "near_perfect": False,
             "official_style_score": {"total_score": 50.0},
+            "ranking_metrics": {"data_quality": {"wrench": {"is_real": False}}},
             "artifact": {
-                "metadata": {"trial_id": "trial_1", "task_id": "task_1"},
+                "metadata": {
+                    "trial_id": "trial_1",
+                    "task_id": "task_1",
+                    "data_quality": {"wrench": {"is_real": False}},
+                },
                 "step_logs": [
                     {
                         "sim_time": 0.1,
@@ -24,6 +29,8 @@ class TeacherDatasetExportTest(unittest.TestCase):
                         "trajectory_point": {"action": [0, 0, 0, 0, 0, 0]},
                         "dynamics_summary": {"cable_settling_score": 1.0},
                         "observation_summary": {"sim_tick": 1},
+                        "history_summary": {"window_size": 1},
+                        "data_quality": {"wrench": {"is_real": False}},
                     }
                 ],
             },
@@ -32,8 +39,10 @@ class TeacherDatasetExportTest(unittest.TestCase):
             result = export_teacher_jsonl_dataset(candidate, output_dir=tmpdir)
             lines = result.dataset_path.read_text(encoding="utf-8").strip().splitlines()
             metadata = json.loads(result.metadata_path.read_text(encoding="utf-8"))
+            record = json.loads(lines[0])
         self.assertEqual(len(lines), 1)
         self.assertEqual(metadata["rank"], 1)
+        self.assertIn("data_quality", record)
 
 
 if __name__ == "__main__":

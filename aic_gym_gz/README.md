@@ -213,7 +213,7 @@ The teacher layer uses:
 
 - temporal history
 - probes
-- planning through deterministic mock backends and future OpenAI-backed flows
+- planning through deterministic mock backends and a live OpenAI Responses API backend
 - trajectory smoothing
 - candidate search
 - replay artifacts and dataset export
@@ -225,11 +225,25 @@ Teacher-side tooling consumes the base environment exactly as exposed here:
 - `official_eval_score` remains outside `aic_gym_gz` and outside the teacher
   stack unless the official toolkit path is run separately
 
+Teacher-side extensions remain additive to the base env:
+
+- current observation semantics stay in the base env
+- temporal memory is built in `aic_gym_gz.teacher.history.TemporalObservationBuffer`
+- planning state now carries explicit controller-state, reference-TCP, camera-info,
+  and signal-quality metadata when available
+- missing or synthetic wrench/controller/camera-info signals are marked
+  explicitly and propagated into ranking, replay, and dataset export metadata
+
 Representative teacher entry points:
 
 ```bash
 pixi run python -m aic_gym_gz.demo_teacher_rollout \
   --output aic_gym_gz/artifacts/teacher_rollout.json
+pixi run python -m aic_gym_gz.demo_teacher_rollout \
+  --planner-backend openai \
+  --openai-model gpt-5.4-mini \
+  --output aic_gym_gz/artifacts/teacher_rollout_openai.json
+pixi run python -m aic_gym_gz.demo_teacher_history_context
 pixi run python -m aic_gym_gz.replay_teacher_artifact \
   --artifact aic_gym_gz/artifacts/teacher_rollout.json
 pixi run python -m aic_gym_gz.compare_teacher_replay \
@@ -237,6 +251,8 @@ pixi run python -m aic_gym_gz.compare_teacher_replay \
 pixi run python -m aic_gym_gz.run_teacher_audit \
   --output aic_gym_gz/artifacts/teacher_audit.json
 pixi run python -m aic_gym_gz.run_teacher_search \
+  --planner-backend openai \
+  --openai-model gpt-5.4-mini \
   --output aic_gym_gz/artifacts/teacher_search.json
 pixi run python -m aic_gym_gz.export_teacher_dataset \
   --search-artifact aic_gym_gz/artifacts/teacher_search.json \
@@ -259,10 +275,12 @@ What is intentionally aligned:
 
 Key differences and caveats:
 
-- the policy must maintain its own temporal memory
+- the policy must maintain its own temporal memory above the env
 - some live fields depend on ROS topics being present
 - `gym_final_score` is a local final-score path, not the official toolkit score
 - final validation must be done with the official toolkit path
+- teacher search/ranking/export are quality-aware but still conservative when
+  wrench/controller/camera-info parity is incomplete
 
 State this explicitly:
 

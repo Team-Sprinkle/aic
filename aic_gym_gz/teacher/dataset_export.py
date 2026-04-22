@@ -39,6 +39,8 @@ def export_teacher_jsonl_dataset(
                 "action": step["trajectory_point"]["action"],
                 "planner_rationale": step["planner_rationale"],
                 "dynamics_summary": step["dynamics_summary"],
+                "history_summary": step.get("history_summary", {}),
+                "data_quality": step.get("data_quality", artifact["metadata"].get("data_quality", {})),
                 "probe_result": step.get("probe_result"),
                 "task_metadata": {
                     "task_id": artifact["metadata"]["task_id"],
@@ -49,6 +51,7 @@ def export_teacher_jsonl_dataset(
                     "candidate_rank": candidate_entry["rank"],
                     "selected_top_k": candidate_entry["selected_top_k"],
                     "near_perfect": candidate_entry["near_perfect"],
+                    "ranking_metrics": candidate_entry.get("ranking_metrics", {}),
                 },
                 "score_breakdown": score,
             }
@@ -63,6 +66,7 @@ def export_teacher_jsonl_dataset(
                 "candidate_spec": candidate_entry["candidate_spec"],
                 "rank": candidate_entry["rank"],
                 "official_style_score": score,
+                "ranking_metrics": candidate_entry.get("ranking_metrics", {}),
                 "artifact_metadata": artifact["metadata"],
             },
             indent=2,
@@ -152,6 +156,7 @@ def export_teacher_lerobot_dataset(
                 "candidate_spec": candidate_entry["candidate_spec"],
                 "rank": candidate_entry["rank"],
                 "official_style_score": candidate_entry["official_style_score"],
+                "ranking_metrics": candidate_entry.get("ranking_metrics", {}),
                 "selected_top_k": candidate_entry["selected_top_k"],
                 "near_perfect": candidate_entry["near_perfect"],
                 "artifact_metadata": artifact["metadata"],
@@ -216,7 +221,9 @@ def _lerobot_observation_from_step(step: dict[str, Any]) -> dict[str, Any]:
     joint_positions = joint_positions[:7] + [0.0] * max(0, 7 - len(joint_positions))
     wrench = obs["wrench"]
     target_tcp_pose = step["trajectory_point"]["target_tcp_pose"]
-    tcp_error = [float(target_tcp_pose[idx] - tcp_pose[idx]) for idx in range(6)]
+    tcp_error = obs.get("controller_tcp_error")
+    if tcp_error is None:
+        tcp_error = [float(target_tcp_pose[idx] - tcp_pose[idx]) for idx in range(6)]
     image_summaries = obs.get("image_summaries", {})
     return {
         "tcp_pose.position.x": float(tcp_pose[0]),

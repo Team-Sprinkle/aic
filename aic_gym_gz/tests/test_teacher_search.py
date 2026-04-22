@@ -26,6 +26,42 @@ class TeacherSearchTest(unittest.TestCase):
         top_score = result.payload["top_candidates"][0]["official_style_score"]["total_score"]
         bottom_score = result.payload["ranked_candidates"][-1]["official_style_score"]["total_score"]
         self.assertGreaterEqual(top_score, bottom_score)
+        self.assertIn("ranking_metrics", result.payload["top_candidates"][0])
+        self.assertIn("data_quality", result.payload["top_candidates"][0]["ranking_metrics"])
+
+    def test_quality_adjustment_penalizes_missing_wrench_and_controller(self) -> None:
+        search = TeacherCandidateSearch(
+            env_factory=lambda: make_default_env(enable_randomization=True, include_images=False),
+            planner_factory=lambda: DeterministicMockPlannerBackend(),
+        )
+        base_artifact = {
+            "metadata": {
+                "final_metrics": {"gym_final_score": 50.0, "rl_step_reward_total": 10.0},
+                "data_quality": {
+                    "wrench": {"is_real": True, "is_missing": False},
+                    "controller_state": {"is_real": True},
+                    "camera_info": {"available": False, "is_real": False},
+                    "partial_insertion_depth": {"is_real": False},
+                    "tier1_validity": {"is_real": False},
+                },
+            }
+        }
+        degraded_artifact = {
+            "metadata": {
+                "final_metrics": {"gym_final_score": 50.0, "rl_step_reward_total": 10.0},
+                "data_quality": {
+                    "wrench": {"is_real": False, "is_missing": True},
+                    "controller_state": {"is_real": False},
+                    "camera_info": {"available": False, "is_real": False},
+                    "partial_insertion_depth": {"is_real": False},
+                    "tier1_validity": {"is_real": False},
+                },
+            }
+        }
+        teacher_score = {"total_score": 60.0}
+        base_metrics = search._ranking_metrics(artifact=base_artifact, teacher_score=teacher_score)
+        degraded_metrics = search._ranking_metrics(artifact=degraded_artifact, teacher_score=teacher_score)
+        self.assertGreater(base_metrics["composite_score"], degraded_metrics["composite_score"])
 
 
 if __name__ == "__main__":

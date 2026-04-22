@@ -24,6 +24,7 @@ def _state(*, sim_tick: int, sim_time: float, plug_xyz: tuple[float, float, floa
         target_port_entrance_pose=np.array([0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 1.0], dtype=np.float64),
         wrench=np.array([0.0, 0.0, force_z, 0.0, 0.0, 0.0], dtype=np.float64),
         off_limit_contact=False,
+        controller_state={"tcp_error": np.zeros(6, dtype=np.float64)},
     )
 
 
@@ -51,6 +52,29 @@ class TeacherHistoryTest(unittest.TestCase):
                 action=np.zeros(6),
             )
         self.assertTrue(history.dynamics_summary().quasi_static)
+
+    def test_teacher_memory_summary_keeps_current_observation_separate_from_history(self) -> None:
+        history = TemporalObservationBuffer(max_frames=4)
+        state = _state(
+            sim_tick=3,
+            sim_time=0.3,
+            plug_xyz=(0.0, 0.0, 0.003),
+            tcp_xyz=(0.0, 0.0, 0.001),
+            force_z=0.5,
+        )
+        history.append(
+            state=state,
+            action=np.ones(6, dtype=np.float64),
+            image_timestamps={"left": 1.0},
+            image_summaries={"left": {"present": True}},
+            camera_info={"left": {"size": np.array([64.0, 64.0], dtype=np.float32)}},
+            signal_quality={"wrench": {"is_real": False}, "controller_state": {"is_real": True}},
+        )
+        current = history.current_observation_view()
+        memory = history.teacher_memory_summary()
+        self.assertEqual(current["sim_tick"], 3)
+        self.assertEqual(len(memory["action_history"]), 1)
+        self.assertEqual(memory["latest_signal_quality"]["controller_state"]["is_real"], True)
 
 
 if __name__ == "__main__":
