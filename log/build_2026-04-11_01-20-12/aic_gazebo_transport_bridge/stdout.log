@@ -1,0 +1,21 @@
+[ 50%] Building CXX object CMakeFiles/aic_gz_transport_bridge.dir/src/aic_gz_transport_bridge.cc.o
+[100%] Linking CXX executable aic_gz_transport_bridge
+[100%] Built target aic_gz_transport_bridge
+-- Install configuration: ""
+-- Installing: /home/ubuntu/ws_aic/src/aic/install/lib/aic_gazebo_transport_bridge/aic_gz_transport_bridge
+-- Set non-toolchain portion of runtime path of "/home/ubuntu/ws_aic/src/aic/install/lib/aic_gazebo_transport_bridge/aic_gz_transport_bridge" to ""
+-- Up-to-date: /home/ubuntu/ws_aic/src/aic/install/share/ament_index/resource_index/package_run_dependencies/aic_gazebo_transport_bridge
+-- Up-to-date: /home/ubuntu/ws_aic/src/aic/install/share/ament_index/resource_index/parent_prefix_path/aic_gazebo_transport_bridge
+-- Up-to-date: /home/ubuntu/ws_aic/src/aic/install/share/aic_gazebo_transport_bridge/environment/ament_prefix_path.sh
+-- Up-to-date: /home/ubuntu/ws_aic/src/aic/install/share/aic_gazebo_transport_bridge/environment/ament_prefix_path.dsv
+-- Up-to-date: /home/ubuntu/ws_aic/src/aic/install/share/aic_gazebo_transport_bridge/environment/path.sh
+-- Up-to-date: /home/ubuntu/ws_aic/src/aic/install/share/aic_gazebo_transport_bridge/environment/path.dsv
+-- Up-to-date: /home/ubuntu/ws_aic/src/aic/install/share/aic_gazebo_transport_bridge/local_setup.bash
+-- Up-to-date: /home/ubuntu/ws_aic/src/aic/install/share/aic_gazebo_transport_bridge/local_setup.sh
+-- Up-to-date: /home/ubuntu/ws_aic/src/aic/install/share/aic_gazebo_transport_bridge/local_setup.zsh
+-- Up-to-date: /home/ubuntu/ws_aic/src/aic/install/share/aic_gazebo_transport_bridge/local_setup.dsv
+-- Installing: /home/ubuntu/ws_aic/src/aic/install/share/aic_gazebo_transport_bridge/package.dsv
+-- Up-to-date: /home/ubuntu/ws_aic/src/aic/install/share/ament_index/resource_index/packages/aic_gazebo_transport_bridge
+-- Up-to-date: /home/ubuntu/ws_aic/src/aic/install/share/aic_gazebo_transport_bridge/cmake/aic_gazebo_transport_bridgeConfig.cmake
+-- Up-to-date: /home/ubuntu/ws_aic/src/aic/install/share/aic_gazebo_transport_bridge/cmake/aic_gazebo_transport_bridgeConfig-version.cmake
+-- Up-to-date: /home/ubuntu/ws_aic/src/aic/install/share/aic_gazebo_transport_bridge/package.xml

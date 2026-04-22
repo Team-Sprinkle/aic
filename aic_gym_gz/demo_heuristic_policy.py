@@ -1,31 +1,42 @@
-"""Runs a random policy against the live Gazebo-backed env."""
+"""Runs a simple shaped heuristic policy against the standalone env."""
 
 from __future__ import annotations
 
 import argparse
 
-from .env import make_live_env
+import numpy as np
+
+from .env import make_default_env
+
+
+def _heuristic_action(observation: dict[str, np.ndarray]) -> np.ndarray:
+    plug_position = observation["plug_pose"][:3]
+    target_position = observation["target_port_pose"][:3]
+    entrance_position = observation["target_port_entrance_pose"][:3]
+    insertion_progress = float(observation["score_geometry"]["insertion_progress"][0])
+    target_point = entrance_position if insertion_progress < 0.2 else target_position
+    direction = target_point - plug_position
+    linear = np.clip(2.5 * direction, -0.05, 0.05)
+    action = np.zeros(6, dtype=np.float32)
+    action[:3] = linear.astype(np.float32)
+    return action
 
 
 def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--episodes", type=int, default=1)
     parser.add_argument("--seed", type=int, default=123)
-    parser.add_argument("--world-path", type=str, default=None)
     args = parser.parse_args()
 
-    env = make_live_env(world_path=args.world_path)
+    env = make_default_env()
     try:
         for episode in range(args.episodes):
             observation, info = env.reset(seed=args.seed + episode)
-            print(
-                f"episode={episode} trial_id={info['trial_id']} "
-                f"sim_tick={observation['sim_tick']} sim_time={observation['sim_time']:.3f}"
-            )
+            print(f"episode={episode} trial_id={info['trial_id']} sim_time={observation['sim_time']:.3f}")
             terminated = truncated = False
             total_reward = 0.0
             while not (terminated or truncated):
-                action = env.action_space.sample()
+                action = _heuristic_action(observation)
                 observation, reward, terminated, truncated, step_info = env.step(action)
                 total_reward += reward
             final_report = step_info["final_evaluation"]

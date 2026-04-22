@@ -8,24 +8,43 @@ keeping the inner RL loop free of ROS-specific orchestration.
 from .io import AicGazeboIO, GazeboNativeIOPlaceholder, MockGazeboIO
 from .parity import AicParityHarness
 from .randomizer import AicEnvRandomizer
-from .reward import AicEvaluationSummary, AicRewardBreakdown, AicScoreCalculator
+from .reward import (
+    AicEvaluationSummary,
+    AicRewardMetrics,
+    AicRlRewardBreakdown,
+    AicRlRewardCalculator,
+    AicRlRewardWeights,
+    AicScoreCalculator,
+)
 from .runtime import (
     AicGazeboRuntime,
     MockStepperBackend,
     RuntimeBackend,
+    RuntimeCheckpoint,
     RuntimeState,
     ScenarioGymGzBackend,
 )
 
+# Base env exports.
 try:
     from .env import AicInsertionEnv, make_default_env, make_live_env
     from .task import AicInsertionTask
+except ModuleNotFoundError as exc:
+    if exc.name != "gymnasium":
+        raise
+    AicInsertionEnv = None
+    AicInsertionTask = None
+    make_default_env = None
+    make_live_env = None
+
+# Teacher-layer exports.
+try:
     from .teacher import (
         AgentTeacherController,
         OfficialStyleScore,
         OfficialStyleScoreEvaluator,
-        TeacherConfig,
         TeacherCandidateSearch,
+        TeacherConfig,
         TeacherContextExtractor,
         TeacherReplayArtifact,
         TeacherReplayComparator,
@@ -42,13 +61,11 @@ try:
 except ModuleNotFoundError as exc:
     if exc.name != "gymnasium":
         raise
-    AicInsertionEnv = None
-    AicInsertionTask = None
     AgentTeacherController = None
     OfficialStyleScore = None
     OfficialStyleScoreEvaluator = None
-    TeacherConfig = None
     TeacherCandidateSearch = None
+    TeacherConfig = None
     TeacherContextExtractor = None
     TeacherReplayArtifact = None
     TeacherReplayComparator = None
@@ -61,8 +78,6 @@ except ModuleNotFoundError as exc:
     load_teacher_replay = None
     run_teacher_rollout = None
     save_teacher_replay = None
-    make_default_env = None
-    make_live_env = None
 
 __all__ = [
     "AgentTeacherController",
@@ -73,16 +88,20 @@ __all__ = [
     "AicInsertionEnv",
     "AicInsertionTask",
     "AicParityHarness",
-    "AicRewardBreakdown",
+    "AicRewardMetrics",
+    "AicRlRewardBreakdown",
+    "AicRlRewardCalculator",
+    "AicRlRewardWeights",
     "AicScoreCalculator",
     "GazeboNativeIOPlaceholder",
     "MockGazeboIO",
     "MockStepperBackend",
-    "OfficialStyleScore",
-    "OfficialStyleScoreEvaluator",
+    "RuntimeCheckpoint",
     "RuntimeBackend",
     "RuntimeState",
     "ScenarioGymGzBackend",
+    "OfficialStyleScore",
+    "OfficialStyleScoreEvaluator",
     "TeacherCandidateSearch",
     "TeacherConfig",
     "TeacherContextExtractor",

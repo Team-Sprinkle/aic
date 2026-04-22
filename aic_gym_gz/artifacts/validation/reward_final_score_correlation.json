@@ -1,0 +1,578 @@
+{
+  "episodes": [
+    {
+      "gym_final_score": 1.0,
+      "num_steps": 128,
+      "official_eval_score": null,
+      "policy": "random",
+      "seed": 123,
+      "terminated": false,
+      "total_rl_reward": 7.8760821793776,
+      "trial_id": "trial_1",
+      "truncated": false
+    },
+    {
+      "gym_final_score": 1.0,
+      "num_steps": 128,
+      "official_eval_score": null,
+      "policy": "random",
+      "seed": 124,
+      "terminated": false,
+      "total_rl_reward": 7.999426617460263,
+      "trial_id": "trial_1",
+      "truncated": false
+    },
+    {
+      "gym_final_score": 1.0,
+      "num_steps": 128,
+      "official_eval_score": null,
+      "policy": "random",
+      "seed": 125,
+      "terminated": false,
+      "total_rl_reward": 7.687881065130815,
+      "trial_id": "trial_1",
+      "truncated": false
+    },
+    {
+      "gym_final_score": 1.0,
+      "num_steps": 128,
+      "official_eval_score": null,
+      "policy": "random",
+      "seed": 126,
+      "terminated": false,
+      "total_rl_reward": 7.800400692187444,
+      "trial_id": "trial_1",
+      "truncated": false
+    },
+    {
+      "gym_final_score": 1.0,
+      "num_steps": 128,
+      "official_eval_score": null,
+      "policy": "random",
+      "seed": 127,
+      "terminated": false,
+      "total_rl_reward": 7.844291605564871,
+      "trial_id": "trial_1",
+      "truncated": false
+    },
+    {
+      "gym_final_score": 1.0,
+      "num_steps": 128,
+      "official_eval_score": null,
+      "policy": "random",
+      "seed": 128,
+      "terminated": false,
+      "total_rl_reward": 7.863382752471695,
+      "trial_id": "trial_1",
+      "truncated": false
+    },
+    {
+      "gym_final_score": 1.0,
+      "num_steps": 128,
+      "official_eval_score": null,
+      "policy": "random",
+      "seed": 129,
+      "terminated": false,
+      "total_rl_reward": 7.772496960962578,
+      "trial_id": "trial_1",
+      "truncated": false
+    },
+    {
+      "gym_final_score": 1.0,
+      "num_steps": 128,
+      "official_eval_score": null,
+      "policy": "random",
+      "seed": 130,
+      "terminated": false,
+      "total_rl_reward": 7.745088101359309,
+      "trial_id": "trial_1",
+      "truncated": false
+    },
+    {
+      "gym_final_score": 1.0,
+      "num_steps": 128,
+      "official_eval_score": null,
+      "policy": "heuristic",
+      "seed": 123,
+      "terminated": false,
+      "total_rl_reward": 14.206574716877743,
+      "trial_id": "trial_1",
+      "truncated": false
+    },
+    {
+      "gym_final_score": 1.0,
+      "num_steps": 128,
+      "official_eval_score": null,
+      "policy": "heuristic",
+      "seed": 124,
+      "terminated": false,
+      "total_rl_reward": 13.90059050149472,
+      "trial_id": "trial_1",
+      "truncated": false
+    },
+    {
+      "gym_final_score": 1.0,
+      "num_steps": 128,
+      "official_eval_score": null,
+      "policy": "heuristic",
+      "seed": 125,
+      "terminated": false,
+      "total_rl_reward": 13.92088364666554,
+      "trial_id": "trial_1",
+      "truncated": false
+    },
+    {
+      "gym_final_score": 1.0,
+      "num_steps": 128,
+      "official_eval_score": null,
+      "policy": "heuristic",
+      "seed": 126,
+      "terminated": false,
+      "total_rl_reward": 14.030718806288396,
+      "trial_id": "trial_1",
+      "truncated": false
+    },
+    {
+      "gym_final_score": 1.0,
+      "num_steps": 128,
+      "official_eval_score": null,
+      "policy": "heuristic",
+      "seed": 127,
+      "terminated": false,
+      "total_rl_reward": 14.209223255726897,
+      "trial_id": "trial_1",
+      "truncated": false
+    },
+    {
+      "gym_final_score": 1.0,
+      "num_steps": 128,
+      "official_eval_score": null,
+      "policy": "heuristic",
+      "seed": 128,
+      "terminated": false,
+      "total_rl_reward": 13.907518764963758,
+      "trial_id": "trial_1",
+      "truncated": false
+    },
+    {
+      "gym_final_score": 1.0,
+      "num_steps": 128,
+      "official_eval_score": null,
+      "policy": "heuristic",
+      "seed": 129,
+      "terminated": false,
+      "total_rl_reward": 14.02617184114942,
+      "trial_id": "trial_1",
+      "truncated": false
+    },
+    {
+      "gym_final_score": 1.0,
+      "num_steps": 128,
+      "official_eval_score": null,
+      "policy": "heuristic",
+      "seed": 130,
+      "terminated": false,
+      "total_rl_reward": 14.048490538381564,
+      "trial_id": "trial_1",
+      "truncated": false
+    },
+    {
+      "gym_final_score": 1.0,
+      "num_steps": 128,
+      "official_eval_score": null,
+      "policy": "toward_target",
+      "seed": 123,
+      "terminated": false,
+      "total_rl_reward": 14.206574716877743,
+      "trial_id": "trial_1",
+      "truncated": false
+    },
+    {
+      "gym_final_score": 1.0,
+      "num_steps": 128,
+      "official_eval_score": null,
+      "policy": "toward_target",
+      "seed": 124,
+      "terminated": false,
+      "total_rl_reward": 13.90059050149472,
+      "trial_id": "trial_1",
+      "truncated": false
+    },
+    {
+      "gym_final_score": 1.0,
+      "num_steps": 128,
+      "official_eval_score": null,
+      "policy": "toward_target",
+      "seed": 125,
+      "terminated": false,
+      "total_rl_reward": 13.92088364666554,
+      "trial_id": "trial_1",
+      "truncated": false
+    },
+    {
+      "gym_final_score": 1.0,
+      "num_steps": 128,
+      "official_eval_score": null,
+      "policy": "toward_target",
+      "seed": 126,
+      "terminated": false,
+      "total_rl_reward": 14.030718806288396,
+      "trial_id": "trial_1",
+      "truncated": false
+    },
+    {
+      "gym_final_score": 1.0,
+      "num_steps": 128,
+      "official_eval_score": null,
+      "policy": "toward_target",
+      "seed": 127,
+      "terminated": false,
+      "total_rl_reward": 14.209223255726897,
+      "trial_id": "trial_1",
+      "truncated": false
+    },
+    {
+      "gym_final_score": 1.0,
+      "num_steps": 128,
+      "official_eval_score": null,
+      "policy": "toward_target",
+      "seed": 128,
+      "terminated": false,
+      "total_rl_reward": 13.907518764963758,
+      "trial_id": "trial_1",
+      "truncated": false
+    },
+    {
+      "gym_final_score": 1.0,
+      "num_steps": 128,
+      "official_eval_score": null,
+      "policy": "toward_target",
+      "seed": 129,
+      "terminated": false,
+      "total_rl_reward": 14.02617184114942,
+      "trial_id": "trial_1",
+      "truncated": false
+    },
+    {
+      "gym_final_score": 1.0,
+      "num_steps": 128,
+      "official_eval_score": null,
+      "policy": "toward_target",
+      "seed": 130,
+      "terminated": false,
+      "total_rl_reward": 14.048490538381564,
+      "trial_id": "trial_1",
+      "truncated": false
+    },
+    {
+      "gym_final_score": 1.0,
+      "num_steps": 128,
+      "official_eval_score": null,
+      "policy": "away_from_target",
+      "seed": 123,
+      "terminated": false,
+      "total_rl_reward": 1.8748136577214418,
+      "trial_id": "trial_1",
+      "truncated": false
+    },
+    {
+      "gym_final_score": 1.0,
+      "num_steps": 128,
+      "official_eval_score": null,
+      "policy": "away_from_target",
+      "seed": 124,
+      "terminated": false,
+      "total_rl_reward": 1.5033758539274118,
+      "trial_id": "trial_1",
+      "truncated": false
+    },
+    {
+      "gym_final_score": 1.0,
+      "num_steps": 128,
+      "official_eval_score": null,
+      "policy": "away_from_target",
+      "seed": 125,
+      "terminated": false,
+      "total_rl_reward": 1.5277061441654778,
+      "trial_id": "trial_1",
+      "truncated": false
+    },
+    {
+      "gym_final_score": 1.0,
+      "num_steps": 128,
+      "official_eval_score": null,
+      "policy": "away_from_target",
+      "seed": 126,
+      "terminated": false,
+      "total_rl_reward": 1.660199086331266,
+      "trial_id": "trial_1",
+      "truncated": false
+    },
+    {
+      "gym_final_score": 1.0,
+      "num_steps": 128,
+      "official_eval_score": null,
+      "policy": "away_from_target",
+      "seed": 127,
+      "terminated": false,
+      "total_rl_reward": 1.8780663416530046,
+      "trial_id": "trial_1",
+      "truncated": false
+    },
+    {
+      "gym_final_score": 1.0,
+      "num_steps": 128,
+      "official_eval_score": null,
+      "policy": "away_from_target",
+      "seed": 128,
+      "terminated": false,
+      "total_rl_reward": 1.5116769262133372,
+      "trial_id": "trial_1",
+      "truncated": false
+    },
+    {
+      "gym_final_score": 1.0,
+      "num_steps": 128,
+      "official_eval_score": null,
+      "policy": "away_from_target",
+      "seed": 129,
+      "terminated": false,
+      "total_rl_reward": 1.6546885436313736,
+      "trial_id": "trial_1",
+      "truncated": false
+    },
+    {
+      "gym_final_score": 1.0,
+      "num_steps": 128,
+      "official_eval_score": null,
+      "policy": "away_from_target",
+      "seed": 130,
+      "terminated": false,
+      "total_rl_reward": 1.6817569671488717,
+      "trial_id": "trial_1",
+      "truncated": false
+    },
+    {
+      "gym_final_score": 1.0,
+      "num_steps": 128,
+      "official_eval_score": null,
+      "policy": "oscillate_in_place",
+      "seed": 123,
+      "terminated": false,
+      "total_rl_reward": 8.118324446369968,
+      "trial_id": "trial_1",
+      "truncated": false
+    },
+    {
+      "gym_final_score": 1.0,
+      "num_steps": 128,
+      "official_eval_score": null,
+      "policy": "oscillate_in_place",
+      "seed": 124,
+      "terminated": false,
+      "total_rl_reward": 7.775485969829847,
+      "trial_id": "trial_1",
+      "truncated": false
+    },
+    {
+      "gym_final_score": 1.0,
+      "num_steps": 128,
+      "official_eval_score": null,
+      "policy": "oscillate_in_place",
+      "seed": 125,
+      "terminated": false,
+      "total_rl_reward": 7.798047667367515,
+      "trial_id": "trial_1",
+      "truncated": false
+    },
+    {
+      "gym_final_score": 1.0,
+      "num_steps": 128,
+      "official_eval_score": null,
+      "policy": "oscillate_in_place",
+      "seed": 126,
+      "terminated": false,
+      "total_rl_reward": 7.92063134892557,
+      "trial_id": "trial_1",
+      "truncated": false
+    },
+    {
+      "gym_final_score": 1.0,
+      "num_steps": 128,
+      "official_eval_score": null,
+      "policy": "oscillate_in_place",
+      "seed": 127,
+      "terminated": false,
+      "total_rl_reward": 8.121313417553994,
+      "trial_id": "trial_1",
+      "truncated": false
+    },
+    {
+      "gym_final_score": 1.0,
+      "num_steps": 128,
+      "official_eval_score": null,
+      "policy": "oscillate_in_place",
+      "seed": 128,
+      "terminated": false,
+      "total_rl_reward": 7.783185511427165,
+      "trial_id": "trial_1",
+      "truncated": false
+    },
+    {
+      "gym_final_score": 1.0,
+      "num_steps": 128,
+      "official_eval_score": null,
+      "policy": "oscillate_in_place",
+      "seed": 129,
+      "terminated": false,
+      "total_rl_reward": 7.915541796537685,
+      "trial_id": "trial_1",
+      "truncated": false
+    },
+    {
+      "gym_final_score": 1.0,
+      "num_steps": 128,
+      "official_eval_score": null,
+      "policy": "oscillate_in_place",
+      "seed": 130,
+      "terminated": false,
+      "total_rl_reward": 7.940535301896225,
+      "trial_id": "trial_1",
+      "truncated": false
+    },
+    {
+      "gym_final_score": -23.0,
+      "num_steps": 76,
+      "official_eval_score": null,
+      "policy": "collide_intentionally",
+      "seed": 123,
+      "terminated": true,
+      "total_rl_reward": -44.23078494248179,
+      "trial_id": "trial_1",
+      "truncated": false
+    },
+    {
+      "gym_final_score": -23.0,
+      "num_steps": 76,
+      "official_eval_score": null,
+      "policy": "collide_intentionally",
+      "seed": 124,
+      "terminated": true,
+      "total_rl_reward": -44.42142925944999,
+      "trial_id": "trial_1",
+      "truncated": false
+    },
+    {
+      "gym_final_score": -23.0,
+      "num_steps": 76,
+      "official_eval_score": null,
+      "policy": "collide_intentionally",
+      "seed": 125,
+      "terminated": true,
+      "total_rl_reward": -44.40894235367799,
+      "trial_id": "trial_1",
+      "truncated": false
+    },
+    {
+      "gym_final_score": -23.0,
+      "num_steps": 76,
+      "official_eval_score": null,
+      "policy": "collide_intentionally",
+      "seed": 126,
+      "terminated": true,
+      "total_rl_reward": -44.34094898701059,
+      "trial_id": "trial_1",
+      "truncated": false
+    },
+    {
+      "gym_final_score": -23.0,
+      "num_steps": 76,
+      "official_eval_score": null,
+      "policy": "collide_intentionally",
+      "seed": 127,
+      "terminated": true,
+      "total_rl_reward": -44.229114681520365,
+      "trial_id": "trial_1",
+      "truncated": false
+    },
+    {
+      "gym_final_score": -23.0,
+      "num_steps": 76,
+      "official_eval_score": null,
+      "policy": "collide_intentionally",
+      "seed": 128,
+      "terminated": true,
+      "total_rl_reward": -44.417168873222735,
+      "trial_id": "trial_1",
+      "truncated": false
+    },
+    {
+      "gym_final_score": -23.0,
+      "num_steps": 76,
+      "official_eval_score": null,
+      "policy": "collide_intentionally",
+      "seed": 129,
+      "terminated": true,
+      "total_rl_reward": -44.34377692524385,
+      "trial_id": "trial_1",
+      "truncated": false
+    },
+    {
+      "gym_final_score": -23.0,
+      "num_steps": 76,
+      "official_eval_score": null,
+      "policy": "collide_intentionally",
+      "seed": 130,
+      "terminated": true,
+      "total_rl_reward": -44.32988560470092,
+      "trial_id": "trial_1",
+      "truncated": false
+    }
+  ],
+  "notes": [
+    "This checks positive alignment between total rl_step_reward and gym_final_score. It does not try to force equality.",
+    "official_eval_score remains None unless an external official toolkit result is injected."
+  ],
+  "overall": {
+    "num_episodes": 48,
+    "reward_final_score_correlation": 0.9782340459680854
+  },
+  "per_policy": {
+    "away_from_target": {
+      "mean_gym_final_score": 1.0,
+      "mean_total_rl_reward": 1.661535440099023,
+      "num_episodes": 8,
+      "reward_final_score_correlation": null
+    },
+    "collide_intentionally": {
+      "mean_gym_final_score": -23.0,
+      "mean_total_rl_reward": -44.34025645341353,
+      "num_episodes": 8,
+      "reward_final_score_correlation": null
+    },
+    "heuristic": {
+      "mean_gym_final_score": 1.0,
+      "mean_total_rl_reward": 14.031271508943505,
+      "num_episodes": 8,
+      "reward_final_score_correlation": null
+    },
+    "oscillate_in_place": {
+      "mean_gym_final_score": 1.0,
+      "mean_total_rl_reward": 7.921633182488496,
+      "num_episodes": 8,
+      "reward_final_score_correlation": null
+    },
+    "random": {
+      "mean_gym_final_score": 1.0,
+      "mean_total_rl_reward": 7.8236312468143225,
+      "num_episodes": 8,
+      "reward_final_score_correlation": null
+    },
+    "toward_target": {
+      "mean_gym_final_score": 1.0,
+      "mean_total_rl_reward": 14.031271508943505,
+      "num_episodes": 8,
+      "reward_final_score_correlation": null
+    }
+  }
+}

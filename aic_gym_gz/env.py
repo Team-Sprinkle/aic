@@ -59,6 +59,8 @@ class AicInsertionEnv(gym.Env[dict[str, Any], np.ndarray]):
             "trial_id": scenario.trial_id,
             "scenario_metadata": scenario.metadata,
             "task_definition": next(iter(scenario.tasks.values())).__dict__,
+            "reward_label": "rl_step_reward",
+            "score_label": "gym_final_score",
         }
         return observation, info
 
@@ -84,7 +86,9 @@ class AicInsertionEnv(gym.Env[dict[str, Any], np.ndarray]):
             step_count=self._step_count,
         )
         if terminated or truncated:
-            info["evaluation"] = self.task.final_evaluation()
+            final_evaluation = self.task.final_evaluation()
+            info["final_evaluation"] = final_evaluation
+            info["evaluation"] = final_evaluation
         self._state = current_state
         return observation, reward, terminated, truncated, info
 

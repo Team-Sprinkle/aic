@@ -34,9 +34,15 @@ class EnvTest(unittest.TestCase):
             _, _, terminated, truncated, info = env.step(np.zeros(6, dtype=np.float32))
             if terminated or truncated:
                 break
-        self.assertIn("evaluation", info)
+        self.assertEqual(info["reward_label"], "rl_step_reward")
         self.assertIn("reward_terms", info)
-        self.assertIn("total_score", info["evaluation"])
+        self.assertIn("reward_metrics", info)
+        self.assertIn("final_evaluation", info)
+        self.assertIn("evaluation", info)
+        self.assertEqual(info["final_evaluation"]["score_label"], "gym_final_score")
+        self.assertEqual(info["evaluation"]["score_label"], "gym_final_score")
+        self.assertIn("gym_final_score", info["final_evaluation"])
+        self.assertIn("training_reward_total", info["final_evaluation"])
         env.close()
 
     def test_image_schema_present_when_enabled(self) -> None:
@@ -45,6 +51,18 @@ class EnvTest(unittest.TestCase):
         self.assertEqual(obs["images"]["left"].shape, (64, 64, 3))
         self.assertEqual(obs["images"]["left"].dtype, np.uint8)
         self.assertEqual(obs["image_timestamps"].shape, (3,))
+        env.close()
+
+    def test_observation_contains_explicit_scalar_and_score_geometry_fields(self) -> None:
+        env = make_default_env()
+        obs, _ = env.reset(seed=4)
+        self.assertIn("step_count", obs)
+        self.assertIn("sim_tick", obs)
+        self.assertIn("sim_time", obs)
+        self.assertIn("distance_to_entrance", obs["score_geometry"])
+        self.assertIn("lateral_misalignment", obs["score_geometry"])
+        self.assertIn("orientation_error", obs["score_geometry"])
+        self.assertIn("insertion_progress", obs["score_geometry"])
         env.close()
 
     def test_live_health_check_signature_works_for_mock_free_import(self) -> None:

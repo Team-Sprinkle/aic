@@ -1,7 +1,9 @@
 # aic_gym_gz
 
 `aic_gym_gz` is a standalone Gym-style training path for the AIC cable insertion
-challenge.
+challenge. It is intended to be a usable RL substrate with synchronous
+`reset()` / `step()` semantics while staying as behaviorally aligned as practical
+with the official AIC rollout surface.
 
 It is separate from the official ROS-first evaluation flow. The package reuses:
 
@@ -9,90 +11,95 @@ It is separate from the official ROS-first evaluation flow. The package reuses:
 - the official task board and cable geometry definitions from `aic_description`
 - the official scoring shape from `aic_scoring/src/ScoringTier2.cc`
 
-Current status:
-
-- Milestone 1: implemented
-- Milestone 2: implemented with a deterministic state-only backend
-- Milestone 3: implemented for the current live fixed-rollout path
-- Milestone 4: implemented with named reward terms and official-like score summary
-- Milestone 5: implemented with live wrist-camera ingestion through an isolated ROS sidecar fallback
-- Milestone 6: implemented for fixed-rollout parity against the official toolkit
-- Milestone 7: implemented with live benchmark reports under `artifacts/`
-
-The live target architecture is:
-
-- `AicGazeboRuntime`: owns synchronous stepping and exact tick advancement
-- `AicInsertionTask`: action space, observation space, reward, done, truncation
-- `AicGazeboIO`: Gazebo-native observations and action application
-- `AicEnvRandomizer`: official-schema-aligned scenario randomization
-- `AicParityHarness`: rollout comparison tooling
-- `teacher/`: training-time agent-teacher orchestration, replay, and temporal diagnostics
-- `planners/`: planner backend contracts plus deterministic and OpenAI scaffolds
-- `trajectory/`: dense segment smoothing from sparse subgoals
-- `probes/`: safe micro-probes for cable-dynamics estimation
-
 ## Quick start
 
 ```bash
-pixi run python -m aic_gym_gz.demo_random_policy
 pixi run python -m unittest discover -s aic_gym_gz/tests
-pixi run python -m aic_gym_gz.benchmark
-pixi run python -m aic_gym_gz.live_benchmark
-pixi run python -m aic_gym_gz.deterministic_policy_parity
-pixi run python -m aic_gym_gz.live_training_smoke
-pixi run python -m aic_gym_gz.demo_teacher_rollout --output aic_gym_gz/artifacts/teacher_rollout.json
-pixi run python -m aic_gym_gz.replay_teacher_artifact --artifact aic_gym_gz/artifacts/teacher_rollout.json
-pixi run python -m aic_gym_gz.compare_teacher_replay --artifact aic_gym_gz/artifacts/teacher_rollout.json
-pixi run python -m aic_gym_gz.run_teacher_audit --output aic_gym_gz/artifacts/teacher_audit.json
-pixi run python -m aic_gym_gz.run_teacher_search --output aic_gym_gz/artifacts/teacher_search.json
-pixi run python -m aic_gym_gz.export_teacher_official_replay --search-artifact aic_gym_gz/artifacts/teacher_search.json --output aic_gym_gz/artifacts/teacher_selected_replay.json
-pixi run python -m aic_gym_gz.export_teacher_dataset --search-artifact aic_gym_gz/artifacts/teacher_search.json --output-dir aic_gym_gz/artifacts/teacher_dataset --format jsonl
+pixi run python -m aic_gym_gz.demo_random_policy --print-every 16
+pixi run python -m aic_gym_gz.demo_heuristic_policy
+pixi run python -m aic_gym_gz.compare_reward_to_final_score \
+  --policies random heuristic toward_target away_from_target oscillate_in_place collide_intentionally \
+  --episodes 8
+pixi run python -m aic_gym_gz.validate_reward_behavior \
+  --output-dir aic_gym_gz/artifacts/validation/reward_behavior
+pixi run python -m aic_gym_gz.validate_observation_temporal \
+  --output-dir aic_gym_gz/artifacts/validation/observation_temporal
 ```
 
-## How to use for RL
+## Reward and score labels
 
-Recommended workflow:
+Use these labels literally and consistently.
 
-1. Launch the official Gazebo+ROS stack in the container and wait until `aic_controller` is active.
-2. Run the deterministic parity gate once.
-3. Run the training smoke script.
-4. Start your learner against `make_live_env(...)`.
+| Name | Computed Where | Purpose | Exact vs Approx |
+| --- | --- | --- | --- |
+| `rl_step_reward` | `env.step()` via `AicInsertionTask.evaluate_step()` | Dense per-step RL training reward | Local shaped reward, intentionally not equal to final score |
+| `gym_final_score` | `task.final_evaluation()` at episode end | Episode-level evaluation and analysis inside `aic_gym_gz` | Local trajectory-level approximation using the strongest available geometry and traces |
+| `official_eval_score` | Outside `aic_gym_gz`, via the official toolkit path | Ground-truth official evaluation and leaderboard-facing result | Official source of truth only when actually run |
+| `teacher_official_style_score` | Teacher-side systems layered on top of `aic_gym_gz` | Teacher-layer approximation or ranking helper | Teacher-specific approximation, not official |
 
-Recommended live configuration today:
+### `rl_step_reward`
 
-- `attach_to_existing=True`
-- `transport_backend="cli"`
-- `include_images=False` for first training runs
-- enable images only after state-only training is stable
+- `rl_step_reward` is the per-step training reward returned by `env.step()`.
+- It is dense, local, shaped, and intended for optimization.
+- It follows Isaac-Lab-style reward design rather than trying to exactly
+  reconstruct the final score trajectory term by term.
+- It should not be interpreted as an official score.
 
-Minimal Gym-style usage:
+### `gym_final_score`
 
-```python
-import numpy as np
+- `gym_final_score` is computed at episode end from the full trajectory stored
+  by the task.
+- It uses local geometry, timing, wrench/contact traces, and local final-score
+  logic.
+- It is useful for evaluation, analysis, ablations, and teacher-side ranking.
+- It is not the same thing as `official_eval_score`.
 
-from aic_gym_gz.env import make_live_env
+### `official_eval_score`
 
-env = make_live_env(
-    include_images=False,
-    enable_randomization=False,
-    attach_to_existing=True,
-    transport_backend="cli",
-    ticks_per_step=8,
-)
+- `official_eval_score` is not computed inside `aic_gym_gz`.
+- It requires running the official toolkit / official rollout path.
+- If you need leaderboard-relevant or ground-truth numbers, you must use the
+  official toolkit path.
 
-observation, info = env.reset(seed=123)
+## RL reward design
 
-done = False
-while not done:
-    action = np.zeros(6, dtype=np.float32)
-    observation, reward, terminated, truncated, step_info = env.step(action)
-    done = terminated or truncated
+The per-step RL reward follows Isaac-Lab-style shaping with configurable local
+terms. The weights live in `aic_gym_gz.reward.AicRlRewardWeights`.
 
-env.close()
-```
+Current reward shaping includes:
 
-Observation keys in state-only mode:
+- potential-based target progress
+- potential-based target-entrance progress
+- potential-based insertion-corridor progress
+- orientation-alignment progress
+- lateral corridor-alignment shaping
+- local action magnitude penalty
+- local action-delta penalty
+- local TCP-velocity-delta penalty
+- local force penalty from the current wrench sample
+- local off-limit contact penalty
+- short-history oscillation penalty
+- per-step time penalty
+- partial-insertion bonus
+- terminal success bonus
+- terminal wrong-port penalty
 
+Important:
+
+- The sum of `rl_step_reward` over an episode is not designed to equal
+  `gym_final_score`.
+- Training should optimize `rl_step_reward`.
+- Analysis and model-selection reports may also look at `gym_final_score`.
+
+## Observation schema
+
+The public observation dictionary is stable and explicit.
+
+State-mode keys:
+
+- `step_count`
+- `sim_tick`
+- `sim_time`
 - `joint_positions`
 - `joint_velocities`
 - `gripper_state`
@@ -100,135 +107,283 @@ Observation keys in state-only mode:
 - `tcp_velocity`
 - `plug_pose`
 - `target_port_pose`
+- `target_port_entrance_pose`
 - `plug_to_port_relative`
 - `wrench`
+- `wrench_timestamp`
 - `off_limit_contact`
-- `sim_tick`
-- `sim_time`
+- `controller_tcp_pose`
+- `controller_reference_tcp_pose`
+- `controller_tcp_velocity`
+- `controller_tcp_error`
+- `controller_reference_joint_state`
+- `controller_target_mode`
+- `fts_tare_wrench`
+- `score_geometry.distance_to_target`
+- `score_geometry.distance_threshold`
+- `score_geometry.plug_to_port_depth`
+- `score_geometry.port_to_entrance_depth`
+- `score_geometry.distance_to_entrance`
+- `score_geometry.lateral_misalignment`
+- `score_geometry.orientation_error`
+- `score_geometry.insertion_progress`
+- `score_geometry.partial_insertion`
 
-Additional keys in image mode:
+Additional image-mode keys:
 
 - `images["left"]`
 - `images["center"]`
 - `images["right"]`
 - `image_timestamps`
+- `camera_info["left"|"center"|"right"]`
 
-Useful pre-training checks:
+### F/T sensor behavior
 
-```bash
-pixi run python -m aic_gym_gz.deterministic_policy_parity
-pixi run python -m aic_gym_gz.live_training_smoke
-pixi run python -m aic_gym_gz.live_training_smoke --include-images
+- The policy receives only the current `wrench` sample for the current step.
+- No built-in wrench history is provided in the public observation.
+- This is closer to the official participant-facing observation surface than
+  providing an implicit history buffer inside the environment.
+
+### Temporal behavior
+
+- One `env.step()` corresponds to one policy observation timestep.
+- In the default configuration, the policy sees one observation per held action.
+- If `ticks_per_step > 1`, transient contact or force spikes that occur inside
+  the held-action window may be missed because only the final sample of the step
+  is returned.
+- There is currently no built-in within-step max or window summary for F/T.
+
+### Recommended usage for temporal signals
+
+- Build temporal memory at the policy level.
+- Use stacking, recurrence, or external history buffers if your policy depends
+  on contact transients or settling behavior.
+- Treat `wrench` as a current sample, not a trajectory summary.
+
+Example: stack recent wrench samples yourself.
+
+```python
+from collections import deque
+
+wrench_history = deque(maxlen=8)
+
+observation, info = env.reset(seed=123)
+wrench_history.append(observation["wrench"].copy())
+
+action = env.action_space.sample()
+observation, reward, terminated, truncated, step_info = env.step(action)
+wrench_history.append(observation["wrench"].copy())
+
+stacked_wrench = list(wrench_history)
 ```
 
-Artifacts worth checking:
+## Using this environment for RL training
 
-- deterministic parity: `artifacts/deterministic_policy_state/`
-- training smoke: `artifacts/training_smoke/`
-- live benchmark: `artifacts/live_benchmark_state.json` and `artifacts/live_benchmark_image.json`
-- teacher rollout replay: `artifacts/teacher_rollout.json`
+This environment is suitable for gym-style RL training as long as you keep the
+current limitations in mind.
 
-## Agent teacher stack
+Best practices:
 
-The teacher stack is intentionally additive and namespaced under `aic_gym_gz`.
-It is meant for trajectory generation, diagnostics, and future dataset creation,
-not direct leaderboard submission.
+- optimize `rl_step_reward`, not `gym_final_score`
+- maintain your own observation history if temporal context matters
+- start with state-only training before enabling images
+- use `reward_terms` and `reward_metrics` from `step_info` to debug shaping
+- tune reward weights if your learner exploits weak penalties
 
-Current components:
+Recommended interpretation:
 
-- `teacher/history.py`: rolling temporal buffer with derived cable-dynamics metrics
-- `teacher/context.py`: teacher-mode oracle context assembly separate from policy observations
-- `probes/library.py`: safe hold, sweep, wiggle, and lift probes
-- `planners/mock.py`: deterministic planner backend for tests and smoke runs
-- `planners/openai_backend.py`: OpenAI planner scaffold using `OPENAI_API_KEY`
-- `trajectory/smoothing.py`: minimum-jerk segment densification
-- `teacher/policy.py`: hierarchical teacher controller with branch-and-evaluate plan selection
-- `teacher/scoring.py`: official-style teacher candidate scorer
-- `teacher/search.py`: candidate generation, rollout search, ranking, and near-perfect selection
-- `teacher/dataset_export.py`: JSONL and LeRobot-compatible export adapters
-- `teacher/official_replay.py`: selected-trajectory loader for official replay
-- `teacher/replay.py`: replay artifact serialization and comparison helpers
-- `teacher/runner.py`: end-to-end rollout driver
+- `rl_step_reward` is for learning
+- `gym_final_score` is for local episode analysis
+- `official_eval_score` is for final external validation only
 
-Minimal demo path:
+Current limitations for RL:
+
+- the mock backend can be overly forgiving
+- the local penalties do not necessarily suppress every undesirable behavior
+- reward-vs-final-score correlation is only approximate
+- F/T is current-sample-only, so transient spikes may be missed
+
+## Agent Teacher Layer (feat/agent-teacher)
+
+`feat/agent-teacher` is an additive teacher stack built on top of the base
+environment. It does not redefine the base reward, final-score, geometry, or
+observation semantics.
+
+The teacher layer uses:
+
+- temporal history
+- probes
+- planning through deterministic mock backends and future OpenAI-backed flows
+- trajectory smoothing
+- candidate search
+- replay artifacts and dataset export
+
+Teacher-side tooling consumes the base environment exactly as exposed here:
+
+- teacher rollouts optimize and analyze against the base env's `rl_step_reward`
+- episode ranking and local evaluation use the base env's `gym_final_score`
+- `official_eval_score` remains outside `aic_gym_gz` and outside the teacher
+  stack unless the official toolkit path is run separately
+
+Representative teacher entry points:
 
 ```bash
 pixi run python -m aic_gym_gz.demo_teacher_rollout \
   --output aic_gym_gz/artifacts/teacher_rollout.json
-
-pixi run python -m aic_gym_gz.record_teacher_temporal_diagnostics --steps 8
-pixi run python -m aic_gym_gz.run_teacher_probe_experiment --probe micro_sweep_xy
 pixi run python -m aic_gym_gz.replay_teacher_artifact \
   --artifact aic_gym_gz/artifacts/teacher_rollout.json
 pixi run python -m aic_gym_gz.compare_teacher_replay \
   --artifact aic_gym_gz/artifacts/teacher_rollout.json
-pixi run python -m aic_gym_gz.benchmark_teacher_planner --episodes 3
-pixi run python -m aic_gym_gz.run_teacher_audit --output aic_gym_gz/artifacts/teacher_audit.json
-pixi run python -m aic_gym_gz.run_teacher_search --output aic_gym_gz/artifacts/teacher_search.json
-pixi run python -m aic_gym_gz.export_teacher_official_replay \
-  --search-artifact aic_gym_gz/artifacts/teacher_search.json \
-  --output aic_gym_gz/artifacts/teacher_selected_replay.json
+pixi run python -m aic_gym_gz.run_teacher_audit \
+  --output aic_gym_gz/artifacts/teacher_audit.json
+pixi run python -m aic_gym_gz.run_teacher_search \
+  --output aic_gym_gz/artifacts/teacher_search.json
 pixi run python -m aic_gym_gz.export_teacher_dataset \
   --search-artifact aic_gym_gz/artifacts/teacher_search.json \
   --output-dir aic_gym_gz/artifacts/teacher_dataset \
   --format jsonl
 ```
 
-OpenAI planner notes:
+## Compatibility with official AIC evaluation
 
-- Do not commit API keys or planner secrets.
-- The scaffold reads the key from `OPENAI_API_KEY` only.
-- `OpenAIPlannerBackend.build_request_payload(...)` produces the compact planning payload.
-- The actual API call and strict JSON response parsing are intentionally left as a follow-up integration.
+The observation interface is designed to stay close to the official toolkit and
+official rollout surface, but it is not identical to running the official
+toolchain.
 
-Current determinism limitation:
+What is intentionally aligned:
 
-- Exact reset-level replay works on the deterministic mock backend.
-- Exact intermediate-state cloning is not available in the live Gazebo path today.
-- Branch-and-evaluate therefore uses deterministic planner variants and reset/replay patterns, not true simulator forks.
+- explicit task geometry in observation
+- current-sample state exposure rather than built-in history
+- controller-state propagation when available
+- wrench/contact/image/camera-info propagation when the live dependencies exist
 
-Official replay policy path:
+Key differences and caveats:
+
+- the policy must maintain its own temporal memory
+- some live fields depend on ROS topics being present
+- `gym_final_score` is a local final-score path, not the official toolkit score
+- final validation must be done with the official toolkit path
+
+State this explicitly:
+
+- `gym_final_score != official_eval_score`
+- `official_eval_score` must be treated as the official ground truth
+
+## Example usage
+
+### Step the environment
+
+```python
+import numpy as np
+
+from aic_gym_gz.env import make_default_env
+
+env = make_default_env()
+observation, info = env.reset(seed=123)
+
+action = np.zeros(6, dtype=np.float32)
+observation, reward, terminated, truncated, step_info = env.step(action)
+
+print(step_info["reward_label"], reward)
+print(step_info["reward_terms"])
+print(step_info["reward_metrics"])
+
+if terminated or truncated:
+    print(step_info["final_evaluation"]["gym_final_score"])
+
+env.close()
+```
+
+### Interpret reward versus final score
+
+```python
+training_reward_total = 0.0
+
+observation, info = env.reset(seed=123)
+done = False
+while not done:
+    action = env.action_space.sample()
+    observation, reward, terminated, truncated, step_info = env.step(action)
+    training_reward_total += reward
+    done = terminated or truncated
+
+final_report = step_info.get("final_evaluation") or env.task.final_evaluation()
+
+print("training reward total:", training_reward_total)
+print("gym final score:", final_report["gym_final_score"])
+print("official eval score:", final_report["official_eval_score"])
+```
+
+## Runtime parity and checkpoints
+
+Runtime parity audit:
 
 ```bash
-pixi run python -m aic_gym_gz.export_teacher_official_replay \
-  --search-artifact aic_gym_gz/artifacts/teacher_search.json \
-  --output aic_gym_gz/artifacts/teacher_selected_replay.json
-
-export AIC_TEACHER_REPLAY_ARTIFACT=/home/ubuntu/ws_aic/src/aic/aic_gym_gz/artifacts/teacher_selected_replay.json
-pixi run ros2 run aic_model aic_model --ros-args \
-  -p use_sim_time:=true \
-  -p policy:=aic_example_policies.ros.TeacherReplayPolicy
+pixi run python -m aic_gym_gz.audit_runtime \
+  --output-json /tmp/aic_gym_runtime_audit.json \
+  --output-markdown /tmp/aic_gym_runtime_audit.md
 ```
+
+Runtime checkpoint export:
+
+```bash
+pixi run python -m aic_gym_gz.export_runtime_checkpoint \
+  --output /tmp/aic_gym_checkpoint.json
+```
+
+Checkpoint status:
+
+- mock backend checkpoint/restore is exact
+- live checkpoint export is reset-and-rerun metadata only
+- live midpoint restore is still approximate / unavailable
+
+## Validation summary
+
+Current validation status, based on the checked-in validation report and recent
+branch checks:
+
+- reward is dense and usable for RL experiments, but imperfect
+- reward-vs-score correlation exists, but is inflated in the mock backend
+- F/T is current-sample-only, so within-step transients may be missed
+- live parity exists in branch artifacts, but was not fully revalidated in every
+  environment / shell
+
+The detailed validation write-up is in
+[docs/validation_report.md](/home/ubuntu/ws_aic/src/aic/aic_gym_gz/docs/validation_report.md).
 
 ## What is real today
 
 - deterministic `reset(seed=...)`
 - exact synchronous `step(action)` over a configured number of ticks
-- stable state-only observation dictionary
-- reward decomposition with named terms
-- official-like final score decomposition
-- live fixed-rollout parity against the official toolkit in state-only and state+image modes
-- live benchmark reports for the official control path versus the `aic_gym_gz` attached replay path
-- deterministic state-only parity regression artifacts under `artifacts/deterministic_policy_state`
-- state-only and image-mode live smoke artifacts under `artifacts/training_smoke`
-- teacher rollout, replay, probe, and temporal diagnostics utilities for training-time teacher generation
-- candidate search with ranked top-K and explicit near-perfect thresholding
-- official-policy replay conversion through `TeacherReplayPolicy`
-- dataset export to JSONL and LeRobot-compatible formats with sidecar metadata
+- explicit state-only observation schema
+- optional image observations with timestamps and `camera_info`
+- dense `rl_step_reward` with explicit reward-term breakdown
+- separate `gym_final_score` at episode end
+- validation scripts for reward behavior, temporal observation behavior, and
+  reward-vs-final-score correlation
+- checked-in live parity artifacts for official-path comparison
+- additive teacher tooling for temporal diagnostics, candidate search, replay,
+  and dataset export on top of the base env
 
 ## What is still approximate
 
-- the current tested backend is deterministic and simulator-free
-- the default `make_default_env()` path is still deterministic and simulator-free for tests
-- the live backend is routed through `aic_utils/aic_gazebo_env`, not upstream ScenarIO / gym-gz
-- image ingestion currently uses a dedicated ROS bridge sidecar fallback rather than pure Gazebo Transport
-- the official reset metric is a readiness surrogate on this machine because `/gz_server/reset_simulation` still destabilizes the official bringup
-- repeated env-style live training startup is still less stable than the fixed-rollout parity path; the deterministic parity gate is currently the stronger readiness check
-- live branch-and-evaluate does not yet support exact simulator checkpoint/restore at arbitrary intermediate states
-- the teacher planner path still lacks full official `controller_state` and `CameraInfo` parity
-- partial insertion scoring remains approximate without the official port-entrance TF in gym artifacts
-- LeRobot compatibility is schema-compatible, but controller-specific error fields are synthesized from teacher artifacts
+- the default tested backend in this shell is deterministic and simulator-free
+- the live backend is routed through `aic_utils/aic_gazebo_env`, not upstream
+  ScenarIO / gym-gz
+- image ingestion still uses a ROS sidecar fallback rather than pure Gazebo
+  Transport
+- live wrench/contact/controller parity depends on ROS topic availability
+- `official_eval_score` is not computed inside `aic_gym_gz`
+- short-horizon mock rollouts can make `gym_final_score` look less
+  discriminative than a real official rollout
+- teacher-side candidate ranking is still a local approximation unless the
+  official toolkit path is run separately
 
-See [docs/architecture.md](/home/ubuntu/ws_aic/src/aic/aic_gym_gz/docs/architecture.md).
-See [docs/agent_teacher.md](/home/ubuntu/ws_aic/src/aic/aic_gym_gz/docs/agent_teacher.md).
-See [docs/agent_teacher_audit.md](/home/ubuntu/ws_aic/src/aic/aic_gym_gz/docs/agent_teacher_audit.md).
+See also:
+
+- [docs/architecture.md](/home/ubuntu/ws_aic/src/aic/aic_gym_gz/docs/architecture.md)
+- [docs/runtime_parity.md](/home/ubuntu/ws_aic/src/aic/aic_gym_gz/docs/runtime_parity.md)
+- [docs/rl_reward_design.md](/home/ubuntu/ws_aic/src/aic/aic_gym_gz/docs/rl_reward_design.md)
+- [docs/validation_report.md](/home/ubuntu/ws_aic/src/aic/aic_gym_gz/docs/validation_report.md)
+- [docs/agent_teacher.md](/home/ubuntu/ws_aic/src/aic/aic_gym_gz/docs/agent_teacher.md)
+- [docs/agent_teacher_audit.md](/home/ubuntu/ws_aic/src/aic/aic_gym_gz/docs/agent_teacher_audit.md)
