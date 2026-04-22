@@ -85,6 +85,7 @@ class TeacherOpenAIPlannerBackendTest(unittest.TestCase):
             backend.last_payload["input"][0]["content"][0]["type"],
             "input_text",
         )
+        self.assertIn("compact_planning_brief", backend.last_payload["input"][1]["content"][0]["text"])
 
     def test_rejects_invalid_structured_response(self) -> None:
         backend = _MockOpenAIPlannerBackend(

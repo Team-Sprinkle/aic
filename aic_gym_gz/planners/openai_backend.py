@@ -147,7 +147,9 @@ class OpenAIPlannerBackend(PlannerBackend):
                                 "You are planning one short, conservative teacher segment for a cable insertion "
                                 "task. Use only the provided planning state. Respect data_quality metadata: if "
                                 "signals are missing or approximate, remain conservative and do not pretend they "
-                                "are official."
+                                "are official. Prefer compact, useful segments that reflect current phase, score "
+                                "geometry, temporal summary, and insertion progress. Avoid repeating the exact "
+                                "same candidate when candidate_index changes."
                             ),
                         }
                     ],
@@ -160,6 +162,10 @@ class OpenAIPlannerBackend(PlannerBackend):
                             "text": json.dumps(
                                 {
                                     "candidate_index": candidate_index,
+                                    "compact_planning_brief": self._compact_planning_brief(
+                                        state=state,
+                                        candidate_index=candidate_index,
+                                    ),
                                     "planning_state": state.to_dict(),
                                 },
                                 sort_keys=True,
@@ -185,6 +191,40 @@ class OpenAIPlannerBackend(PlannerBackend):
         candidate_index: int = 0,
     ) -> dict[str, Any]:
         return sanitize_payload(self.build_request_payload(state, candidate_index=candidate_index))
+
+    def _compact_planning_brief(
+        self,
+        *,
+        state: TeacherPlanningState,
+        candidate_index: int,
+    ) -> dict[str, Any]:
+        policy = state.policy_context
+        score_geometry = policy.get("score_geometry", {})
+        return {
+            "task": state.goal_summary,
+            "current_phase": state.current_phase,
+            "candidate_index": candidate_index,
+            "candidate_guidance": (
+                "baseline safe candidate"
+                if candidate_index == 0
+                else "produce a meaningfully different but still safe candidate from the baseline"
+            ),
+            "distance_to_target": policy.get("distance_to_target"),
+            "distance_to_entrance": score_geometry.get("distance_to_entrance"),
+            "insertion_progress": score_geometry.get("insertion_progress"),
+            "partial_insertion": score_geometry.get("partial_insertion"),
+            "lateral_misalignment": score_geometry.get("lateral_misalignment"),
+            "orientation_error": score_geometry.get("orientation_error"),
+            "temporal_summary": state.temporal_context.get("dynamics_summary", {}),
+            "signal_quality_summary": {
+                signal: {
+                    "is_real": quality.get("is_real"),
+                    "is_missing": quality.get("is_missing"),
+                    "source": quality.get("source"),
+                }
+                for signal, quality in state.data_quality.items()
+            },
+        }
 
     def build_smoke_test_payload(self, *, prompt: str = "Return a short valid planner response.") -> dict[str, Any]:
         return {

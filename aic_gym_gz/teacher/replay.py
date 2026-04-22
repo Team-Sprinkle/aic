@@ -68,6 +68,13 @@ class TeacherReplayRunner:
                 "sim_tick": int(observation["sim_tick"]),
                 "sim_time": float(observation["sim_time"]),
                 "distance_to_target": float(observation["plug_to_port_relative"][3]),
+                "tcp_pose": np.asarray(observation["tcp_pose"], dtype=np.float64).tolist(),
+                "plug_pose": np.asarray(observation["plug_pose"], dtype=np.float64).tolist(),
+                "target_port_pose": np.asarray(observation["target_port_pose"], dtype=np.float64).tolist(),
+                "plug_to_port_relative": np.asarray(
+                    observation["plug_to_port_relative"], dtype=np.float64
+                ).tolist(),
+                "off_limit_contact": bool(np.asarray(observation["off_limit_contact"]).reshape(-1)[0] > 0.5),
             }
         ]
         final_info = info
@@ -80,9 +87,18 @@ class TeacherReplayRunner:
                         "sim_tick": int(observation["sim_tick"]),
                         "sim_time": float(observation["sim_time"]),
                         "distance_to_target": float(observation["plug_to_port_relative"][3]),
+                        "tcp_pose": np.asarray(observation["tcp_pose"], dtype=np.float64).tolist(),
+                        "plug_pose": np.asarray(observation["plug_pose"], dtype=np.float64).tolist(),
+                        "target_port_pose": np.asarray(observation["target_port_pose"], dtype=np.float64).tolist(),
+                        "plug_to_port_relative": np.asarray(
+                            observation["plug_to_port_relative"], dtype=np.float64
+                        ).tolist(),
                         "reward": float(reward),
                         "terminated": bool(terminated),
                         "truncated": bool(truncated),
+                        "off_limit_contact": bool(
+                            np.asarray(observation["off_limit_contact"]).reshape(-1)[0] > 0.5
+                        ),
                     }
                 )
                 if terminated or truncated:
@@ -101,6 +117,8 @@ class TeacherReplayComparator:
         replay_steps = max(len(replayed.get("records", [])) - 1, 0)
         original_final = original.step_logs[-1] if original.step_logs else {}
         replay_final = replayed.get("records", [{}])[-1]
+        original_final_obs = original_final.get("observation_summary", {})
+        replay_final_eval = dict((replayed.get("final_info") or {}).get("final_evaluation") or {})
         return {
             "original_steps": original_steps,
             "replay_steps": replay_steps,
@@ -108,4 +126,30 @@ class TeacherReplayComparator:
             "final_sim_time_delta": float(replay_final.get("sim_time", 0.0)) - float(original_final.get("sim_time", 0.0)),
             "distance_to_target_delta": float(replay_final.get("distance_to_target", 0.0))
             - float((original.final_info.get("distance_to_target") or 0.0)),
+            "final_tcp_pose_delta": _pose_delta(
+                original_final_obs.get("tcp_pose"),
+                replay_final.get("tcp_pose"),
+            ),
+            "final_plug_to_port_relative_delta": _pose_delta(
+                original_final_obs.get("plug_to_port_relative"),
+                replay_final.get("plug_to_port_relative"),
+            ),
+            "reward_total_delta": sum(float(record.get("reward", 0.0)) for record in replayed.get("records", []))
+            - sum(float(step.get("reward", 0.0)) for step in original.step_logs),
+            "replay_gym_final_score": replay_final_eval.get("gym_final_score"),
+            "original_gym_final_score": original.metadata.get("final_metrics", {}).get("gym_final_score"),
+            "off_limit_contact_delta": sum(bool(record.get("off_limit_contact", False)) for record in replayed.get("records", []))
+            - sum(bool(step.get("observation_summary", {}).get("off_limit_contact", False)) for step in original.step_logs),
+            "metadata_keys": sorted(original.metadata.keys()),
         }
+
+
+def _pose_delta(left: Any, right: Any) -> float | None:
+    if left is None or right is None:
+        return None
+    left_array = np.asarray(left, dtype=np.float64).reshape(-1)
+    right_array = np.asarray(right, dtype=np.float64).reshape(-1)
+    count = min(left_array.size, right_array.size)
+    if count == 0:
+        return None
+    return float(np.linalg.norm(left_array[:count] - right_array[:count]))
