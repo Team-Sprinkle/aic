@@ -67,6 +67,10 @@ class OpenAIPlannerConfig:
     cache_dir: str | None = None
 
 
+class OpenAIPlannerAPIError(RuntimeError):
+    """Responses API request error with sanitized diagnostics."""
+
+
 @dataclass
 class OpenAIPlannerBackend(PlannerBackend):
     config: OpenAIPlannerConfig
@@ -108,7 +112,15 @@ class OpenAIPlannerBackend(PlannerBackend):
                 plan = self._parse_response_payload(response_payload)
                 self._store_cached_plan(cache_key, plan)
                 return plan
-            except (RuntimeError, ValidationError, json.JSONDecodeError, HTTPError, URLError, TimeoutError, socket.timeout) as exc:
+            except (
+                OpenAIPlannerAPIError,
+                RuntimeError,
+                ValidationError,
+                json.JSONDecodeError,
+                URLError,
+                TimeoutError,
+                socket.timeout,
+            ) as exc:
                 last_error = exc
                 if attempt >= self.config.max_retries:
                     break
@@ -128,21 +140,32 @@ class OpenAIPlannerBackend(PlannerBackend):
             "input": [
                 {
                     "role": "system",
-                    "content": (
-                        "You are planning one short, conservative teacher segment for a cable insertion task. "
-                        "Use only the provided planning state. Respect data_quality metadata: if signals are "
-                        "missing or approximate, remain conservative and do not pretend they are official."
-                    ),
+                    "content": [
+                        {
+                            "type": "input_text",
+                            "text": (
+                                "You are planning one short, conservative teacher segment for a cable insertion "
+                                "task. Use only the provided planning state. Respect data_quality metadata: if "
+                                "signals are missing or approximate, remain conservative and do not pretend they "
+                                "are official."
+                            ),
+                        }
+                    ],
                 },
                 {
                     "role": "user",
-                    "content": json.dumps(
+                    "content": [
                         {
-                            "candidate_index": candidate_index,
-                            "planning_state": state.to_dict(),
-                        },
-                        sort_keys=True,
-                    ),
+                            "type": "input_text",
+                            "text": json.dumps(
+                                {
+                                    "candidate_index": candidate_index,
+                                    "planning_state": state.to_dict(),
+                                },
+                                sort_keys=True,
+                            ),
+                        }
+                    ],
                 },
             ],
             "text": {
@@ -150,9 +173,53 @@ class OpenAIPlannerBackend(PlannerBackend):
                     "type": "json_schema",
                     "name": "teacher_segment_plan",
                     "strict": True,
-                    "schema": _PlanPayload.model_json_schema(),
+                    "schema": self.response_format_schema(),
                 }
             },
+        }
+
+    def build_debug_payload(
+        self,
+        state: TeacherPlanningState,
+        *,
+        candidate_index: int = 0,
+    ) -> dict[str, Any]:
+        return sanitize_payload(self.build_request_payload(state, candidate_index=candidate_index))
+
+    def build_smoke_test_payload(self, *, prompt: str = "Return a short valid planner response.") -> dict[str, Any]:
+        return {
+            "model": self.config.model,
+            "temperature": self.config.temperature,
+            "max_output_tokens": 300,
+            "store": False,
+            "input": [
+                {
+                    "role": "system",
+                    "content": [{"type": "input_text", "text": "Return valid JSON matching the provided schema."}],
+                },
+                {
+                    "role": "user",
+                    "content": [{"type": "input_text", "text": prompt}],
+                },
+            ],
+            "text": {
+                "format": {
+                    "type": "json_schema",
+                    "name": "teacher_segment_plan",
+                    "strict": True,
+                    "schema": self.response_format_schema(),
+                }
+            },
+        }
+
+    def run_smoke_test(self, *, prompt: str = "Return a cautious pre-insert plan.") -> dict[str, Any]:
+        payload = self.build_smoke_test_payload(prompt=prompt)
+        response_payload = self._post_responses_request(payload)
+        plan = self._parse_response_payload(response_payload)
+        return {
+            "payload": sanitize_payload(payload),
+            "response": sanitize_payload(response_payload),
+            "plan": plan.to_dict(),
         }
 
     def _parse_response_payload(self, response_payload: dict[str, Any]) -> TeacherPlan:
@@ -191,8 +258,32 @@ class OpenAIPlannerBackend(PlannerBackend):
             },
             method="POST",
         )
-        with urlopen(request, timeout=self.config.timeout_s) as response:
-            return json.loads(response.read().decode("utf-8"))
+        try:
+            with urlopen(request, timeout=self.config.timeout_s) as response:
+                return json.loads(response.read().decode("utf-8"))
+        except HTTPError as exc:
+            body_text = _http_error_body(exc)
+            raise OpenAIPlannerAPIError(
+                self._format_http_error_message(
+                    status=exc.code,
+                    body_text=body_text,
+                    payload=payload,
+                )
+            ) from exc
+
+    def _format_http_error_message(
+        self,
+        *,
+        status: int,
+        body_text: str,
+        payload: dict[str, Any],
+    ) -> str:
+        return (
+            "OpenAI Responses API request failed "
+            f"(status={status}, model={self.config.model}, "
+            f"structured_output_requested={bool(payload.get('text', {}).get('format'))}). "
+            f"Response body: {body_text}"
+        )
 
     def _extract_output_text(self, response_payload: dict[str, Any]) -> str:
         if isinstance(response_payload.get("output_text"), str) and response_payload["output_text"].strip():
@@ -275,3 +366,97 @@ class OpenAIPlannerBackend(PlannerBackend):
                 f"Missing OpenAI API key in environment variable {self.config.api_key_env_var}."
             )
         return api_key
+
+    @staticmethod
+    def response_format_schema() -> dict[str, Any]:
+        return {
+            "type": "object",
+            "additionalProperties": False,
+            "properties": {
+                "next_phase": {
+                    "type": "string",
+                    "enum": [
+                        "free_space_approach",
+                        "obstacle_avoidance",
+                        "cable_probe",
+                        "pre_insert_align",
+                        "guarded_insert",
+                        "backoff_and_retry",
+                    ],
+                },
+                "waypoints": {
+                    "type": "array",
+                    "minItems": 1,
+                    "maxItems": 4,
+                    "items": {
+                        "type": "object",
+                        "additionalProperties": False,
+                        "properties": {
+                            "position_xyz": {
+                                "type": "array",
+                                "items": {"type": "number"},
+                                "minItems": 3,
+                                "maxItems": 3,
+                            },
+                            "yaw": {"type": "number"},
+                            "speed_scale": {"type": "number"},
+                            "clearance_hint": {"type": "number"},
+                        },
+                        "required": [
+                            "position_xyz",
+                            "yaw",
+                            "speed_scale",
+                            "clearance_hint",
+                        ],
+                    },
+                },
+                "motion_mode": {
+                    "type": "string",
+                    "enum": ["coarse_cartesian", "fine_cartesian", "guarded_insert", "hold"],
+                },
+                "caution_flag": {"type": "boolean"},
+                "should_probe": {"type": "boolean"},
+                "segment_horizon_steps": {"type": "integer", "minimum": 1, "maximum": 64},
+                "segment_granularity": {
+                    "type": "string",
+                    "enum": ["coarse", "fine", "guarded"],
+                },
+                "rationale_summary": {"type": "string", "minLength": 1, "maxLength": 400},
+            },
+            "required": [
+                "next_phase",
+                "waypoints",
+                "motion_mode",
+                "caution_flag",
+                "should_probe",
+                "segment_horizon_steps",
+                "segment_granularity",
+                "rationale_summary",
+            ],
+        }
+
+
+def sanitize_payload(payload: Any) -> Any:
+    if isinstance(payload, dict):
+        sanitized: dict[str, Any] = {}
+        for key, value in payload.items():
+            lower_key = str(key).lower()
+            if lower_key in {"authorization", "api_key", "apikey"}:
+                sanitized[key] = "<redacted>"
+            else:
+                sanitized[key] = sanitize_payload(value)
+        return sanitized
+    if isinstance(payload, list):
+        return [sanitize_payload(item) for item in payload]
+    return payload
+
+
+def _http_error_body(error: HTTPError) -> str:
+    try:
+        raw = error.read()
+    except Exception:
+        return "<unable to read error body>"
+    try:
+        return raw.decode("utf-8", errors="replace")
+    except Exception:
+        return repr(raw)
