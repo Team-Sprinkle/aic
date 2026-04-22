@@ -14,11 +14,13 @@ if __package__ in (None, ""):
     from aic_gym_gz.parity import AicParityHarness
     from aic_gym_gz.policies import deterministic_policy_actions
     from aic_gym_gz.replay_trace import replay_trace_against_attached_runtime
+    from aic_gym_gz.utils import to_jsonable
 else:
     from .official_trace import FixedVelocityAction, capture_official_and_native_trace
     from .parity import AicParityHarness
     from .policies import deterministic_policy_actions
     from .replay_trace import replay_trace_against_attached_runtime
+    from .utils import to_jsonable
 
 
 def _official_actions() -> tuple[FixedVelocityAction, ...]:
@@ -109,31 +111,33 @@ def main() -> None:
         output_dir = Path(args.output_dir)
         output_dir.mkdir(parents=True, exist_ok=True)
         (output_dir / "official_trace.json").write_text(
-            json.dumps(report["official"], indent=2, sort_keys=True) + "\n",
+            json.dumps(to_jsonable(report["official"]), indent=2, sort_keys=True) + "\n",
             encoding="utf-8",
         )
         (output_dir / "candidate_trace.json").write_text(
-            json.dumps(report["candidate"], indent=2, sort_keys=True) + "\n",
+            json.dumps(to_jsonable(report["candidate"]), indent=2, sort_keys=True) + "\n",
             encoding="utf-8",
         )
         (output_dir / "parity_report.json").write_text(
-            json.dumps(report["parity"], indent=2, sort_keys=True) + "\n",
+            json.dumps(to_jsonable(report["parity"]), indent=2, sort_keys=True) + "\n",
             encoding="utf-8",
         )
         (output_dir / "summary.json").write_text(
             json.dumps(
-                {
-                    key: value
-                    for key, value in report.items()
-                    if key not in ("official", "candidate", "parity")
-                },
+                to_jsonable(
+                    {
+                        key: value
+                        for key, value in report.items()
+                        if key not in ("official", "candidate", "parity")
+                    }
+                ),
                 indent=2,
                 sort_keys=True,
             )
             + "\n",
             encoding="utf-8",
         )
-    print(json.dumps(report, indent=2, sort_keys=True))
+    print(json.dumps(to_jsonable(report), indent=2, sort_keys=True))
 
 
 if __name__ == "__main__":

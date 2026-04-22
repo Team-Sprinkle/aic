@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import json
 import unittest
 
 import numpy as np
@@ -9,24 +8,25 @@ from aic_gym_gz.utils import to_jsonable
 
 
 class JsonUtilsTest(unittest.TestCase):
-    def test_to_jsonable_converts_numpy_nested_values(self) -> None:
+    def test_to_jsonable_converts_numpy_containers_and_scalars(self) -> None:
         payload = {
-            "array": np.array([[1.0, 2.0], [3.0, 4.0]], dtype=np.float32),
-            "scalar_float": np.float64(1.25),
-            "scalar_int": np.int32(7),
-            "scalar_bool": np.bool_(True),
-            "nested": {
-                "tuple": (np.array([5, 6], dtype=np.int64), np.float32(2.5)),
-                "list": [np.bool_(False), {"value": np.array([8], dtype=np.int32)}],
-            },
+            "array": np.array([[1, 2], [3, 4]], dtype=np.int32),
+            "float_scalar": np.float32(1.5),
+            "int_scalar": np.int64(7),
+            "nested": [
+                {"vector": np.array([0.1, 0.2], dtype=np.float64)},
+                (np.bool_(True), np.float32(2.5)),
+            ],
         }
 
         converted = to_jsonable(payload)
 
-        self.assertEqual(converted["array"], [[1.0, 2.0], [3.0, 4.0]])
-        self.assertEqual(converted["scalar_float"], 1.25)
-        self.assertEqual(converted["scalar_int"], 7)
-        self.assertIs(converted["scalar_bool"], True)
-        self.assertEqual(converted["nested"]["tuple"], [[5, 6], 2.5])
-        self.assertEqual(converted["nested"]["list"], [False, {"value": [8]}])
-        self.assertIn('"array": [[1.0, 2.0], [3.0, 4.0]]', json.dumps(converted, sort_keys=True))
+        self.assertEqual(converted["array"], [[1, 2], [3, 4]])
+        self.assertEqual(converted["float_scalar"], 1.5)
+        self.assertEqual(converted["int_scalar"], 7)
+        self.assertEqual(converted["nested"][0]["vector"], [0.1, 0.2])
+        self.assertEqual(converted["nested"][1], [True, 2.5])
+
+
+if __name__ == "__main__":
+    unittest.main()

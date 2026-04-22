@@ -9,6 +9,7 @@ from pathlib import Path
 from typing import Any
 
 from .validation_common import pearson_correlation, policy_specs, rollout_policy
+from .utils import to_jsonable
 
 
 def _episode_summary(rollout: dict[str, Any]) -> dict[str, Any]:
@@ -114,7 +115,10 @@ def run_comparison(
     }
     if output_path is not None:
         output_path.parent.mkdir(parents=True, exist_ok=True)
-        output_path.write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+        output_path.write_text(
+            json.dumps(to_jsonable(payload), indent=2, sort_keys=True) + "\n",
+            encoding="utf-8",
+        )
         csv_path = output_path.with_suffix(".csv")
         with csv_path.open("w", encoding="utf-8", newline="") as handle:
             writer = csv.writer(handle)
@@ -172,7 +176,7 @@ def main() -> None:
         f"overall_reward_final_score_correlation={payload['overall']['reward_final_score_correlation']} "
         f"episodes={payload['overall']['num_episodes']}"
     )
-    print(json.dumps(payload, indent=2, sort_keys=True))
+    print(json.dumps(to_jsonable(payload), indent=2, sort_keys=True))
 
 
 if __name__ == "__main__":

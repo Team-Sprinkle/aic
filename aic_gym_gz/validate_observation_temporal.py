@@ -11,6 +11,7 @@ from typing import Any
 import numpy as np
 
 from .env import make_default_env
+from .utils import to_jsonable
 
 
 def _phase_action(phase: str) -> np.ndarray:
@@ -145,7 +146,7 @@ def run_temporal_validation(
                                 record["rl_step_reward"],
                                 int(record["terminated"]),
                                 int(record["truncated"]),
-                                json.dumps(record["reward_terms"], sort_keys=True),
+                                json.dumps(to_jsonable(record["reward_terms"]), sort_keys=True),
                             ]
                         )
         finally:
@@ -160,7 +161,7 @@ def run_temporal_validation(
     }
     if output_dir is not None:
         (output_dir / "observation_temporal_summary.json").write_text(
-            json.dumps(payload, indent=2, sort_keys=True) + "\n",
+            json.dumps(to_jsonable(payload), indent=2, sort_keys=True) + "\n",
             encoding="utf-8",
         )
     return payload
@@ -193,7 +194,7 @@ def main() -> None:
             f"timestamp_monotonic={experiment['wrench_timestamp_monotonic']} "
             f"transient_summary_fields_present={experiment['transient_summary_fields_present']}"
         )
-    print(json.dumps(payload["summary"], indent=2, sort_keys=True))
+    print(json.dumps(to_jsonable(payload["summary"]), indent=2, sort_keys=True))
 
 
 if __name__ == "__main__":
