@@ -8,6 +8,7 @@ from pathlib import Path
 import numpy as np
 
 from .env import make_default_env
+from .utils import to_jsonable
 
 
 def main() -> None:
@@ -25,18 +26,20 @@ def main() -> None:
         checkpoint = env.runtime.export_checkpoint()
         Path(args.output).write_text(
             json.dumps(
-                {
-                    "mode": checkpoint.mode,
-                    "exact": checkpoint.exact,
-                    "limitations": checkpoint.limitations,
-                    "summary": {
-                        "checkpoint_label": "runtime_checkpoint",
-                        "mock_restore_semantics": "exact" if checkpoint.exact else "approximate",
-                        "step_reward_label": "rl_step_reward",
-                        "final_score_label": "gym_final_score",
-                    },
-                    "payload": checkpoint.payload,
-                },
+                to_jsonable(
+                    {
+                        "mode": checkpoint.mode,
+                        "exact": checkpoint.exact,
+                        "limitations": checkpoint.limitations,
+                        "summary": {
+                            "checkpoint_label": "runtime_checkpoint",
+                            "mock_restore_semantics": "exact" if checkpoint.exact else "approximate",
+                            "step_reward_label": "rl_step_reward",
+                            "final_score_label": "gym_final_score",
+                        },
+                        "payload": checkpoint.payload,
+                    }
+                ),
                 indent=2,
                 sort_keys=True,
             ),

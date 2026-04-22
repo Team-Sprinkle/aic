@@ -1,5 +1,8 @@
 from __future__ import annotations
 
+import json
+from pathlib import Path
+import tempfile
 import unittest
 
 import numpy as np
@@ -78,6 +81,22 @@ class ForceTransientTest(unittest.TestCase):
         )
         self.assertFalse(report["isaac_lab_style_check"]["direct_isaac_lab_parity_tested"])
         self.assertFalse(report["official_path_check"]["direct_official_parity_tested"])
+
+    def test_force_transient_validation_writes_json_with_numpy_payloads(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            report = run_force_transient_validation(
+                ticks_per_step=20,
+                seed=123,
+                output_dir=Path(tmpdir),
+            )
+            output_path = Path(tmpdir) / "force_transient_validation_report.json"
+            written = json.loads(output_path.read_text(encoding="utf-8"))
+
+        self.assertEqual(written["observation_contract"], report["observation_contract"])
+        first_record = written["scenarios"][0]["records"][0]
+        self.assertIsInstance(first_record["current_wrench"], list)
+        self.assertIsInstance(first_record["wrench_max_abs_recent"], list)
+        self.assertIsInstance(first_record["time_of_peak_within_step"], float)
 
 
 if __name__ == "__main__":

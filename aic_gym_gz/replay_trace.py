@@ -17,11 +17,13 @@ if __package__ in (None, ""):
     from aic_gym_gz.parity import AicParityHarness
     from aic_gym_gz.randomizer import AicEnvRandomizer
     from aic_gym_gz.runtime import AicGazeboRuntime, ScenarioGymGzBackend
+    from aic_gym_gz.utils import to_jsonable
 else:
     from .io import RosCameraSubscriber, summarize_image_batch
     from .parity import AicParityHarness
     from .randomizer import AicEnvRandomizer
     from .runtime import AicGazeboRuntime, ScenarioGymGzBackend
+    from .utils import to_jsonable
 
 
 class CameraBridgeSidecar:
@@ -196,15 +198,15 @@ def main() -> None:
 
     if args.candidate_trace_output:
         Path(args.candidate_trace_output).write_text(
-            json.dumps(candidate, indent=2, sort_keys=True),
+            json.dumps(to_jsonable(candidate), indent=2, sort_keys=True),
             encoding="utf-8",
         )
     if args.parity_output:
         Path(args.parity_output).write_text(
-            json.dumps(parity, indent=2, sort_keys=True),
+            json.dumps(to_jsonable(parity), indent=2, sort_keys=True),
             encoding="utf-8",
         )
-    print(json.dumps({"candidate": candidate, "parity": parity}, indent=2, sort_keys=True))
+    print(json.dumps(to_jsonable({"candidate": candidate, "parity": parity}), indent=2, sort_keys=True))
 
 
 if __name__ == "__main__":
