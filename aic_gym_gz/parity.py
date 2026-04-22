@@ -15,8 +15,10 @@ import numpy as np
 if __package__ in (None, ""):
     sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
     from aic_gym_gz.reward import AicScoreCalculator
+    from aic_gym_gz.utils import to_jsonable
 else:
     from .reward import AicScoreCalculator
+    from .utils import to_jsonable
 
 
 @dataclass(frozen=True)
@@ -283,7 +285,7 @@ class AicParityHarness:
     ) -> None:
         path = Path(output_json)
         path.parent.mkdir(parents=True, exist_ok=True)
-        path.write_text(json.dumps(report, indent=2, sort_keys=True), encoding="utf-8")
+        path.write_text(json.dumps(to_jsonable(report), indent=2, sort_keys=True), encoding="utf-8")
 
     def _read_csv(self, path: Path | str) -> list[dict[str, Any]]:
         rows: list[dict[str, Any]] = []
@@ -458,7 +460,7 @@ def main() -> None:
 
     if args.output:
         harness.write_report(report, output_json=args.output)
-    print(json.dumps(report, indent=2, sort_keys=True))
+    print(json.dumps(to_jsonable(report), indent=2, sort_keys=True))
 
 
 if __name__ == "__main__":

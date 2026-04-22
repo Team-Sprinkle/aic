@@ -21,6 +21,12 @@ import sys
 import time
 from typing import Any
 
+if __package__ in (None, ""):
+    sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+    from aic_gym_gz.utils import to_jsonable
+else:
+    from .utils import to_jsonable
+
 
 @dataclass(frozen=True)
 class FixedVelocityAction:
@@ -748,7 +754,7 @@ def capture_official_and_native_trace(
     if output_json is not None:
         path = Path(output_json)
         path.parent.mkdir(parents=True, exist_ok=True)
-        path.write_text(json.dumps(report, indent=2, sort_keys=True), encoding="utf-8")
+        path.write_text(json.dumps(to_jsonable(report), indent=2, sort_keys=True), encoding="utf-8")
     return report
 
 
@@ -761,9 +767,11 @@ def main() -> None:
     args = parser.parse_args()
     print(
         json.dumps(
-            capture_official_and_native_trace(
-                output_json=args.output,
-                include_images=args.include_images,
+            to_jsonable(
+                capture_official_and_native_trace(
+                    output_json=args.output,
+                    include_images=args.include_images,
+                )
             ),
             indent=2,
         )
