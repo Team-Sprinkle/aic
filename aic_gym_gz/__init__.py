@@ -18,7 +18,9 @@ from .reward import (
 )
 from .runtime import (
     AicGazeboRuntime,
+    AuxiliaryForceContactSummary,
     MockStepperBackend,
+    MockTransientContactConfig,
     RuntimeBackend,
     RuntimeCheckpoint,
     RuntimeState,
@@ -85,6 +87,7 @@ __all__ = [
     "AicEnvRandomizer",
     "AicGazeboIO",
     "AicGazeboRuntime",
+    "AuxiliaryForceContactSummary",
     "AicInsertionEnv",
     "AicInsertionTask",
     "AicParityHarness",
@@ -96,6 +99,7 @@ __all__ = [
     "GazeboNativeIOPlaceholder",
     "MockGazeboIO",
     "MockStepperBackend",
+    "MockTransientContactConfig",
     "RuntimeCheckpoint",
     "RuntimeBackend",
     "RuntimeState",
