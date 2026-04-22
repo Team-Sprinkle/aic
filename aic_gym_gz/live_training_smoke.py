@@ -14,9 +14,11 @@ if __package__ in (None, ""):
     sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
     from aic_gym_gz.env import live_env_health_check, make_live_env
     from aic_gym_gz.policies import deterministic_policy_actions
+    from aic_gym_gz.utils import to_jsonable
 else:
     from .env import live_env_health_check, make_live_env
     from .policies import deterministic_policy_actions
+    from .utils import to_jsonable
 
 
 def _select_action(*, policy: str, step_idx: int, rng: np.random.Generator) -> np.ndarray:
@@ -121,8 +123,11 @@ def main() -> None:
         transport_backend=args.transport_backend,
     )
     if args.output:
-        Path(args.output).write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n", encoding="utf-8")
-    print(json.dumps(payload, indent=2, sort_keys=True))
+        Path(args.output).write_text(
+            json.dumps(to_jsonable(payload), indent=2, sort_keys=True) + "\n",
+            encoding="utf-8",
+        )
+    print(json.dumps(to_jsonable(payload), indent=2, sort_keys=True))
 
 
 if __name__ == "__main__":

@@ -11,6 +11,7 @@ from typing import Any
 import numpy as np
 
 from .validation_common import pearson_correlation, policy_specs, rollout_policy
+from .utils import to_jsonable
 
 
 def _policy_summary(rollout: dict[str, Any]) -> dict[str, Any]:
@@ -78,8 +79,8 @@ def _write_csv(*, output_dir: Path, rollout: dict[str, Any]) -> None:
                     record["wrench_force_l2_norm"],
                     record["wrench_timestamp"],
                     int(record["off_limit_contact"]),
-                    json.dumps(record["reward_terms"], sort_keys=True),
-                    json.dumps(record["reward_metrics"], sort_keys=True),
+                    json.dumps(to_jsonable(record["reward_terms"]), sort_keys=True),
+                    json.dumps(to_jsonable(record["reward_metrics"]), sort_keys=True),
                 ]
             )
 
@@ -107,7 +108,12 @@ def run_validation(
         for rollout in rollouts:
             _write_csv(output_dir=output_dir, rollout=rollout)
         (output_dir / "reward_behavior_summary.json").write_text(
-            json.dumps({"rollouts": rollouts, "summaries": summaries}, indent=2, sort_keys=True) + "\n",
+            json.dumps(
+                to_jsonable({"rollouts": rollouts, "summaries": summaries}),
+                indent=2,
+                sort_keys=True,
+            )
+            + "\n",
             encoding="utf-8",
         )
     return {"rollouts": rollouts, "summaries": summaries}
@@ -158,7 +164,7 @@ def main() -> None:
             f"reward_vs_action_corr={summary['reward_vs_action_magnitude_correlation']} "
             f"gym_final_score={summary['final_gym_final_score']}"
         )
-    print(json.dumps(payload["summaries"], indent=2, sort_keys=True))
+    print(json.dumps(to_jsonable(payload["summaries"]), indent=2, sort_keys=True))
 
 
 if __name__ == "__main__":

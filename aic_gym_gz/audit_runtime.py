@@ -6,6 +6,8 @@ import json
 from pathlib import Path
 from typing import Any
 
+from .utils import to_jsonable
+
 
 OBSERVATION_AUDIT: list[dict[str, str]] = [
     {
@@ -179,7 +181,7 @@ def generate_runtime_audit() -> dict[str, Any]:
 def write_runtime_audit(*, output_json: str | None = None, output_markdown: str | None = None) -> dict[str, Any]:
     report = generate_runtime_audit()
     if output_json:
-        Path(output_json).write_text(json.dumps(report, indent=2, sort_keys=True), encoding="utf-8")
+        Path(output_json).write_text(json.dumps(to_jsonable(report), indent=2, sort_keys=True), encoding="utf-8")
     if output_markdown:
         Path(output_markdown).write_text(_render_markdown(report), encoding="utf-8")
     return report
@@ -250,9 +252,11 @@ def main() -> None:
     args = parser.parse_args()
     print(
         json.dumps(
-            write_runtime_audit(
-                output_json=args.output_json,
-                output_markdown=args.output_markdown,
+            to_jsonable(
+                write_runtime_audit(
+                    output_json=args.output_json,
+                    output_markdown=args.output_markdown,
+                )
             ),
             indent=2,
             sort_keys=True,

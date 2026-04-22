@@ -17,18 +17,7 @@ from .io import MockGazeboIO
 from .randomizer import AicEnvRandomizer
 from .runtime import AicGazeboRuntime, MockStepperBackend, MockTransientContactConfig
 from .task import AicInsertionTask
-
-
-def _json_safe(value: Any) -> Any:
-    if isinstance(value, np.ndarray):
-        return value.tolist()
-    if isinstance(value, dict):
-        return {str(key): _json_safe(item) for key, item in value.items()}
-    if isinstance(value, (list, tuple)):
-        return [_json_safe(item) for item in value]
-    if isinstance(value, (np.floating, np.integer)):
-        return value.item()
-    return value
+from .utils import to_jsonable
 
 
 def _make_validation_env(
@@ -367,7 +356,7 @@ def run_force_transient_validation(
     if output_dir is not None:
         output_dir.mkdir(parents=True, exist_ok=True)
         (output_dir / "force_transient_validation_report.json").write_text(
-            json.dumps(_json_safe(payload), indent=2, sort_keys=True) + "\n",
+            json.dumps(to_jsonable(payload), indent=2, sort_keys=True) + "\n",
             encoding="utf-8",
         )
         _write_csv(output_dir / "force_transient_validation_records.csv", payload["scenarios"])
@@ -375,7 +364,7 @@ def run_force_transient_validation(
             _markdown_summary(payload),
             encoding="utf-8",
         )
-    return _json_safe(payload)
+    return to_jsonable(payload)
 
 
 def main() -> None:
@@ -391,7 +380,7 @@ def main() -> None:
         seed=args.seed,
         output_dir=output_dir,
     )
-    print(json.dumps(payload, indent=2, sort_keys=True))
+    print(json.dumps(to_jsonable(payload), indent=2, sort_keys=True))
 
 
 if __name__ == "__main__":

@@ -21,10 +21,12 @@ if __package__ in (None, ""):
     from aic_gym_gz.official_trace import capture_official_and_native_trace
     from aic_gym_gz.parity import AicParityHarness
     from aic_gym_gz.replay_trace import replay_trace_against_attached_runtime
+    from aic_gym_gz.utils import to_jsonable
 else:
     from .official_trace import capture_official_and_native_trace
     from .parity import AicParityHarness
     from .replay_trace import replay_trace_against_attached_runtime
+    from .utils import to_jsonable
 
 
 def _summary_from_timing(trace: dict[str, Any]) -> dict[str, Any]:
@@ -110,8 +112,11 @@ def main() -> None:
 
     payload = run_live_benchmark(include_images=args.include_images)
     if args.output:
-        Path(args.output).write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n", encoding="utf-8")
-    print(json.dumps(payload, indent=2, sort_keys=True))
+        Path(args.output).write_text(
+            json.dumps(to_jsonable(payload), indent=2, sort_keys=True) + "\n",
+            encoding="utf-8",
+        )
+    print(json.dumps(to_jsonable(payload), indent=2, sort_keys=True))
 
 
 if __name__ == "__main__":
