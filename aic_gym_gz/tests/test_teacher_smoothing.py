@@ -22,6 +22,7 @@ class TeacherSmoothingTest(unittest.TestCase):
             tcp_velocity=np.zeros(6, dtype=np.float64),
             plug_pose=np.array([0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0], dtype=np.float64),
             target_port_pose=np.array([0.0, 0.0, 0.9, 0.0, 0.0, 0.0, 1.0], dtype=np.float64),
+            target_port_entrance_pose=np.array([0.0, 0.0, 0.9, 0.0, 0.0, 0.0, 1.0], dtype=np.float64),
             wrench=np.zeros(6, dtype=np.float64),
             off_limit_contact=False,
         )
