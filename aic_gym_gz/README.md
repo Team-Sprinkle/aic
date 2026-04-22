@@ -24,6 +24,8 @@ pixi run python -m aic_gym_gz.validate_reward_behavior \
   --output-dir aic_gym_gz/artifacts/validation/reward_behavior
 pixi run python -m aic_gym_gz.validate_observation_temporal \
   --output-dir aic_gym_gz/artifacts/validation/observation_temporal
+pixi run python -m aic_gym_gz.validate_force_transients \
+  --output-dir aic_gym_gz/artifacts/validation/force_transients
 ```
 
 ## Reward and score labels
@@ -144,6 +146,8 @@ Additional image-mode keys:
 - No built-in wrench history is provided in the public observation.
 - This is closer to the official participant-facing observation surface than
   providing an implicit history buffer inside the environment.
+- The official-compatible observation contract stays current-sample-only even
+  when auxiliary within-step summaries are enabled elsewhere in the runtime.
 
 ### Temporal behavior
 
@@ -152,7 +156,34 @@ Additional image-mode keys:
 - If `ticks_per_step > 1`, transient contact or force spikes that occur inside
   the held-action window may be missed because only the final sample of the step
   is returned.
-- There is currently no built-in within-step max or window summary for F/T.
+- The public observation still does not expose a built-in within-step max or
+  history buffer for F/T.
+
+### Auxiliary within-step force/contact summaries
+
+- `step_info["auxiliary_force_contact_summary"]` provides an explicitly
+  non-official per-step summary of internal sub-samples.
+- These summaries are for training, search, debugging, and validation. They are
+  not participant-facing official observations.
+- The main current observation is unchanged:
+  - `observation["wrench"]` remains the current/final sample for the policy
+    timestep
+  - `observation["off_limit_contact"]` remains the current/final contact sample
+- The auxiliary summary may include:
+  - `wrench_current`
+  - `wrench_max_abs_recent`
+  - `wrench_mean_recent`
+  - `wrench_max_force_abs_recent`
+  - `wrench_max_torque_abs_recent`
+  - `had_contact_recent`
+  - `max_contact_indicator_recent`
+  - `first_wrench_recent`
+  - `last_wrench_recent`
+  - `time_of_peak_within_step`
+- Mock runtime uses exact internal sub-step samples for these fields.
+- Live runtime uses real ROS callback history when available. If exact within-step
+  sub-samples are unavailable, the summary records that limitation instead of
+  inventing precision.
 
 ### Recommended usage for temporal signals
 
@@ -160,6 +191,8 @@ Additional image-mode keys:
 - Use stacking, recurrence, or external history buffers if your policy depends
   on contact transients or settling behavior.
 - Treat `wrench` as a current sample, not a trajectory summary.
+- Use the auxiliary force/contact summary only when you intentionally want
+  non-official additional observability.
 
 Example: stack recent wrench samples yourself.
 
@@ -247,6 +280,7 @@ observation, reward, terminated, truncated, step_info = env.step(action)
 print(step_info["reward_label"], reward)
 print(step_info["reward_terms"])
 print(step_info["reward_metrics"])
+print(step_info["auxiliary_force_contact_summary"]["had_contact_recent"])
 
 if terminated or truncated:
     print(step_info["final_evaluation"]["gym_final_score"])
@@ -304,7 +338,9 @@ branch checks:
 
 - reward is dense and usable for RL experiments, but imperfect
 - reward-vs-score correlation exists, but is inflated in the mock backend
-- F/T is current-sample-only, so within-step transients may be missed
+- the official-compatible F/T observation is current-sample-only
+- auxiliary within-step summaries now expose hidden transient contact/force
+  spikes without changing the public observation contract
 - live parity exists in branch artifacts, but was not fully revalidated in every
   environment / shell
 
