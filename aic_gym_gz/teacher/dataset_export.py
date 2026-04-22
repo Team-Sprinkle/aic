@@ -9,6 +9,8 @@ from typing import Any
 
 import numpy as np
 
+from ..utils import to_jsonable
+
 
 @dataclass(frozen=True)
 class TeacherDatasetExportResult:
@@ -57,18 +59,20 @@ def export_teacher_jsonl_dataset(
             }
         )
     jsonl_path.write_text(
-        "".join(json.dumps(record, sort_keys=True) + "\n" for record in records),
+        "".join(json.dumps(to_jsonable(record), sort_keys=True) + "\n" for record in records),
         encoding="utf-8",
     )
     metadata_path.write_text(
         json.dumps(
-            {
-                "candidate_spec": candidate_entry["candidate_spec"],
-                "rank": candidate_entry["rank"],
-                "official_style_score": score,
-                "ranking_metrics": candidate_entry.get("ranking_metrics", {}),
-                "artifact_metadata": artifact["metadata"],
-            },
+            to_jsonable(
+                {
+                    "candidate_spec": candidate_entry["candidate_spec"],
+                    "rank": candidate_entry["rank"],
+                    "official_style_score": score,
+                    "ranking_metrics": candidate_entry.get("ranking_metrics", {}),
+                    "artifact_metadata": artifact["metadata"],
+                }
+            ),
             indent=2,
             sort_keys=True,
         ),
@@ -152,15 +156,17 @@ def export_teacher_lerobot_dataset(
     metadata_path.parent.mkdir(parents=True, exist_ok=True)
     metadata_path.write_text(
         json.dumps(
-            {
-                "candidate_spec": candidate_entry["candidate_spec"],
-                "rank": candidate_entry["rank"],
-                "official_style_score": candidate_entry["official_style_score"],
-                "ranking_metrics": candidate_entry.get("ranking_metrics", {}),
-                "selected_top_k": candidate_entry["selected_top_k"],
-                "near_perfect": candidate_entry["near_perfect"],
-                "artifact_metadata": artifact["metadata"],
-            },
+            to_jsonable(
+                {
+                    "candidate_spec": candidate_entry["candidate_spec"],
+                    "rank": candidate_entry["rank"],
+                    "official_style_score": candidate_entry["official_style_score"],
+                    "ranking_metrics": candidate_entry.get("ranking_metrics", {}),
+                    "selected_top_k": candidate_entry["selected_top_k"],
+                    "near_perfect": candidate_entry["near_perfect"],
+                    "artifact_metadata": artifact["metadata"],
+                }
+            ),
             indent=2,
             sort_keys=True,
         ),

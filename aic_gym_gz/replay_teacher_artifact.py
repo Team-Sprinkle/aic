@@ -7,6 +7,7 @@ import json
 
 from aic_gym_gz.env import make_default_env
 from aic_gym_gz.teacher import TeacherReplayRunner, load_teacher_replay
+from aic_gym_gz.utils import to_jsonable
 
 
 def main() -> None:
@@ -18,7 +19,7 @@ def main() -> None:
     try:
         artifact = load_teacher_replay(args.artifact)
         replay = TeacherReplayRunner(env=env).replay(artifact)
-        print(json.dumps(replay, indent=2, sort_keys=True))
+        print(json.dumps(to_jsonable(replay), indent=2, sort_keys=True))
     finally:
         env.close()
 

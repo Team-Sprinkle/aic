@@ -10,6 +10,7 @@ from typing import Any
 import numpy as np
 
 from ..env import AicInsertionEnv
+from ..utils import to_jsonable
 
 
 @dataclass(frozen=True)
@@ -35,7 +36,10 @@ class TeacherReplayArtifact:
 
 
 def save_teacher_replay(artifact: TeacherReplayArtifact, path: Path | str) -> None:
-    Path(path).write_text(json.dumps(artifact.to_dict(), indent=2, sort_keys=True), encoding="utf-8")
+    Path(path).write_text(
+        json.dumps(to_jsonable(artifact.to_dict()), indent=2, sort_keys=True),
+        encoding="utf-8",
+    )
 
 
 def load_teacher_replay(path: Path | str) -> TeacherReplayArtifact:

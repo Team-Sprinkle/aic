@@ -9,6 +9,7 @@ from typing import Any, Callable
 
 from ..env import AicInsertionEnv
 from ..planners.base import PlannerBackend
+from ..utils import to_jsonable
 from .policy import AgentTeacherController, TeacherConfig
 from .quality import ranking_quality_adjustment
 from .replay import TeacherReplayArtifact, save_teacher_replay
@@ -232,7 +233,10 @@ class TeacherCandidateSearch:
             "limitations": limitations,
         }
         if output_path is not None:
-            Path(output_path).write_text(json.dumps(payload, indent=2, sort_keys=True), encoding="utf-8")
+            Path(output_path).write_text(
+                json.dumps(to_jsonable(payload), indent=2, sort_keys=True),
+                encoding="utf-8",
+            )
         return TeacherSearchResult(payload=payload, output_path=output_path)
 
     def _ranking_metrics(

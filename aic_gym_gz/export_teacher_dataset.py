@@ -10,6 +10,7 @@ from aic_gym_gz.teacher.dataset_export import (
     export_teacher_jsonl_dataset,
     export_teacher_lerobot_dataset,
 )
+from aic_gym_gz.utils import to_jsonable
 
 
 def main() -> None:
@@ -35,11 +36,13 @@ def main() -> None:
         )
     print(
         json.dumps(
-            {
-                "dataset_path": str(result.dataset_path),
-                "metadata_path": str(result.metadata_path),
-                "format": result.format,
-            },
+            to_jsonable(
+                {
+                    "dataset_path": str(result.dataset_path),
+                    "metadata_path": str(result.metadata_path),
+                    "format": result.format,
+                }
+            ),
             indent=2,
             sort_keys=True,
         )

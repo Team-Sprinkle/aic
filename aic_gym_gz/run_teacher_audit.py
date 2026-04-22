@@ -11,6 +11,7 @@ from aic_gym_gz.teacher.audit import (
     observation_parity_rows,
     scoring_parity_rows,
 )
+from aic_gym_gz.utils import to_jsonable
 
 
 def main() -> None:
@@ -23,7 +24,7 @@ def main() -> None:
         "scoring_parity": [row.to_dict() for row in scoring_parity_rows()],
         "dataset_compatibility": [row.to_dict() for row in dataset_compatibility_rows()],
     }
-    text = json.dumps(payload, indent=2, sort_keys=True)
+    text = json.dumps(to_jsonable(payload), indent=2, sort_keys=True)
     if args.output:
         Path(args.output).write_text(text, encoding="utf-8")
     print(text)
