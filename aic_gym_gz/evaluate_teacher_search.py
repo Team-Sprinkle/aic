@@ -13,12 +13,16 @@ from aic_gym_gz.utils import to_jsonable
 def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--artifact", required=True)
+    parser.add_argument("--meaningful-improvement-threshold", type=float, default=0.15)
     parser.add_argument("--output-json", default=None)
     parser.add_argument("--output-markdown", default=None)
     args = parser.parse_args()
 
     payload = load_json_file(args.artifact)
-    result = analyze_search_payload(payload)
+    result = analyze_search_payload(
+        payload,
+        meaningful_improvement_threshold=args.meaningful_improvement_threshold,
+    )
     if args.output_json:
         Path(args.output_json).write_text(
             json.dumps(to_jsonable(result.summary), indent=2, sort_keys=True),

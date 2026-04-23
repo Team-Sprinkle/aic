@@ -34,9 +34,20 @@ def _planning_state() -> TeacherPlanningState:
         policy_context={
             "plug_pose": [0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0],
             "target_port_pose": [0.0, 0.0, 0.9, 0.0, 0.0, 0.0, 1.0],
+            "target_port_entrance_pose": [0.0, 0.0, 0.92, 0.0, 0.0, 0.0, 1.0],
             "off_limit_contact": False,
+            "distance_to_target": 0.1,
+            "distance_to_entrance": 0.12,
+            "lateral_misalignment": 0.02,
+            "orientation_error": 0.1,
+            "insertion_progress": 0.0,
+            "score_geometry": {
+                "distance_to_entrance": 0.12,
+                "lateral_misalignment": 0.02,
+                "orientation_error": 0.1,
+                "insertion_progress": 0.0,
+            },
         },
-        oracle_context={},
         obstacle_summary=[],
         dynamics_summary={
             "quasi_static": True,
@@ -46,7 +57,28 @@ def _planning_state() -> TeacherPlanningState:
         image_timestamps={},
         image_summaries={},
         recent_probe_results=[],
+        temporal_context={
+            "phase_guidance": {"recommended_phase": "pre_insert_align"},
+            "geometry_progress_summary": {"net_distance_to_entrance_progress": 0.0},
+            "auxiliary_history_summary": {"hidden_contact_recent": False},
+        },
         data_quality={"wrench": {"is_real": False}},
+        oracle_context={
+            "task_board_pose_xyz_rpy": [0.1, -0.2, 1.1, 0.0, 0.0, 3.14],
+            "target_port_pose": [0.0, 0.0, 0.9, 0.0, 0.0, 0.0, 1.0],
+            "target_port_entrance_pose": [0.0, 0.0, 0.92, 0.0, 0.0, 0.0, 1.0],
+            "plug_pose": [0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0],
+            "clearance_summary": {"present_obstacle_count": 3.0},
+            "scene_layout_summary": {
+                "present_obstacles": [
+                    {
+                        "name": "rail_0",
+                        "approximate_world_xyz": [0.1, -0.2, 1.1],
+                    }
+                ]
+            },
+            "cable": {"name": "cable_0", "type": "sfp_sc"},
+        },
     )
 
 
@@ -87,6 +119,63 @@ class TeacherOpenAIPlannerBackendTest(unittest.TestCase):
         )
         self.assertIn("compact_planning_brief", backend.last_payload["input"][1]["content"][0]["text"])
 
+    def test_candidate_family_changes_with_candidate_index(self) -> None:
+        backend = OpenAIPlannerBackend(OpenAIPlannerConfig(enabled=True))
+        first = backend.build_debug_payload(_planning_state(), candidate_index=0)
+        second = backend.build_debug_payload(_planning_state(), candidate_index=3)
+        first_text = first["input"][1]["content"][0]["text"]
+        second_text = second["input"][1]["content"][0]["text"]
+        self.assertIn("baseline_safe", first_text)
+        self.assertIn("guarded_insert", second_text)
+
+    def test_payload_includes_scene_geometry_context(self) -> None:
+        backend = OpenAIPlannerBackend(OpenAIPlannerConfig(enabled=True))
+        payload = backend.build_debug_payload(_planning_state())
+        user_text = payload["input"][1]["content"][0]["text"]
+        self.assertIn("scene_geometry_context", user_text)
+        self.assertIn("board_pose_xyz_rpy", user_text)
+        self.assertIn("present_obstacles", user_text)
+
+    def test_visual_context_is_included_when_present(self) -> None:
+        state = _planning_state()
+        state.recent_visual_observations.append(
+            {
+                "label": "recent_left",
+                "camera_name": "left",
+                "sim_tick": 12,
+                "sim_time": 0.24,
+                "timestamp": 0.24,
+                "source": "official_wrist_camera_history",
+                "image_data_url": "data:image/png;base64,AAA",
+            }
+        )
+        state.scene_overview_images.append(
+            {
+                "label": "scene_top",
+                "view_name": "top_down_xy",
+                "source": "teacher_schematic_scene_overview",
+                "image_data_url": "data:image/png;base64,BBB",
+            }
+        )
+        backend = OpenAIPlannerBackend(OpenAIPlannerConfig(enabled=True))
+        payload = backend.build_debug_payload(state)
+        content = payload["input"][1]["content"]
+        self.assertTrue(any(item.get("type") == "input_image" for item in content))
+        self.assertTrue(any(item.get("text", "").startswith("Recent official wrist-camera") for item in content))
+        self.assertTrue(any(item.get("text", "").startswith("Teacher-side scene overview") for item in content))
+        self.assertTrue(any(item.get("image_url") == "<image_data_url>" for item in content if item.get("type") == "input_image"))
+
+    def test_temperature_is_omitted_when_configured_none(self) -> None:
+        backend = OpenAIPlannerBackend(OpenAIPlannerConfig(enabled=True, temperature=None, model="gpt-5-nano"))
+        payload = backend.build_debug_payload(_planning_state())
+        self.assertNotIn("temperature", payload)
+
+    def test_reasoning_and_low_verbosity_are_included_by_default(self) -> None:
+        backend = OpenAIPlannerBackend(OpenAIPlannerConfig(enabled=True))
+        payload = backend.build_debug_payload(_planning_state())
+        self.assertEqual(payload["reasoning"]["effort"], "low")
+        self.assertEqual(payload["text"]["verbosity"], "low")
+
     def test_rejects_invalid_structured_response(self) -> None:
         backend = _MockOpenAIPlannerBackend(
             response_payload={
@@ -116,6 +205,7 @@ class TeacherOpenAIPlannerBackendTest(unittest.TestCase):
             3,
         )
         self.assertEqual(sanitize_payload({"Authorization": "secret"})["Authorization"], "<redacted>")
+        self.assertEqual(sanitize_payload({"image_url": "data:image/png;base64,AAA"})["image_url"], "<image_data_url>")
 
     def test_http_error_message_includes_status_and_body(self) -> None:
         backend = OpenAIPlannerBackend(OpenAIPlannerConfig(enabled=True, max_retries=0))

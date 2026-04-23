@@ -85,6 +85,8 @@ class TeacherPlanningState:
     image_timestamps: dict[str, float]
     image_summaries: dict[str, dict[str, Any]]
     recent_probe_results: list[dict[str, Any]]
+    recent_visual_observations: list[dict[str, Any]] = field(default_factory=list)
+    scene_overview_images: list[dict[str, Any]] = field(default_factory=list)
     controller_context: dict[str, Any] = field(default_factory=dict)
     camera_context: dict[str, Any] = field(default_factory=dict)
     temporal_context: dict[str, Any] = field(default_factory=dict)
@@ -93,7 +95,27 @@ class TeacherPlanningState:
     last_teacher_rationale: str | None = None
 
     def to_dict(self) -> dict[str, Any]:
-        return asdict(self)
+        payload = asdict(self)
+        payload["recent_visual_observations"] = [
+            {
+                "label": item.get("label"),
+                "camera_name": item.get("camera_name"),
+                "sim_tick": item.get("sim_tick"),
+                "sim_time": item.get("sim_time"),
+                "timestamp": item.get("timestamp"),
+                "source": item.get("source"),
+            }
+            for item in self.recent_visual_observations
+        ]
+        payload["scene_overview_images"] = [
+            {
+                "label": item.get("label"),
+                "view_name": item.get("view_name"),
+                "source": item.get("source"),
+            }
+            for item in self.scene_overview_images
+        ]
+        return payload
 
 
 @dataclass(frozen=True)
@@ -177,6 +199,9 @@ class TeacherStepLog:
     observation_summary: dict[str, Any]
     history_summary: dict[str, Any] = field(default_factory=dict)
     data_quality: dict[str, Any] = field(default_factory=dict)
+    auxiliary_force_contact_summary: dict[str, Any] = field(default_factory=dict)
+    auxiliary_summary_available: bool = False
+    auxiliary_contact_metrics: dict[str, Any] = field(default_factory=dict)
     probe_result: dict[str, Any] | None = None
 
     def to_dict(self) -> dict[str, Any]:
@@ -195,6 +220,7 @@ class TeacherRolloutLog:
     initial_observation_summary: dict[str, Any]
     data_quality: dict[str, Any] = field(default_factory=dict)
     history_metadata: dict[str, Any] = field(default_factory=dict)
+    auxiliary_summary_metadata: dict[str, Any] = field(default_factory=dict)
     planner_candidates: list[dict[str, Any]] = field(default_factory=list)
     probe_results: list[dict[str, Any]] = field(default_factory=list)
     trajectory_segments: list[dict[str, Any]] = field(default_factory=list)

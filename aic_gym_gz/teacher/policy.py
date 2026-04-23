@@ -66,6 +66,9 @@ class AgentTeacherController:
                 plan=plan,
                 segment=segment,
                 dynamics=planning_state.dynamics_summary,
+                temporal_context=planning_state.temporal_context,
+                current_phase=planning_state.current_phase,
+                policy_context=planning_state.policy_context,
                 data_quality=planning_state.data_quality,
             )
             candidates.append(
@@ -110,6 +113,9 @@ class AgentTeacherController:
         plan: TeacherPlan,
         segment: TrajectorySegment,
         dynamics: dict[str, Any],
+        temporal_context: dict[str, Any],
+        current_phase: str,
+        policy_context: dict[str, Any],
         data_quality: dict[str, Any],
     ) -> float:
         duration_penalty = segment.expected_duration_s
@@ -118,4 +124,69 @@ class AgentTeacherController:
         granularity_bonus = 0.1 if plan.segment_granularity == "guarded" else 0.0
         controller_bonus = 0.05 if data_quality.get("controller_state", {}).get("is_real", False) else 0.0
         wrench_penalty = 0.1 if not data_quality.get("wrench", {}).get("is_real", False) else 0.0
-        return settling_bonus + granularity_bonus + controller_bonus - duration_penalty - caution_penalty - wrench_penalty
+        auxiliary = temporal_context.get("auxiliary_history_summary", {})
+        phase_guidance = temporal_context.get("phase_guidance", {})
+        hidden_contact_penalty = 0.05 if auxiliary.get("hidden_contact_recent", False) else 0.0
+        repeated_contact_penalty = 0.02 * min(int(auxiliary.get("repeated_contact_rich_steps", 0)), 2)
+        recommended_phase_bonus = 0.12 if plan.next_phase == phase_guidance.get("recommended_phase") else 0.0
+        stuck_phase_penalty = (
+            0.18
+            if plan.next_phase == current_phase and phase_guidance.get("should_avoid_repeating_current_phase", False)
+            else 0.0
+        )
+        insertion_zone_bonus = (
+            0.10
+            if phase_guidance.get("in_insertion_zone", False)
+            and plan.segment_granularity in {"fine", "guarded"}
+            else 0.0
+        )
+        guarded_insert_bonus = (
+            0.12
+            if phase_guidance.get("insertion_ready", False) and plan.next_phase == "guarded_insert"
+            else 0.0
+        )
+        alignment_bonus = (
+            0.08
+            if policy_context.get("distance_to_entrance", 1.0) <= 0.08 and plan.next_phase == "pre_insert_align"
+            else 0.0
+        )
+        progress_bonus, stagnation_penalty = self._progress_terms(plan=plan, policy_context=policy_context)
+        return (
+            settling_bonus
+            + granularity_bonus
+            + controller_bonus
+            + recommended_phase_bonus
+            + insertion_zone_bonus
+            + guarded_insert_bonus
+            + alignment_bonus
+            + progress_bonus
+            - duration_penalty
+            - caution_penalty
+            - wrench_penalty
+            - hidden_contact_penalty
+            - repeated_contact_penalty
+            - stuck_phase_penalty
+            - stagnation_penalty
+        )
+
+    def _progress_terms(
+        self,
+        *,
+        plan: TeacherPlan,
+        policy_context: dict[str, Any],
+    ) -> tuple[float, float]:
+        if not plan.waypoints:
+            return 0.0, 0.2
+        plug = np.asarray(policy_context.get("plug_pose", [0.0, 0.0, 0.0]), dtype=np.float64)[:3]
+        target = np.asarray(policy_context.get("target_port_pose", [0.0, 0.0, 0.0]), dtype=np.float64)[:3]
+        entrance = np.asarray(
+            policy_context.get("target_port_entrance_pose") or policy_context.get("target_port_pose", [0.0, 0.0, 0.0]),
+            dtype=np.float64,
+        )[:3]
+        target_ref = entrance if plan.next_phase in {"pre_insert_align", "guarded_insert"} else target
+        current_distance = float(np.linalg.norm(plug - target_ref))
+        planned_distance = float(np.linalg.norm(np.asarray(plan.waypoints[-1].position_xyz, dtype=np.float64) - target_ref))
+        progress = max(current_distance - planned_distance, 0.0)
+        progress_bonus = 8.0 * progress
+        stagnation_penalty = 0.25 if progress <= 0.002 else 0.0
+        return progress_bonus, stagnation_penalty

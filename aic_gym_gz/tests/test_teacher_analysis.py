@@ -31,6 +31,14 @@ def _rollout_artifact() -> dict:
                 "wrench": {"is_real": False},
                 "controller_state": {"is_real": False},
             },
+            "auxiliary_summary_metadata": {
+                "auxiliary_summary_available": True,
+                "hidden_contact_event_count_recent": 2,
+                "repeated_contact_rich_steps": 2,
+                "had_contact_recent": True,
+                "current_wrench_force_l2_norm": 0.0,
+                "auxiliary_wrench_max_recent": 12.0,
+            },
         },
         "trajectory_segments": [{"phase": "free_space_approach", "points": [{"target_tcp_pose": [0, 0, 0, 0, 0, 0, 1]}]}],
         "planner_candidates": [{"name": "candidate_0"}],
@@ -80,6 +88,8 @@ class TeacherAnalysisTest(unittest.TestCase):
                 "gym_final_score": 8.0,
                 "rl_step_reward_total": 7.0,
                 "quality_adjustment": -2.0,
+                "auxiliary_adjustment": -0.8,
+                "local_trajectory_score_summary": {"scalar_score": 10.0, "components": {}},
             },
         }
         other = {
@@ -92,6 +102,8 @@ class TeacherAnalysisTest(unittest.TestCase):
                 "gym_final_score": 8.0,
                 "rl_step_reward_total": 7.0,
                 "quality_adjustment": 0.0,
+                "auxiliary_adjustment": 0.0,
+                "local_trajectory_score_summary": {"scalar_score": 9.5, "components": {}},
             },
         }
         payload = {
@@ -101,9 +113,13 @@ class TeacherAnalysisTest(unittest.TestCase):
         result = analyze_search_payload(payload)
         self.assertEqual(result.summary["top_candidates"][0]["name"], "planner_candidate_0")
         self.assertIn("diversity_analysis", result.summary)
+        self.assertEqual(
+            result.summary["search_vs_single_family"]["best_single_family"]["name"],
+            "planner_candidate_0",
+        )
         self.assertIn(
             result.summary["ranking_analysis"]["metric_dominance"]["dominant_metric"],
-            {"teacher_official_style_score", "quality_adjustment"},
+            {"teacher_official_style_score", "quality_adjustment", "auxiliary_adjustment"},
         )
 
     def test_search_metric_dominance_ignores_constant_quality_adjustment(self) -> None:
@@ -117,6 +133,8 @@ class TeacherAnalysisTest(unittest.TestCase):
                 "gym_final_score": 8.0,
                 "rl_step_reward_total": 7.0,
                 "quality_adjustment": -2.0,
+                "auxiliary_adjustment": 0.0,
+                "local_trajectory_score_summary": {"scalar_score": 10.0, "components": {}},
             },
         }
         other = {
@@ -129,6 +147,8 @@ class TeacherAnalysisTest(unittest.TestCase):
                 "gym_final_score": 8.0,
                 "rl_step_reward_total": 7.0,
                 "quality_adjustment": -2.0,
+                "auxiliary_adjustment": 0.0,
+                "local_trajectory_score_summary": {"scalar_score": 9.9, "components": {}},
             },
         }
         payload = {
@@ -141,9 +161,68 @@ class TeacherAnalysisTest(unittest.TestCase):
             "teacher_official_style_score",
         )
 
+    def test_search_analysis_uses_segment_endpoints_for_diversity(self) -> None:
+        base_artifact = _rollout_artifact()
+        other_artifact = _rollout_artifact()
+        other_artifact["trajectory_segments"] = [
+            {
+                "phase": "free_space_approach",
+                "points": [
+                    {"target_tcp_pose": [0, 0, 0, 0, 0, 0, 1]},
+                    {"target_tcp_pose": [0, 0, 0.2, 0, 0, 0, 1]},
+                ],
+            }
+        ]
+        payload = {
+            "metadata": {"planner_backend": "openai", "top_k": 1},
+            "ranked_candidates": [
+                {
+                    "candidate_spec": {"name": "planner_candidate_0", "mode": "planner_waypoint"},
+                    "rank": 1,
+                    "artifact": base_artifact,
+                    "ranking_metrics": {
+                        "composite_score": 10.0,
+                        "teacher_official_style_score": 9.0,
+                        "gym_final_score": 8.0,
+                        "rl_step_reward_total": 7.0,
+                        "quality_adjustment": 0.0,
+                        "auxiliary_adjustment": 0.0,
+                        "local_trajectory_score_summary": {"scalar_score": 10.0, "components": {}},
+                    },
+                },
+                {
+                    "candidate_spec": {"name": "planner_candidate_1", "mode": "planner_waypoint"},
+                    "rank": 2,
+                    "artifact": other_artifact,
+                    "ranking_metrics": {
+                        "composite_score": 9.0,
+                        "teacher_official_style_score": 8.5,
+                        "gym_final_score": 7.0,
+                        "rl_step_reward_total": 6.0,
+                        "quality_adjustment": 0.0,
+                        "auxiliary_adjustment": 0.0,
+                        "local_trajectory_score_summary": {"scalar_score": 9.0, "components": {}},
+                    },
+                },
+            ],
+        }
+        result = analyze_search_payload(payload)
+        pairwise = result.summary["diversity_analysis"]["pairwise_similarity"]
+        self.assertEqual(len(pairwise), 1)
+        self.assertGreater(pairwise[0]["waypoint_distance"], 0.15)
+
     def test_replay_analysis_classifies_approximate_match(self) -> None:
         artifact = TeacherReplayArtifact(
-            metadata={"final_metrics": {"gym_final_score": 20.0}},
+            metadata={
+                "final_metrics": {"gym_final_score": 20.0, "rl_step_reward_total": 1.0},
+                "initial_observation_summary": {"distance_to_target": 0.2},
+                "ranking_metrics": {
+                    "quality_adjustment": -2.0,
+                    "auxiliary_adjustment": 0.0,
+                    "duplicate_penalty": 0.0,
+                    "local_trajectory_score_summary": {"scalar_score": 4.0, "components": {}},
+                },
+            },
             trajectory_segments=[],
             probe_results=[],
             planner_candidates=[],
@@ -157,22 +236,36 @@ class TeacherAnalysisTest(unittest.TestCase):
                     },
                 }
             ],
-            final_info={},
+            final_info={"distance_to_target": 0.1},
             limitations=[],
         )
         replayed = {
             "records": [
                 {
+                    "distance_to_target": 0.2,
                     "reward": 1.5,
                     "tcp_pose": [0, 0, 0.03, 0, 0, 0, 1],
                     "plug_to_port_relative": [0, 0, 0.12, 0.12],
                     "off_limit_contact": False,
-                }
+                },
+                {
+                    "distance_to_target": 0.1,
+                    "reward": 0.0,
+                    "tcp_pose": [0, 0, 0.03, 0, 0, 0, 1],
+                    "plug_to_port_relative": [0, 0, 0.12, 0.12],
+                    "off_limit_contact": False,
+                },
             ],
-            "final_info": {"final_evaluation": {"gym_final_score": 24.0}},
+            "final_info": {"final_evaluation": {"gym_final_score": 24.0}, "distance_to_target": 0.1},
         }
         result = analyze_replay_comparison(original=artifact, replayed=replayed)
         self.assertEqual(result.summary["fidelity"]["label"], "approximately faithful")
+        self.assertIn("local_trajectory_score_comparison", result.summary)
+
+    def test_rollout_analysis_warns_on_hidden_contact(self) -> None:
+        result = analyze_rollout_artifact(_rollout_artifact())
+        joined = "\n".join(result.summary["warnings"])
+        self.assertIn("Hidden transient contacts", joined)
 
     def test_replay_fidelity_thresholds(self) -> None:
         self.assertEqual(
