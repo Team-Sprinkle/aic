@@ -56,6 +56,10 @@ QuaternionTuple = tuple[float, float, float, float]
 class InsertionState(Enum):
     TRANSPORT = auto()
     INSERT = auto()
+    # PRE_INSERTION = auto()
+    # SLIP = auto()
+    RECOVER = auto()
+    # FAILURE = auto()
 
 
 class PIDControllerMode(Enum):
@@ -108,6 +112,10 @@ class CheatCodePIDController(Policy):
         self._transport_force_injection_applied = False
         self._transport_force_injection_wrench = None
         self._transport_force_injection_logged = False
+        self._recover_lift_m = float(os.environ.get("AIC_PID_RECOVER_LIFT_M", "0.01"))
+        self._recover_motion_dt_sec = float(
+            os.environ.get("AIC_PID_RECOVER_MOTION_DT_SEC", "0.2")
+        )
         if (
             self._transport_force_injection_enabled
             and self._transport_force_injection_min_n
@@ -141,8 +149,11 @@ class CheatCodePIDController(Policy):
         self.history_err_x = []
         self.history_err_y = []
         self.history_state = []
+        self.history_collision_detected = []
+        self.history_stuck_detected = []
         self._insertion_state = None
         self.start_time = None
+        self._diagnostics_active = False
 
         self._insertion_event_sub = self._parent_node.create_subscription(
             String,
@@ -184,23 +195,37 @@ class CheatCodePIDController(Policy):
         )
         self._lateral_contact_detected = False
         self._lateral_contact_sec = 0.0
-        self._blocked_descent_duration_threshold_sec = float(
-            os.environ.get("AIC_PID_BLOCKED_DESCENT_DURATION_THRESHOLD_SEC", "0.5")
+        self._stuck_fz_threshold_n = float(
+            os.environ.get("AIC_PID_STUCK_FZ_THRESHOLD_N", "5.0")
         )
-        self._blocked_descent_progress_threshold_m = float(
-            os.environ.get("AIC_PID_BLOCKED_DESCENT_PROGRESS_THRESHOLD_M", "0.0001")
+        self._stuck_duration_threshold_sec = float(
+            os.environ.get("AIC_PID_STUCK_DURATION_THRESHOLD_SEC", "1.0")
         )
+        self._stuck_z_stationary_threshold_m = float(
+            os.environ.get("AIC_PID_STUCK_Z_STATIONARY_THRESHOLD_M", "0.0001")
+        )
+        self._stuck_force_increase_threshold_n = float(
+            os.environ.get("AIC_PID_STUCK_FORCE_INCREASE_THRESHOLD_N", "0.05")
+        )
+        self._stuck_detected = False
         self._blocked_descent_detected = False
-        self._blocked_descent_sec = 0.0
+        self._stuck_sec = 0.0
         self._last_blocked_descent_check_time_sec = None
         self._last_plug_port_z_m = None
+        self._last_stuck_abs_fz_n = None
+        self._stuck_window_start_abs_fz_n = None
         self._latest_force_mag_n = 0.0
+        self._latest_tared_force_z_n = 0.0
         self._latest_lateral_force_mag_n = 0.0
         self._latest_lateral_force_ratio = 0.0
         self._max_force_mag_n = 0.0
         self._force_above_threshold_sec = 0.0
         self._contact_force_sec = 0.0
         self._last_force_sample_time_sec = None
+        self._last_stuck_log_time_sec = None
+        self._stuck_debug_log_interval_sec = float(
+            os.environ.get("AIC_PID_STUCK_DEBUG_LOG_INTERVAL_SEC", "0.5")
+        )
         self._obs_sub = self._parent_node.create_subscription(
             Observation,
             "/observations",
@@ -225,11 +250,15 @@ class CheatCodePIDController(Policy):
             ]
         )
         self._latest_force_mag_n = float(np.linalg.norm(tared_force))
+        self._latest_tared_force_z_n = float(tared_force[2])
         self._latest_lateral_force_mag_n = float(np.linalg.norm(tared_force[:2]))
         self._latest_lateral_force_ratio = self._latest_lateral_force_mag_n / max(
             self._latest_force_mag_n, 1e-6
         )
         self._max_force_mag_n = max(self._max_force_mag_n, self._latest_force_mag_n)
+
+        if not self._diagnostics_active:
+            return
 
         stamp = msg.wrist_wrench.header.stamp
         sample_time_sec = stamp.sec + stamp.nanosec / 1e9
@@ -243,8 +272,13 @@ class CheatCodePIDController(Policy):
 
         if self._latest_force_mag_n > self._collision_force_threshold_n:
             self._force_above_threshold_sec += dt
-        elif self._latest_force_mag_n >= self._contact_force_threshold_n:
+        else:
+            self._force_above_threshold_sec = 0.0
+
+        if self._latest_force_mag_n >= self._contact_force_threshold_n:
             self._contact_force_sec += dt
+        else:
+            self._contact_force_sec = 0.0
 
         lateral_contact_active = (
             self._latest_lateral_force_mag_n >= self._lateral_contact_force_threshold_n
@@ -256,6 +290,8 @@ class CheatCodePIDController(Policy):
         )
         if lateral_contact_active:
             self._lateral_contact_sec += dt
+        else:
+            self._lateral_contact_sec = 0.0
 
         if self._force_log_interval_sec > 0.0 and (
             self._last_force_log_time_sec is None
@@ -272,7 +308,7 @@ class CheatCodePIDController(Policy):
                 f"lateral_ratio={self._latest_lateral_force_ratio:.2f}, "
                 f"contact_time={self._contact_force_sec:.2f} s, "
                 f"lateral_contact_time={self._lateral_contact_sec:.2f} s, "
-                f"blocked_descent_time={self._blocked_descent_sec:.2f} s, "
+                f"stuck_time={self._stuck_sec:.2f} s, "
                 f"time_above_20N={self._force_above_threshold_sec:.2f} s"
             )
             self._last_force_log_time_sec = sample_time_sec
@@ -428,6 +464,40 @@ class CheatCodePIDController(Policy):
         except Exception as ex:
             self.get_logger().info(f"move_robot exception: {ex}")
 
+    def _current_tcp_pose(self) -> Pose:
+        gripper_tf_stamped = self._parent_node._tf_buffer.lookup_transform(
+            "base_link",
+            "gripper/tcp",
+            Time(),
+        )
+        transform = gripper_tf_stamped.transform
+        return Pose(
+            position=Point(
+                x=transform.translation.x,
+                y=transform.translation.y,
+                z=transform.translation.z,
+            ),
+            orientation=Quaternion(
+                w=transform.rotation.w,
+                x=transform.rotation.x,
+                y=transform.rotation.y,
+                z=transform.rotation.z,
+            ),
+        )
+
+    def _plug_port_xy_error(
+        self, port_transform: Transform, cable_tip_frame: str
+    ) -> tuple[float, float]:
+        plug_tf_stamped = self._parent_node._tf_buffer.lookup_transform(
+            "base_link",
+            cable_tip_frame,
+            Time(),
+        )
+        return (
+            port_transform.translation.x - plug_tf_stamped.transform.translation.x,
+            port_transform.translation.y - plug_tf_stamped.transform.translation.y,
+        )
+
     def _update_blocked_descent_detection(
         self, port_transform: Transform, cable_tip_frame: str
     ) -> None:
@@ -451,30 +521,71 @@ class CheatCodePIDController(Policy):
         ):
             self._last_plug_port_z_m = plug_port_z_m
             self._last_blocked_descent_check_time_sec = current_time_sec
+            self._last_stuck_abs_fz_n = abs(self._latest_tared_force_z_n)
             return
 
         dt = max(0.0, current_time_sec - self._last_blocked_descent_check_time_sec)
         z_progress_m = self._last_plug_port_z_m - plug_port_z_m
+        abs_fz_n = abs(self._latest_tared_force_z_n)
         self._last_plug_port_z_m = plug_port_z_m
         self._last_blocked_descent_check_time_sec = current_time_sec
+        self._last_stuck_abs_fz_n = abs_fz_n
 
-        contact_present = self._latest_force_mag_n >= self._contact_force_threshold_n
-        progress_stalled = z_progress_m < self._blocked_descent_progress_threshold_m
-        if contact_present and progress_stalled:
-            self._blocked_descent_sec += dt
+        fz_contact_present = abs_fz_n > self._stuck_fz_threshold_n
+        z_stationary = abs(z_progress_m) <= self._stuck_z_stationary_threshold_m
+        if fz_contact_present and z_stationary:
+            if self._stuck_window_start_abs_fz_n is None:
+                self._stuck_window_start_abs_fz_n = abs_fz_n
+            self._stuck_sec += dt
+        else:
+            self._stuck_sec = 0.0
+            self._stuck_window_start_abs_fz_n = None
+
+        window_force_delta_n = (
+            0.0
+            if self._stuck_window_start_abs_fz_n is None
+            else abs_fz_n - self._stuck_window_start_abs_fz_n
+        )
+        force_increased = window_force_delta_n >= self._stuck_force_increase_threshold_n
 
         if (
-            not self._blocked_descent_detected
-            and self._blocked_descent_sec > self._blocked_descent_duration_threshold_sec
+            self._stuck_debug_log_interval_sec > 0.0
+            and fz_contact_present
+            and (
+                self._last_stuck_log_time_sec is None
+                or current_time_sec - self._last_stuck_log_time_sec
+                >= self._stuck_debug_log_interval_sec
+            )
+        ):
+            self.get_logger().info(
+                "[CheatCodePID] STUCK check: "
+                f"|Fz|={abs_fz_n:.2f} N "
+                f"(threshold>{self._stuck_fz_threshold_n:.2f}), "
+                f"z_change={z_progress_m * 1e3:.3f} mm "
+                f"(stationary<={self._stuck_z_stationary_threshold_m * 1e3:.3f} mm), "
+                f"|Fz|_window_delta={window_force_delta_n:.2f} N "
+                f"(threshold>={self._stuck_force_increase_threshold_n:.2f}), "
+                f"stuck_time={self._stuck_sec:.2f}/"
+                f"{self._stuck_duration_threshold_sec:.2f} s"
+            )
+            self._last_stuck_log_time_sec = current_time_sec
+
+        if (
+            not self._stuck_detected
+            and self._stuck_sec > self._stuck_duration_threshold_sec
+            and force_increased
         ):
             self.get_logger().warn(
-                "Blocked descent detected: z_offset is still decreasing, "
-                "but plug-to-port Z progress is stalled under contact force. "
+                "[CheatCodePID] STUCK condition detected during INSERT: "
+                "z_offset is decreasing, plug-to-port Z is stationary, "
+                "and |Fz| is increasing above threshold. "
                 f"plug_port_z={plug_port_z_m:.4f} m, "
-                f"last_progress={z_progress_m * 1e3:.2f} mm, "
-                f"|F|={self._latest_force_mag_n:.2f} N, "
-                f"blocked_time={self._blocked_descent_sec:.2f} s"
+                f"last_z_change={z_progress_m * 1e3:.2f} mm, "
+                f"Fz={self._latest_tared_force_z_n:.2f} N, "
+                f"|Fz|_window_delta={window_force_delta_n:.2f} N, "
+                f"stuck_time={self._stuck_sec:.2f} s"
             )
+            self._stuck_detected = True
             self._blocked_descent_detected = True
 
     def _wait_for_tf(
@@ -627,6 +738,8 @@ class CheatCodePIDController(Policy):
             self.history_state.append("")
         else:
             self.history_state.append(self._insertion_state.name)
+        self.history_collision_detected.append(self._collision_detected)
+        self.history_stuck_detected.append(self._stuck_detected)
 
     def _reset_xy_controller_state(self) -> None:
         self.pid_x.reset()
@@ -861,13 +974,13 @@ class CheatCodePIDController(Policy):
         cable_tip_frame: str,
         z_offset: float,
         dt: float,
-    ) -> tuple[bool, float]:
+    ) -> tuple[InsertionState | None, bool, float]:
         while True:
             if self._task_completed_in_simulation(task):
                 self.get_logger().info(
                     "[CheatCodePID] Early exit: simulation reported task completion."
                 )
-                return True, z_offset
+                return None, True, z_offset
             if z_offset < -0.015:
                 break
 
@@ -877,6 +990,8 @@ class CheatCodePIDController(Policy):
                 pose = self.calc_gripper_pose(port_transform, z_offset=z_offset)
                 self.set_pose_target(move_robot=move_robot, pose=pose)
                 self._update_blocked_descent_detection(port_transform, cable_tip_frame)
+                if self._stuck_detected:
+                    return InsertionState.RECOVER, False, z_offset
                 self.sleep_for(dt)
             except TransformException as ex:
                 self.get_logger().warn(f"TF lookup failed during insertion: {ex}")
@@ -890,9 +1005,63 @@ class CheatCodePIDController(Policy):
                 self.get_logger().info(
                     "[CheatCodePID] Insertion event observed before timeout."
                 )
-                return True, z_offset
+                return None, True, z_offset
             self.sleep_for(0.05)
-        return False, z_offset
+        return None, False, z_offset
+
+    def _run_recover_state(
+        self,
+        move_robot: MoveRobotCallback,
+        port_transform: Transform,
+        cable_tip_frame: str,
+        z_offset: float,
+    ) -> tuple[InsertionState, float]:
+        self.get_logger().warn(
+            "[CheatCodePID] Entering RECOVER: lifting TCP and reducing XY error by half."
+        )
+
+        tcp_pose = self._current_tcp_pose()
+        lift_pose = Pose(
+            position=Point(
+                x=tcp_pose.position.x,
+                y=tcp_pose.position.y,
+                z=tcp_pose.position.z + self._recover_lift_m,
+            ),
+            orientation=tcp_pose.orientation,
+        )
+        self.set_pose_target(move_robot=move_robot, pose=lift_pose)
+        self.sleep_for(self._recover_motion_dt_sec)
+
+        error_x, error_y = self._plug_port_xy_error(port_transform, cable_tip_frame)
+        lifted_pose = self._current_tcp_pose()
+
+        # TODO: Use PID CONTROLLER mode to compute the correction instead of hardcoding half the error
+        reduce_error_pose = Pose(
+            position=Point(
+                x=lifted_pose.position.x + 0.5 * error_x,
+                y=lifted_pose.position.y + 0.5 * error_y,
+                z=lifted_pose.position.z,
+            ),
+            orientation=lifted_pose.orientation,
+        )
+        self.get_logger().warn(
+            "[CheatCodePID] RECOVER XY correction: "
+            f"error=({error_x * 1e3:.2f}, {error_y * 1e3:.2f}) mm, "
+            f"commanded_half=({0.5 * error_x * 1e3:.2f}, "
+            f"{0.5 * error_y * 1e3:.2f}) mm"
+        )
+        self.set_pose_target(move_robot=move_robot, pose=reduce_error_pose)
+        self.sleep_for(self._recover_motion_dt_sec)
+
+        self._stuck_detected = False
+        self._blocked_descent_detected = False
+        self._stuck_sec = 0.0
+        self._last_blocked_descent_check_time_sec = None
+        self._last_plug_port_z_m = None
+        self._last_stuck_abs_fz_n = None
+        self._stuck_window_start_abs_fz_n = None
+
+        return InsertionState.INSERT, z_offset + self._recover_lift_m
 
     def insert_cable(
         self,
@@ -907,19 +1076,25 @@ class CheatCodePIDController(Policy):
         self._collision_detected = False
         self._contact_detected = False
         self._lateral_contact_detected = False
+        self._stuck_detected = False
         self._blocked_descent_detected = False
         self._latest_force_mag_n = 0.0
+        self._latest_tared_force_z_n = 0.0
         self._latest_lateral_force_mag_n = 0.0
         self._latest_lateral_force_ratio = 0.0
         self._max_force_mag_n = 0.0
         self._force_above_threshold_sec = 0.0
         self._contact_force_sec = 0.0
         self._lateral_contact_sec = 0.0
-        self._blocked_descent_sec = 0.0
+        self._stuck_sec = 0.0
         self._last_force_sample_time_sec = None
         self._last_force_log_time_sec = None
         self._last_blocked_descent_check_time_sec = None
         self._last_plug_port_z_m = None
+        self._last_stuck_abs_fz_n = None
+        self._stuck_window_start_abs_fz_n = None
+        self._last_stuck_log_time_sec = None
+        self._diagnostics_active = True
         self._transport_force_injection_rng = np.random.default_rng(
             self._transport_force_injection_seed
         )
@@ -933,6 +1108,8 @@ class CheatCodePIDController(Policy):
         self.history_err_x = []
         self.history_err_y = []
         self.history_state = []
+        self.history_collision_detected = []
+        self.history_stuck_detected = []
         self._insertion_state = None
         self.start_time = None
         self._reset_xy_controller_state()
@@ -981,7 +1158,7 @@ class CheatCodePIDController(Policy):
                     break
                 state = self._transition_to_state(state, next_state)
             elif state == InsertionState.INSERT:
-                success, z_offset = self._run_insert_state(
+                next_state, success, z_offset = self._run_insert_state(
                     task=task,
                     move_robot=move_robot,
                     port_transform=port_transform,
@@ -989,11 +1166,24 @@ class CheatCodePIDController(Policy):
                     z_offset=z_offset,
                     dt=dt,
                 )
+                if next_state is not None:
+                    state = self._transition_to_state(state, next_state)
+                    continue
                 break
+            elif state == InsertionState.RECOVER:
+                next_state, z_offset = self._run_recover_state(
+                    move_robot=move_robot,
+                    port_transform=port_transform,
+                    cable_tip_frame=cable_tip_frame,
+                    z_offset=z_offset,
+                )
+                state = self._transition_to_state(state, next_state)
+                continue
 
         self.get_logger().info("CheatCodePIDController.insert_cable() exiting...")
 
         self._safe_plot_errors(success=success)
+        self._diagnostics_active = False
 
         return success
 
