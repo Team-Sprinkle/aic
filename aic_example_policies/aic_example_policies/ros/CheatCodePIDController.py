@@ -17,9 +17,11 @@
 import os
 from pathlib import Path
 import re
+from enum import Enum, auto
 
 import numpy as np
 
+from aic_control_interfaces.msg import MotionUpdate, TrajectoryGenerationMode
 from aic_example_policies.controllers import PIDController
 from aic_model.policy import (
     GetObservationCallback,
@@ -29,10 +31,11 @@ from aic_model.policy import (
 )
 from aic_model_interfaces.msg import Observation
 from aic_task_interfaces.msg import Task
-from geometry_msgs.msg import Point, Pose, Quaternion, Transform, Vector3
+from geometry_msgs.msg import Point, Pose, Quaternion, Transform, Vector3, Wrench
 from rclpy.duration import Duration
 from rclpy.qos import qos_profile_sensor_data
 from rclpy.time import Time
+from std_msgs.msg import Header
 from std_msgs.msg import String
 from tf2_ros import TransformException
 from transforms3d._gohlketransforms import quaternion_multiply, quaternion_slerp
@@ -50,10 +53,34 @@ except ImportError:
 QuaternionTuple = tuple[float, float, float, float]
 
 
+class InsertionState(Enum):
+    TRANSPORT = auto()
+    INSERT = auto()
+
+
+class PIDControllerMode(Enum):
+    ON = auto()
+    OFF = auto()
+    CHEATCODE_DEFAULT = auto()
+
+
 class CheatCodePIDController(Policy):
     def __init__(self, parent_node):
         self.pid_x = PIDController(kp=17.0, ki=0.08, kd=2.0)
         self.pid_y = PIDController(kp=17.0, ki=0.08, kd=2.0)
+        pid_mode_name = os.environ.get("AIC_PID_CONTROLLER_MODE", "ON").upper()
+        try:
+            self._pid_controller_mode = PIDControllerMode[pid_mode_name]
+        except KeyError as ex:
+            valid_modes = ", ".join(mode.name for mode in PIDControllerMode)
+            raise RuntimeError(
+                "AIC_PID_CONTROLLER_MODE must be one of "
+                f"{valid_modes}; got '{pid_mode_name}'"
+            ) from ex
+        self._cheatcode_i_gain = 0.15
+        self._cheatcode_max_integrator_windup = 0.05
+        self._cheatcode_tip_x_error_integrator = 0.0
+        self._cheatcode_tip_y_error_integrator = 0.0
         self.xy_alignment_tolerance_m = 0.01
         self.xy_alignment_stable_cycles = 5
         self._task = None
@@ -62,31 +89,34 @@ class CheatCodePIDController(Policy):
             os.environ.get("AIC_PID_TUNING_PLOTS", "false").lower() == "true"
         )
         self._plot_output_dir = self._resolve_plot_output_dir()
-        self._collision_injection_enabled = (
-            os.environ.get("AIC_PID_COLLISION_INJECTION", "true").lower()
-            not in ("0", "false", "no", "off")
+        self._transport_force_injection_enabled = os.environ.get(
+            "AIC_PID_TRANSPORT_FORCE_INJECTION_ENABLED", "false"
+        ).lower() not in ("0", "false", "no", "off")
+        self._transport_force_injection_min_n = float(
+            os.environ.get("AIC_PID_TRANSPORT_FORCE_INJECTION_MIN_N", "5.0")
         )
-        self._collision_injection_start_z_offset_m = float(
-            os.environ.get("AIC_PID_COLLISION_INJECTION_START_Z_OFFSET_M", "0.2")
+        self._transport_force_injection_max_n = float(
+            os.environ.get("AIC_PID_TRANSPORT_FORCE_INJECTION_MAX_N", "20.0")
         )
-        self._collision_injection_xy_bias_m = float(
-            os.environ.get("AIC_PID_COLLISION_INJECTION_XY_BIAS_M", "0.025")
+        self._transport_force_injection_seed = int(
+            os.environ.get("AIC_PID_TRANSPORT_FORCE_INJECTION_SEED", "7")
         )
-        self._collision_injection_xy_noise_m = float(
-            os.environ.get("AIC_PID_COLLISION_INJECTION_XY_NOISE_M", "0.003")
+        self._transport_force_injection_rng = np.random.default_rng(
+            self._transport_force_injection_seed
         )
-        self._collision_injection_ramp_duration_sec = float(
-            os.environ.get("AIC_PID_COLLISION_INJECTION_RAMP_DURATION_SEC", "2.0")
-        )
-        self._collision_injection_seed = int(
-            os.environ.get("AIC_PID_COLLISION_INJECTION_SEED", "7")
-        )
-        self._collision_injection_rng = np.random.default_rng(
-            self._collision_injection_seed
-        )
-        self._collision_injection_target_xy_offset_m = None
-        self._collision_injection_start_time_sec = None
-        self._collision_injection_logged = False
+        self._transport_force_injection_time_sec = None
+        self._transport_force_injection_applied = False
+        self._transport_force_injection_wrench = None
+        self._transport_force_injection_logged = False
+        if (
+            self._transport_force_injection_enabled
+            and self._transport_force_injection_min_n
+            >= self._transport_force_injection_max_n
+        ):
+            raise RuntimeError(
+                "AIC_PID_TRANSPORT_FORCE_INJECTION_MIN_N must be less than "
+                "AIC_PID_TRANSPORT_FORCE_INJECTION_MAX_N"
+            )
         self._force_log_interval_sec = float(
             os.environ.get("AIC_PID_FORCE_LOG_INTERVAL_SEC", "0.25")
         )
@@ -97,11 +127,21 @@ class CheatCodePIDController(Policy):
                 "Hint: pixi add matplotlib"
             )
         super().__init__(parent_node)
+        self.get_logger().info(
+            "[CheatCodePID] Controller mode: "
+            f"{self._pid_controller_mode.name}; "
+            f"PID X(kp={self.pid_x.kp}, ki={self.pid_x.ki}, kd={self.pid_x.kd}), "
+            f"PID Y(kp={self.pid_y.kp}, ki={self.pid_y.ki}, kd={self.pid_y.kd}), "
+            f"CheatCode i_gain={self._cheatcode_i_gain}, "
+            f"CheatCode max_integrator_windup={self._cheatcode_max_integrator_windup}"
+        )
 
         # --- NEW: Initialize tracking attributes ---
         self.history_time = []
         self.history_err_x = []
         self.history_err_y = []
+        self.history_state = []
+        self._insertion_state = None
         self.start_time = None
 
         self._insertion_event_sub = self._parent_node.create_subscription(
@@ -207,8 +247,7 @@ class CheatCodePIDController(Policy):
             self._contact_force_sec += dt
 
         lateral_contact_active = (
-            self._latest_lateral_force_mag_n
-            >= self._lateral_contact_force_threshold_n
+            self._latest_lateral_force_mag_n >= self._lateral_contact_force_threshold_n
             or (
                 self._latest_force_mag_n >= self._contact_force_threshold_n
                 and self._latest_lateral_force_ratio
@@ -218,13 +257,10 @@ class CheatCodePIDController(Policy):
         if lateral_contact_active:
             self._lateral_contact_sec += dt
 
-        if (
-            self._force_log_interval_sec > 0.0
-            and (
-                self._last_force_log_time_sec is None
-                or sample_time_sec - self._last_force_log_time_sec
-                >= self._force_log_interval_sec
-            )
+        if self._force_log_interval_sec > 0.0 and (
+            self._last_force_log_time_sec is None
+            or sample_time_sec - self._last_force_log_time_sec
+            >= self._force_log_interval_sec
         ):
             self.get_logger().info(
                 "Tared force: "
@@ -256,8 +292,7 @@ class CheatCodePIDController(Policy):
 
         if (
             not self._lateral_contact_detected
-            and self._lateral_contact_sec
-            > self._lateral_contact_duration_threshold_sec
+            and self._lateral_contact_sec > self._lateral_contact_duration_threshold_sec
         ):
             self.get_logger().warn(
                 "Lateral contact detected: sustained off-axis tared force. "
@@ -290,56 +325,108 @@ class CheatCodePIDController(Policy):
             return False
         return tokens[-2] == task.target_module_name and tokens[-1] == task.port_name
 
-    def _build_collision_test_port_transform(
-        self, port_transform: Transform, z_offset: float
-    ) -> Transform:
-        """Artificially add smooth XY target noise during descent to create collision."""
-        if (
-            not self._collision_injection_enabled
-            or z_offset > self._collision_injection_start_z_offset_m
-        ):
-            return port_transform
+    def _reset_transport_force_injection(self, transport_duration_sec: float) -> None:
+        self._transport_force_injection_time_sec = None
+        self._transport_force_injection_applied = False
+        self._transport_force_injection_wrench = None
+        self._transport_force_injection_logged = False
 
-        if self._collision_injection_target_xy_offset_m is None:
-            bias = self._collision_injection_xy_bias_m * np.array([1.0, 0.6])
-            noise = self._collision_injection_rng.normal(
-                loc=0.0, scale=self._collision_injection_xy_noise_m, size=2
-            )
-            self._collision_injection_target_xy_offset_m = bias + noise
-            self._collision_injection_start_time_sec = (
-                self.time_now().nanoseconds / 1e9
-            )
+        if not self._transport_force_injection_enabled or transport_duration_sec <= 0.0:
+            return
 
-        current_time_sec = self.time_now().nanoseconds / 1e9
-        elapsed_sec = current_time_sec - self._collision_injection_start_time_sec
-        if self._collision_injection_ramp_duration_sec <= 0.0:
-            ramp_fraction = 1.0
-        else:
-            ramp_fraction = min(
-                max(elapsed_sec / self._collision_injection_ramp_duration_sec, 0.0),
-                1.0,
-            )
-        smooth_fraction = 3.0 * ramp_fraction**2 - 2.0 * ramp_fraction**3
-        xy_offset = self._collision_injection_target_xy_offset_m * smooth_fraction
-
-        if not self._collision_injection_logged:
-            self.get_logger().warn(
-                "Injecting smooth descent XY drift to induce insertion collision: "
-                f"target_offset=({self._collision_injection_target_xy_offset_m[0] * 1e3:.1f}, "
-                f"{self._collision_injection_target_xy_offset_m[1] * 1e3:.1f}) mm, "
-                f"ramp_duration={self._collision_injection_ramp_duration_sec:.2f} s, "
-                f"start_z_offset={self._collision_injection_start_z_offset_m:.3f} m"
-            )
-            self._collision_injection_logged = True
-
-        return Transform(
-            translation=Vector3(
-                x=port_transform.translation.x + float(xy_offset[0]),
-                y=port_transform.translation.y + float(xy_offset[1]),
-                z=port_transform.translation.z,
-            ),
-            rotation=port_transform.rotation,
+        min_force_n = max(
+            self._transport_force_injection_min_n,
+            float(np.nextafter(5.0, 20.0)),
         )
+        max_force_n = min(
+            self._transport_force_injection_max_n,
+            float(np.nextafter(20.0, 5.0)),
+        )
+        if min_force_n >= max_force_n:
+            self.get_logger().warn(
+                "Transport force injection disabled: configured force range does not "
+                "overlap the required open interval 5 N < F < 20 N."
+            )
+            return
+
+        self._transport_force_injection_time_sec = float(
+            self._transport_force_injection_rng.uniform(0.0, transport_duration_sec)
+        )
+        force_mag_n = float(
+            self._transport_force_injection_rng.uniform(min_force_n, max_force_n)
+        )
+        axis_index = int(self._transport_force_injection_rng.integers(0, 2))
+        direction_sign = float(self._transport_force_injection_rng.choice([-1.0, 1.0]))
+        force_x = direction_sign * force_mag_n if axis_index == 0 else 0.0
+        force_y = direction_sign * force_mag_n if axis_index == 1 else 0.0
+
+        self._transport_force_injection_wrench = Wrench(
+            force=Vector3(x=force_x, y=force_y, z=0.0),
+            torque=Vector3(x=0.0, y=0.0, z=0.0),
+        )
+        self.get_logger().warn(
+            "[CheatCodePID] Scheduled one-shot TRANSPORT TCP force injection: "
+            f"time={self._transport_force_injection_time_sec:.3f}/"
+            f"{transport_duration_sec:.3f} s, "
+            f"force=({force_x:.2f}, {force_y:.2f}, 0.00) N, "
+            f"magnitude={force_mag_n:.2f} N"
+        )
+
+    def _transport_force_injection_wrench_for_time(
+        self, elapsed_sec: float
+    ) -> Wrench | None:
+        if (
+            self._transport_force_injection_time_sec is None
+            or self._transport_force_injection_wrench is None
+            or self._transport_force_injection_applied
+            or elapsed_sec < self._transport_force_injection_time_sec
+        ):
+            return None
+
+        if not self._transport_force_injection_logged:
+            now_sec = self.time_now().nanoseconds / 1e9
+            force = self._transport_force_injection_wrench.force
+            self.get_logger().warn(
+                "[CheatCodePID] Applying one-shot TRANSPORT TCP force injection: "
+                f"t={now_sec:.3f} s, transport_elapsed={elapsed_sec:.3f} s, "
+                f"force=({force.x:.2f}, {force.y:.2f}, {force.z:.2f}) N"
+            )
+            self._transport_force_injection_logged = True
+        self._transport_force_injection_applied = True
+
+        return self._transport_force_injection_wrench
+
+    def _set_pose_target_with_optional_wrench(
+        self,
+        move_robot: MoveRobotCallback,
+        pose: Pose,
+        feedforward_wrench_at_tip: Wrench | None = None,
+        frame_id: str = "base_link",
+        stiffness: list = [90.0, 90.0, 90.0, 50.0, 50.0, 50.0],
+        damping: list = [50.0, 50.0, 50.0, 20.0, 20.0, 20.0],
+    ) -> None:
+        motion_update = MotionUpdate(
+            header=Header(
+                frame_id=frame_id,
+                stamp=self._parent_node.get_clock().now().to_msg(),
+            ),
+            pose=pose,
+            target_stiffness=np.diag(stiffness).flatten(),
+            target_damping=np.diag(damping).flatten(),
+            feedforward_wrench_at_tip=feedforward_wrench_at_tip
+            or Wrench(
+                force=Vector3(x=0.0, y=0.0, z=0.0),
+                torque=Vector3(x=0.0, y=0.0, z=0.0),
+            ),
+            wrench_feedback_gains_at_tip=[0.5, 0.5, 0.5, 0.0, 0.0, 0.0],
+            trajectory_generation_mode=TrajectoryGenerationMode(
+                mode=TrajectoryGenerationMode.MODE_POSITION,
+            ),
+        )
+        try:
+            move_robot(motion_update=motion_update)
+        except Exception as ex:
+            self.get_logger().info(f"move_robot exception: {ex}")
 
     def _update_blocked_descent_detection(
         self, port_transform: Transform, cable_tip_frame: str
@@ -378,8 +465,7 @@ class CheatCodePIDController(Policy):
 
         if (
             not self._blocked_descent_detected
-            and self._blocked_descent_sec
-            > self._blocked_descent_duration_threshold_sec
+            and self._blocked_descent_sec > self._blocked_descent_duration_threshold_sec
         ):
             self.get_logger().warn(
                 "Blocked descent detected: z_offset is still decreasing, "
@@ -463,6 +549,7 @@ class CheatCodePIDController(Policy):
         status = "SUCCESS" if success else "FAILURE"
         plt.title(
             f"PID Performance: {task_label} [{status}]\n"
+            f"Mode={self._pid_controller_mode.name}  |  "
             f"X: Kp={self.pid_x.kp} Ki={self.pid_x.ki} Kd={self.pid_x.kd}  |  "
             f"Y: Kp={self.pid_y.kp} Ki={self.pid_y.ki} Kd={self.pid_y.kd}\n"
             f"Final Error: X={final_x:.3f} mm, Y={final_y:.3f} mm"
@@ -536,6 +623,62 @@ class CheatCodePIDController(Policy):
         self.history_time.append(current_time)
         self.history_err_x.append(self.pid_x.last_error)
         self.history_err_y.append(self.pid_y.last_error)
+        if self._insertion_state is None:
+            self.history_state.append("")
+        else:
+            self.history_state.append(self._insertion_state.name)
+
+    def _reset_xy_controller_state(self) -> None:
+        self.pid_x.reset()
+        self.pid_y.reset()
+        self._cheatcode_tip_x_error_integrator = 0.0
+        self._cheatcode_tip_y_error_integrator = 0.0
+
+    def _xy_controller_adjustments(
+        self,
+        port_xy: tuple[float, float],
+        plug_xyz: tuple[float, float, float],
+        reset_controller: bool,
+        dt: float,
+    ) -> tuple[float, float]:
+        tip_x_error = port_xy[0] - plug_xyz[0]
+        tip_y_error = port_xy[1] - plug_xyz[1]
+        self.pid_x.last_error = tip_x_error
+        self.pid_y.last_error = tip_y_error
+
+        if reset_controller:
+            self._reset_xy_controller_state()
+            self.pid_x.last_error = tip_x_error
+            self.pid_y.last_error = tip_y_error
+
+        if self._pid_controller_mode == PIDControllerMode.OFF:
+            return 0.0, 0.0
+
+        if self._pid_controller_mode == PIDControllerMode.CHEATCODE_DEFAULT:
+            if not reset_controller:
+                self._cheatcode_tip_x_error_integrator = float(
+                    np.clip(
+                        self._cheatcode_tip_x_error_integrator + tip_x_error,
+                        -self._cheatcode_max_integrator_windup,
+                        self._cheatcode_max_integrator_windup,
+                    )
+                )
+                self._cheatcode_tip_y_error_integrator = float(
+                    np.clip(
+                        self._cheatcode_tip_y_error_integrator + tip_y_error,
+                        -self._cheatcode_max_integrator_windup,
+                        self._cheatcode_max_integrator_windup,
+                    )
+                )
+            return (
+                self._cheatcode_i_gain * self._cheatcode_tip_x_error_integrator,
+                self._cheatcode_i_gain * self._cheatcode_tip_y_error_integrator,
+            )
+
+        return (
+            self.pid_x.update(setpoint=port_xy[0], measurement=plug_xyz[0], dt=dt),
+            self.pid_y.update(setpoint=port_xy[1], measurement=plug_xyz[1], dt=dt),
+        )
 
     def calc_gripper_pose(
         self,
@@ -547,10 +690,6 @@ class CheatCodePIDController(Policy):
         dt: float = 0.05,
     ) -> Pose:
         """Find the gripper pose that results in plug alignment."""
-        if reset_pids:
-            self.pid_x.reset()
-            self.pid_y.reset()
-
         q_port = (
             port_transform.rotation.w,
             port_transform.rotation.x,
@@ -610,8 +749,12 @@ class CheatCodePIDController(Policy):
             gripper_xyz[2] - plug_xyz[2],
         )
 
-        adj_x = self.pid_x.update(setpoint=port_xy[0], measurement=plug_xyz[0], dt=dt)
-        adj_y = self.pid_y.update(setpoint=port_xy[1], measurement=plug_xyz[1], dt=dt)
+        adj_x, adj_y = self._xy_controller_adjustments(
+            port_xy=port_xy,
+            plug_xyz=plug_xyz,
+            reset_controller=reset_pids,
+            dt=dt,
+        )
 
         self._record_telemetry()
 
@@ -645,6 +788,112 @@ class CheatCodePIDController(Policy):
             and abs(self.pid_y.last_error) <= self.xy_alignment_tolerance_m
         )
 
+    def _transition_to_state(
+        self, current_state: InsertionState, next_state: InsertionState
+    ) -> InsertionState:
+        if current_state != next_state:
+            self.get_logger().info(
+                f"[CheatCodePID] State transition: {current_state.name} -> {next_state.name}"
+            )
+        self._insertion_state = next_state
+        return next_state
+
+    def _run_transport_state(
+        self,
+        task: Task,
+        move_robot: MoveRobotCallback,
+        port_transform: Transform,
+        z_offset: float,
+        duration: float,
+        dt: float,
+    ) -> tuple[InsertionState | None, bool]:
+        steps = int(duration / dt)
+        self._reset_transport_force_injection(duration)
+
+        def cubic_polynomial_trajectory(t_frac: float) -> float:
+            """3rd-order polynomial (C1 continuity): smooth acceleration/deceleration."""
+            return 3 * (t_frac**2) - 2 * (t_frac**3)
+
+        for t in range(steps):
+            if self._task_completed_in_simulation(task):
+                self.get_logger().info(
+                    "[CheatCodePID] Early exit: simulation reported task completion."
+                )
+                return None, True
+            raw_fraction = t / float(steps)
+            elapsed_sec = t * dt
+            interp_fraction = cubic_polynomial_trajectory(raw_fraction)
+            reset_xy_controller = (
+                self._pid_controller_mode == PIDControllerMode.CHEATCODE_DEFAULT
+            )
+            try:
+                self._set_pose_target_with_optional_wrench(
+                    move_robot=move_robot,
+                    pose=self.calc_gripper_pose(
+                        port_transform,
+                        slerp_fraction=interp_fraction,
+                        position_fraction=interp_fraction,
+                        z_offset=z_offset,
+                        reset_pids=reset_xy_controller,
+                        dt=dt,
+                    ),
+                    feedforward_wrench_at_tip=self._transport_force_injection_wrench_for_time(
+                        elapsed_sec
+                    ),
+                )
+            except TransformException as ex:
+                self.get_logger().warn(f"TF lookup failed during interpolation: {ex}")
+            self.sleep_for(dt)
+
+        self._pre_descent_index = len(self.history_err_x) - 1
+        self.get_logger().info(
+            f"[CheatCodePID] Pre-descent XY error: "
+            f"ErrX={self.pid_x.last_error * 1e3:.3f} mm, "
+            f"ErrY={self.pid_y.last_error * 1e3:.3f} mm"
+        )
+        return InsertionState.INSERT, False
+
+    def _run_insert_state(
+        self,
+        task: Task,
+        move_robot: MoveRobotCallback,
+        port_transform: Transform,
+        cable_tip_frame: str,
+        z_offset: float,
+        dt: float,
+    ) -> tuple[bool, float]:
+        while True:
+            if self._task_completed_in_simulation(task):
+                self.get_logger().info(
+                    "[CheatCodePID] Early exit: simulation reported task completion."
+                )
+                return True, z_offset
+            if z_offset < -0.015:
+                break
+
+            z_offset -= 0.0005
+            self.get_logger().info(f"z_offset: {z_offset:0.5}")
+            try:
+                pose = self.calc_gripper_pose(port_transform, z_offset=z_offset)
+                self.set_pose_target(move_robot=move_robot, pose=pose)
+                self._update_blocked_descent_detection(port_transform, cable_tip_frame)
+                self.sleep_for(dt)
+            except TransformException as ex:
+                self.get_logger().warn(f"TF lookup failed during insertion: {ex}")
+                self.sleep_for(dt)
+
+        self.get_logger().info("Waiting briefly for insertion event...")
+        wait_started = self.time_now()
+        wait_timeout = Duration(seconds=5.0)
+        while (self.time_now() - wait_started) < wait_timeout:
+            if self._task_completed_in_simulation(task):
+                self.get_logger().info(
+                    "[CheatCodePID] Insertion event observed before timeout."
+                )
+                return True, z_offset
+            self.sleep_for(0.05)
+        return False, z_offset
+
     def insert_cable(
         self,
         task: Task,
@@ -671,20 +920,22 @@ class CheatCodePIDController(Policy):
         self._last_force_log_time_sec = None
         self._last_blocked_descent_check_time_sec = None
         self._last_plug_port_z_m = None
-        self._collision_injection_rng = np.random.default_rng(
-            self._collision_injection_seed
+        self._transport_force_injection_rng = np.random.default_rng(
+            self._transport_force_injection_seed
         )
-        self._collision_injection_target_xy_offset_m = None
-        self._collision_injection_start_time_sec = None
-        self._collision_injection_logged = False
+        self._transport_force_injection_time_sec = None
+        self._transport_force_injection_applied = False
+        self._transport_force_injection_wrench = None
+        self._transport_force_injection_logged = False
 
         # Reset telemetry and PIDs
         self.history_time = []
         self.history_err_x = []
         self.history_err_y = []
+        self.history_state = []
+        self._insertion_state = None
         self.start_time = None
-        self.pid_x.reset()
-        self.pid_y.reset()
+        self._reset_xy_controller_state()
 
         port_frame = f"task_board/{task.target_module_name}/{task.port_name}_link"
         cable_tip_frame = f"{task.cable_name}/{task.plug_name}_link"
@@ -710,92 +961,41 @@ class CheatCodePIDController(Policy):
 
         duration = 5.0
         dt = 0.05
-        steps = int(duration / dt)
 
-        def cubic_polynomial_trajectory(t_frac: float) -> float:
-            """3rd-order polynomial (C1 continuity): smooth acceleration/deceleration."""
-            return 3 * (t_frac**2) - 2 * (t_frac**3)
+        state = InsertionState.TRANSPORT
+        self._insertion_state = state
+        self.get_logger().info(f"[CheatCodePID] Starting state machine in {state.name}")
 
-        for t in range(steps):
-            if self._task_completed_in_simulation(task):
-                self.get_logger().info(
-                    "[CheatCodePID] Early exit: simulation reported task completion."
-                )
-                self._safe_plot_errors(success=True)
-                return True
-            raw_fraction = t / float(steps)
-            interp_fraction = cubic_polynomial_trajectory(raw_fraction)
-            try:
-                self.set_pose_target(
-                    move_robot=move_robot,
-                    pose=self.calc_gripper_pose(
-                        port_transform,
-                        slerp_fraction=interp_fraction,
-                        position_fraction=interp_fraction,
-                        z_offset=z_offset,
-                        reset_pids=False,
-                        dt=dt,
-                    ),
-                )
-            except TransformException as ex:
-                self.get_logger().warn(f"TF lookup failed during interpolation: {ex}")
-            self.sleep_for(0.05)
-
-        self._pre_descent_index = len(self.history_err_x) - 1
-        self.get_logger().info(
-            f"[CheatCodePID] Pre-descent XY error: "
-            f"ErrX={self.pid_x.last_error * 1e3:.3f} mm, "
-            f"ErrY={self.pid_y.last_error * 1e3:.3f} mm"
-        )
-
-        # Descend until the cable is inserted into the port.
-        # aligned_cycles = 0
+        success = False
         while True:
-            if self._task_completed_in_simulation(task):
-                self.get_logger().info(
-                    "[CheatCodePID] Early exit: simulation reported task completion."
+            if state == InsertionState.TRANSPORT:
+                next_state, success = self._run_transport_state(
+                    task=task,
+                    move_robot=move_robot,
+                    port_transform=port_transform,
+                    z_offset=z_offset,
+                    duration=duration,
+                    dt=dt,
                 )
-                self._safe_plot_errors(success=True)
-                return True
-            if z_offset < -0.015:
+                if success or next_state is None:
+                    break
+                state = self._transition_to_state(state, next_state)
+            elif state == InsertionState.INSERT:
+                success, z_offset = self._run_insert_state(
+                    task=task,
+                    move_robot=move_robot,
+                    port_transform=port_transform,
+                    cable_tip_frame=cable_tip_frame,
+                    z_offset=z_offset,
+                    dt=dt,
+                )
                 break
-
-            z_offset -= 0.0005
-            self.get_logger().info(f"z_offset: {z_offset:0.5}")
-            try:
-                insertion_port_transform = self._build_collision_test_port_transform(
-                    port_transform, z_offset
-                )
-                pose = self.calc_gripper_pose(
-                    insertion_port_transform, z_offset=z_offset
-                )
-                self.set_pose_target(move_robot=move_robot, pose=pose)
-                self._update_blocked_descent_detection(
-                    port_transform, cable_tip_frame
-                )
-                self.sleep_for(0.05)
-            except TransformException as ex:
-                self.get_logger().warn(f"TF lookup failed during insertion: {ex}")
-                self.sleep_for(0.05)
-                continue
-
-        self.get_logger().info("Waiting briefly for insertion event...")
-        wait_started = self.time_now()
-        wait_timeout = Duration(seconds=5.0)
-        while (self.time_now() - wait_started) < wait_timeout:
-            if self._task_completed_in_simulation(task):
-                self.get_logger().info(
-                    "[CheatCodePID] Insertion event observed before timeout."
-                )
-                self._safe_plot_errors(success=True)
-                return True
-            self.sleep_for(0.05)
 
         self.get_logger().info("CheatCodePIDController.insert_cable() exiting...")
 
-        self._safe_plot_errors()
+        self._safe_plot_errors(success=success)
 
-        return False
+        return success
 
 
 CheatCodePidController = CheatCodePIDController
