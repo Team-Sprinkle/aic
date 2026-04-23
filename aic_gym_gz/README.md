@@ -245,6 +245,8 @@ observation semantics.
 The teacher layer uses:
 
 - temporal history
+- teacher-side auxiliary within-step force/contact summary history
+- explicit candidate families and phase guidance for planner diversification
 - probes
 - planning through deterministic mock backends and a live OpenAI Responses API backend
 - trajectory smoothing
@@ -257,6 +259,39 @@ Teacher-side tooling consumes the base environment exactly as exposed here:
 - episode ranking and local evaluation use the base env's `gym_final_score`
 - `official_eval_score` remains outside `aic_gym_gz` and outside the teacher
   stack unless the official toolkit path is run separately
+- official-compatible current observation remains unchanged; teacher code keeps
+  auxiliary within-step summaries separate in history, ranking metadata, replay,
+  export, and analysis
+
+Teacher-side auxiliary handling is explicit:
+
+- `observation["wrench"]` remains the current/final official-compatible sample
+- teacher temporal memory now stores both official-compatible observation
+  history and separate `auxiliary_force_contact_summary` history
+- planner/search/analysis consume compact teacher-only auxiliary summaries such
+  as recent hidden-contact count and recent auxiliary max force
+- auxiliary summaries are non-official training/search aids for coarse
+  multi-tick contact-rich stepping; they are not participant-facing observation
+  parity claims
+
+Recent teacher-planner improvements:
+
+- planner requests now use compact phase-guided payloads instead of dumping the
+  full raw planning state into every OpenAI call
+- `candidate_index` maps to explicit candidate families such as baseline-safe,
+  obstacle-clearance, alignment-first, guarded-insert, and recovery/backoff
+- teacher smoothing now respects `segment_horizon_steps`, so one planner call
+  no longer turns into a whole-episode dense segment by accident
+- search now evaluates the single-family planner candidates first, then spends
+  bounded refinement budget on the strongest planner seeds
+- refinement candidates can use a slightly longer bounded segment budget than
+  the initial single-family screening pass, so search can buy additional local
+  progress instead of merely reshuffling equivalent short-horizon trajectories
+- OpenAI/VLM planning can now receive recent wrist-camera history when
+  `include_images=True`, plus teacher-side multi-angle scene-overview renders
+  derived from Gazebo/scenario geometry
+- search applies duplicate penalties and selects a more diverse top-K instead of
+  simply taking the first near-identical candidates by score
 
 Teacher-side extensions remain additive to the base env:
 
@@ -316,6 +351,10 @@ Interpret trust conservatively:
 - approximate or missing signals reduce confidence and may trigger warnings
 - `gym_final_score` and teacher-style scoring remain local analysis tools, not
   official evaluation
+- search artifacts now include a transparent `local_trajectory_score_summary`
+  for each candidate so you can compare the best single family, the best
+  searched candidate, and the replayed selected candidate without treating any
+  of them as `official_eval_score`
 
 Example evaluation commands:
 
@@ -326,6 +365,7 @@ pixi run python -m aic_gym_gz.evaluate_teacher_rollout \
 
 pixi run python -m aic_gym_gz.evaluate_teacher_search \
   --artifact /tmp/teacher_search_openai.json \
+  --meaningful-improvement-threshold 0.15 \
   --output-markdown /tmp/teacher_search_eval.md
 
 pixi run python -m aic_gym_gz.evaluate_teacher_replay \

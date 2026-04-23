@@ -19,6 +19,7 @@ from urllib.request import Request, urlopen
 from pydantic import BaseModel, ConfigDict, Field, ValidationError
 
 from .base import PlannerBackend
+from ..teacher.planning import candidate_family_for_index
 from ..teacher.types import TeacherPlan, TeacherPlanningState, TeacherWaypoint
 
 
@@ -54,8 +55,10 @@ class _PlanPayload(BaseModel):
 @dataclass(frozen=True)
 class OpenAIPlannerConfig:
     model: str = "gpt-5.4-mini"
-    temperature: float = 0.1
+    temperature: float | None = 0.1
     max_output_tokens: int = 1200
+    reasoning_effort: Literal["minimal", "low", "medium", "high"] | None = "low"
+    text_verbosity: Literal["low", "medium", "high"] = "low"
     timeout_s: float = 20.0
     max_retries: int = 2
     max_calls_per_episode: int = 8
@@ -65,6 +68,9 @@ class OpenAIPlannerConfig:
     enabled: bool = False
     use_cache: bool = True
     cache_dir: str | None = None
+    include_visual_context: bool = True
+    max_recent_visual_images: int = 6
+    max_scene_overview_images: int = 3
 
 
 class OpenAIPlannerAPIError(RuntimeError):
@@ -132,9 +138,21 @@ class OpenAIPlannerBackend(PlannerBackend):
         *,
         candidate_index: int = 0,
     ) -> dict[str, Any]:
-        return {
+        user_content = [
+            {
+                "type": "input_text",
+                "text": json.dumps(
+                    self._planner_state_payload(
+                        state=state,
+                        candidate_index=candidate_index,
+                    ),
+                    sort_keys=True,
+                ),
+            }
+        ]
+        user_content.extend(self._visual_content(state))
+        payload = {
             "model": self.config.model,
-            "temperature": self.config.temperature,
             "max_output_tokens": self.config.max_output_tokens,
             "store": False,
             "input": [
@@ -148,30 +166,19 @@ class OpenAIPlannerBackend(PlannerBackend):
                                 "task. Use only the provided planning state. Respect data_quality metadata: if "
                                 "signals are missing or approximate, remain conservative and do not pretend they "
                                 "are official. Prefer compact, useful segments that reflect current phase, score "
-                                "geometry, temporal summary, and insertion progress. Avoid repeating the exact "
-                                "same candidate when candidate_index changes."
+                                "geometry, temporal summary, and insertion progress. Candidate_index is intentional: "
+                                "each candidate must represent a distinct family with different phase preference, "
+                                "clearance behavior, or insertion aggressiveness. Do not emit near-duplicate plans. "
+                                "If the segment would be long, emit only the next short segment that makes progress "
+                                "toward the phase guidance instead of a whole-episode path. Do not stay in one phase "
+                                "indefinitely when the phase guidance recommends advancement."
                             ),
                         }
                     ],
                 },
                 {
                     "role": "user",
-                    "content": [
-                        {
-                            "type": "input_text",
-                            "text": json.dumps(
-                                {
-                                    "candidate_index": candidate_index,
-                                    "compact_planning_brief": self._compact_planning_brief(
-                                        state=state,
-                                        candidate_index=candidate_index,
-                                    ),
-                                    "planning_state": state.to_dict(),
-                                },
-                                sort_keys=True,
-                            ),
-                        }
-                    ],
+                    "content": user_content,
                 },
             ],
             "text": {
@@ -180,9 +187,15 @@ class OpenAIPlannerBackend(PlannerBackend):
                     "name": "teacher_segment_plan",
                     "strict": True,
                     "schema": self.response_format_schema(),
-                }
+                },
+                "verbosity": self.config.text_verbosity,
             },
         }
+        if self.config.temperature is not None:
+            payload["temperature"] = self.config.temperature
+        if self.config.reasoning_effort is not None:
+            payload["reasoning"] = {"effort": self.config.reasoning_effort}
+        return payload
 
     def build_debug_payload(
         self,
@@ -200,15 +213,13 @@ class OpenAIPlannerBackend(PlannerBackend):
     ) -> dict[str, Any]:
         policy = state.policy_context
         score_geometry = policy.get("score_geometry", {})
+        candidate_family = candidate_family_for_index(candidate_index)
         return {
             "task": state.goal_summary,
             "current_phase": state.current_phase,
             "candidate_index": candidate_index,
-            "candidate_guidance": (
-                "baseline safe candidate"
-                if candidate_index == 0
-                else "produce a meaningfully different but still safe candidate from the baseline"
-            ),
+            "candidate_guidance": candidate_family["planner_instruction"],
+            "candidate_family": candidate_family,
             "distance_to_target": policy.get("distance_to_target"),
             "distance_to_entrance": score_geometry.get("distance_to_entrance"),
             "insertion_progress": score_geometry.get("insertion_progress"),
@@ -216,6 +227,9 @@ class OpenAIPlannerBackend(PlannerBackend):
             "lateral_misalignment": score_geometry.get("lateral_misalignment"),
             "orientation_error": score_geometry.get("orientation_error"),
             "temporal_summary": state.temporal_context.get("dynamics_summary", {}),
+            "geometry_progress_summary": state.temporal_context.get("geometry_progress_summary", {}),
+            "phase_guidance": state.temporal_context.get("phase_guidance", {}),
+            "auxiliary_contact_summary": state.temporal_context.get("auxiliary_history_summary", {}),
             "signal_quality_summary": {
                 signal: {
                     "is_real": quality.get("is_real"),
@@ -226,11 +240,154 @@ class OpenAIPlannerBackend(PlannerBackend):
             },
         }
 
-    def build_smoke_test_payload(self, *, prompt: str = "Return a short valid planner response.") -> dict[str, Any]:
+    def _planner_state_payload(
+        self,
+        *,
+        state: TeacherPlanningState,
+        candidate_index: int,
+    ) -> dict[str, Any]:
+        policy = state.policy_context
         return {
+            "candidate_index": candidate_index,
+            "compact_planning_brief": self._compact_planning_brief(
+                state=state,
+                candidate_index=candidate_index,
+            ),
+            "current_observation": {
+                "tcp_pose": policy.get("tcp_pose"),
+                "plug_pose": policy.get("plug_pose"),
+                "target_port_pose": policy.get("target_port_pose"),
+                "target_port_entrance_pose": policy.get("target_port_entrance_pose"),
+                "distance_to_target": policy.get("distance_to_target"),
+                "distance_to_entrance": policy.get("distance_to_entrance"),
+                "lateral_misalignment": policy.get("lateral_misalignment"),
+                "orientation_error": policy.get("orientation_error"),
+                "insertion_progress": policy.get("insertion_progress"),
+                "off_limit_contact": policy.get("off_limit_contact"),
+            },
+            "obstacle_summary": state.obstacle_summary[:6],
+            "scene_geometry_context": {
+                "board_pose_xyz_rpy": state.oracle_context.get("task_board_pose_xyz_rpy"),
+                "target_port_pose": state.oracle_context.get("target_port_pose"),
+                "target_port_entrance_pose": state.oracle_context.get("target_port_entrance_pose"),
+                "plug_pose": state.oracle_context.get("plug_pose"),
+                "clearance_summary": state.oracle_context.get("clearance_summary"),
+                "scene_layout_summary": state.oracle_context.get("scene_layout_summary"),
+                "cable_context": state.oracle_context.get("cable"),
+            },
+            "temporal_context_summary": {
+                "dynamics_summary": state.dynamics_summary,
+                "geometry_progress_summary": state.temporal_context.get("geometry_progress_summary", {}),
+                "auxiliary_history_summary": state.temporal_context.get("auxiliary_history_summary", {}),
+                "phase_guidance": state.temporal_context.get("phase_guidance", {}),
+            },
+            "signal_quality_context": state.data_quality,
+            "recent_probe_results": state.recent_probe_results[-2:],
+            "controller_context": {
+                "controller_state_available": bool(state.controller_context.get("controller_state")),
+                "tcp_error": state.controller_context.get("tcp_error"),
+                "controller_target_mode": state.controller_context.get("controller_target_mode"),
+            },
+            "visual_context_summary": {
+                "recent_visual_observations": [
+                    {
+                        "label": item.get("label"),
+                        "camera_name": item.get("camera_name"),
+                        "sim_tick": item.get("sim_tick"),
+                        "sim_time": item.get("sim_time"),
+                        "timestamp": item.get("timestamp"),
+                        "source": item.get("source"),
+                    }
+                    for item in state.recent_visual_observations[: self.config.max_recent_visual_images]
+                ],
+                "scene_overview_images": [
+                    {
+                        "label": item.get("label"),
+                        "view_name": item.get("view_name"),
+                        "source": item.get("source"),
+                    }
+                    for item in state.scene_overview_images[: self.config.max_scene_overview_images]
+                ],
+            },
+            "planning_metadata": {
+                "include_images": state.planning_metadata.get("include_images"),
+                "history_window_size": state.planning_metadata.get("history_window_size"),
+                "teacher_history_is_additive": state.planning_metadata.get("teacher_history_is_additive"),
+                "official_observation_contract_unchanged": state.planning_metadata.get("official_observation_contract_unchanged"),
+                "auxiliary_force_contact_summary_is_teacher_side": state.planning_metadata.get("auxiliary_force_contact_summary_is_teacher_side"),
+            },
+            "last_teacher_rationale": state.last_teacher_rationale,
+        }
+
+    def _visual_content(self, state: TeacherPlanningState) -> list[dict[str, Any]]:
+        if not self.config.include_visual_context:
+            return []
+        content: list[dict[str, Any]] = []
+        recent_items = state.recent_visual_observations[: self.config.max_recent_visual_images]
+        if recent_items:
+            content.append(
+                {
+                    "type": "input_text",
+                    "text": (
+                        "Recent official wrist-camera observations follow. These are official image observations "
+                        "when image mode is enabled; use them to reason about local contact geometry, cable pose, "
+                        "and corridor alignment over the last few steps."
+                    ),
+                }
+            )
+            for item in recent_items:
+                content.append(
+                    {
+                        "type": "input_text",
+                        "text": (
+                            f"Image label={item.get('label')} camera={item.get('camera_name')} "
+                            f"sim_tick={item.get('sim_tick')} sim_time={item.get('sim_time')} "
+                            f"timestamp={item.get('timestamp')} source={item.get('source')}"
+                        ),
+                    }
+                )
+                content.append(
+                    {
+                        "type": "input_image",
+                        "image_url": item.get("image_data_url"),
+                        "detail": "low",
+                    }
+                )
+        scene_items = state.scene_overview_images[: self.config.max_scene_overview_images]
+        if scene_items:
+            content.append(
+                {
+                    "type": "input_text",
+                    "text": (
+                        "Teacher-side scene overview renders follow. These are multi-angle schematic views "
+                        "derived from Gazebo/scenario geometry, not official participant observations. Use them "
+                        "for global scene layout and obstacle-awareness only."
+                    ),
+                }
+            )
+            for item in scene_items:
+                content.append(
+                    {
+                        "type": "input_text",
+                        "text": (
+                            f"Scene overview label={item.get('label')} view={item.get('view_name')} "
+                            f"source={item.get('source')}"
+                        ),
+                    }
+                )
+                content.append(
+                    {
+                        "type": "input_image",
+                        "image_url": item.get("image_data_url"),
+                        "detail": "low",
+                    }
+                )
+        return content
+
+    def build_smoke_test_payload(self, *, prompt: str = "Return a short valid planner response.") -> dict[str, Any]:
+        payload = {
             "model": self.config.model,
-            "temperature": self.config.temperature,
-            "max_output_tokens": 300,
+            "max_output_tokens": min(max(self.config.max_output_tokens, 300), 1200),
             "store": False,
             "input": [
                 {
@@ -248,9 +405,15 @@ class OpenAIPlannerBackend(PlannerBackend):
                     "name": "teacher_segment_plan",
                     "strict": True,
                     "schema": self.response_format_schema(),
-                }
+                },
+                "verbosity": self.config.text_verbosity,
             },
         }
+        if self.config.temperature is not None:
+            payload["temperature"] = self.config.temperature
+        if self.config.reasoning_effort is not None:
+            payload["reasoning"] = {"effort": self.config.reasoning_effort}
+        return payload
 
     def run_smoke_test(self, *, prompt: str = "Return a cautious pre-insert plan.") -> dict[str, Any]:
         payload = self.build_smoke_test_payload(prompt=prompt)
@@ -483,6 +646,8 @@ def sanitize_payload(payload: Any) -> Any:
             lower_key = str(key).lower()
             if lower_key in {"authorization", "api_key", "apikey"}:
                 sanitized[key] = "<redacted>"
+            elif lower_key == "image_url" and isinstance(value, str):
+                sanitized[key] = "<image_data_url>"
             else:
                 sanitized[key] = sanitize_payload(value)
         return sanitized

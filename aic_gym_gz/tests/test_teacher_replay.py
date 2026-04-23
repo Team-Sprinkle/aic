@@ -20,6 +20,7 @@ class TeacherReplayTest(unittest.TestCase):
                 "scenario_metadata": {"name": "scenario"},
                 "task_metadata": {"port_name": "port_0"},
                 "data_quality": {"wrench": {"is_real": False}},
+                "auxiliary_summary_metadata": {"hidden_contact_event_count_recent": 1},
             },
             trajectory_segments=[{"points": [{"action": [0, 0, 0, 0, 0, 0]}]}],
             probe_results=[],
@@ -34,6 +35,7 @@ class TeacherReplayTest(unittest.TestCase):
             loaded = load_teacher_replay(path)
         self.assertEqual(loaded.metadata["trial_id"], "trial_0")
         self.assertIn("data_quality", loaded.metadata)
+        self.assertIn("auxiliary_summary_metadata", loaded.metadata)
 
     def test_replay_save_serializes_numpy_values(self) -> None:
         artifact = TeacherReplayArtifact(

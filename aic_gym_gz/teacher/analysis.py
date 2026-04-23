@@ -10,6 +10,11 @@ from typing import Any
 
 import numpy as np
 
+from .local_scores import (
+    artifact_progress_metrics,
+    build_local_trajectory_score_summary,
+    replay_progress_metrics,
+)
 from .replay import TeacherReplayArtifact
 from .scoring import OfficialStyleScoreEvaluator
 
@@ -49,10 +54,12 @@ def analyze_rollout_artifact(
     tcp_positions = _tcp_positions(step_logs)
     path_length = _path_length(tcp_positions)
     duration = _duration(step_logs)
+    progress_metrics = artifact_progress_metrics(artifact_payload)
     candidate_count = len(planner_candidates)
     planner_calls = candidate_count
     data_quality = metadata.get("data_quality", {})
     signal_quality_summary = _signal_quality_summary(data_quality)
+    auxiliary_summary = _artifact_auxiliary_summary(artifact_payload)
     tier3 = teacher_score.get("tier3", {})
     outcome = {
         "success": bool(final_info.get("success", False)),
@@ -70,6 +77,7 @@ def analyze_rollout_artifact(
             "data_quality": data_quality,
             "outcome": outcome,
             "teacher_score": teacher_score,
+            "auxiliary_summary": auxiliary_summary,
             "path_length_m": path_length,
             "duration_s": duration,
         }
@@ -96,7 +104,16 @@ def analyze_rollout_artifact(
             "teacher_official_style_score": teacher_score.get("total_score"),
             "official_eval_score": metadata.get("final_metrics", {}).get("official_eval_score"),
         },
+        "local_trajectory_score_summary": build_local_trajectory_score_summary(
+            teacher_official_style_score=float(teacher_score.get("total_score", 0.0)),
+            gym_final_score=_float_or_none(metadata.get("final_metrics", {}).get("gym_final_score")),
+            rl_step_reward_total=float(metadata.get("final_metrics", {}).get("rl_step_reward_total") or 0.0),
+            progress_to_target_m=progress_metrics.get("progress_to_target_m"),
+            final_distance_to_target_m=progress_metrics.get("final_distance_to_target_m"),
+            path_length_m=progress_metrics.get("path_length_m"),
+        ),
         "signal_quality": signal_quality_summary,
+        "auxiliary_contact_summary": auxiliary_summary,
         "outcome": outcome,
         "trajectory": {
             "path_length_m": path_length,
@@ -115,6 +132,7 @@ def analyze_rollout_artifact(
 def analyze_search_payload(
     search_payload: dict[str, Any],
     *,
+    meaningful_improvement_threshold: float = 0.15,
     include_markdown: bool = True,
 ) -> TeacherEvaluationResult:
     ranked = list(search_payload.get("ranked_candidates", []))
@@ -149,20 +167,44 @@ def analyze_search_payload(
         abs(float(item.get("ranking_metrics", {}).get("quality_adjustment", 0.0)))
         for item in ranked
     ]
+    auxiliary_penalty_magnitudes = [
+        abs(float(item.get("ranking_metrics", {}).get("auxiliary_adjustment", 0.0)))
+        for item in ranked
+    ]
+    order_without_auxiliary = sorted(
+        ranked,
+        key=lambda item: float(
+            item.get("ranking_metrics", {}).get("composite_score", -math.inf)
+        )
+        - float(item.get("ranking_metrics", {}).get("auxiliary_adjustment", 0.0)),
+        reverse=True,
+    )
+    rank_changes_from_auxiliary = sum(
+        1
+        for index, item in enumerate(ranked)
+        if index < len(order_without_auxiliary)
+        and item["candidate_spec"]["name"] != order_without_auxiliary[index]["candidate_spec"]["name"]
+    )
     warnings = detect_search_warnings(
         {
             "candidate_count": len(ranked),
             "candidate_summaries": candidate_summaries,
             "pairwise_similarity": pairwise,
             "rank_changes_from_quality": rank_changes,
+            "rank_changes_from_auxiliary": rank_changes_from_auxiliary,
             "value_over_single_plan": value_over_single,
+            "meaningful_improvement_threshold": meaningful_improvement_threshold,
             "quality_penalty_magnitudes": quality_penalty_magnitudes,
+            "auxiliary_penalty_magnitudes": auxiliary_penalty_magnitudes,
         }
     )
+    best_single_family_summary = _candidate_comparison_summary(best_planner_waypoint)
+    best_search_summary = _candidate_comparison_summary(top_candidate)
     summary = {
         "artifact_type": "teacher_search",
         "metadata": {
             **metadata,
+            "meaningful_improvement_threshold": meaningful_improvement_threshold,
             "missing_fields": missing_fields,
         },
         "top_candidates": [
@@ -175,15 +217,30 @@ def analyze_search_payload(
                 "gym_final_score": candidate["ranking_metrics"].get("gym_final_score"),
                 "rl_step_reward_total": candidate["ranking_metrics"].get("rl_step_reward_total"),
                 "quality_adjustment": candidate["ranking_metrics"].get("quality_adjustment"),
+                "auxiliary_adjustment": candidate["ranking_metrics"].get("auxiliary_adjustment"),
+                "auxiliary_summary_metadata": candidate["ranking_metrics"].get("auxiliary_summary_metadata", {}),
             }
             for candidate in ranked[: metadata.get("top_k", 3)]
         ],
         "ranking_analysis": {
             "rank_changes_from_quality": rank_changes,
+            "rank_changes_from_auxiliary": rank_changes_from_auxiliary,
             "top_k_without_quality": top_without_quality,
             "top_k_with_quality": top_with_quality,
             "value_over_single_plan": value_over_single,
+            "value_over_single_plan_is_meaningful": bool(
+                value_over_single is not None and value_over_single >= meaningful_improvement_threshold
+            ),
             "metric_dominance": _metric_dominance(ranked),
+        },
+        "search_vs_single_family": {
+            "best_single_family": best_single_family_summary,
+            "best_search_candidate": best_search_summary,
+            "value_over_single_plan": value_over_single,
+            "margin_classification": _margin_classification(
+                value=value_over_single,
+                threshold=meaningful_improvement_threshold,
+            ),
         },
         "diversity_analysis": {
             "candidate_count": len(ranked),
@@ -211,6 +268,41 @@ def analyze_replay_comparison(
     original_final_obs = original_final.get("observation_summary", {})
     replay_final_info = dict(replayed.get("final_info", {}))
     replay_final_eval = dict(replay_final_info.get("final_evaluation") or {})
+    original_ranking_metrics = dict(original.metadata.get("ranking_metrics", {}))
+    original_local_summary = (
+        original_ranking_metrics.get("local_trajectory_score_summary")
+        or build_local_trajectory_score_summary(
+            teacher_official_style_score=float(
+                (original.metadata.get("teacher_official_style_score") or {}).get("total_score", 0.0)
+            ),
+            gym_final_score=_float_or_none(original.metadata.get("final_metrics", {}).get("gym_final_score")),
+            rl_step_reward_total=float(original.metadata.get("final_metrics", {}).get("rl_step_reward_total") or 0.0),
+            progress_to_target_m=artifact_progress_metrics(original.to_dict()).get("progress_to_target_m"),
+            final_distance_to_target_m=artifact_progress_metrics(original.to_dict()).get("final_distance_to_target_m"),
+            path_length_m=artifact_progress_metrics(original.to_dict()).get("path_length_m"),
+        )
+    )
+    replay_progress = replay_progress_metrics(original=original.to_dict(), replayed=replayed)
+    replay_local_summary = build_local_trajectory_score_summary(
+        teacher_official_style_score=float(
+            (original.metadata.get("teacher_official_style_score") or {}).get("total_score", 0.0)
+        ),
+        gym_final_score=_float_or_none(replay_final_eval.get("gym_final_score")),
+        rl_step_reward_total=float(replay_reward_total),
+        progress_to_target_m=replay_progress.get("replay_progress_to_target_m"),
+        final_distance_to_target_m=replay_progress.get("replay_final_distance_to_target_m"),
+        path_length_m=replay_progress.get("replay_path_length_m"),
+        quality_adjustment=float(original_ranking_metrics.get("quality_adjustment", 0.0)),
+        auxiliary_adjustment=float(original_ranking_metrics.get("auxiliary_adjustment", 0.0)),
+        duplicate_penalty=float(original_ranking_metrics.get("duplicate_penalty", 0.0)),
+    )
+    auxiliary_hidden_contact_delta = sum(
+        bool(record.get("auxiliary_contact_metrics", {}).get("hidden_contact_recent", False))
+        for record in replay_records
+    ) - sum(
+        bool(step.get("auxiliary_contact_metrics", {}).get("hidden_contact_recent", False))
+        for step in original_steps
+    )
     final_tcp_pose_delta = _norm_delta(
         original_final_obs.get("tcp_pose"),
         replay_final.get("tcp_pose"),
@@ -236,6 +328,7 @@ def analyze_replay_comparison(
             "final_plug_target_delta": final_plug_target_delta,
             "reward_total_delta": abs(replay_reward_total - original_reward_total),
             "gym_final_score_delta": abs(gym_final_score_delta or 0.0),
+            "auxiliary_hidden_contact_delta": auxiliary_hidden_contact_delta,
         }
     )
     summary = {
@@ -247,12 +340,19 @@ def analyze_replay_comparison(
             "final_plug_target_relation_delta": final_plug_target_delta,
             "reward_total_delta": abs(replay_reward_total - original_reward_total),
             "gym_final_score_delta": gym_final_score_delta,
+            "auxiliary_hidden_contact_delta": auxiliary_hidden_contact_delta,
         },
         "metadata_check": {
             "candidate_rank_present": "candidate_rank" in original.metadata,
             "ranking_metrics_present": "ranking_metrics" in original.metadata,
             "scenario_metadata_present": "scenario_metadata" in original.metadata,
             "task_metadata_present": "task_metadata" in original.metadata,
+            "auxiliary_summary_metadata_present": "auxiliary_summary_metadata" in original.metadata,
+        },
+        "local_trajectory_score_comparison": {
+            "original_selected_candidate": original_local_summary,
+            "replayed_selected_candidate": replay_local_summary,
+            "scalar_score_delta": float(replay_local_summary["scalar_score"]) - float(original_local_summary["scalar_score"]),
         },
         "warnings": warnings,
     }
@@ -296,6 +396,7 @@ def detect_rollout_warnings(summary: dict[str, Any]) -> list[str]:
     action_stats = dict(summary.get("action_stats", {}))
     outcome = dict(summary.get("outcome", {}))
     teacher_score = dict(summary.get("teacher_score", {}))
+    auxiliary_summary = dict(summary.get("auxiliary_summary", {}))
     if len(set(phase_sequence)) <= 1 and summary.get("segment_count", 0) <= 1:
         warnings.append("Planner output collapse: rollout stayed in one phase with one segment.")
     if action_stats.get("action_repeat_fraction", 0.0) >= 0.95:
@@ -304,6 +405,15 @@ def detect_rollout_warnings(summary: dict[str, Any]) -> list[str]:
         warnings.append("Rollout depended on approximate or missing wrench data.")
     if not data_quality.get("controller_state", {}).get("is_real", False):
         warnings.append("Controller-derived parity fields were unavailable during planning.")
+    if auxiliary_summary.get("hidden_contact_event_count_recent", 0) > 0:
+        warnings.append("Hidden transient contacts were detected by auxiliary within-step summaries.")
+    if auxiliary_summary.get("had_contact_recent", False) and auxiliary_summary.get("current_wrench_force_l2_norm", 0.0) <= 0.5:
+        warnings.append("Current wrench is quiet even though auxiliary contact activity was detected recently.")
+    if auxiliary_summary.get("auxiliary_wrench_max_recent", 0.0) > max(
+        2.0,
+        3.0 * float(auxiliary_summary.get("current_wrench_force_l2_norm", 0.0)),
+    ):
+        warnings.append("Auxiliary max force is materially larger than the current official-compatible wrench sample.")
     if outcome.get("failure_mode") not in {None, "success"} and (teacher_score.get("total_score") or 0.0) > 40.0:
         warnings.append("Suspiciously strong local score despite failed rollout outcome.")
     return warnings
@@ -317,13 +427,19 @@ def detect_search_warnings(summary: dict[str, Any]) -> list[str]:
     duplicates = [item for item in pairwise if item["similarity"] >= 0.95]
     if candidate_count and len(duplicates) >= max(1, candidate_count // 3):
         warnings.append("Search contains many near-duplicate candidates; planner diversity is low.")
-    if value_over_single is not None and value_over_single <= 0.1:
+    meaningful_threshold = float(summary.get("meaningful_improvement_threshold", 0.1))
+    if value_over_single is not None and value_over_single <= meaningful_threshold:
         warnings.append("Search adds limited value over the best single planner candidate.")
     if int(summary.get("rank_changes_from_quality", 0)) == 0:
         warnings.append("Quality penalties are not materially changing rank order.")
+    if int(summary.get("rank_changes_from_auxiliary", 0)) == 0:
+        warnings.append("Auxiliary contact penalties are not materially changing rank order.")
     penalty_magnitudes = list(summary.get("quality_penalty_magnitudes", []))
     if penalty_magnitudes and max(penalty_magnitudes) >= 8.0:
         warnings.append("Ranking is heavily influenced by approximate-signal penalties.")
+    auxiliary_penalty_magnitudes = list(summary.get("auxiliary_penalty_magnitudes", []))
+    if auxiliary_penalty_magnitudes and max(auxiliary_penalty_magnitudes) >= 1.0:
+        warnings.append("Ranking changed materially due to auxiliary hidden-contact information.")
     return warnings
 
 
@@ -335,6 +451,8 @@ def detect_replay_warnings(summary: dict[str, Any]) -> list[str]:
         warnings.append("Replay final TCP pose drift is significant.")
     if (summary.get("gym_final_score_delta") or 0.0) > 10.0:
         warnings.append("Replay gym_final_score changed materially.")
+    if abs(float(summary.get("auxiliary_hidden_contact_delta") or 0.0)) > 0.0:
+        warnings.append("Replay changed the detected hidden-contact count from the original artifact.")
     return warnings
 
 
@@ -352,6 +470,8 @@ def format_rollout_markdown(summary: dict[str, Any]) -> str:
             f"- `rl_step_reward_total`: `{summary['scores'].get('rl_step_reward_total')}`",
             f"- `gym_final_score`: `{summary['scores'].get('gym_final_score')}`",
             f"- `teacher_official_style_score`: `{summary['scores'].get('teacher_official_style_score')}`",
+            f"- Local trajectory score: `{summary['local_trajectory_score_summary'].get('scalar_score')}`",
+            f"- Auxiliary hidden-contact events: `{summary['auxiliary_contact_summary'].get('hidden_contact_event_count_recent')}`",
             f"- Outcome: `{summary['outcome']['failure_mode']}`",
             f"- Planner adaptation: `{summary['trajectory']['planner_adaptation']}`",
             "## Warnings",
@@ -371,7 +491,9 @@ def format_search_markdown(summary: dict[str, Any]) -> str:
             f"- Planner backend: `{summary['metadata'].get('planner_backend')}`",
             f"- Top-K: `{summary['metadata'].get('top_k')}`",
             f"- Rank changes from quality penalties: `{summary['ranking_analysis']['rank_changes_from_quality']}`",
+            f"- Rank changes from auxiliary penalties: `{summary['ranking_analysis']['rank_changes_from_auxiliary']}`",
             f"- Value over best single planner candidate: `{summary['ranking_analysis']['value_over_single_plan']}`",
+            f"- Margin classification: `{summary['search_vs_single_family']['margin_classification']}`",
             "## Top Candidates",
             *(top_lines or ["- None"]),
             "## Warnings",
@@ -391,6 +513,8 @@ def format_replay_markdown(summary: dict[str, Any]) -> str:
             f"- Final plug-target relation delta: `{fidelity['final_plug_target_relation_delta']}`",
             f"- Reward total delta: `{fidelity['reward_total_delta']}`",
             f"- `gym_final_score` delta: `{fidelity['gym_final_score_delta']}`",
+            f"- Hidden-contact delta: `{summary['fidelity'].get('auxiliary_hidden_contact_delta')}`",
+            f"- Local trajectory score delta: `{summary['local_trajectory_score_comparison']['scalar_score_delta']}`",
             "## Warnings",
             *([f"- {warning}" for warning in summary["warnings"]] or ["- None"]),
         ]
@@ -405,7 +529,7 @@ def _candidate_signature(candidate: dict[str, Any]) -> dict[str, Any]:
     for segment in segments[:3]:
         points = list(segment.get("points", []))
         if points:
-            pose = points[min(len(points) - 1, 0)].get("target_tcp_pose", [])[:3]
+            pose = points[-1].get("target_tcp_pose", [])[:3]
             waypoint_signature.append([float(value) for value in pose])
     return {
         "name": candidate["candidate_spec"]["name"],
@@ -462,6 +586,10 @@ def _metric_dominance(ranked: list[dict[str, Any]]) -> dict[str, Any]:
         [item["ranking_metrics"]["quality_adjustment"] for item in ranked],
         dtype=np.float64,
     )
+    auxiliary_adjustments = np.asarray(
+        [item["ranking_metrics"].get("auxiliary_adjustment", 0.0) for item in ranked],
+        dtype=np.float64,
+    )
     composite_scores = np.asarray(
         [item["ranking_metrics"]["composite_score"] for item in ranked],
         dtype=np.float64,
@@ -469,17 +597,45 @@ def _metric_dominance(ranked: list[dict[str, Any]]) -> dict[str, Any]:
     ranges = {
         "teacher_official_style_score": float(teacher_scores.max() - teacher_scores.min()),
         "quality_adjustment": float(quality_adjustments.max() - quality_adjustments.min()),
+        "auxiliary_adjustment": float(auxiliary_adjustments.max() - auxiliary_adjustments.min()),
         "composite_score": float(composite_scores.max() - composite_scores.min()),
     }
     return {
         "teacher_score_range": ranges["teacher_official_style_score"],
         "quality_adjustment_range": ranges["quality_adjustment"],
+        "auxiliary_adjustment_range": ranges["auxiliary_adjustment"],
         "composite_score_range": ranges["composite_score"],
         "dominant_metric": max(
-            ("teacher_official_style_score", "quality_adjustment"),
+            ("teacher_official_style_score", "quality_adjustment", "auxiliary_adjustment"),
             key=lambda name: ranges[name],
         ),
     }
+
+
+def _candidate_comparison_summary(candidate: dict[str, Any] | None) -> dict[str, Any] | None:
+    if candidate is None:
+        return None
+    ranking_metrics = dict(candidate.get("ranking_metrics", {}))
+    local_summary = dict(ranking_metrics.get("local_trajectory_score_summary", {}))
+    return {
+        "name": candidate["candidate_spec"]["name"],
+        "mode": candidate["candidate_spec"]["mode"],
+        "family": candidate["candidate_spec"].get("family"),
+        "rl_step_reward_total": ranking_metrics.get("rl_step_reward_total"),
+        "gym_final_score": ranking_metrics.get("gym_final_score"),
+        "teacher_official_style_score": ranking_metrics.get("teacher_official_style_score"),
+        "local_trajectory_score_summary": local_summary,
+    }
+
+
+def _margin_classification(*, value: float | None, threshold: float) -> str:
+    if value is None:
+        return "unavailable"
+    if value <= 0.0:
+        return "no_search_gain"
+    if value < threshold:
+        return "trivial"
+    return "meaningful"
 
 
 def _missing_fields(payload: dict[str, Any], required_fields: list[str]) -> list[str]:
@@ -544,6 +700,33 @@ def _signal_quality_summary(data_quality: dict[str, Any]) -> dict[str, Any]:
         "approximate_or_missing_signals": sorted(
             signal for signal, quality in data_quality.items() if not quality.get("is_real", False)
         ),
+    }
+
+
+def _artifact_auxiliary_summary(artifact_payload: dict[str, Any]) -> dict[str, Any]:
+    metadata = dict(artifact_payload.get("metadata", {}))
+    summary = dict(metadata.get("auxiliary_summary_metadata", {}))
+    if summary:
+        return summary
+    step_logs = list(artifact_payload.get("step_logs", []))
+    if not step_logs:
+        return {}
+    hidden_count = sum(
+        bool(step.get("auxiliary_contact_metrics", {}).get("hidden_contact_recent", False))
+        for step in step_logs
+    )
+    contact_count = sum(
+        bool(step.get("auxiliary_contact_metrics", {}).get("had_contact_recent", False))
+        for step in step_logs
+    )
+    latest = dict(step_logs[-1].get("auxiliary_contact_metrics", {}))
+    return {
+        "auxiliary_summary_available": any(step.get("auxiliary_summary_available", False) for step in step_logs),
+        "hidden_contact_event_count_recent": hidden_count,
+        "repeated_contact_rich_steps": contact_count,
+        "had_contact_recent": latest.get("had_contact_recent", False),
+        "current_wrench_force_l2_norm": latest.get("current_wrench_force_l2_norm", 0.0),
+        "auxiliary_wrench_max_recent": latest.get("auxiliary_wrench_max_recent", 0.0),
     }
 
 

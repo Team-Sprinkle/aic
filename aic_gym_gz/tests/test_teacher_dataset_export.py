@@ -33,6 +33,9 @@ class TeacherDatasetExportTest(unittest.TestCase):
                         "observation_summary": {"sim_tick": 1},
                         "history_summary": {"window_size": 1},
                         "data_quality": {"wrench": {"is_real": False}},
+                        "auxiliary_summary_available": True,
+                        "auxiliary_force_contact_summary": {"had_contact_recent": True},
+                        "auxiliary_contact_metrics": {"hidden_contact_recent": True},
                     }
                 ],
             },
@@ -45,6 +48,7 @@ class TeacherDatasetExportTest(unittest.TestCase):
         self.assertEqual(len(lines), 1)
         self.assertEqual(metadata["rank"], 1)
         self.assertIn("data_quality", record)
+        self.assertTrue(record["auxiliary_summary_available"])
 
     def test_jsonl_export_serializes_numpy_values(self) -> None:
         candidate = {
@@ -63,6 +67,7 @@ class TeacherDatasetExportTest(unittest.TestCase):
                     "task_id": "task_1",
                     "data_quality": {"wrench": {"is_real": np.bool_(False)}},
                     "auxiliary_summary": {"pose": np.array([0.1, 0.2, 0.3], dtype=np.float32)},
+                    "auxiliary_summary_metadata": {"hidden_contact_event_count_recent": np.int32(2)},
                 },
                 "step_logs": [
                     {
@@ -73,6 +78,9 @@ class TeacherDatasetExportTest(unittest.TestCase):
                         "observation_summary": {"sim_tick": 1, "pose": np.array([1, 2], dtype=np.int32)},
                         "history_summary": {"window_size": np.int32(1)},
                         "data_quality": {"wrench": {"is_real": np.bool_(False)}},
+                        "auxiliary_summary_available": np.bool_(True),
+                        "auxiliary_force_contact_summary": {"wrench_max_force_abs_recent": np.float32(4.0)},
+                        "auxiliary_contact_metrics": {"hidden_contact_recent": np.bool_(True)},
                     }
                 ],
             },
@@ -88,6 +96,7 @@ class TeacherDatasetExportTest(unittest.TestCase):
         self.assertAlmostEqual(pose[0], 0.1, places=6)
         self.assertAlmostEqual(pose[1], 0.2, places=6)
         self.assertAlmostEqual(pose[2], 0.3, places=6)
+        self.assertEqual(metadata["auxiliary_summary_metadata"]["hidden_contact_event_count_recent"], 2)
 
 
 if __name__ == "__main__":

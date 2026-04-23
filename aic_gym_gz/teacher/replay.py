@@ -11,6 +11,7 @@ import numpy as np
 
 from ..env import AicInsertionEnv
 from ..utils import to_jsonable
+from .quality import normalize_auxiliary_force_contact_summary, summarize_auxiliary_force_contact_summary
 
 
 @dataclass(frozen=True)
@@ -79,6 +80,10 @@ class TeacherReplayRunner:
                     observation["plug_to_port_relative"], dtype=np.float64
                 ).tolist(),
                 "off_limit_contact": bool(np.asarray(observation["off_limit_contact"]).reshape(-1)[0] > 0.5),
+                "auxiliary_summary_available": bool("auxiliary_force_contact_summary" in info),
+                "auxiliary_force_contact_summary": normalize_auxiliary_force_contact_summary(
+                    info.get("auxiliary_force_contact_summary")
+                ),
             }
         ]
         final_info = info
@@ -102,6 +107,15 @@ class TeacherReplayRunner:
                         "truncated": bool(truncated),
                         "off_limit_contact": bool(
                             np.asarray(observation["off_limit_contact"]).reshape(-1)[0] > 0.5
+                        ),
+                        "auxiliary_summary_available": bool("auxiliary_force_contact_summary" in final_info),
+                        "auxiliary_force_contact_summary": normalize_auxiliary_force_contact_summary(
+                            final_info.get("auxiliary_force_contact_summary")
+                        ),
+                        "auxiliary_contact_metrics": summarize_auxiliary_force_contact_summary(
+                            auxiliary_force_contact_summary=final_info.get("auxiliary_force_contact_summary"),
+                            auxiliary_summary_available="auxiliary_force_contact_summary" in final_info,
+                            current_wrench=observation.get("wrench", np.zeros(6, dtype=np.float64)),
                         ),
                     }
                 )
@@ -144,6 +158,14 @@ class TeacherReplayComparator:
             "original_gym_final_score": original.metadata.get("final_metrics", {}).get("gym_final_score"),
             "off_limit_contact_delta": sum(bool(record.get("off_limit_contact", False)) for record in replayed.get("records", []))
             - sum(bool(step.get("observation_summary", {}).get("off_limit_contact", False)) for step in original.step_logs),
+            "auxiliary_hidden_contact_delta": sum(
+                bool(record.get("auxiliary_contact_metrics", {}).get("hidden_contact_recent", False))
+                for record in replayed.get("records", [])
+            )
+            - sum(
+                bool(step.get("auxiliary_contact_metrics", {}).get("hidden_contact_recent", False))
+                for step in original.step_logs
+            ),
             "metadata_keys": sorted(original.metadata.keys()),
         }
 

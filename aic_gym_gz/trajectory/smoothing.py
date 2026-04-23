@@ -22,7 +22,8 @@ class MinimumJerkSmoother:
     def smooth(self, *, state: RuntimeState, plan: TeacherPlan) -> TrajectorySegment:
         current_pose = np.asarray(state.tcp_pose, dtype=np.float64).copy()
         plug_to_tcp_offset = np.asarray(state.tcp_pose[:3] - state.plug_pose[:3], dtype=np.float64)
-        points: list[DenseTrajectoryPoint] = []
+        targets: list[np.ndarray] = []
+        ideal_steps: list[int] = []
         for waypoint in plan.waypoints:
             target_pose = current_pose.copy()
             # Teacher waypoints are specified in plug space. Convert them into
@@ -46,6 +47,19 @@ class MinimumJerkSmoother:
             )
             if plan.segment_granularity != "coarse":
                 steps = max(steps, 4)
+            targets.append(target_pose)
+            ideal_steps.append(steps)
+            current_pose = target_pose
+        allocated_steps = self._allocate_steps(
+            ideal_steps=ideal_steps,
+            horizon_steps=max(int(plan.segment_horizon_steps), 1),
+        )
+        current_pose = np.asarray(state.tcp_pose, dtype=np.float64).copy()
+        points: list[DenseTrajectoryPoint] = []
+        for target_pose, steps in zip(targets, allocated_steps):
+            if steps <= 0:
+                current_pose = target_pose
+                continue
             for step in range(1, steps + 1):
                 tau = step / steps
                 blend = 10.0 * tau**3 - 15.0 * tau**4 + 6.0 * tau**5
@@ -71,3 +85,37 @@ class MinimumJerkSmoother:
             points=tuple(points),
             expected_duration_s=duration_s,
         )
+
+    def _allocate_steps(self, *, ideal_steps: list[int], horizon_steps: int) -> list[int]:
+        if not ideal_steps:
+            return []
+        total_ideal_steps = sum(ideal_steps)
+        if total_ideal_steps <= horizon_steps:
+            return ideal_steps
+        scale = horizon_steps / max(total_ideal_steps, 1)
+        allocated = [max(1, int(math.floor(step_count * scale))) for step_count in ideal_steps]
+        allocated_total = sum(allocated)
+        if allocated_total > horizon_steps:
+            reduction_candidates = sorted(
+                range(len(allocated)),
+                key=lambda index: (allocated[index], ideal_steps[index]),
+            )
+            for index in reduction_candidates:
+                if allocated_total <= horizon_steps:
+                    break
+                reducible = min(allocated[index] - 1, allocated_total - horizon_steps)
+                if reducible <= 0:
+                    continue
+                allocated[index] -= reducible
+                allocated_total -= reducible
+        elif allocated_total < horizon_steps:
+            remainders = [
+                (ideal_steps[index] * scale - allocated[index], index)
+                for index in range(len(allocated))
+            ]
+            for _, index in sorted(remainders, reverse=True):
+                if allocated_total >= horizon_steps:
+                    break
+                allocated[index] += 1
+                allocated_total += 1
+        return allocated

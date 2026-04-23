@@ -13,17 +13,25 @@ from aic_gym_gz.teacher.search import TeacherCandidateSearch, TeacherSearchConfi
 from aic_gym_gz.utils import to_jsonable
 
 
+def _optional_float(value: str) -> float | None:
+    normalized = value.strip().lower()
+    if normalized in {"none", "null", "auto"}:
+        return None
+    return float(value)
+
+
 def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--seed", type=int, default=123)
     parser.add_argument("--trial-id", default=None)
     parser.add_argument("--live", action="store_true")
+    parser.add_argument("--include-images", action="store_true")
     parser.add_argument("--output", default="aic_gym_gz/artifacts/teacher_search.json")
     parser.add_argument("--near-perfect-threshold", type=float, default=90.0)
     parser.add_argument("--top-k", type=int, default=3)
     parser.add_argument("--planner-backend", choices=("mock", "openai"), default="mock")
     parser.add_argument("--openai-model", default="gpt-5.4-mini")
-    parser.add_argument("--openai-temperature", type=float, default=0.1)
+    parser.add_argument("--openai-temperature", type=_optional_float, default=0.1)
     parser.add_argument("--openai-timeout", type=float, default=20.0)
     parser.add_argument("--openai-max-retries", type=int, default=2)
     parser.add_argument("--openai-max-calls-per-episode", type=int, default=8)
@@ -32,9 +40,9 @@ def main() -> None:
     args = parser.parse_args()
 
     factory = (
-        (lambda: make_live_env(enable_randomization=False, include_images=False))
+        (lambda: make_live_env(enable_randomization=False, include_images=args.include_images))
         if args.live
-        else (lambda: make_default_env(enable_randomization=True, include_images=False))
+        else (lambda: make_default_env(enable_randomization=True, include_images=args.include_images))
     )
     planner_factory = (
         (lambda: DeterministicMockPlannerBackend())

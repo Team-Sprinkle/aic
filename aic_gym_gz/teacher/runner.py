@@ -17,7 +17,10 @@ from .policy import AgentTeacherController
 from .quality import (
     build_signal_quality_snapshot,
     controller_state_summary,
+    normalize_auxiliary_force_contact_summary,
     serialize_nested,
+    summarize_auxiliary_force_contact_summary,
+    synthetic_auxiliary_force_contact_summary,
     summarize_camera_info,
 )
 from .replay import TeacherReplayArtifact, save_teacher_replay
@@ -62,6 +65,8 @@ def run_teacher_rollout(
             include_images=include_images,
             camera_info=observation.get("camera_info"),
         ),
+        auxiliary_force_contact_summary=normalize_auxiliary_force_contact_summary(info.get("auxiliary_force_contact_summary")),
+        auxiliary_summary_available="auxiliary_force_contact_summary" in info,
     )
     start_wall = time.perf_counter()
     probe_results: list[dict[str, Any]] = []
@@ -104,6 +109,11 @@ def run_teacher_rollout(
                         include_images=include_images,
                         camera_info=observation.get("camera_info"),
                     ),
+                    auxiliary_force_contact_summary=_step_auxiliary_summary(
+                        state=state,
+                        step_info=last_info,
+                    ),
+                    auxiliary_summary_available="auxiliary_force_contact_summary" in last_info,
                 )
                 if terminated or truncated:
                     break
@@ -125,6 +135,7 @@ def run_teacher_rollout(
             observation, reward, terminated, truncated, last_info = env.step(action)
             state = env._state
             assert state is not None
+            auxiliary_summary_available = "auxiliary_force_contact_summary" in last_info
             history.append(
                 state=state,
                 action=action,
@@ -137,6 +148,20 @@ def run_teacher_rollout(
                     include_images=include_images,
                     camera_info=observation.get("camera_info"),
                 ),
+                auxiliary_force_contact_summary=_step_auxiliary_summary(
+                    state=state,
+                    step_info=last_info,
+                ),
+                auxiliary_summary_available=auxiliary_summary_available,
+            )
+            auxiliary_force_contact_summary = _step_auxiliary_summary(
+                state=state,
+                step_info=last_info,
+            )
+            auxiliary_contact_metrics = summarize_auxiliary_force_contact_summary(
+                auxiliary_force_contact_summary=auxiliary_force_contact_summary,
+                auxiliary_summary_available=auxiliary_summary_available,
+                current_wrench=state.wrench,
             )
             step_logs.append(
                 TeacherStepLog(
@@ -153,9 +178,13 @@ def run_teacher_rollout(
                         observation,
                         state=state,
                         include_images=include_images,
+                        step_info=last_info,
                     ),
                     history_summary=history.teacher_memory_summary(),
                     data_quality=dict(history.latest().signal_quality),
+                    auxiliary_force_contact_summary=auxiliary_force_contact_summary,
+                    auxiliary_summary_available=auxiliary_summary_available,
+                    auxiliary_contact_metrics=auxiliary_contact_metrics,
                     probe_result=probe_results[-1] if probe_results else None,
                 ).to_dict()
             )
@@ -165,6 +194,7 @@ def run_teacher_rollout(
             break
     total_wall_s = time.perf_counter() - start_wall
     final_history_summary = history.teacher_memory_summary()
+    final_auxiliary_summary = dict(final_history_summary.get("auxiliary_history_summary", {}))
     final_data_quality = dict(history.latest().signal_quality)
     final_metrics = _final_metrics(last_info=last_info, step_logs=step_logs)
     rollout_log = TeacherRolloutLog(
@@ -187,6 +217,7 @@ def run_teacher_rollout(
         },
         data_quality=final_data_quality,
         history_metadata=final_history_summary,
+        auxiliary_summary_metadata=final_auxiliary_summary,
         planner_candidates=planner_candidates,
         probe_results=probe_results,
         trajectory_segments=trajectory_segments,
@@ -206,7 +237,14 @@ def run_teacher_rollout(
             "scenario_metadata": dict(scenario.metadata),
             "task_metadata": _task_metadata(scenario, task_id),
             "data_quality": final_data_quality,
+            "initial_observation_summary": {
+                "sim_tick": int(initial_observation["sim_tick"]) if "sim_tick" in initial_observation else 0,
+                "sim_time": float(initial_observation["sim_time"]) if "sim_time" in initial_observation else 0.0,
+                "distance_to_target": float(initial_observation["plug_to_port_relative"][3]),
+            },
             "history_metadata": final_history_summary,
+            "auxiliary_summary_metadata": final_auxiliary_summary,
+            "auxiliary_summary_available": bool(final_auxiliary_summary.get("auxiliary_summary_available", False)),
             "planner_metadata": _planner_metadata(controller),
             "final_metrics": final_metrics,
         },
@@ -241,6 +279,7 @@ def _observation_summary(
     *,
     state,
     include_images: bool,
+    step_info: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     data_quality = build_signal_quality_snapshot(
         state,
@@ -281,12 +320,19 @@ def _observation_summary(
         "score_geometry": serialize_nested(observation.get("score_geometry", {})),
         "controller_state_summary": controller_state_summary(state.controller_state),
         "data_quality": data_quality,
+        "auxiliary_summary_available": bool(step_info and "auxiliary_force_contact_summary" in step_info),
     }
     if "images" in observation:
         summary["image_summaries"] = _image_summary_map(observation)
         summary["image_timestamps"] = _image_timestamp_map(observation)
         summary["camera_info"] = summarize_camera_info(observation.get("camera_info"))
     return summary
+
+
+def _step_auxiliary_summary(*, state, step_info: dict[str, Any]) -> dict[str, Any]:
+    if "auxiliary_force_contact_summary" not in step_info:
+        return synthetic_auxiliary_force_contact_summary(state)
+    return normalize_auxiliary_force_contact_summary(step_info.get("auxiliary_force_contact_summary"))
 
 
 def _planner_metadata(controller: AgentTeacherController) -> dict[str, Any]:

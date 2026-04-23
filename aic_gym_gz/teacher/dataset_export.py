@@ -43,6 +43,9 @@ def export_teacher_jsonl_dataset(
                 "dynamics_summary": step["dynamics_summary"],
                 "history_summary": step.get("history_summary", {}),
                 "data_quality": step.get("data_quality", artifact["metadata"].get("data_quality", {})),
+                "auxiliary_summary_available": step.get("auxiliary_summary_available", False),
+                "auxiliary_force_contact_summary": step.get("auxiliary_force_contact_summary", {}),
+                "auxiliary_contact_metrics": step.get("auxiliary_contact_metrics", {}),
                 "probe_result": step.get("probe_result"),
                 "task_metadata": {
                     "task_id": artifact["metadata"]["task_id"],
@@ -71,6 +74,7 @@ def export_teacher_jsonl_dataset(
                     "official_style_score": score,
                     "ranking_metrics": candidate_entry.get("ranking_metrics", {}),
                     "artifact_metadata": artifact["metadata"],
+                    "auxiliary_summary_metadata": artifact["metadata"].get("auxiliary_summary_metadata", {}),
                 }
             ),
             indent=2,
@@ -165,6 +169,7 @@ def export_teacher_lerobot_dataset(
                     "selected_top_k": candidate_entry["selected_top_k"],
                     "near_perfect": candidate_entry["near_perfect"],
                     "artifact_metadata": artifact["metadata"],
+                    "auxiliary_summary_metadata": artifact["metadata"].get("auxiliary_summary_metadata", {}),
                 }
             ),
             indent=2,

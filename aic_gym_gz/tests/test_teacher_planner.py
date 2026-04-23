@@ -21,7 +21,13 @@ class TeacherPlannerTest(unittest.TestCase):
             policy_context={
                 "plug_pose": [0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0],
                 "target_port_pose": [0.0, 0.0, 0.9, 0.0, 0.0, 0.0, 1.0],
+                "target_port_entrance_pose": [0.0, 0.0, 0.92, 0.0, 0.0, 0.0, 1.0],
                 "off_limit_contact": False,
+                "distance_to_target": 0.1,
+                "distance_to_entrance": 0.12,
+                "lateral_misalignment": 0.015,
+                "orientation_error": 0.1,
+                "insertion_progress": 0.0,
             },
             oracle_context={},
             obstacle_summary=[],
@@ -33,10 +39,56 @@ class TeacherPlannerTest(unittest.TestCase):
             image_timestamps={},
             image_summaries={},
             recent_probe_results=[],
+            temporal_context={
+                "phase_guidance": {
+                    "recommended_phase": "pre_insert_align",
+                    "alignment_needed": True,
+                    "in_insertion_zone": False,
+                    "insertion_ready": False,
+                },
+                "auxiliary_history_summary": {"hidden_contact_recent": False},
+            },
         )
         plan = backend.plan(state)
         self.assertGreaterEqual(len(plan.waypoints), 1)
         self.assertIn(plan.motion_mode, {"coarse_cartesian", "fine_cartesian", "guarded_insert"})
+
+    def test_mock_planner_can_progress_to_guarded_insert_near_entrance(self) -> None:
+        backend = DeterministicMockPlannerBackend()
+        state = TeacherPlanningState(
+            trial_id="trial_0",
+            task_id="task_0",
+            goal_summary="goal",
+            current_phase="pre_insert_align",
+            policy_context={
+                "plug_pose": [0.0, 0.0, 0.905, 0.0, 0.0, 0.0, 1.0],
+                "target_port_pose": [0.0, 0.0, 0.9, 0.0, 0.0, 0.0, 1.0],
+                "target_port_entrance_pose": [0.0, 0.0, 0.91, 0.0, 0.0, 0.0, 1.0],
+                "off_limit_contact": False,
+                "distance_to_target": 0.005,
+                "distance_to_entrance": 0.01,
+                "lateral_misalignment": 0.002,
+                "orientation_error": 0.01,
+                "insertion_progress": 0.3,
+            },
+            oracle_context={},
+            obstacle_summary=[],
+            dynamics_summary={"quasi_static": True, "cable_settling_score": 0.95},
+            image_refs=[],
+            image_timestamps={},
+            image_summaries={},
+            recent_probe_results=[],
+            temporal_context={
+                "phase_guidance": {
+                    "recommended_phase": "guarded_insert",
+                    "insertion_ready": True,
+                    "in_insertion_zone": True,
+                },
+                "auxiliary_history_summary": {"hidden_contact_recent": False},
+            },
+        )
+        plan = backend.plan(state, candidate_index=3)
+        self.assertEqual(plan.next_phase, "guarded_insert")
 
     def test_context_extractor_surfaces_controller_and_quality_metadata(self) -> None:
         env = make_default_env(enable_randomization=True, include_images=False)
@@ -69,6 +121,8 @@ class TeacherPlannerTest(unittest.TestCase):
         self.assertIn("controller_state", planning_state.controller_context)
         self.assertIn("wrench", planning_state.data_quality)
         self.assertEqual(planning_state.temporal_context["window_size"], 1)
+        self.assertIn("auxiliary_history_summary", planning_state.temporal_context)
+        self.assertIn("auxiliary_force_contact_summary", planning_state.policy_context)
 
 
 if __name__ == "__main__":
