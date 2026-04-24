@@ -13,6 +13,7 @@ DATASET_SINGLE_TASK="${DATASET_SINGLE_TASK:-Insert cable into target port}"
 ACTION_MODE="${ACTION_MODE:-cartesian}"
 MAX_EPISODES="${MAX_EPISODES:-}"
 POLICY_CLASS="${POLICY_CLASS:-aic_example_policies.ros.CheatCode}"
+POLICY_CONFIG_FILE="${POLICY_CONFIG_FILE:-${WORKSPACE_DIR}/aic_example_policies/aic_example_policies/assets/cheatcode_pid/config.yaml}"
 SIM_DISTROBOX_NAME="${SIM_DISTROBOX_NAME:-aic_eval}"
 AUTO_ATTACH="${AUTO_ATTACH:-true}"
 RESULTS_ROOT="${RESULTS_ROOT:-${WORKSPACE_DIR}/outputs/scores/$(basename "${DATASET_ROOT}")}"
@@ -35,6 +36,7 @@ Options:
   --workspace-dir PATH      workspace root containing pixi.toml (default: ${WORKSPACE_DIR})
   --engine-config PATH      aic_engine config yaml (default: ${ENGINE_CONFIG_FILE})
   --policy-class CLASS      policy class path (default: ${POLICY_CLASS})
+  --policy-config PATH      CheatCodePID config yaml/json (default: ${POLICY_CONFIG_FILE})
   --sim-distrobox NAME      distrobox name for simulation window (default: ${SIM_DISTROBOX_NAME})
   --dataset-repo-id ID      LeRobot dataset repo id (default: ${DATASET_REPO_ID})
   --dataset-root PATH       LeRobot dataset root (default: ${DATASET_ROOT})
@@ -51,7 +53,7 @@ Options:
 
 Environment variable equivalents are also supported:
   SESSION_NAME, WORKSPACE_DIR, ENGINE_CONFIG_FILE, POLICY_CLASS,
-  SIM_DISTROBOX_NAME, DATASET_REPO_ID, DATASET_ROOT, DATASET_SINGLE_TASK,
+  POLICY_CONFIG_FILE, SIM_DISTROBOX_NAME, DATASET_REPO_ID, DATASET_ROOT, DATASET_SINGLE_TASK,
   ACTION_MODE, MAX_EPISODES, RESULTS_ROOT, REMOVE_BAG_DATA, GAZEBO_GUI,
   LAUNCH_RVIZ, PID_TUNING_PLOTS
 EOF
@@ -73,6 +75,10 @@ while [[ $# -gt 0 ]]; do
       ;;
     --policy-class)
       POLICY_CLASS="$2"
+      shift 2
+      ;;
+    --policy-config)
+      POLICY_CONFIG_FILE="$2"
       shift 2
       ;;
     --sim-distrobox)
@@ -196,6 +202,11 @@ if [[ ! -f "${ENGINE_CONFIG_FILE}" ]]; then
   exit 1
 fi
 
+if [[ ! -f "${POLICY_CONFIG_FILE}" ]]; then
+  echo "Error: policy config file does not exist: ${POLICY_CONFIG_FILE}" >&2
+  exit 1
+fi
+
 if [[ -z "${MAX_EPISODES}" ]]; then
   MAX_EPISODES="$(count_trials_in_engine_config "${ENGINE_CONFIG_FILE}")"
   if ! [[ "${MAX_EPISODES}" =~ ^[0-9]+$ ]]; then
@@ -309,7 +320,7 @@ chmod +x "${POST_SIM_SCRIPT}"
 
 SIM_CMD="/entrypoint.sh ground_truth:=true start_aic_engine:=true gazebo_gui:=${GAZEBO_GUI} launch_rviz:=${LAUNCH_RVIZ} aic_engine_config_file:=${ENGINE_CONFIG_FILE} shutdown_on_aic_engine_exit:=true"
 SIM_CMD_IN_CONTAINER="export DBX_CONTAINER_MANAGER=docker && distrobox enter ${SIM_DISTROBOX_NAME} -- bash -lc 'cd \"${WORKSPACE_DIR}\" && export AIC_RESULTS_DIR=\"${RESULTS_ROOT}\" && ${SIM_CMD}'"
-POLICY_CMD="export AIC_PID_TUNING_PLOTS=\"${PID_TUNING_PLOTS}\" && pixi run ros2 run aic_model aic_model --ros-args -p use_sim_time:=true -p policy:=${POLICY_CLASS}"
+POLICY_CMD="export AIC_PID_CONFIG_FILE=\"${POLICY_CONFIG_FILE}\" && pixi run ros2 run aic_model aic_model --ros-args -p use_sim_time:=true -p policy:=${POLICY_CLASS}"
 RECORDER_CMD="pixi run aic-policy-recorder --dataset.repo_id=${DATASET_REPO_ID} --dataset.single_task=\"${DATASET_SINGLE_TASK}\" --dataset.root=${DATASET_ROOT} --dataset.fps=30 --action_mode=${ACTION_MODE} --max_episodes=${MAX_EPISODES} --dataset.push_to_hub"
 
 tmux new-session -d -s "${SESSION_NAME}" -n simulation
@@ -326,6 +337,7 @@ tmux select-window -t "${SESSION_NAME}:simulation"
 echo "Launched tmux session '${SESSION_NAME}' with windows: simulation, policy, recorder."
 echo "  scoring results dir: ${RESULTS_ROOT}"
 echo "  PID tuning plots: ${PID_TUNING_PLOTS}"
+echo "  policy config file: ${POLICY_CONFIG_FILE}"
 echo "  scoring yaml (after sim exits): ${SCORING_YAML}"
 echo "  score summary csv (after sim exits): ${SCORE_SUMMARY_CSV}"
 echo "  remove bag data: ${REMOVE_BAG_DATA}"
