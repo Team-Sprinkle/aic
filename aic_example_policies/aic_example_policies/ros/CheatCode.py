@@ -18,6 +18,7 @@
 import numpy as np
 
 from aic_model.policy import (
+    compute_delta_pose,
     GetObservationCallback,
     MoveRobotCallback,
     Policy,
@@ -207,6 +208,34 @@ class CheatCode(Policy):
             ),
         )
 
+    def _send_delta_pose_target(
+        self,
+        move_robot: MoveRobotCallback,
+        target_pose: Pose,
+    ) -> None:
+        gripper_tf_stamped = self._parent_node._tf_buffer.lookup_transform(
+            "base_link",
+            "gripper/tcp",
+            Time(),
+        )
+        current_pose = Pose(
+            position=Point(
+                x=gripper_tf_stamped.transform.translation.x,
+                y=gripper_tf_stamped.transform.translation.y,
+                z=gripper_tf_stamped.transform.translation.z,
+            ),
+            orientation=Quaternion(
+                x=gripper_tf_stamped.transform.rotation.x,
+                y=gripper_tf_stamped.transform.rotation.y,
+                z=gripper_tf_stamped.transform.rotation.z,
+                w=gripper_tf_stamped.transform.rotation.w,
+            ),
+        )
+        self.set_delta_pose_target(
+            move_robot=move_robot,
+            delta_pose=compute_delta_pose(current_pose, target_pose),
+        )
+
     def insert_cable(
         self,
         task: Task,
@@ -255,9 +284,9 @@ class CheatCode(Policy):
                 return True
             interp_fraction = t / steps
             try:
-                self.set_pose_target(
+                self._send_delta_pose_target(
                     move_robot=move_robot,
-                    pose=self.calc_gripper_pose(
+                    target_pose=self.calc_gripper_pose(
                         port_transform,
                         slerp_fraction=interp_fraction,
                         position_fraction=interp_fraction,
@@ -284,9 +313,9 @@ class CheatCode(Policy):
             z_offset -= 0.0005
             self.get_logger().info(f"z_offset: {z_offset:0.5}")
             try:
-                self.set_pose_target(
+                self._send_delta_pose_target(
                     move_robot=move_robot,
-                    pose=self.calc_gripper_pose(port_transform, z_offset=z_offset),
+                    target_pose=self.calc_gripper_pose(port_transform, z_offset=z_offset),
                 )
             except TransformException as ex:
                 self.get_logger().warn(f"TF lookup failed during insertion: {ex}")

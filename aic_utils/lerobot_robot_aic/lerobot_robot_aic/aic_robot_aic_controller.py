@@ -33,7 +33,8 @@ from aic_control_interfaces.msg import (
     TrajectoryGenerationMode,
 )
 from aic_control_interfaces.srv import ChangeTargetMode
-from geometry_msgs.msg import Twist, Vector3, Wrench, WrenchStamped
+from geometry_msgs.msg import Vector3, Wrench, WrenchStamped
+from aic_model.policy import build_pose_from_vectors, pose_to_position_motion_update, rotation_vector_to_quaternion_xyzw
 from lerobot.cameras import CameraConfig, make_cameras_from_configs
 from lerobot.robots import Robot, RobotConfig
 from lerobot.utils.errors import DeviceAlreadyConnectedError, DeviceNotConnectedError
@@ -425,40 +426,50 @@ class AICRobotAICController(Robot):
     def send_action_cartesian(self, action: dict[str, Any]) -> None:
         if not self._is_connected or not self.ros2_interface:
             raise DeviceNotConnectedError()
+        if self.config.record_only:
+            return
 
         motion_update_action = cast(MotionUpdateActionDict, action)
-
-        twist_msg = Twist()
-
         try:
-            twist_msg.linear.x = float(motion_update_action["linear.x"])
+            delta_position = np.array(
+                [
+                    float(motion_update_action["delta_position.x"]),
+                    float(motion_update_action["delta_position.y"]),
+                    float(motion_update_action["delta_position.z"]),
+                ],
+                dtype=np.float64,
+            )
         except KeyError:
             raise KeyError(
-                "Missing key 'linear.x'. If using `--teleop.type=aic_keyboard_joint`, have you set `--robot.teleop_target_mode=joint`?"
+                "Missing key 'delta_position.x'. If using `--teleop.type=aic_keyboard_joint`, have you set `--robot.teleop_target_mode=joint`?"
             ) from None
-        twist_msg.linear.y = float(motion_update_action["linear.y"])
-        twist_msg.linear.z = float(motion_update_action["linear.z"])
-        twist_msg.angular.x = float(motion_update_action["angular.x"])
-        twist_msg.angular.y = float(motion_update_action["angular.y"])
-        twist_msg.angular.z = float(motion_update_action["angular.z"])
+        delta_rotation = np.array(
+            [
+                float(motion_update_action["delta_rotation.x"]),
+                float(motion_update_action["delta_rotation.y"]),
+                float(motion_update_action["delta_rotation.z"]),
+            ],
+            dtype=np.float64,
+        )
 
-        msg = MotionUpdate()
-        msg.header.stamp = self.ros2_interface.node.get_clock().now().to_msg()
-        msg.header.frame_id = self.frame_id
-        msg.velocity = twist_msg
-        msg.target_stiffness = np.diag([85.0, 85.0, 85.0, 85.0, 85.0, 85.0]).flatten()
-        msg.target_damping = np.diag([75.0, 75.0, 75.0, 75.0, 75.0, 75.0]).flatten()
-        msg.feedforward_wrench_at_tip = Wrench(
-            force=Vector3(x=0.0, y=0.0, z=0.0),
-            torque=Vector3(x=0.0, y=0.0, z=0.0),
+        msg = pose_to_position_motion_update(
+            build_pose_from_vectors(
+                delta_position,
+                rotation_vector_to_quaternion_xyzw(delta_rotation),
+            ),
+            stamp=self.ros2_interface.node.get_clock().now().to_msg(),
+            frame_id=self.frame_id,
+            stiffness=[85.0, 85.0, 85.0, 85.0, 85.0, 85.0],
+            damping=[75.0, 75.0, 75.0, 75.0, 75.0, 75.0],
         )
         msg.wrench_feedback_gains_at_tip = [0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
-        msg.trajectory_generation_mode.mode = TrajectoryGenerationMode.MODE_VELOCITY
         self.ros2_interface.motion_update_pub.publish(msg)
 
     def send_action_joint(self, action: dict[str, Any]) -> None:
         if not self._is_connected or not self.ros2_interface:
             raise DeviceNotConnectedError()
+        if self.config.record_only:
+            return
 
         joint_motion_update_action = cast(JointMotionUpdateActionDict, action)
         msg = JointMotionUpdate()

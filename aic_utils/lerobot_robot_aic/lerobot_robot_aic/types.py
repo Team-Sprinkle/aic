@@ -3,12 +3,12 @@ from typing import TypedDict
 MotionUpdateActionDict = TypedDict(
     "MotionUpdateActionDict",
     {
-        "linear.x": float,
-        "linear.y": float,
-        "linear.z": float,
-        "angular.x": float,
-        "angular.y": float,
-        "angular.z": float,
+        "delta_position.x": float,
+        "delta_position.y": float,
+        "delta_position.z": float,
+        "delta_rotation.x": float,
+        "delta_rotation.y": float,
+        "delta_rotation.z": float,
     },
 )
 

@@ -33,7 +33,6 @@ from __future__ import annotations
 import argparse
 from dataclasses import dataclass
 import logging
-import math
 import time
 from pathlib import Path
 from typing import Any
@@ -58,6 +57,7 @@ from rclpy.node import Node
 from rclpy.qos import qos_profile_sensor_data
 from sensor_msgs.msg import Image
 
+from aic_model.policy import quaternion_xyzw_to_rotation_vector
 from .types import JointMotionUpdateActionDict, MotionUpdateActionDict
 
 
@@ -86,54 +86,6 @@ def _fixed_len(values: list[float], length: int) -> list[float]:
     if len(out) < length:
         out.extend([0.0] * (length - len(out)))
     return out
-
-
-def _quat_xyzw_to_wxyz(q_xyzw: np.ndarray) -> np.ndarray:
-    return np.array([q_xyzw[3], q_xyzw[0], q_xyzw[1], q_xyzw[2]], dtype=np.float64)
-
-
-def _quat_conjugate_wxyz(q: np.ndarray) -> np.ndarray:
-    return np.array([q[0], -q[1], -q[2], -q[3]], dtype=np.float64)
-
-
-def _quat_multiply_wxyz(q1: np.ndarray, q2: np.ndarray) -> np.ndarray:
-    w1, x1, y1, z1 = q1
-    w2, x2, y2, z2 = q2
-    return np.array(
-        [
-            w1 * w2 - x1 * x2 - y1 * y2 - z1 * z2,
-            w1 * x2 + x1 * w2 + y1 * z2 - z1 * y2,
-            w1 * y2 - x1 * z2 + y1 * w2 + z1 * x2,
-            w1 * z2 + x1 * y2 - y1 * x2 + z1 * w2,
-        ],
-        dtype=np.float64,
-    )
-
-
-def _angular_velocity_from_quats_xyzw(
-    prev_q_xyzw: np.ndarray,
-    curr_q_xyzw: np.ndarray,
-    dt: float,
-) -> np.ndarray:
-    if dt <= 1e-6:
-        return np.zeros(3, dtype=np.float64)
-
-    q_prev = _quat_xyzw_to_wxyz(prev_q_xyzw)
-    q_curr = _quat_xyzw_to_wxyz(curr_q_xyzw)
-    q_delta = _quat_multiply_wxyz(q_curr, _quat_conjugate_wxyz(q_prev))
-
-    if q_delta[0] < 0.0:
-        q_delta = -q_delta
-
-    w = float(np.clip(q_delta[0], -1.0, 1.0))
-    angle = 2.0 * math.acos(w)
-
-    if angle < 1e-9:
-        return np.zeros(3, dtype=np.float64)
-
-    s = math.sqrt(max(1e-12, 1.0 - w * w))
-    axis = q_delta[1:] / s
-    return axis * (angle / dt)
 
 
 def _stamp_to_sec(stamp: Any) -> float | None:
@@ -206,18 +158,14 @@ class PolicyRecorder(Node):
         self._pending_terminal_state: int | None = None
         self._episodes_saved = 0
         self._unsupported_encodings_logged: set[str] = set()
+        self._unsupported_action_modes_logged: set[str] = set()
         self._episode_save_state_by_goal: dict[tuple[int, ...], _EpisodeSaveState] = {}
 
         self._latest_obs: Observation | None = None
         self._latest_motion_cmd: MotionUpdate | None = None
         self._latest_joint_cmd: JointMotionUpdate | None = None
         self._latest_motion_recv_time = 0.0
-        self._latest_motion_cmd_time_sec: float | None = None
         self._latest_joint_wall_time = 0.0
-        self._prev_motion_pose_xyz: np.ndarray | None = None
-        self._prev_motion_pose_q_xyzw: np.ndarray | None = None
-        self._prev_motion_cmd_time_sec: float | None = None
-        self._prev_motion_recv_time: float | None = None
 
         self._teleop_action_processor, _, self._robot_observation_processor = (
             make_default_processors()
@@ -348,10 +296,6 @@ class PolicyRecorder(Node):
     def _motion_cmd_cb(self, msg: MotionUpdate) -> None:
         self._latest_motion_cmd = msg
         self._latest_motion_recv_time = time.monotonic()
-        stamp_sec = _stamp_to_sec(msg.header.stamp)
-        if stamp_sec is None:
-            stamp_sec = self.get_clock().now().nanoseconds * 1e-9
-        self._latest_motion_cmd_time_sec = stamp_sec
 
     def _joint_cmd_cb(self, msg: JointMotionUpdate) -> None:
         self._latest_joint_cmd = msg
@@ -453,12 +397,12 @@ class PolicyRecorder(Node):
     def _cartesian_action_from_motion(self) -> dict[str, float]:
         now = time.monotonic()
         zero_action = {
-            "linear.x": 0.0,
-            "linear.y": 0.0,
-            "linear.z": 0.0,
-            "angular.x": 0.0,
-            "angular.y": 0.0,
-            "angular.z": 0.0,
+            "delta_position.x": 0.0,
+            "delta_position.y": 0.0,
+            "delta_position.z": 0.0,
+            "delta_rotation.x": 0.0,
+            "delta_rotation.y": 0.0,
+            "delta_rotation.z": 0.0,
         }
 
         if self._latest_motion_cmd is None:
@@ -470,69 +414,48 @@ class PolicyRecorder(Node):
 
         if (
             int(msg.trajectory_generation_mode.mode)
-            == TrajectoryGenerationMode.MODE_VELOCITY
+            != TrajectoryGenerationMode.MODE_POSITION
         ):
-            return {
-                "linear.x": float(msg.velocity.linear.x),
-                "linear.y": float(msg.velocity.linear.y),
-                "linear.z": float(msg.velocity.linear.z),
-                "angular.x": float(msg.velocity.angular.x),
-                "angular.y": float(msg.velocity.angular.y),
-                "angular.z": float(msg.velocity.angular.z),
-            }
-
-        curr_xyz = np.array(
-            [
-                float(msg.pose.position.x),
-                float(msg.pose.position.y),
-                float(msg.pose.position.z),
-            ],
-            dtype=np.float64,
-        )
-        curr_q = np.array(
-            [
-                float(msg.pose.orientation.x),
-                float(msg.pose.orientation.y),
-                float(msg.pose.orientation.z),
-                float(msg.pose.orientation.w),
-            ],
-            dtype=np.float64,
-        )
-
-        if (
-            self._prev_motion_pose_xyz is None
-            or self._prev_motion_pose_q_xyzw is None
-            or self._prev_motion_cmd_time_sec is None
-            or self._latest_motion_cmd_time_sec is None
-            or self._prev_motion_recv_time is None
-        ):
-            self._prev_motion_pose_xyz = curr_xyz
-            self._prev_motion_pose_q_xyzw = curr_q
-            self._prev_motion_cmd_time_sec = self._latest_motion_cmd_time_sec
-            self._prev_motion_recv_time = self._latest_motion_recv_time
+            mode_key = f"mode:{int(msg.trajectory_generation_mode.mode)}"
+            if mode_key not in self._unsupported_action_modes_logged:
+                self.get_logger().warn(
+                    "Recorder expected Cartesian MODE_POSITION commands for delta-pose "
+                    f"datasets, received mode={int(msg.trajectory_generation_mode.mode)}. "
+                    "Recording zero action for this frame."
+                )
+                self._unsupported_action_modes_logged.add(mode_key)
             return zero_action
 
-        dt = self._latest_motion_cmd_time_sec - self._prev_motion_cmd_time_sec
-        if dt <= 1e-6:
-            dt = self._latest_motion_recv_time - self._prev_motion_recv_time
-        dt = max(1e-6, dt)
-        linear = (curr_xyz - self._prev_motion_pose_xyz) / dt
-        angular = _angular_velocity_from_quats_xyzw(
-            self._prev_motion_pose_q_xyzw, curr_q, dt
+        frame_id = str(getattr(msg.header, "frame_id", "") or "")
+        if frame_id != "gripper/tcp":
+            mode_key = f"frame:{frame_id}"
+            if mode_key not in self._unsupported_action_modes_logged:
+                self.get_logger().warn(
+                    "Recorder expected Cartesian pose commands in frame_id='gripper/tcp' "
+                    f"for delta-pose datasets, received frame_id='{frame_id}'. "
+                    "Recording zero action for this frame."
+                )
+                self._unsupported_action_modes_logged.add(mode_key)
+            return zero_action
+
+        rotvec = quaternion_xyzw_to_rotation_vector(
+            np.array(
+                [
+                    float(msg.pose.orientation.x),
+                    float(msg.pose.orientation.y),
+                    float(msg.pose.orientation.z),
+                    float(msg.pose.orientation.w),
+                ],
+                dtype=np.float64,
+            )
         )
-
-        self._prev_motion_pose_xyz = curr_xyz
-        self._prev_motion_pose_q_xyzw = curr_q
-        self._prev_motion_cmd_time_sec = self._latest_motion_cmd_time_sec
-        self._prev_motion_recv_time = self._latest_motion_recv_time
-
         return {
-            "linear.x": float(linear[0]),
-            "linear.y": float(linear[1]),
-            "linear.z": float(linear[2]),
-            "angular.x": float(angular[0]),
-            "angular.y": float(angular[1]),
-            "angular.z": float(angular[2]),
+            "delta_position.x": float(msg.pose.position.x),
+            "delta_position.y": float(msg.pose.position.y),
+            "delta_position.z": float(msg.pose.position.z),
+            "delta_rotation.x": float(rotvec[0]),
+            "delta_rotation.y": float(rotvec[1]),
+            "delta_rotation.z": float(rotvec[2]),
         }
 
     def _joint_action_from_joint_cmd(self) -> dict[str, float]:

@@ -8,10 +8,8 @@ import cv2
 import numpy as np
 import torch
 import yaml
-from geometry_msgs.msg import Twist, Vector3, Wrench
 from rclpy.node import Node
 
-from aic_control_interfaces.msg import MotionUpdate, TrajectoryGenerationMode
 from aic_model.policy import (
     GetObservationCallback,
     MoveRobotCallback,
@@ -31,7 +29,7 @@ class RunMIP(Policy):
 
         # Paths for repo-local MIP artifacts.
         self._assets_root = self._resolve_assets_root()
-        self._checkpoint_path = self._assets_root / "model_latest.pt"
+        self._checkpoint_path = self._assets_root / "model_100000.pt"
         self._task_cfg_path = (
             self._assets_root / "configs" / "task" / "aic_lerobot_image_state.yaml"
         )
@@ -87,6 +85,10 @@ class RunMIP(Policy):
         self.pending_actions: Deque[np.ndarray] = deque()
 
         self.camera_scale = 0.25
+        self.max_translation_delta = 0.02
+        self.max_rotation_delta = 0.2
+        self.translation_deadband = 5e-4
+        self.rotation_deadband = 1e-3
 
         self.get_logger().info(
             f"Loaded MIP policy on {self.device} from {self._checkpoint_path} "
@@ -398,17 +400,15 @@ class RunMIP(Policy):
                 return False
 
             self.get_logger().info(f"Action: {action}")
-
-            twist = Twist(
-                linear=Vector3(
-                    x=float(action[0]), y=float(action[1]), z=float(action[2])
-                ),
-                angular=Vector3(
-                    x=float(action[3]), y=float(action[4]), z=float(action[5])
-                ),
+            self.set_delta_pose_target_from_components(
+                move_robot=move_robot,
+                delta_position_xyz=action[:3],
+                delta_rotation_xyz=action[3:6],
+                max_translation=self.max_translation_delta,
+                max_rotation=self.max_rotation_delta,
+                deadband_translation=self.translation_deadband,
+                deadband_rotation=self.rotation_deadband,
             )
-            motion_update = self.set_cartesian_twist_target(twist)
-            move_robot(motion_update=motion_update)
             send_feedback("in progress...")
 
             elapsed = time.time() - loop_start
@@ -416,28 +416,3 @@ class RunMIP(Policy):
 
         self.get_logger().info("RunMIP.insert_cable() exiting...")
         return True
-
-    def set_cartesian_twist_target(self, twist: Twist, frame_id: str = "base_link"):
-        motion_update_msg = MotionUpdate()
-        motion_update_msg.velocity = twist
-        motion_update_msg.header.frame_id = frame_id
-        motion_update_msg.header.stamp = self.get_clock().now().to_msg()
-
-        motion_update_msg.target_stiffness = np.diag(
-            [100.0, 100.0, 100.0, 50.0, 50.0, 50.0]
-        ).flatten()
-        motion_update_msg.target_damping = np.diag(
-            [40.0, 40.0, 40.0, 15.0, 15.0, 15.0]
-        ).flatten()
-
-        motion_update_msg.feedforward_wrench_at_tip = Wrench(
-            force=Vector3(x=0.0, y=0.0, z=0.0), torque=Vector3(x=0.0, y=0.0, z=0.0)
-        )
-
-        motion_update_msg.wrench_feedback_gains_at_tip = [0.5, 0.5, 0.5, 0.0, 0.0, 0.0]
-
-        motion_update_msg.trajectory_generation_mode.mode = (
-            TrajectoryGenerationMode.MODE_VELOCITY
-        )
-
-        return motion_update_msg
