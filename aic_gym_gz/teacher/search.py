@@ -120,6 +120,7 @@ class CandidatePlannerBackend(PlannerBackend):
                 f"refinement_style={self._spec.refinement_style}; "
                 f"delta={self._spec.perturbation_xyz}; yaw_offset={self._spec.yaw_offset:.4f}"
             ),
+            decision_diagnostics=dict(transformed.decision_diagnostics),
         )
 
     def plan_global_guidance(self, state, *, candidate_index: int = 0) -> dict[str, Any] | None:
@@ -596,6 +597,7 @@ def _apply_candidate_family(*, base_plan: TeacherPlan, state, spec: CandidateSpe
         segment_horizon_steps=horizon_steps,
         segment_granularity=segment_granularity,
         rationale_summary=f"{base_plan.rationale_summary}; family={family}",
+        decision_diagnostics=dict(base_plan.decision_diagnostics),
     )
 
 
@@ -722,6 +724,7 @@ def _apply_refinement_style(*, base_plan: TeacherPlan, state, spec: CandidateSpe
         segment_horizon_steps=horizon_steps,
         segment_granularity=segment_granularity,
         rationale_summary=f"{base_plan.rationale_summary}; refinement_style={style}",
+        decision_diagnostics=dict(base_plan.decision_diagnostics),
     )
 
 

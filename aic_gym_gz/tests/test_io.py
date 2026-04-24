@@ -11,6 +11,17 @@ from aic_gym_gz.video import HeadlessTrajectoryVideoRecorder
 
 
 class IoTest(unittest.TestCase):
+    class _FakeOverviewSubscriber:
+        def __init__(self, images):
+            self._images = images
+
+        def latest_images(self):
+            timestamps = {name: 1.0 for name in self._images}
+            return self._images, timestamps, {}
+
+        def close(self):
+            return None
+
     def test_camera_bridge_sidecar_builds_topic_pairs(self) -> None:
         bridge = CameraBridgeSidecar(topic_map={"overview": "/overview_camera/image"})
         self.assertEqual(
@@ -53,8 +64,16 @@ class IoTest(unittest.TestCase):
                 output_dir=tmpdir,
                 enabled=True,
                 require_real_wrist_images=True,
-                require_live_overview=False,
+                require_live_overview=True,
                 prefer_live_overview_camera=False,
+            )
+            recorder._overview_camera_subscriber = self._FakeOverviewSubscriber(
+                {
+                    "top_down_xy": np.full((64, 64, 3), 10, dtype=np.uint8),
+                    "front_xz": np.full((64, 64, 3), 10, dtype=np.uint8),
+                    "side_yz": np.full((64, 64, 3), 10, dtype=np.uint8),
+                    "oblique_xy": np.full((64, 64, 3), 10, dtype=np.uint8),
+                }
             )
             with self.assertRaises(RuntimeError):
                 recorder.capture(
@@ -77,8 +96,16 @@ class IoTest(unittest.TestCase):
                 output_dir=tmpdir,
                 enabled=True,
                 require_real_wrist_images=False,
-                require_live_overview=False,
+                require_live_overview=True,
                 prefer_live_overview_camera=False,
+            )
+            recorder._overview_camera_subscriber = self._FakeOverviewSubscriber(
+                {
+                    "top_down_xy": np.full((64, 64, 3), 50, dtype=np.uint8),
+                    "front_xz": np.full((64, 64, 3), 60, dtype=np.uint8),
+                    "side_yz": np.full((64, 64, 3), 70, dtype=np.uint8),
+                    "oblique_xy": np.full((64, 64, 3), 80, dtype=np.uint8),
+                }
             )
             recorder.capture(
                 observation={

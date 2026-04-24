@@ -76,6 +76,7 @@ class TeacherPlanningState:
     trial_id: str
     task_id: str
     goal_summary: str
+    task_definition: dict[str, Any]
     current_phase: TeacherPhase
     policy_context: dict[str, Any]
     oracle_context: dict[str, Any]
@@ -143,6 +144,7 @@ class TeacherPlan:
     segment_horizon_steps: int
     segment_granularity: Literal["coarse", "fine", "guarded"]
     rationale_summary: str
+    decision_diagnostics: dict[str, Any] = field(default_factory=dict)
 
     def to_dict(self) -> dict[str, Any]:
         payload = asdict(self)

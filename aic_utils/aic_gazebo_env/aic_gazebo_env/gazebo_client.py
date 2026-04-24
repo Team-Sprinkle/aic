@@ -240,6 +240,7 @@ class GazeboCliClientConfig:
     settle_step_ticks: int = 1
     observation_transport: str = "auto"
     persistent_topic_quiet_period_s: float = 0.05
+    allow_world_step_on_observation_timeout: bool = True
 
 
 @dataclass
@@ -477,7 +478,7 @@ class GazeboCliClient(GazeboClient):
                 return self._run(["topic", "-e", "-n", "1", "-t", topic])
             except (RuntimeError, subprocess.TimeoutExpired) as exc:
                 last_error = exc
-                if topic.endswith("/state"):
+                if topic.endswith("/state") and self.config.allow_world_step_on_observation_timeout:
                     fallback_payload = self._read_state_sample_after_world_step(topic)
                     if fallback_payload is not None:
                         return fallback_payload
@@ -499,9 +500,10 @@ class GazeboCliClient(GazeboClient):
                 timeout=min(self.config.timeout, 2.0),
             )
         except TimeoutError:
-            fallback_payload = self._read_state_sample_after_world_step(topic)
-            if fallback_payload is not None:
-                return fallback_payload, None
+            if self.config.allow_world_step_on_observation_timeout:
+                fallback_payload = self._read_state_sample_after_world_step(topic)
+                if fallback_payload is not None:
+                    return fallback_payload, None
             raise
 
     def _read_pose_sample(self, *, topic: str) -> str | None:
@@ -1869,13 +1871,13 @@ class GazeboCliClient(GazeboClient):
         if isinstance(discovered_world_name, str) and discovered_world_name:
             return discovered_world_name
 
+        if self.config.world_name:
+            return self.config.world_name
+
         running_world_name = self._discover_running_world_name()
         if running_world_name:
             self._discovered_world_name = running_world_name
             return running_world_name
-
-        if self.config.world_name:
-            return self.config.world_name
 
         return self._world_name_from_path()
 

@@ -30,6 +30,30 @@ def _planning_state() -> TeacherPlanningState:
         trial_id="trial_0",
         task_id="task_0",
         goal_summary="goal",
+        task_definition={
+            "scenario_task_definition": {
+                "task_id": "task_0",
+                "cable_type": "sfp_sc",
+                "cable_name": "cable_0",
+                "plug_type": "sfp",
+                "plug_name": "sfp_tip",
+                "port_type": "sfp",
+                "port_name": "sfp_port_0",
+                "target_module_name": "nic_card_mount_0",
+                "time_limit_s": 180.0,
+            },
+            "task_msg": {
+                "id": "task_0",
+                "cable_type": "sfp_sc",
+                "cable_name": "cable_0",
+                "plug_type": "sfp",
+                "plug_name": "sfp_tip",
+                "port_type": "sfp",
+                "port_name": "sfp_port_0",
+                "target_module_name": "nic_card_mount_0",
+                "time_limit": 180,
+            },
+        },
         current_phase="free_space_approach",
         policy_context={
             "tcp_pose": [0.0, 0.0, 1.02, 0.0, 0.0, 0.0, 1.0],
@@ -59,6 +83,29 @@ def _planning_state() -> TeacherPlanningState:
                 "runtime_pose_frame": "world",
                 "runtime_action_command_frame": "world",
                 "official_policy_reference_frame": "base_link",
+            },
+            "geometry_tool_outputs": {
+                "frame_transform_queries": {
+                    "official_policy_base_link_to_runtime_world": {
+                        "ok": False,
+                        "transform_available": False,
+                    }
+                },
+                "distance_and_alignment_queries": {
+                    "plug_to_target_port": {
+                        "distance_to_target_m": 0.1,
+                        "distance_to_entrance_m": 0.12,
+                        "lateral_offset_m": 0.02,
+                        "axial_depth_m": -0.08,
+                        "insertion_progress": 0.0,
+                    }
+                },
+                "clearance_distance_queries": {
+                    "plug_to_entrance_segment": {
+                        "nearest_obstacle_distance_m": 0.031,
+                        "approach_segment_min_clearance_m": 0.015,
+                    }
+                },
             },
         },
         obstacle_summary=[],
@@ -107,6 +154,23 @@ def _planning_state() -> TeacherPlanningState:
             "scene_overview_sources": {"top_down_xy": "teacher_schematic_scene_overview"},
             "scene_overview_live_source_used": False,
             "prefer_live_scene_overview": False,
+            "overlay_metadata": {
+                "xyz_axis_overlay_targets": [{"name": "plug"}],
+                "insertion_axis_overlay": {"label": "port_insertion_axis"},
+                "zoomed_interaction_crop": {"radius_m": 0.05},
+            },
+            "signal_reliability_summary": {
+                "real_signals": ["controller_state"],
+                "approximate_signals": ["wrench"],
+                "missing_signals": [],
+            },
+            "available_helper_tool_outputs": [
+                "frame_transform_query",
+                "distance_and_alignment_query",
+                "clearance_distance_query",
+                "signal_reliability_summary",
+                "xyz_axis_overlay_metadata",
+            ],
         },
     )
 
@@ -133,7 +197,15 @@ class TeacherOpenAIPlannerBackendTest(unittest.TestCase):
                     "should_probe": true,
                     "segment_horizon_steps": 6,
                     "segment_granularity": "fine",
-                    "rationale_summary": "Use a conservative align segment."
+                    "rationale_summary": "Use a conservative align segment.",
+                    "decision_diagnostics": {
+                        "confidence_level": "medium",
+                        "blocking_gaps": ["No explicit transform from base_link to world was provided."],
+                        "ambiguous_frames": ["Controller pose appears to use a different frame from world entities."],
+                        "requested_tools": ["frame_transform_query", "distance_and_alignment_query"],
+                        "requested_visual_aids": ["xyz_axis_arrow_overlay", "port_axis_or_insertion_axis_overlay"],
+                        "assumptions_used": ["Assumed target and plug poses are both expressed in the runtime world frame."]
+                    }
                 }"""
             },
             config=OpenAIPlannerConfig(enabled=True, max_retries=0),
@@ -141,6 +213,8 @@ class TeacherOpenAIPlannerBackendTest(unittest.TestCase):
         plan = backend.plan(_planning_state())
         self.assertEqual(plan.next_phase, "pre_insert_align")
         self.assertEqual(len(plan.waypoints), 1)
+        self.assertEqual(plan.decision_diagnostics["confidence_level"], "medium")
+        self.assertIn("frame_transform_query", plan.decision_diagnostics["requested_tools"])
         self.assertEqual(backend.last_payload["text"]["format"]["type"], "json_schema")
         self.assertEqual(
             backend.last_payload["input"][0]["content"][0]["type"],
@@ -172,6 +246,15 @@ class TeacherOpenAIPlannerBackendTest(unittest.TestCase):
         self.assertIn("wrench_timestamp", user_text)
         self.assertIn("scene_overview_sources", user_text)
         self.assertIn("runtime_pose_frame", user_text)
+        self.assertIn("task_definition", user_text)
+        self.assertIn("available_helper_tools", user_text)
+        self.assertIn("geometry_tool_outputs", user_text)
+        self.assertIn("overlay_metadata", user_text)
+        self.assertIn("signal_reliability_summary", user_text)
+        self.assertIn("distance_and_alignment_query", user_text)
+        self.assertIn("clearance_distance_query", user_text)
+        self.assertIn("xyz_axis_arrow_overlay", user_text)
+        self.assertIn("\"target_module_name\": \"nic_card_mount_0\"", user_text)
 
     def test_build_global_guidance_payload_uses_global_schema(self) -> None:
         backend = OpenAIPlannerBackend(
@@ -185,6 +268,7 @@ class TeacherOpenAIPlannerBackendTest(unittest.TestCase):
         self.assertEqual(payload["model"], "gpt-5.4-mini")
         self.assertEqual(payload["text"]["format"]["name"], "teacher_global_guidance")
         self.assertEqual(payload["text"]["format"]["schema"]["required"][0], "strategy_summary")
+        self.assertIn("decision_diagnostics", payload["text"]["format"]["schema"]["required"])
 
     def test_visual_context_is_included_when_present(self) -> None:
         state = _planning_state()
@@ -242,7 +326,15 @@ class TeacherOpenAIPlannerBackendTest(unittest.TestCase):
                     "should_probe": false,
                     "segment_horizon_steps": 0,
                     "segment_granularity": "fine",
-                    "rationale_summary": ""
+                    "rationale_summary": "",
+                    "decision_diagnostics": {
+                        "confidence_level": "low",
+                        "blocking_gaps": [],
+                        "ambiguous_frames": [],
+                        "requested_tools": [],
+                        "requested_visual_aids": [],
+                        "assumptions_used": []
+                    }
                 }"""
             },
             config=OpenAIPlannerConfig(enabled=True, max_retries=0),

@@ -61,6 +61,7 @@ class AicInsertionEnv(gym.Env[dict[str, Any], np.ndarray]):
             "task_definition": next(iter(scenario.tasks.values())).__dict__,
             "reward_label": "rl_step_reward",
             "score_label": "gym_final_score",
+            "runtime_scene_validation": dict(state.world_entities_summary.get("runtime_diagnostics", {})),
         }
         return observation, info
 
@@ -89,6 +90,9 @@ class AicInsertionEnv(gym.Env[dict[str, Any], np.ndarray]):
             "wrench_is_current_sample_only": True,
             "auxiliary_force_contact_summary_is_non_official": True,
         }
+        info["runtime_scene_validation"] = dict(
+            current_state.world_entities_summary.get("runtime_diagnostics", {})
+        )
         info["auxiliary_force_contact_summary"] = (
             current_state.auxiliary_force_contact_summary.to_dict()
         )
@@ -214,6 +218,8 @@ def make_live_env(
     timeout: float = 10.0,
     attach_ready_timeout: float | None = None,
     image_shape: tuple[int, int, int] = (256, 256, 3),
+    allow_synthetic_tcp_pose: bool = False,
+    allow_synthetic_plug_pose: bool = False,
 ) -> AicInsertionEnv:
     return AicInsertionEnv(
         runtime=AicGazeboRuntime(
@@ -223,6 +229,8 @@ def make_live_env(
                 attach_ready_timeout=attach_ready_timeout,
                 attach_to_existing=attach_to_existing,
                 transport_backend=transport_backend,
+                allow_synthetic_tcp_pose=allow_synthetic_tcp_pose,
+                allow_synthetic_plug_pose=allow_synthetic_plug_pose,
             ),
             ticks_per_step=ticks_per_step,
         ),

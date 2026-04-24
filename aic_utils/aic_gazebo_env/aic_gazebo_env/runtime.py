@@ -86,6 +86,7 @@ class GazeboRuntimeConfig:
     action_post_step_ticks: int = 1
     settle_step_ticks: int = 1
     observation_transport: str = "auto"
+    allow_world_step_on_observation_timeout: bool = True
 
 
 @dataclass
@@ -239,6 +240,7 @@ class GazeboRuntime(Runtime):
                 action_post_step_ticks=self.config.action_post_step_ticks,
                 settle_step_ticks=self.config.settle_step_ticks,
                 observation_transport=self.config.observation_transport,
+                allow_world_step_on_observation_timeout=self.config.allow_world_step_on_observation_timeout,
             )
             backend = self.config.transport_backend
             if backend == "transport" or (
@@ -335,6 +337,7 @@ class GazeboAttachedRuntime(Runtime):
                 action_post_step_ticks=self.config.action_post_step_ticks,
                 settle_step_ticks=self.config.settle_step_ticks,
                 observation_transport=self.config.observation_transport,
+                allow_world_step_on_observation_timeout=self.config.allow_world_step_on_observation_timeout,
             )
             backend = self.config.transport_backend
             if backend == "transport" or (

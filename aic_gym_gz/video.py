@@ -5,6 +5,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 import json
 from pathlib import Path
+import time
 from typing import Any
 
 import imageio.v2 as imageio
@@ -12,9 +13,6 @@ import numpy as np
 from PIL import Image, ImageDraw
 
 from .io import CameraBridgeSidecar, RosCameraSubscriber
-from .teacher.visual_context import render_scene_overview_frame
-
-
 def default_video_output_dir(*, run_name: str) -> Path:
     return Path("aic_gym_gz/artifacts/videos") / run_name
 
@@ -91,7 +89,7 @@ class HeadlessTrajectoryVideoRecorder:
         self._overview_sources: dict[str, dict[str, int]] = {
             view_name: {
                 "live_overview_topic": 0,
-                "teacher_schematic_scene_overview": 0,
+                "missing_live_overview": 0,
             }
             for view_name in self.OVERVIEW_TOPIC_MAP
         }
@@ -112,10 +110,6 @@ class HeadlessTrajectoryVideoRecorder:
             "camera_left": _StreamWriter(self.output_dir / "camera_left.mp4", fps=self.fps),
             "camera_center": _StreamWriter(self.output_dir / "camera_center.mp4", fps=self.fps),
             "camera_right": _StreamWriter(self.output_dir / "camera_right.mp4", fps=self.fps),
-            "overview_top_down_xy": _StreamWriter(self.output_dir / "overview_top_down_xy.mp4", fps=self.fps),
-            "overview_front_xz": _StreamWriter(self.output_dir / "overview_front_xz.mp4", fps=self.fps),
-            "overview_side_yz": _StreamWriter(self.output_dir / "overview_side_yz.mp4", fps=self.fps),
-            "overview_oblique_xy": _StreamWriter(self.output_dir / "overview_oblique_xy.mp4", fps=self.fps),
         }
         if self.prefer_live_overview_camera:
             self._overview_camera_bridge = CameraBridgeSidecar(topic_map=dict(self.OVERVIEW_TOPIC_MAP))
@@ -165,7 +159,12 @@ class HeadlessTrajectoryVideoRecorder:
         overview_frames = self._overview_frames(scenario=scenario, state=state)
         for view_name, (overview, overview_source) in overview_frames.items():
             self._overview_sources[view_name][overview_source] += 1
-            self._writers[f"overview_{view_name}"].append(overview, sim_time=sim_time)
+            if overview is None:
+                continue
+            self._ensure_writer(name=f"overview_{view_name}", path=self.output_dir / f"overview_{view_name}.mp4").append(
+                overview,
+                sim_time=sim_time,
+            )
 
     def close(self) -> dict[str, Any]:
         if not self.enabled:
@@ -190,11 +189,18 @@ class HeadlessTrajectoryVideoRecorder:
         }
 
     def _overview_frames(self, *, scenario: Any, state: Any) -> dict[str, tuple[np.ndarray, str]]:
+        del scenario, state
         images: dict[str, np.ndarray] = {}
+        deadline = time.monotonic() + (30.0 if self.require_live_overview and not self._seen_live_overview else 0.5)
         if self._overview_camera_subscriber is not None:
-            ready_timeout = 30.0 if self.require_live_overview and not self._seen_live_overview else 0.5
-            if self._overview_camera_subscriber.wait_until_ready(timeout_s=ready_timeout):
+            while time.monotonic() < deadline:
                 images, _, _ = self._overview_camera_subscriber.latest_images()
+                if any(
+                    image is not None and image.size > 0 and int(image.sum()) > 0
+                    for image in images.values()
+                ):
+                    break
+                time.sleep(0.05)
         frames: dict[str, tuple[np.ndarray, str]] = {}
         for view_name, topic in self.OVERVIEW_TOPIC_MAP.items():
             overview_image = images.get(view_name)
@@ -207,16 +213,15 @@ class HeadlessTrajectoryVideoRecorder:
                     "Live overview camera frames were required for video export, but "
                     f"no nonblank frames arrived on {topic!r} for view {view_name!r}."
                 )
-            frames[view_name] = (
-                render_scene_overview_frame(
-                    scenario=scenario,
-                    state=state,
-                    view_name=view_name,
-                    image_size=(512, 512),
-                ),
-                "teacher_schematic_scene_overview",
-            )
+            frames[view_name] = (None, "missing_live_overview")
         return frames
+
+    def _ensure_writer(self, *, name: str, path: Path) -> _StreamWriter:
+        writer = self._writers.get(name)
+        if writer is None:
+            writer = _StreamWriter(path, fps=self.fps)
+            self._writers[name] = writer
+        return writer
 
 
 def _camera_frame(frame: np.ndarray | None, *, label: str, require_real: bool = False) -> np.ndarray:

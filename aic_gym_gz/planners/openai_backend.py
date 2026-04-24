@@ -33,6 +33,17 @@ class _WaypointPayload(BaseModel):
     clearance_hint: float = Field(default=0.0, ge=0.0, le=0.25)
 
 
+class _DecisionDiagnosticsPayload(BaseModel):
+    model_config = ConfigDict(extra="forbid", strict=True)
+
+    confidence_level: Literal["high", "medium", "low"]
+    blocking_gaps: list[str] = Field(default_factory=list, max_length=6)
+    ambiguous_frames: list[str] = Field(default_factory=list, max_length=4)
+    requested_tools: list[str] = Field(default_factory=list, max_length=6)
+    requested_visual_aids: list[str] = Field(default_factory=list, max_length=6)
+    assumptions_used: list[str] = Field(default_factory=list, max_length=6)
+
+
 class _PlanPayload(BaseModel):
     model_config = ConfigDict(extra="forbid", strict=True)
 
@@ -51,6 +62,7 @@ class _PlanPayload(BaseModel):
     segment_horizon_steps: int = Field(ge=1, le=64)
     segment_granularity: Literal["coarse", "fine", "guarded"]
     rationale_summary: str = Field(min_length=1, max_length=400)
+    decision_diagnostics: _DecisionDiagnosticsPayload
 
 
 @dataclass(frozen=True)
@@ -203,10 +215,12 @@ class OpenAIPlannerBackend(PlannerBackend):
                 "text": json.dumps(
                     {
                         "task": state.goal_summary,
+                        "task_definition": state.task_definition,
                         "candidate_index": candidate_index,
                         "current_phase": state.current_phase,
                         "phase_guidance": state.temporal_context.get("phase_guidance", {}),
                         "global_inputs": {
+                            "task_definition": brief.get("task_definition", {}),
                             "current_observation": brief.get("current_observation", {}),
                             "scene_geometry_context": brief.get("scene_geometry_context", {}),
                             "obstacle_summary": brief.get("obstacle_summary", []),
@@ -287,7 +301,12 @@ class OpenAIPlannerBackend(PlannerBackend):
                             "text": (
                                 "You are producing low-frequency global guidance for a cable insertion teacher. "
                                 "Do not emit executable low-level actions. Produce only phase-level strategy and a "
-                                "small set of milestone waypoints that later local planning can refine."
+                                "small set of milestone waypoints that later local planning can refine. Respect the "
+                                "structured task_definition as the authoritative task contract. Also report "
+                                "decision_diagnostics that state what missing information, frame ambiguity, tools, "
+                                "or visual aids would improve planning accuracy. Be explicit when transform math, "
+                                "distance checks, xyz-axis overlays, insertion-axis arrows, zoomed crops, or extra "
+                                "camera angles would help."
                             ),
                         }
                     ],
@@ -361,7 +380,12 @@ class OpenAIPlannerBackend(PlannerBackend):
                                 "clearance behavior, or insertion aggressiveness. Do not emit near-duplicate plans. "
                                 "If the segment would be long, emit only the next short segment that makes progress "
                                 "toward the phase guidance instead of a whole-episode path. Do not stay in one phase "
-                                "indefinitely when the phase guidance recommends advancement."
+                                "indefinitely when the phase guidance recommends advancement. Treat the structured "
+                                "task_definition as the authoritative goal. Always fill decision_diagnostics with "
+                                "the concrete gaps or ambiguities that limit confidence, plus the extra tools or "
+                                "visual aids that would most improve the next decision. Explicitly mention if frame "
+                                "transforms, distances/clearances, xyz-axis arrows, insertion-axis overlays, click "
+                                "annotations, or additional camera views would help."
                             ),
                         }
                     ],
@@ -406,6 +430,7 @@ class OpenAIPlannerBackend(PlannerBackend):
         candidate_family = candidate_family_for_index(candidate_index)
         return {
             "task": state.goal_summary,
+            "task_definition": state.task_definition,
             "current_phase": state.current_phase,
             "candidate_index": candidate_index,
             "candidate_guidance": candidate_family["planner_instruction"],
@@ -424,6 +449,20 @@ class OpenAIPlannerBackend(PlannerBackend):
             "global_guidance": state.temporal_context.get("global_guidance", {}),
             "auxiliary_contact_summary": state.temporal_context.get("auxiliary_history_summary", {}),
             "frame_context": state.policy_context.get("frame_context", {}),
+            "geometry_tool_outputs": state.policy_context.get("geometry_tool_outputs", {}),
+            "overlay_metadata": state.planning_metadata.get("overlay_metadata", {}),
+            "signal_reliability_summary": state.planning_metadata.get("signal_reliability_summary", {}),
+            "available_helper_tools": [
+                "frame_transform_query",
+                "distance_and_alignment_query",
+                "clearance_distance_query",
+                "signal_reliability_summary",
+                "port_axis_or_insertion_axis_overlay",
+                "xyz_axis_arrow_overlay",
+                "click_or_keypoint_annotations",
+                "zoomed_crop_request",
+                "additional_camera_angle_request",
+            ],
             "signal_quality_summary": {
                 signal: {
                     "is_real": quality.get("is_real"),
@@ -443,6 +482,7 @@ class OpenAIPlannerBackend(PlannerBackend):
         policy = state.policy_context
         return {
             "candidate_index": candidate_index,
+            "task_definition": state.task_definition,
             "compact_planning_brief": self._compact_planning_brief(
                 state=state,
                 candidate_index=candidate_index,
@@ -463,6 +503,7 @@ class OpenAIPlannerBackend(PlannerBackend):
                 "off_limit_contact": policy.get("off_limit_contact"),
                 "relative_geometry": policy.get("relative_geometry"),
                 "frame_context": policy.get("frame_context"),
+                "geometry_tool_outputs": policy.get("geometry_tool_outputs"),
                 "world_entities_summary": policy.get("world_entities_summary"),
             },
             "obstacle_summary": state.obstacle_summary[:6],
@@ -474,6 +515,7 @@ class OpenAIPlannerBackend(PlannerBackend):
                 "clearance_summary": state.oracle_context.get("clearance_summary"),
                 "scene_layout_summary": state.oracle_context.get("scene_layout_summary"),
                 "cable_context": state.oracle_context.get("cable"),
+                "geometry_tool_outputs": state.oracle_context.get("geometry_tool_outputs"),
             },
             "temporal_context_summary": {
                 "dynamics_summary": state.dynamics_summary,
@@ -527,6 +569,8 @@ class OpenAIPlannerBackend(PlannerBackend):
                 "frame_context": state.planning_metadata.get("frame_context"),
                 "planner_output_mode": state.planning_metadata.get("planner_output_mode"),
                 "scene_overview_sources": state.planning_metadata.get("scene_overview_sources"),
+                "overlay_metadata": state.planning_metadata.get("overlay_metadata"),
+                "available_helper_tool_outputs": state.planning_metadata.get("available_helper_tool_outputs"),
                 "available_scene_overview_views": state.planning_metadata.get("available_scene_overview_views"),
                 "scene_overview_live_source_used": state.planning_metadata.get("scene_overview_live_source_used"),
                 "prefer_live_scene_overview": state.planning_metadata.get("prefer_live_scene_overview"),
@@ -693,6 +737,24 @@ class OpenAIPlannerBackend(PlannerBackend):
             segment_horizon_steps=int(payload.segment_horizon_steps),
             segment_granularity=payload.segment_granularity,
             rationale_summary=payload.rationale_summary.strip(),
+            decision_diagnostics={
+                "confidence_level": payload.decision_diagnostics.confidence_level,
+                "blocking_gaps": [item.strip() for item in payload.decision_diagnostics.blocking_gaps if item.strip()],
+                "ambiguous_frames": [
+                    item.strip() for item in payload.decision_diagnostics.ambiguous_frames if item.strip()
+                ],
+                "requested_tools": [
+                    item.strip() for item in payload.decision_diagnostics.requested_tools if item.strip()
+                ],
+                "requested_visual_aids": [
+                    item.strip()
+                    for item in payload.decision_diagnostics.requested_visual_aids
+                    if item.strip()
+                ],
+                "assumptions_used": [
+                    item.strip() for item in payload.decision_diagnostics.assumptions_used if item.strip()
+                ],
+            },
         )
 
     def _post_responses_request(self, payload: dict[str, Any]) -> dict[str, Any]:
@@ -912,6 +974,33 @@ class OpenAIPlannerBackend(PlannerBackend):
                     "enum": ["coarse", "fine", "guarded"],
                 },
                 "rationale_summary": {"type": "string", "minLength": 1, "maxLength": 400},
+                "decision_diagnostics": {
+                    "type": "object",
+                    "additionalProperties": False,
+                    "properties": {
+                        "confidence_level": {
+                            "type": "string",
+                            "enum": ["high", "medium", "low"],
+                        },
+                        "blocking_gaps": {"type": "array", "items": {"type": "string"}, "maxItems": 6},
+                        "ambiguous_frames": {"type": "array", "items": {"type": "string"}, "maxItems": 4},
+                        "requested_tools": {"type": "array", "items": {"type": "string"}, "maxItems": 6},
+                        "requested_visual_aids": {
+                            "type": "array",
+                            "items": {"type": "string"},
+                            "maxItems": 6,
+                        },
+                        "assumptions_used": {"type": "array", "items": {"type": "string"}, "maxItems": 6},
+                    },
+                    "required": [
+                        "confidence_level",
+                        "blocking_gaps",
+                        "ambiguous_frames",
+                        "requested_tools",
+                        "requested_visual_aids",
+                        "assumptions_used",
+                    ],
+                },
             },
             "required": [
                 "next_phase",
@@ -922,6 +1011,7 @@ class OpenAIPlannerBackend(PlannerBackend):
                 "segment_horizon_steps",
                 "segment_granularity",
                 "rationale_summary",
+                "decision_diagnostics",
             ],
         }
 
@@ -932,6 +1022,33 @@ class OpenAIPlannerBackend(PlannerBackend):
             "additionalProperties": False,
             "properties": {
                 "strategy_summary": {"type": "string", "minLength": 1, "maxLength": 400},
+                "decision_diagnostics": {
+                    "type": "object",
+                    "additionalProperties": False,
+                    "properties": {
+                        "confidence_level": {
+                            "type": "string",
+                            "enum": ["high", "medium", "low"],
+                        },
+                        "blocking_gaps": {"type": "array", "items": {"type": "string"}, "maxItems": 6},
+                        "ambiguous_frames": {"type": "array", "items": {"type": "string"}, "maxItems": 4},
+                        "requested_tools": {"type": "array", "items": {"type": "string"}, "maxItems": 6},
+                        "requested_visual_aids": {
+                            "type": "array",
+                            "items": {"type": "string"},
+                            "maxItems": 6,
+                        },
+                        "assumptions_used": {"type": "array", "items": {"type": "string"}, "maxItems": 6},
+                    },
+                    "required": [
+                        "confidence_level",
+                        "blocking_gaps",
+                        "ambiguous_frames",
+                        "requested_tools",
+                        "requested_visual_aids",
+                        "assumptions_used",
+                    ],
+                },
                 "phase_sequence": {
                     "type": "array",
                     "minItems": 1,
@@ -986,7 +1103,13 @@ class OpenAIPlannerBackend(PlannerBackend):
                     "items": {"type": "string"},
                 },
             },
-            "required": ["strategy_summary", "phase_sequence", "milestones", "risks"],
+            "required": [
+                "strategy_summary",
+                "decision_diagnostics",
+                "phase_sequence",
+                "milestones",
+                "risks",
+            ],
         }
 
 

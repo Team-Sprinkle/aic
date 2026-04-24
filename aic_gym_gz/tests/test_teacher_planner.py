@@ -21,6 +21,7 @@ class TeacherPlannerTest(unittest.TestCase):
             trial_id="trial_0",
             task_id="task_0",
             goal_summary="goal",
+            task_definition={"task_msg": {"id": "task_0"}},
             current_phase="free_space_approach",
             policy_context={
                 "plug_pose": [0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0],
@@ -63,6 +64,7 @@ class TeacherPlannerTest(unittest.TestCase):
             trial_id="trial_0",
             task_id="task_0",
             goal_summary="goal",
+            task_definition={"task_msg": {"id": "task_0"}},
             current_phase="pre_insert_align",
             policy_context={
                 "plug_pose": [0.0, 0.0, 0.905, 0.0, 0.0, 0.0, 1.0],
@@ -130,8 +132,19 @@ class TeacherPlannerTest(unittest.TestCase):
         self.assertIn("auxiliary_force_contact_summary", planning_state.policy_context)
         self.assertIn("relative_geometry", planning_state.policy_context)
         self.assertIn("frame_context", planning_state.policy_context)
+        self.assertIn("geometry_tool_outputs", planning_state.policy_context)
+        self.assertIn("plug_to_target_port", planning_state.policy_context["geometry_tool_outputs"]["distance_and_alignment_queries"])
+        self.assertIn("plug_to_entrance_segment", planning_state.policy_context["geometry_tool_outputs"]["clearance_distance_queries"])
+        self.assertIn(
+            "official_policy_base_link_to_runtime_world",
+            planning_state.policy_context["geometry_tool_outputs"]["frame_transform_queries"],
+        )
         self.assertIn("world_entities_summary", planning_state.policy_context)
         self.assertIn("scene_overview_sources", planning_state.planning_metadata)
+        self.assertIn("overlay_metadata", planning_state.planning_metadata)
+        self.assertIn("signal_reliability_summary", planning_state.planning_metadata)
+        self.assertIn("available_helper_tool_outputs", planning_state.planning_metadata)
+        self.assertIn("zoomed_interaction_crop", planning_state.planning_metadata["overlay_metadata"])
         self.assertIn("recent_visual_timepoints", planning_state.camera_context)
 
     def test_global_guidance_bonus_prefers_matching_phase_and_milestone(self) -> None:

@@ -9,6 +9,13 @@ import numpy as np
 
 from ..runtime import RuntimeState
 from ..scenario import AicScenario
+from .geometry_tools import (
+    build_overlay_metadata,
+    clearance_distance_query,
+    distance_and_alignment_query,
+    frame_transform_query,
+    signal_reliability_summary,
+)
 from .history import TemporalObservationBuffer
 from .planning import phase_guidance_from_state
 from .quality import controller_state_summary, serialize_nested
@@ -40,6 +47,19 @@ class TeacherContextExtractor:
         last_teacher_rationale: str | None = None,
     ) -> TeacherPlanningState:
         task = scenario.tasks[task_id]
+        frame_context = self._frame_context()
+        geometry_tool_outputs = self._geometry_tool_outputs(
+            scenario,
+            state,
+            frame_context=frame_context,
+        )
+        overlay_metadata = build_overlay_metadata(
+            tcp_pose=state.tcp_pose,
+            plug_pose=state.plug_pose,
+            target_port_pose=state.target_port_pose,
+            target_port_entrance_pose=state.target_port_entrance_pose,
+            runtime_pose_frame=str(frame_context["runtime_pose_frame"]),
+        )
         policy_context = {
             "sim_tick": int(state.sim_tick),
             "sim_time": float(state.sim_time),
@@ -65,7 +85,8 @@ class TeacherContextExtractor:
             "score_geometry": serialize_nested(state.score_geometry),
             "auxiliary_force_contact_summary": temporal_buffer.auxiliary_history_summary(max_items=1),
             "relative_geometry": self._relative_geometry_summary(state),
-            "frame_context": self._frame_context(),
+            "frame_context": frame_context,
+            "geometry_tool_outputs": geometry_tool_outputs,
             "world_entities_summary": serialize_nested(state.world_entities_summary),
         }
         oracle_context = {
@@ -83,12 +104,14 @@ class TeacherContextExtractor:
                 "type": task.cable_type,
                 "scenario": scenario.cables[task.cable_name].__dict__,
             },
+            "geometry_tool_outputs": geometry_tool_outputs,
             "clearance_summary": self._clearance_summary(scenario),
             "scene_layout_summary": self._scene_layout_summary(scenario, state),
             "world_entities_summary": serialize_nested(state.world_entities_summary),
         }
         latest_frame = temporal_buffer.latest()
         image_refs = list(latest_frame.image_refs) if include_images else []
+        signal_reliability = signal_reliability_summary(data_quality=dict(latest_frame.signal_quality))
         recent_visual_observations = build_recent_visual_observations(
             frames=temporal_buffer.recent_visual_frames(max_frames=self.max_recent_visual_frames),
             max_frames=self.max_recent_visual_frames,
@@ -122,6 +145,15 @@ class TeacherContextExtractor:
                 f"Insert {task.plug_name} into {task.target_module_name}/{task.port_name} "
                 f"for cable type {task.cable_type}."
             ),
+            task_definition={
+                "scenario_task_definition": task.to_dict(),
+                "task_msg": task.to_task_msg_dict(),
+                "task_contract_notes": {
+                    "task_msg_id_field_maps_from": "task_id",
+                    "task_msg_time_limit_field_maps_from_seconds": "time_limit_s",
+                    "goal_requires_target_module_and_port": True,
+                },
+            },
             current_phase=current_phase,  # type: ignore[arg-type]
             policy_context=policy_context,
             oracle_context=oracle_context,
@@ -163,7 +195,7 @@ class TeacherContextExtractor:
             },
             data_quality=dict(latest_frame.signal_quality),
             planning_metadata={
-                "frame_context": self._frame_context(),
+                "frame_context": frame_context,
                 "include_images": bool(include_images),
                 "recent_visual_frame_count": len(recent_visual_observations),
                 "scene_overview_image_count": len(scene_overview_images),
@@ -182,6 +214,18 @@ class TeacherContextExtractor:
                 "official_observation_contract_unchanged": True,
                 "auxiliary_force_contact_summary_is_teacher_side": True,
                 "phase_guidance": phase_guidance,
+                "geometry_tool_outputs": geometry_tool_outputs,
+                "overlay_metadata": overlay_metadata,
+                "signal_reliability_summary": signal_reliability,
+                "available_helper_tool_outputs": [
+                    "frame_transform_query",
+                    "distance_and_alignment_query",
+                    "clearance_distance_query",
+                    "signal_reliability_summary",
+                    "xyz_axis_overlay_metadata",
+                    "insertion_axis_overlay_metadata",
+                    "zoomed_interaction_crop_metadata",
+                ],
             },
             last_teacher_rationale=last_teacher_rationale,
         )
@@ -241,6 +285,92 @@ class TeacherContextExtractor:
                 "Controller topic fields may use controller-local conventions unless explicitly documented elsewhere.",
             ],
         }
+
+    def _geometry_tool_outputs(
+        self,
+        scenario: AicScenario,
+        state: RuntimeState,
+        *,
+        frame_context: dict[str, Any],
+    ) -> dict[str, Any]:
+        runtime_pose_frame = str(frame_context.get("runtime_pose_frame", "world"))
+        controller_state_frame = str(frame_context.get("controller_state_frame", "unknown"))
+        official_policy_reference_frame = str(
+            frame_context.get("official_policy_reference_frame", "base_link")
+        )
+        reference_tcp_pose = state.controller_state.get("reference_tcp_pose")
+        present_obstacles = list(self._scene_layout_summary(scenario, state).get("present_obstacles", []))
+        outputs = {
+            "frame_transform_queries": {
+                "runtime_tcp_pose_to_world": frame_transform_query(
+                    source_frame=runtime_pose_frame,
+                    target_frame="world",
+                    pose=state.tcp_pose,
+                ),
+                "runtime_plug_pose_to_world": frame_transform_query(
+                    source_frame=runtime_pose_frame,
+                    target_frame="world",
+                    pose=state.plug_pose,
+                ),
+                "runtime_target_port_pose_to_world": frame_transform_query(
+                    source_frame=runtime_pose_frame,
+                    target_frame="world",
+                    pose=state.target_port_pose,
+                ),
+                "official_policy_base_link_to_runtime_world": frame_transform_query(
+                    source_frame=official_policy_reference_frame,
+                    target_frame=runtime_pose_frame,
+                    pose=state.plug_pose,
+                ),
+            },
+            "distance_and_alignment_queries": {
+                "plug_to_target_port": distance_and_alignment_query(
+                    actor_pose=state.plug_pose,
+                    target_pose=state.target_port_pose,
+                    entrance_pose=state.target_port_entrance_pose,
+                    actor_name="plug",
+                    target_name="target_port",
+                ),
+                "tcp_to_target_port": distance_and_alignment_query(
+                    actor_pose=state.tcp_pose,
+                    target_pose=state.target_port_pose,
+                    entrance_pose=state.target_port_entrance_pose,
+                    actor_name="tcp",
+                    target_name="target_port",
+                ),
+            },
+            "clearance_distance_queries": {
+                "plug_to_entrance_segment": clearance_distance_query(
+                    actor_pose=state.plug_pose,
+                    target_pose=(
+                        state.target_port_pose
+                        if state.target_port_entrance_pose is None
+                        else state.target_port_entrance_pose
+                    ),
+                    obstacle_points=present_obstacles,
+                    actor_name="plug",
+                ),
+                "tcp_to_entrance_segment": clearance_distance_query(
+                    actor_pose=state.tcp_pose,
+                    target_pose=(
+                        state.target_port_pose
+                        if state.target_port_entrance_pose is None
+                        else state.target_port_entrance_pose
+                    ),
+                    obstacle_points=present_obstacles,
+                    actor_name="tcp",
+                ),
+            },
+        }
+        if reference_tcp_pose is not None:
+            outputs["frame_transform_queries"]["controller_reference_tcp_to_runtime_world"] = (
+                frame_transform_query(
+                    source_frame=controller_state_frame,
+                    target_frame=runtime_pose_frame,
+                    pose=reference_tcp_pose,
+                )
+            )
+        return outputs
 
     def _obstacle_summary(self, scenario: AicScenario) -> list[ObstacleSummary]:
         obstacles: list[ObstacleSummary] = []
