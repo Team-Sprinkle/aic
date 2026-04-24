@@ -136,7 +136,10 @@ def live_env_health_check(
     world_path: str | None = None,
     attach_to_existing: bool = False,
     transport_backend: str = "transport",
+    timeout: float = 10.0,
+    attach_ready_timeout: float | None = None,
     seed: int = 123,
+    image_shape: tuple[int, int, int] = (256, 256, 3),
 ) -> dict[str, Any]:
     env = make_live_env(
         include_images=include_images,
@@ -145,6 +148,9 @@ def live_env_health_check(
         world_path=world_path,
         attach_to_existing=attach_to_existing,
         transport_backend=transport_backend,
+        timeout=timeout,
+        attach_ready_timeout=attach_ready_timeout,
+        image_shape=image_shape,
     )
     try:
         observation, info = env.reset(seed=seed)
@@ -158,7 +164,7 @@ def live_env_health_check(
         }
         if include_images:
             summary["images_ready"] = all(
-                observation["images"][name].shape == (64, 64, 3)
+                observation["images"][name].shape == image_shape
                 and observation["images"][name].dtype == np.uint8
                 and int(observation["images"][name].sum()) > 0
                 for name in ("left", "center", "right")
@@ -173,7 +179,15 @@ def make_default_env(
     include_images: bool = False,
     enable_randomization: bool = True,
     ticks_per_step: int = 8,
+    allow_mock_images: bool = False,
+    image_shape: tuple[int, int, int] = (256, 256, 3),
 ) -> AicInsertionEnv:
+    if include_images and not allow_mock_images:
+        raise RuntimeError(
+            "make_default_env() cannot provide real camera images. "
+            "Use make_live_env(include_images=True, ...) for real wrist-camera data. "
+            "Pass allow_mock_images=True only for tests or explicitly mock-only workflows."
+        )
     return AicInsertionEnv(
         runtime=AicGazeboRuntime(
             backend=MockStepperBackend(),
@@ -182,8 +196,9 @@ def make_default_env(
         task=AicInsertionTask(
             hold_action_ticks=ticks_per_step,
             include_images=include_images,
+            image_shape=image_shape,
         ),
-        io=MockGazeboIO(),
+        io=MockGazeboIO(image_shape=image_shape),
         randomizer=AicEnvRandomizer(enable_randomization=enable_randomization),
     )
 
@@ -196,11 +211,16 @@ def make_live_env(
     world_path: str | None = None,
     attach_to_existing: bool = False,
     transport_backend: str = "transport",
+    timeout: float = 10.0,
+    attach_ready_timeout: float | None = None,
+    image_shape: tuple[int, int, int] = (256, 256, 3),
 ) -> AicInsertionEnv:
     return AicInsertionEnv(
         runtime=AicGazeboRuntime(
             backend=ScenarioGymGzBackend(
                 world_path=world_path,
+                timeout=timeout,
+                attach_ready_timeout=attach_ready_timeout,
                 attach_to_existing=attach_to_existing,
                 transport_backend=transport_backend,
             ),
@@ -209,7 +229,8 @@ def make_live_env(
         task=AicInsertionTask(
             hold_action_ticks=ticks_per_step,
             include_images=include_images,
+            image_shape=image_shape,
         ),
-        io=RosCameraSidecarIO() if include_images else MockGazeboIO(),
+        io=RosCameraSidecarIO(image_shape=image_shape) if include_images else MockGazeboIO(image_shape=image_shape),
         randomizer=AicEnvRandomizer(enable_randomization=enable_randomization),
     )

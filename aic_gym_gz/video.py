@@ -1,0 +1,267 @@
+"""Headless-safe trajectory video capture helpers."""
+
+from __future__ import annotations
+
+from dataclasses import dataclass, field
+import json
+from pathlib import Path
+from typing import Any
+
+import imageio.v2 as imageio
+import numpy as np
+from PIL import Image, ImageDraw
+
+from .io import CameraBridgeSidecar, RosCameraSubscriber
+from .teacher.visual_context import render_scene_overview_frame
+
+
+def default_video_output_dir(*, run_name: str) -> Path:
+    return Path("aic_gym_gz/artifacts/videos") / run_name
+
+
+def build_run_name(*, prefix: str, seed: int | None, trial_id: str | None) -> str:
+    safe_trial = "default" if not trial_id else str(trial_id).replace("/", "_")
+    safe_seed = "none" if seed is None else str(seed)
+    return f"{prefix}_seed{safe_seed}_{safe_trial}"
+
+
+@dataclass
+class _StreamWriter:
+    path: Path
+    fps: float
+    frame_count: int = 0
+    sim_times: list[float] = field(default_factory=list)
+
+    def __post_init__(self) -> None:
+        self.path.parent.mkdir(parents=True, exist_ok=True)
+        self._writer = imageio.get_writer(
+            self.path,
+            fps=self.fps,
+            codec="libx264",
+            quality=7,
+            macro_block_size=None,
+        )
+
+    def append(self, frame: np.ndarray, *, sim_time: float | None = None) -> None:
+        image = np.asarray(frame, dtype=np.uint8)
+        if image.ndim == 2:
+            image = np.repeat(image[:, :, None], 3, axis=2)
+        if image.shape[-1] != 3:
+            raise ValueError(f"Expected RGB frame with shape (*, *, 3), got {image.shape}.")
+        self._writer.append_data(image)
+        self.frame_count += 1
+        if sim_time is not None:
+            self.sim_times.append(float(sim_time))
+
+    def close(self) -> dict[str, Any]:
+        self._writer.close()
+        return {
+            "path": str(self.path),
+            "frame_count": self.frame_count,
+            "fps": self.fps,
+            "first_sim_time": None if not self.sim_times else float(self.sim_times[0]),
+            "last_sim_time": None if not self.sim_times else float(self.sim_times[-1]),
+        }
+
+
+@dataclass
+class HeadlessTrajectoryVideoRecorder:
+    output_dir: Path
+    fps: float = 12.5
+    overview_view_name: str = "top_down_xy"
+    enabled: bool = True
+    require_real_wrist_images: bool = True
+    require_live_overview: bool = True
+    prefer_live_overview_camera: bool = True
+    live_overview_topic: str = "/overview_camera/image"
+    live_overview_shape: tuple[int, int, int] = (512, 512, 3)
+
+    OVERVIEW_TOPIC_MAP = {
+        "top_down_xy": "/overview_camera/image",
+        "front_xz": "/overview_front_camera/image",
+        "side_yz": "/overview_side_camera/image",
+        "oblique_xy": "/overview_oblique_camera/image",
+    }
+
+    def __post_init__(self) -> None:
+        self.output_dir = Path(self.output_dir)
+        self._writers: dict[str, _StreamWriter] = {}
+        self._overview_camera_bridge: CameraBridgeSidecar | None = None
+        self._overview_camera_subscriber: RosCameraSubscriber | None = None
+        self._overview_sources: dict[str, dict[str, int]] = {
+            view_name: {
+                "live_overview_topic": 0,
+                "teacher_schematic_scene_overview": 0,
+            }
+            for view_name in self.OVERVIEW_TOPIC_MAP
+        }
+        self._metadata: dict[str, Any] = {
+            "output_dir": str(self.output_dir),
+            "fps": self.fps,
+            "overview_view_name": self.overview_view_name,
+            "require_real_wrist_images": self.require_real_wrist_images,
+            "require_live_overview": self.require_live_overview,
+            "prefer_live_overview_camera": self.prefer_live_overview_camera,
+            "live_overview_topic": self.live_overview_topic,
+            "streams": {},
+        }
+        self._seen_live_overview = False
+        if not self.enabled:
+            return
+        self._writers = {
+            "camera_left": _StreamWriter(self.output_dir / "camera_left.mp4", fps=self.fps),
+            "camera_center": _StreamWriter(self.output_dir / "camera_center.mp4", fps=self.fps),
+            "camera_right": _StreamWriter(self.output_dir / "camera_right.mp4", fps=self.fps),
+            "overview_top_down_xy": _StreamWriter(self.output_dir / "overview_top_down_xy.mp4", fps=self.fps),
+            "overview_front_xz": _StreamWriter(self.output_dir / "overview_front_xz.mp4", fps=self.fps),
+            "overview_side_yz": _StreamWriter(self.output_dir / "overview_side_yz.mp4", fps=self.fps),
+            "overview_oblique_xy": _StreamWriter(self.output_dir / "overview_oblique_xy.mp4", fps=self.fps),
+        }
+        if self.prefer_live_overview_camera:
+            self._overview_camera_bridge = CameraBridgeSidecar(topic_map=dict(self.OVERVIEW_TOPIC_MAP))
+            self._overview_camera_subscriber = RosCameraSubscriber(
+                image_shape=self.live_overview_shape,
+                topic_map=dict(self.OVERVIEW_TOPIC_MAP),
+                node_name="aic_gym_gz_video_overview_subscriber",
+            )
+            self._overview_camera_bridge.start()
+            self._overview_camera_subscriber.start()
+
+    def capture(
+        self,
+        *,
+        observation: dict[str, Any],
+        scenario: Any,
+        state: Any,
+    ) -> None:
+        if not self.enabled:
+            return
+        sim_time = float(observation.get("sim_time", getattr(state, "sim_time", 0.0)))
+        images = observation.get("images") or {}
+        self._writers["camera_left"].append(
+            _camera_frame(
+                images.get("left"),
+                label="left",
+                require_real=self.require_real_wrist_images,
+            ),
+            sim_time=sim_time,
+        )
+        self._writers["camera_center"].append(
+            _camera_frame(
+                images.get("center"),
+                label="center",
+                require_real=self.require_real_wrist_images,
+            ),
+            sim_time=sim_time,
+        )
+        self._writers["camera_right"].append(
+            _camera_frame(
+                images.get("right"),
+                label="right",
+                require_real=self.require_real_wrist_images,
+            ),
+            sim_time=sim_time,
+        )
+        overview_frames = self._overview_frames(scenario=scenario, state=state)
+        for view_name, (overview, overview_source) in overview_frames.items():
+            self._overview_sources[view_name][overview_source] += 1
+            self._writers[f"overview_{view_name}"].append(overview, sim_time=sim_time)
+
+    def close(self) -> dict[str, Any]:
+        if not self.enabled:
+            return {"enabled": False, "output_dir": str(self.output_dir)}
+        if self._overview_camera_subscriber is not None:
+            self._overview_camera_subscriber.close()
+        if self._overview_camera_bridge is not None:
+            self._overview_camera_bridge.close()
+        streams = {
+            name: writer.close()
+            for name, writer in self._writers.items()
+        }
+        self._metadata["overview_frame_sources"] = self._overview_sources
+        self._metadata["streams"] = streams
+        metadata_path = self.output_dir / "metadata.json"
+        metadata_path.write_text(json.dumps(self._metadata, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+        return {
+            "enabled": True,
+            "output_dir": str(self.output_dir),
+            "metadata_path": str(metadata_path),
+            "streams": streams,
+        }
+
+    def _overview_frames(self, *, scenario: Any, state: Any) -> dict[str, tuple[np.ndarray, str]]:
+        images: dict[str, np.ndarray] = {}
+        if self._overview_camera_subscriber is not None:
+            ready_timeout = 30.0 if self.require_live_overview and not self._seen_live_overview else 0.5
+            if self._overview_camera_subscriber.wait_until_ready(timeout_s=ready_timeout):
+                images, _, _ = self._overview_camera_subscriber.latest_images()
+        frames: dict[str, tuple[np.ndarray, str]] = {}
+        for view_name, topic in self.OVERVIEW_TOPIC_MAP.items():
+            overview_image = images.get(view_name)
+            if overview_image is not None and overview_image.size > 0 and int(overview_image.sum()) > 0:
+                self._seen_live_overview = True
+                frames[view_name] = (np.asarray(overview_image, dtype=np.uint8), "live_overview_topic")
+                continue
+            if self.require_live_overview:
+                raise RuntimeError(
+                    "Live overview camera frames were required for video export, but "
+                    f"no nonblank frames arrived on {topic!r} for view {view_name!r}."
+                )
+            frames[view_name] = (
+                render_scene_overview_frame(
+                    scenario=scenario,
+                    state=state,
+                    view_name=view_name,
+                    image_size=(512, 512),
+                ),
+                "teacher_schematic_scene_overview",
+            )
+        return frames
+
+
+def _camera_frame(frame: np.ndarray | None, *, label: str, require_real: bool = False) -> np.ndarray:
+    if frame is None:
+        if require_real:
+            raise RuntimeError(f"Real wrist camera frame required for {label!r}, but no frame was provided.")
+        return _placeholder_frame(label=f"{label}: unavailable")
+    image = np.asarray(frame, dtype=np.uint8)
+    if image.size == 0 or int(image.sum()) == 0:
+        if require_real:
+            raise RuntimeError(f"Real wrist camera frame required for {label!r}, but the frame was blank.")
+        return _placeholder_frame(label=f"{label}: blank")
+    return image
+
+
+def _placeholder_frame(*, label: str, size: tuple[int, int] = (256, 256)) -> np.ndarray:
+    image = Image.new("RGB", size, color=(24, 28, 36))
+    draw = ImageDraw.Draw(image)
+    draw.text((16, 16), label, fill=(230, 230, 230))
+    draw.rectangle([(12, 12), (size[0] - 12, size[1] - 12)], outline=(120, 140, 180), width=2)
+    return np.asarray(image, dtype=np.uint8)
+
+
+def record_teacher_artifact_replay(
+    *,
+    env: Any,
+    artifact: Any,
+    recorder: HeadlessTrajectoryVideoRecorder,
+    seed: int | None,
+    trial_id: str | None,
+) -> dict[str, Any]:
+    observation, info = env.reset(seed=seed, options={"trial_id": trial_id} if trial_id else {})
+    scenario = env._scenario
+    state = env._state
+    if scenario is None or state is None:
+        raise RuntimeError("Environment did not expose scenario/state after reset for replay recording.")
+    recorder.capture(observation=observation, scenario=scenario, state=state)
+    final_info = dict(info)
+    for segment in artifact.trajectory_segments:
+        for point in segment.get("points", []):
+            action = np.asarray(point["action"], dtype=np.float32)
+            observation, _, terminated, truncated, final_info = env.step(action)
+            state = env._state
+            assert state is not None
+            recorder.capture(observation=observation, scenario=scenario, state=state)
+            if terminated or truncated:
+                return dict(final_info)
+    return dict(final_info)

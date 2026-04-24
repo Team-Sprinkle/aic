@@ -43,6 +43,7 @@ class AicInsertionTask:
     frame: str = "base_link"
     max_episode_steps: int = 512
     include_images: bool = False
+    image_shape: tuple[int, int, int] = (256, 256, 3)
     rl_reward_calculator: AicRlRewardCalculator = field(default_factory=AicRlRewardCalculator)
     score_calculator: AicScoreCalculator = field(default_factory=AicScoreCalculator)
 
@@ -91,7 +92,7 @@ class AicInsertionTask:
             ),
         }
         if self.include_images:
-            image_space = gym.spaces.Box(0, 255, shape=(64, 64, 3), dtype=np.uint8)
+            image_space = gym.spaces.Box(0, 255, shape=self.image_shape, dtype=np.uint8)
             base_spaces["images"] = gym.spaces.Dict(
                 {"left": image_space, "center": image_space, "right": image_space}
             )

@@ -33,6 +33,7 @@ class TemporalFrame:
     off_limit_contact: bool
     action: np.ndarray
     controller_state: dict[str, Any]
+    world_entities_summary: dict[str, Any]
     images: dict[str, np.ndarray]
     image_refs: tuple[str, ...]
     image_timestamps: dict[str, float]
@@ -97,6 +98,7 @@ class TemporalObservationBuffer:
                 off_limit_contact=bool(state.off_limit_contact),
                 action=np.asarray(action, dtype=np.float64).copy(),
                 controller_state=_copy_mapping(state.controller_state),
+                world_entities_summary=_copy_mapping(state.world_entities_summary),
                 images={
                     name: np.asarray(image, dtype=np.uint8).copy()
                     for name, image in (images or {}).items()
@@ -188,6 +190,7 @@ class TemporalObservationBuffer:
             "wrench_timestamp": latest.wrench_timestamp,
             "off_limit_contact": latest.off_limit_contact,
             "controller_state": controller_state_summary(latest.controller_state),
+            "world_entities_summary": dict(latest.world_entities_summary),
             "images_available": bool(latest.images),
             "image_refs": list(latest.image_refs),
             "image_timestamps": dict(latest.image_timestamps),
@@ -212,6 +215,8 @@ class TemporalObservationBuffer:
         auxiliary_history_frames = [dict(frame.auxiliary_contact_metrics) for frame in frames]
         auxiliary_history_summary = summarize_auxiliary_force_contact_history(auxiliary_history_frames)
         geometry_progress_summary = _geometry_progress_summary(frames)
+        wrench_contact_trend_summary = _wrench_contact_trend_summary(frames)
+        compact_signal_samples = _compact_signal_samples(frames)
         return {
             "window_size": len(self._frames),
             "history_items": len(frames),
@@ -223,6 +228,7 @@ class TemporalObservationBuffer:
             "wrench_timestamp_history": official_history_summary["wrench_timestamp_history"],
             "tcp_velocity_history": official_history_summary["tcp_velocity_history"],
             "controller_state_history": official_history_summary["controller_state_history"],
+            "world_entities_summary": dict(latest.world_entities_summary),
             "image_ref_history": [list(frame.image_refs) for frame in frames],
             "image_timestamp_history": [dict(frame.image_timestamps) for frame in frames],
             "latest_image_summaries": dict(latest.image_summaries),
@@ -234,6 +240,8 @@ class TemporalObservationBuffer:
             "auxiliary_contact_metrics_history": auxiliary_history_frames,
             "auxiliary_history_summary": auxiliary_history_summary,
             "geometry_progress_summary": geometry_progress_summary,
+            "wrench_contact_trend_summary": wrench_contact_trend_summary,
+            "compact_signal_samples": compact_signal_samples,
             "dynamics_summary": summary.to_dict(),
         }
 
@@ -245,12 +253,20 @@ class TemporalObservationBuffer:
 
     def recent_visual_frames(self, *, max_frames: int = 2) -> list[dict[str, Any]]:
         frames = [frame for frame in list(self._frames)[-max_frames:] if frame.images]
+        latest_sim_time = frames[-1].sim_time if frames else None
         visual_frames: list[dict[str, Any]] = []
-        for frame in frames:
+        for frame_index, frame in enumerate(frames):
             visual_frames.append(
                 {
+                    "frame_index": frame_index,
                     "sim_tick": frame.sim_tick,
                     "sim_time": frame.sim_time,
+                    "age_from_latest_s": (
+                        None if latest_sim_time is None else float(latest_sim_time - frame.sim_time)
+                    ),
+                    "age_from_latest_steps": (
+                        None if not frames else int(frames[-1].sim_tick - frame.sim_tick)
+                    ),
                     "images": {
                         name: image.copy()
                         for name, image in frame.images.items()
@@ -300,4 +316,51 @@ def _geometry_progress_summary(frames: list[TemporalFrame]) -> dict[str, Any]:
         "net_distance_to_target_progress": float(distance_to_target_history[0] - distance_to_target_history[-1]),
         "net_distance_to_entrance_progress": float(distance_to_entrance_history[0] - distance_to_entrance_history[-1]),
         "net_insertion_progress": float(insertion_progress_history[-1] - insertion_progress_history[0]),
+    }
+
+
+def _wrench_contact_trend_summary(frames: list[TemporalFrame]) -> dict[str, Any]:
+    if not frames:
+        return {
+            "history_items": 0,
+            "current_force_l2": 0.0,
+            "max_force_l2_recent": 0.0,
+            "mean_force_l2_recent": 0.0,
+            "current_torque_l2": 0.0,
+            "max_torque_l2_recent": 0.0,
+            "mean_torque_l2_recent": 0.0,
+            "contact_count_recent": 0,
+            "contact_fraction_recent": 0.0,
+            "force_increasing_recent": False,
+            "last_wrench_timestamp": 0.0,
+        }
+    wrench_history = np.stack([frame.wrench for frame in frames], axis=0)
+    force_l2 = np.linalg.norm(wrench_history[:, :3], axis=1)
+    torque_l2 = np.linalg.norm(wrench_history[:, 3:], axis=1)
+    contacts = np.asarray([float(frame.off_limit_contact) for frame in frames], dtype=np.float64)
+    return {
+        "history_items": len(frames),
+        "current_force_l2": float(force_l2[-1]),
+        "max_force_l2_recent": float(force_l2.max(initial=0.0)),
+        "mean_force_l2_recent": float(force_l2.mean()),
+        "current_torque_l2": float(torque_l2[-1]),
+        "max_torque_l2_recent": float(torque_l2.max(initial=0.0)),
+        "mean_torque_l2_recent": float(torque_l2.mean()),
+        "contact_count_recent": int(contacts.sum()),
+        "contact_fraction_recent": float(contacts.mean()),
+        "force_increasing_recent": bool(force_l2[-1] > force_l2[0] + 1e-6),
+        "last_wrench_timestamp": float(frames[-1].wrench_timestamp),
+    }
+
+
+def _compact_signal_samples(frames: list[TemporalFrame], *, max_items: int = 3) -> dict[str, Any]:
+    selected = frames[-max_items:]
+    return {
+        "history_items": len(selected),
+        "sim_time_samples": [float(frame.sim_time) for frame in selected],
+        "wrench_samples": [frame.wrench.astype(float).tolist() for frame in selected],
+        "wrench_timestamps": [float(frame.wrench_timestamp) for frame in selected],
+        "tcp_velocity_samples": [frame.tcp_velocity.astype(float).tolist() for frame in selected],
+        "action_samples": [frame.action.astype(float).tolist() for frame in selected],
+        "off_limit_contact_samples": [bool(frame.off_limit_contact) for frame in selected],
     }

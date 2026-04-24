@@ -171,12 +171,21 @@ class GazeboTransportBridge:
             request_payload["id"] = request_id
             process.stdin.write(json.dumps(request_payload) + "\n")
             process.stdin.flush()
-            response_line = self._read_line(process, timeout_s=timeout)
-            response = json.loads(response_line)
-            if response.get("id") != request_id:
-                raise GazeboTransportBridgeError(
-                    f"transport bridge response id mismatch: expected {request_id}, got {response.get('id')}"
-                )
+            deadline = time.monotonic() + max(float(timeout), 0.1)
+            skipped_ids: list[int | None] = []
+            while True:
+                remaining = max(deadline - time.monotonic(), 0.0)
+                if remaining <= 0.0:
+                    raise GazeboTransportBridgeError(
+                        "transport bridge timed out waiting for the matching response id: "
+                        f"expected {request_id}, skipped={skipped_ids}"
+                    )
+                response_line = self._read_line(process, timeout_s=remaining)
+                response = json.loads(response_line)
+                response_id = response.get("id")
+                if response_id == request_id:
+                    break
+                skipped_ids.append(response_id)
             if response.get("ok") is not True:
                 raise GazeboTransportBridgeError(
                     str(response.get("error", "transport bridge request failed"))

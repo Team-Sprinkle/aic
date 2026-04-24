@@ -47,6 +47,62 @@
   direction: GZ_TO_ROS
   lazy: true
 
+- ros_topic_name: "/overview_camera/image"
+  gz_topic_name: "/overview_camera/image"
+  ros_type_name: "sensor_msgs/msg/Image"
+  gz_type_name: "gz.msgs.Image"
+  direction: GZ_TO_ROS
+  lazy: true
+
+- ros_topic_name: "/overview_camera/camera_info"
+  gz_topic_name: "/overview_camera/camera_info"
+  ros_type_name: "sensor_msgs/msg/CameraInfo"
+  gz_type_name: "gz.msgs.CameraInfo"
+  direction: GZ_TO_ROS
+  lazy: true
+
+- ros_topic_name: "/overview_front_camera/image"
+  gz_topic_name: "/overview_front_camera/image"
+  ros_type_name: "sensor_msgs/msg/Image"
+  gz_type_name: "gz.msgs.Image"
+  direction: GZ_TO_ROS
+  lazy: true
+
+- ros_topic_name: "/overview_front_camera/camera_info"
+  gz_topic_name: "/overview_front_camera/camera_info"
+  ros_type_name: "sensor_msgs/msg/CameraInfo"
+  gz_type_name: "gz.msgs.CameraInfo"
+  direction: GZ_TO_ROS
+  lazy: true
+
+- ros_topic_name: "/overview_side_camera/image"
+  gz_topic_name: "/overview_side_camera/image"
+  ros_type_name: "sensor_msgs/msg/Image"
+  gz_type_name: "gz.msgs.Image"
+  direction: GZ_TO_ROS
+  lazy: true
+
+- ros_topic_name: "/overview_side_camera/camera_info"
+  gz_topic_name: "/overview_side_camera/camera_info"
+  ros_type_name: "sensor_msgs/msg/CameraInfo"
+  gz_type_name: "gz.msgs.CameraInfo"
+  direction: GZ_TO_ROS
+  lazy: true
+
+- ros_topic_name: "/overview_oblique_camera/image"
+  gz_topic_name: "/overview_oblique_camera/image"
+  ros_type_name: "sensor_msgs/msg/Image"
+  gz_type_name: "gz.msgs.Image"
+  direction: GZ_TO_ROS
+  lazy: true
+
+- ros_topic_name: "/overview_oblique_camera/camera_info"
+  gz_topic_name: "/overview_oblique_camera/camera_info"
+  ros_type_name: "sensor_msgs/msg/CameraInfo"
+  gz_type_name: "gz.msgs.CameraInfo"
+  direction: GZ_TO_ROS
+  lazy: true
+
 - ros_topic_name: "/aic/gazebo/contacts/off_limit"
   gz_topic_name: "/aic/gazebo/contacts/off_limit"
   ros_type_name: "ros_gz_interfaces/msg/Contacts"

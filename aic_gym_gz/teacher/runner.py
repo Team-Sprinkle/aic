@@ -41,6 +41,8 @@ def run_teacher_rollout(
     trial_id: str | None = None,
     output_path: Path | None = None,
     probe_name: str = "hold_settle",
+    trajectory_recorder: Any | None = None,
+    step_callback: Any | None = None,
 ) -> TeacherRolloutResult:
     if hasattr(controller.planner, "reset_episode_budget"):
         controller.planner.reset_episode_budget()
@@ -52,6 +54,25 @@ def run_teacher_rollout(
         raise RuntimeError("Environment did not expose scenario/state after reset.")
     task_id = next(iter(scenario.tasks.keys()))
     include_images = env.task.include_images
+    if trajectory_recorder is not None:
+        trajectory_recorder.capture(
+            observation=observation,
+            scenario=scenario,
+            state=state,
+        )
+    if step_callback is not None:
+        step_callback(
+            kind="reset",
+            observation=observation,
+            reward=0.0,
+            terminated=False,
+            truncated=False,
+            info=info,
+            state=state,
+            action=controller.initial_action(),
+            planner_rationale=None,
+            phase=controller.current_phase,
+        )
     history = TemporalObservationBuffer()
     history.append(
         state=state,
@@ -75,12 +96,121 @@ def run_teacher_rollout(
     planner_candidates: list[dict[str, Any]] = []
     terminated = truncated = False
     last_info: dict[str, Any] = dict(info)
+    planner_segment_count = 0
     limitations = [
         "Exact mid-rollout simulator state cloning is not available in the current stack.",
         "Branch-and-evaluate currently reuses deterministic planner variants instead of full simulator forks.",
         "Replay is exact for deterministic mock resets and best-effort for live Gazebo runs.",
     ]
-    for _ in range(controller.config.segment_limit):
+    while True:
+        if terminated or truncated:
+            break
+        if controller.config.run_until_env_done and env._step_count >= int(controller.config.max_env_steps):
+            truncated = True
+            last_info = dict(last_info)
+            last_info.setdefault("termination_reason", "teacher_max_env_steps_guard")
+            if "final_evaluation" not in last_info:
+                final_evaluation = env.task.final_evaluation()
+                last_info["final_evaluation"] = final_evaluation
+                last_info["evaluation"] = final_evaluation
+            break
+        use_close_range = False
+        close_range_reason: str | None = None
+        if controller.should_handoff_to_close_range(observation):
+            use_close_range = True
+            close_range_reason = "near_target_handoff"
+        elif controller.planner_budget_exhausted():
+            controller.force_close_range_handoff()
+            use_close_range = True
+            close_range_reason = "planner_budget_exhausted"
+        elif (not controller.config.run_until_env_done) and planner_segment_count >= controller.config.segment_limit:
+            break
+
+        if use_close_range:
+            action = controller.close_range_action(observation)
+            observation, reward, terminated, truncated, last_info = env.step(action.astype(np.float32))
+            state = env._state
+            assert state is not None
+            auxiliary_summary_available = "auxiliary_force_contact_summary" in last_info
+            history.append(
+                state=state,
+                action=action,
+                images=observation.get("images"),
+                image_timestamps=_image_timestamp_map(observation),
+                image_summaries=_image_summary_map(observation),
+                camera_info=observation.get("camera_info"),
+                signal_quality=build_signal_quality_snapshot(
+                    state,
+                    include_images=include_images,
+                    camera_info=observation.get("camera_info"),
+                ),
+                auxiliary_force_contact_summary=_step_auxiliary_summary(
+                    state=state,
+                    step_info=last_info,
+                ),
+                auxiliary_summary_available=auxiliary_summary_available,
+            )
+            if trajectory_recorder is not None:
+                trajectory_recorder.capture(
+                    observation=observation,
+                    scenario=scenario,
+                    state=state,
+                )
+            if step_callback is not None:
+                step_callback(
+                    kind="close_range_step",
+                    observation=observation,
+                    reward=reward,
+                    terminated=terminated,
+                    truncated=truncated,
+                    info=last_info,
+                    state=state,
+                    action=action,
+                    planner_rationale=close_range_reason,
+                    phase=controller.close_range_policy.phase,
+                )
+            auxiliary_force_contact_summary = _step_auxiliary_summary(
+                state=state,
+                step_info=last_info,
+            )
+            auxiliary_contact_metrics = summarize_auxiliary_force_contact_summary(
+                auxiliary_force_contact_summary=auxiliary_force_contact_summary,
+                auxiliary_summary_available=auxiliary_summary_available,
+                current_wrench=state.wrench,
+            )
+            step_logs.append(
+                TeacherStepLog(
+                    phase=controller.current_phase,  # type: ignore[arg-type]
+                    sim_time=float(state.sim_time),
+                    sim_tick=int(state.sim_tick),
+                    reward=float(reward),
+                    terminated=bool(terminated),
+                    truncated=bool(truncated),
+                    planner_rationale=close_range_reason or "",
+                    trajectory_point={
+                        "dt": float(env.task.hold_action_ticks) * 0.002,
+                        "action": tuple(float(value) for value in np.asarray(action, dtype=np.float64).tolist()),
+                        "target_tcp_pose": tuple(float(value) for value in np.asarray(state.tcp_pose, dtype=np.float64).tolist()),
+                        "control_source": "close_range_policy",
+                    },
+                    dynamics_summary=history.dynamics_summary().to_dict(),
+                    observation_summary=_observation_summary(
+                        observation,
+                        state=state,
+                        include_images=include_images,
+                        step_info=last_info,
+                        target_tcp_pose=tuple(float(value) for value in np.asarray(state.tcp_pose, dtype=np.float64).tolist()),
+                    ),
+                    history_summary=history.teacher_memory_summary(),
+                    data_quality=dict(history.latest().signal_quality),
+                    auxiliary_force_contact_summary=auxiliary_force_contact_summary,
+                    auxiliary_summary_available=auxiliary_summary_available,
+                    auxiliary_contact_metrics=auxiliary_contact_metrics,
+                    probe_result=probe_results[-1] if probe_results else None,
+                ).to_dict()
+            )
+            continue
+
         plan, segment, candidates = controller.select_plan(
             scenario=scenario,
             task_id=task_id,
@@ -89,6 +219,7 @@ def run_teacher_rollout(
             recent_probe_results=probe_results,
             include_images=include_images,
         )
+        planner_segment_count += 1
         planner_candidates.extend(candidates)
         if controller.should_probe(plan, history):
             before_state = deepcopy(state)
@@ -115,6 +246,25 @@ def run_teacher_rollout(
                     ),
                     auxiliary_summary_available="auxiliary_force_contact_summary" in last_info,
                 )
+                if trajectory_recorder is not None:
+                    trajectory_recorder.capture(
+                        observation=observation,
+                        scenario=scenario,
+                        state=state,
+                    )
+                if step_callback is not None:
+                    step_callback(
+                        kind="probe_step",
+                        observation=observation,
+                        reward=0.0,
+                        terminated=terminated,
+                        truncated=truncated,
+                        info=last_info,
+                        state=state,
+                        action=probe_action,
+                        planner_rationale=controller.last_rationale,
+                        phase=controller.current_phase,
+                    )
                 if terminated or truncated:
                     break
             probe_results.append(
@@ -154,6 +304,25 @@ def run_teacher_rollout(
                 ),
                 auxiliary_summary_available=auxiliary_summary_available,
             )
+            if trajectory_recorder is not None:
+                trajectory_recorder.capture(
+                    observation=observation,
+                    scenario=scenario,
+                    state=state,
+                )
+            if step_callback is not None:
+                step_callback(
+                    kind="segment_step",
+                    observation=observation,
+                    reward=reward,
+                    terminated=terminated,
+                    truncated=truncated,
+                    info=last_info,
+                    state=state,
+                    action=action,
+                    planner_rationale=controller.last_rationale,
+                    phase=controller.current_phase,
+                )
             auxiliary_force_contact_summary = _step_auxiliary_summary(
                 state=state,
                 step_info=last_info,
@@ -179,6 +348,7 @@ def run_teacher_rollout(
                         state=state,
                         include_images=include_images,
                         step_info=last_info,
+                        target_tcp_pose=point.target_tcp_pose,
                     ),
                     history_summary=history.teacher_memory_summary(),
                     data_quality=dict(history.latest().signal_quality),
@@ -208,6 +378,7 @@ def run_teacher_rollout(
             "total_wall_s": total_wall_s,
             "step_count": len(step_logs),
             "segment_count": len(trajectory_segments),
+            "planner_segment_count": planner_segment_count,
             "final_sim_time": float(state.sim_time),
         },
         initial_observation_summary={
@@ -247,6 +418,9 @@ def run_teacher_rollout(
             "auxiliary_summary_available": bool(final_auxiliary_summary.get("auxiliary_summary_available", False)),
             "planner_metadata": _planner_metadata(controller),
             "final_metrics": final_metrics,
+            "run_until_env_done": bool(controller.config.run_until_env_done),
+            "max_env_steps": int(controller.config.max_env_steps),
+            "planner_segment_count": int(planner_segment_count),
         },
         trajectory_segments=trajectory_segments,
         probe_results=probe_results,
@@ -280,6 +454,7 @@ def _observation_summary(
     state,
     include_images: bool,
     step_info: dict[str, Any] | None = None,
+    target_tcp_pose: tuple[float, ...] | None = None,
 ) -> dict[str, Any]:
     data_quality = build_signal_quality_snapshot(
         state,
@@ -318,6 +493,7 @@ def _observation_summary(
         ),
         "fts_tare_wrench": np.asarray(observation["fts_tare_wrench"], dtype=np.float64).tolist(),
         "score_geometry": serialize_nested(observation.get("score_geometry", {})),
+        "world_entities_summary": serialize_nested(state.world_entities_summary),
         "controller_state_summary": controller_state_summary(state.controller_state),
         "data_quality": data_quality,
         "auxiliary_summary_available": bool(step_info and "auxiliary_force_contact_summary" in step_info),
@@ -326,6 +502,13 @@ def _observation_summary(
         summary["image_summaries"] = _image_summary_map(observation)
         summary["image_timestamps"] = _image_timestamp_map(observation)
         summary["camera_info"] = summarize_camera_info(observation.get("camera_info"))
+    if target_tcp_pose is not None:
+        target_array = np.asarray(target_tcp_pose, dtype=np.float64)
+        tcp_pose = np.asarray(observation["tcp_pose"], dtype=np.float64)
+        summary["step_target_tcp_pose"] = target_array.tolist()
+        summary["step_target_tcp_position_error_m"] = float(np.linalg.norm(tcp_pose[:3] - target_array[:3]))
+        if tcp_pose.shape[0] >= 7 and target_array.shape[0] >= 7:
+            summary["step_target_tcp_orientation_error_l2"] = float(np.linalg.norm(tcp_pose[3:7] - target_array[3:7]))
     return summary
 
 
@@ -340,8 +523,12 @@ def _planner_metadata(controller: AgentTeacherController) -> dict[str, Any]:
         "backend_name": controller.planner.backend_name,
         "candidate_plan_count": controller.config.candidate_plan_count,
         "segment_limit": controller.config.segment_limit,
+        "max_planner_calls_per_episode": controller.config.max_planner_calls_per_episode,
+        "run_until_env_done": controller.config.run_until_env_done,
+        "max_env_steps": controller.config.max_env_steps,
         "hold_ticks_per_action": controller.config.hold_ticks_per_action,
         "enable_probes": controller.config.enable_probes,
+        "planner_call_count": controller.planner_call_count,
     }
     planner_config = getattr(controller.planner, "config", None)
     if planner_config is not None:

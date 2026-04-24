@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
+from typing import Any
 
 from ..teacher.types import TeacherPlan, TeacherPlanningState
 
@@ -16,3 +17,13 @@ class PlannerBackend(ABC):
     @abstractmethod
     def plan(self, state: TeacherPlanningState, *, candidate_index: int = 0) -> TeacherPlan:
         """Return a structured segment plan."""
+
+    def plan_global_guidance(
+        self,
+        state: TeacherPlanningState,
+        *,
+        candidate_index: int = 0,
+    ) -> dict[str, Any] | None:
+        """Return optional low-frequency global guidance metadata."""
+        del state, candidate_index
+        return None

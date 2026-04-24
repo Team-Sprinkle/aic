@@ -18,6 +18,7 @@ def main() -> None:
     parser.add_argument("--output", default=None)
     parser.add_argument("--model", default="gpt-5.4-mini")
     parser.add_argument("--candidate-index", type=int, default=0)
+    parser.add_argument("--prefer-live-scene-overview", action="store_true")
     args = parser.parse_args()
 
     env = make_default_env(enable_randomization=True, include_images=False)
@@ -36,7 +37,9 @@ def main() -> None:
                 camera_info=observation.get("camera_info"),
             ),
         )
-        planning_state = TeacherContextExtractor().build_planning_state(
+        planning_state = TeacherContextExtractor(
+            prefer_live_scene_overview=args.prefer_live_scene_overview
+        ).build_planning_state(
             scenario=env._scenario,
             task_id=task_id,
             state=env._state,

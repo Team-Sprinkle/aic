@@ -1,0 +1,143 @@
+[0.000000] (-) TimerEvent: {}
+[0.000206] (-) JobUnselected: {'identifier': 'aic_adapter'}
+[0.000243] (-) JobUnselected: {'identifier': 'aic_assets'}
+[0.000267] (-) JobUnselected: {'identifier': 'aic_control_interfaces'}
+[0.000286] (-) JobUnselected: {'identifier': 'aic_controller'}
+[0.000305] (-) JobUnselected: {'identifier': 'aic_engine'}
+[0.000321] (-) JobUnselected: {'identifier': 'aic_engine_interfaces'}
+[0.000338] (-) JobUnselected: {'identifier': 'aic_example_policies'}
+[0.000352] (-) JobUnselected: {'identifier': 'aic_gazebo'}
+[0.000366] (-) JobUnselected: {'identifier': 'aic_gazebo_transport_bridge'}
+[0.000381] (-) JobUnselected: {'identifier': 'aic_model'}
+[0.000397] (-) JobUnselected: {'identifier': 'aic_model_interfaces'}
+[0.000412] (-) JobUnselected: {'identifier': 'aic_mujoco'}
+[0.000426] (-) JobUnselected: {'identifier': 'aic_scoring'}
+[0.000440] (-) JobUnselected: {'identifier': 'aic_task'}
+[0.000454] (-) JobUnselected: {'identifier': 'aic_task_interfaces'}
+[0.000500] (-) JobUnselected: {'identifier': 'aic_teleoperation'}
+[0.000522] (-) JobUnselected: {'identifier': 'lerobot_robot_aic'}
+[0.000541] (aic_description) JobQueued: {'identifier': 'aic_description', 'dependencies': OrderedDict({'aic_assets': '/workspace/ws_aic/install_live', 'aic_engine_interfaces': '/workspace/ws_aic/install_live', 'aic_gazebo': '/workspace/ws_aic/install_live'})}
+[0.000568] (aic_bringup) JobQueued: {'identifier': 'aic_bringup', 'dependencies': OrderedDict({'aic_assets': '/workspace/ws_aic/install_live', 'aic_control_interfaces': '/workspace/ws_aic/install_live', 'aic_engine_interfaces': '/workspace/ws_aic/install_live', 'aic_task_interfaces': '/workspace/ws_aic/install_live', 'aic_controller': '/workspace/ws_aic/install_live', 'aic_gazebo': '/workspace/ws_aic/install_live', 'aic_scoring': '/workspace/ws_aic/install_live', 'aic_description': '/workspace/ws_aic/install_live', 'aic_engine': '/workspace/ws_aic/install_live'})}
+[0.000812] (aic_description) JobStarted: {'identifier': 'aic_description'}
+[0.013852] (aic_description) JobProgress: {'identifier': 'aic_description', 'progress': 'cmake'}
+[0.014309] (aic_description) Command: {'cmd': ['/usr/bin/cmake', '/workspace/ws_aic/src/aic/aic_description', '-DCMAKE_INSTALL_PREFIX=/workspace/ws_aic/install_live'], 'cwd': '/workspace/ws_aic/src/aic/build/aic_description', 'env': OrderedDict({'GZ_SIM_SYSTEM_PLUGIN_PATH': '/ws_aic/install/lib/aic_gazebo/', 'GZ_SIM_RESOURCE_PATH': '/ws_aic/install/share/aic_assets/models:/ws_aic/install/share', 'GZ_CONFIG_PATH': '/ws_aic/install/share/gz:/opt/ros/kilted/opt/sdformat_vendor/share/gz', 'HOSTNAME': '4ec5a01e6a48', 'ROS_PACKAGE_PATH': '/ws_aic/install', 'SHLVL': '0', 'LD_LIBRARY_PATH': '/ws_aic/install/lib:/opt/ros/kilted/opt/zenoh_cpp_vendor/lib:/opt/ros/kilted/opt/sdformat_vendor/lib:/opt/ros/kilted/opt/gz_math_vendor/lib:/opt/ros/kilted/opt/gz_utils_vendor/lib:/opt/ros/kilted/opt/rviz_ogre_vendor/lib:/opt/ros/kilted/lib/x86_64-linux-gnu:/opt/ros/kilted/opt/gz_tools_vendor/lib:/opt/ros/kilted/opt/gz_ogre_next_vendor/lib:/opt/ros/kilted/opt/gz_dartsim_vendor/lib:/opt/ros/kilted/opt/gz_cmake_vendor/lib:/opt/ros/kilted/lib', 'HOME': '/root', 'ROS_PYTHON_VERSION': '3', 'COLCON_PREFIX_PATH': '/ws_aic/install', 'ROS_DISTRO': 'kilted', '_': '/usr/bin/colcon', 'ROS_VERSION': '2', 'PKG_CONFIG_PATH': '/ws_aic/install/lib/x86_64-linux-gnu/pkgconfig:/ws_aic/install/lib/pkgconfig', 'PATH': '/ws_aic/install/bin:/opt/ros/kilted/opt/gz_tools_vendor/bin:/opt/ros/kilted/opt/gz_ogre_next_vendor/bin:/opt/ros/kilted/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin', 'LANG': 'C.UTF-8', 'AMENT_PREFIX_PATH': '/ws_aic/install:/opt/ros/kilted', 'ROS_AUTOMATIC_DISCOVERY_RANGE': 'SUBNET', 'PWD': '/workspace/ws_aic/src/aic/build/aic_description', 'LC_ALL': 'C.UTF-8', 'PYTHONPATH': '/ws_aic/install/lib/python3.12/site-packages:/opt/ros/kilted/lib/python3.12/site-packages', 'COLCON': '1', 'CMAKE_PREFIX_PATH': '/ws_aic/install:/opt/ros/kilted/opt/sdformat_vendor:/opt/ros/kilted/opt/gz_math_vendor:/opt/ros/kilted/opt/gz_utils_vendor:/opt/ros/kilted/opt/gz_tools_vendor:/opt/ros/kilted/opt/gz_ogre_next_vendor:/opt/ros/kilted/opt/gz_dartsim_vendor:/opt/ros/kilted/opt/gz_cmake_vendor:/opt/ros/kilted'}), 'shell': False}
+[0.075797] (aic_description) StdoutLine: {'line': b'-- The C compiler identification is GNU 13.3.0\n'}
+[0.099789] (-) TimerEvent: {}
+[0.136630] (aic_description) StdoutLine: {'line': b'-- The CXX compiler identification is GNU 13.3.0\n'}
+[0.153284] (aic_description) StdoutLine: {'line': b'-- Detecting C compiler ABI info\n'}
+[0.199900] (-) TimerEvent: {}
+[0.245812] (aic_description) StdoutLine: {'line': b'-- Detecting C compiler ABI info - done\n'}
+[0.254201] (aic_description) StdoutLine: {'line': b'-- Check for working C compiler: /usr/bin/cc - skipped\n'}
+[0.254496] (aic_description) StdoutLine: {'line': b'-- Detecting C compile features\n'}
+[0.254885] (aic_description) StdoutLine: {'line': b'-- Detecting C compile features - done\n'}
+[0.264632] (aic_description) StdoutLine: {'line': b'-- Detecting CXX compiler ABI info\n'}
+[0.300009] (-) TimerEvent: {}
+[0.366754] (aic_description) StdoutLine: {'line': b'-- Detecting CXX compiler ABI info - done\n'}
+[0.375528] (aic_description) StdoutLine: {'line': b'-- Check for working CXX compiler: /usr/bin/c++ - skipped\n'}
+[0.375814] (aic_description) StdoutLine: {'line': b'-- Detecting CXX compile features\n'}
+[0.376257] (aic_description) StdoutLine: {'line': b'-- Detecting CXX compile features - done\n'}
+[0.382239] (aic_description) StdoutLine: {'line': b'-- Found ament_cmake: 2.7.5 (/opt/ros/kilted/share/ament_cmake/cmake)\n'}
+[0.400084] (-) TimerEvent: {}
+[0.500219] (-) TimerEvent: {}
+[0.531035] (aic_description) StdoutLine: {'line': b'-- Found Python3: /usr/bin/python3 (found version "3.12.3") found components: Interpreter \n'}
+[0.600308] (-) TimerEvent: {}
+[0.700449] (-) TimerEvent: {}
+[0.740590] (aic_description) StdoutLine: {'line': b'-- Configuring done (0.7s)\n'}
+[0.744390] (aic_description) StdoutLine: {'line': b'-- Generating done (0.0s)\n'}
+[0.746231] (aic_description) StdoutLine: {'line': b'-- Build files have been written to: /workspace/ws_aic/src/aic/build/aic_description\n'}
+[0.751364] (aic_description) CommandEnded: {'returncode': 0}
+[0.751887] (aic_description) JobProgress: {'identifier': 'aic_description', 'progress': 'build'}
+[0.752452] (aic_description) Command: {'cmd': ['/usr/bin/cmake', '--build', '/workspace/ws_aic/src/aic/build/aic_description', '--', '-j8', '-l8'], 'cwd': '/workspace/ws_aic/src/aic/build/aic_description', 'env': OrderedDict({'GZ_SIM_SYSTEM_PLUGIN_PATH': '/ws_aic/install/lib/aic_gazebo/', 'GZ_SIM_RESOURCE_PATH': '/ws_aic/install/share/aic_assets/models:/ws_aic/install/share', 'GZ_CONFIG_PATH': '/ws_aic/install/share/gz:/opt/ros/kilted/opt/sdformat_vendor/share/gz', 'HOSTNAME': '4ec5a01e6a48', 'ROS_PACKAGE_PATH': '/ws_aic/install', 'SHLVL': '0', 'LD_LIBRARY_PATH': '/ws_aic/install/lib:/opt/ros/kilted/opt/zenoh_cpp_vendor/lib:/opt/ros/kilted/opt/sdformat_vendor/lib:/opt/ros/kilted/opt/gz_math_vendor/lib:/opt/ros/kilted/opt/gz_utils_vendor/lib:/opt/ros/kilted/opt/rviz_ogre_vendor/lib:/opt/ros/kilted/lib/x86_64-linux-gnu:/opt/ros/kilted/opt/gz_tools_vendor/lib:/opt/ros/kilted/opt/gz_ogre_next_vendor/lib:/opt/ros/kilted/opt/gz_dartsim_vendor/lib:/opt/ros/kilted/opt/gz_cmake_vendor/lib:/opt/ros/kilted/lib', 'HOME': '/root', 'ROS_PYTHON_VERSION': '3', 'COLCON_PREFIX_PATH': '/ws_aic/install', 'ROS_DISTRO': 'kilted', '_': '/usr/bin/colcon', 'ROS_VERSION': '2', 'PKG_CONFIG_PATH': '/ws_aic/install/lib/x86_64-linux-gnu/pkgconfig:/ws_aic/install/lib/pkgconfig', 'PATH': '/ws_aic/install/bin:/opt/ros/kilted/opt/gz_tools_vendor/bin:/opt/ros/kilted/opt/gz_ogre_next_vendor/bin:/opt/ros/kilted/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin', 'LANG': 'C.UTF-8', 'AMENT_PREFIX_PATH': '/ws_aic/install:/opt/ros/kilted', 'ROS_AUTOMATIC_DISCOVERY_RANGE': 'SUBNET', 'PWD': '/workspace/ws_aic/src/aic/build/aic_description', 'LC_ALL': 'C.UTF-8', 'PYTHONPATH': '/ws_aic/install/lib/python3.12/site-packages:/opt/ros/kilted/lib/python3.12/site-packages', 'COLCON': '1', 'CMAKE_PREFIX_PATH': '/ws_aic/install:/opt/ros/kilted/opt/sdformat_vendor:/opt/ros/kilted/opt/gz_math_vendor:/opt/ros/kilted/opt/gz_utils_vendor:/opt/ros/kilted/opt/gz_tools_vendor:/opt/ros/kilted/opt/gz_ogre_next_vendor:/opt/ros/kilted/opt/gz_dartsim_vendor:/opt/ros/kilted/opt/gz_cmake_vendor:/opt/ros/kilted'}), 'shell': False}
+[0.799653] (aic_description) CommandEnded: {'returncode': 0}
+[0.800327] (aic_description) JobProgress: {'identifier': 'aic_description', 'progress': 'install'}
+[0.800497] (-) TimerEvent: {}
+[0.810796] (aic_description) Command: {'cmd': ['/usr/bin/cmake', '--install', '/workspace/ws_aic/src/aic/build/aic_description'], 'cwd': '/workspace/ws_aic/src/aic/build/aic_description', 'env': OrderedDict({'GZ_SIM_SYSTEM_PLUGIN_PATH': '/ws_aic/install/lib/aic_gazebo/', 'GZ_SIM_RESOURCE_PATH': '/ws_aic/install/share/aic_assets/models:/ws_aic/install/share', 'GZ_CONFIG_PATH': '/ws_aic/install/share/gz:/opt/ros/kilted/opt/sdformat_vendor/share/gz', 'HOSTNAME': '4ec5a01e6a48', 'ROS_PACKAGE_PATH': '/ws_aic/install', 'SHLVL': '0', 'LD_LIBRARY_PATH': '/ws_aic/install/lib:/opt/ros/kilted/opt/zenoh_cpp_vendor/lib:/opt/ros/kilted/opt/sdformat_vendor/lib:/opt/ros/kilted/opt/gz_math_vendor/lib:/opt/ros/kilted/opt/gz_utils_vendor/lib:/opt/ros/kilted/opt/rviz_ogre_vendor/lib:/opt/ros/kilted/lib/x86_64-linux-gnu:/opt/ros/kilted/opt/gz_tools_vendor/lib:/opt/ros/kilted/opt/gz_ogre_next_vendor/lib:/opt/ros/kilted/opt/gz_dartsim_vendor/lib:/opt/ros/kilted/opt/gz_cmake_vendor/lib:/opt/ros/kilted/lib', 'HOME': '/root', 'ROS_PYTHON_VERSION': '3', 'COLCON_PREFIX_PATH': '/ws_aic/install', 'ROS_DISTRO': 'kilted', '_': '/usr/bin/colcon', 'ROS_VERSION': '2', 'PKG_CONFIG_PATH': '/ws_aic/install/lib/x86_64-linux-gnu/pkgconfig:/ws_aic/install/lib/pkgconfig', 'PATH': '/ws_aic/install/bin:/opt/ros/kilted/opt/gz_tools_vendor/bin:/opt/ros/kilted/opt/gz_ogre_next_vendor/bin:/opt/ros/kilted/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin', 'LANG': 'C.UTF-8', 'AMENT_PREFIX_PATH': '/ws_aic/install:/opt/ros/kilted', 'ROS_AUTOMATIC_DISCOVERY_RANGE': 'SUBNET', 'PWD': '/workspace/ws_aic/src/aic/build/aic_description', 'LC_ALL': 'C.UTF-8', 'PYTHONPATH': '/ws_aic/install/lib/python3.12/site-packages:/opt/ros/kilted/lib/python3.12/site-packages', 'COLCON': '1', 'CMAKE_PREFIX_PATH': '/ws_aic/install:/opt/ros/kilted/opt/sdformat_vendor:/opt/ros/kilted/opt/gz_math_vendor:/opt/ros/kilted/opt/gz_utils_vendor:/opt/ros/kilted/opt/gz_tools_vendor:/opt/ros/kilted/opt/gz_ogre_next_vendor:/opt/ros/kilted/opt/gz_dartsim_vendor:/opt/ros/kilted/opt/gz_cmake_vendor:/opt/ros/kilted'}), 'shell': False}
+[0.820819] (aic_description) StdoutLine: {'line': b'-- Install configuration: ""\n'}
+[0.821088] (aic_description) StdoutLine: {'line': b'-- Up-to-date: /workspace/ws_aic/install_live/share/aic_description/urdf\n'}
+[0.821202] (aic_description) StdoutLine: {'line': b'-- Up-to-date: /workspace/ws_aic/install_live/share/aic_description/urdf/task_board.urdf.xacro\n'}
+[0.821301] (aic_description) StdoutLine: {'line': b'-- Up-to-date: /workspace/ws_aic/install_live/share/aic_description/urdf/cable.sdf.xacro\n'}
+[0.821406] (aic_description) StdoutLine: {'line': b'-- Up-to-date: /workspace/ws_aic/install_live/share/aic_description/urdf/ur_gz.urdf.xacro\n'}
+[0.821536] (aic_description) StdoutLine: {'line': b'-- Up-to-date: /workspace/ws_aic/install_live/share/aic_description/world\n'}
+[0.821730] (aic_description) StdoutLine: {'line': b'-- Up-to-date: /workspace/ws_aic/install_live/share/aic_description/world/aic.sdf\n'}
+[0.821849] (aic_description) StdoutLine: {'line': b'-- Installing: /workspace/ws_aic/install_live/share/ament_index/resource_index/package_run_dependencies/aic_description\n'}
+[0.821947] (aic_description) StdoutLine: {'line': b'-- Installing: /workspace/ws_aic/install_live/share/ament_index/resource_index/parent_prefix_path/aic_description\n'}
+[0.822153] (aic_description) StdoutLine: {'line': b'-- Up-to-date: /workspace/ws_aic/install_live/share/aic_description/environment/ament_prefix_path.sh\n'}
+[0.822232] (aic_description) StdoutLine: {'line': b'-- Installing: /workspace/ws_aic/install_live/share/aic_description/environment/ament_prefix_path.dsv\n'}
+[0.822311] (aic_description) StdoutLine: {'line': b'-- Up-to-date: /workspace/ws_aic/install_live/share/aic_description/environment/path.sh\n'}
+[0.822387] (aic_description) StdoutLine: {'line': b'-- Installing: /workspace/ws_aic/install_live/share/aic_description/environment/path.dsv\n'}
+[0.822553] (aic_description) StdoutLine: {'line': b'-- Installing: /workspace/ws_aic/install_live/share/aic_description/local_setup.bash\n'}
+[0.822698] (aic_description) StdoutLine: {'line': b'-- Installing: /workspace/ws_aic/install_live/share/aic_description/local_setup.sh\n'}
+[0.822829] (aic_description) StdoutLine: {'line': b'-- Installing: /workspace/ws_aic/install_live/share/aic_description/local_setup.zsh\n'}
+[0.823023] (aic_description) StdoutLine: {'line': b'-- Installing: /workspace/ws_aic/install_live/share/aic_description/local_setup.dsv\n'}
+[0.823242] (aic_description) StdoutLine: {'line': b'-- Installing: /workspace/ws_aic/install_live/share/aic_description/package.dsv\n'}
+[0.823485] (aic_description) StdoutLine: {'line': b'-- Installing: /workspace/ws_aic/install_live/share/ament_index/resource_index/packages/aic_description\n'}
+[0.823711] (aic_description) StdoutLine: {'line': b'-- Installing: /workspace/ws_aic/install_live/share/aic_description/cmake/aic_descriptionConfig.cmake\n'}
+[0.823905] (aic_description) StdoutLine: {'line': b'-- Installing: /workspace/ws_aic/install_live/share/aic_description/cmake/aic_descriptionConfig-version.cmake\n'}
+[0.824117] (aic_description) StdoutLine: {'line': b'-- Up-to-date: /workspace/ws_aic/install_live/share/aic_description/package.xml\n'}
+[0.825618] (aic_description) CommandEnded: {'returncode': 0}
+[0.841796] (aic_description) JobEnded: {'identifier': 'aic_description', 'rc': 0}
+[0.842927] (aic_bringup) JobStarted: {'identifier': 'aic_bringup'}
+[0.852093] (aic_bringup) JobProgress: {'identifier': 'aic_bringup', 'progress': 'cmake'}
+[0.852576] (aic_bringup) Command: {'cmd': ['/usr/bin/cmake', '/workspace/ws_aic/src/aic/aic_bringup', '-DCMAKE_INSTALL_PREFIX=/workspace/ws_aic/install_live'], 'cwd': '/workspace/ws_aic/src/aic/build/aic_bringup', 'env': OrderedDict({'GZ_SIM_SYSTEM_PLUGIN_PATH': '/ws_aic/install/lib/aic_gazebo/', 'GZ_SIM_RESOURCE_PATH': '/ws_aic/install/share/aic_assets/models:/ws_aic/install/share', 'GZ_CONFIG_PATH': '/ws_aic/install/share/gz:/opt/ros/kilted/opt/sdformat_vendor/share/gz', 'HOSTNAME': '4ec5a01e6a48', 'ROS_PACKAGE_PATH': '/ws_aic/install', 'SHLVL': '0', 'LD_LIBRARY_PATH': '/ws_aic/install/lib:/opt/ros/kilted/opt/zenoh_cpp_vendor/lib:/opt/ros/kilted/opt/sdformat_vendor/lib:/opt/ros/kilted/opt/gz_math_vendor/lib:/opt/ros/kilted/opt/gz_utils_vendor/lib:/opt/ros/kilted/opt/rviz_ogre_vendor/lib:/opt/ros/kilted/lib/x86_64-linux-gnu:/opt/ros/kilted/opt/gz_tools_vendor/lib:/opt/ros/kilted/opt/gz_ogre_next_vendor/lib:/opt/ros/kilted/opt/gz_dartsim_vendor/lib:/opt/ros/kilted/opt/gz_cmake_vendor/lib:/opt/ros/kilted/lib', 'HOME': '/root', 'ROS_PYTHON_VERSION': '3', 'COLCON_PREFIX_PATH': '/ws_aic/install', 'ROS_DISTRO': 'kilted', '_': '/usr/bin/colcon', 'ROS_VERSION': '2', 'PKG_CONFIG_PATH': '/ws_aic/install/lib/x86_64-linux-gnu/pkgconfig:/ws_aic/install/lib/pkgconfig', 'PATH': '/ws_aic/install/bin:/opt/ros/kilted/opt/gz_tools_vendor/bin:/opt/ros/kilted/opt/gz_ogre_next_vendor/bin:/opt/ros/kilted/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin', 'LANG': 'C.UTF-8', 'AMENT_PREFIX_PATH': '/workspace/ws_aic/install_live:/ws_aic/install:/opt/ros/kilted', 'ROS_AUTOMATIC_DISCOVERY_RANGE': 'SUBNET', 'PWD': '/workspace/ws_aic/src/aic/build/aic_bringup', 'LC_ALL': 'C.UTF-8', 'PYTHONPATH': '/ws_aic/install/lib/python3.12/site-packages:/opt/ros/kilted/lib/python3.12/site-packages', 'COLCON': '1', 'CMAKE_PREFIX_PATH': '/workspace/ws_aic/install_live:/ws_aic/install:/opt/ros/kilted/opt/sdformat_vendor:/opt/ros/kilted/opt/gz_math_vendor:/opt/ros/kilted/opt/gz_utils_vendor:/opt/ros/kilted/opt/gz_tools_vendor:/opt/ros/kilted/opt/gz_ogre_next_vendor:/opt/ros/kilted/opt/gz_dartsim_vendor:/opt/ros/kilted/opt/gz_cmake_vendor:/opt/ros/kilted'}), 'shell': False}
+[0.900621] (-) TimerEvent: {}
+[0.908597] (aic_bringup) StdoutLine: {'line': b'-- The C compiler identification is GNU 13.3.0\n'}
+[0.963828] (aic_bringup) StdoutLine: {'line': b'-- The CXX compiler identification is GNU 13.3.0\n'}
+[0.980585] (aic_bringup) StdoutLine: {'line': b'-- Detecting C compiler ABI info\n'}
+[1.000704] (-) TimerEvent: {}
+[1.072618] (aic_bringup) StdoutLine: {'line': b'-- Detecting C compiler ABI info - done\n'}
+[1.081127] (aic_bringup) StdoutLine: {'line': b'-- Check for working C compiler: /usr/bin/cc - skipped\n'}
+[1.081398] (aic_bringup) StdoutLine: {'line': b'-- Detecting C compile features\n'}
+[1.081805] (aic_bringup) StdoutLine: {'line': b'-- Detecting C compile features - done\n'}
+[1.091740] (aic_bringup) StdoutLine: {'line': b'-- Detecting CXX compiler ABI info\n'}
+[1.100788] (-) TimerEvent: {}
+[1.193604] (aic_bringup) StdoutLine: {'line': b'-- Detecting CXX compiler ABI info - done\n'}
+[1.200872] (-) TimerEvent: {}
+[1.202319] (aic_bringup) StdoutLine: {'line': b'-- Check for working CXX compiler: /usr/bin/c++ - skipped\n'}
+[1.202682] (aic_bringup) StdoutLine: {'line': b'-- Detecting CXX compile features\n'}
+[1.203180] (aic_bringup) StdoutLine: {'line': b'-- Detecting CXX compile features - done\n'}
+[1.208872] (aic_bringup) StdoutLine: {'line': b'-- Found ament_cmake: 2.7.5 (/opt/ros/kilted/share/ament_cmake/cmake)\n'}
+[1.300995] (-) TimerEvent: {}
+[1.357409] (aic_bringup) StdoutLine: {'line': b'-- Found Python3: /usr/bin/python3 (found version "3.12.3") found components: Interpreter \n'}
+[1.401089] (-) TimerEvent: {}
+[1.501244] (-) TimerEvent: {}
+[1.572250] (aic_bringup) StdoutLine: {'line': b'-- Configuring done (0.7s)\n'}
+[1.576119] (aic_bringup) StdoutLine: {'line': b'-- Generating done (0.0s)\n'}
+[1.577944] (aic_bringup) StdoutLine: {'line': b'-- Build files have been written to: /workspace/ws_aic/src/aic/build/aic_bringup\n'}
+[1.582687] (aic_bringup) CommandEnded: {'returncode': 0}
+[1.583135] (aic_bringup) JobProgress: {'identifier': 'aic_bringup', 'progress': 'build'}
+[1.583400] (aic_bringup) Command: {'cmd': ['/usr/bin/cmake', '--build', '/workspace/ws_aic/src/aic/build/aic_bringup', '--', '-j8', '-l8'], 'cwd': '/workspace/ws_aic/src/aic/build/aic_bringup', 'env': OrderedDict({'GZ_SIM_SYSTEM_PLUGIN_PATH': '/ws_aic/install/lib/aic_gazebo/', 'GZ_SIM_RESOURCE_PATH': '/ws_aic/install/share/aic_assets/models:/ws_aic/install/share', 'GZ_CONFIG_PATH': '/ws_aic/install/share/gz:/opt/ros/kilted/opt/sdformat_vendor/share/gz', 'HOSTNAME': '4ec5a01e6a48', 'ROS_PACKAGE_PATH': '/ws_aic/install', 'SHLVL': '0', 'LD_LIBRARY_PATH': '/ws_aic/install/lib:/opt/ros/kilted/opt/zenoh_cpp_vendor/lib:/opt/ros/kilted/opt/sdformat_vendor/lib:/opt/ros/kilted/opt/gz_math_vendor/lib:/opt/ros/kilted/opt/gz_utils_vendor/lib:/opt/ros/kilted/opt/rviz_ogre_vendor/lib:/opt/ros/kilted/lib/x86_64-linux-gnu:/opt/ros/kilted/opt/gz_tools_vendor/lib:/opt/ros/kilted/opt/gz_ogre_next_vendor/lib:/opt/ros/kilted/opt/gz_dartsim_vendor/lib:/opt/ros/kilted/opt/gz_cmake_vendor/lib:/opt/ros/kilted/lib', 'HOME': '/root', 'ROS_PYTHON_VERSION': '3', 'COLCON_PREFIX_PATH': '/ws_aic/install', 'ROS_DISTRO': 'kilted', '_': '/usr/bin/colcon', 'ROS_VERSION': '2', 'PKG_CONFIG_PATH': '/ws_aic/install/lib/x86_64-linux-gnu/pkgconfig:/ws_aic/install/lib/pkgconfig', 'PATH': '/ws_aic/install/bin:/opt/ros/kilted/opt/gz_tools_vendor/bin:/opt/ros/kilted/opt/gz_ogre_next_vendor/bin:/opt/ros/kilted/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin', 'LANG': 'C.UTF-8', 'AMENT_PREFIX_PATH': '/workspace/ws_aic/install_live:/ws_aic/install:/opt/ros/kilted', 'ROS_AUTOMATIC_DISCOVERY_RANGE': 'SUBNET', 'PWD': '/workspace/ws_aic/src/aic/build/aic_bringup', 'LC_ALL': 'C.UTF-8', 'PYTHONPATH': '/ws_aic/install/lib/python3.12/site-packages:/opt/ros/kilted/lib/python3.12/site-packages', 'COLCON': '1', 'CMAKE_PREFIX_PATH': '/workspace/ws_aic/install_live:/ws_aic/install:/opt/ros/kilted/opt/sdformat_vendor:/opt/ros/kilted/opt/gz_math_vendor:/opt/ros/kilted/opt/gz_utils_vendor:/opt/ros/kilted/opt/gz_tools_vendor:/opt/ros/kilted/opt/gz_ogre_next_vendor:/opt/ros/kilted/opt/gz_dartsim_vendor:/opt/ros/kilted/opt/gz_cmake_vendor:/opt/ros/kilted'}), 'shell': False}
+[1.601339] (-) TimerEvent: {}
+[1.626409] (aic_bringup) CommandEnded: {'returncode': 0}
+[1.627041] (aic_bringup) JobProgress: {'identifier': 'aic_bringup', 'progress': 'install'}
+[1.627210] (aic_bringup) Command: {'cmd': ['/usr/bin/cmake', '--install', '/workspace/ws_aic/src/aic/build/aic_bringup'], 'cwd': '/workspace/ws_aic/src/aic/build/aic_bringup', 'env': OrderedDict({'GZ_SIM_SYSTEM_PLUGIN_PATH': '/ws_aic/install/lib/aic_gazebo/', 'GZ_SIM_RESOURCE_PATH': '/ws_aic/install/share/aic_assets/models:/ws_aic/install/share', 'GZ_CONFIG_PATH': '/ws_aic/install/share/gz:/opt/ros/kilted/opt/sdformat_vendor/share/gz', 'HOSTNAME': '4ec5a01e6a48', 'ROS_PACKAGE_PATH': '/ws_aic/install', 'SHLVL': '0', 'LD_LIBRARY_PATH': '/ws_aic/install/lib:/opt/ros/kilted/opt/zenoh_cpp_vendor/lib:/opt/ros/kilted/opt/sdformat_vendor/lib:/opt/ros/kilted/opt/gz_math_vendor/lib:/opt/ros/kilted/opt/gz_utils_vendor/lib:/opt/ros/kilted/opt/rviz_ogre_vendor/lib:/opt/ros/kilted/lib/x86_64-linux-gnu:/opt/ros/kilted/opt/gz_tools_vendor/lib:/opt/ros/kilted/opt/gz_ogre_next_vendor/lib:/opt/ros/kilted/opt/gz_dartsim_vendor/lib:/opt/ros/kilted/opt/gz_cmake_vendor/lib:/opt/ros/kilted/lib', 'HOME': '/root', 'ROS_PYTHON_VERSION': '3', 'COLCON_PREFIX_PATH': '/ws_aic/install', 'ROS_DISTRO': 'kilted', '_': '/usr/bin/colcon', 'ROS_VERSION': '2', 'PKG_CONFIG_PATH': '/ws_aic/install/lib/x86_64-linux-gnu/pkgconfig:/ws_aic/install/lib/pkgconfig', 'PATH': '/ws_aic/install/bin:/opt/ros/kilted/opt/gz_tools_vendor/bin:/opt/ros/kilted/opt/gz_ogre_next_vendor/bin:/opt/ros/kilted/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin', 'LANG': 'C.UTF-8', 'AMENT_PREFIX_PATH': '/workspace/ws_aic/install_live:/ws_aic/install:/opt/ros/kilted', 'ROS_AUTOMATIC_DISCOVERY_RANGE': 'SUBNET', 'PWD': '/workspace/ws_aic/src/aic/build/aic_bringup', 'LC_ALL': 'C.UTF-8', 'PYTHONPATH': '/ws_aic/install/lib/python3.12/site-packages:/opt/ros/kilted/lib/python3.12/site-packages', 'COLCON': '1', 'CMAKE_PREFIX_PATH': '/workspace/ws_aic/install_live:/ws_aic/install:/opt/ros/kilted/opt/sdformat_vendor:/opt/ros/kilted/opt/gz_math_vendor:/opt/ros/kilted/opt/gz_utils_vendor:/opt/ros/kilted/opt/gz_tools_vendor:/opt/ros/kilted/opt/gz_ogre_next_vendor:/opt/ros/kilted/opt/gz_dartsim_vendor:/opt/ros/kilted/opt/gz_cmake_vendor:/opt/ros/kilted'}), 'shell': False}
+[1.635967] (aic_bringup) StdoutLine: {'line': b'-- Install configuration: ""\n'}
+[1.636385] (aic_bringup) StdoutLine: {'line': b'-- Up-to-date: /workspace/ws_aic/install_live/share/aic_bringup/config\n'}
+[1.636547] (aic_bringup) StdoutLine: {'line': b'-- Up-to-date: /workspace/ws_aic/install_live/share/aic_bringup/config/ros_gz_bridge_config.yaml\n'}
+[1.636708] (aic_bringup) StdoutLine: {'line': b'-- Up-to-date: /workspace/ws_aic/install_live/share/aic_bringup/config/aic_ros2_controllers.yaml\n'}
+[1.636821] (aic_bringup) StdoutLine: {'line': b'-- Up-to-date: /workspace/ws_aic/install_live/share/aic_bringup/launch\n'}
+[1.636928] (aic_bringup) StdoutLine: {'line': b'-- Up-to-date: /workspace/ws_aic/install_live/share/aic_bringup/launch/spawn_task_board.launch.py\n'}
+[1.637078] (aic_bringup) StdoutLine: {'line': b'-- Up-to-date: /workspace/ws_aic/install_live/share/aic_bringup/launch/spawn_cable.launch.py\n'}
+[1.637170] (aic_bringup) StdoutLine: {'line': b'-- Up-to-date: /workspace/ws_aic/install_live/share/aic_bringup/launch/aic_gz_bringup.launch.py\n'}
+[1.637252] (aic_bringup) StdoutLine: {'line': b'-- Up-to-date: /workspace/ws_aic/install_live/share/aic_bringup/rviz\n'}
+[1.637327] (aic_bringup) StdoutLine: {'line': b'-- Up-to-date: /workspace/ws_aic/install_live/share/aic_bringup/rviz/aic.rviz\n'}
+[1.637400] (aic_bringup) StdoutLine: {'line': b'-- Up-to-date: /workspace/ws_aic/install_live/lib/aic_bringup/test_impedance.py\n'}
+[1.637533] (aic_bringup) StdoutLine: {'line': b'-- Up-to-date: /workspace/ws_aic/install_live/lib/aic_bringup/home_robot.py\n'}
+[1.637628] (aic_bringup) StdoutLine: {'line': b'-- Installing: /workspace/ws_aic/install_live/share/aic_bringup/environment/gz_config_path.dsv\n'}
+[1.637788] (aic_bringup) StdoutLine: {'line': b'-- Installing: /workspace/ws_aic/install_live/share/ament_index/resource_index/package_run_dependencies/aic_bringup\n'}
+[1.637860] (aic_bringup) StdoutLine: {'line': b'-- Installing: /workspace/ws_aic/install_live/share/ament_index/resource_index/parent_prefix_path/aic_bringup\n'}
+[1.637938] (aic_bringup) StdoutLine: {'line': b'-- Up-to-date: /workspace/ws_aic/install_live/share/aic_bringup/environment/ament_prefix_path.sh\n'}
+[1.638028] (aic_bringup) StdoutLine: {'line': b'-- Installing: /workspace/ws_aic/install_live/share/aic_bringup/environment/ament_prefix_path.dsv\n'}
+[1.638112] (aic_bringup) StdoutLine: {'line': b'-- Up-to-date: /workspace/ws_aic/install_live/share/aic_bringup/environment/path.sh\n'}
+[1.638187] (aic_bringup) StdoutLine: {'line': b'-- Installing: /workspace/ws_aic/install_live/share/aic_bringup/environment/path.dsv\n'}
+[1.638355] (aic_bringup) StdoutLine: {'line': b'-- Installing: /workspace/ws_aic/install_live/share/aic_bringup/local_setup.bash\n'}
+[1.638431] (aic_bringup) StdoutLine: {'line': b'-- Installing: /workspace/ws_aic/install_live/share/aic_bringup/local_setup.sh\n'}
+[1.638525] (aic_bringup) StdoutLine: {'line': b'-- Installing: /workspace/ws_aic/install_live/share/aic_bringup/local_setup.zsh\n'}
+[1.638657] (aic_bringup) StdoutLine: {'line': b'-- Installing: /workspace/ws_aic/install_live/share/aic_bringup/local_setup.dsv\n'}
+[1.638801] (aic_bringup) StdoutLine: {'line': b'-- Installing: /workspace/ws_aic/install_live/share/aic_bringup/package.dsv\n'}
+[1.639019] (aic_bringup) StdoutLine: {'line': b'-- Installing: /workspace/ws_aic/install_live/share/ament_index/resource_index/packages/aic_bringup\n'}
+[1.639220] (aic_bringup) StdoutLine: {'line': b'-- Installing: /workspace/ws_aic/install_live/share/aic_bringup/cmake/aic_bringupConfig.cmake\n'}
+[1.639410] (aic_bringup) StdoutLine: {'line': b'-- Installing: /workspace/ws_aic/install_live/share/aic_bringup/cmake/aic_bringupConfig-version.cmake\n'}
+[1.639696] (aic_bringup) StdoutLine: {'line': b'-- Up-to-date: /workspace/ws_aic/install_live/share/aic_bringup/package.xml\n'}
+[1.640908] (aic_bringup) CommandEnded: {'returncode': 0}
+[1.651786] (aic_bringup) JobEnded: {'identifier': 'aic_bringup', 'rc': 0}
+[1.652349] (-) EventReactorShutdown: {}

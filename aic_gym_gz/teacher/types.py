@@ -103,6 +103,9 @@ class TeacherPlanningState:
                 "sim_tick": item.get("sim_tick"),
                 "sim_time": item.get("sim_time"),
                 "timestamp": item.get("timestamp"),
+                "age_from_latest_s": item.get("age_from_latest_s"),
+                "age_from_latest_steps": item.get("age_from_latest_steps"),
+                "timepoint_label": item.get("timepoint_label"),
                 "source": item.get("source"),
             }
             for item in self.recent_visual_observations
@@ -111,6 +114,7 @@ class TeacherPlanningState:
             {
                 "label": item.get("label"),
                 "view_name": item.get("view_name"),
+                "timestamp": item.get("timestamp"),
                 "source": item.get("source"),
             }
             for item in self.scene_overview_images
@@ -163,6 +167,7 @@ class TrajectorySegment:
     rationale_summary: str
     points: tuple[DenseTrajectoryPoint, ...]
     expected_duration_s: float
+    conversion_metadata: dict[str, Any] = field(default_factory=dict)
 
     def to_dict(self) -> dict[str, Any]:
         payload = asdict(self)
