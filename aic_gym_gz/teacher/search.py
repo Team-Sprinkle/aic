@@ -62,6 +62,8 @@ class TeacherSearchConfig:
     auxiliary_repeated_contact_rich_weight: float = 0.05
     duplicate_similarity_threshold: float = 0.985
     duplicate_penalty_weight: float = 1.25
+    planner_output_mode: str = "absolute_cartesian_waypoint"
+    prefer_live_scene_overview: bool = False
 
 
 class CandidatePlannerBackend(PlannerBackend):
@@ -118,6 +120,13 @@ class CandidatePlannerBackend(PlannerBackend):
                 f"refinement_style={self._spec.refinement_style}; "
                 f"delta={self._spec.perturbation_xyz}; yaw_offset={self._spec.yaw_offset:.4f}"
             ),
+        )
+
+    def plan_global_guidance(self, state, *, candidate_index: int = 0) -> dict[str, Any] | None:
+        del candidate_index
+        return self._base_backend.plan_global_guidance(
+            state,
+            candidate_index=self._spec.planner_candidate_index,
         )
 
 
@@ -314,6 +323,8 @@ class TeacherCandidateSearch:
                 config=TeacherConfig(
                     candidate_plan_count=1,
                     enable_probes=self.config.enable_probes,
+                    planner_output_mode=self.config.planner_output_mode,
+                    prefer_live_scene_overview=self.config.prefer_live_scene_overview,
                     segment_limit=(
                         spec.segment_limit_override
                         if spec.segment_limit_override is not None

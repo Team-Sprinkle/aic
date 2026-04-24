@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from typing import Any
 
 import numpy as np
@@ -10,6 +10,7 @@ import numpy as np
 from ..planners.base import PlannerBackend
 from ..probes.library import ProbeLibrary
 from ..trajectory.smoothing import MinimumJerkSmoother
+from .close_range import CloseRangeInsertionPolicy
 from .context import TeacherContextExtractor
 from .history import TemporalObservationBuffer
 from .types import CandidateEvaluation, TeacherPlan, TrajectorySegment
@@ -21,8 +22,16 @@ class TeacherConfig:
     enable_probes: bool = True
     max_probe_actions: int = 3
     segment_limit: int = 8
+    max_env_steps: int = 512
+    run_until_env_done: bool = False
+    max_planner_calls_per_episode: int = 10
     hold_ticks_per_action: int = 8
     planner_backend_name: str = "mock-deterministic"
+    planner_output_mode: str = "absolute_cartesian_waypoint"
+    prefer_live_scene_overview: bool = False
+    enable_global_guidance: bool = False
+    global_plan_interval_segments: int = 4
+    enable_close_range_handoff: bool = True
 
 
 @dataclass
@@ -34,6 +43,27 @@ class AgentTeacherController:
     config: TeacherConfig = field(default_factory=TeacherConfig)
     current_phase: str = "free_space_approach"
     last_rationale: str | None = None
+    segment_index: int = 0
+    planner_call_count: int = 0
+    cached_global_guidance: dict[str, Any] | None = None
+    close_range_policy: CloseRangeInsertionPolicy = field(default_factory=CloseRangeInsertionPolicy)
+
+    def __post_init__(self) -> None:
+        desired_base_dt = max(int(self.config.hold_ticks_per_action), 1) * 0.002
+        if (
+            self.smoother.planner_output_mode != self.config.planner_output_mode
+            or abs(float(self.smoother.base_dt) - float(desired_base_dt)) > 1e-9
+        ):
+            self.smoother = replace(
+                self.smoother,
+                planner_output_mode=self.config.planner_output_mode,
+                base_dt=desired_base_dt,
+            )
+        if self.context_extractor.prefer_live_scene_overview != self.config.prefer_live_scene_overview:
+            self.context_extractor = replace(
+                self.context_extractor,
+                prefer_live_scene_overview=self.config.prefer_live_scene_overview,
+            )
 
     def select_plan(
         self,
@@ -55,12 +85,18 @@ class AgentTeacherController:
             include_images=include_images,
             last_teacher_rationale=self.last_rationale,
         )
+        global_guidance = self._maybe_refresh_global_guidance(planning_state)
+        planning_state.planning_metadata["planner_output_mode"] = self.config.planner_output_mode
+        if global_guidance is not None:
+            planning_state.temporal_context["global_guidance"] = global_guidance
+            planning_state.planning_metadata["global_guidance"] = global_guidance
         candidates: list[CandidateEvaluation] = []
         best_plan: TeacherPlan | None = None
         best_segment: TrajectorySegment | None = None
         best_score: float | None = None
         for candidate_index in range(self.config.candidate_plan_count):
             plan = self.planner.plan(planning_state, candidate_index=candidate_index)
+            self.planner_call_count += 1
             segment = self.smoother.smooth(state=state, plan=plan)
             score = self._score_candidate(
                 plan=plan,
@@ -94,6 +130,7 @@ class AgentTeacherController:
         assert best_segment is not None
         self.current_phase = best_plan.next_phase
         self.last_rationale = best_plan.rationale_summary
+        self.segment_index += 1
         return best_plan, best_segment, [candidate.to_dict() for candidate in candidates]
 
     def should_probe(self, plan: TeacherPlan, temporal_buffer: TemporalObservationBuffer) -> bool:
@@ -106,6 +143,20 @@ class AgentTeacherController:
 
     def initial_action(self) -> np.ndarray:
         return np.zeros(6, dtype=np.float32)
+
+    def planner_budget_exhausted(self) -> bool:
+        return self.planner_call_count >= max(int(self.config.max_planner_calls_per_episode), 1)
+
+    def should_handoff_to_close_range(self, observation: dict[str, Any]) -> bool:
+        if not self.config.enable_close_range_handoff:
+            return False
+        return self.close_range_policy.should_handoff(observation)
+
+    def force_close_range_handoff(self) -> None:
+        self.close_range_policy.force_handoff()
+
+    def close_range_action(self, observation: dict[str, Any]) -> np.ndarray:
+        return self.close_range_policy.action(observation)
 
     def _score_candidate(
         self,
@@ -151,6 +202,11 @@ class AgentTeacherController:
             else 0.0
         )
         progress_bonus, stagnation_penalty = self._progress_terms(plan=plan, policy_context=policy_context)
+        global_phase_bonus, milestone_bonus = self._global_guidance_terms(
+            plan=plan,
+            policy_context=policy_context,
+            temporal_context=temporal_context,
+        )
         return (
             settling_bonus
             + granularity_bonus
@@ -160,6 +216,8 @@ class AgentTeacherController:
             + guarded_insert_bonus
             + alignment_bonus
             + progress_bonus
+            + global_phase_bonus
+            + milestone_bonus
             - duration_penalty
             - caution_penalty
             - wrench_penalty
@@ -190,3 +248,85 @@ class AgentTeacherController:
         progress_bonus = 8.0 * progress
         stagnation_penalty = 0.25 if progress <= 0.002 else 0.0
         return progress_bonus, stagnation_penalty
+
+    def _global_guidance_terms(
+        self,
+        *,
+        plan: TeacherPlan,
+        policy_context: dict[str, Any],
+        temporal_context: dict[str, Any],
+    ) -> tuple[float, float]:
+        guidance = temporal_context.get("global_guidance", {})
+        if not isinstance(guidance, dict) or not guidance:
+            return 0.0, 0.0
+        phase_sequence = guidance.get("phase_sequence") or []
+        current_phase = str(temporal_context.get("phase_guidance", {}).get("current_phase", ""))
+        if not isinstance(phase_sequence, list):
+            phase_sequence = []
+        next_expected_phase = None
+        for phase in phase_sequence:
+            if phase != current_phase:
+                next_expected_phase = phase
+                break
+        global_phase_bonus = 0.0
+        if next_expected_phase is not None and plan.next_phase == next_expected_phase:
+            global_phase_bonus = 0.12
+        elif plan.next_phase in phase_sequence[:2]:
+            global_phase_bonus = 0.06
+
+        milestones = guidance.get("milestones") or []
+        if not isinstance(milestones, list) or not milestones or not plan.waypoints:
+            return global_phase_bonus, 0.0
+        current_target = np.asarray(plan.waypoints[-1].position_xyz, dtype=np.float64)
+        milestone_bonus = 0.0
+        for milestone in milestones:
+            if not isinstance(milestone, dict):
+                continue
+            position_xyz = milestone.get("position_xyz")
+            phase = milestone.get("phase")
+            if not isinstance(position_xyz, (list, tuple)) or len(position_xyz) < 3:
+                continue
+            milestone_target = np.asarray(position_xyz[:3], dtype=np.float64)
+            distance = float(np.linalg.norm(current_target - milestone_target))
+            if phase == plan.next_phase:
+                if distance <= 0.03:
+                    milestone_bonus = max(milestone_bonus, 0.18)
+                elif distance <= 0.08:
+                    milestone_bonus = max(milestone_bonus, 0.1)
+            elif distance <= 0.03:
+                milestone_bonus = max(milestone_bonus, 0.04)
+        return global_phase_bonus, milestone_bonus
+
+    def _maybe_refresh_global_guidance(self, planning_state) -> dict[str, Any] | None:
+        if not self.config.enable_global_guidance:
+            return self.cached_global_guidance
+        if (
+            self.cached_global_guidance is not None
+            and self.segment_index % max(self.config.global_plan_interval_segments, 1) != 0
+        ):
+            return self.cached_global_guidance
+        planner_guidance = self.planner.plan_global_guidance(planning_state, candidate_index=0)
+        if planner_guidance is not None:
+            self.cached_global_guidance = planner_guidance
+            return planner_guidance
+        phase_guidance = planning_state.temporal_context.get("phase_guidance", {})
+        self.cached_global_guidance = {
+            "source": "teacher_heuristic_global_guidance",
+            "segment_index": self.segment_index,
+            "current_phase": planning_state.current_phase,
+            "recommended_phase": phase_guidance.get("recommended_phase"),
+            "allowed_phases": phase_guidance.get("allowed_phases", []),
+            "milestones": [
+                {
+                    "name": "entrance_setup",
+                    "pose": planning_state.policy_context.get("target_port_entrance_pose"),
+                    "phase": "pre_insert_align",
+                },
+                {
+                    "name": "target_insert",
+                    "pose": planning_state.policy_context.get("target_port_pose"),
+                    "phase": "guarded_insert",
+                },
+            ],
+        }
+        return self.cached_global_guidance

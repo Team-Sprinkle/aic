@@ -203,6 +203,114 @@
       <static>true</static>
     </include>
 
+    <model name="overview_camera_rig">
+      <static>true</static>
+      <pose>0.95 -0.1 1.3 0.0 0.0 3.14</pose>
+      <link name="overview_camera_link">
+        <sensor name="overview_camera" type="camera">
+          <always_on>true</always_on>
+          <update_rate>20.0</update_rate>
+          <topic>/overview_camera/image</topic>
+          <frame_id>overview_camera_link</frame_id>
+          <camera name="overview_camera">
+            <camera_info_topic>/overview_camera/camera_info</camera_info_topic>
+            <optical_frame_id>overview_camera_link</optical_frame_id>
+            <image>
+              <width>1152</width>
+              <height>1024</height>
+              <format>R8G8B8</format>
+            </image>
+            <horizontal_fov>0.8718</horizontal_fov>
+            <clip>
+              <near>0.07</near>
+              <far>20</far>
+            </clip>
+          </camera>
+        </sensor>
+      </link>
+    </model>
+
+    <model name="overview_front_camera_rig">
+      <static>true</static>
+      <pose>0.15 -1.05 1.22 1.5708 0.0 1.5708</pose>
+      <link name="overview_front_camera_link">
+        <sensor name="overview_front_camera" type="camera">
+          <always_on>true</always_on>
+          <update_rate>20.0</update_rate>
+          <topic>/overview_front_camera/image</topic>
+          <frame_id>overview_front_camera_link</frame_id>
+          <camera name="overview_front_camera">
+            <camera_info_topic>/overview_front_camera/camera_info</camera_info_topic>
+            <optical_frame_id>overview_front_camera_link</optical_frame_id>
+            <image>
+              <width>1152</width>
+              <height>1024</height>
+              <format>R8G8B8</format>
+            </image>
+            <horizontal_fov>0.8718</horizontal_fov>
+            <clip>
+              <near>0.07</near>
+              <far>20</far>
+            </clip>
+          </camera>
+        </sensor>
+      </link>
+    </model>
+
+    <model name="overview_side_camera_rig">
+      <static>true</static>
+      <pose>-0.95 -0.15 1.18 0.0 0.0 0.0</pose>
+      <link name="overview_side_camera_link">
+        <sensor name="overview_side_camera" type="camera">
+          <always_on>true</always_on>
+          <update_rate>20.0</update_rate>
+          <topic>/overview_side_camera/image</topic>
+          <frame_id>overview_side_camera_link</frame_id>
+          <camera name="overview_side_camera">
+            <camera_info_topic>/overview_side_camera/camera_info</camera_info_topic>
+            <optical_frame_id>overview_side_camera_link</optical_frame_id>
+            <image>
+              <width>1152</width>
+              <height>1024</height>
+              <format>R8G8B8</format>
+            </image>
+            <horizontal_fov>0.8718</horizontal_fov>
+            <clip>
+              <near>0.07</near>
+              <far>20</far>
+            </clip>
+          </camera>
+        </sensor>
+      </link>
+    </model>
+
+    <model name="overview_oblique_camera_rig">
+      <static>true</static>
+      <pose>0.95 -0.95 1.55 0.0 0.0 2.35</pose>
+      <link name="overview_oblique_camera_link">
+        <sensor name="overview_oblique_camera" type="camera">
+          <always_on>true</always_on>
+          <update_rate>20.0</update_rate>
+          <topic>/overview_oblique_camera/image</topic>
+          <frame_id>overview_oblique_camera_link</frame_id>
+          <camera name="overview_oblique_camera">
+            <camera_info_topic>/overview_oblique_camera/camera_info</camera_info_topic>
+            <optical_frame_id>overview_oblique_camera_link</optical_frame_id>
+            <image>
+              <width>1152</width>
+              <height>1024</height>
+              <format>R8G8B8</format>
+            </image>
+            <horizontal_fov>0.8718</horizontal_fov>
+            <clip>
+              <near>0.07</near>
+              <far>20</far>
+            </clip>
+          </camera>
+        </sensor>
+      </link>
+    </model>
+
     <!-- Cable is now spawned via cable.sdf.xacro in launch file -->
     <!-- Task board and components are now spawned via task_board.urdf.xacro in launch file -->
   </world>

@@ -32,9 +32,13 @@ def _planning_state() -> TeacherPlanningState:
         goal_summary="goal",
         current_phase="free_space_approach",
         policy_context={
+            "tcp_pose": [0.0, 0.0, 1.02, 0.0, 0.0, 0.0, 1.0],
+            "tcp_velocity": [0.01, 0.0, -0.02, 0.0, 0.0, 0.1],
             "plug_pose": [0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0],
             "target_port_pose": [0.0, 0.0, 0.9, 0.0, 0.0, 0.0, 1.0],
             "target_port_entrance_pose": [0.0, 0.0, 0.92, 0.0, 0.0, 0.0, 1.0],
+            "wrench": [0.0, 0.0, 1.5, 0.0, 0.0, 0.1],
+            "wrench_timestamp": 12.5,
             "off_limit_contact": False,
             "distance_to_target": 0.1,
             "distance_to_entrance": 0.12,
@@ -46,6 +50,15 @@ def _planning_state() -> TeacherPlanningState:
                 "lateral_misalignment": 0.02,
                 "orientation_error": 0.1,
                 "insertion_progress": 0.0,
+            },
+            "relative_geometry": {
+                "plug_to_entrance_xyz": [0.0, 0.0, -0.08],
+                "insertion_axis_world_xyz": [0.0, 0.0, -1.0],
+            },
+            "frame_context": {
+                "runtime_pose_frame": "world",
+                "runtime_action_command_frame": "world",
+                "official_policy_reference_frame": "base_link",
             },
         },
         obstacle_summary=[],
@@ -61,6 +74,11 @@ def _planning_state() -> TeacherPlanningState:
             "phase_guidance": {"recommended_phase": "pre_insert_align"},
             "geometry_progress_summary": {"net_distance_to_entrance_progress": 0.0},
             "auxiliary_history_summary": {"hidden_contact_recent": False},
+            "wrench_contact_trend_summary": {"current_force_l2": 0.0},
+            "compact_signal_samples": {
+                "wrench_force_samples": [[0.0, 0.0, 0.0]],
+                "tcp_speed_samples": [0.0],
+            },
         },
         data_quality={"wrench": {"is_real": False}},
         oracle_context={
@@ -78,6 +96,17 @@ def _planning_state() -> TeacherPlanningState:
                 ]
             },
             "cable": {"name": "cable_0", "type": "sfp_sc"},
+        },
+        controller_context={
+            "reference_tcp_pose": [0.0, 0.0, 1.02, 0.0, 0.0, 0.0, 1.0],
+            "tcp_error": [0.0, 0.0, -0.01, 0.0, 0.0, 0.0],
+            "controller_target_mode": 1,
+        },
+        planning_metadata={
+            "planner_output_mode": "absolute_cartesian_waypoint",
+            "scene_overview_sources": {"top_down_xy": "teacher_schematic_scene_overview"},
+            "scene_overview_live_source_used": False,
+            "prefer_live_scene_overview": False,
         },
     )
 
@@ -135,6 +164,27 @@ class TeacherOpenAIPlannerBackendTest(unittest.TestCase):
         self.assertIn("scene_geometry_context", user_text)
         self.assertIn("board_pose_xyz_rpy", user_text)
         self.assertIn("present_obstacles", user_text)
+        self.assertIn("relative_geometry", user_text)
+        self.assertIn("reference_tcp_pose", user_text)
+        self.assertIn("wrench_contact_trend_summary", user_text)
+        self.assertIn("compact_signal_samples", user_text)
+        self.assertIn("tcp_velocity", user_text)
+        self.assertIn("wrench_timestamp", user_text)
+        self.assertIn("scene_overview_sources", user_text)
+        self.assertIn("runtime_pose_frame", user_text)
+
+    def test_build_global_guidance_payload_uses_global_schema(self) -> None:
+        backend = OpenAIPlannerBackend(
+            OpenAIPlannerConfig(
+                enabled=True,
+                enable_global_guidance=True,
+                global_model="gpt-5.4-mini",
+            )
+        )
+        payload = backend.build_global_guidance_request_payload(_planning_state())
+        self.assertEqual(payload["model"], "gpt-5.4-mini")
+        self.assertEqual(payload["text"]["format"]["name"], "teacher_global_guidance")
+        self.assertEqual(payload["text"]["format"]["schema"]["required"][0], "strategy_summary")
 
     def test_visual_context_is_included_when_present(self) -> None:
         state = _planning_state()
@@ -145,6 +195,9 @@ class TeacherOpenAIPlannerBackendTest(unittest.TestCase):
                 "sim_tick": 12,
                 "sim_time": 0.24,
                 "timestamp": 0.24,
+                "age_from_latest_s": 0.0,
+                "age_from_latest_steps": 0,
+                "timepoint_label": "current",
                 "source": "official_wrist_camera_history",
                 "image_data_url": "data:image/png;base64,AAA",
             }
@@ -154,6 +207,7 @@ class TeacherOpenAIPlannerBackendTest(unittest.TestCase):
                 "label": "scene_top",
                 "view_name": "top_down_xy",
                 "source": "teacher_schematic_scene_overview",
+                "timestamp": None,
                 "image_data_url": "data:image/png;base64,BBB",
             }
         )
@@ -163,6 +217,7 @@ class TeacherOpenAIPlannerBackendTest(unittest.TestCase):
         self.assertTrue(any(item.get("type") == "input_image" for item in content))
         self.assertTrue(any(item.get("text", "").startswith("Recent official wrist-camera") for item in content))
         self.assertTrue(any(item.get("text", "").startswith("Teacher-side scene overview") for item in content))
+        self.assertTrue(any("timepoint_label=current" in item.get("text", "") for item in content))
         self.assertTrue(any(item.get("image_url") == "<image_data_url>" for item in content if item.get("type") == "input_image"))
 
     def test_temperature_is_omitted_when_configured_none(self) -> None:

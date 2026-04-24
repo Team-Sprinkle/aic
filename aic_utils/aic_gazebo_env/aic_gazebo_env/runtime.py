@@ -85,6 +85,7 @@ class GazeboRuntimeConfig:
     reset_post_reset_ticks: int = 4
     action_post_step_ticks: int = 1
     settle_step_ticks: int = 1
+    observation_transport: str = "auto"
 
 
 @dataclass
@@ -237,6 +238,7 @@ class GazeboRuntime(Runtime):
                 reset_post_reset_ticks=self.config.reset_post_reset_ticks,
                 action_post_step_ticks=self.config.action_post_step_ticks,
                 settle_step_ticks=self.config.settle_step_ticks,
+                observation_transport=self.config.observation_transport,
             )
             backend = self.config.transport_backend
             if backend == "transport" or (
@@ -332,6 +334,7 @@ class GazeboAttachedRuntime(Runtime):
                 reset_post_reset_ticks=self.config.reset_post_reset_ticks,
                 action_post_step_ticks=self.config.action_post_step_ticks,
                 settle_step_ticks=self.config.settle_step_ticks,
+                observation_transport=self.config.observation_transport,
             )
             backend = self.config.transport_backend
             if backend == "transport" or (

@@ -428,11 +428,14 @@ class GazeboCliClient(GazeboClient):
         world_name = self._world_name()
         state_topic = f"/world/{world_name}/state"
         pose_topic = f"/world/{world_name}/pose/info"
+        dynamic_pose_topic = f"/world/{world_name}/dynamic_pose/info"
         state_payload, _ = self._read_state_sample(
             topic=state_topic,
             after_generation=None,
         )
         pose_payload = self._read_pose_sample(topic=pose_topic)
+        if pose_payload is None:
+            pose_payload = self._read_pose_sample(topic=dynamic_pose_topic)
         observation = self._parse_live_observation(
             state_payload=state_payload,
             pose_payload=pose_payload,
@@ -448,6 +451,7 @@ class GazeboCliClient(GazeboClient):
                 "transport_backend": self._transport_backend_name(),
                 "observation_topic": state_topic,
                 "pose_topic": pose_topic,
+                "dynamic_pose_topic": dynamic_pose_topic,
                 "state_text": self._logicalize_state_text(state_payload),
                 "state_text_raw": state_payload,
                 "pose_text": pose_payload,
@@ -502,15 +506,21 @@ class GazeboCliClient(GazeboClient):
 
     def _read_pose_sample(self, *, topic: str) -> str | None:
         if not self._uses_persistent_observation_transport():
-            return self._try_run_with_timeout(
-                ["topic", "-e", "-n", "1", "-t", topic],
-                timeout=min(self.config.timeout, 1.0),
-            )
+            attempts = 3
+            for _ in range(attempts):
+                payload = self._try_run_with_timeout(
+                    ["topic", "-e", "-n", "1", "-t", topic],
+                    timeout=min(self.config.timeout, 3.0),
+                )
+                if payload:
+                    return payload
+                time.sleep(0.2)
+            return None
         reader = self._pose_topic_reader(topic)
         try:
             payload, _ = reader.get_sample(
                 after_generation=None,
-                timeout=min(self.config.timeout, 0.5),
+                timeout=min(self.config.timeout, 1.5),
             )
             return payload
         except TimeoutError:
@@ -1115,6 +1125,7 @@ class GazeboCliClient(GazeboClient):
         world_name = self._world_name()
         state_topic = f"/world/{world_name}/state"
         pose_topic = f"/world/{world_name}/pose/info"
+        dynamic_pose_topic = f"/world/{world_name}/dynamic_pose/info"
         try:
             state_payload, _ = self._read_state_sample(
                 topic=state_topic,
@@ -1128,6 +1139,8 @@ class GazeboCliClient(GazeboClient):
                 raise
             state_payload = fallback_payload
         pose_payload = self._read_pose_sample(topic=pose_topic)
+        if pose_payload is None:
+            pose_payload = self._read_pose_sample(topic=dynamic_pose_topic)
         observation = self._parse_live_observation(
             state_payload=state_payload,
             pose_payload=pose_payload,
@@ -1142,6 +1155,7 @@ class GazeboCliClient(GazeboClient):
                 "runtime": "gazebo",
                 "observation_topic": state_topic,
                 "pose_topic": pose_topic,
+                "dynamic_pose_topic": dynamic_pose_topic,
                 "state_text": state_payload,
                 "pose_text": pose_payload,
             },
@@ -1222,11 +1236,10 @@ class GazeboCliClient(GazeboClient):
             else self._extract_live_state_entities(state_payload)
         )
         state_text_entities = self._extract_entities(state_payload)
-        if len(state_text_entities) > len(entities):
-            # Prefer the richer state-text entity view when it is available.
-            # This keeps fake/textproto bridge paths and real live fallbacks on
-            # the same observation contract without weakening the live parser.
-            entities = state_text_entities
+        entities = self._merge_entity_views(
+            primary_entities=entities,
+            secondary_entities=state_text_entities,
+        )
         entities_by_name = {
             entity["name"]: dict(entity) for entity in entities if isinstance(entity["name"], str)
         }
@@ -1250,6 +1263,37 @@ class GazeboCliClient(GazeboClient):
             },
             "task_geometry": self._build_task_geometry(entities_by_name),
         }
+
+    def _merge_entity_views(
+        self,
+        *,
+        primary_entities: list[dict[str, object]],
+        secondary_entities: list[dict[str, object]],
+    ) -> list[dict[str, object]]:
+        merged_by_name: dict[str, dict[str, object]] = {}
+        for entity in secondary_entities:
+            name = entity.get("name")
+            if isinstance(name, str):
+                merged_by_name[name] = dict(entity)
+        for entity in primary_entities:
+            name = entity.get("name")
+            if not isinstance(name, str):
+                continue
+            existing = merged_by_name.get(name, {})
+            combined = dict(existing)
+            combined.update(entity)
+            existing_pose = existing.get("pose") if isinstance(existing.get("pose"), dict) else {}
+            current_pose = entity.get("pose") if isinstance(entity.get("pose"), dict) else {}
+            pose = dict(existing_pose)
+            pose.update(current_pose)
+            if pose:
+                combined["pose"] = pose
+                if "position" not in combined and isinstance(pose.get("position"), list):
+                    combined["position"] = pose["position"]
+                if "orientation" not in combined and isinstance(pose.get("orientation"), list):
+                    combined["orientation"] = pose["orientation"]
+            merged_by_name[name] = combined
+        return [merged_by_name[name] for name in sorted(merged_by_name.keys())]
 
     def _extract_live_state_entities(self, payload: str) -> list[dict[str, object]]:
         entities_by_id = {

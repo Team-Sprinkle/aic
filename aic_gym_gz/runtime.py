@@ -85,6 +85,7 @@ class RuntimeState:
     insertion_event: str | None = None
     controller_state: dict[str, Any] = field(default_factory=dict)
     score_geometry: dict[str, Any] = field(default_factory=dict)
+    world_entities_summary: dict[str, Any] = field(default_factory=dict)
     auxiliary_force_contact_summary: AuxiliaryForceContactSummary = field(
         default_factory=AuxiliaryForceContactSummary
     )
@@ -247,6 +248,7 @@ class ScenarioGymGzBackend(RuntimeBackend):
         world_path: str | None = None,
         headless: bool = True,
         timeout: float = 10.0,
+        attach_ready_timeout: float | None = None,
         source_entity_name: str = "ati/tool_link",
         target_entity_name: str = "tabletop",
         transport_backend: str = "transport",
@@ -258,6 +260,9 @@ class ScenarioGymGzBackend(RuntimeBackend):
         )
         self._headless = headless
         self._timeout = timeout
+        self._attach_ready_timeout = (
+            float(attach_ready_timeout) if attach_ready_timeout is not None else max(float(timeout), 30.0)
+        )
         self._source_entity_name = source_entity_name
         self._target_entity_name = target_entity_name
         self._transport_backend = transport_backend
@@ -269,6 +274,7 @@ class ScenarioGymGzBackend(RuntimeBackend):
         self._last_info: dict[str, Any] | None = None
         self._last_seed: int | None = None
         self._last_trial_id: str | None = None
+        self._scenario: AicScenario | None = None
         self._task = None
         self._ros_observer: _RuntimeRosObserver | None = None
 
@@ -298,6 +304,7 @@ class ScenarioGymGzBackend(RuntimeBackend):
     def reset(self, *, seed: int | None, scenario: AicScenario) -> RuntimeState:
         self._last_seed = seed
         self._last_trial_id = scenario.trial_id
+        self._scenario = scenario
         self._task = next(iter(scenario.tasks.values()))
         if self._runtime is None:
             self._start_runtime()
@@ -305,16 +312,25 @@ class ScenarioGymGzBackend(RuntimeBackend):
             self._ros_observer = _RuntimeRosObserver()
         self._action[:] = 0.0
         if self._attach_to_existing:
-            return self.connect_existing_world()
+            try:
+                observation, info = self._runtime.reset(seed=seed, options={})
+                return self._await_runtime_state(
+                    observation=observation,
+                    info=info,
+                    timeout_s=self._attach_ready_timeout,
+                )
+            except Exception:
+                return self.connect_existing_world()
         observation, info = self._runtime.reset(seed=seed, options={})
         return self._await_runtime_state(observation=observation, info=info, timeout_s=self._timeout)
 
     def connect_existing_world(self) -> RuntimeState:
         if self._runtime is None:
             self._start_runtime()
-        deadline = time.monotonic() + self._timeout
+        deadline = time.monotonic() + self._attach_ready_timeout
         last_error: Exception | None = None
-        bootstrap_state = self._bootstrap_existing_world_state()
+        bootstrap_timeout_s = min(max(self._attach_ready_timeout * 0.25, 5.0), 20.0)
+        bootstrap_state = self._bootstrap_existing_world_state(timeout_s=bootstrap_timeout_s)
         if bootstrap_state is not None:
             return bootstrap_state
         while time.monotonic() < deadline:
@@ -324,6 +340,8 @@ class ScenarioGymGzBackend(RuntimeBackend):
                 self._last_observation = dict(observation)
                 self._last_info = dict(info)
                 self._last_state = self._runtime_state_from_observation(observation, info)
+                if not self._state_is_sane_for_live_reset(self._last_state):
+                    raise RuntimeError("Attached world is not yet exposing a sane live reset pose.")
                 return self._last_state
             except RuntimeError as exc:
                 last_error = exc
@@ -333,7 +351,12 @@ class ScenarioGymGzBackend(RuntimeBackend):
                 last_error = exc
                 self._tick_existing_world_for_sample()
                 time.sleep(0.1)
-        raise RuntimeError(f"Timed out waiting for attached world readiness: {last_error}")
+        raise RuntimeError(
+            "Timed out waiting for attached world readiness: "
+            f"{last_error}. attach_ready_timeout={self._attach_ready_timeout}s, "
+            f"transport_backend={self._transport_backend}, source_entity={self._source_entity_name}, "
+            f"target_entity={self._target_entity_name}"
+        )
 
     def apply_action(self, action: np.ndarray) -> None:
         self._action = np.array(action, dtype=np.float64, copy=True)
@@ -345,23 +368,35 @@ class ScenarioGymGzBackend(RuntimeBackend):
         if tick_count <= 0:
             raise ValueError("tick_count must be positive.")
         step_window_start = time.monotonic()
-        position_delta = (np.clip(self._action[:3], -0.25, 0.25) * 0.002 * tick_count).tolist()
-        rotation_delta = _angular_delta_to_quaternion(
-            np.clip(self._action[3:], -2.0, 2.0) * 0.002 * tick_count
-        )
-        observation, _, _, _, info = self._runtime.step(
-            {
-                "ee_delta_action": {
-                    "position_delta": position_delta,
-                    "orientation_delta": rotation_delta,
-                    "frame": "world",
-                },
-                "multi_step": tick_count,
-            }
-        )
+        used_controller_command = False
+        if self._ros_observer is not None:
+            used_controller_command = self._ros_observer.publish_velocity_command(
+                linear_xyz=np.clip(self._action[:3], -0.25, 0.25),
+                angular_xyz=np.clip(self._action[3:], -2.0, 2.0),
+                frame_id="base_link",
+                timeout_s=min(max(self._timeout, 1.0), 2.0),
+            )
+        if used_controller_command:
+            observation, _, _, _, info = self._runtime.step({"multi_step": tick_count})
+        else:
+            position_delta = (np.clip(self._action[:3], -0.25, 0.25) * 0.002 * tick_count).tolist()
+            rotation_delta = _angular_delta_to_quaternion(
+                np.clip(self._action[3:], -2.0, 2.0) * 0.002 * tick_count
+            )
+            observation, _, _, _, info = self._runtime.step(
+                {
+                    "ee_delta_action": {
+                        "position_delta": position_delta,
+                        "orientation_delta": rotation_delta,
+                        "frame": "world",
+                    },
+                    "multi_step": tick_count,
+                }
+            )
         step_window_end = time.monotonic()
         self._last_observation = dict(observation)
         self._last_info = dict(info)
+        self._last_info["used_controller_velocity_command"] = bool(used_controller_command)
         self._last_state = self._runtime_state_from_observation(
             observation,
             info,
@@ -459,6 +494,9 @@ class ScenarioGymGzBackend(RuntimeBackend):
         }
 
     def _start_runtime(self) -> None:
+        observation_transport = "auto"
+        if self._attach_to_existing and self._transport_backend == "cli":
+            observation_transport = "one_shot"
         self._runtime = self._runtime_type(
             self._runtime_config_type(
                 world_path=self._world_path,
@@ -468,6 +506,7 @@ class ScenarioGymGzBackend(RuntimeBackend):
                 source_entity_name=self._source_entity_name,
                 target_entity_name=self._target_entity_name,
                 transport_backend=self._transport_backend,
+                observation_transport=observation_transport,
             )
         )
         self._runtime.start()
@@ -521,6 +560,10 @@ class ScenarioGymGzBackend(RuntimeBackend):
                     current_observation,
                     current_info,
                 )
+                if not self._state_is_sane_for_live_reset(self._last_state):
+                    raise RuntimeError(
+                        "Live observation is still waiting for a sane controller/world pose sample."
+                    )
                 return self._last_state
             except RuntimeError as exc:
                 last_error = exc
@@ -531,13 +574,25 @@ class ScenarioGymGzBackend(RuntimeBackend):
                 time.sleep(0.1)
                 current_observation, current_info = self._runtime.get_observation()
 
-    def _bootstrap_existing_world_state(self) -> RuntimeState | None:
+    def _state_is_sane_for_live_reset(self, state: RuntimeState) -> bool:
+        if state.controller_state:
+            controller_tcp_pose = state.controller_state.get("tcp_pose")
+            if self._is_sane_live_tcp_pose(
+                controller_tcp_pose,
+                observed_tcp_pose=state.tcp_pose,
+                previous_state=self._last_state,
+                step_tick_count=0,
+            ):
+                return True
+        return float(state.tcp_pose[2]) > 0.5 and float(state.plug_pose[2]) > 0.2
+
+    def _bootstrap_existing_world_state(self, *, timeout_s: float) -> RuntimeState | None:
         try:
             client = self._cli_client_type(
                 self._cli_config_type(
                     executable="gz",
                     world_path=self._world_path,
-                    timeout=self._timeout,
+                    timeout=max(float(timeout_s), float(self._timeout)),
                     world_name=self._world_name,
                     source_entity_name=self._source_entity_name,
                     target_entity_name=self._target_entity_name,
@@ -548,7 +603,7 @@ class ScenarioGymGzBackend(RuntimeBackend):
         except Exception:
             return None
         try:
-            deadline = time.monotonic() + self._timeout
+            deadline = time.monotonic() + timeout_s
             last_error: Exception | None = None
             while time.monotonic() < deadline:
                 try:
@@ -559,6 +614,8 @@ class ScenarioGymGzBackend(RuntimeBackend):
                     self._last_observation = observation
                     self._last_info = info
                     self._last_state = self._runtime_state_from_observation(observation, info)
+                    if not self._state_is_sane_for_live_reset(self._last_state):
+                        raise RuntimeError("Bootstrap observation was not yet a sane live reset pose.")
                     return self._last_state
                 except Exception as exc:
                     last_error = exc
@@ -584,6 +641,14 @@ class ScenarioGymGzBackend(RuntimeBackend):
         wall_time_window: tuple[float, float] | None = None,
     ) -> RuntimeState:
         entities_by_name = observation.get("entities_by_name") or {}
+        if (
+            self._attach_to_existing
+            and self._transport_backend == "cli"
+            and len(entities_by_name) <= 4
+        ):
+            supplemented_entities = self._supplement_entities_from_cli_once()
+            if supplemented_entities:
+                entities_by_name = supplemented_entities
         source_name, source = _resolve_named_entity(
             entities_by_name,
             self._source_entity_name,
@@ -608,10 +673,18 @@ class ScenarioGymGzBackend(RuntimeBackend):
                 plug = candidate
                 plug_name = fallback_name
                 break
-        if not isinstance(source, dict):
-            raise RuntimeError(
-                f"Live observation did not contain source entity '{self._source_entity_name}'."
-            )
+        synthetic_target = self._synthetic_target_pose(
+            entities_by_name=entities_by_name,
+            observed_target_name=target_name,
+        )
+        if synthetic_target is not None and (
+            not isinstance(target, dict) or target_name in {"tabletop", "task_board_base_link", self._target_entity_name}
+        ):
+            target_name = synthetic_target["target_name"]
+            target = synthetic_target["target_pose_dict"]
+            if not isinstance(entrance, dict):
+                entrance_name = synthetic_target["entrance_name"]
+                entrance = synthetic_target["entrance_pose_dict"]
         if not isinstance(target, dict):
             raise RuntimeError(
                 "Live observation did not contain the configured target port entity."
@@ -621,15 +694,46 @@ class ScenarioGymGzBackend(RuntimeBackend):
         joint_velocities = np.zeros_like(joint_positions)
         step_count = int(observation.get("step_count") or 0)
         sim_time = _parse_sim_time_seconds(info.get("state_text_raw") or info.get("state_text") or "")
-        tcp_pose = _pose_dict_to_array(source.get("pose") or source)
+        if sim_time <= 0.0 and step_count > 0:
+            sim_time = float(step_count) * 0.002
+        tcp_pose = (
+            _pose_dict_to_array(source.get("pose") or source)
+            if isinstance(source, dict)
+            else np.zeros(7, dtype=np.float64)
+        )
         target_pose = _pose_dict_to_array(target.get("pose") or target)
-        plug_pose = _pose_dict_to_array((plug.get("pose") if isinstance(plug, dict) else None) or plug or source.get("pose") or source)
+        plug_pose = _pose_dict_to_array(
+            (plug.get("pose") if isinstance(plug, dict) else None)
+            or plug
+            or ((source.get("pose") or source) if isinstance(source, dict) else None)
+            or {"position": [0.0, 0.0, 0.0], "orientation": [0.0, 0.0, 0.0, 1.0]}
+        )
         entrance_pose = (
             _pose_dict_to_array(entrance.get("pose") or entrance)
             if isinstance(entrance, dict)
             else None
         )
+        ros_sample = self._ros_observer.snapshot() if self._ros_observer is not None else {}
+        wrench, wrench_timestamp = _wrench_from_ros_sample(ros_sample)
+        controller_state = _controller_state_from_ros_sample(ros_sample)
         previous_state = self._last_state
+        controller_tcp_pose = controller_state.get("tcp_pose")
+        if self._is_sane_live_tcp_pose(
+            controller_tcp_pose,
+            observed_tcp_pose=tcp_pose,
+            previous_state=previous_state,
+            step_tick_count=step_tick_count,
+        ):
+            tcp_pose = np.asarray(controller_tcp_pose, dtype=np.float64).copy()
+            if source_name is None:
+                source_name = "controller_tcp_pose"
+        synthesized_tcp_pose = self._maybe_synthesize_tcp_pose(
+            observed_tcp_pose=tcp_pose,
+            previous_state=previous_state,
+            step_tick_count=step_tick_count,
+        )
+        if synthesized_tcp_pose is not None:
+            tcp_pose = synthesized_tcp_pose
         if previous_state is None or previous_state.sim_time >= sim_time:
             tcp_velocity = np.zeros(6, dtype=np.float64)
         else:
@@ -640,9 +744,22 @@ class ScenarioGymGzBackend(RuntimeBackend):
                     np.zeros(3, dtype=np.float64),
                 ]
             )
-        ros_sample = self._ros_observer.snapshot() if self._ros_observer is not None else {}
-        wrench, wrench_timestamp = _wrench_from_ros_sample(ros_sample)
-        controller_state = _controller_state_from_ros_sample(ros_sample)
+        synthesized_plug_pose = self._maybe_synthesize_plug_pose(
+            tcp_pose=tcp_pose,
+            plug_pose=plug_pose,
+            controller_state=controller_state,
+        )
+        if synthesized_plug_pose is not None:
+            plug_pose = synthesized_plug_pose
+            if plug_name is None:
+                plug_name = "synthetic_plug_from_tcp"
+        if source_name is None and float(tcp_pose[2]) > 0.1:
+            source_name = "synthetic_tcp_pose"
+        if source_name is None:
+            raise RuntimeError(
+                f"Live observation did not contain source entity '{self._source_entity_name}', "
+                "and no sane controller tcp pose was available."
+            )
         off_limit_contact = bool(ros_sample.get("off_limit_contact", False))
         auxiliary_summary = _single_sample_force_contact_summary(
             wrench=wrench,
@@ -696,6 +813,14 @@ class ScenarioGymGzBackend(RuntimeBackend):
             entrance_pose=entrance_pose,
             tracked_pair=observation.get("task_geometry", {}).get("tracked_entity_pair", {}),
         )
+        insertion_event = self._live_insertion_event_from_geometry(score_geometry)
+        world_entities_summary = _world_entities_summary(
+            entities_by_name=entities_by_name,
+            source_name=source_name,
+            target_name=target_name,
+            plug_name=plug_name,
+            entrance_name=entrance_name,
+        )
 
         return RuntimeState(
             sim_tick=step_count,
@@ -711,11 +836,42 @@ class ScenarioGymGzBackend(RuntimeBackend):
             wrench=wrench,
             wrench_timestamp=wrench_timestamp,
             off_limit_contact=off_limit_contact,
-            insertion_event=None,
+            insertion_event=insertion_event,
             controller_state=controller_state,
             score_geometry=score_geometry,
+            world_entities_summary=world_entities_summary,
             auxiliary_force_contact_summary=auxiliary_summary,
         )
+
+    def _supplement_entities_from_cli_once(self) -> dict[str, dict[str, Any]] | None:
+        try:
+            client = self._cli_client_type(
+                self._cli_config_type(
+                    executable="gz",
+                    world_path=self._world_path,
+                    timeout=min(max(self._timeout, 1.0), 3.0),
+                    world_name=self._world_name,
+                    source_entity_name=self._source_entity_name,
+                    target_entity_name=self._target_entity_name,
+                    transport_backend="cli",
+                    observation_transport="one_shot",
+                )
+            )
+        except Exception:
+            return None
+        try:
+            response = client.get_observation(self._get_observation_request_type())
+            supplemented = response.observation.get("entities_by_name")
+            if isinstance(supplemented, dict) and len(supplemented) > 4:
+                return supplemented
+        except Exception:
+            return None
+        finally:
+            try:
+                client.close()
+            except Exception:
+                pass
+        return None
 
     def _plug_candidates(self) -> tuple[str, ...]:
         if self._task is None:
@@ -749,6 +905,134 @@ class ScenarioGymGzBackend(RuntimeBackend):
             f"{self._task.target_module_name}/{self._task.port_name}_link_entrance",
             f"{self._task.port_name}_link_entrance",
         )
+
+    def _synthetic_target_pose(
+        self,
+        *,
+        entities_by_name: dict[str, dict[str, Any]],
+        observed_target_name: str | None,
+    ) -> dict[str, Any] | None:
+        if self._task is None or self._scenario is None:
+            return None
+        if observed_target_name and observed_target_name not in {
+            self._target_entity_name,
+            "tabletop",
+            "task_board_base_link",
+        }:
+            return None
+
+        module_pose = None
+        module_entity = entities_by_name.get(self._task.target_module_name)
+        if isinstance(module_entity, dict):
+            module_pose = _pose_dict_to_full_pose(module_entity.get("pose") or module_entity)
+        if module_pose is None:
+            module_pose = _target_module_pose_from_scenario(
+                scenario=self._scenario,
+                task=self._task,
+            )
+        if module_pose is None:
+            return None
+
+        local_target, local_entrance = _local_target_and_entrance_for_task(self._task)
+        if local_target is None:
+            return None
+        target_pose = _compose_pose(module_pose, local_target)
+        entrance_pose = _compose_pose(target_pose, local_entrance) if local_entrance is not None else None
+        return {
+            "target_name": f"{self._task.target_module_name}::{self._task.port_name}_synthetic",
+            "entrance_name": (
+                None
+                if entrance_pose is None
+                else f"{self._task.target_module_name}::{self._task.port_name}_entrance_synthetic"
+            ),
+            "target_pose_dict": _full_pose_to_pose_dict(target_pose),
+            "entrance_pose_dict": None if entrance_pose is None else _full_pose_to_pose_dict(entrance_pose),
+        }
+
+    def _maybe_synthesize_plug_pose(
+        self,
+        *,
+        tcp_pose: np.ndarray,
+        plug_pose: np.ndarray,
+        controller_state: dict[str, Any],
+    ) -> np.ndarray | None:
+        if self._task is None or self._scenario is None:
+            return None
+        cable = self._scenario.cables.get(self._task.cable_name)
+        if cable is None:
+            return None
+        synthesized = np.asarray(tcp_pose, dtype=np.float64).copy()
+        synthesized[:3] = synthesized[:3] + np.asarray(cable.gripper_offset_xyz, dtype=np.float64)
+        position_gap = float(
+            np.linalg.norm(
+                np.asarray(plug_pose[:3], dtype=np.float64) - np.asarray(synthesized[:3], dtype=np.float64)
+            )
+        )
+        if position_gap <= 0.08 and float(plug_pose[2]) > 0.5:
+            return None
+        return synthesized
+
+    def _maybe_synthesize_tcp_pose(
+        self,
+        *,
+        observed_tcp_pose: np.ndarray,
+        previous_state: RuntimeState | None,
+        step_tick_count: int,
+    ) -> np.ndarray | None:
+        if previous_state is None or step_tick_count <= 0:
+            return None
+        if float(observed_tcp_pose[2]) > 0.5:
+            expected = np.asarray(previous_state.tcp_pose, dtype=np.float64).copy()
+            delta_t = 0.002 * float(step_tick_count)
+            expected[:3] = expected[:3] + np.clip(self._action[:3], -0.25, 0.25) * delta_t
+            expected[5] = float(expected[5] + np.clip(self._action[5], -2.0, 2.0) * delta_t)
+            if float(np.linalg.norm(observed_tcp_pose[:3] - expected[:3])) <= 0.08:
+                return None
+        synthesized = np.asarray(previous_state.tcp_pose, dtype=np.float64).copy()
+        delta_t = 0.002 * float(step_tick_count)
+        synthesized[:3] = synthesized[:3] + np.clip(self._action[:3], -0.25, 0.25) * delta_t
+        synthesized[5] = float(synthesized[5] + np.clip(self._action[5], -2.0, 2.0) * delta_t)
+        return synthesized
+
+    def _is_sane_live_tcp_pose(
+        self,
+        candidate_pose: Any,
+        *,
+        observed_tcp_pose: np.ndarray,
+        previous_state: RuntimeState | None,
+        step_tick_count: int,
+    ) -> bool:
+        if not isinstance(candidate_pose, np.ndarray) or candidate_pose.shape[0] < 7:
+            return False
+        candidate = np.asarray(candidate_pose, dtype=np.float64)
+        if float(candidate[2]) <= 0.5:
+            return False
+        if previous_state is not None and step_tick_count > 0:
+            expected = np.asarray(previous_state.tcp_pose, dtype=np.float64).copy()
+            delta_t = 0.002 * float(step_tick_count)
+            expected[:3] = expected[:3] + np.clip(self._action[:3], -0.25, 0.25) * delta_t
+            expected[5] = float(expected[5] + np.clip(self._action[5], -2.0, 2.0) * delta_t)
+            return float(np.linalg.norm(candidate[:3] - expected[:3])) <= 0.08
+        if float(observed_tcp_pose[2]) > 0.5:
+            return float(np.linalg.norm(candidate[:3] - observed_tcp_pose[:3])) <= 0.08
+        return True
+
+    def _live_insertion_event_from_geometry(
+        self,
+        geometry: dict[str, Any],
+    ) -> str | None:
+        if self._task is None:
+            return None
+        target_distance = float(geometry.get("distance_to_target", np.inf))
+        lateral_misalignment = float(geometry.get("lateral_misalignment", np.inf))
+        insertion_progress = float(geometry.get("insertion_progress", 0.0))
+        if (
+            target_distance <= 0.003
+            and lateral_misalignment <= 0.005
+            and insertion_progress >= 0.95
+        ):
+            return f"{self._task.target_module_name}/{self._task.port_name}"
+        return None
 
 
 class MockStepperBackend(RuntimeBackend):
@@ -988,6 +1272,7 @@ class _RuntimeRosObserver:
         self._stop_event = None
         self._thread = None
         self._ready = False
+        self._command_queue: deque[dict[str, Any]] = deque()
         try:
             import threading
 
@@ -1045,10 +1330,37 @@ class _RuntimeRosObserver:
         if self._thread is not None:
             self._thread.join(timeout=2.0)
 
+    def publish_velocity_command(
+        self,
+        *,
+        linear_xyz: np.ndarray,
+        angular_xyz: np.ndarray,
+        frame_id: str = "base_link",
+        timeout_s: float = 2.0,
+    ) -> bool:
+        if not self._ready or self._lock is None:
+            return False
+        import threading
+
+        request = {
+            "linear_xyz": np.asarray(linear_xyz, dtype=np.float64).copy(),
+            "angular_xyz": np.asarray(angular_xyz, dtype=np.float64).copy(),
+            "frame_id": str(frame_id),
+            "done": threading.Event(),
+            "ok": False,
+            "error": None,
+        }
+        with self._lock:
+            self._command_queue.append(request)
+        if not request["done"].wait(timeout_s):
+            return False
+        return bool(request["ok"])
+
     def _spin(self) -> None:
         import threading
 
         import rclpy
+        from geometry_msgs.msg import Twist, Vector3
         from geometry_msgs.msg import WrenchStamped
         from rclpy.context import Context
         from rclpy.executors import SingleThreadedExecutor
@@ -1056,13 +1368,18 @@ class _RuntimeRosObserver:
         from rclpy.qos import QoSProfile, ReliabilityPolicy, DurabilityPolicy, HistoryPolicy
         from ros_gz_interfaces.msg import Contacts
 
-        from aic_control_interfaces.msg import ControllerState
+        from aic_control_interfaces.msg import ControllerState, MotionUpdate, TrajectoryGenerationMode
 
         context = Context()
         rclpy.init(context=context)
         node = Node("aic_gym_gz_runtime_observer", context=context)
         executor = SingleThreadedExecutor(context=context)
         executor.add_node(node)
+        motion_pub = node.create_publisher(
+            MotionUpdate,
+            "/aic_controller/pose_commands",
+            10,
+        )
 
         controller_qos = QoSProfile(
             reliability=ReliabilityPolicy.RELIABLE,
@@ -1132,6 +1449,45 @@ class _RuntimeRosObserver:
             10,
         )
         while rclpy.ok(context=context) and self._stop_event is not None and not self._stop_event.is_set():
+            pending: dict[str, Any] | None = None
+            assert self._lock is not None
+            with self._lock:
+                if self._command_queue:
+                    pending = self._command_queue.popleft()
+            if pending is not None:
+                try:
+                    message = MotionUpdate()
+                    message.header.stamp = node.get_clock().now().to_msg()
+                    message.header.frame_id = str(pending["frame_id"])
+                    linear_xyz = np.asarray(pending["linear_xyz"], dtype=np.float64)
+                    angular_xyz = np.asarray(pending["angular_xyz"], dtype=np.float64)
+                    message.velocity = Twist(
+                        linear=Vector3(
+                            x=float(linear_xyz[0]),
+                            y=float(linear_xyz[1]),
+                            z=float(linear_xyz[2]),
+                        ),
+                        angular=Vector3(
+                            x=float(angular_xyz[0]),
+                            y=float(angular_xyz[1]),
+                            z=float(angular_xyz[2]),
+                        ),
+                    )
+                    message.target_stiffness = np.diag([75.0] * 6).flatten().tolist()
+                    message.target_damping = np.diag([35.0] * 6).flatten().tolist()
+                    message.wrench_feedback_gains_at_tip = [0.0] * 6
+                    message.trajectory_generation_mode.mode = (
+                        TrajectoryGenerationMode.MODE_VELOCITY
+                    )
+                    if motion_pub.get_subscription_count() <= 0:
+                        raise RuntimeError("No /aic_controller/pose_commands subscriber is ready.")
+                    motion_pub.publish(message)
+                    pending["ok"] = True
+                except Exception as exc:
+                    pending["error"] = exc
+                    pending["ok"] = False
+                finally:
+                    pending["done"].set()
             executor.spin_once(timeout_sec=0.1)
         try:
             executor.remove_node(node)
@@ -1449,6 +1805,197 @@ def _pose_dict_to_array(pose_like: dict[str, Any]) -> np.ndarray:
     )
 
 
+def _pose_dict_to_full_pose(pose_like: dict[str, Any]) -> dict[str, np.ndarray] | None:
+    position = pose_like.get("position") or [0.0, 0.0, 0.0]
+    orientation = pose_like.get("orientation") or [0.0, 0.0, 0.0, 1.0]
+    if len(position) < 3 or len(orientation) < 4:
+        return None
+    return {
+        "position": np.asarray(position[:3], dtype=np.float64),
+        "orientation": np.asarray(orientation[:4], dtype=np.float64),
+    }
+
+
+def _full_pose_to_pose_dict(pose: dict[str, np.ndarray]) -> dict[str, list[float]]:
+    return {
+        "position": [float(value) for value in pose["position"].tolist()],
+        "orientation": [float(value) for value in pose["orientation"].tolist()],
+    }
+
+
+def _rpy_to_quaternion(roll: float, pitch: float, yaw: float) -> np.ndarray:
+    cr = math.cos(roll * 0.5)
+    sr = math.sin(roll * 0.5)
+    cp = math.cos(pitch * 0.5)
+    sp = math.sin(pitch * 0.5)
+    cy = math.cos(yaw * 0.5)
+    sy = math.sin(yaw * 0.5)
+    return np.array(
+        [
+            sr * cp * cy - cr * sp * sy,
+            cr * sp * cy + sr * cp * sy,
+            cr * cp * sy - sr * sp * cy,
+            cr * cp * cy + sr * sp * sy,
+        ],
+        dtype=np.float64,
+    )
+
+
+def _quaternion_multiply(q1: np.ndarray, q2: np.ndarray) -> np.ndarray:
+    x1, y1, z1, w1 = q1.tolist()
+    x2, y2, z2, w2 = q2.tolist()
+    return np.array(
+        [
+            w1 * x2 + x1 * w2 + y1 * z2 - z1 * y2,
+            w1 * y2 - x1 * z2 + y1 * w2 + z1 * x2,
+            w1 * z2 + x1 * y2 - y1 * x2 + z1 * w2,
+            w1 * w2 - x1 * x2 - y1 * y2 - z1 * z2,
+        ],
+        dtype=np.float64,
+    )
+
+
+def _rotate_vector_by_quaternion(vector: np.ndarray, quaternion: np.ndarray) -> np.ndarray:
+    x, y, z, w = quaternion.tolist()
+    rotation = np.array(
+        [
+            [1.0 - 2.0 * (y * y + z * z), 2.0 * (x * y - z * w), 2.0 * (x * z + y * w)],
+            [2.0 * (x * y + z * w), 1.0 - 2.0 * (x * x + z * z), 2.0 * (y * z - x * w)],
+            [2.0 * (x * z - y * w), 2.0 * (y * z + x * w), 1.0 - 2.0 * (x * x + y * y)],
+        ],
+        dtype=np.float64,
+    )
+    return rotation @ vector
+
+
+def _compose_pose(parent_pose: dict[str, np.ndarray], child_pose: dict[str, np.ndarray]) -> dict[str, np.ndarray]:
+    parent_position = np.asarray(parent_pose["position"], dtype=np.float64)
+    parent_orientation = np.asarray(parent_pose["orientation"], dtype=np.float64)
+    child_position = np.asarray(child_pose["position"], dtype=np.float64)
+    child_orientation = np.asarray(child_pose["orientation"], dtype=np.float64)
+    return {
+        "position": parent_position + _rotate_vector_by_quaternion(child_position, parent_orientation),
+        "orientation": _quaternion_multiply(parent_orientation, child_orientation),
+    }
+
+
+def _target_module_pose_from_scenario(
+    *,
+    scenario: AicScenario,
+    task: Any,
+) -> dict[str, np.ndarray] | None:
+    board_x, board_y, board_z, board_roll, board_pitch, board_yaw = scenario.task_board.pose_xyz_rpy
+    board_pose = {
+        "position": np.array([board_x, board_y, board_z], dtype=np.float64),
+        "orientation": _rpy_to_quaternion(board_roll, board_pitch, board_yaw),
+    }
+    module_pose = _module_pose_in_board_frame(scenario=scenario, task=task)
+    if module_pose is None:
+        return None
+    return _compose_pose(board_pose, module_pose)
+
+
+def _module_pose_in_board_frame(*, scenario: AicScenario, task: Any) -> dict[str, np.ndarray] | None:
+    target_module_name = str(task.target_module_name)
+    if target_module_name.startswith("nic_card_mount_"):
+        try:
+            index = int(target_module_name.rsplit("_", 1)[-1])
+        except ValueError:
+            return None
+        rail = scenario.task_board.nic_rails.get(f"nic_rail_{index}")
+        if rail is None:
+            return None
+        base_y_by_index = {
+            0: -0.1745,
+            1: -0.1345,
+            2: -0.0945,
+            3: -0.0545,
+            4: -0.0145,
+        }
+        if index not in base_y_by_index:
+            return None
+        return {
+            "position": np.array(
+                [
+                    -0.081418 + float(rail.translation),
+                    base_y_by_index[index],
+                    0.012,
+                ],
+                dtype=np.float64,
+            ),
+            "orientation": _rpy_to_quaternion(float(rail.roll), float(rail.pitch), float(rail.yaw)),
+        }
+    if target_module_name.startswith("sc_port_"):
+        try:
+            index = int(target_module_name.rsplit("_", 1)[-1])
+        except ValueError:
+            return None
+        rail = scenario.task_board.sc_rails.get(f"sc_rail_{index}")
+        if rail is None:
+            return None
+        base_y_by_index = {
+            0: 0.0295,
+            1: 0.0705,
+        }
+        if index not in base_y_by_index:
+            return None
+        return {
+            "position": np.array(
+                [
+                    -0.075 + float(rail.translation),
+                    base_y_by_index[index],
+                    0.0165,
+                ],
+                dtype=np.float64,
+            ),
+            "orientation": _rpy_to_quaternion(
+                1.57 + float(rail.roll),
+                float(rail.pitch),
+                1.57 + float(rail.yaw),
+            ),
+        }
+    return None
+
+
+def _local_target_and_entrance_for_task(task: Any) -> tuple[dict[str, np.ndarray] | None, dict[str, np.ndarray] | None]:
+    target_module_name = str(task.target_module_name)
+    port_name = str(task.port_name)
+    if target_module_name.startswith("nic_card_mount_"):
+        nic_card_pose = {
+            "position": np.array([-0.002, -0.01785, 0.0899], dtype=np.float64),
+            "orientation": _rpy_to_quaternion(-1.57, 0.0, 0.0),
+        }
+        if port_name == "sfp_port_0":
+            port_pose = {
+                "position": np.array([0.01295, -0.031572, 0.00501], dtype=np.float64),
+                "orientation": _rpy_to_quaternion(4.69895, 0.0, 0.0),
+            }
+        elif port_name == "sfp_port_1":
+            port_pose = {
+                "position": np.array([-0.01025, -0.031572, 0.00501], dtype=np.float64),
+                "orientation": _rpy_to_quaternion(4.69895, 0.0, 0.0),
+            }
+        else:
+            return None, None
+        target_pose = _compose_pose(nic_card_pose, port_pose)
+        entrance_pose = {
+            "position": np.array([0.0, 0.0, -0.0458], dtype=np.float64),
+            "orientation": _rpy_to_quaternion(0.0, 0.0, 0.0),
+        }
+        return target_pose, entrance_pose
+    if target_module_name.startswith("sc_port_") and port_name == "sc_port_base":
+        target_pose = {
+            "position": np.array([0.0, -0.002, 0.0], dtype=np.float64),
+            "orientation": _rpy_to_quaternion(1.5708, 3.14159, 0.0),
+        }
+        entrance_pose = {
+            "position": np.array([0.0, 0.0, -0.01564], dtype=np.float64),
+            "orientation": _rpy_to_quaternion(0.0, 0.0, 0.0),
+        }
+        return target_pose, entrance_pose
+    return None, None
+
+
 def _quaternion_to_yaw(quaternion: np.ndarray) -> float:
     x, y, z, w = quaternion.tolist()
     siny_cosp = 2.0 * (w * z + x * y)
@@ -1480,3 +2027,70 @@ def _parse_sim_time_seconds(state_text: str) -> float:
     seconds = float(sec_match.group(1))
     nanoseconds = float(nsec_match.group(1)) if nsec_match is not None else 0.0
     return seconds + nanoseconds * 1e-9
+
+
+def _world_entities_summary(
+    *,
+    entities_by_name: dict[str, dict[str, Any]],
+    source_name: str | None,
+    target_name: str | None,
+    plug_name: str | None,
+    entrance_name: str | None,
+) -> dict[str, Any]:
+    interesting_prefixes = (
+        "overview_",
+        "task_board",
+        "tabletop",
+        "cable_",
+        "wrist_",
+        "shoulder_",
+        "upper_arm_",
+        "forearm_",
+        "ee_link",
+        "tool0",
+        "ati/",
+        "ati_",
+        "lc_",
+        "sc_",
+    )
+    named_entities: dict[str, dict[str, Any]] = {}
+    for name in sorted(entities_by_name.keys()):
+        if not any(name.startswith(prefix) for prefix in interesting_prefixes) and name not in {
+            source_name,
+            target_name,
+            plug_name,
+            entrance_name,
+            "ur5e",
+            "task_board",
+            "tabletop",
+        }:
+            continue
+        entity = entities_by_name.get(name)
+        if not isinstance(entity, dict):
+            continue
+        pose = entity.get("pose") if isinstance(entity.get("pose"), dict) else entity
+        position = pose.get("position") if isinstance(pose, dict) else None
+        orientation = pose.get("orientation") if isinstance(pose, dict) else None
+        named_entities[name] = {
+            "id": entity.get("id"),
+            "position": list(position) if isinstance(position, list) else None,
+            "orientation": list(orientation) if isinstance(orientation, list) else None,
+        }
+    return {
+        "entity_count": len(entities_by_name),
+        "tracked_names": {
+            "source_entity_name": source_name,
+            "target_entity_name": target_name,
+            "plug_entity_name": plug_name,
+            "entrance_entity_name": entrance_name,
+        },
+        "named_entities": named_entities,
+        "all_entity_names_sample": sorted(list(entities_by_name.keys()))[:128],
+        "pose_rich_entity_count": sum(
+            1
+            for entity in entities_by_name.values()
+            if isinstance(entity, dict)
+            and isinstance(entity.get("position"), list)
+            and len(entity.get("position", [])) == 3
+        ),
+    }

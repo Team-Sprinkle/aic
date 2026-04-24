@@ -198,6 +198,8 @@ class GazeboNativeIOPlaceholder(AicGazeboIO):
 class MockGazeboIO(AicGazeboIO):
     """State-only IO used for deterministic testing."""
 
+    image_shape: tuple[int, int, int] = (256, 256, 3)
+
     def observation_from_state(
         self,
         state: RuntimeState,
@@ -207,7 +209,7 @@ class MockGazeboIO(AicGazeboIO):
     ) -> dict[str, Any]:
         observation = _base_observation(state, step_count=step_count)
         if include_images:
-            blank = np.zeros((3, 64, 64, 3), dtype=np.uint8)
+            blank = np.zeros((3, *self.image_shape), dtype=np.uint8)
             observation["images"] = {
                 "left": blank[0],
                 "center": blank[1],
@@ -235,8 +237,9 @@ class RosCameraSubscriber:
     def __init__(
         self,
         *,
-        image_shape: tuple[int, int, int] = (64, 64, 3),
+        image_shape: tuple[int, int, int] = (256, 256, 3),
         topic_map: dict[str, str] | None = None,
+        node_name: str = "aic_gym_gz_camera_sidecar",
     ) -> None:
         self._image_shape = image_shape
         self._topic_map = topic_map or {
@@ -244,6 +247,7 @@ class RosCameraSubscriber:
             "center": "/center_camera/image",
             "right": "/right_camera/image",
         }
+        self._node_name = str(node_name)
         self._latest_images: dict[str, np.ndarray] = {
             name: np.zeros(image_shape, dtype=np.uint8) for name in self._topic_map
         }
@@ -319,7 +323,7 @@ class RosCameraSubscriber:
         rclpy.init(context=context)
         self._rclpy = rclpy
         self._context = context
-        node = Node("aic_gym_gz_camera_sidecar", context=context)
+        node = Node(self._node_name, context=context)
         executor = SingleThreadedExecutor(context=context)
         executor.add_node(node)
         self._node = node
@@ -363,8 +367,24 @@ class RosCameraSubscriber:
 class CameraBridgeSidecar:
     """Dedicated non-lazy bridge for wrist camera topics."""
 
-    def __init__(self) -> None:
+    def __init__(self, *, topic_map: dict[str, str] | None = None) -> None:
         self._process: subprocess.Popen[str] | None = None
+        self._topic_map = topic_map or {
+            "left": "/left_camera/image",
+            "center": "/center_camera/image",
+            "right": "/right_camera/image",
+        }
+
+    def _bridge_arguments(self) -> list[str]:
+        arguments: list[str] = []
+        for topic in self._topic_map.values():
+            arguments.extend(
+                [
+                    f"{topic}@sensor_msgs/msg/Image[gz.msgs.Image",
+                    f"{topic.replace('/image', '/camera_info')}@sensor_msgs/msg/CameraInfo[gz.msgs.CameraInfo",
+                ]
+            )
+        return arguments
 
     def start(self) -> None:
         if self._process is not None and self._process.poll() is None:
@@ -375,12 +395,7 @@ class CameraBridgeSidecar:
                 "run",
                 "ros_gz_bridge",
                 "parameter_bridge",
-                "/left_camera/image@sensor_msgs/msg/Image[gz.msgs.Image",
-                "/left_camera/camera_info@sensor_msgs/msg/CameraInfo[gz.msgs.CameraInfo",
-                "/center_camera/image@sensor_msgs/msg/Image[gz.msgs.Image",
-                "/center_camera/camera_info@sensor_msgs/msg/CameraInfo[gz.msgs.CameraInfo",
-                "/right_camera/image@sensor_msgs/msg/Image[gz.msgs.Image",
-                "/right_camera/camera_info@sensor_msgs/msg/CameraInfo[gz.msgs.CameraInfo",
+                *self._bridge_arguments(),
             ],
             stdout=subprocess.DEVNULL,
             stderr=subprocess.DEVNULL,
@@ -405,11 +420,14 @@ class CameraBridgeSidecar:
 class RosCameraSidecarIO(AicGazeboIO):
     """Live IO path with ROS-only image fallback."""
 
-    camera_subscriber: RosCameraSubscriber = field(default_factory=RosCameraSubscriber)
+    camera_subscriber: RosCameraSubscriber | None = None
     camera_bridge: CameraBridgeSidecar = field(default_factory=CameraBridgeSidecar)
     ready_timeout_s: float = 10.0
+    image_shape: tuple[int, int, int] = (256, 256, 3)
 
     def __post_init__(self) -> None:
+        if self.camera_subscriber is None:
+            self.camera_subscriber = RosCameraSubscriber(image_shape=self.image_shape)
         self.camera_bridge.start()
         self.camera_subscriber.start()
 

@@ -133,6 +133,7 @@ class TeacherHistoryTest(unittest.TestCase):
         frames = history.recent_visual_frames(max_frames=2)
         self.assertEqual(len(frames), 1)
         self.assertEqual(frames[0]["images"]["left"].shape, (8, 8, 3))
+        self.assertEqual(frames[0]["age_from_latest_s"], 0.0)
 
 
 if __name__ == "__main__":

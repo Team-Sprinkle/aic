@@ -13,12 +13,19 @@ from .history import TemporalObservationBuffer
 from .planning import phase_guidance_from_state
 from .quality import controller_state_summary, serialize_nested
 from .types import ObstacleSummary, TeacherPlanningState
-from .visual_context import build_recent_visual_observations, build_scene_overview_images
+from .visual_context import (
+    build_recent_visual_observations,
+    build_scene_overview_images,
+    latest_live_overview_images,
+)
 
 
 @dataclass(frozen=True)
 class TeacherContextExtractor:
     """Builds compact planner inputs from policy and oracle context."""
+
+    max_recent_visual_frames: int = 12
+    prefer_live_scene_overview: bool = False
 
     def build_planning_state(
         self,
@@ -57,6 +64,9 @@ class TeacherContextExtractor:
             "partial_insertion": bool(state.score_geometry.get("partial_insertion", False)),
             "score_geometry": serialize_nested(state.score_geometry),
             "auxiliary_force_contact_summary": temporal_buffer.auxiliary_history_summary(max_items=1),
+            "relative_geometry": self._relative_geometry_summary(state),
+            "frame_context": self._frame_context(),
+            "world_entities_summary": serialize_nested(state.world_entities_summary),
         }
         oracle_context = {
             "task_board_pose_xyz_rpy": list(scenario.task_board.pose_xyz_rpy),
@@ -75,17 +85,28 @@ class TeacherContextExtractor:
             },
             "clearance_summary": self._clearance_summary(scenario),
             "scene_layout_summary": self._scene_layout_summary(scenario, state),
+            "world_entities_summary": serialize_nested(state.world_entities_summary),
         }
         latest_frame = temporal_buffer.latest()
         image_refs = list(latest_frame.image_refs) if include_images else []
         recent_visual_observations = build_recent_visual_observations(
-            frames=temporal_buffer.recent_visual_frames(max_frames=2),
-            max_frames=2,
+            frames=temporal_buffer.recent_visual_frames(max_frames=self.max_recent_visual_frames),
+            max_frames=self.max_recent_visual_frames,
         ) if include_images else []
+        live_overview_images = (
+            latest_live_overview_images(image_size=(256, 256))
+            if self.prefer_live_scene_overview
+            else {}
+        )
         scene_overview_images = build_scene_overview_images(
             scenario=scenario,
             state=state,
+            live_images_by_view=live_overview_images,
         )
+        scene_overview_sources = {
+            str(item.get("view_name")): str(item.get("source"))
+            for item in scene_overview_images
+        }
         obstacle_summary = [obstacle.to_dict() for obstacle in self._obstacle_summary(scenario)]
         temporal_context = temporal_buffer.teacher_memory_summary()
         phase_guidance = phase_guidance_from_state(
@@ -122,6 +143,19 @@ class TeacherContextExtractor:
                 "camera_info": serialize_nested(latest_frame.camera_info) if include_images else {},
                 "image_refs": image_refs,
                 "image_timestamps": dict(latest_frame.image_timestamps) if include_images else {},
+                "recent_visual_timepoints": [
+                    {
+                        "label": item.get("label"),
+                        "camera_name": item.get("camera_name"),
+                        "sim_tick": item.get("sim_tick"),
+                        "sim_time": item.get("sim_time"),
+                        "timestamp": item.get("timestamp"),
+                        "age_from_latest_s": item.get("age_from_latest_s"),
+                        "age_from_latest_steps": item.get("age_from_latest_steps"),
+                        "timepoint_label": item.get("timepoint_label"),
+                    }
+                    for item in recent_visual_observations
+                ],
             },
             temporal_context={
                 **temporal_context,
@@ -129,9 +163,19 @@ class TeacherContextExtractor:
             },
             data_quality=dict(latest_frame.signal_quality),
             planning_metadata={
+                "frame_context": self._frame_context(),
                 "include_images": bool(include_images),
                 "recent_visual_frame_count": len(recent_visual_observations),
                 "scene_overview_image_count": len(scene_overview_images),
+                "scene_overview_sources": scene_overview_sources,
+                "available_scene_overview_views": [
+                    str(item.get("view_name")) for item in scene_overview_images
+                ],
+                "scene_overview_live_source_used": bool(
+                    any(item.get("source") == "live_overview_topic" for item in scene_overview_images)
+                ),
+                "prefer_live_scene_overview": self.prefer_live_scene_overview,
+                "recent_visual_frame_budget": self.max_recent_visual_frames,
                 "history_window_size": len(temporal_buffer),
                 "teacher_history_is_additive": True,
                 "official_current_observation_only": temporal_buffer.current_observation_view(),
@@ -141,6 +185,62 @@ class TeacherContextExtractor:
             },
             last_teacher_rationale=last_teacher_rationale,
         )
+
+    def _relative_geometry_summary(self, state: RuntimeState) -> dict[str, Any]:
+        tcp = np.asarray(state.tcp_pose[:3], dtype=np.float64)
+        plug = np.asarray(state.plug_pose[:3], dtype=np.float64)
+        target = np.asarray(state.target_port_pose[:3], dtype=np.float64)
+        entrance = (
+            target
+            if state.target_port_entrance_pose is None
+            else np.asarray(state.target_port_entrance_pose[:3], dtype=np.float64)
+        )
+        insertion_axis = target - entrance
+        insertion_axis_norm = float(np.linalg.norm(insertion_axis))
+        insertion_axis_unit = (
+            insertion_axis / insertion_axis_norm
+            if insertion_axis_norm > 1e-8
+            else np.array([0.0, 0.0, 1.0], dtype=np.float64)
+        )
+        plug_to_entrance = entrance - plug
+        tcp_to_entrance = entrance - tcp
+        plug_to_target = target - plug
+        tcp_to_target = target - tcp
+        plug_to_tcp = tcp - plug
+        axial_error_to_entrance = float(np.dot(plug_to_entrance, insertion_axis_unit))
+        lateral_error_to_entrance = float(
+            np.linalg.norm(plug_to_entrance - axial_error_to_entrance * insertion_axis_unit)
+        )
+        return {
+            "tcp_to_target_port_xyz": tcp_to_target.astype(float).tolist(),
+            "tcp_to_target_port_distance": float(np.linalg.norm(tcp_to_target)),
+            "tcp_to_entrance_xyz": tcp_to_entrance.astype(float).tolist(),
+            "tcp_to_entrance_distance": float(np.linalg.norm(tcp_to_entrance)),
+            "plug_to_target_port_xyz": plug_to_target.astype(float).tolist(),
+            "plug_to_target_port_distance": float(np.linalg.norm(plug_to_target)),
+            "plug_to_entrance_xyz": plug_to_entrance.astype(float).tolist(),
+            "plug_to_entrance_distance": float(np.linalg.norm(plug_to_entrance)),
+            "plug_to_tcp_xyz": plug_to_tcp.astype(float).tolist(),
+            "plug_to_tcp_distance": float(np.linalg.norm(plug_to_tcp)),
+            "insertion_axis_world_xyz": insertion_axis_unit.astype(float).tolist(),
+            "axial_error_to_entrance_m": axial_error_to_entrance,
+            "lateral_error_to_entrance_m": lateral_error_to_entrance,
+        }
+
+    def _frame_context(self) -> dict[str, Any]:
+        return {
+            "runtime_pose_frame": "world",
+            "runtime_action_command_frame": "world",
+            "official_policy_reference_frame": "base_link",
+            "planner_waypoint_space": "plug_position_in_runtime_pose_frame",
+            "smoother_target_space": "tcp_pose_in_runtime_pose_frame",
+            "controller_state_frame": "runtime_controller_topic_unspecified",
+            "notes": [
+                "Teacher payload poses come from runtime/Gazebo state and behave like world-frame poses.",
+                "Official CheatCode and policy docs commonly reason in base_link.",
+                "Controller topic fields may use controller-local conventions unless explicitly documented elsewhere.",
+            ],
+        }
 
     def _obstacle_summary(self, scenario: AicScenario) -> list[ObstacleSummary]:
         obstacles: list[ObstacleSummary] = []

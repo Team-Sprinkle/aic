@@ -34,6 +34,9 @@ ros-kilted-std-msgs = "*"                                                       
 ros-kilted-std-srvs = "*"
 ros-kilted-tf2-ros-py = "*"
 setuptools = ">=71.0.0,<81.0.0"                                                        # required by lerobot==0.4.3
+vcstool = ">=1.1.7,<2"
+rosdep = ">=0.26.0,<0.27"
+colcon-common-extensions = ">=0.3.0,<0.4"
 
 [pypi-dependencies]
 huggingface-hub = { version = "~=1.7" }

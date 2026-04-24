@@ -18,18 +18,23 @@ class MinimumJerkSmoother:
     max_angular_speed: float = 2.0
     max_linear_accel: float = 0.25
     max_linear_jerk: float = 2.0
+    planner_output_mode: str = "absolute_cartesian_waypoint"
 
     def smooth(self, *, state: RuntimeState, plan: TeacherPlan) -> TrajectorySegment:
         current_pose = np.asarray(state.tcp_pose, dtype=np.float64).copy()
         plug_to_tcp_offset = np.asarray(state.tcp_pose[:3] - state.plug_pose[:3], dtype=np.float64)
         targets: list[np.ndarray] = []
         ideal_steps: list[int] = []
+        conversion_steps: list[dict[str, object]] = []
+        native_action_override: np.ndarray | None = None
         for waypoint in plan.waypoints:
             target_pose = current_pose.copy()
-            # Teacher waypoints are specified in plug space. Convert them into
-            # TCP targets by preserving the current plug-to-TCP offset.
-            target_pose[:3] = np.asarray(waypoint.position_xyz, dtype=np.float64) + plug_to_tcp_offset
-            target_pose[5] = float(waypoint.yaw)
+            target_pose, native_action_override, conversion_note = self._convert_waypoint(
+                state=state,
+                current_pose=current_pose,
+                plug_to_tcp_offset=plug_to_tcp_offset,
+                waypoint=waypoint,
+            )
             distance = float(np.linalg.norm(target_pose[:3] - current_pose[:3]))
             steps = max(
                 2,
@@ -49,6 +54,7 @@ class MinimumJerkSmoother:
                 steps = max(steps, 4)
             targets.append(target_pose)
             ideal_steps.append(steps)
+            conversion_steps.append(conversion_note)
             current_pose = target_pose
         allocated_steps = self._allocate_steps(
             ideal_steps=ideal_steps,
@@ -66,9 +72,12 @@ class MinimumJerkSmoother:
                 pose = current_pose + (target_pose - current_pose) * blend
                 prev_pose = current_pose if step == 1 else np.asarray(points[-1].target_tcp_pose, dtype=np.float64)
                 delta = pose - prev_pose
-                linear_velocity = np.clip(delta[:3] / self.base_dt, -self.max_linear_speed, self.max_linear_speed)
-                angular_velocity = np.clip(delta[3:6] / self.base_dt, -self.max_angular_speed, self.max_angular_speed)
-                action = np.concatenate([linear_velocity, angular_velocity])
+                if native_action_override is not None:
+                    action = native_action_override.copy()
+                else:
+                    linear_velocity = np.clip(delta[:3] / self.base_dt, -self.max_linear_speed, self.max_linear_speed)
+                    angular_velocity = np.clip(delta[3:6] / self.base_dt, -self.max_angular_speed, self.max_angular_speed)
+                    action = np.concatenate([linear_velocity, angular_velocity])
                 points.append(
                     DenseTrajectoryPoint(
                         dt=self.base_dt,
@@ -84,7 +93,61 @@ class MinimumJerkSmoother:
             rationale_summary=plan.rationale_summary,
             points=tuple(points),
             expected_duration_s=duration_s,
+            conversion_metadata={
+                "planner_output_mode": self.planner_output_mode,
+                "dense_point_dt_s": float(self.base_dt),
+                "conversion_steps": conversion_steps,
+                "native_action_override_used": bool(native_action_override is not None),
+            },
         )
+
+    def _convert_waypoint(
+        self,
+        *,
+        state: RuntimeState,
+        current_pose: np.ndarray,
+        plug_to_tcp_offset: np.ndarray,
+        waypoint,
+    ) -> tuple[np.ndarray, np.ndarray | None, dict[str, object]]:
+        target_pose = current_pose.copy()
+        if self.planner_output_mode == "absolute_cartesian_waypoint":
+            target_pose[:3] = np.asarray(waypoint.position_xyz, dtype=np.float64) + plug_to_tcp_offset
+            target_pose[5] = float(waypoint.yaw)
+            return target_pose, None, {
+                "mode": self.planner_output_mode,
+                "input_position_xyz": list(waypoint.position_xyz),
+                "target_space": "absolute_plug_waypoint_to_absolute_tcp_pose",
+            }
+        if self.planner_output_mode == "delta_cartesian_waypoint":
+            current_plug = np.asarray(state.plug_pose[:3], dtype=np.float64)
+            delta_xyz = np.asarray(waypoint.position_xyz, dtype=np.float64)
+            target_pose[:3] = current_plug + delta_xyz + plug_to_tcp_offset
+            target_pose[5] = float(current_pose[5] + waypoint.yaw)
+            return target_pose, None, {
+                "mode": self.planner_output_mode,
+                "input_position_xyz": list(waypoint.position_xyz),
+                "target_space": "delta_plug_waypoint_to_absolute_tcp_pose",
+            }
+        if self.planner_output_mode == "native_6d_action":
+            native_action = np.array(
+                [
+                    float(waypoint.position_xyz[0]),
+                    float(waypoint.position_xyz[1]),
+                    float(waypoint.position_xyz[2]),
+                    0.0,
+                    0.0,
+                    float(waypoint.yaw),
+                ],
+                dtype=np.float64,
+            )
+            target_pose[:3] = current_pose[:3] + native_action[:3] * self.base_dt
+            target_pose[5] = float(current_pose[5] + native_action[5] * self.base_dt)
+            return target_pose, native_action, {
+                "mode": self.planner_output_mode,
+                "input_position_xyz": list(waypoint.position_xyz),
+                "target_space": "native_6d_action_passthrough",
+            }
+        raise ValueError(f"Unsupported planner_output_mode={self.planner_output_mode!r}")
 
     def _allocate_steps(self, *, ideal_steps: list[int], horizon_steps: int) -> list[int]:
         if not ideal_steps:

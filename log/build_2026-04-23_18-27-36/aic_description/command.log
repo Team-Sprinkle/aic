@@ -1,0 +1,6 @@
+Invoking command in '/workspace/ws_aic/src/aic/build/aic_description': CMAKE_PREFIX_PATH=${CMAKE_PREFIX_PATH}:/opt/ros/kilted /usr/bin/cmake /workspace/ws_aic/src/aic/aic_description -DCMAKE_INSTALL_PREFIX=/workspace/ws_aic/install_live
+Invoked command in '/workspace/ws_aic/src/aic/build/aic_description' returned '0': CMAKE_PREFIX_PATH=${CMAKE_PREFIX_PATH}:/opt/ros/kilted /usr/bin/cmake /workspace/ws_aic/src/aic/aic_description -DCMAKE_INSTALL_PREFIX=/workspace/ws_aic/install_live
+Invoking command in '/workspace/ws_aic/src/aic/build/aic_description': CMAKE_PREFIX_PATH=${CMAKE_PREFIX_PATH}:/opt/ros/kilted /usr/bin/cmake --build /workspace/ws_aic/src/aic/build/aic_description -- -j8 -l8
+Invoked command in '/workspace/ws_aic/src/aic/build/aic_description' returned '0': CMAKE_PREFIX_PATH=${CMAKE_PREFIX_PATH}:/opt/ros/kilted /usr/bin/cmake --build /workspace/ws_aic/src/aic/build/aic_description -- -j8 -l8
+Invoking command in '/workspace/ws_aic/src/aic/build/aic_description': CMAKE_PREFIX_PATH=${CMAKE_PREFIX_PATH}:/opt/ros/kilted /usr/bin/cmake --install /workspace/ws_aic/src/aic/build/aic_description
+Invoked command in '/workspace/ws_aic/src/aic/build/aic_description' returned '0': CMAKE_PREFIX_PATH=${CMAKE_PREFIX_PATH}:/opt/ros/kilted /usr/bin/cmake --install /workspace/ws_aic/src/aic/build/aic_description

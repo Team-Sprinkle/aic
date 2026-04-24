@@ -1,0 +1,39 @@
+-- The C compiler identification is GNU 13.3.0
+-- The CXX compiler identification is GNU 13.3.0
+-- Detecting C compiler ABI info
+-- Detecting C compiler ABI info - done
+-- Check for working C compiler: /usr/bin/cc - skipped
+-- Detecting C compile features
+-- Detecting C compile features - done
+-- Detecting CXX compiler ABI info
+-- Detecting CXX compiler ABI info - done
+-- Check for working CXX compiler: /usr/bin/c++ - skipped
+-- Detecting CXX compile features
+-- Detecting CXX compile features - done
+-- Found ament_cmake: 2.7.5 (/opt/ros/kilted/share/ament_cmake/cmake)
+-- Found Python3: /usr/bin/python3 (found version "3.12.3") found components: Interpreter 
+-- Configuring done (0.7s)
+-- Generating done (0.0s)
+-- Build files have been written to: /workspace/ws_aic/src/aic/build/aic_description
+-- Install configuration: ""
+-- Up-to-date: /workspace/ws_aic/install_live/share/aic_description/urdf
+-- Up-to-date: /workspace/ws_aic/install_live/share/aic_description/urdf/task_board.urdf.xacro
+-- Up-to-date: /workspace/ws_aic/install_live/share/aic_description/urdf/cable.sdf.xacro
+-- Up-to-date: /workspace/ws_aic/install_live/share/aic_description/urdf/ur_gz.urdf.xacro
+-- Up-to-date: /workspace/ws_aic/install_live/share/aic_description/world
+-- Up-to-date: /workspace/ws_aic/install_live/share/aic_description/world/aic.sdf
+-- Installing: /workspace/ws_aic/install_live/share/ament_index/resource_index/package_run_dependencies/aic_description
+-- Installing: /workspace/ws_aic/install_live/share/ament_index/resource_index/parent_prefix_path/aic_description
+-- Up-to-date: /workspace/ws_aic/install_live/share/aic_description/environment/ament_prefix_path.sh
+-- Installing: /workspace/ws_aic/install_live/share/aic_description/environment/ament_prefix_path.dsv
+-- Up-to-date: /workspace/ws_aic/install_live/share/aic_description/environment/path.sh
+-- Installing: /workspace/ws_aic/install_live/share/aic_description/environment/path.dsv
+-- Installing: /workspace/ws_aic/install_live/share/aic_description/local_setup.bash
+-- Installing: /workspace/ws_aic/install_live/share/aic_description/local_setup.sh
+-- Installing: /workspace/ws_aic/install_live/share/aic_description/local_setup.zsh
+-- Installing: /workspace/ws_aic/install_live/share/aic_description/local_setup.dsv
+-- Installing: /workspace/ws_aic/install_live/share/aic_description/package.dsv
+-- Installing: /workspace/ws_aic/install_live/share/ament_index/resource_index/packages/aic_description
+-- Installing: /workspace/ws_aic/install_live/share/aic_description/cmake/aic_descriptionConfig.cmake
+-- Installing: /workspace/ws_aic/install_live/share/aic_description/cmake/aic_descriptionConfig-version.cmake
+-- Up-to-date: /workspace/ws_aic/install_live/share/aic_description/package.xml
