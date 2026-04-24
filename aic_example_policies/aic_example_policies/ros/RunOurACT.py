@@ -27,7 +27,6 @@ import draccus
 from pathlib import Path
 from typing import Callable, Dict, Any, List
 from rclpy.node import Node
-from geometry_msgs.msg import Twist, Vector3
 
 from aic_model.policy import (
     GetObservationCallback,
@@ -37,12 +36,6 @@ from aic_model.policy import (
 )
 from aic_model_interfaces.msg import Observation
 from aic_task_interfaces.msg import Task
-
-from aic_control_interfaces.msg import (
-    MotionUpdate,
-    TrajectoryGenerationMode,
-)
-from geometry_msgs.msg import Wrench
 
 # LeRobot & Safetensors
 from lerobot.policies.act.modeling_act import ACTPolicy
@@ -61,8 +54,8 @@ class RunOurACT(Policy):
         # -------------------------------------------------------------------------
 
         # Path to your checkpoint folder
-        checkpoint_number = "025000"
-        policy_path = Path(f"/home/jk/ws_aic/src/aic/outputs/train/act_fixed_single_board/checkpoints/{checkpoint_number}/pretrained_model")
+        checkpoint_number = "045000"
+        policy_path = Path(f"/home/jk/ws_aic/src/aic/outputs/train/act_fixed_sfp2nic_deltapose/checkpoints/{checkpoint_number}/pretrained_model")
 
         # Load Config Manually (Fixes 'Draccus' error by removing unknown 'type' field)
         with open(policy_path / "config.json", "r") as f:
@@ -124,6 +117,10 @@ class RunOurACT(Policy):
 
         # Config
         self.image_scaling = 0.25  # Must match AICRobotAICControllerConfig
+        self.max_translation_delta = 0.02
+        self.max_rotation_delta = 0.2
+        self.translation_deadband = 5e-4
+        self.rotation_deadband = 1e-3
 
         self.get_logger().info("Normalization statistics loaded successfully.")
 
@@ -272,22 +269,20 @@ class RunOurACT(Policy):
             raw_action_tensor = (normalized_action * self.action_std) + self.action_mean
 
             # 4. Extract and Command
-            # raw_action_tensor is [1, 7], taking [0] gives vector of 7
+            # raw_action_tensor is [1, 6], taking [0] gives one delta-pose action.
             action = raw_action_tensor[0].cpu().numpy()
-            action *= 1000
 
             self.get_logger().info(f"Action: {action}")
 
-            twist = Twist(
-                linear=Vector3(
-                    x=float(action[0]), y=float(action[1]), z=float(action[2])
-                ),
-                angular=Vector3(
-                    x=float(action[3]), y=float(action[4]), z=float(action[5])
-                ),
+            self.set_delta_pose_target_from_components(
+                move_robot=move_robot,
+                delta_position_xyz=action[:3],
+                delta_rotation_xyz=action[3:6],
+                max_translation=self.max_translation_delta,
+                max_rotation=self.max_rotation_delta,
+                deadband_translation=self.translation_deadband,
+                deadband_rotation=self.rotation_deadband,
             )
-            motion_update = self.set_cartesian_twist_target(twist)
-            move_robot(motion_update=motion_update)
             send_feedback("in progress...")
 
             # Maintain control rate (approx 4Hz loop = 0.25s sleep)
@@ -296,28 +291,3 @@ class RunOurACT(Policy):
 
         self.get_logger().info("RunACT.insert_cable() exiting...")
         return True
-
-    def set_cartesian_twist_target(self, twist: Twist, frame_id: str = "base_link"):
-        motion_update_msg = MotionUpdate()
-        motion_update_msg.velocity = twist
-        motion_update_msg.header.frame_id = frame_id
-        motion_update_msg.header.stamp = self.get_clock().now().to_msg()
-
-        motion_update_msg.target_stiffness = np.diag(
-            [100.0, 100.0, 100.0, 50.0, 50.0, 50.0]
-        ).flatten()
-        motion_update_msg.target_damping = np.diag(
-            [40.0, 40.0, 40.0, 15.0, 15.0, 15.0]
-        ).flatten()
-
-        motion_update_msg.feedforward_wrench_at_tip = Wrench(
-            force=Vector3(x=0.0, y=0.0, z=0.0), torque=Vector3(x=0.0, y=0.0, z=0.0)
-        )
-
-        motion_update_msg.wrench_feedback_gains_at_tip = [0.5, 0.5, 0.5, 0.0, 0.0, 0.0]
-
-        motion_update_msg.trajectory_generation_mode.mode = (
-            TrajectoryGenerationMode.MODE_VELOCITY
-        )
-
-        return motion_update_msg

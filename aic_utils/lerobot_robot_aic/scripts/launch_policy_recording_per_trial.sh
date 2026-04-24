@@ -394,7 +394,7 @@ for TRIAL_ID in "${TRIAL_IDS[@]}"; do
     "--dataset.repo_id=${DATASET_REPO_ID}"
     "--dataset.single_task=${DATASET_SINGLE_TASK}"
     "--dataset.root=${DATASET_ROOT}"
-    --dataset.fps=30
+    --dataset.fps=20
     "--action_mode=${ACTION_MODE}"
     --max_episodes=1
   )

@@ -202,12 +202,12 @@ class AICKeyboardEETeleop(KeyboardEndEffectorTeleop):
         self._current_scaling = self._high_scaling
 
         self._current_actions: MotionUpdateActionDict = {
-            "linear.x": 0.0,
-            "linear.y": 0.0,
-            "linear.z": 0.0,
-            "angular.x": 0.0,
-            "angular.y": 0.0,
-            "angular.z": 0.0,
+            "delta_position.x": 0.0,
+            "delta_position.y": 0.0,
+            "delta_position.z": 0.0,
+            "delta_rotation.x": 0.0,
+            "delta_rotation.y": 0.0,
+            "delta_rotation.z": 0.0,
         }
         self._hotkey_node: Node | None = None
         self._hotkey_executor: SingleThreadedExecutor | None = None
@@ -248,29 +248,29 @@ class AICKeyboardEETeleop(KeyboardEndEffectorTeleop):
             val = self._get_action_value(is_pressed)
 
             if key == "w":
-                self._current_actions["linear.y"] = -val
+                self._current_actions["delta_position.y"] = -val
             elif key == "s":
-                self._current_actions["linear.y"] = val
+                self._current_actions["delta_position.y"] = val
             elif key == "a":
-                self._current_actions["linear.x"] = -val
+                self._current_actions["delta_position.x"] = -val
             elif key == "d":
-                self._current_actions["linear.x"] = val
+                self._current_actions["delta_position.x"] = val
             elif key == "r":
-                self._current_actions["linear.z"] = -val
+                self._current_actions["delta_position.z"] = -val
             elif key == "f":
-                self._current_actions["linear.z"] = val
+                self._current_actions["delta_position.z"] = val
             elif key == "W":
-                self._current_actions["angular.x"] = val
+                self._current_actions["delta_rotation.x"] = val
             elif key == "S":
-                self._current_actions["angular.x"] = -val
+                self._current_actions["delta_rotation.x"] = -val
             elif key == "A":
-                self._current_actions["angular.y"] = -val
+                self._current_actions["delta_rotation.y"] = -val
             elif key == "D":
-                self._current_actions["angular.y"] = val
+                self._current_actions["delta_rotation.y"] = val
             elif key == "q":
-                self._current_actions["angular.z"] = -val
+                self._current_actions["delta_rotation.z"] = -val
             elif key == "e":
-                self._current_actions["angular.z"] = val
+                self._current_actions["delta_rotation.z"] = val
             elif is_pressed:
                 # If the key is pressed, add it to the misc_keys_queue
                 # this will record key presses that are not part of the delta_x, delta_y, delta_z
@@ -342,12 +342,12 @@ class AICSpaceMouseTeleop(Teleoperator):
         self._device: pyspacemouse.SpaceMouseDevice | None = None
 
         self._current_actions: MotionUpdateActionDict = {
-            "linear.x": 0.0,
-            "linear.y": 0.0,
-            "linear.z": 0.0,
-            "angular.x": 0.0,
-            "angular.y": 0.0,
-            "angular.z": 0.0,
+            "delta_position.x": 0.0,
+            "delta_position.y": 0.0,
+            "delta_position.z": 0.0,
+            "delta_rotation.x": 0.0,
+            "delta_rotation.y": 0.0,
+            "delta_rotation.z": 0.0,
         }
 
     @property
@@ -441,12 +441,12 @@ class AICSpaceMouseTeleop(Teleoperator):
             twist_msg.angular.y *= -1
 
         self._current_actions = {
-            "linear.x": twist_msg.linear.x,
-            "linear.y": twist_msg.linear.y,
-            "linear.z": twist_msg.linear.z,
-            "angular.x": twist_msg.angular.x,
-            "angular.y": twist_msg.angular.y,
-            "angular.z": twist_msg.angular.z,
+            "delta_position.x": twist_msg.linear.x,
+            "delta_position.y": twist_msg.linear.y,
+            "delta_position.z": twist_msg.linear.z,
+            "delta_rotation.x": twist_msg.angular.x,
+            "delta_rotation.y": twist_msg.angular.y,
+            "delta_rotation.z": twist_msg.angular.z,
         }
 
         return cast(dict, self._current_actions)
