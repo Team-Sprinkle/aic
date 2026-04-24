@@ -6,7 +6,7 @@ from pathlib import Path
 import textwrap
 import pytest
 
-from aic_gazebo_env.gazebo_client import GazeboCliClientConfig, GazeboTransportClient
+from aic_gazebo_env.gazebo_client import GazeboCliClient, GazeboCliClientConfig, GazeboTransportClient
 from aic_gazebo_env.runtime import GazeboRuntime, GazeboRuntimeConfig
 from aic_gazebo_env.transport_bridge import (
     GazeboTransportBridge,
@@ -401,6 +401,56 @@ def test_transport_client_observation_fallback_only_on_transport_freshness_failu
     response = client.get_observation(GetObservationRequest())
     assert response.info["transport_backend"] == "transport_cli_fallback"
     assert response.info["fallback_used"] is True
+
+
+def test_client_prefers_configured_world_name_without_service_scan(tmp_path: Path) -> None:
+    world = tmp_path / "world.sdf"
+    _write_world(world)
+    client = GazeboTransportClient(
+        GazeboCliClientConfig(
+            world_path=str(world),
+            world_name="test_world",
+            executable="gz",
+            timeout=0.2,
+            transport_backend="transport",
+        )
+    )
+    client._discover_running_world_name = lambda: (_ for _ in ()).throw(
+        AssertionError("service scan should not run when world_name is configured")
+    )
+    assert client._world_name() == "test_world"
+
+
+def test_cli_client_does_not_force_world_step_when_observation_timeout_fallback_disabled(
+    tmp_path: Path,
+) -> None:
+    world = tmp_path / "world.sdf"
+    _write_world(world)
+    client = GazeboCliClient(
+        GazeboCliClientConfig(
+            world_path=str(world),
+            world_name="test_world",
+            executable="gz",
+            timeout=0.2,
+            transport_backend="cli",
+            allow_world_step_on_observation_timeout=False,
+            observation_transport="persistent",
+        )
+    )
+    client._state_topic_reader = lambda topic: type(
+        "_Reader",
+        (),
+        {
+            "get_sample": staticmethod(
+                lambda after_generation=None, timeout=None: (_ for _ in ()).throw(TimeoutError())
+            )
+        },
+    )()
+    client._read_state_sample_after_world_step = lambda topic: (_ for _ in ()).throw(
+        AssertionError("world-step fallback should stay disabled")
+    )
+    with pytest.raises(TimeoutError):
+        client.get_observation(GetObservationRequest())
 
 
 def test_transport_client_reset_failure_exposes_reset_service_category(tmp_path: Path) -> None:

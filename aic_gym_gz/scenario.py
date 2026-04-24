@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+from dataclasses import asdict, dataclass, field
 from pathlib import Path
 from typing import Any
 
@@ -36,6 +36,10 @@ class CableScenario:
     attach_to_gripper: bool
     gripper_offset_xyz: tuple[float, float, float]
     rpy: tuple[float, float, float]
+    spawn_pose_xyz: tuple[float, float, float] = (-0.35, 0.4, 1.15)
+
+    def to_dict(self) -> dict[str, Any]:
+        return asdict(self)
 
 
 @dataclass(frozen=True)
@@ -49,6 +53,22 @@ class TaskDefinition:
     port_name: str
     target_module_name: str
     time_limit_s: float
+
+    def to_dict(self) -> dict[str, Any]:
+        return asdict(self)
+
+    def to_task_msg_dict(self) -> dict[str, Any]:
+        return {
+            "id": self.task_id,
+            "cable_type": self.cable_type,
+            "cable_name": self.cable_name,
+            "plug_type": self.plug_type,
+            "plug_name": self.plug_name,
+            "port_type": self.port_type,
+            "port_name": self.port_name,
+            "target_module_name": self.target_module_name,
+            "time_limit": int(round(self.time_limit_s)),
+        }
 
 
 @dataclass(frozen=True)
@@ -103,6 +123,11 @@ def load_trials(config_path: Path | str = OFFICIAL_SAMPLE_CONFIG) -> dict[str, A
                 cable_name=cable_name,
                 cable_type=str(cable_cfg["cable_type"]),
                 attach_to_gripper=bool(cable_cfg["attach_cable_to_gripper"]),
+                spawn_pose_xyz=(
+                    float(cable_cfg.get("pose", {}).get("x", -0.35)),
+                    float(cable_cfg.get("pose", {}).get("y", 0.4)),
+                    float(cable_cfg.get("pose", {}).get("z", 1.15)),
+                ),
                 gripper_offset_xyz=(
                     float(cable_cfg["pose"]["gripper_offset"]["x"]),
                     float(cable_cfg["pose"]["gripper_offset"]["y"]),

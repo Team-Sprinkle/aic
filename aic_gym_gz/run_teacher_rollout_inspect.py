@@ -5,13 +5,17 @@ from __future__ import annotations
 import argparse
 import json
 from pathlib import Path
+import re
+import subprocess
 import time
 from typing import Any
 
 from aic_gym_gz.env import make_default_env, make_live_env
 from aic_gym_gz.io import RosCameraSubscriber
+from aic_gym_gz.official_scene import build_official_launch_spec
 from aic_gym_gz.planners.mock import DeterministicMockPlannerBackend
 from aic_gym_gz.planners.openai_backend import OpenAIPlannerBackend, OpenAIPlannerConfig
+from aic_gym_gz.randomizer import AicEnvRandomizer
 from aic_gym_gz.teacher import AgentTeacherController, TeacherConfig, run_teacher_rollout
 from aic_gym_gz.teacher.analysis import analyze_rollout_artifact
 from aic_gym_gz.teacher.dataset_export import RolloutDatasetFrame, export_rollout_lerobot_dataset
@@ -88,6 +92,120 @@ def _flatten_step_table(artifact: dict[str, Any]) -> list[dict[str, Any]]:
 def _write_json(path: Path, payload: Any) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(json.dumps(to_jsonable(payload), indent=2, sort_keys=True) + "\n", encoding="utf-8")
+
+
+def _wait_for_official_scene_ready(
+    *,
+    timeout_s: float,
+    ros_command_prefix: str,
+    launch_log_path: Path | None = None,
+) -> dict[str, Any]:
+    topic_checks = {
+        "/aic_controller/controller_state": {"require_publisher": True},
+        "/joint_states": {"require_publisher": True},
+        "/left_camera/image": {"require_publisher": False},
+    }
+    deadline = time.monotonic() + float(timeout_s)
+    per_topic: dict[str, bool] = {topic: False for topic in topic_checks}
+    last_errors: dict[str, str] = {}
+    while time.monotonic() < deadline:
+        if launch_log_path is not None and launch_log_path.exists():
+            try:
+                log_text = launch_log_path.read_text(encoding="utf-8", errors="ignore")
+            except OSError:
+                log_text = ""
+            duplicate_world_error = "Another world of the same name is running" in log_text
+            if duplicate_world_error:
+                return {
+                    "ready": False,
+                    "topics": per_topic,
+                    "timeout_s": float(timeout_s),
+                    "duplicate_world_running": True,
+                    "last_errors": last_errors,
+                }
+            if (
+                "Configured and activated joint_state_broadcaster" in log_text
+                and "Configured and activated all the parsed controllers list : ['aic_controller']!" in log_text
+                and "/left_camera/image" in log_text
+            ):
+                return {
+                    "ready": True,
+                    "topics": {
+                        **per_topic,
+                        "/joint_states": True,
+                        "/aic_controller/controller_state": True,
+                        "/left_camera/image": True,
+                    },
+                    "timeout_s": float(timeout_s),
+                    "source": "launch_log_markers",
+                }
+        all_ready = True
+        for topic, requirements in topic_checks.items():
+            if per_topic[topic]:
+                continue
+            completed = subprocess.run(
+                [
+                    "bash",
+                    "-lc",
+                    f"{ros_command_prefix} && timeout 5s ros2 topic info -v {topic}",
+                ],
+                cwd=Path.cwd(),
+                check=False,
+                capture_output=True,
+                text=True,
+                timeout=10.0,
+            )
+            output = f"{completed.stdout}\n{completed.stderr}"
+            publisher_match = re.search(r"Publisher count:\s*(\d+)", output)
+            publisher_count = int(publisher_match.group(1)) if publisher_match is not None else 0
+            topic_visible = completed.returncode == 0 and "Topic type:" in output
+            if requirements.get("require_publisher", False):
+                per_topic[topic] = topic_visible and publisher_count > 0
+            else:
+                per_topic[topic] = topic_visible
+            if not per_topic[topic]:
+                last_errors[topic] = output.strip()[-400:]
+            all_ready = all_ready and per_topic[topic]
+        if all_ready:
+            return {"ready": True, "topics": per_topic, "timeout_s": float(timeout_s)}
+        time.sleep(1.0)
+    return {
+        "ready": False,
+        "topics": per_topic,
+        "timeout_s": float(timeout_s),
+        "last_errors": last_errors,
+    }
+
+
+def _cleanup_stale_official_scene_processes() -> None:
+    cleanup_script = """
+pkill -9 -f "/entrypoint.sh" || true
+pkill -9 -f "rmw_zenohd" || true
+pkill -9 -f "ros2 launch aic_bringup aic_gz_bringup.launch.py" || true
+pkill -9 -f "/opt/ros/kilted/bin/ros2 launch aic_bringup aic_gz_bringup.launch.py" || true
+pkill -9 -f component_container || true
+pkill -9 -f "/opt/ros/kilted/lib/rclcpp_components/component_container" || true
+pkill -9 -f "ros_gz_bridge/parameter_bridge" || true
+pkill -9 -f "ros_gz_bridge" || true
+pkill -9 -f "controller_manager/spawner" || true
+pkill -9 -f gz_server || true
+pkill -9 -f "gz sim" || true
+pkill -9 -f aic_adapter || true
+pkill -9 -f "/ws_aic/install/lib/aic_adapter/aic_adapter" || true
+pkill -9 -f robot_state_publisher || true
+pkill -9 -f "/opt/ros/kilted/lib/robot_state_publisher/robot_state_publisher" || true
+pkill -9 -f ros_gz_sim || true
+rm -f /dev/shm/sem.fastdds* /dev/shm/fastdds* /dev/shm/fastrtps* 2>/dev/null || true
+sleep 2
+"""
+    subprocess.run(
+        ["bash", "-lc", cleanup_script],
+        cwd=Path.cwd(),
+        check=False,
+        capture_output=True,
+        text=True,
+        timeout=15.0,
+    )
 
 
 def _write_jsonl(path: Path, rows: list[dict[str, Any]]) -> None:
@@ -185,6 +303,8 @@ def main() -> None:
     parser.add_argument("--live-timeout", type=float, default=20.0)
     parser.add_argument("--attach-ready-timeout", type=float, default=60.0)
     parser.add_argument("--skip-preflight", action="store_true")
+    parser.add_argument("--prepare-official-scene", action="store_true")
+    parser.add_argument("--official-ground-truth", action="store_true")
     parser.add_argument("--planner-backend", choices=("openai", "mock"), default="openai")
     parser.add_argument("--openai-model", default="gpt-5.4-mini")
     parser.add_argument("--openai-temperature", type=_optional_float, default=None)
@@ -227,6 +347,55 @@ def main() -> None:
     include_images = True
     image_shape = (int(args.image_height), int(args.image_width), 3)
     preflight_summary = None
+    launched_scene_process = None
+    launched_scene_log = output_dir / "official_scene_launch.log"
+    official_scene_spec = None
+    official_scene_ready = None
+    if args.prepare_official_scene:
+        _cleanup_stale_official_scene_processes()
+        scenario = AicEnvRandomizer(enable_randomization=False).sample(
+            seed=args.seed,
+            trial_id=args.trial_id,
+        )
+        official_scene_spec = build_official_launch_spec(
+            scenario,
+            setup_script=Path.cwd() / "install" / "setup.bash",
+            ground_truth=args.official_ground_truth,
+            start_aic_engine=False,
+            gazebo_gui=False,
+            launch_rviz=False,
+        )
+        launch_log = launched_scene_log.open("w", encoding="utf-8")
+        launched_scene_process = subprocess.Popen(
+            ["bash", "-lc", official_scene_spec.shell_command],
+            stdout=launch_log,
+            stderr=subprocess.STDOUT,
+            text=True,
+        )
+        args.attach_to_existing = True
+        official_scene_ready = _wait_for_official_scene_ready(
+            timeout_s=max(float(args.attach_ready_timeout), 180.0),
+            ros_command_prefix=official_scene_spec.ros_command_prefix,
+            launch_log_path=launched_scene_log,
+        )
+        if not bool(official_scene_ready.get("ready", False)):
+            if launched_scene_process is not None and launched_scene_process.poll() is None:
+                launched_scene_process.terminate()
+                try:
+                    launched_scene_process.wait(timeout=15.0)
+                except subprocess.TimeoutExpired:
+                    launched_scene_process.kill()
+                    launched_scene_process.wait(timeout=15.0)
+            raise RuntimeError(
+                "Official scene did not become ready before attach. "
+                f"readiness={official_scene_ready}"
+            )
+    if args.prepare_official_scene:
+        args.skip_preflight = True
+        preflight_summary = {
+            "skipped": True,
+            "reason": "official_scene_prepare_mode_uses_runtime_scene_validation_instead_of_attach_preflight",
+        }
     if args.live and args.attach_to_existing and not args.skip_preflight:
         preflight_summary = _preflight_live_attach(
             timeout_s=args.attach_ready_timeout,
@@ -289,7 +458,7 @@ def main() -> None:
             output_dir=video_dir,
             enabled=True,
             require_real_wrist_images=True,
-            require_live_overview=True,
+            require_live_overview=False,
         )
         def _dataset_callback(
             *,
@@ -330,6 +499,13 @@ def main() -> None:
         video_summary = recorder.close()
     finally:
         env.close()
+        if launched_scene_process is not None and launched_scene_process.poll() is None:
+            launched_scene_process.terminate()
+            try:
+                launched_scene_process.wait(timeout=15.0)
+            except subprocess.TimeoutExpired:
+                launched_scene_process.kill()
+                launched_scene_process.wait(timeout=15.0)
 
     artifact = result.artifact.to_dict()
     analysis = analyze_rollout_artifact(artifact)
@@ -382,6 +558,20 @@ def main() -> None:
             "lerobot_dataset_dir": "LeRobot-format rollout dataset aligned to the exp/data policy-recorder schema, with added sim_time/sim_tick and target/plug pose fields.",
         },
         "preflight_summary": preflight_summary,
+        "official_scene_launch": (
+            None
+            if official_scene_spec is None
+            else {
+                "log_path": str(launched_scene_log),
+                "shell_command": official_scene_spec.shell_command,
+                "ros_launch_args": list(official_scene_spec.ros_launch_args),
+                "expected_entities": list(official_scene_spec.expected_entities),
+                "launch_mode": official_scene_spec.launch_mode,
+                "shell_environment": dict(official_scene_spec.shell_environment),
+                "ros_command_prefix": official_scene_spec.ros_command_prefix,
+                "readiness": official_scene_ready,
+            }
+        ),
     }
     _write_json(manifest_path, manifest)
     print(json.dumps(to_jsonable(manifest), indent=2, sort_keys=True))

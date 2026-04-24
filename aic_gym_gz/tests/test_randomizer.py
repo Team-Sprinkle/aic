@@ -15,6 +15,13 @@ class RandomizerTest(unittest.TestCase):
             scenario_b.task_board.nic_rails["nic_rail_0"].translation,
         )
 
+    def test_randomizer_varies_board_pose_and_task_target(self) -> None:
+        randomizer = AicEnvRandomizer(enable_randomization=True)
+        scenario = randomizer.sample(seed=5)
+        task = next(iter(scenario.tasks.values()))
+        self.assertNotEqual(scenario.task_board.pose_xyz_rpy[:2], (0.15, -0.2))
+        self.assertTrue(task.target_module_name.startswith(("nic_card_mount_", "sc_port_")))
+
 
 if __name__ == "__main__":
     unittest.main()

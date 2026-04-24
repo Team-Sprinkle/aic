@@ -1,8 +1,10 @@
 from __future__ import annotations
 
 import math
+import os
 import types
 import unittest
+from unittest import mock
 
 import numpy as np
 
@@ -257,6 +259,156 @@ stats {
             },
         )
         assert event is None
+
+    def test_attach_to_existing_does_not_fabricate_missing_module_pose_from_scenario(self) -> None:
+        backend = object.__new__(ScenarioGymGzBackend)
+        backend._task = types.SimpleNamespace(
+            target_module_name="nic_card_mount_0",
+            port_name="sfp_port_0",
+        )
+        backend._scenario = types.SimpleNamespace(
+            task_board=types.SimpleNamespace(
+                pose_xyz_rpy=(0.15, -0.2, 1.14, 0.0, 0.0, math.pi),
+                nic_rails={
+                    "nic_rail_0": types.SimpleNamespace(
+                        translation=0.0,
+                        roll=0.0,
+                        pitch=0.0,
+                        yaw=0.0,
+                    )
+                },
+                sc_rails={},
+            )
+        )
+        backend._attach_to_existing = True
+        backend._target_entity_name = "task_board::missing_target"
+        synthetic = ScenarioGymGzBackend._synthetic_target_pose(
+            backend,
+            entities_by_name={},
+            observed_target_name="task_board_base_link",
+        )
+        assert synthetic is None
+
+    def test_bootstrap_existing_world_uses_short_cli_timeout(self) -> None:
+        recorded: dict[str, float] = {}
+
+        class _FakeClient:
+            def __init__(self, config):
+                recorded["timeout"] = float(config.timeout)
+
+            def get_observation(self, request):
+                raise RuntimeError("no sample")
+
+            def close(self):
+                return None
+
+        backend = object.__new__(ScenarioGymGzBackend)
+        backend._cli_client_type = _FakeClient
+        backend._cli_config_type = types.SimpleNamespace
+        backend._get_observation_request_type = dict
+        backend._world_path = "aic_description/world/aic.sdf"
+        backend._world_name = "aic_world"
+        backend._source_entity_name = "ati/tool_link"
+        backend._target_entity_name = "tabletop"
+        backend._timeout = 30.0
+        backend._action = np.zeros(6, dtype=np.float64)
+        backend._last_observation = None
+        backend._last_info = None
+        backend._last_state = None
+        backend._tick_existing_world_for_sample = lambda: None
+
+        result = ScenarioGymGzBackend._bootstrap_existing_world_state(backend, timeout_s=20.0)
+        assert result is None
+        self.assertEqual(recorded["timeout"], 4.0)
+
+    def test_connect_existing_world_skips_cli_bootstrap_for_transport_backend(self) -> None:
+        backend = object.__new__(ScenarioGymGzBackend)
+        backend._runtime = types.SimpleNamespace(
+            get_observation=lambda: (
+                {"sim_time": 0.0, "sim_tick": 0},
+                {},
+            )
+        )
+        backend._transport_backend = "transport"
+        backend._attach_ready_timeout = 0.01
+        backend._action = np.zeros(6, dtype=np.float64)
+        backend._last_observation = None
+        backend._last_info = None
+        backend._last_state = None
+        backend._bootstrap_existing_world_state = lambda timeout_s: (_ for _ in ()).throw(
+            AssertionError("bootstrap should not be called")
+        )
+        backend._runtime_state_from_observation = lambda observation, info: types.SimpleNamespace(
+            controller_state={"tcp_pose": np.array([0.0, 0.0, 1.1, 0.0, 0.0, 0.0, 1.0], dtype=np.float64)},
+            tcp_pose=np.array([0.0, 0.0, 1.1, 0.0, 0.0, 0.0, 1.0], dtype=np.float64),
+            plug_pose=np.array([0.0, 0.0, 1.1, 0.0, 0.0, 0.0, 1.0], dtype=np.float64),
+        )
+        backend._state_is_sane_for_live_reset = lambda state: True
+        result = ScenarioGymGzBackend.connect_existing_world(backend)
+        assert result is not None
+
+    def test_connect_existing_world_skips_cli_bootstrap_by_default(self) -> None:
+        backend = object.__new__(ScenarioGymGzBackend)
+        backend._runtime = types.SimpleNamespace(
+            get_observation=lambda: (
+                {"sim_time": 0.0, "sim_tick": 0},
+                {},
+            )
+        )
+        backend._transport_backend = "cli"
+        backend._attach_ready_timeout = 0.01
+        backend._action = np.zeros(6, dtype=np.float64)
+        backend._last_observation = None
+        backend._last_info = None
+        backend._last_state = None
+        backend._bootstrap_existing_world_state = lambda timeout_s: (_ for _ in ()).throw(
+            AssertionError("bootstrap should not be called without explicit opt-in")
+        )
+        backend._runtime_state_from_observation = lambda observation, info: types.SimpleNamespace(
+            controller_state={"tcp_pose": np.array([0.0, 0.0, 1.1, 0.0, 0.0, 0.0, 1.0], dtype=np.float64)},
+            tcp_pose=np.array([0.0, 0.0, 1.1, 0.0, 0.0, 0.0, 1.0], dtype=np.float64),
+            plug_pose=np.array([0.0, 0.0, 1.1, 0.0, 0.0, 0.0, 1.0], dtype=np.float64),
+        )
+        backend._state_is_sane_for_live_reset = lambda state: True
+        with mock.patch.dict(os.environ, {}, clear=False):
+            result = ScenarioGymGzBackend.connect_existing_world(backend)
+        assert result is not None
+
+    def test_resolve_live_insertion_event_prefers_official_topic(self) -> None:
+        backend = object.__new__(ScenarioGymGzBackend)
+        backend._task = types.SimpleNamespace(
+            target_module_name="nic_card_mount_0",
+            port_name="sfp_port_0",
+        )
+        event, source = ScenarioGymGzBackend._resolve_live_insertion_event(
+            backend,
+            ros_sample={"official_insertion_event": "nic_card_mount_0/sfp_port_0"},
+            geometry={
+                "distance_to_target": 0.001,
+                "lateral_misalignment": 0.001,
+                "insertion_progress": 0.99,
+            },
+        )
+        assert event == "nic_card_mount_0/sfp_port_0"
+        assert source == "official_topic"
+
+    def test_resolve_live_insertion_event_does_not_use_geometry_fallback(self) -> None:
+        backend = object.__new__(ScenarioGymGzBackend)
+        backend._task = types.SimpleNamespace(
+            target_module_name="nic_card_mount_0",
+            port_name="sfp_port_0",
+        )
+        event, source = ScenarioGymGzBackend._resolve_live_insertion_event(
+            backend,
+            ros_sample={},
+            geometry={
+                "distance_to_target": 0.001,
+                "lateral_misalignment": 0.001,
+                "insertion_progress": 0.99,
+            },
+        )
+        assert event is None
+        assert source == "none"
 
 
 if __name__ == "__main__":
