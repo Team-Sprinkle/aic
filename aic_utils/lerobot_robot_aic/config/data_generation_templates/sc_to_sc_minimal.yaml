@@ -1,0 +1,18 @@
+root_dir: outputs/trajectory_datasets
+task_family: sc_to_sc
+suffix: first_batch
+
+generation:
+  target_accepted_trajectories: 200
+  max_attempts: 400
+  policy: cheatcode
+  seed: 43
+  append_if_exists: true
+
+acceptance:
+  success_only: true
+  min_score: 90.0
+
+scene:
+  sc_ports:
+    count: 2

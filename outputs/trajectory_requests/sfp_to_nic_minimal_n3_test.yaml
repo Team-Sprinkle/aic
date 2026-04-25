@@ -1,0 +1,15 @@
+root_dir: outputs/trajectory_datasets
+task_family: sfp_to_nic
+suffix: test_n3
+generation:
+  target_accepted_trajectories: 3
+  max_attempts: 3
+  policy: cheatcode
+  seed: 42
+  append_if_exists: true
+acceptance:
+  success_only: true
+  min_score: 90.0
+scene:
+  nic_cards:
+    count: 1

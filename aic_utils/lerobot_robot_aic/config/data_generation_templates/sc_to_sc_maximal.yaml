@@ -1,0 +1,102 @@
+root_dir: outputs/trajectory_datasets
+task_family: sc_to_sc
+suffix: controlled_sc_batch
+
+generation:
+  target_accepted_trajectories: 200
+  max_attempts: 400
+  policy: cheatcode
+  seed: 43
+  append_if_exists: true
+
+acceptance:
+  success_only: true
+  min_score: 90.0
+
+scene:
+  board:
+    x:
+      min: 0.12
+      max: 0.18
+    y:
+      min: -0.24
+      max: -0.12
+    z:
+      min: 1.14
+      max: 1.14
+    roll_deg:
+      min: 0.0
+      max: 0.0
+    pitch_deg:
+      min: 0.0
+      max: 0.0
+    yaw_deg:
+      min: 169.0
+      max: 183.0
+
+  sc_ports:
+    count: [1, 2]
+    rails: [sc_rail_0, sc_rail_1]
+    target_port: auto
+    translation:
+      min: -0.06
+      max: 0.055
+    roll_deg:
+      min: 0.0
+      max: 0.0
+    pitch_deg:
+      min: 0.0
+      max: 0.0
+    yaw_deg:
+      min: 0.0
+      max: 0.0
+
+  nic_cards:
+    count: [0, 1, 2]
+    rails: [nic_rail_0, nic_rail_1, nic_rail_2, nic_rail_3, nic_rail_4]
+    translation:
+      min: -0.0215
+      max: 0.0234
+    yaw_deg:
+      min: -10.0
+      max: 10.0
+
+  fixture_mounts:
+    present_probability:
+      min: 0.75
+      max: 0.75
+    rails:
+      - lc_mount_rail_0
+      - sfp_mount_rail_0
+      - sc_mount_rail_0
+      - lc_mount_rail_1
+      - sfp_mount_rail_1
+      - sc_mount_rail_1
+    translation:
+      min: -0.09425
+      max: 0.09425
+    yaw_deg:
+      min: -60.0
+      max: 60.0
+
+  cable:
+    cable_type: sfp_sc_cable_reversed
+    gripper_offset:
+      x:
+        min: 0.0
+        max: 0.0
+      y:
+        min: 0.015385
+        max: 0.015385
+      z:
+        min: 0.04045
+        max: 0.04045
+    roll_deg:
+      min: 25.4
+      max: 25.4
+    pitch_deg:
+      min: -27.7
+      max: -27.7
+    yaw_deg:
+      min: 76.2
+      max: 76.2

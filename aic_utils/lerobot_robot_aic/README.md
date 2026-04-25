@@ -350,6 +350,157 @@ Useful flags:
 - `--results-root` where the script writes per-trial scoring outputs and score summary (default `./outputs/aic_results_per_trial`)
 - `--remove-bag-data true` remove per-trial `bag_*` directories after each trial (default `true`)
 
+### Generating Trajectory Datasets from Request YAML
+
+For user-facing dataset generation, use request YAML templates under:
+
+```bash
+aic_utils/lerobot_robot_aic/config/data_generation_templates/
+```
+
+Templates are provided for:
+
+- `sfp_to_nic_minimal.yaml`
+- `sfp_to_nic_maximal.yaml`
+- `sc_to_sc_minimal.yaml`
+- `sc_to_sc_maximal.yaml`
+
+The minimal templates require only the task family, generation budget,
+acceptance threshold, and exact target component count. Missing scene fields use
+the team default randomization from
+`aic_engine/scripts/generate_random_trials_config.py`.
+
+Request YAML semantics:
+
+- Missing field: use default team randomization.
+- List: uniform categorical choice.
+- `min` / `max`: continuous uniform range.
+- `min == max`: fixed value.
+- Fields ending in `_deg`: degrees in the request, converted to radians in
+  `engine_config.yaml`.
+
+The generated output hierarchy is:
+
+```text
+{root_dir}/{task_family}/{policy}/{count_label}/n{target_accepted_trajectories}__{suffix}/
+```
+
+Example outputs:
+
+```text
+outputs/trajectory_datasets/sfp_to_nic/cheatcode/nic_cards_1/n200__first_batch/
+outputs/trajectory_datasets/sc_to_sc/cheatcode/sc_ports_2/n200__first_batch/
+```
+
+Each dataset directory contains:
+
+```text
+request.yaml
+engine_config.yaml
+raw_dataset/
+accepted_dataset/
+scores/
+trials/
+logs/
+generation_summary.json
+selection_report.csv  # after filtering
+```
+
+`raw_dataset/` and `accepted_dataset/` are native LeRobot dataset roots with
+`meta/`, `data/`, and `videos/` when recording/filtering has run.
+
+Dry-run a minimal SFP-to-NIC request without Gazebo:
+
+```bash
+cd ~/ws_aic/src/aic
+python aic_utils/lerobot_robot_aic/scripts/generate_trajectory_dataset.py \
+  --request-yaml aic_utils/lerobot_robot_aic/config/data_generation_templates/sfp_to_nic_minimal.yaml \
+  --target-accepted-override 2 \
+  --max-attempts-override 3 \
+  --dry-run \
+  --skip-recording
+```
+
+This writes `request.yaml`, `engine_config.yaml`, `trials/trial_*.yaml`, and
+`generation_summary.json`.
+
+Run real generation in an environment with the simulator/runtime available:
+
+```bash
+cd ~/ws_aic/src/aic
+python aic_utils/lerobot_robot_aic/scripts/generate_trajectory_dataset.py \
+  --request-yaml aic_utils/lerobot_robot_aic/config/data_generation_templates/sfp_to_nic_minimal.yaml
+```
+
+The script invokes the per-trial recorder with:
+
+- `--dataset-root <output_dir>/raw_dataset`
+- `--results-root <output_dir>/scores`
+- `--policy-class aic_example_policies.ros.CheatCode`
+- `--gazebo-gui false`
+- `--launch-rviz false`
+- `--require-recorder-save-log true`
+- `--remove-bag-data true`
+
+Filtering is run automatically after recording unless `--skip-filter` is set.
+To run filtering manually:
+
+```bash
+cd ~/ws_aic/src/aic
+pixi run python aic_utils/lerobot_robot_aic/scripts/filter_merge_lerobot_by_score.py \
+  --datasets <output_dir>/raw_dataset \
+  --score-csvs <output_dir>/scores/score_summary.csv \
+  --min-score 90 \
+  --output <output_dir>/accepted_dataset \
+  --include-videos \
+  --overwrite
+```
+
+To compare the accepted dataset schema with the reference LeRobot dataset
+`jskim/fixed_single_board_sfp2nic`, pass:
+
+```bash
+python aic_utils/lerobot_robot_aic/scripts/generate_trajectory_dataset.py \
+  --request-yaml <request.yaml> \
+  --inspect-reference-dataset jskim/fixed_single_board_sfp2nic
+```
+
+The comparison uses `aic-validate-dataset-compat` when
+`accepted_dataset/meta/info.json` exists and the reference dataset can be loaded.
+It checks FPS, robot type, feature keys, action and observation feature schemas,
+and video feature keys. The result is recorded in `generation_summary.json`.
+
+Smoke-test both minimal templates by copying each to a temporary request and
+changing:
+
+```yaml
+generation:
+  target_accepted_trajectories: 2
+  max_attempts: 3
+suffix: smoke_test
+```
+
+Then run:
+
+```bash
+python aic_utils/lerobot_robot_aic/scripts/generate_trajectory_dataset.py \
+  --request-yaml <smoke_request.yaml> \
+  --target-accepted-override 2 \
+  --max-attempts-override 3 \
+  --dry-run \
+  --skip-recording
+```
+
+When the runtime is available, remove `--dry-run --skip-recording` to record 3
+attempts and filter toward 2 accepted trajectories. Inspect:
+
+- `raw_dataset/meta/info.json`
+- `raw_dataset/data/**/*.parquet`
+- `raw_dataset/videos/**/**/*.mp4` when video is enabled
+- `scores/score_summary.csv`
+- `accepted_dataset/meta/info.json`
+- `accepted_dataset/data/**/*.parquet`
+
 ### Post-process CheatCode phases (alignment vs descent)
 
 If your rollout rows include either timestamps or per-episode step indices, you can
