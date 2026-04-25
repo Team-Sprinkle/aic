@@ -39,7 +39,11 @@ class OfficialSceneLaunchSpecTest(unittest.TestCase):
                 start_aic_engine=False,
             )
         self.assertEqual(spec.launch_mode, "ros2_launch")
-        self.assertEqual(spec.shell_environment, {})
+        self.assertEqual(spec.shell_environment["RMW_IMPLEMENTATION"], "rmw_cyclonedds_cpp")
+        self.assertIn("GZ_CONFIG_PATH", spec.shell_environment)
+        self.assertIn("GZ_SIM_RESOURCE_PATH", spec.shell_environment)
+        self.assertIn("GZ_SIM_SYSTEM_PLUGIN_PATH", spec.shell_environment)
+        self.assertIn("export RMW_IMPLEMENTATION=rmw_cyclonedds_cpp", spec.shell_command)
         self.assertIn("source /home/ubuntu/ws_aic/src/aic/install/setup.bash", spec.shell_command)
         self.assertNotIn("source /tmp/zenoh_eval_session.sh", spec.shell_command)
         self.assertNotIn("source /tmp/zenoh_router.sh", spec.shell_command)
@@ -54,6 +58,33 @@ class OfficialSceneLaunchSpecTest(unittest.TestCase):
             scene_probe_model="\n<model name='scene_probe_camera'></model>\n",
         )
         self.assertIn("scene_probe_camera", sanitized)
+
+    def test_sanitize_training_world_injects_joint_target_plugin(self) -> None:
+        world_sdf = (
+            "<sdf version='1.9'><world name='aic_world'><model name='ur5e'>"
+            "<plugin name='aic_gazebo::ResetJointsPlugin' filename='ResetJointsPlugin'/>"
+            "</model></world></sdf>"
+        )
+        sanitized = sanitize_training_world_sdf(
+            world_sdf,
+            scene_probe_model="\n<model name='scene_probe_camera'></model>\n",
+        )
+        self.assertIn("JointTargetPlugin", sanitized)
+        self.assertIn("<world_name>aic_world</world_name>", sanitized)
+
+    def test_sanitize_training_world_strips_ros2_control_plugin(self) -> None:
+        world_sdf = (
+            "<sdf version='1.9'><world name='aic_world'><model name='ur5e'>"
+            "<plugin name='gz_ros2_control::GazeboSimROS2ControlPlugin' "
+            "filename='gz_ros2_control-system'><parameters>ignored</parameters></plugin>"
+            "</model></world></sdf>"
+        )
+        sanitized = sanitize_training_world_sdf(
+            world_sdf,
+            scene_probe_model="\n<model name='scene_probe_camera'></model>\n",
+        )
+        self.assertNotIn("gz_ros2_control-system", sanitized)
+        self.assertNotIn("GazeboSimROS2ControlPlugin", sanitized)
 
 
 if __name__ == "__main__":

@@ -164,34 +164,6 @@
     >
   </xacro:basler_camera>
 
-  <xacro:basler_camera
-    name="overview_camera"
-    tf_prefix="overview_camera/"
-    use_sim_cam="$(arg use_sim_cam)"
-    >
-  </xacro:basler_camera>
-
-  <xacro:basler_camera
-    name="overview_front_camera"
-    tf_prefix="overview_front_camera/"
-    use_sim_cam="$(arg use_sim_cam)"
-    >
-  </xacro:basler_camera>
-
-  <xacro:basler_camera
-    name="overview_side_camera"
-    tf_prefix="overview_side_camera/"
-    use_sim_cam="$(arg use_sim_cam)"
-    >
-  </xacro:basler_camera>
-
-  <xacro:basler_camera
-    name="overview_oblique_camera"
-    tf_prefix="overview_oblique_camera/"
-    use_sim_cam="$(arg use_sim_cam)"
-    >
-  </xacro:basler_camera>
-
   <xacro:robotiq_hande
     name="gripper"
     tf_prefix="$(arg gripper_tf_prefix)"
@@ -244,30 +216,6 @@
     <origin xyz="0.09326 -0.053843 -0.007188" rpy="0 -1.30899630 2.61799343"/>
     <parent link="$(arg cam_mount_tf_prefix)cam_mount_link"/>
     <child link="$(arg right_camera_tf_prefix)camera_link"/>
-  </joint>
-
-  <joint name="attach_overview_camera" type="fixed">
-    <origin xyz="-1.149822 0.300681 0.16" rpy="0 0 -0.00218531"/>
-    <parent link="tabletop"/>
-    <child link="overview_camera/camera_link"/>
-  </joint>
-
-  <joint name="attach_overview_front_camera" type="fixed">
-    <origin xyz="-0.349259 1.250207 0.08" rpy="1.5708 0 -1.57138531"/>
-    <parent link="tabletop"/>
-    <child link="overview_front_camera/camera_link"/>
-  </joint>
-
-  <joint name="attach_overview_side_camera" type="fixed">
-    <origin xyz="0.750207 0.349555 0.04" rpy="0 0 3.141"/>
-    <parent link="tabletop"/>
-    <child link="overview_side_camera/camera_link"/>
-  </joint>
-
-  <joint name="attach_overview_oblique_camera" type="fixed">
-    <origin xyz="-1.149318 1.150681 0.41" rpy="0 0 -0.79218531"/>
-    <parent link="tabletop"/>
-    <child link="overview_oblique_camera/camera_link"/>
   </joint>
 
   <joint name="attach_gripper" type="fixed">

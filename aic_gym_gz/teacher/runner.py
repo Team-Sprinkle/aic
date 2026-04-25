@@ -97,22 +97,67 @@ def run_teacher_rollout(
     terminated = truncated = False
     last_info: dict[str, Any] = dict(info)
     planner_segment_count = 0
+    no_progress_window: list[tuple[np.ndarray, float, float]] = []
+    post_budget_step_count = 0
     limitations = [
         "Exact mid-rollout simulator state cloning is not available in the current stack.",
         "Branch-and-evaluate currently reuses deterministic planner variants instead of full simulator forks.",
         "Replay is exact for deterministic mock resets and best-effort for live Gazebo runs.",
     ]
+
+    def _finalize_teacher_truncation(reason: str) -> None:
+        nonlocal truncated, last_info
+        truncated = True
+        last_info = dict(last_info)
+        last_info.setdefault("termination_reason", reason)
+        if "final_evaluation" not in last_info:
+            final_evaluation = env.task.final_evaluation()
+            last_info["final_evaluation"] = final_evaluation
+            last_info["evaluation"] = final_evaluation
+
+    def _check_teacher_max_steps() -> bool:
+        if not controller.config.run_until_env_done:
+            return False
+        if env._step_count < int(controller.config.max_env_steps):
+            return False
+        _finalize_teacher_truncation("teacher_max_env_steps_guard")
+        return True
+
+    def _check_post_budget_stagnation(current_state: Any) -> bool:
+        nonlocal post_budget_step_count
+        if not controller.planner_budget_exhausted():
+            no_progress_window.clear()
+            post_budget_step_count = 0
+            return False
+        post_budget_step_count += 1
+        plug_xyz = np.asarray(current_state.plug_pose[:3], dtype=np.float64)
+        target_xyz = np.asarray(current_state.target_port_pose[:3], dtype=np.float64)
+        distance = float(np.linalg.norm(plug_xyz - target_xyz))
+        orientation_error = float(current_state.score_geometry.get("orientation_error", 0.0) or 0.0)
+        no_progress_window.append((plug_xyz.copy(), distance, orientation_error))
+        if len(no_progress_window) > 80:
+            no_progress_window.pop(0)
+        if post_budget_step_count < 80 or len(no_progress_window) < 80:
+            return False
+        start_xyz, start_distance, start_orientation_error = no_progress_window[0]
+        displacement = float(np.linalg.norm(plug_xyz - start_xyz))
+        improvement = float(start_distance - distance)
+        orientation_improvement = float(start_orientation_error - orientation_error)
+        if displacement < 0.004 and improvement < 0.003 and orientation_improvement < 0.05:
+            _finalize_teacher_truncation("post_budget_no_progress")
+            last_info["post_budget_no_progress"] = {
+                "window_steps": len(no_progress_window),
+                "plug_displacement_m": displacement,
+                "target_distance_improvement_m": improvement,
+                "orientation_error_improvement_rad": orientation_improvement,
+            }
+            return True
+        return False
+
     while True:
         if terminated or truncated:
             break
-        if controller.config.run_until_env_done and env._step_count >= int(controller.config.max_env_steps):
-            truncated = True
-            last_info = dict(last_info)
-            last_info.setdefault("termination_reason", "teacher_max_env_steps_guard")
-            if "final_evaluation" not in last_info:
-                final_evaluation = env.task.final_evaluation()
-                last_info["final_evaluation"] = final_evaluation
-                last_info["evaluation"] = final_evaluation
+        if _check_teacher_max_steps():
             break
         use_close_range = False
         close_range_reason: str | None = None
@@ -209,6 +254,8 @@ def run_teacher_rollout(
                     probe_result=probe_results[-1] if probe_results else None,
                 ).to_dict()
             )
+            if _check_teacher_max_steps() or _check_post_budget_stagnation(state):
+                break
             continue
 
         plan, segment, candidates = controller.select_plan(
@@ -267,6 +314,8 @@ def run_teacher_rollout(
                     )
                 if terminated or truncated:
                     break
+                if _check_teacher_max_steps() or _check_post_budget_stagnation(state):
+                    break
             probe_results.append(
                 controller.probe_library.summarize_result(
                     probe_name=probe_name,
@@ -281,6 +330,8 @@ def run_teacher_rollout(
                 break
         trajectory_segments.append(segment.to_dict())
         for point in segment.points:
+            if _check_teacher_max_steps():
+                break
             action = np.asarray(point.action, dtype=np.float32)
             observation, reward, terminated, truncated, last_info = env.step(action)
             state = env._state
@@ -359,6 +410,8 @@ def run_teacher_rollout(
                 ).to_dict()
             )
             if terminated or truncated:
+                break
+            if _check_teacher_max_steps() or _check_post_budget_stagnation(state):
                 break
         if terminated or truncated:
             break

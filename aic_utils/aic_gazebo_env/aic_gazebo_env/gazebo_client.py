@@ -1114,6 +1114,12 @@ class GazeboCliClient(GazeboClient):
         positions: list[float],
     ) -> str:
         """Send absolute joint targets through the Gazebo-native joint bridge."""
+        published = self._publish_joint_target_topics(
+            joint_names=joint_names,
+            positions=positions,
+        )
+        if published:
+            return "data: true"
         joint_names_text = ",".join(joint_names)
         positions_text = ",".join(self._format_joint_position(position) for position in positions)
         request_text = (
@@ -1144,6 +1150,35 @@ class GazeboCliClient(GazeboClient):
                 time.sleep(0.2)
         raise RuntimeError(f"Joint target request failed after retries: {last_error}")
 
+    def _publish_joint_target_topics(
+        self,
+        *,
+        joint_names: list[str],
+        positions: list[float],
+    ) -> bool:
+        """Publish UR5e joint targets to Gazebo's native position controllers."""
+        if len(joint_names) != len(positions):
+            return False
+        for _ in range(3):
+            for joint_name, position in zip(joint_names, positions):
+                try:
+                    GazeboCliClient._run(
+                        self,
+                        [
+                            "topic",
+                            "-t",
+                            f"/aic/joint_target/{joint_name}",
+                            "-m",
+                            "gz.msgs.Double",
+                            "-p",
+                            f"data: {self._format_joint_position(position)}",
+                        ]
+                    )
+                except (RuntimeError, subprocess.TimeoutExpired):
+                    return False
+            time.sleep(0.05)
+        return True
+
     def _resolve_current_joint_positions(self) -> list[float]:
         cached_positions = getattr(self, "_last_known_joint_positions", None)
         if isinstance(cached_positions, tuple) and len(cached_positions) == len(
@@ -1152,13 +1187,29 @@ class GazeboCliClient(GazeboClient):
             return [float(position) for position in cached_positions]
 
         configured_positions = self.config.initial_joint_positions
-        if isinstance(configured_positions, tuple) and len(configured_positions) == len(
-            self.config.joint_names
-        ):
-            return [float(position) for position in configured_positions]
-
-        observation_response = self.get_observation(GetObservationRequest())
-        return self._lookup_current_joint_positions(observation_response.observation)
+        try:
+            observation_response = self.get_observation(GetObservationRequest())
+            observed_positions = self._lookup_current_joint_positions(
+                observation_response.observation
+            )
+            if (
+                isinstance(configured_positions, tuple)
+                and len(configured_positions) == len(self.config.joint_names)
+                and max(abs(position) for position in observed_positions) < 1e-3
+                and max(abs(position) for position in configured_positions) > 0.1
+            ):
+                # Exported no-ROS training worlds can initially report zero
+                # joint positions even though the official URDF link poses and
+                # controller initial positions are the nonzero ground-truth
+                # home configuration.
+                return [float(position) for position in configured_positions]
+            return observed_positions
+        except RuntimeError:
+            if isinstance(configured_positions, tuple) and len(configured_positions) == len(
+                self.config.joint_names
+            ):
+                return [float(position) for position in configured_positions]
+            raise
 
     def _remember_joint_positions(self, observation: dict[str, object]) -> None:
         try:
@@ -2245,6 +2296,15 @@ class GazeboTransportClient(GazeboCliClient):
 
     def _transport_backend_name(self) -> str:
         return "transport"
+
+    def _publish_joint_target_topics(
+        self,
+        *,
+        joint_names: list[str],
+        positions: list[float],
+    ) -> bool:
+        del joint_names, positions
+        return False
 
     def _transport_health_flags(self) -> dict[str, object]:
         return self._bridge.health_flags()

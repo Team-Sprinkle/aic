@@ -21,6 +21,7 @@ from aic_gym_gz.teacher.analysis import analyze_rollout_artifact
 from aic_gym_gz.teacher.dataset_export import RolloutDatasetFrame, export_rollout_lerobot_dataset
 from aic_gym_gz.utils import to_jsonable
 from aic_gym_gz.video import HeadlessTrajectoryVideoRecorder, build_run_name, default_video_output_dir
+from aic_gym_gz.vlm_feedback import run_final_gpt5_feedback
 
 
 def _resolve_official_setup_script() -> Path:
@@ -110,6 +111,130 @@ def _write_json(path: Path, payload: Any) -> None:
     path.write_text(json.dumps(to_jsonable(payload), indent=2, sort_keys=True) + "\n", encoding="utf-8")
 
 
+def _scalar_metric(mapping: dict[str, Any], key: str) -> float | None:
+    value = mapping.get(key)
+    if isinstance(value, (list, tuple)) and value:
+        value = value[0]
+    try:
+        return None if value is None else float(value)
+    except (TypeError, ValueError):
+        return None
+
+
+def _build_performance_summary(
+    *,
+    run_name: str,
+    args: argparse.Namespace,
+    artifact: dict[str, Any],
+    analysis_summary: dict[str, Any],
+    video_summary: dict[str, Any],
+    final_vlm_feedback_summary: dict[str, Any] | None,
+    trace_files: list[str],
+) -> dict[str, Any]:
+    step_logs = list(artifact.get("step_logs", []))
+    final_step = dict(step_logs[-1]) if step_logs else {}
+    final_obs = dict(final_step.get("observation_summary", {}))
+    final_score_geometry = dict(final_obs.get("score_geometry") or {})
+    final_info = dict(artifact.get("final_info") or {})
+    final_eval = dict(final_info.get("final_evaluation") or final_info.get("evaluation") or {})
+    trajectory_segments = list(artifact.get("trajectory_segments", []))
+    dense_step_counts = [len(segment.get("points", [])) for segment in trajectory_segments]
+    optimizer_metadata = [
+        dict(segment.get("conversion_metadata") or {})
+        for segment in trajectory_segments
+        if isinstance(segment, dict)
+    ]
+    optimizer_metrics = [
+        dict(metadata.get("optimizer_metrics") or {})
+        for metadata in optimizer_metadata
+        if isinstance(metadata.get("optimizer_metrics"), dict)
+    ]
+    dense_path_lengths = [
+        _scalar_metric(metrics, "dense_path_length_m")
+        for metrics in optimizer_metrics
+    ]
+    dense_path_lengths = [value for value in dense_path_lengths if value is not None]
+    sparse_path_lengths = [
+        _scalar_metric(metrics, "sparse_path_length_m")
+        for metrics in optimizer_metrics
+    ]
+    sparse_path_lengths = [value for value in sparse_path_lengths if value is not None]
+    max_linear_speeds = [
+        _scalar_metric(metrics, "max_command_linear_speed_mps")
+        for metrics in optimizer_metrics
+    ]
+    max_linear_speeds = [value for value in max_linear_speeds if value is not None]
+    mean_jerks = [
+        _scalar_metric(metrics, "mean_command_linear_jerk_mps3")
+        for metrics in optimizer_metrics
+    ]
+    mean_jerks = [value for value in mean_jerks if value is not None]
+    feedback = (
+        dict(final_vlm_feedback_summary.get("feedback") or {})
+        if isinstance(final_vlm_feedback_summary, dict)
+        else {}
+    )
+    return {
+        "run_name": run_name,
+        "live_env_requested": bool(args.live),
+        "live_mode": args.live_mode,
+        "state_observation_mode": args.state_observation_mode,
+        "planner_backend": args.planner_backend,
+        "planner_model": args.openai_model if args.planner_backend == "openai" else None,
+        "planner_call_count": len(trace_files),
+        "segment_count": len(trajectory_segments),
+        "step_count": len(step_logs),
+        "termination_reason": final_info.get("termination_reason"),
+        "success": bool(final_info.get("success", False)),
+        "metrics": {
+            "gym_final_score": _scalar_metric(final_eval, "gym_final_score"),
+            "training_reward_total": _scalar_metric(final_eval, "training_reward_total")
+            or _scalar_metric(final_info, "training_reward_total"),
+            "distance_to_target_m": _scalar_metric(final_info, "distance_to_target")
+            or _scalar_metric(final_score_geometry, "distance_to_target"),
+            "distance_to_entrance_m": _scalar_metric(final_info, "distance_to_entrance")
+            or _scalar_metric(final_score_geometry, "distance_to_entrance"),
+            "lateral_misalignment_m": _scalar_metric(final_score_geometry, "lateral_misalignment"),
+            "insertion_progress": _scalar_metric(final_score_geometry, "insertion_progress"),
+            "orientation_error_rad": _scalar_metric(final_score_geometry, "orientation_error"),
+            "partial_insertion": bool(round(_scalar_metric(final_score_geometry, "partial_insertion") or 0.0)),
+        },
+        "trajectory_optimizer": {
+            "coordinate_space": "Cartesian world-frame plug waypoints converted to TCP targets",
+            "optimizer": "MinimumJerkSmoother",
+            "vlm_planning_cadence": "Sparse segment-level waypoints; dense per-step commands are generated by the optimizer.",
+            "dense_step_counts": dense_step_counts,
+            "total_dense_steps": int(sum(dense_step_counts)),
+            "aggregate_metrics": {
+                "sparse_path_length_m": float(sum(sparse_path_lengths)),
+                "dense_path_length_m": float(sum(dense_path_lengths)),
+                "path_length_ratio_dense_to_sparse": (
+                    float(sum(dense_path_lengths) / sum(sparse_path_lengths))
+                    if sum(sparse_path_lengths) > 1e-9
+                    else None
+                ),
+                "max_command_linear_speed_mps": max(max_linear_speeds, default=None),
+                "mean_segment_command_linear_jerk_mps3": (
+                    float(sum(mean_jerks) / len(mean_jerks)) if mean_jerks else None
+                ),
+            },
+            "metadata_samples": optimizer_metadata[:5],
+        },
+        "video_summary": video_summary,
+        "gpt5_feedback": {
+            "path": final_vlm_feedback_summary.get("path")
+            if isinstance(final_vlm_feedback_summary, dict)
+            else None,
+            "parse_error": final_vlm_feedback_summary.get("parse_error")
+            if isinstance(final_vlm_feedback_summary, dict)
+            else None,
+            "feedback": feedback,
+        },
+        "analysis_counts": analysis_summary.get("counts", {}),
+        "analysis_warnings": analysis_summary.get("warnings", []),
+    }
+
+
 def _wait_for_official_scene_ready(
     *,
     timeout_s: float,
@@ -118,7 +243,6 @@ def _wait_for_official_scene_ready(
 ) -> dict[str, Any]:
     topic_checks = {
         "/aic_controller/controller_state": {"require_publisher": True},
-        "/joint_states": {"require_publisher": True},
         "/left_camera/image": {"require_publisher": False},
     }
     deadline = time.monotonic() + float(timeout_s)
@@ -140,15 +264,13 @@ def _wait_for_official_scene_ready(
                     "last_errors": last_errors,
                 }
             if (
-                "Configured and activated joint_state_broadcaster" in log_text
-                and "Configured and activated all the parsed controllers list : ['aic_controller']!" in log_text
+                "Configured and activated all the parsed controllers list : ['aic_controller']!" in log_text
                 and "/left_camera/image" in log_text
             ):
                 return {
                     "ready": True,
                     "topics": {
                         **per_topic,
-                        "/joint_states": True,
                         "/aic_controller/controller_state": True,
                         "/left_camera/image": True,
                     },
@@ -324,9 +446,25 @@ def main() -> None:
         choices=("gazebo_training_fast", "controller_velocity_wip"),
         default="gazebo_training_fast",
     )
+    parser.add_argument(
+        "--image-observation-mode",
+        choices=("artifact_validation", "async_training"),
+        default="async_training",
+    )
+    parser.add_argument(
+        "--state-observation-mode",
+        choices=("honest_live", "synthetic_training"),
+        default="synthetic_training",
+    )
+    parser.add_argument(
+        "--observation-transport-override",
+        choices=("auto", "one_shot", "persistent"),
+        default="persistent",
+    )
     parser.add_argument("--skip-preflight", action="store_true")
     parser.add_argument("--prepare-official-scene", action="store_true")
     parser.add_argument("--official-ground-truth", action="store_true")
+    parser.add_argument("--official-start-aic-engine", action="store_true")
     parser.add_argument("--planner-backend", choices=("openai", "mock"), default="openai")
     parser.add_argument("--openai-model", default="gpt-5.4-mini")
     parser.add_argument("--openai-temperature", type=_optional_float, default=None)
@@ -346,6 +484,13 @@ def main() -> None:
     parser.add_argument("--skip-dataset-export", action="store_true")
     parser.add_argument("--image-height", type=int, default=256)
     parser.add_argument("--image-width", type=int, default=256)
+    parser.add_argument("--overview-capture-stride", type=int, default=1)
+    parser.add_argument("--prefer-ros-overview", action="store_true")
+    parser.add_argument("--enable-final-gpt5-feedback", action="store_true")
+    parser.add_argument("--final-feedback-model", default="gpt-5")
+    parser.add_argument("--final-feedback-timeout", type=float, default=120.0)
+    parser.add_argument("--final-feedback-max-output-tokens", type=int, default=4000)
+    parser.add_argument("--final-feedback-frames-per-angle", type=int, default=10)
     parser.add_argument("--run-name", default=None)
     parser.add_argument("--output-dir", default=None)
     args = parser.parse_args()
@@ -363,6 +508,7 @@ def main() -> None:
     analysis_md_path = output_dir / "rollout_analysis.md"
     step_table_path = output_dir / "step_table.jsonl"
     manifest_path = output_dir / "manifest.json"
+    performance_summary_path = output_dir / "performance_summary.json"
     video_dir = output_dir / "videos"
     dataset_root = Path(args.dataset_root) if args.dataset_root else output_dir / "lerobot_dataset"
     dataset_frames: list[RolloutDatasetFrame] = []
@@ -386,7 +532,11 @@ def main() -> None:
             scenario,
             setup_script=_resolve_official_setup_script(),
             ground_truth=args.official_ground_truth,
-            start_aic_engine=False,
+            start_aic_engine=bool(
+                args.official_start_aic_engine
+                or args.use_controller_velocity_commands
+                or args.live_mode == "controller_velocity_wip"
+            ),
             gazebo_gui=False,
             launch_rviz=False,
         )
@@ -415,7 +565,7 @@ def main() -> None:
                 "Official scene did not become ready before attach. "
                 f"readiness={official_scene_ready}"
             )
-    elif args.live and not args.attach_to_existing and args.live_mode == "gazebo_training_fast":
+    elif args.live and not args.attach_to_existing:
         export_scenario = AicEnvRandomizer(enable_randomization=False).sample(
             seed=args.seed,
             trial_id=args.trial_id,
@@ -451,6 +601,9 @@ def main() -> None:
             image_shape=image_shape,
             use_controller_velocity_commands=args.use_controller_velocity_commands,
             live_mode=args.live_mode,
+            image_observation_mode=args.image_observation_mode,
+            observation_transport_override=args.observation_transport_override,
+            state_observation_mode=args.state_observation_mode,
         )
         if args.live
         else make_default_env(
@@ -498,7 +651,9 @@ def main() -> None:
             output_dir=video_dir,
             enabled=True,
             require_real_wrist_images=True,
-            require_live_overview=False,
+            require_live_overview=True,
+            prefer_live_overview_camera=bool(args.prefer_ros_overview),
+            overview_capture_stride=max(int(args.overview_capture_stride), 1),
         )
         def _dataset_callback(
             *,
@@ -549,6 +704,22 @@ def main() -> None:
 
     artifact = result.artifact.to_dict()
     analysis = analyze_rollout_artifact(artifact)
+    final_vlm_feedback_summary = None
+    if args.enable_final_gpt5_feedback:
+        try:
+            final_vlm_feedback_summary = run_final_gpt5_feedback(
+                run_dir=output_dir,
+                model=args.final_feedback_model,
+                timeout_s=float(args.final_feedback_timeout),
+                max_output_tokens=int(args.final_feedback_max_output_tokens),
+                frames_per_angle=int(args.final_feedback_frames_per_angle),
+            )
+        except Exception as exc:
+            final_vlm_feedback_summary = {
+                "error": str(exc),
+                "model": args.final_feedback_model,
+            }
+        analysis.summary["final_gpt5_vlm_feedback"] = final_vlm_feedback_summary
     _write_json(analysis_json_path, analysis.summary)
     analysis_md_path.write_text(analysis.markdown, encoding="utf-8")
     step_table = _flatten_step_table(artifact)
@@ -593,6 +764,16 @@ def main() -> None:
             }
 
     trace_files = sorted(str(path) for path in trace_dir.glob("*.json"))
+    performance_summary = _build_performance_summary(
+        run_name=run_name,
+        args=args,
+        artifact=artifact,
+        analysis_summary=analysis.summary,
+        video_summary=video_summary,
+        final_vlm_feedback_summary=final_vlm_feedback_summary,
+        trace_files=trace_files,
+    )
+    _write_json(performance_summary_path, performance_summary)
     manifest = {
         "run_name": run_name,
         "seed": args.seed,
@@ -605,6 +786,7 @@ def main() -> None:
             "rollout_analysis_json": str(analysis_json_path),
             "rollout_analysis_markdown": str(analysis_md_path),
             "step_table_jsonl": str(step_table_path),
+            "performance_summary_json": str(performance_summary_path),
             "openai_trace_dir": str(trace_dir),
             "openai_trace_files": trace_files,
             "video_dir": str(video_dir),
@@ -612,10 +794,12 @@ def main() -> None:
             "lerobot_dataset_dir": None if dataset_result is None else str(dataset_result.dataset_path),
             "lerobot_dataset_metadata": None if dataset_result is None else str(dataset_result.metadata_path),
             "dataset_export_status": dataset_export_status,
+            "final_gpt5_vlm_feedback": final_vlm_feedback_summary,
         },
         "notes": {
             "rollout_artifact_json": "Full nested artifact including metadata, planner_candidates, trajectory_segments, step_logs, final_info.",
             "step_table_jsonl": "Flattened one-row-per-env.step table with action, target pose, current pose, wrench, controller fields, and score geometry.",
+            "performance_summary_json": "Compact metrics summary with distance, score, trajectory optimizer metadata, video streams, and final GPT-5 feedback.",
             "openai_trace_files": "One JSON file per OpenAI planner/global-guidance call including sanitized request payload, full response payload, parsed output, and response_text.",
             "lerobot_dataset_dir": "LeRobot-format rollout dataset aligned to the exp/data policy-recorder schema, with added sim_time/sim_tick and target/plug pose fields.",
         },

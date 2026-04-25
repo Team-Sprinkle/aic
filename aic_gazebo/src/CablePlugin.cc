@@ -250,7 +250,8 @@ void CablePlugin::PreUpdate(const gz::sim::UpdateInfo& _info,
   }
 
   if (this->cableState == CableState::CABLE_ATTACHED_TO_GRIPPER) {
-    if (this->cableConnection0PortTopics.empty()) {
+    if (!this->cableConnection0PortSubscribed) {
+      if (this->cableConnection0PortTopics.empty()) {
       std::vector<std::string> allTopics;
       this->node.TopicList(allTopics);
 
@@ -261,6 +262,7 @@ void CablePlugin::PreUpdate(const gz::sim::UpdateInfo& _info,
       }
 
       if (this->cableConnection0PortTopics.empty()) return;
+      }
 
       std::function<void(const msgs::Boolean&, const transport::MessageInfo&)>
           callback = [this](const msgs::Boolean& _msg,
@@ -272,9 +274,12 @@ void CablePlugin::PreUpdate(const gz::sim::UpdateInfo& _info,
                   << ". Topic: " << _info.Topic() << std::endl;
           };
       for (const auto& topic : this->cableConnection0PortTopics) {
-        this->cableConnection0PortSubs.emplace_back(
-            this->node.CreateSubscriber(topic, callback));
+        if (!this->node.Subscribe(topic, callback)) {
+          gzerr << "Failed to subscribe to cable connection port topic: "
+                << topic << std::endl;
+        }
       }
+      this->cableConnection0PortSubscribed = true;
     }
 
     if (this->attachCableConnection0ToPort) {

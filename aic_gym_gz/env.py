@@ -280,9 +280,10 @@ def make_live_env(
     timeout: float = 10.0,
     attach_ready_timeout: float | None = None,
     image_shape: tuple[int, int, int] = (256, 256, 3),
-    allow_synthetic_tcp_pose: bool = True,
-    allow_synthetic_plug_pose: bool = True,
+    allow_synthetic_tcp_pose: bool = False,
+    allow_synthetic_plug_pose: bool = False,
     use_controller_velocity_commands: bool = False,
+    source_entity_name: str = "ati/tool_link",
     live_mode: str = "gazebo_training_fast",
     image_observation_mode: str = "artifact_validation",
     observation_transport_override: str | None = None,
@@ -313,6 +314,14 @@ def make_live_env(
         if state_observation_mode is not None
         else ("synthetic_training" if normalized_image_mode == "async_training" else "honest_live")
     )
+    resolved_allow_synthetic_tcp_pose = (
+        bool(allow_synthetic_tcp_pose)
+        and resolved_state_observation_mode == "synthetic_training"
+    )
+    resolved_allow_synthetic_plug_pose = (
+        bool(allow_synthetic_plug_pose)
+        and resolved_state_observation_mode == "synthetic_training"
+    )
     return AicInsertionEnv(
         runtime=AicGazeboRuntime(
             backend=ScenarioGymGzBackend(
@@ -321,8 +330,9 @@ def make_live_env(
                 attach_ready_timeout=attach_ready_timeout,
                 attach_to_existing=attach_to_existing,
                 transport_backend=resolved_transport_backend,
-                allow_synthetic_tcp_pose=allow_synthetic_tcp_pose,
-                allow_synthetic_plug_pose=allow_synthetic_plug_pose,
+                source_entity_name=source_entity_name,
+                allow_synthetic_tcp_pose=resolved_allow_synthetic_tcp_pose,
+                allow_synthetic_plug_pose=resolved_allow_synthetic_plug_pose,
                 use_controller_velocity_commands=(
                     bool(use_controller_velocity_commands) or resolved_use_controller_velocity
                 ),
@@ -341,10 +351,10 @@ def make_live_env(
         if include_images and normalized_image_mode == "artifact_validation"
         else RosCameraSidecarIO(
             image_shape=image_shape,
-            ready_timeout_s=3.0,
+            ready_timeout_s=10.0,
             start_bridge=True,
             blocking_bootstrap=True,
-            allow_direct_fetch_fallback=False,
+            allow_direct_fetch_fallback=True,
             background_direct_fetch=False,
         )
         if include_images

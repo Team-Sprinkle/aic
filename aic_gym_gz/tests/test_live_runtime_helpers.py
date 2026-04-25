@@ -222,7 +222,7 @@ stats {
             backend,
         )
         backend._resolve_live_insertion_event = types.MethodType(
-            lambda self, ros_sample, geometry: (None, "none"),
+            lambda self, ros_sample, geometry, allow_geometry_success=False: (None, "none"),
             backend,
         )
         backend._live_insertion_event_from_geometry = types.MethodType(
@@ -574,7 +574,7 @@ stats {
         assert event is None
         assert source == "none"
 
-    def test_step_ticks_fast_mode_uses_delta_source_pose_action(self) -> None:
+    def test_step_ticks_fast_mode_uses_joint_position_delta_action(self) -> None:
         recorded: dict[str, object] = {}
 
         class _FakeRuntime:
@@ -607,16 +607,11 @@ stats {
         state = ScenarioGymGzBackend.step_ticks(backend, 8)
 
         action = recorded["action"]
-        assert "delta_source_pose" in action
+        assert "joint_position_delta" in action
         assert "ee_delta_action" not in action
         np.testing.assert_allclose(
-            action["delta_source_pose"]["position_delta"],
-            [0.0016, -0.0032, 0.004],
-            atol=1e-9,
-        )
-        np.testing.assert_allclose(
-            action["delta_source_pose"]["orientation_delta"],
-            _angular_delta_to_quaternion(np.array([0.0, 0.0, 0.016], dtype=np.float64)),
+            action["joint_position_delta"],
+            [0.0, 0.0, 0.0, 0.0, 0.0, 0.001],
             atol=1e-9,
         )
         assert action["multi_step"] == 8

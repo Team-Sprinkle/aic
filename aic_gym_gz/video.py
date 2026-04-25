@@ -14,11 +14,15 @@ from PIL import Image, ImageDraw
 
 from .io import (
     CameraBridgeSidecar,
+    RosImageFileSubscriber,
     RosCameraSubscriber,
     capture_scene_probe_images,
     fetch_gazebo_topic_image,
     fetch_ros_topic_image,
 )
+from .teacher.visual_context import render_scene_overview_frame, render_wrist_diagnostic_frame
+
+
 def default_video_output_dir(*, run_name: str) -> Path:
     return Path("aic_gym_gz/artifacts/inspect_runs") / run_name / "videos"
 
@@ -77,6 +81,7 @@ class HeadlessTrajectoryVideoRecorder:
     require_real_wrist_images: bool = True
     require_live_overview: bool = True
     prefer_live_overview_camera: bool = True
+    allow_direct_overview_fetch: bool = True
     live_overview_topic: str = "/overview_camera/image"
     live_overview_shape: tuple[int, int, int] = (512, 512, 3)
     overview_capture_stride: int = 5
@@ -93,11 +98,14 @@ class HeadlessTrajectoryVideoRecorder:
         self._writers: dict[str, _StreamWriter] = {}
         self._overview_camera_bridge: CameraBridgeSidecar | None = None
         self._overview_camera_subscriber: RosCameraSubscriber | None = None
+        self._overview_file_subscriber: RosImageFileSubscriber | None = None
         self._overview_sources: dict[str, dict[str, int]] = {
             view_name: {
+                "ros_file_overview_topic": 0,
                 "live_overview_topic": 0,
                 "gz_overview_topic": 0,
                 "scene_probe_camera": 0,
+                "teacher_schematic_scene_overview": 0,
                 "missing_live_overview": 0,
             }
             for view_name in self.OVERVIEW_TOPIC_MAP
@@ -109,6 +117,7 @@ class HeadlessTrajectoryVideoRecorder:
             "require_real_wrist_images": self.require_real_wrist_images,
             "require_live_overview": self.require_live_overview,
             "prefer_live_overview_camera": self.prefer_live_overview_camera,
+            "allow_direct_overview_fetch": self.allow_direct_overview_fetch,
             "live_overview_topic": self.live_overview_topic,
             "streams": {},
         }
@@ -133,6 +142,14 @@ class HeadlessTrajectoryVideoRecorder:
             )
             self._overview_camera_bridge.start()
             self._overview_camera_subscriber.start()
+        elif self.require_live_overview:
+            self._overview_camera_bridge = CameraBridgeSidecar(topic_map=dict(self.OVERVIEW_TOPIC_MAP))
+            self._overview_file_subscriber = RosImageFileSubscriber(
+                image_shape=self.live_overview_shape,
+                topic_map=dict(self.OVERVIEW_TOPIC_MAP),
+            )
+            self._overview_camera_bridge.start()
+            self._overview_file_subscriber.start()
 
     def capture(
         self,
@@ -151,6 +168,21 @@ class HeadlessTrajectoryVideoRecorder:
             frame = images.get(camera_name)
             if frame is None or np.asarray(frame).size == 0 or int(np.asarray(frame).sum()) == 0:
                 self._wrist_missing_counts[camera_name] += 1
+                if not self.require_real_wrist_images:
+                    frame = render_wrist_diagnostic_frame(
+                        scenario=scenario,
+                        state=state,
+                        camera_name=camera_name,
+                        image_size=(256, 256),
+                    )
+                    self._writers[f"camera_{camera_name}"].append(
+                        _camera_frame(
+                            frame,
+                            label=camera_name,
+                            require_real=False,
+                        ),
+                        sim_time=sim_time,
+                    )
                 continue
             self._writers[f"camera_{camera_name}"].append(
                 _camera_frame(
@@ -175,6 +207,8 @@ class HeadlessTrajectoryVideoRecorder:
             return {"enabled": False, "output_dir": str(self.output_dir)}
         if self._overview_camera_subscriber is not None:
             self._overview_camera_subscriber.close()
+        if self._overview_file_subscriber is not None:
+            self._overview_file_subscriber.close()
         if self._overview_camera_bridge is not None:
             self._overview_camera_bridge.close()
         if self.require_real_wrist_images:
@@ -219,7 +253,6 @@ class HeadlessTrajectoryVideoRecorder:
         }
 
     def _overview_frames(self, *, scenario: Any, state: Any) -> dict[str, tuple[np.ndarray, str]]:
-        del scenario, state
         should_refresh = (
             not self._cached_overview_frames
             or self._capture_count <= 1
@@ -234,19 +267,27 @@ class HeadlessTrajectoryVideoRecorder:
             images: dict[str, np.ndarray] = {}
             if self._overview_camera_subscriber is not None:
                 images, _, _ = self._overview_camera_subscriber.latest_images()
+            file_images: dict[str, np.ndarray] = {}
+            if self._overview_file_subscriber is not None:
+                file_images, _ = self._overview_file_subscriber.latest_images()
             refreshed: dict[str, tuple[np.ndarray, str]] = {}
             for view_name, topic in self.OVERVIEW_TOPIC_MAP.items():
                 overview_image = images.get(view_name)
                 if overview_image is not None and overview_image.size > 0 and int(overview_image.sum()) > 0:
                     refreshed[view_name] = (np.asarray(overview_image, dtype=np.uint8), "live_overview_topic")
                     continue
-                overview_image = fetch_gazebo_topic_image(
-                    topic,
-                    timeout_s=0.5,
-                    expected_shape=self.live_overview_shape,
-                )
+                overview_image = file_images.get(view_name)
                 if overview_image is not None and overview_image.size > 0 and int(overview_image.sum()) > 0:
-                    refreshed[view_name] = (np.asarray(overview_image, dtype=np.uint8), "gz_overview_topic")
+                    refreshed[view_name] = (np.asarray(overview_image, dtype=np.uint8), "ros_file_overview_topic")
+                    continue
+                if self.allow_direct_overview_fetch:
+                    overview_image = fetch_gazebo_topic_image(
+                        topic,
+                        timeout_s=0.5,
+                        expected_shape=self.live_overview_shape,
+                    )
+                    if overview_image is not None and overview_image.size > 0 and int(overview_image.sum()) > 0:
+                        refreshed[view_name] = (np.asarray(overview_image, dtype=np.uint8), "gz_overview_topic")
             missing_views = tuple(
                 view_name
                 for view_name in self.OVERVIEW_TOPIC_MAP
@@ -262,6 +303,19 @@ class HeadlessTrajectoryVideoRecorder:
                     if probe_image is None or probe_image.size == 0 or int(probe_image.sum()) == 0:
                         continue
                     refreshed[view_name] = (np.asarray(probe_image, dtype=np.uint8), "scene_probe_camera")
+            if not self.require_live_overview:
+                for view_name in self.OVERVIEW_TOPIC_MAP:
+                    if view_name in refreshed:
+                        continue
+                    refreshed[view_name] = (
+                        render_scene_overview_frame(
+                            scenario=scenario,
+                            state=state,
+                            image_size=self.live_overview_shape[:2],
+                            view_name=view_name,
+                        ),
+                        "teacher_schematic_scene_overview",
+                    )
             if len(refreshed) == len(self.OVERVIEW_TOPIC_MAP):
                 self._seen_live_overview = True
                 frames = refreshed

@@ -100,7 +100,10 @@ class AgentTeacherController:
         best_plan: TeacherPlan | None = None
         best_segment: TrajectorySegment | None = None
         best_score: float | None = None
-        for candidate_index in range(self.config.candidate_plan_count):
+        candidate_count = self._candidate_count_for_current_budget()
+        if candidate_count <= 0:
+            raise RuntimeError("Planner budget is exhausted before candidate generation.")
+        for candidate_index in range(candidate_count):
             plan = self.planner.plan(planning_state, candidate_index=candidate_index)
             self.planner_call_count += 1
             segment = self.smoother.smooth(state=state, plan=plan)
@@ -151,7 +154,24 @@ class AgentTeacherController:
         return np.zeros(6, dtype=np.float32)
 
     def planner_budget_exhausted(self) -> bool:
-        return self.planner_call_count >= max(int(self.config.max_planner_calls_per_episode), 1)
+        controller_remaining = max(int(self.config.max_planner_calls_per_episode), 1) - self.planner_call_count
+        return controller_remaining <= 0 or self._backend_remaining_plan_calls() == 0
+
+    def _candidate_count_for_current_budget(self) -> int:
+        configured_count = max(int(self.config.candidate_plan_count), 1)
+        controller_remaining = max(int(self.config.max_planner_calls_per_episode), 1) - self.planner_call_count
+        backend_remaining = self._backend_remaining_plan_calls()
+        budget = controller_remaining if backend_remaining is None else min(controller_remaining, backend_remaining)
+        return max(min(configured_count, budget), 0)
+
+    def _backend_remaining_plan_calls(self) -> int | None:
+        remaining = getattr(self.planner, "remaining_episode_plan_calls", None)
+        if not callable(remaining):
+            return None
+        value = remaining()
+        if value is None:
+            return None
+        return max(int(value), 0)
 
     def should_handoff_to_close_range(self, observation: dict[str, Any]) -> bool:
         if not self.config.enable_close_range_handoff:
@@ -208,6 +228,7 @@ class AgentTeacherController:
             else 0.0
         )
         progress_bonus, stagnation_penalty = self._progress_terms(plan=plan, policy_context=policy_context)
+        port_frame_bonus, port_frame_penalty = self._port_frame_terms(plan=plan, policy_context=policy_context)
         global_phase_bonus, milestone_bonus = self._global_guidance_terms(
             plan=plan,
             policy_context=policy_context,
@@ -222,6 +243,7 @@ class AgentTeacherController:
             + guarded_insert_bonus
             + alignment_bonus
             + progress_bonus
+            + port_frame_bonus
             + global_phase_bonus
             + milestone_bonus
             - duration_penalty
@@ -231,6 +253,7 @@ class AgentTeacherController:
             - repeated_contact_penalty
             - stuck_phase_penalty
             - stagnation_penalty
+            - port_frame_penalty
         )
 
     def _progress_terms(
@@ -254,6 +277,68 @@ class AgentTeacherController:
         progress_bonus = 8.0 * progress
         stagnation_penalty = 0.25 if progress <= 0.002 else 0.0
         return progress_bonus, stagnation_penalty
+
+    def _port_frame_terms(
+        self,
+        *,
+        plan: TeacherPlan,
+        policy_context: dict[str, Any],
+    ) -> tuple[float, float]:
+        if not plan.waypoints:
+            return 0.0, 0.4
+        plug = np.asarray(policy_context.get("plug_pose", [0.0, 0.0, 0.0]), dtype=np.float64)[:3]
+        target = np.asarray(policy_context.get("target_port_pose", [0.0, 0.0, 0.0]), dtype=np.float64)[:3]
+        entrance = np.asarray(
+            policy_context.get("target_port_entrance_pose") or policy_context.get("target_port_pose", [0.0, 0.0, 0.0]),
+            dtype=np.float64,
+        )[:3]
+        axis = target - entrance
+        axis_norm = float(np.linalg.norm(axis))
+        if axis_norm <= 1e-8:
+            return 0.0, 0.0
+        axis_unit = axis / axis_norm
+        current = self._port_metrics(plug=plug, entrance=entrance, axis_unit=axis_unit)
+        planned = self._port_metrics(
+            plug=np.asarray(plan.waypoints[-1].position_xyz, dtype=np.float64)[:3],
+            entrance=entrance,
+            axis_unit=axis_unit,
+        )
+        pre_insert = entrance - 0.025 * axis_unit
+        current_pre_distance = float(np.linalg.norm(plug - pre_insert))
+        planned_pre_distance = float(np.linalg.norm(np.asarray(plan.waypoints[-1].position_xyz, dtype=np.float64)[:3] - pre_insert))
+        bonus = 0.0
+        penalty = 0.0
+        bonus += 6.0 * max(current["lateral"] - planned["lateral"], 0.0)
+        bonus += 4.0 * max(current_pre_distance - planned_pre_distance, 0.0)
+        if planned["lateral"] > current["lateral"] + 0.015:
+            penalty += 0.45
+        if planned_pre_distance > current_pre_distance + 0.02:
+            penalty += 0.45
+        if planned["axial_depth"] > 0.015 and planned["lateral"] > 0.012:
+            penalty += 0.55
+        if abs(planned["axial_depth"]) > axis_norm + 0.08:
+            penalty += 0.35
+        max_step = max(0.08, min(0.16, current_pre_distance + 0.04))
+        first_step = float(np.linalg.norm(np.asarray(plan.waypoints[0].position_xyz, dtype=np.float64)[:3] - plug))
+        if first_step > max_step:
+            penalty += min(0.8, 2.0 * (first_step - max_step))
+        return bonus, penalty
+
+    def _port_metrics(
+        self,
+        *,
+        plug: np.ndarray,
+        entrance: np.ndarray,
+        axis_unit: np.ndarray,
+    ) -> dict[str, float]:
+        offset = plug - entrance
+        axial_depth = float(np.dot(offset, axis_unit))
+        lateral_vec = offset - axial_depth * axis_unit
+        return {
+            "axial_depth": axial_depth,
+            "signed_distance_before_plane": -axial_depth,
+            "lateral": float(np.linalg.norm(lateral_vec)),
+        }
 
     def _global_guidance_terms(
         self,

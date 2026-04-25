@@ -191,9 +191,8 @@ namespace aic_gazebo
     /// \brief Name of the cable connection 0 port topic
     private: std::unordered_set<std::string> cableConnection0PortTopics;
 
-    /// \brief Cable connection 0 port subscribers
-    private: std::vector<gz::transport::Node::Subscriber>
-        cableConnection0PortSubs;
+    /// \brief Whether cable connection 0 port subscriptions are registered.
+    private: bool cableConnection0PortSubscribed{false};
 
     /// \brief Task completion event publisher
     private: gz::transport::Node::Publisher taskCompletionPub;

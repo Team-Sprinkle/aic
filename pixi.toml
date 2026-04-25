@@ -29,14 +29,23 @@ ros-kilted-moveit-msgs = "*"                                                    
 ros-kilted-rclpy = "*"
 ros-kilted-rmw-zenoh-cpp = "*"
 ros-kilted-ros-core = "*"
+ros-kilted-ros-gz-bridge = "*"
+ros-kilted-ros-gz-sim = "*"
 ros-kilted-sensor-msgs = "*"                                                           # lerobot_robot_ros
 ros-kilted-std-msgs = "*"                                                              # lerobot_robot_ros
 ros-kilted-std-srvs = "*"
 ros-kilted-tf2-ros-py = "*"
+ros-kilted-ur-description = "*"
 setuptools = ">=71.0.0,<81.0.0"                                                        # required by lerobot==0.4.3
 vcstool = ">=1.1.7,<2"
 rosdep = ">=0.26.0,<0.27"
 colcon-common-extensions = ">=0.3.0,<0.4"
+ros-kilted-gz-ros2-control = ">=2.0.14,<3"
+ros-kilted-rosbag2-cpp = ">=0.32.0,<0.33"
+ros-kilted-kinematics-interface = ">=2.4.0,<3"
+ros-kilted-kinematics-interface-kdl = ">=2.4.0,<3"
+ros-kilted-tf2-eigen = ">=0.41.6,<0.42"
+sophus = ">=1!1.24.6,<1!2"
 
 [pypi-dependencies]
 huggingface-hub = { version = "~=1.7" }

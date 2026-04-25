@@ -214,7 +214,13 @@ def build_scene_overview_images(
         source = "teacher_schematic_scene_overview"
         live_image = None if live_images_by_view is None else live_images_by_view.get(view_name)
         if live_image is not None:
-            image = np.asarray(live_image, dtype=np.uint8)
+            image = annotate_live_overview_frame(
+                live_image=np.asarray(live_image, dtype=np.uint8),
+                scenario=scenario,
+                state=state,
+                view_name=view_name,
+                image_size=image_size,
+            )
             source = "live_overview_topic"
         elif require_live_images:
             image = None
@@ -231,6 +237,7 @@ def build_scene_overview_images(
                 "label": f"scene_overview_{view_name}",
                 "view_name": view_name,
                 "source": source,
+                "diagnostic_overlay": bool(live_image is not None),
                 "timestamp": None,
                 "image_data_url": None if image is None else encode_image_data_url(image),
             }
@@ -256,6 +263,106 @@ def render_scene_overview_frame(
                 title=view_name,
             )
     raise KeyError(f"Unknown scene overview view {view_name!r}.")
+
+
+def annotate_live_overview_frame(
+    *,
+    live_image: np.ndarray,
+    scenario,
+    state,
+    view_name: str,
+    image_size: tuple[int, int] = (256, 256),
+) -> np.ndarray:
+    """Add planner-visible port-frame diagnostics to a real Gazebo overview."""
+
+    width, height = image_size
+    image = Image.fromarray(np.asarray(live_image, dtype=np.uint8)).resize((width, height), Image.BILINEAR).convert("RGB")
+    draw = ImageDraw.Draw(image, "RGBA")
+    schematic = Image.fromarray(
+        render_scene_overview_frame(
+            scenario=scenario,
+            state=state,
+            view_name=view_name,
+            image_size=(96, 96),
+        )
+    )
+    image.paste(schematic, (width - 100, 38))
+
+    score_geometry = getattr(state, "score_geometry", {}) or {}
+    plug = np.asarray(state.plug_pose[:3], dtype=np.float64)
+    target = np.asarray(state.target_port_pose[:3], dtype=np.float64)
+    entrance = (
+        target
+        if state.target_port_entrance_pose is None
+        else np.asarray(state.target_port_entrance_pose[:3], dtype=np.float64)
+    )
+    axis = target - entrance
+    axis_norm = float(np.linalg.norm(axis))
+    axis_unit = axis / axis_norm if axis_norm > 1e-8 else np.array([0.0, 0.0, 1.0], dtype=np.float64)
+    offset = plug - entrance
+    axial_depth = float(np.dot(offset, axis_unit))
+    axial_residual = float(axis_norm - axial_depth)
+    lateral_vec = offset - axial_depth * axis_unit
+    lateral = float(np.linalg.norm(lateral_vec))
+    wrench = np.asarray(getattr(state, "wrench", np.zeros(6, dtype=np.float64)), dtype=np.float64).reshape(-1)
+    force_xyz = np.zeros(3, dtype=np.float64) if wrench.size < 3 else wrench[:3]
+    axial_force = float(np.dot(force_xyz, axis_unit))
+    pre_insert = entrance - 0.025 * axis_unit
+    distance_to_entrance = float(score_geometry.get("distance_to_entrance", np.linalg.norm(plug - entrance)) or 0.0)
+    distance_to_target = float(score_geometry.get("distance_to_target", np.linalg.norm(plug - target)) or 0.0)
+    progress = float(score_geometry.get("insertion_progress", 0.0) or 0.0)
+
+    draw.rectangle([(0, 0), (width, 34)], fill=(20, 24, 28, 220))
+    draw.text(
+        (8, 8),
+        f"live {view_name} | sim {float(getattr(state, 'sim_time', 0.0)):.2f}s tick {int(getattr(state, 'sim_tick', 0))}",
+        fill=(250, 250, 250, 255),
+    )
+    draw.rectangle([(0, height - 72), (width, height)], fill=(20, 24, 28, 225))
+    lines = [
+        f"port frame: depth={axial_depth:+.3f}m residual={axial_residual:+.3f}m lateral={lateral:.3f}m progress={progress:.2f}",
+        f"dist entrance={distance_to_entrance:.3f}m target={distance_to_target:.3f}m",
+        f"axis_world=[{axis_unit[0]:+.2f},{axis_unit[1]:+.2f},{axis_unit[2]:+.2f}] F_axis={axial_force:+.1f}N pre_xyz=[{pre_insert[0]:.3f},{pre_insert[1]:.3f},{pre_insert[2]:.3f}]",
+    ]
+    for index, line in enumerate(lines):
+        draw.text((8, height - 66 + 18 * index), line[:96], fill=(245, 245, 245, 255))
+    draw.rectangle([(width - 101, 37), (width - 3, 136)], outline=(245, 245, 245, 220), width=1)
+    draw.text((width - 98, 138), "schematic + axis", fill=(245, 245, 245, 255))
+    return np.asarray(image, dtype=np.uint8)
+
+
+def render_wrist_diagnostic_frame(
+    *,
+    scenario,
+    state,
+    camera_name: str,
+    image_size: tuple[int, int] = (256, 256),
+) -> np.ndarray:
+    view_name = {
+        "left": "oblique_xy",
+        "center": "front_xz",
+        "right": "side_yz",
+    }.get(camera_name, "front_xz")
+    image = Image.fromarray(
+        render_scene_overview_frame(
+            scenario=scenario,
+            state=state,
+            view_name=view_name,
+            image_size=image_size,
+        )
+    )
+    draw = ImageDraw.Draw(image, "RGBA")
+    width, height = image_size
+    draw.rectangle([(0, 0), (width - 1, height - 1)], outline=(40, 40, 40, 255), width=2)
+    draw.rectangle([(6, 6), (width - 7, 28)], fill=(20, 24, 28, 210))
+    draw.text(
+        (12, 11),
+        f"synthetic wrist {camera_name} | diagnostic projection",
+        fill=(245, 245, 245, 255),
+    )
+    draw.line([(width // 2 - 18, height // 2), (width // 2 + 18, height // 2)], fill=(40, 40, 40, 170), width=1)
+    draw.line([(width // 2, height // 2 - 18), (width // 2, height // 2 + 18)], fill=(40, 40, 40, 170), width=1)
+    return np.asarray(image, dtype=np.uint8)
 
 
 def select_visual_context_items(
@@ -331,15 +438,16 @@ def _render_scene_view(
     title: str,
 ) -> np.ndarray:
     width, height = image_size
-    image = Image.new("RGB", (width, height), color=(246, 246, 242))
+    image = Image.new("RGB", (width, height), color=(242, 244, 241))
     draw = ImageDraw.Draw(image)
-    margin = 20
+    margin = 48
 
     def axis_value(pose: np.ndarray | list[float], axis: str) -> float:
         index = {"x": 0, "y": 1, "z": 2}[axis]
         return float(pose[index])
 
     board_pose = np.asarray(scenario.task_board.pose_xyz_rpy[:3], dtype=np.float64)
+    tcp_pose = np.asarray(state.tcp_pose[:3], dtype=np.float64)
     plug_pose = np.asarray(state.plug_pose[:3], dtype=np.float64)
     target_pose = np.asarray(state.target_port_pose[:3], dtype=np.float64)
     entrance_pose = (
@@ -374,13 +482,28 @@ def _render_scene_view(
                 y_value = board_pose[0] + float(entity.translation)
             obstacle_points.append((x_value, y_value, entity.name or "rail"))
 
-    xs = [axis_value(board_pose, x_axis), axis_value(plug_pose, x_axis), axis_value(target_pose, x_axis), axis_value(entrance_pose, x_axis)]
-    ys = [axis_value(board_pose, y_axis), axis_value(plug_pose, y_axis), axis_value(target_pose, y_axis), axis_value(entrance_pose, y_axis)]
+    cable_tail = plug_pose + np.array([-0.12, 0.05, 0.04], dtype=np.float64)
+    xs = [
+        axis_value(board_pose, x_axis),
+        axis_value(tcp_pose, x_axis),
+        axis_value(plug_pose, x_axis),
+        axis_value(target_pose, x_axis),
+        axis_value(entrance_pose, x_axis),
+        axis_value(cable_tail, x_axis),
+    ]
+    ys = [
+        axis_value(board_pose, y_axis),
+        axis_value(tcp_pose, y_axis),
+        axis_value(plug_pose, y_axis),
+        axis_value(target_pose, y_axis),
+        axis_value(entrance_pose, y_axis),
+        axis_value(cable_tail, y_axis),
+    ]
     for x_value, y_value, _ in obstacle_points:
         xs.append(x_value)
         ys.append(y_value)
-    x_min, x_max = min(xs) - 0.12, max(xs) + 0.12
-    y_min, y_max = min(ys) - 0.12, max(ys) + 0.12
+    x_min, x_max = min(xs) - 0.16, max(xs) + 0.16
+    y_min, y_max = min(ys) - 0.14, max(ys) + 0.14
 
     def to_px(x_value: float, y_value: float) -> tuple[int, int]:
         x_norm = 0.5 if abs(x_max - x_min) <= 1e-6 else (x_value - x_min) / (x_max - x_min)
@@ -389,26 +512,96 @@ def _render_scene_view(
         py = int(height - margin - y_norm * (height - 2 * margin))
         return px, py
 
+    def marker(
+        pose: np.ndarray,
+        *,
+        radius: int,
+        fill: tuple[int, int, int],
+        outline: tuple[int, int, int],
+        label: str,
+        label_offset: tuple[int, int] = (8, -18),
+    ) -> tuple[int, int]:
+        px, py = to_px(axis_value(pose, x_axis), axis_value(pose, y_axis))
+        draw.ellipse([(px - radius, py - radius), (px + radius, py + radius)], fill=fill, outline=outline, width=2)
+        draw.text((px + label_offset[0], py + label_offset[1]), label, fill=outline)
+        return px, py
+
     board_center = to_px(axis_value(board_pose, x_axis), axis_value(board_pose, y_axis))
+    board_w = max(90, min(width - 2 * margin, 180))
+    board_h = max(70, min(height - 2 * margin, 130))
     draw.rectangle(
         [
-            (board_center[0] - 60, board_center[1] - 50),
-            (board_center[0] + 60, board_center[1] + 50),
+            (board_center[0] - board_w // 2, board_center[1] - board_h // 2),
+            (board_center[0] + board_w // 2, board_center[1] + board_h // 2),
         ],
-        outline=(90, 90, 90),
+        fill=(226, 228, 220),
+        outline=(80, 80, 76),
         width=2,
     )
-    for x_value, y_value, _ in obstacle_points:
+    draw.text((board_center[0] - board_w // 2 + 8, board_center[1] - board_h // 2 + 6), "task board", fill=(60, 60, 56))
+
+    entrance_px = to_px(axis_value(entrance_pose, x_axis), axis_value(entrance_pose, y_axis))
+    target_px = to_px(axis_value(target_pose, x_axis), axis_value(target_pose, y_axis))
+    axis_vector = target_pose - entrance_pose
+    axis_norm = float(np.linalg.norm(axis_vector))
+    axis_unit = axis_vector / axis_norm if axis_norm > 1e-8 else np.array([0.0, 0.0, 1.0], dtype=np.float64)
+    pre_insert_pose = entrance_pose - 0.025 * axis_unit
+    pre_insert_px = to_px(axis_value(pre_insert_pose, x_axis), axis_value(pre_insert_pose, y_axis))
+    corridor_half = 10
+    draw.line([pre_insert_px, entrance_px], fill=(70, 170, 80), width=3)
+    draw.line([entrance_px, target_px], fill=(20, 140, 180), width=5)
+    draw.line(
+        [(entrance_px[0], entrance_px[1] - corridor_half), (target_px[0], target_px[1] - corridor_half)],
+        fill=(140, 210, 225),
+        width=1,
+    )
+    draw.line(
+        [(entrance_px[0], entrance_px[1] + corridor_half), (target_px[0], target_px[1] + corridor_half)],
+        fill=(140, 210, 225),
+        width=1,
+    )
+
+    for x_value, y_value, label in obstacle_points:
         px, py = to_px(x_value, y_value)
         draw.rectangle([(px - 6, py - 6), (px + 6, py + 6)], fill=(180, 60, 60), outline=(120, 20, 20))
+        draw.text((px + 7, py + 4), label[:12], fill=(120, 20, 20))
 
-    plug_px = to_px(axis_value(plug_pose, x_axis), axis_value(plug_pose, y_axis))
-    target_px = to_px(axis_value(target_pose, x_axis), axis_value(target_pose, y_axis))
-    entrance_px = to_px(axis_value(entrance_pose, x_axis), axis_value(entrance_pose, y_axis))
-    draw.ellipse([(plug_px[0] - 6, plug_px[1] - 6), (plug_px[0] + 6, plug_px[1] + 6)], fill=(30, 150, 30))
-    draw.ellipse([(target_px[0] - 6, target_px[1] - 6), (target_px[0] + 6, target_px[1] + 6)], fill=(40, 90, 210))
-    draw.ellipse([(entrance_px[0] - 5, entrance_px[1] - 5), (entrance_px[0] + 5, entrance_px[1] + 5)], fill=(20, 180, 190))
+    cable_tail_px = to_px(axis_value(cable_tail, x_axis), axis_value(cable_tail, y_axis))
+    tcp_px = marker(tcp_pose, radius=5, fill=(100, 100, 110), outline=(55, 55, 65), label="tcp")
+    plug_px = marker(plug_pose, radius=7, fill=(30, 150, 30), outline=(10, 90, 10), label="plug")
+    target_px = marker(target_pose, radius=7, fill=(40, 90, 210), outline=(20, 45, 140), label="target")
+    entrance_px = marker(entrance_pose, radius=6, fill=(20, 180, 190), outline=(0, 105, 120), label="entrance")
+    marker(pre_insert_pose, radius=5, fill=(245, 190, 50), outline=(140, 90, 10), label="pre")
+    draw.line([cable_tail_px, plug_px, tcp_px], fill=(70, 70, 70), width=3)
     draw.line([plug_px, entrance_px], fill=(80, 80, 80), width=2)
-    draw.text((10, 8), f"teacher scene overview: {title}", fill=(20, 20, 20))
-    draw.text((10, height - 18), "green=plug blue=target cyan=entrance red=obstacles", fill=(40, 40, 40))
+
+    axis_origin = (width - 74, height - 48)
+    draw.line([axis_origin, (axis_origin[0] + 34, axis_origin[1])], fill=(210, 60, 60), width=3)
+    draw.line([axis_origin, (axis_origin[0], axis_origin[1] - 34)], fill=(60, 120, 210), width=3)
+    draw.text((axis_origin[0] + 38, axis_origin[1] - 7), x_axis, fill=(150, 30, 30))
+    draw.text((axis_origin[0] - 5, axis_origin[1] - 48), y_axis, fill=(30, 70, 160))
+
+    score_geometry = getattr(state, "score_geometry", {}) or {}
+    distance_to_target = float(score_geometry.get("distance_to_target", np.linalg.norm(plug_pose - target_pose)) or 0.0)
+    distance_to_entrance = float(score_geometry.get("distance_to_entrance", np.linalg.norm(plug_pose - entrance_pose)) or 0.0)
+    lateral = float(score_geometry.get("lateral_misalignment", 0.0) or 0.0)
+    progress = float(score_geometry.get("insertion_progress", 0.0) or 0.0)
+    yaw_error = float(score_geometry.get("orientation_error", abs(float(state.plug_pose[5] - state.target_port_pose[5]))) or 0.0)
+    offset = plug_pose - entrance_pose
+    axial_depth = float(np.dot(offset, axis_unit))
+    axial_residual = float(axis_norm - axial_depth)
+    lateral_vector = offset - axial_depth * axis_unit
+    port_lateral = float(np.linalg.norm(lateral_vector))
+    wrench = np.asarray(getattr(state, "wrench", np.zeros(6, dtype=np.float64)), dtype=np.float64).reshape(-1)
+    force_xyz = np.zeros(3, dtype=np.float64) if wrench.size < 3 else wrench[:3]
+    axial_force = float(np.dot(force_xyz, axis_unit))
+    header = f"{title} | sim {float(getattr(state, 'sim_time', 0.0)):.3f}s tick {int(getattr(state, 'sim_tick', 0))}"
+    draw.rectangle([(0, 0), (width, 36)], fill=(35, 40, 44))
+    draw.text((10, 10), header, fill=(245, 245, 245))
+    details = (
+        f"target {distance_to_target:.3f}m entrance {distance_to_entrance:.3f}m "
+        f"depth_res {axial_residual:+.3f}m lat {port_lateral:.3f}m F_axis {axial_force:+.1f}N yaw {yaw_error:.3f}"
+    )
+    draw.rectangle([(0, height - 34), (width, height)], fill=(35, 40, 44))
+    draw.text((10, height - 24), details[:92], fill=(245, 245, 245))
     return np.asarray(image, dtype=np.uint8)

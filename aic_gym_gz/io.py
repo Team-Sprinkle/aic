@@ -488,6 +488,10 @@ class RosCameraSubscriber:
         self._context = None
 
     def _spin(self) -> None:
+        if os.environ.get("AIC_GYM_GZ_FORCE_CYCLONEDDS", "").strip() in {"1", "true", "TRUE"}:
+            os.environ["RMW_IMPLEMENTATION"] = "rmw_cyclonedds_cpp"
+            os.environ.pop("ZENOH_SESSION_CONFIG_URI", None)
+            os.environ.pop("ZENOH_CONFIG_OVERRIDE", None)
         import rclpy
         from rclpy.context import Context
         from rclpy.executors import SingleThreadedExecutor

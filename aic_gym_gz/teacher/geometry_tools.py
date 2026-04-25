@@ -94,6 +94,9 @@ def distance_and_alignment_query(
     clipped_axial_depth = float(np.clip(axial_depth, 0.0, insertion_axis_length))
     lateral_vector = offset_from_entrance - axial_depth * insertion_axis_unit
     lateral_offset = float(np.linalg.norm(lateral_vector))
+    pre_insertion_standoff_m = 0.025
+    pre_insertion_waypoint = entrance_xyz - pre_insertion_standoff_m * insertion_axis_unit
+    guarded_entry_waypoint = entrance_xyz - 0.005 * insertion_axis_unit
 
     return {
         "actor_name": actor_name,
@@ -108,6 +111,20 @@ def distance_and_alignment_query(
         "lateral_offset_vector_m": lateral_vector.astype(float).tolist(),
         "axial_depth_m": axial_depth,
         "signed_distance_to_entrance_plane_m": -axial_depth,
+        "port_frame_error": {
+            "coordinate_frame": "port_entrance_frame",
+            "origin_world_xyz": entrance_xyz.astype(float).tolist(),
+            "axis_positive_direction": "from port entrance toward fully inserted target",
+            "axis_unit_world_xyz": insertion_axis_unit.astype(float).tolist(),
+            "axial_depth_m": axial_depth,
+            "signed_distance_before_entrance_plane_m": -axial_depth,
+            "lateral_offset_norm_m": lateral_offset,
+            "lateral_offset_vector_world_m": lateral_vector.astype(float).tolist(),
+            "insertion_axis_length_m": insertion_axis_length,
+            "pre_insertion_standoff_m": pre_insertion_standoff_m,
+            "pre_insertion_waypoint_world_xyz": pre_insertion_waypoint.astype(float).tolist(),
+            "guarded_entry_waypoint_world_xyz": guarded_entry_waypoint.astype(float).tolist(),
+        },
         "insertion_progress": (
             0.0 if insertion_axis_length <= 1e-8 else clipped_axial_depth / insertion_axis_length
         ),
@@ -201,6 +218,10 @@ def build_overlay_metadata(
     )[:3]
     crop_center = 0.5 * (plug_xyz + entrance_xyz)
     crop_radius = max(0.03, float(np.linalg.norm(plug_xyz - entrance_xyz)) * 0.75)
+    axis = target_xyz - entrance_xyz
+    axis_norm = float(np.linalg.norm(axis))
+    axis_unit = axis / axis_norm if axis_norm > 1e-8 else np.array([0.0, 0.0, 1.0], dtype=np.float64)
+    pre_insertion_waypoint = entrance_xyz - 0.025 * axis_unit
 
     return {
         "runtime_pose_frame": runtime_pose_frame,
@@ -216,6 +237,13 @@ def build_overlay_metadata(
             "start_xyz": entrance_xyz.astype(float).tolist(),
             "end_xyz": target_xyz.astype(float).tolist(),
             "label": "port_insertion_axis",
+            "coordinate_frame": runtime_pose_frame,
+            "axis_positive_direction": "from entrance toward fully inserted target",
+        },
+        "pre_insertion_waypoint_overlay": {
+            "world_xyz": pre_insertion_waypoint.astype(float).tolist(),
+            "label": "pre_insert_standoff_25mm",
+            "purpose": "First align plug here, then move along the port insertion axis.",
         },
         "zoomed_interaction_crop": {
             "center_xyz": crop_center.astype(float).tolist(),

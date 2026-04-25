@@ -14,6 +14,15 @@ from aic_gym_gz.teacher.types import TeacherPlan, TeacherPlanningState, TeacherW
 from aic_gym_gz.teacher.visual_context import build_scene_overview_images
 
 
+class _BudgetedMockPlanner(DeterministicMockPlannerBackend):
+    def __init__(self, remaining: int | None) -> None:
+        super().__init__()
+        object.__setattr__(self, "remaining", remaining)
+
+    def remaining_episode_plan_calls(self) -> int | None:
+        return self.remaining
+
+
 class TeacherPlannerTest(unittest.TestCase):
     def test_mock_planner_returns_structured_segment_plan(self) -> None:
         backend = DeterministicMockPlannerBackend()
@@ -140,6 +149,8 @@ class TeacherPlannerTest(unittest.TestCase):
             planning_state.policy_context["geometry_tool_outputs"]["frame_transform_queries"],
         )
         self.assertIn("world_entities_summary", planning_state.policy_context)
+        self.assertIn("target_yaw", planning_state.policy_context)
+        self.assertIn("yaw_error_to_target", planning_state.policy_context)
         self.assertIn("scene_overview_sources", planning_state.planning_metadata)
         self.assertIn("overlay_metadata", planning_state.planning_metadata)
         self.assertIn("signal_reliability_summary", planning_state.planning_metadata)
@@ -174,6 +185,18 @@ class TeacherPlannerTest(unittest.TestCase):
         )
         self.assertGreater(bonus_phase, 0.0)
         self.assertGreater(bonus_milestone, 0.0)
+
+    def test_controller_respects_backend_planner_budget(self) -> None:
+        controller = AgentTeacherController(planner=_BudgetedMockPlanner(remaining=2))
+        controller.config.candidate_plan_count = 3
+        controller.config.max_planner_calls_per_episode = 10
+        self.assertEqual(controller._candidate_count_for_current_budget(), 2)
+        self.assertFalse(controller.planner_budget_exhausted())
+
+        controller = AgentTeacherController(planner=_BudgetedMockPlanner(remaining=0))
+        controller.config.max_planner_calls_per_episode = 10
+        self.assertEqual(controller._candidate_count_for_current_budget(), 0)
+        self.assertTrue(controller.planner_budget_exhausted())
 
     def test_live_overview_images_replace_matching_scene_entries(self) -> None:
         env = make_default_env(enable_randomization=True, include_images=False)

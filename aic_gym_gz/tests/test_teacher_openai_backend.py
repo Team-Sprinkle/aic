@@ -244,6 +244,8 @@ class TeacherOpenAIPlannerBackendTest(unittest.TestCase):
         self.assertIn("compact_signal_samples", user_text)
         self.assertIn("tcp_velocity", user_text)
         self.assertIn("wrench_timestamp", user_text)
+        self.assertIn("target_yaw", user_text)
+        self.assertIn("yaw_error_to_target", user_text)
         self.assertIn("scene_overview_sources", user_text)
         self.assertIn("runtime_pose_frame", user_text)
         self.assertIn("task_definition", user_text)
@@ -306,6 +308,11 @@ class TeacherOpenAIPlannerBackendTest(unittest.TestCase):
 
     def test_temperature_is_omitted_when_configured_none(self) -> None:
         backend = OpenAIPlannerBackend(OpenAIPlannerConfig(enabled=True, temperature=None, model="gpt-5-nano"))
+        payload = backend.build_debug_payload(_planning_state())
+        self.assertNotIn("temperature", payload)
+
+    def test_temperature_is_omitted_for_gpt5_models(self) -> None:
+        backend = OpenAIPlannerBackend(OpenAIPlannerConfig(enabled=True, temperature=0.1, model="gpt-5.4-mini"))
         payload = backend.build_debug_payload(_planning_state())
         self.assertNotIn("temperature", payload)
 

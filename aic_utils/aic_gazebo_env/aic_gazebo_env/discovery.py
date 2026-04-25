@@ -160,6 +160,16 @@ def resolve_transport_helper_executable(
             candidates.append(candidate)
 
     for workspace_root in _candidate_workspace_roots(repo):
+        merge_install_candidate = (
+            workspace_root
+            / "install"
+            / "lib"
+            / "aic_gazebo_transport_bridge"
+            / "aic_gz_transport_bridge"
+        )
+        merge_install_candidate_text = str(merge_install_candidate)
+        if merge_install_candidate_text not in candidates:
+            candidates.append(merge_install_candidate_text)
         candidate = (
             workspace_root
             / "install"
