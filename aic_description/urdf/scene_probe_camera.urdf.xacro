@@ -1,0 +1,24 @@
+<?xml version="1.0"?>
+<robot xmlns:xacro="http://wiki.ros.org/xacro" name="scene_probe_camera">
+  <xacro:include filename="$(find aic_assets)/models/Basler Camera/basler_camera_macro.xacro"/>
+
+  <link name="scene_probe_base">
+    <inertial>
+      <origin xyz="0 0 0" rpy="0 0 0"/>
+      <mass value="0.001"/>
+      <inertia ixx="0.000001" ixy="0" ixz="0" iyy="0.000001" iyz="0" izz="0.000001"/>
+    </inertial>
+  </link>
+
+  <gazebo reference="scene_probe_base">
+    <gravity>false</gravity>
+  </gazebo>
+
+  <xacro:basler_camera name="scene_probe" tf_prefix="scene_probe/" use_sim_cam="${True}"/>
+
+  <joint name="attach_scene_probe_camera" type="fixed">
+    <origin xyz="0 0 0" rpy="0 0 0"/>
+    <parent link="scene_probe_base"/>
+    <child link="scene_probe/camera_link"/>
+  </joint>
+</robot>

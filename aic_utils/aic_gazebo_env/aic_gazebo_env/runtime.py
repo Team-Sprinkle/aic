@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
+import os
 from pathlib import Path
 import subprocess
 import time
@@ -131,13 +132,18 @@ class GazeboRuntime(Runtime):
             )
 
         command = self._build_command(world_path, executable=self._resolved_executable())
+        env = dict(os.environ)
+        env.setdefault("GZ_IP", "127.0.0.1")
         self.process = subprocess.Popen(
             command,
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
             text=True,
+            env=env,
         )
         deadline = time.monotonic() + self.config.timeout
+        stable_after_s = min(max(self.config.timeout * 0.05, 0.5), 2.0)
+        stable_since = time.monotonic()
         while time.monotonic() < deadline:
             if self.process.poll() is not None:
                 stdout, stderr = self.process.communicate()
@@ -146,7 +152,11 @@ class GazeboRuntime(Runtime):
                     f"(exit code {self.process.returncode}). "
                     f"stdout: {stdout.strip()} stderr: {stderr.strip()}"
                 )
+            if time.monotonic() - stable_since >= stable_after_s:
+                return
             time.sleep(0.05)
+        if self.process.poll() is None:
+            return
 
     def stop(self) -> None:
         """Stop the Gazebo subprocess cleanly, or kill it on timeout."""
@@ -162,13 +172,11 @@ class GazeboRuntime(Runtime):
         self.process.terminate()
         try:
             self.process.wait(timeout=self.config.timeout)
-        except subprocess.TimeoutExpired as exc:
+        except subprocess.TimeoutExpired:
             self.process.kill()
             self.process.wait(timeout=self.config.timeout)
             self.process = None
-            raise TimeoutError(
-                "Timed out while waiting for Gazebo process to stop cleanly."
-            ) from exc
+            return
 
         self.process = None
 

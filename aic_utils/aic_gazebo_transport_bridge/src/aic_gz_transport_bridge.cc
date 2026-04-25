@@ -124,6 +124,8 @@ class BridgeServer {
     auto &allocator = response.GetAllocator();
     const std::size_t afterGeneration =
         this->ReadOptionalUint(request, "after_generation").value_or(0);
+    const std::size_t poseAfterGeneration =
+        this->ReadOptionalUint(request, "pose_after_generation").value_or(afterGeneration);
     const auto timeoutMs =
         this->ReadOptionalInt(request, "timeout_ms").value_or(1000);
     const auto poseTimeoutMs =
@@ -135,7 +137,15 @@ class BridgeServer {
       return response;
     }
 
-    auto pose = this->LatestPose(Milliseconds(poseTimeoutMs));
+    std::optional<TopicSample> pose;
+    if (poseAfterGeneration > 0) {
+      pose = this->WaitForPose(poseAfterGeneration, Milliseconds(poseTimeoutMs));
+      if (!pose.has_value()) {
+        pose = this->LatestPose(Milliseconds::zero());
+      }
+    } else {
+      pose = this->LatestPose(Milliseconds(poseTimeoutMs));
+    }
 
     response.AddMember("ok", true, allocator);
     response.AddMember(
@@ -378,6 +388,19 @@ class BridgeServer {
       return std::nullopt;
     }
     return this->state_;
+  }
+
+  std::optional<TopicSample> WaitForPose(std::size_t afterGeneration,
+                                         Milliseconds timeout) {
+    const auto deadline = Clock::now() + timeout;
+    std::unique_lock<std::mutex> lock(this->mutex_);
+    this->condition_.wait_until(lock, deadline, [this, afterGeneration]() {
+      return this->pose_.generation > afterGeneration && !this->pose_.text.empty();
+    });
+    if (this->pose_.generation <= afterGeneration || this->pose_.text.empty()) {
+      return std::nullopt;
+    }
+    return this->pose_;
   }
 
   bool WaitUntilReady(Milliseconds timeout, bool requirePose) {

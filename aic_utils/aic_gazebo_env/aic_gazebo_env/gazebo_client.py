@@ -254,6 +254,9 @@ class GazeboCliClient(GazeboClient):
         self._state_reader: PersistentGazeboTopicReader | None = None
         self._pose_reader: PersistentGazeboTopicReader | None = None
         self._logical_step_count = 0
+        self._last_source_entity_name: str | None = None
+        self._last_source_position: list[float] | None = None
+        self._last_source_orientation: list[float] | None = None
 
     def _transport_backend_name(self) -> str:
         """Return the concrete transport backend label used for info/debugging."""
@@ -358,9 +361,14 @@ class GazeboCliClient(GazeboClient):
         reset_info["reset_post_reset_step_service"] = step_reply
         try:
             observation_response = self._get_observation_after_generation(
-                state_generation=pre_reset_generation
-                if self._uses_persistent_observation_transport()
-                else None
+                state_generation=(
+                    pre_reset_generation if self._uses_persistent_observation_transport() else None
+                ),
+                pose_generation=(
+                    self._current_pose_generation()
+                    if self._uses_persistent_observation_transport()
+                    else None
+                ),
             )
             self._validate_observation_sane(observation_response.observation)
         except TimeoutError as exc:
@@ -506,7 +514,12 @@ class GazeboCliClient(GazeboClient):
                     return fallback_payload, None
             raise
 
-    def _read_pose_sample(self, *, topic: str) -> str | None:
+    def _read_pose_sample(
+        self,
+        *,
+        topic: str,
+        after_generation: int | None = None,
+    ) -> str | None:
         if not self._uses_persistent_observation_transport():
             attempts = 3
             for _ in range(attempts):
@@ -521,7 +534,7 @@ class GazeboCliClient(GazeboClient):
         reader = self._pose_topic_reader(topic)
         try:
             payload, _ = reader.get_sample(
-                after_generation=None,
+                after_generation=after_generation,
                 timeout=min(self.config.timeout, 1.5),
             )
             return payload
@@ -594,11 +607,15 @@ class GazeboCliClient(GazeboClient):
         settle_info: dict[str, object] = {}
         if joint_reply is None and pose_reply is None:
             state_generation = self._current_state_generation()
+            pose_generation = self._current_pose_generation()
             reply = self._advance_world(multi_step)
             observation_response = self._get_observation_after_generation(
-                state_generation=state_generation
-                if self._uses_persistent_observation_transport()
-                else None
+                state_generation=(
+                    state_generation if self._uses_persistent_observation_transport() else None
+                ),
+                pose_generation=(
+                    pose_generation if self._uses_persistent_observation_transport() else None
+                ),
             )
             settle_info["world_control_ok"] = True
         else:
@@ -689,6 +706,7 @@ class GazeboCliClient(GazeboClient):
 
         return self._get_observation_after_generation(
             state_generation=self._current_state_generation(),
+            pose_generation=self._current_pose_generation(),
         ), settle_info
 
     def _translate_policy_action(self, action: dict[str, object]) -> dict[str, object]:
@@ -903,6 +921,39 @@ class GazeboCliClient(GazeboClient):
 
     def _apply_delta_source_pose_action(self, delta_pose_action: object) -> str:
         """Apply an incremental pose update to the configured source entity."""
+        return self._apply_delta_source_pose_action_internal(
+            delta_pose_action,
+            prefer_cached_source_pose=False,
+        )
+
+    def _apply_delta_source_pose_action_cached(self, delta_pose_action: object) -> str:
+        """Apply an incremental pose update using cached source pose when available."""
+        return self._apply_delta_source_pose_action_internal(
+            delta_pose_action,
+            prefer_cached_source_pose=True,
+        )
+
+    def set_source_pose_cache(
+        self,
+        *,
+        entity_name: str,
+        position: list[float],
+        orientation: list[float],
+    ) -> None:
+        """Seed the cached source pose for fast delta updates."""
+        self._last_source_entity_name = str(entity_name)
+        self._last_source_position = [float(value) for value in position]
+        self._last_source_orientation = self._normalize_quaternion(
+            [float(value) for value in orientation]
+        )
+
+    def _apply_delta_source_pose_action_internal(
+        self,
+        delta_pose_action: object,
+        *,
+        prefer_cached_source_pose: bool,
+    ) -> str:
+        """Apply an incremental pose update to the configured source entity."""
         if not isinstance(delta_pose_action, dict):
             raise ValueError("Gazebo step action 'delta_source_pose' must be a dict.")
 
@@ -932,25 +983,77 @@ class GazeboCliClient(GazeboClient):
                 "'orientation_delta', or both."
             )
 
-        observation_response = self.get_observation(GetObservationRequest())
-        entities_by_name = observation_response.observation.get("entities_by_name")
-        if not isinstance(entities_by_name, dict):
-            raise RuntimeError("Real observation did not contain 'entities_by_name'.")
-        source_entity = self._lookup_named_entity(
-            entities_by_name,
-            self.config.source_entity_name,
+        source_entity_name = self.config.source_entity_name
+        pose_entities: dict[str, dict[str, object]] = {}
+        current_position = (
+            None if self._last_source_position is None else list(self._last_source_position)
         )
-        if source_entity is None:
+        current_orientation = (
+            None if self._last_source_orientation is None else list(self._last_source_orientation)
+        )
+        if self._last_source_entity_name:
+            source_entity_name = self._last_source_entity_name
+        source_entity = None
+        if not prefer_cached_source_pose or current_position is None or current_orientation is None:
+            observation_response = self.get_observation(GetObservationRequest())
+            entities_by_name = observation_response.observation.get("entities_by_name")
+            if not isinstance(entities_by_name, dict):
+                raise RuntimeError("Real observation did not contain 'entities_by_name'.")
+            source_entity = self._lookup_named_entity(
+                entities_by_name,
+                source_entity_name,
+            )
+            if source_entity is None:
+                world_name = self._world_name()
+                pose_payload = self._read_pose_sample(
+                    topic=f"/world/{world_name}/pose/info",
+                    after_generation=None,
+                )
+                if pose_payload is None:
+                    pose_payload = self._read_pose_sample(
+                        topic=f"/world/{world_name}/dynamic_pose/info",
+                        after_generation=None,
+                    )
+                if isinstance(pose_payload, str) and pose_payload:
+                    pose_entities = {
+                        entity["name"]: entity
+                        for entity in self._extract_poses(pose_payload)
+                        if isinstance(entity.get("name"), str)
+                    }
+                    source_entity = self._lookup_named_entity(
+                        pose_entities,
+                        source_entity_name,
+                    )
+            if source_entity is None:
+                for candidate_name, _candidate_id in self.config.live_state_entity_ids:
+                    if candidate_name == source_entity_name:
+                        continue
+                    source_entity = self._lookup_named_entity(entities_by_name, candidate_name)
+                    if source_entity is None and pose_entities:
+                        source_entity = self._lookup_named_entity(pose_entities, candidate_name)
+                    if source_entity is not None:
+                        source_entity_name = candidate_name
+                        break
+            if source_entity is not None:
+                current_position = self._lookup_entity_position(source_entity)
+                current_orientation = self._lookup_entity_orientation(source_entity)
+        if current_position is None or current_orientation is None:
+            current_position = (
+                None if self._last_source_position is None else list(self._last_source_position)
+            )
+            current_orientation = (
+                None
+                if self._last_source_orientation is None
+                else list(self._last_source_orientation)
+            )
+            source_entity_name = self._last_source_entity_name or source_entity_name
+        if current_position is None or current_orientation is None:
             raise RuntimeError(
                 f"Configured source entity was not found in real observation: {self.config.source_entity_name}"
             )
-
-        current_position = self._lookup_entity_position(source_entity)
-        current_orientation = self._lookup_entity_orientation(source_entity)
-        if current_position is None or current_orientation is None:
-            raise RuntimeError(
-                f"Configured source entity did not contain a full pose: {self.config.source_entity_name}"
-            )
+        self._last_source_entity_name = source_entity_name
+        self._last_source_position = list(current_position)
+        self._last_source_orientation = list(current_orientation)
 
         next_position = [
             current_axis + float(delta_axis)
@@ -965,8 +1068,10 @@ class GazeboCliClient(GazeboClient):
                 current_orientation,
             )
         )
+        self._last_source_position = list(next_position)
+        self._last_source_orientation = list(next_orientation)
         return self._send_set_pose_request(
-            entity_name=self.config.source_entity_name,
+            entity_name=source_entity_name,
             position=next_position,
             orientation=next_orientation,
         )
@@ -1123,6 +1228,7 @@ class GazeboCliClient(GazeboClient):
         self,
         *,
         state_generation: int | None,
+        pose_generation: int | None = None,
     ) -> GetObservationResponse:
         world_name = self._world_name()
         state_topic = f"/world/{world_name}/state"
@@ -1140,9 +1246,15 @@ class GazeboCliClient(GazeboClient):
             if fallback_payload is None:
                 raise
             state_payload = fallback_payload
-        pose_payload = self._read_pose_sample(topic=pose_topic)
+        pose_payload = self._read_pose_sample(
+            topic=pose_topic,
+            after_generation=pose_generation,
+        )
         if pose_payload is None:
-            pose_payload = self._read_pose_sample(topic=dynamic_pose_topic)
+            pose_payload = self._read_pose_sample(
+                topic=dynamic_pose_topic,
+                after_generation=pose_generation,
+            )
         observation = self._parse_live_observation(
             state_payload=state_payload,
             pose_payload=pose_payload,
@@ -1167,6 +1279,11 @@ class GazeboCliClient(GazeboClient):
         if self._state_reader is None:
             return None
         return self._state_reader.current_generation()
+
+    def _current_pose_generation(self) -> int | None:
+        if self._pose_reader is None:
+            return None
+        return self._pose_reader.current_generation()
 
     def _state_topic_reader(self, topic: str) -> PersistentGazeboTopicReader:
         if self._state_reader is None:
@@ -1245,6 +1362,8 @@ class GazeboCliClient(GazeboClient):
         entities_by_name = {
             entity["name"]: dict(entity) for entity in entities if isinstance(entity["name"], str)
         }
+        entities_by_name = self._normalize_entity_pose_frames(entities_by_name)
+        entities = [entities_by_name[name] for name in sorted(entities_by_name.keys())]
         joints = self._decode_joint_components(state_payload)
         state_text_joints = self._extract_joints(state_payload)
         if len(state_text_joints) > len(joints):
@@ -1265,6 +1384,168 @@ class GazeboCliClient(GazeboClient):
             },
             "task_geometry": self._build_task_geometry(entities_by_name),
         }
+
+    def _normalize_entity_pose_frames(
+        self,
+        entities_by_name: dict[str, dict[str, object]],
+    ) -> dict[str, dict[str, object]]:
+        normalized = {name: dict(entity) for name, entity in entities_by_name.items()}
+        cache: dict[str, dict[str, object]] = {}
+        for name in list(normalized.keys()):
+            resolved = self._resolve_entity_world_pose(name=name, entities_by_name=normalized, cache=cache, stack=set())
+            if resolved is not None:
+                normalized[name] = resolved
+        return normalized
+
+    def _resolve_entity_world_pose(
+        self,
+        *,
+        name: str,
+        entities_by_name: dict[str, dict[str, object]],
+        cache: dict[str, dict[str, object]],
+        stack: set[str],
+    ) -> dict[str, object] | None:
+        cached = cache.get(name)
+        if cached is not None:
+            return dict(cached)
+        entity = entities_by_name.get(name)
+        if not isinstance(entity, dict):
+            return None
+        if name in stack:
+            return dict(entity)
+        pose = self._entity_pose_dict(entity)
+        if pose is None:
+            cache[name] = dict(entity)
+            return dict(entity)
+        if self._pose_looks_world_space(name=name, entity=entity, entities_by_name=entities_by_name):
+            cache[name] = dict(entity)
+            return dict(entity)
+        parent_name = self._candidate_parent_name(name=name, entities_by_name=entities_by_name)
+        if parent_name is None:
+            cache[name] = dict(entity)
+            return dict(entity)
+        stack = set(stack)
+        stack.add(name)
+        parent_entity = self._resolve_entity_world_pose(
+            name=parent_name,
+            entities_by_name=entities_by_name,
+            cache=cache,
+            stack=stack,
+        )
+        if not isinstance(parent_entity, dict):
+            cache[name] = dict(entity)
+            return dict(entity)
+        parent_pose = self._entity_pose_dict(parent_entity)
+        if parent_pose is None:
+            cache[name] = dict(entity)
+            return dict(entity)
+        composed = self._compose_pose_dicts(parent_pose, pose)
+        resolved = dict(entity)
+        resolved["position"] = list(composed["position"])
+        resolved["orientation"] = list(composed["orientation"])
+        resolved["pose"] = {
+            "position": list(composed["position"]),
+            "orientation": list(composed["orientation"]),
+        }
+        resolved["pose_frame_status"] = "parent_composed_world"
+        resolved["pose_parent_name"] = parent_name
+        cache[name] = dict(resolved)
+        return resolved
+
+    def _pose_looks_world_space(
+        self,
+        *,
+        name: str,
+        entity: dict[str, object],
+        entities_by_name: dict[str, dict[str, object]],
+    ) -> bool:
+        position = self._lookup_entity_position(entity)
+        if position is None:
+            return True
+        if name in {"task_board", "tabletop", "cable_0", self.config.source_entity_name}:
+            return True
+        if position[2] > 0.5:
+            return True
+        board = entities_by_name.get("task_board")
+        board_position = self._lookup_entity_position(board) if isinstance(board, dict) else None
+        if board_position is None or board_position[2] <= 0.5:
+            return True
+        return False
+
+    def _candidate_parent_name(
+        self,
+        *,
+        name: str,
+        entities_by_name: dict[str, dict[str, object]],
+    ) -> str | None:
+        if name.endswith("_entrance"):
+            candidate = name[: -len("_entrance")]
+            if candidate in entities_by_name:
+                return candidate
+        if name in {"lc_plug_link", "sc_plug_link", "sfp_module_link"} and "cable_0" in entities_by_name:
+            return "cable_0"
+        if name.startswith("nic_card_mount_") and "task_board" in entities_by_name:
+            return "task_board"
+        if name == "nic_card_link":
+            for candidate in sorted(entities_by_name.keys()):
+                if candidate.startswith("nic_card_mount_"):
+                    return candidate
+        if re.fullmatch(r"sfp_port_\d+_link", name):
+            if "nic_card_link" in entities_by_name:
+                return "nic_card_link"
+        if re.fullmatch(r"sc_port_base_link", name):
+            for candidate in sorted(entities_by_name.keys()):
+                if candidate.startswith("sc_port_") and candidate in entities_by_name:
+                    return candidate
+        return None
+
+    def _entity_pose_dict(
+        self,
+        entity: dict[str, object],
+    ) -> dict[str, list[float]] | None:
+        position = self._lookup_entity_position(entity)
+        orientation = self._lookup_entity_orientation(entity)
+        if position is None or orientation is None:
+            return None
+        return {"position": list(position), "orientation": list(orientation)}
+
+    def _compose_pose_dicts(
+        self,
+        parent_pose: dict[str, list[float]],
+        child_pose: dict[str, list[float]],
+    ) -> dict[str, list[float]]:
+        parent_position = parent_pose["position"]
+        parent_orientation = self._normalize_quaternion(parent_pose["orientation"])
+        child_position = child_pose["position"]
+        child_orientation = self._normalize_quaternion(child_pose["orientation"])
+        rotated_child = self._rotate_vector_by_quaternion(child_position, parent_orientation)
+        return {
+            "position": [
+                float(parent_axis + child_axis)
+                for parent_axis, child_axis in zip(parent_position, rotated_child)
+            ],
+            "orientation": self._normalize_quaternion(
+                self._multiply_quaternions(parent_orientation, child_orientation)
+            ),
+        }
+
+    def _rotate_vector_by_quaternion(
+        self,
+        vector: list[float],
+        quaternion: list[float],
+    ) -> list[float]:
+        x, y, z, w = quaternion
+        return [
+            (1.0 - 2.0 * (y * y + z * z)) * vector[0]
+            + (2.0 * (x * y - z * w)) * vector[1]
+            + (2.0 * (x * z + y * w)) * vector[2],
+            (2.0 * (x * y + z * w)) * vector[0]
+            + (1.0 - 2.0 * (x * x + z * z)) * vector[1]
+            + (2.0 * (y * z - x * w)) * vector[2],
+            (2.0 * (x * z - y * w)) * vector[0]
+            + (2.0 * (y * z + x * w)) * vector[1]
+            + (1.0 - 2.0 * (x * x + y * y)) * vector[2],
+        ]
 
     def _merge_entity_views(
         self,
@@ -1528,6 +1809,22 @@ class GazeboCliClient(GazeboClient):
     ) -> dict[str, object] | None:
         """Return a named entity dict if present and well formed."""
         entity = entities_by_name.get(name)
+        if not isinstance(entity, dict):
+            scoped_matches = [
+                candidate
+                for candidate, value in entities_by_name.items()
+                if isinstance(value, dict)
+                and (
+                    candidate.endswith(f"::{name}")
+                    or f"::{name}::" in candidate
+                    or candidate.endswith(f"/{name}")
+                    or f"/{name}/" in candidate
+                )
+            ]
+            if len(scoped_matches) == 1:
+                entity = entities_by_name.get(scoped_matches[0])
+            else:
+                return None
         if not isinstance(entity, dict):
             return None
         return entity
@@ -2079,12 +2376,18 @@ class GazeboTransportClient(GazeboCliClient):
             return payload, generation
         return payload, None
 
-    def _read_pose_sample(self, *, topic: str) -> str | None:
+    def _read_pose_sample(
+        self,
+        *,
+        topic: str,
+        after_generation: int | None = None,
+    ) -> str | None:
         del topic
         try:
             response = self._bridge.request(
                 {
                     "op": "get_observation",
+                    "pose_after_generation": after_generation,
                     "timeout_ms": int(self.config.timeout * 1000),
                     "pose_timeout_ms": int(min(self.config.timeout, 1.0) * 1000),
                 }
@@ -2131,6 +2434,17 @@ class GazeboTransportClient(GazeboCliClient):
             self._last_state_generation = generation
             return generation
         return self._last_state_generation
+
+    def _current_pose_generation(self) -> int | None:
+        try:
+            response = self._bridge.request({"op": "status"})
+        except Exception:
+            return self._last_pose_generation
+        generation = response.get("pose_generation")
+        if isinstance(generation, int):
+            self._last_pose_generation = generation
+            return generation
+        return self._last_pose_generation
 
     def _cli_run(self, args: list[str]) -> str:
         completed = subprocess.run(

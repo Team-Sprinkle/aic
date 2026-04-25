@@ -44,17 +44,38 @@ class AicInsertionEnv(gym.Env[dict[str, Any], np.ndarray]):
             trial_id=str(options.get("trial_id", self.trial_id)) if options.get("trial_id", self.trial_id) else None,
         )
         state = self.runtime.reset(seed=seed, scenario=scenario)
-        if self.task.include_images:
-            state = self._warm_images_on_reset(state)
+        print('{"env_stage":"runtime_reset_returned"}', flush=True)
         self.task.reset(scenario=scenario, initial_state=state)
         self._scenario = scenario
         self._state = state
         self._step_count = 0
-        observation = self.io.observation_from_state(
-            state,
-            include_images=self.task.include_images,
-            step_count=self._step_count,
-        )
+        try:
+            print('{"env_stage":"final_observation_begin"}', flush=True)
+            observation = self.io.observation_from_state(
+                state,
+                include_images=self.task.include_images,
+                step_count=self._step_count,
+            )
+            if self.task.include_images and not self._observation_has_live_wrist_images(observation):
+                self._state = self._warm_images_on_reset(state)
+                observation = self.io.observation_from_state(
+                    self._state,
+                    include_images=True,
+                    step_count=self._step_count,
+                )
+                print('{"env_stage":"final_observation_done_after_warmup"}', flush=True)
+            else:
+                print('{"env_stage":"final_observation_done"}', flush=True)
+        except TimeoutError:
+            if not self.task.include_images:
+                raise
+            self._state = self._warm_images_on_reset(state)
+            observation = self.io.observation_from_state(
+                self._state,
+                include_images=True,
+                step_count=self._step_count,
+            )
+            print('{"env_stage":"final_observation_done_after_retry"}', flush=True)
         info = {
             "trial_id": scenario.trial_id,
             "scenario_metadata": scenario.metadata,
@@ -109,27 +130,49 @@ class AicInsertionEnv(gym.Env[dict[str, Any], np.ndarray]):
 
     def _warm_images_on_reset(self, state):
         try:
-            self.io.observation_from_state(
+            observation = self.io.observation_from_state(
                 state,
                 include_images=True,
                 step_count=0,
             )
-            return state
+            if self._observation_has_live_wrist_images(observation):
+                return state
         except TimeoutError:
-            zero_action = np.zeros(6, dtype=np.float32)
-            warmed_state = state
-            for _ in range(5):
-                warmed_state = self.runtime.step(zero_action, ticks=2)
-                try:
-                    self.io.observation_from_state(
-                        warmed_state,
-                        include_images=True,
-                        step_count=0,
-                    )
+            pass
+        zero_action = np.zeros(6, dtype=np.float32)
+        warmed_state = state
+        warm_ticks = max(2, int(self.task.hold_action_ticks))
+        for _ in range(8):
+            warmed_state = self.runtime.step(zero_action, ticks=warm_ticks)
+            try:
+                observation = self.io.observation_from_state(
+                    warmed_state,
+                    include_images=True,
+                    step_count=0,
+                )
+                if self._observation_has_live_wrist_images(observation):
                     return warmed_state
-                except TimeoutError:
-                    continue
-            return warmed_state
+            except TimeoutError:
+                continue
+        return warmed_state
+
+    @staticmethod
+    def _observation_has_live_wrist_images(observation: dict[str, Any]) -> bool:
+        images = observation.get("images")
+        timestamps = observation.get("image_timestamps")
+        if not isinstance(images, dict):
+            return False
+        if timestamps is None:
+            return False
+        timestamp_array = np.asarray(timestamps, dtype=np.float32).reshape(-1)
+        if timestamp_array.size < 3 or not np.all(timestamp_array[:3] > 0.0):
+            return False
+        return all(
+            name in images
+            and images[name].size > 0
+            and int(np.asarray(images[name], dtype=np.uint8).sum()) > 0
+            for name in ("left", "center", "right")
+        )
 
 
 def live_env_health_check(
@@ -218,9 +261,39 @@ def make_live_env(
     timeout: float = 10.0,
     attach_ready_timeout: float | None = None,
     image_shape: tuple[int, int, int] = (256, 256, 3),
-    allow_synthetic_tcp_pose: bool = False,
-    allow_synthetic_plug_pose: bool = False,
+    allow_synthetic_tcp_pose: bool = True,
+    allow_synthetic_plug_pose: bool = True,
+    use_controller_velocity_commands: bool = False,
+    live_mode: str = "gazebo_training_fast",
+    image_observation_mode: str = "artifact_validation",
+    observation_transport_override: str | None = None,
+    state_observation_mode: str | None = None,
 ) -> AicInsertionEnv:
+    normalized_live_mode = str(live_mode).strip().lower()
+    if normalized_live_mode == "gazebo_training_fast":
+        resolved_use_controller_velocity = False
+    elif normalized_live_mode == "controller_velocity_wip":
+        resolved_use_controller_velocity = True
+    else:
+        raise ValueError(
+            "Unsupported live_mode. Expected 'gazebo_training_fast' or "
+            f"'controller_velocity_wip', received {live_mode!r}."
+        )
+    resolved_transport_backend = transport_backend
+    if normalized_live_mode == "gazebo_training_fast" and not attach_to_existing:
+        resolved_transport_backend = "cli"
+    image_ready_timeout_s = 1.0 if normalized_live_mode == "gazebo_training_fast" else 10.0
+    normalized_image_mode = str(image_observation_mode).strip().lower()
+    if normalized_image_mode not in {"artifact_validation", "async_training"}:
+        raise ValueError(
+            "Unsupported image_observation_mode. Expected 'artifact_validation' or "
+            f"'async_training', received {image_observation_mode!r}."
+        )
+    resolved_state_observation_mode = (
+        str(state_observation_mode).strip().lower()
+        if state_observation_mode is not None
+        else ("synthetic_training" if normalized_image_mode == "async_training" else "honest_live")
+    )
     return AicInsertionEnv(
         runtime=AicGazeboRuntime(
             backend=ScenarioGymGzBackend(
@@ -228,9 +301,15 @@ def make_live_env(
                 timeout=timeout,
                 attach_ready_timeout=attach_ready_timeout,
                 attach_to_existing=attach_to_existing,
-                transport_backend=transport_backend,
+                transport_backend=resolved_transport_backend,
                 allow_synthetic_tcp_pose=allow_synthetic_tcp_pose,
                 allow_synthetic_plug_pose=allow_synthetic_plug_pose,
+                use_controller_velocity_commands=(
+                    bool(use_controller_velocity_commands) or resolved_use_controller_velocity
+                ),
+                live_mode=normalized_live_mode,
+                observation_transport_override=observation_transport_override,
+                state_observation_mode=resolved_state_observation_mode,
             ),
             ticks_per_step=ticks_per_step,
         ),
@@ -239,6 +318,17 @@ def make_live_env(
             include_images=include_images,
             image_shape=image_shape,
         ),
-        io=RosCameraSidecarIO(image_shape=image_shape) if include_images else MockGazeboIO(image_shape=image_shape),
+        io=RosCameraSidecarIO(image_shape=image_shape, ready_timeout_s=image_ready_timeout_s)
+        if include_images and normalized_image_mode == "artifact_validation"
+        else RosCameraSidecarIO(
+            image_shape=image_shape,
+            ready_timeout_s=3.0,
+            start_bridge=True,
+            blocking_bootstrap=True,
+            allow_direct_fetch_fallback=False,
+            background_direct_fetch=False,
+        )
+        if include_images
+        else MockGazeboIO(image_shape=image_shape),
         randomizer=AicEnvRandomizer(enable_randomization=enable_randomization),
     )

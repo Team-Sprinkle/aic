@@ -3,7 +3,11 @@
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
+import ast
 from dataclasses import dataclass, field
+import math
+import os
+import re
 import subprocess
 import threading
 import time
@@ -33,6 +37,150 @@ class AicGazeboIO(ABC):
 
     def close(self) -> None:
         """Release any side resources held by the IO layer."""
+
+
+SCENE_PROBE_TOPIC = "/scene_probe/image"
+SCENE_PROBE_MODEL_NAME = "scene_probe_camera"
+SCENE_PROBE_VIEW_POSES: dict[str, tuple[float, float, float, float, float, float]] = {
+    "top_down_xy": (0.95, -0.10, 1.30, 0.0, 0.0, 3.14),
+    "front_xz": (0.15, -1.05, 1.22, 1.5708, 0.0, 1.5708),
+    "side_yz": (-0.95, -0.15, 1.18, 0.0, 0.0, 0.0),
+    "oblique_xy": (0.95, -0.95, 1.55, 0.0, 0.0, 2.35),
+}
+
+
+def capture_scene_probe_images(
+    *,
+    view_names: tuple[str, ...] | list[str] | None = None,
+    world_name: str = "aic_world",
+    model_name: str = SCENE_PROBE_MODEL_NAME,
+    image_topic: str = SCENE_PROBE_TOPIC,
+    timeout_s: float = 4.0,
+    expected_shape: tuple[int, int, int] = (512, 512, 3),
+) -> dict[str, np.ndarray]:
+    requested_views = tuple(view_names or tuple(SCENE_PROBE_VIEW_POSES))
+    captured: dict[str, np.ndarray] = {}
+    for view_name in requested_views:
+        pose = SCENE_PROBE_VIEW_POSES.get(view_name)
+        if pose is None:
+            continue
+        if not set_gazebo_entity_pose(
+            model_name,
+            pose_xyz_rpy=pose,
+            world_name=world_name,
+            timeout_s=max(timeout_s, 2.0),
+        ):
+            continue
+        time.sleep(0.15)
+        frame = fetch_gazebo_topic_image(
+            image_topic,
+            timeout_s=timeout_s,
+            expected_shape=expected_shape,
+        )
+        if frame is None or frame.size == 0 or int(frame.sum()) == 0:
+            continue
+        captured[view_name] = np.asarray(frame, dtype=np.uint8)
+    return captured
+
+
+def set_gazebo_entity_pose(
+    entity_name: str,
+    *,
+    pose_xyz_rpy: tuple[float, float, float, float, float, float],
+    world_name: str = "aic_world",
+    timeout_s: float = 5.0,
+) -> bool:
+    x, y, z, roll, pitch, yaw = (float(value) for value in pose_xyz_rpy)
+    qx, qy, qz, qw = _quaternion_from_rpy(roll, pitch, yaw)
+    request = (
+        f'name: "{entity_name}" '
+        f'position {{ x: {x} y: {y} z: {z} }} '
+        f'orientation {{ x: {qx} y: {qy} z: {qz} w: {qw} }}'
+    )
+    try:
+        completed = subprocess.run(
+            [
+                "gz",
+                "service",
+                "-s",
+                f"/world/{world_name}/set_pose",
+                "--reqtype",
+                "gz.msgs.Pose",
+                "--reptype",
+                "gz.msgs.Boolean",
+                "--timeout",
+                str(int(max(float(timeout_s), 0.1) * 1000.0)),
+                "--req",
+                request,
+            ],
+            check=False,
+            capture_output=True,
+            text=True,
+            timeout=max(float(timeout_s), 0.1),
+            env=_gazebo_subprocess_env(),
+        )
+    except Exception:
+        return False
+    if completed.returncode != 0:
+        return False
+    return "data: true" in completed.stdout
+
+
+def fetch_gazebo_topic_image(
+    topic: str,
+    *,
+    timeout_s: float = 5.0,
+    expected_shape: tuple[int, int, int] | None = None,
+) -> np.ndarray | None:
+    try:
+        completed = subprocess.run(
+            ["gz", "topic", "-e", "-n", "1", "-t", topic],
+            check=False,
+            capture_output=True,
+            text=True,
+            timeout=max(float(timeout_s), 0.1),
+            env=_gazebo_subprocess_env(),
+        )
+    except Exception:
+        return None
+    if completed.returncode != 0 or not completed.stdout.strip():
+        return None
+    return _gazebo_image_text_to_array(
+        completed.stdout,
+        expected_shape=expected_shape,
+    )
+
+
+def fetch_ros_topic_image(
+    topic: str,
+    *,
+    timeout_s: float = 5.0,
+    expected_shape: tuple[int, int, int] | None = None,
+) -> np.ndarray | None:
+    try:
+        completed = subprocess.run(
+            [
+                "ros2",
+                "topic",
+                "echo",
+                "--once",
+                "--qos-profile",
+                "sensor_data",
+                topic,
+            ],
+            check=False,
+            capture_output=True,
+            text=True,
+            timeout=max(float(timeout_s), 0.1),
+        )
+    except Exception:
+        return None
+    if completed.returncode != 0 or not completed.stdout.strip():
+        return None
+    return _ros_topic_text_to_array(
+        completed.stdout,
+        expected_shape=expected_shape,
+    )
 
 
 def _base_observation(
@@ -171,6 +319,27 @@ def _controller_array(value: Any, *, size: int) -> np.ndarray:
         padded[: array.shape[0]] = array
         return padded
     return array[:size]
+
+
+def _gazebo_subprocess_env() -> dict[str, str]:
+    env = dict(os.environ)
+    env.setdefault("GZ_IP", "127.0.0.1")
+    return env
+
+
+def _quaternion_from_rpy(roll: float, pitch: float, yaw: float) -> tuple[float, float, float, float]:
+    cy = math.cos(yaw * 0.5)
+    sy = math.sin(yaw * 0.5)
+    cp = math.cos(pitch * 0.5)
+    sp = math.sin(pitch * 0.5)
+    cr = math.cos(roll * 0.5)
+    sr = math.sin(roll * 0.5)
+    return (
+        sr * cp * cy - cr * sp * sy,
+        cr * sp * cy + sr * cp * sy,
+        cr * cp * sy - sr * sp * cy,
+        cr * cp * cy + sr * sp * sy,
+    )
 
 
 @dataclass(frozen=True)
@@ -389,6 +558,8 @@ class CameraBridgeSidecar:
     def start(self) -> None:
         if self._process is not None and self._process.poll() is None:
             return
+        env = dict(os.environ)
+        env.setdefault("GZ_IP", "127.0.0.1")
         self._process = subprocess.Popen(
             [
                 "ros2",
@@ -400,6 +571,7 @@ class CameraBridgeSidecar:
             stdout=subprocess.DEVNULL,
             stderr=subprocess.DEVNULL,
             text=True,
+            env=env,
         )
         time.sleep(1.0)
 
@@ -424,12 +596,21 @@ class RosCameraSidecarIO(AicGazeboIO):
     camera_bridge: CameraBridgeSidecar = field(default_factory=CameraBridgeSidecar)
     ready_timeout_s: float = 10.0
     image_shape: tuple[int, int, int] = (256, 256, 3)
+    start_bridge: bool = True
+    blocking_bootstrap: bool = True
+    allow_direct_fetch_fallback: bool = True
+    background_direct_fetch: bool = False
+    _wrist_bootstrapped: bool = field(default=False, init=False, repr=False)
+    _last_good_images: dict[str, np.ndarray] = field(default_factory=dict, init=False, repr=False)
+    _last_good_timestamps: dict[str, float] = field(default_factory=dict, init=False, repr=False)
+    _last_good_camera_info: dict[str, dict[str, np.ndarray]] = field(default_factory=dict, init=False, repr=False)
+    _background_fetch_stop: threading.Event = field(default_factory=threading.Event, init=False, repr=False)
+    _background_fetch_thread: threading.Thread | None = field(default=None, init=False, repr=False)
 
     def __post_init__(self) -> None:
         if self.camera_subscriber is None:
             self.camera_subscriber = RosCameraSubscriber(image_shape=self.image_shape)
-        self.camera_bridge.start()
-        self.camera_subscriber.start()
+        self._ensure_camera_pipeline_started()
 
     def observation_from_state(
         self,
@@ -441,12 +622,51 @@ class RosCameraSidecarIO(AicGazeboIO):
         observation = _base_observation(state, step_count=step_count)
         if not include_images:
             return observation
-        if not self.camera_subscriber.wait_until_ready(timeout_s=self.ready_timeout_s):
-            raise TimeoutError("Timed out waiting for wrist camera images.")
-        images, timestamps, camera_info = self.camera_subscriber.latest_images()
+        self._ensure_camera_pipeline_started()
+        if self.background_direct_fetch and self._background_fetch_thread is None:
+            self._background_fetch_thread = threading.Thread(
+                target=self._background_fetch_loop,
+                name="aic-camera-background-fetch",
+                daemon=True,
+            )
+            self._background_fetch_thread.start()
+        bootstrap = not self._wrist_bootstrapped
+        if bootstrap and self.blocking_bootstrap:
+            print('{"io_stage":"wait_until_ready_begin"}', flush=True)
+            ready = self.camera_subscriber.wait_until_ready(timeout_s=self.ready_timeout_s)
+            print(f'{{"io_stage":"wait_until_ready_done","ready":{str(bool(ready)).lower()}}}', flush=True)
+        images, timestamps, camera_info = self._collect_live_wrist_frames(
+            settle_timeout_s=(
+                18.0
+                if (bootstrap and self.blocking_bootstrap and self.allow_direct_fetch_fallback)
+                else 0.0
+            ),
+            direct_fetch_timeout_s=(
+                8.0
+                if (bootstrap and self.allow_direct_fetch_fallback and self.blocking_bootstrap)
+                else (
+                    0.0
+                    if self.background_direct_fetch
+                    else 2.0
+                    if (bootstrap and self.allow_direct_fetch_fallback)
+                    else (
+                        0.1
+                        if self.allow_direct_fetch_fallback
+                    and any(float(value) <= 0.0 for value in self._last_good_timestamps.values())
+                        else 0.0
+                    )
+                )
+            ),
+        )
+        if bootstrap:
+            self._wrist_bootstrapped = True
         observation["images"] = images
         observation["image_timestamps"] = np.array(
-            [timestamps["left"], timestamps["center"], timestamps["right"]],
+            [
+                float(timestamps.get("left", 0.0)),
+                float(timestamps.get("center", 0.0)),
+                float(timestamps.get("right", 0.0)),
+            ],
             dtype=np.float32,
         )
         observation["camera_info"] = camera_info
@@ -456,8 +676,141 @@ class RosCameraSidecarIO(AicGazeboIO):
         return _sanitize_action(action)
 
     def close(self) -> None:
+        self._background_fetch_stop.set()
+        if self._background_fetch_thread is not None:
+            self._background_fetch_thread.join(timeout=2.0)
+        self._background_fetch_thread = None
         self.camera_subscriber.close()
         self.camera_bridge.close()
+
+    def _ensure_camera_pipeline_started(self) -> None:
+        if self.start_bridge:
+            self.camera_bridge.start()
+        self.camera_subscriber.start()
+
+    def _collect_live_wrist_frames(
+        self,
+        *,
+        settle_timeout_s: float = 3.0,
+        direct_fetch_timeout_s: float = 1.5,
+    ) -> tuple[dict[str, np.ndarray], dict[str, float], dict[str, dict[str, np.ndarray]]]:
+        deadline = time.time() + max(float(settle_timeout_s), 0.0)
+        camera_info: dict[str, dict[str, np.ndarray]] = {}
+        images: dict[str, np.ndarray] = {}
+        timestamps: dict[str, float] = {}
+        printed_direct_begin = False
+        any_direct_success = False
+        while True:
+            subscriber_images, subscriber_timestamps, camera_info = self.camera_subscriber.latest_images()
+            images = {
+                name: image
+                for name, image in subscriber_images.items()
+                if _is_nonblank_image(image) and float(subscriber_timestamps.get(name, 0.0)) > 0.0
+            }
+            timestamps = {
+                name: float(subscriber_timestamps.get(name, 0.0))
+                for name in images
+            }
+            missing = [name for name in ("left", "center", "right") if name not in images]
+            if not missing:
+                break
+            if direct_fetch_timeout_s <= 0.0:
+                break
+            if not printed_direct_begin:
+                print('{"io_stage":"direct_gazebo_wrist_fetch_begin"}', flush=True)
+                printed_direct_begin = True
+            for name in missing:
+                direct_image = fetch_gazebo_topic_image(
+                    f"/{name}_camera/image",
+                    timeout_s=direct_fetch_timeout_s,
+                    expected_shape=self.image_shape,
+                )
+                if not _is_nonblank_image(direct_image):
+                    direct_image = fetch_ros_topic_image(
+                        f"/{name}_camera/image",
+                        timeout_s=max(direct_fetch_timeout_s, 0.1),
+                        expected_shape=self.image_shape,
+                    )
+                if not _is_nonblank_image(direct_image):
+                    continue
+                images[name] = np.asarray(direct_image, dtype=np.uint8)
+                timestamps[name] = max(float(subscriber_timestamps.get(name, 0.0)), time.time())
+                any_direct_success = True
+            if len(images) == 3 or time.time() >= deadline:
+                break
+            time.sleep(0.1)
+        for name in ("left", "center", "right"):
+            if name in images:
+                self._last_good_images[name] = np.asarray(images[name], dtype=np.uint8).copy()
+                self._last_good_timestamps[name] = float(timestamps.get(name, time.time()))
+                if name in camera_info:
+                    self._last_good_camera_info[name] = {
+                        key: np.asarray(value, dtype=np.float32).copy()
+                        for key, value in camera_info[name].items()
+                    }
+            elif name in self._last_good_images:
+                images[name] = self._last_good_images[name].copy()
+                timestamps[name] = float(self._last_good_timestamps.get(name, 0.0))
+                if name not in camera_info and name in self._last_good_camera_info:
+                    camera_info[name] = {
+                        key: value.copy() for key, value in self._last_good_camera_info[name].items()
+                    }
+        if printed_direct_begin:
+            print(
+                f'{{"io_stage":"direct_gazebo_wrist_fetch_done","ok":{str(any_direct_success or len(images) == 3).lower()},"frame_count":{len(images)}}}',
+                flush=True,
+            )
+        return images, timestamps, camera_info
+
+    def _background_fetch_loop(self) -> None:
+        while not self._background_fetch_stop.is_set():
+            try:
+                subscriber_images, subscriber_timestamps, camera_info = self.camera_subscriber.latest_images()
+                updated_any = False
+                for name in ("left", "center", "right"):
+                    timestamp = float(subscriber_timestamps.get(name, 0.0))
+                    image = subscriber_images.get(name)
+                    if _is_nonblank_image(image) and timestamp > 0.0:
+                        self._last_good_images[name] = np.asarray(image, dtype=np.uint8).copy()
+                        self._last_good_timestamps[name] = timestamp
+                        if name in camera_info:
+                            self._last_good_camera_info[name] = {
+                                key: np.asarray(value, dtype=np.float32).copy()
+                                for key, value in camera_info[name].items()
+                            }
+                        updated_any = True
+                missing = [
+                    name
+                    for name in ("left", "center", "right")
+                    if float(self._last_good_timestamps.get(name, 0.0)) <= 0.0
+                ]
+                if not missing:
+                    self._wrist_bootstrapped = True
+                    self._background_fetch_stop.wait(0.5)
+                    continue
+                for name in missing:
+                    direct_image = fetch_gazebo_topic_image(
+                        f"/{name}_camera/image",
+                        timeout_s=2.0,
+                        expected_shape=self.image_shape,
+                    )
+                    if not _is_nonblank_image(direct_image):
+                        direct_image = fetch_ros_topic_image(
+                            f"/{name}_camera/image",
+                            timeout_s=2.0,
+                            expected_shape=self.image_shape,
+                        )
+                    if not _is_nonblank_image(direct_image):
+                        continue
+                    self._last_good_images[name] = np.asarray(direct_image, dtype=np.uint8).copy()
+                    self._last_good_timestamps[name] = time.time()
+                    self._last_good_camera_info.setdefault(name, _default_camera_info())
+                    updated_any = True
+                if updated_any and all(float(self._last_good_timestamps.get(name, 0.0)) > 0.0 for name in ("left", "center", "right")):
+                    self._wrist_bootstrapped = True
+            except Exception:
+                pass
+            self._background_fetch_stop.wait(0.5)
 
 
 def _ros_image_to_array(message: Any, *, expected_shape: tuple[int, int, int]) -> np.ndarray:
@@ -479,9 +832,79 @@ def _ros_image_to_array(message: Any, *, expected_shape: tuple[int, int, int]) -
     return array.copy()
 
 
+def _gazebo_image_text_to_array(
+    text: str,
+    *,
+    expected_shape: tuple[int, int, int] | None,
+) -> np.ndarray | None:
+    width_match = re.search(r"\bwidth:\s*(\d+)", text)
+    height_match = re.search(r"\bheight:\s*(\d+)", text)
+    data_match = re.search(r'\bdata:\s*"((?:\\.|[^"])*)"', text, re.DOTALL)
+    if width_match is None or height_match is None or data_match is None:
+        return None
+    try:
+        width = int(width_match.group(1))
+        height = int(height_match.group(1))
+        decoded = ast.literal_eval('"' + data_match.group(1) + '"')
+    except Exception:
+        return None
+    if isinstance(decoded, str):
+        payload = decoded.encode("latin1", errors="ignore")
+    elif isinstance(decoded, bytes):
+        payload = decoded
+    else:
+        return None
+    buffer = np.frombuffer(payload, dtype=np.uint8)
+    if buffer.size < width * height * 3:
+        return None
+    frame = buffer[: width * height * 3].reshape(height, width, 3)
+    if expected_shape is not None:
+        expected_height, expected_width, _ = expected_shape
+        if (height, width) != (expected_height, expected_width):
+            row_index = np.linspace(0, height - 1, expected_height, dtype=np.int64)
+            col_index = np.linspace(0, width - 1, expected_width, dtype=np.int64)
+            frame = frame[row_index][:, col_index]
+    return frame.copy()
+
+
+def _ros_topic_text_to_array(
+    text: str,
+    *,
+    expected_shape: tuple[int, int, int] | None,
+) -> np.ndarray | None:
+    width_match = re.search(r"^\s*width:\s*(\d+)\s*$", text, re.M)
+    height_match = re.search(r"^\s*height:\s*(\d+)\s*$", text, re.M)
+    if width_match is None or height_match is None:
+        return None
+    width = int(width_match.group(1))
+    height = int(height_match.group(1))
+    data_match = re.search(r"^\s*data:\s*$([\s\S]+)", text, re.M)
+    if data_match is None:
+        return None
+    values = [int(match) for match in re.findall(r"^\s*-\s*(\d+)\s*$", data_match.group(1), re.M)]
+    if len(values) < width * height * 3:
+        return None
+    frame = np.asarray(values[: width * height * 3], dtype=np.uint8).reshape(height, width, 3)
+    if expected_shape is not None:
+        expected_height, expected_width, _ = expected_shape
+        if (height, width) != (expected_height, expected_width):
+            row_index = np.linspace(0, height - 1, expected_height, dtype=np.int64)
+            col_index = np.linspace(0, width - 1, expected_width, dtype=np.int64)
+            frame = frame[row_index][:, col_index]
+    return frame.copy()
+
+
 def _default_camera_info() -> dict[str, np.ndarray]:
     return {
         "size": np.zeros(2, dtype=np.float32),
         "k": np.zeros(9, dtype=np.float32),
         "p": np.zeros(12, dtype=np.float32),
     }
+
+
+def _is_nonblank_image(image: np.ndarray | None) -> bool:
+    return bool(
+        image is not None
+        and getattr(image, "size", 0) > 0
+        and int(np.asarray(image, dtype=np.uint8).sum()) > 0
+    )

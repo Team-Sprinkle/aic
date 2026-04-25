@@ -61,8 +61,6 @@ try:
         save_teacher_replay,
     )
 except ModuleNotFoundError as exc:
-    if exc.name != "gymnasium":
-        raise
     AgentTeacherController = None
     OfficialStyleScore = None
     OfficialStyleScoreEvaluator = None
