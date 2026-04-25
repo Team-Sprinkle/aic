@@ -1,0 +1,75 @@
+controller:
+  mode: OFF
+  cheatcode_i_gain: 0.15
+  cheatcode_max_integrator_windup: 0.05
+  xy_alignment_tolerance_m: 0.01
+  xy_alignment_stable_cycles: 5
+  pid:
+    x:
+      kp: 17.0
+      ki: 0.08
+      kd: 2.0
+    y:
+      kp: 17.0
+      ki: 0.08
+      kd: 2.0
+
+plots:
+  enabled: true
+  output_dir: outputs/pid_tuning_plots
+
+transport:
+  initial_z_offset_m: 0.2
+  duration_sec: 5.0
+  dt_sec: 0.05
+  force_injection:
+    enabled: true
+    randomize_time: true
+    time_sec: null
+    randomize_force: true
+    min_n: 5.0
+    max_n: 20.0
+    force_n: null
+    randomize_axis: true
+    axis: null
+    randomize_direction: true
+    direction_sign: null
+    seed: 7
+
+pre_insertion:
+  z_offset_m: 0.2
+
+recover:
+  lift_m: 0.01
+  duration_sec: 1.0
+  dt_sec: 0.05
+  pid:
+    x:
+      kp: 17.0
+      ki: 0.08
+      kd: 2.0
+    y:
+      kp: 17.0
+      ki: 0.08
+      kd: 2.0
+
+insert:
+  min_z_offset_m: -0.015
+  duration_sec: 4.0
+  dt_sec: 0.05
+  wait_timeout_sec: 5.0
+
+diagnostics:
+  force_log_interval_sec: 0.25
+  collision_force_threshold_n: 20.0
+  collision_duration_threshold_sec: 1.0
+  contact_force_threshold_n: 5.0
+  contact_duration_threshold_sec: 1.0
+  lateral_contact_force_threshold_n: 10.0
+  lateral_contact_ratio_threshold: 0.65
+  lateral_contact_duration_threshold_sec: 0.3
+  stuck_fz_threshold_n: 5.0
+  stuck_duration_threshold_sec: 1.0
+  stuck_z_stationary_threshold_m: 0.0001
+  stuck_force_increase_threshold_n: 0.05
+  stuck_debug_log_interval_sec: 0.5
