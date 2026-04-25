@@ -9,6 +9,7 @@ from aic_gym_gz.planners.mock import DeterministicMockPlannerBackend
 from aic_gym_gz.teacher.context import TeacherContextExtractor
 from aic_gym_gz.teacher.history import TemporalObservationBuffer
 from aic_gym_gz.teacher.policy import AgentTeacherController
+from aic_gym_gz.teacher.planning import phase_guidance_from_state
 from aic_gym_gz.teacher.quality import build_signal_quality_snapshot
 from aic_gym_gz.teacher.types import TeacherPlan, TeacherPlanningState, TeacherWaypoint
 from aic_gym_gz.teacher.visual_context import build_scene_overview_images
@@ -185,6 +186,29 @@ class TeacherPlannerTest(unittest.TestCase):
         )
         self.assertGreater(bonus_phase, 0.0)
         self.assertGreater(bonus_milestone, 0.0)
+
+    def test_phase_guidance_prefers_pre_insert_align_inside_corridor_with_lateral_error(self) -> None:
+        guidance = phase_guidance_from_state(
+            current_phase="obstacle_avoidance",
+            policy_context={
+                "distance_to_target": 0.196,
+                "off_limit_contact": False,
+                "score_geometry": {
+                    "distance_to_entrance": 0.175,
+                    "insertion_progress": 0.35,
+                    "lateral_misalignment": 0.16,
+                    "orientation_error": 0.05,
+                },
+            },
+            temporal_context={
+                "auxiliary_history_summary": {"hidden_contact_recent": False, "had_contact_recent": False},
+                "geometry_progress_summary": {"history_items": 4, "net_distance_to_entrance_progress": 0.01},
+            },
+            obstacle_summary=[{"present": True}],
+        )
+
+        self.assertEqual(guidance["recommended_phase"], "pre_insert_align")
+        self.assertIn("guarded_insert", guidance["allowed_phases"])
 
     def test_controller_respects_backend_planner_budget(self) -> None:
         controller = AgentTeacherController(planner=_BudgetedMockPlanner(remaining=2))

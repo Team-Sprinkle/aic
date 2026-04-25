@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import os
+from dataclasses import replace
 from io import BytesIO
 import unittest
 from unittest.mock import patch
@@ -230,6 +231,49 @@ class TeacherOpenAIPlannerBackendTest(unittest.TestCase):
         second_text = second["input"][1]["content"][0]["text"]
         self.assertIn("baseline_safe", first_text)
         self.assertIn("guarded_insert", second_text)
+
+    def test_port_frame_guard_rewrites_premature_guarded_insert(self) -> None:
+        state = _planning_state()
+        state.policy_context["yaw_error_to_target"] = 0.4
+        state.policy_context["target_yaw"] = 0.0
+        state.policy_context["relative_geometry"]["port_frame_error"] = {
+            "coordinate_frame": "port_entrance_frame",
+            "plug_lateral_offset_norm_m": 0.05,
+            "alignment_threshold_lateral_m": 0.008,
+            "pre_insertion_waypoint_world_xyz": [0.0, 0.0, 0.945],
+        }
+        state = replace(state, current_phase="pre_insert_align")
+        backend = _MockOpenAIPlannerBackend(
+            response_payload={
+                "output_text": """{
+                    "next_phase": "guarded_insert",
+                    "waypoints": [{"position_xyz": [0.0, 0.0, 0.9], "yaw": 0.0, "speed_scale": 1.0, "clearance_hint": 0.0}],
+                    "motion_mode": "guarded_insert",
+                    "caution_flag": false,
+                    "should_probe": false,
+                    "segment_horizon_steps": 4,
+                    "segment_granularity": "guarded",
+                    "rationale_summary": "Attempt insertion.",
+                    "decision_diagnostics": {
+                        "confidence_level": "medium",
+                        "blocking_gaps": [],
+                        "ambiguous_frames": [],
+                        "requested_tools": [],
+                        "requested_visual_aids": [],
+                        "assumptions_used": []
+                    }
+                }"""
+            },
+            config=OpenAIPlannerConfig(enabled=True, max_retries=0),
+        )
+
+        plan = backend.plan(state)
+
+        self.assertEqual(plan.next_phase, "pre_insert_align")
+        self.assertEqual(plan.motion_mode, "fine_cartesian")
+        self.assertEqual(plan.waypoints[0].position_xyz, (0.0, 0.0, 0.945))
+        self.assertTrue(plan.caution_flag)
+        self.assertIn("Port-frame guard", plan.rationale_summary)
 
     def test_payload_includes_scene_geometry_context(self) -> None:
         backend = OpenAIPlannerBackend(OpenAIPlannerConfig(enabled=True))

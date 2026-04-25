@@ -87,6 +87,8 @@ def phase_guidance_from_state(
         recommended_phase = "backoff_and_retry"
     elif insertion_ready:
         recommended_phase = "guarded_insert"
+    elif in_insertion_zone and alignment_needed:
+        recommended_phase = "pre_insert_align"
     elif is_near_entrance or (distance_to_target <= 0.12 and alignment_needed):
         recommended_phase = "pre_insert_align"
     elif obstacle_count > 0 and distance_to_target <= 0.20:

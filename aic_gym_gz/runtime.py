@@ -347,7 +347,7 @@ class ScenarioGymGzBackend(RuntimeBackend):
         self._last_trial_id = scenario.trial_id
         self._scenario = scenario
         self._task = next(iter(scenario.tasks.values()))
-        if self._live_mode == "gazebo_training_fast" and not self._attach_to_existing:
+        if self._live_mode in {"gazebo_training_fast", "gazebo_pose_delta_fast"} and not self._attach_to_existing:
             if self._runtime is not None:
                 try:
                     self._runtime.stop()
@@ -378,7 +378,7 @@ class ScenarioGymGzBackend(RuntimeBackend):
                 self._seed_fast_source_pose_cache(synthetic_reset)
                 print('{"backend_stage":"synthetic_training_reset_shortcut"}', flush=True)
                 return synthetic_reset
-        if self._live_mode in {"gazebo_training_fast", "controller_velocity_wip"}:
+        if self._live_mode in {"gazebo_training_fast", "gazebo_pose_delta_fast", "controller_velocity_wip"}:
             print('{"backend_stage":"connect_started_world_begin"}', flush=True)
             return self._connect_started_world(timeout_s=min(max(self._timeout, 5.0), 10.0))
         observation, info = self._runtime.reset(seed=seed, options={})
@@ -1007,11 +1007,15 @@ class ScenarioGymGzBackend(RuntimeBackend):
             observation_transport = self._observation_transport_override
         elif self._attach_to_existing and self._transport_backend == "cli":
             observation_transport = "persistent"
-        elif not self._attach_to_existing and self._live_mode == "gazebo_training_fast" and self._transport_backend == "cli":
+        elif (
+            not self._attach_to_existing
+            and self._live_mode in {"gazebo_training_fast", "gazebo_pose_delta_fast"}
+            and self._transport_backend == "cli"
+        ):
             observation_transport = "one_shot"
         helper_startup_timeout_s = 5.0
         helper_startup_settle_s = 3.0
-        if not self._attach_to_existing and self._live_mode == "gazebo_training_fast":
+        if not self._attach_to_existing and self._live_mode in {"gazebo_training_fast", "gazebo_pose_delta_fast"}:
             helper_startup_timeout_s = min(max(float(self._timeout), 5.0), 10.0)
             helper_startup_settle_s = 1.0
         self._runtime = self._runtime_type(

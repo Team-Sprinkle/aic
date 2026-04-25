@@ -290,19 +290,23 @@ def make_live_env(
     state_observation_mode: str | None = None,
 ) -> AicInsertionEnv:
     normalized_live_mode = str(live_mode).strip().lower()
-    if normalized_live_mode == "gazebo_training_fast":
+    if normalized_live_mode in {"gazebo_training_fast", "gazebo_pose_delta_fast"}:
         resolved_use_controller_velocity = False
     elif normalized_live_mode == "controller_velocity_wip":
         resolved_use_controller_velocity = True
     else:
         raise ValueError(
-            "Unsupported live_mode. Expected 'gazebo_training_fast' or "
-            f"'controller_velocity_wip', received {live_mode!r}."
+            "Unsupported live_mode. Expected 'gazebo_training_fast', "
+            f"'gazebo_pose_delta_fast', or 'controller_velocity_wip', received {live_mode!r}."
         )
     resolved_transport_backend = transport_backend
-    if normalized_live_mode == "gazebo_training_fast" and not attach_to_existing:
+    if normalized_live_mode in {"gazebo_training_fast", "gazebo_pose_delta_fast"} and not attach_to_existing:
         resolved_transport_backend = "auto"
-    image_ready_timeout_s = 1.0 if normalized_live_mode == "gazebo_training_fast" else 10.0
+    image_ready_timeout_s = (
+        1.0
+        if normalized_live_mode in {"gazebo_training_fast", "gazebo_pose_delta_fast"}
+        else 10.0
+    )
     normalized_image_mode = str(image_observation_mode).strip().lower()
     if normalized_image_mode not in {"artifact_validation", "async_training"}:
         raise ValueError(

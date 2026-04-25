@@ -18,9 +18,10 @@ class CloseRangeInsertionPolicy:
     controller after the VLM has brought the robot close enough to the port.
     """
 
-    handoff_distance_to_entrance_m: float = 0.14
-    handoff_lateral_misalignment_m: float = 0.13
-    handoff_distance_to_target_m: float = 0.16
+    handoff_distance_to_entrance_m: float = 0.055
+    handoff_lateral_misalignment_m: float = 0.010
+    handoff_orientation_error_rad: float = 0.12
+    handoff_distance_to_target_m: float = 0.060
     final_approach_distance_m: float = 0.015
     final_approach_progress: float = 0.75
     axial_force_soft_limit_n: float = 25.0
@@ -156,10 +157,16 @@ class CloseRangeInsertionPolicy:
         distance_to_entrance = float(score_geometry.get("distance_to_entrance", [1.0])[0])
         distance_to_target = float(score_geometry.get("distance_to_target", [1.0])[0])
         lateral_misalignment = float(score_geometry.get("lateral_misalignment", [1.0])[0])
+        orientation_error = float(score_geometry.get("orientation_error", [1.0])[0])
         ready = bool(
             distance_to_entrance <= self.handoff_distance_to_entrance_m
             and lateral_misalignment <= self.handoff_lateral_misalignment_m
-        ) or bool(distance_to_target <= self.handoff_distance_to_target_m)
+            and orientation_error <= self.handoff_orientation_error_rad
+        ) or bool(
+            distance_to_target <= self.handoff_distance_to_target_m
+            and lateral_misalignment <= self.handoff_lateral_misalignment_m
+            and orientation_error <= self.handoff_orientation_error_rad
+        )
         if ready:
             self._handoff_latched = True
         return self._handoff_latched

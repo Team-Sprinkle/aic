@@ -20,6 +20,12 @@ class MinimumJerkSmoother:
     max_linear_jerk: float = 2.0
     max_segment_steps: int = 512
     planner_output_mode: str = "absolute_cartesian_waypoint"
+    port_alignment_lateral_threshold_m: float = 0.008
+    port_alignment_yaw_threshold_rad: float = 0.10
+    pre_insert_standoff_m: float = 0.025
+    guarded_entry_standoff_m: float = 0.005
+    guarded_insert_speed_limit: float = 0.010
+    port_alignment_unaligned_speed_limit: float = 0.030
 
     def smooth(self, *, state: RuntimeState, plan: TeacherPlan) -> TrajectorySegment:
         current_pose = np.asarray(state.tcp_pose, dtype=np.float64).copy()
@@ -57,6 +63,35 @@ class MinimumJerkSmoother:
             ideal_steps.append(steps)
             conversion_steps.append(conversion_note)
             current_pose = target_pose
+        targets, conversion_steps, port_gate_metadata = self._apply_port_frame_alignment_gates(
+            state=state,
+            plan=plan,
+            targets=targets,
+            conversion_steps=conversion_steps,
+            plug_to_tcp_offset=plug_to_tcp_offset,
+        )
+        self._normalize_target_yaw_path(
+            start_yaw=float(np.asarray(state.tcp_pose, dtype=np.float64)[5]),
+            targets=targets,
+        )
+        segment_linear_speed_limit = (
+            float(self.port_alignment_unaligned_speed_limit)
+            if port_gate_metadata.get("active")
+            and port_gate_metadata.get("gate_action") == "align_lateral_and_yaw_at_pre_insert_standoff"
+            else float(self.max_linear_speed)
+        )
+        ideal_steps = self._ideal_step_counts(
+            start_pose=np.asarray(state.tcp_pose, dtype=np.float64),
+            targets=targets,
+            plan=plan,
+            linear_speed_limit=segment_linear_speed_limit,
+            min_speed_scale=(
+                0.8
+                if port_gate_metadata.get("active")
+                and port_gate_metadata.get("gate_action") == "align_lateral_and_yaw_at_pre_insert_standoff"
+                else 0.1
+            ),
+        )
         optimizer_horizon_steps = min(
             max(sum(ideal_steps), 1),
             max(int(self.max_segment_steps), 1),
@@ -91,7 +126,7 @@ class MinimumJerkSmoother:
                         state=state,
                         tcp_pose=pose,
                         plug_to_tcp_offset=plug_to_tcp_offset,
-                        nominal_limit=self.max_linear_speed,
+                        nominal_limit=segment_linear_speed_limit,
                     )
                     linear_velocity = self._clip_vector_norm(
                         delta[:3] / self.base_dt,
@@ -130,14 +165,55 @@ class MinimumJerkSmoother:
                 "optimizer_horizon_steps": int(optimizer_horizon_steps),
                 "max_segment_steps": int(self.max_segment_steps),
                 "conversion_steps": conversion_steps,
+                "port_frame_alignment_gate": port_gate_metadata,
                 "native_action_override_used": bool(native_action_override is not None),
                 "optimizer_metrics": optimizer_metrics,
+                "segment_linear_speed_limit_mps": float(segment_linear_speed_limit),
+                "gated_alignment_min_speed_scale": (
+                    0.8
+                    if port_gate_metadata.get("active")
+                    and port_gate_metadata.get("gate_action") == "align_lateral_and_yaw_at_pre_insert_standoff"
+                    else None
+                ),
             },
         )
 
     def _minimum_horizon_steps(self, segment_granularity: str) -> int:
         del segment_granularity
         return 4
+
+    def _ideal_step_counts(
+        self,
+        *,
+        start_pose: np.ndarray,
+        targets: list[np.ndarray],
+        plan: TeacherPlan,
+        linear_speed_limit: float | None = None,
+        min_speed_scale: float = 0.1,
+    ) -> list[int]:
+        if not targets:
+            return []
+        current_pose = np.asarray(start_pose, dtype=np.float64)
+        counts: list[int] = []
+        waypoint_speed_scales = [
+            max(float(waypoint.speed_scale), float(min_speed_scale))
+            for waypoint in plan.waypoints
+        ]
+        if not waypoint_speed_scales:
+            waypoint_speed_scales = [max(float(min_speed_scale), 1.0)]
+        for index, target_pose in enumerate(targets):
+            speed_scale = waypoint_speed_scales[min(index, len(waypoint_speed_scales) - 1)]
+            distance = float(np.linalg.norm(target_pose[:3] - current_pose[:3]))
+            speed_limit = float(linear_speed_limit) if linear_speed_limit is not None else float(self.max_linear_speed)
+            steps = max(
+                2,
+                int(math.ceil(distance / max(self.base_dt * speed_limit * speed_scale, 1e-4))),
+            )
+            if plan.segment_granularity != "coarse":
+                steps = max(steps, 4)
+            counts.append(steps)
+            current_pose = np.asarray(target_pose, dtype=np.float64)
+        return counts
 
     def _convert_waypoint(
         self,
@@ -207,6 +283,111 @@ class MinimumJerkSmoother:
             return target_yaw
         return float(current_yaw + waypoint_yaw)
 
+    def _apply_port_frame_alignment_gates(
+        self,
+        *,
+        state: RuntimeState,
+        plan: TeacherPlan,
+        targets: list[np.ndarray],
+        conversion_steps: list[dict[str, object]],
+        plug_to_tcp_offset: np.ndarray,
+    ) -> tuple[list[np.ndarray], list[dict[str, object]], dict[str, object]]:
+        """Enforce the port-frame sequence recommended by failure analysis.
+
+        The VLM still owns sparse global planning, but near the port the dense
+        optimizer must not smooth through an invalid shortcut. This gate rewrites
+        near-port sparse targets into the sequence: align yaw/lateral at the
+        entrance standoff, move to guarded entry, then advance along the
+        insertion axis only when the plug is already aligned.
+        """
+        if self.planner_output_mode == "native_6d_action" or state.target_port_entrance_pose is None:
+            return targets, conversion_steps, {"active": False, "reason": "unsupported_mode_or_missing_entrance"}
+        if plan.next_phase not in {"pre_insert_align", "guarded_insert"} and plan.motion_mode != "guarded_insert":
+            return targets, conversion_steps, {"active": False, "reason": "phase_not_near_port"}
+        target = np.asarray(state.target_port_pose[:3], dtype=np.float64)
+        entrance = np.asarray(state.target_port_entrance_pose[:3], dtype=np.float64)
+        axis = target - entrance
+        axis_norm = float(np.linalg.norm(axis))
+        if axis_norm <= 1e-8:
+            return targets, conversion_steps, {"active": False, "reason": "degenerate_insertion_axis"}
+        axis_unit = axis / axis_norm
+        plug = np.asarray(state.plug_pose[:3], dtype=np.float64)
+        plug_offset = plug - entrance
+        axial_depth = float(np.dot(plug_offset, axis_unit))
+        lateral_vector = plug_offset - axial_depth * axis_unit
+        lateral_norm = float(np.linalg.norm(lateral_vector))
+        yaw_error = self._wrap_to_pi(float(state.target_port_pose[5] - state.plug_pose[5]))
+        aligned = (
+            lateral_norm <= float(self.port_alignment_lateral_threshold_m)
+            and abs(yaw_error) <= float(self.port_alignment_yaw_threshold_rad)
+        )
+
+        def pose_for_plug(plug_xyz: np.ndarray) -> np.ndarray:
+            pose = np.asarray(state.tcp_pose, dtype=np.float64).copy()
+            pose[:3] = np.asarray(plug_xyz, dtype=np.float64) + plug_to_tcp_offset
+            pose[5] = float(state.target_port_pose[5])
+            return pose
+
+        pre_insert_plug = entrance - float(self.pre_insert_standoff_m) * axis_unit
+        guarded_entry_plug = entrance - float(self.guarded_entry_standoff_m) * axis_unit
+        rewritten: list[np.ndarray]
+        gate_action: str
+        if not aligned:
+            rewritten = [pose_for_plug(pre_insert_plug)]
+            gate_action = "align_lateral_and_yaw_at_pre_insert_standoff"
+        elif plan.next_phase == "guarded_insert" or plan.motion_mode == "guarded_insert":
+            inserted_depth = min(axis_norm, max(0.0, axial_depth) + 0.010)
+            inserted_plug = entrance + inserted_depth * axis_unit
+            rewritten = [pose_for_plug(guarded_entry_plug), pose_for_plug(inserted_plug)]
+            gate_action = "guarded_axis_advance_after_alignment"
+        else:
+            rewritten = [pose_for_plug(pre_insert_plug)]
+            gate_action = "hold_pre_insert_alignment"
+
+        rewritten_steps = list(conversion_steps)
+        rewritten_steps.append(
+            {
+                "mode": "port_frame_alignment_gate",
+                "coordinate_frame": "port_entrance_frame",
+                "gate_action": gate_action,
+                "axis_unit_world_xyz": axis_unit.astype(float).tolist(),
+                "pre_insert_standoff_m": float(self.pre_insert_standoff_m),
+                "guarded_entry_standoff_m": float(self.guarded_entry_standoff_m),
+                "input_target_count": int(len(targets)),
+                "rewritten_target_count": int(len(rewritten)),
+            }
+        )
+        final_plug = np.asarray(rewritten[-1][:3], dtype=np.float64) - plug_to_tcp_offset
+        final_offset = final_plug - entrance
+        final_axial_depth = float(np.dot(final_offset, axis_unit))
+        final_lateral_vector = final_offset - final_axial_depth * axis_unit
+        final_yaw_error = self._wrap_to_pi(float(state.target_port_pose[5] - rewritten[-1][5]))
+        return rewritten, rewritten_steps, {
+            "active": True,
+            "gate_action": gate_action,
+            "coordinate_frame": "port_entrance_frame",
+            "origin_world_xyz": entrance.astype(float).tolist(),
+            "axis_unit_world_xyz": axis_unit.astype(float).tolist(),
+            "plug_lateral_error_m": lateral_norm,
+            "plug_axial_depth_m": axial_depth,
+            "yaw_error_rad": yaw_error,
+            "alignment_threshold_lateral_m": float(self.port_alignment_lateral_threshold_m),
+            "alignment_threshold_yaw_rad": float(self.port_alignment_yaw_threshold_rad),
+            "aligned_before_gate": bool(aligned),
+            "final_target_lateral_error_m": float(np.linalg.norm(final_lateral_vector)),
+            "final_target_axial_depth_m": final_axial_depth,
+            "final_target_yaw_error_rad": final_yaw_error,
+            "guarded_insert_speed_limit_mps": float(self.guarded_insert_speed_limit),
+            "unaligned_port_alignment_speed_limit_mps": float(self.port_alignment_unaligned_speed_limit),
+        }
+
+    def _normalize_target_yaw_path(self, *, start_yaw: float, targets: list[np.ndarray]) -> None:
+        previous_yaw = float(start_yaw)
+        for target in targets:
+            desired_yaw = float(target[5])
+            target[5] = previous_yaw + self._wrap_to_pi(desired_yaw - previous_yaw)
+            previous_yaw = float(target[5])
+
     def _allocate_steps(self, *, ideal_steps: list[int], horizon_steps: int) -> list[int]:
         if not ideal_steps:
             return []
@@ -270,8 +451,17 @@ class MinimumJerkSmoother:
             axial_depth = float(np.dot(plug_position - entrance, axis / axis_norm))
             insertion_progress = float(np.clip(axial_depth / axis_norm, 0.0, 1.0))
         if distance_to_target <= 0.015 or insertion_progress >= 0.75:
-            return min(float(nominal_limit), 0.035)
+            return min(float(nominal_limit), float(self.guarded_insert_speed_limit))
+        if axis_norm > 1e-8:
+            lateral_vector = (plug_position - entrance) - float(np.dot(plug_position - entrance, axis / axis_norm)) * (axis / axis_norm)
+            distance_to_entrance = float(np.linalg.norm(entrance - plug_position))
+            if distance_to_entrance <= 0.08 and float(np.linalg.norm(lateral_vector)) <= self.port_alignment_lateral_threshold_m:
+                return min(float(nominal_limit), 0.035)
         return float(nominal_limit)
+
+    @staticmethod
+    def _wrap_to_pi(angle: float) -> float:
+        return float((float(angle) + math.pi) % (2.0 * math.pi) - math.pi)
 
     def _optimizer_metrics(
         self,
@@ -315,7 +505,8 @@ class MinimumJerkSmoother:
                 else 0.0
             ),
             "max_command_linear_speed_mps": float(max(linear_speeds, default=0.0)),
-            "final_approach_speed_limit_mps": 0.035,
+            "near_entrance_aligned_speed_limit_mps": 0.035,
+            "guarded_insert_speed_limit_mps": float(self.guarded_insert_speed_limit),
             "max_command_angular_speed_radps": float(max(angular_speeds, default=0.0)),
             "max_command_linear_accel_mps2": float(max(linear_accels, default=0.0)),
             "mean_command_linear_jerk_mps3": float(np.mean(linear_jerks) if linear_jerks else 0.0),

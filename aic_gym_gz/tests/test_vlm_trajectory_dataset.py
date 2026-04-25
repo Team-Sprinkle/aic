@@ -28,7 +28,9 @@ def test_sfp_to_nic_layout_and_target_metadata() -> None:
 
     scenario, metadata = _build_scenario(args)
 
-    assert _run_dir(args) == Path("aic_gym_gz/artifacts/inspect_runs/sfp_to_nic/vlm_planner/nic_cards_2/n1")
+    run_dir = _run_dir(args)
+    assert run_dir.parent == Path("aic_gym_gz/artifacts/inspect_runs/sfp_to_nic/vlm_planner/nic_cards_2/n1")
+    assert run_dir.name.startswith("trial")
     task = next(iter(scenario.tasks.values()))
     assert task.target_module_name == "nic_card_mount_1"
     assert task.port_name == "sfp_port_0"
@@ -42,7 +44,9 @@ def test_sc_to_sc_layout_and_target_metadata() -> None:
 
     scenario, metadata = _build_scenario(args)
 
-    assert _run_dir(args) == Path("aic_gym_gz/artifacts/inspect_runs/sc_to_sc/vlm_planner/sc_ports_2/n1")
+    run_dir = _run_dir(args)
+    assert run_dir.parent == Path("aic_gym_gz/artifacts/inspect_runs/sc_to_sc/vlm_planner/sc_ports_2/n1")
+    assert run_dir.name.startswith("trial")
     task = next(iter(scenario.tasks.values()))
     assert task.target_module_name == "sc_port_1"
     assert task.port_name == "sc_port_base"
