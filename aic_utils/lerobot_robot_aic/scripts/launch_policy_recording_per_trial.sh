@@ -11,6 +11,8 @@ DATASET_ROOT="${DATASET_ROOT:-${WORKSPACE_DIR}/outputs/lerobot_datasets}"
 DATASET_SINGLE_TASK="${DATASET_SINGLE_TASK:-Insert cable into target port}"
 ACTION_MODE="${ACTION_MODE:-cartesian}"
 POLICY_CLASS="${POLICY_CLASS:-aic_example_policies.ros.CheatCode}"
+AIC_OFFICIAL_TEACHER_TRAJECTORY="${AIC_OFFICIAL_TEACHER_TRAJECTORY:-}"
+AIC_OFFICIAL_TEACHER_ACTION_MODE="${AIC_OFFICIAL_TEACHER_ACTION_MODE:-relative_delta_gripper_tcp}"
 SIM_DISTROBOX_NAME="${SIM_DISTROBOX_NAME:-aic_eval_0415}"
 SAVE_FAILED_EPISODES="${SAVE_FAILED_EPISODES:-false}"
 PER_TRIAL_TIMEOUT_SEC="${PER_TRIAL_TIMEOUT_SEC:-0}"
@@ -42,6 +44,13 @@ Options:
   --workspace-dir PATH           Workspace root containing pixi.toml (default: ${WORKSPACE_DIR})
   --engine-config PATH           Multi-trial engine config YAML (default: ${ENGINE_CONFIG_FILE})
   --policy-class CLASS           Policy class path (default: ${POLICY_CLASS})
+  --teacher-trajectory PATH      Smooth trajectory JSON for
+                                 aic_teacher_official.OfficialTeacherReplay
+                                 (sets AIC_OFFICIAL_TEACHER_TRAJECTORY)
+  --teacher-action-mode MODE     Replay action mode:
+                                 relative_delta_gripper_tcp or
+                                 absolute_cartesian_pose_base_link
+                                 (default: ${AIC_OFFICIAL_TEACHER_ACTION_MODE})
   --sim-distrobox NAME           Distrobox name for simulation (default: ${SIM_DISTROBOX_NAME})
   --dataset-repo-id ID           LeRobot dataset repo id (default: ${DATASET_REPO_ID})
   --dataset-root PATH            LeRobot dataset root (default: ${DATASET_ROOT})
@@ -74,7 +83,9 @@ Options:
   -h, --help                     Show this help text
 
 Environment variable equivalents:
-  WORKSPACE_DIR, ENGINE_CONFIG_FILE, POLICY_CLASS, SIM_DISTROBOX_NAME,
+  WORKSPACE_DIR, ENGINE_CONFIG_FILE, POLICY_CLASS,
+  AIC_OFFICIAL_TEACHER_TRAJECTORY, AIC_OFFICIAL_TEACHER_ACTION_MODE,
+  SIM_DISTROBOX_NAME,
   DATASET_REPO_ID, DATASET_ROOT, DATASET_SINGLE_TASK, ACTION_MODE,
   SAVE_FAILED_EPISODES, PER_TRIAL_TIMEOUT_SEC, STARTUP_DELAY_SEC,
   PAUSE_BETWEEN_TRIALS_SEC, CONTINUE_ON_FAILURE, PUSH_TO_HUB, TMP_DIR,
@@ -88,6 +99,8 @@ while [[ $# -gt 0 ]]; do
     --workspace-dir) WORKSPACE_DIR="$2"; shift 2 ;;
     --engine-config) ENGINE_CONFIG_FILE="$2"; shift 2 ;;
     --policy-class) POLICY_CLASS="$2"; shift 2 ;;
+    --teacher-trajectory) AIC_OFFICIAL_TEACHER_TRAJECTORY="$2"; shift 2 ;;
+    --teacher-action-mode) AIC_OFFICIAL_TEACHER_ACTION_MODE="$2"; shift 2 ;;
     --sim-distrobox) SIM_DISTROBOX_NAME="$2"; shift 2 ;;
     --dataset-repo-id) DATASET_REPO_ID="$2"; shift 2 ;;
     --dataset-root) DATASET_ROOT="$2"; shift 2 ;;
@@ -341,7 +354,11 @@ echo "  temp dir: ${TMP_DIR}"
 echo "  recorder drain after sim exit: ${RECORDER_DRAIN_SEC}s"
 echo "  strict save-log check: ${REQUIRE_RECORDER_SAVE_LOG}"
 echo "  sudo keepalive: ${SUDO_KEEPALIVE}"
-echo "  gazebo gui: ${GAZEBO_GUI}"
+  echo "  gazebo gui: ${GAZEBO_GUI}"
+  if [[ -n "${AIC_OFFICIAL_TEACHER_TRAJECTORY}" ]]; then
+    echo "  teacher trajectory: ${AIC_OFFICIAL_TEACHER_TRAJECTORY}"
+    echo "  teacher action mode: ${AIC_OFFICIAL_TEACHER_ACTION_MODE}"
+  fi
 echo "  launch rviz: ${LAUNCH_RVIZ}"
 echo "  per-trial scoring results root: ${RESULTS_ROOT}"
 echo "  remove bag data: ${REMOVE_BAG_DATA}"
@@ -416,6 +433,10 @@ for TRIAL_ID in "${TRIAL_IDS[@]}"; do
 
   (
     cd "${WORKSPACE_DIR}"
+    if [[ -n "${AIC_OFFICIAL_TEACHER_TRAJECTORY}" ]]; then
+      export AIC_OFFICIAL_TEACHER_TRAJECTORY
+      export AIC_OFFICIAL_TEACHER_ACTION_MODE
+    fi
     pixi run ros2 run aic_model aic_model --ros-args -p use_sim_time:=true -p "policy:=${POLICY_CLASS}"
   ) >"${POLICY_LOG}" 2>&1 &
   POLICY_PID=$!
