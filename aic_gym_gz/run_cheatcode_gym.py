@@ -151,9 +151,11 @@ def main() -> None:
                 output_dir=Path(args.video_dir) / f"episode_{episode}"
                 if args.video_dir
                 else default_video_output_dir(run_name=run_name),
+                fps=_rollout_fps_from_ticks(args.ticks_per_step),
                 enabled=not args.disable_video,
                 require_real_wrist_images=not args.disable_video,
                 require_live_overview=not args.disable_video,
+                overview_capture_stride=1,
             )
             print(json.dumps({"stage": "recorder_ready", "episode": episode}, sort_keys=True), flush=True)
             recorder.capture(observation=observation, scenario=scenario, state=state)

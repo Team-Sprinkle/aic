@@ -64,6 +64,8 @@ class TeacherSearchConfig:
     duplicate_penalty_weight: float = 1.25
     planner_output_mode: str = "absolute_cartesian_waypoint"
     prefer_live_scene_overview: bool = False
+    hold_ticks_per_action: int = 8
+    max_env_steps: int = 512
 
 
 class CandidatePlannerBackend(PlannerBackend):
@@ -326,6 +328,8 @@ class TeacherCandidateSearch:
                     enable_probes=self.config.enable_probes,
                     planner_output_mode=self.config.planner_output_mode,
                     prefer_live_scene_overview=self.config.prefer_live_scene_overview,
+                    hold_ticks_per_action=self.config.hold_ticks_per_action,
+                    max_env_steps=self.config.max_env_steps,
                     segment_limit=(
                         spec.segment_limit_override
                         if spec.segment_limit_override is not None

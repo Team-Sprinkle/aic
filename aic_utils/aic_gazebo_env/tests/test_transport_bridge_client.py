@@ -316,6 +316,35 @@ def test_transport_bridge_start_requires_sample_readiness(tmp_path: Path) -> Non
         bridge.start()
 
 
+def test_transport_bridge_allows_world_control_before_sample_readiness(tmp_path: Path) -> None:
+    helper = tmp_path / "fake_transport_bridge_never_ready.py"
+    _write_fake_transport_bridge(helper)
+    bridge = GazeboTransportBridge(
+        GazeboTransportBridgeConfig(
+            world_name="test_world",
+            state_topic="/world/test_world/state",
+            pose_topic="/world/test_world/pose/info",
+            helper_executable=str(helper),
+            startup_timeout_s=0.2,
+        )
+    )
+    try:
+        response = bridge.request(
+            {
+                "op": "world_control",
+                "service": "/world/test_world/control",
+                "multi_step": 1,
+                "timeout_ms": 200,
+            }
+        )
+        assert response["reply_text"] == "data: true\n"
+        flags = bridge.health_flags()
+        assert flags["helper_startup_ok"] is True
+        assert flags["helper_ready_ok"] is False
+    finally:
+        bridge.close()
+
+
 def test_transport_bridge_start_succeeds_when_helper_reports_ready(tmp_path: Path) -> None:
     helper = tmp_path / "fake_transport_bridge_ready.py"
     _write_fake_transport_bridge(helper)

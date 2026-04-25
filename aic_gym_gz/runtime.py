@@ -644,7 +644,10 @@ class ScenarioGymGzBackend(RuntimeBackend):
                         }
                     }
                 )
-            client._advance_world(tick_count)  # type: ignore[attr-defined]
+            if self._attach_to_existing and self._advance_world_control_cli(tick_count):
+                pass
+            else:
+                client._advance_world(tick_count)  # type: ignore[attr-defined]
             if hasattr(client, "_logical_step_count"):
                 client._logical_step_count = int(getattr(client, "_logical_step_count", 0)) + tick_count
         except Exception:
@@ -734,6 +737,32 @@ class ScenarioGymGzBackend(RuntimeBackend):
             "multi_step": tick_count,
         }
         return next_state
+
+    def _advance_world_control_cli(self, tick_count: int) -> bool:
+        try:
+            completed = subprocess.run(
+                [
+                    "gz",
+                    "service",
+                    "-s",
+                    f"/world/{self._world_name}/control",
+                    "--reqtype",
+                    "gz.msgs.WorldControl",
+                    "--reptype",
+                    "gz.msgs.Boolean",
+                    "--timeout",
+                    "1000",
+                    "--req",
+                    f"multi_step: {int(tick_count)}",
+                ],
+                check=False,
+                capture_output=True,
+                text=True,
+                timeout=1.5,
+            )
+        except Exception:
+            return False
+        return completed.returncode == 0 and "data: true" in completed.stdout
 
     def close(self) -> None:
         if self._ros_observer is not None:

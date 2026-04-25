@@ -56,17 +56,26 @@ class AicInsertionEnv(gym.Env[dict[str, Any], np.ndarray]):
                 include_images=self.task.include_images,
                 step_count=self._step_count,
             )
-            if self.task.include_images and not self._observation_has_live_wrist_images(observation):
+            if (
+                self._requires_live_wrist_images()
+                and not self._observation_has_live_wrist_images(observation)
+            ):
                 self._state = self._warm_images_on_reset(state)
                 observation = self.io.observation_from_state(
                     self._state,
                     include_images=True,
                     step_count=self._step_count,
                 )
+                if not self._observation_has_live_wrist_images(observation):
+                    raise TimeoutError(
+                        "Timed out waiting for real wrist camera images during reset warm-up."
+                    )
                 print('{"env_stage":"final_observation_done_after_warmup"}', flush=True)
             else:
                 print('{"env_stage":"final_observation_done"}', flush=True)
-        except TimeoutError:
+        except TimeoutError as exc:
+            if str(exc).startswith("Timed out waiting for real wrist camera images"):
+                raise
             if not self.task.include_images:
                 raise
             self._state = self._warm_images_on_reset(state)
@@ -75,6 +84,13 @@ class AicInsertionEnv(gym.Env[dict[str, Any], np.ndarray]):
                 include_images=True,
                 step_count=self._step_count,
             )
+            if (
+                self._requires_live_wrist_images()
+                and not self._observation_has_live_wrist_images(observation)
+            ):
+                raise TimeoutError(
+                    "Timed out waiting for real wrist camera images during reset retry."
+                )
             print('{"env_stage":"final_observation_done_after_retry"}', flush=True)
         info = {
             "trial_id": scenario.trial_id,
@@ -142,7 +158,7 @@ class AicInsertionEnv(gym.Env[dict[str, Any], np.ndarray]):
         zero_action = np.zeros(6, dtype=np.float32)
         warmed_state = state
         warm_ticks = max(2, int(self.task.hold_action_ticks))
-        for _ in range(8):
+        for _ in range(160):
             warmed_state = self.runtime.step(zero_action, ticks=warm_ticks)
             try:
                 observation = self.io.observation_from_state(
@@ -173,6 +189,9 @@ class AicInsertionEnv(gym.Env[dict[str, Any], np.ndarray]):
             and int(np.asarray(images[name], dtype=np.uint8).sum()) > 0
             for name in ("left", "center", "right")
         )
+
+    def _requires_live_wrist_images(self) -> bool:
+        return bool(self.task.include_images and isinstance(self.io, RosCameraSidecarIO))
 
 
 def live_env_health_check(
@@ -281,7 +300,7 @@ def make_live_env(
         )
     resolved_transport_backend = transport_backend
     if normalized_live_mode == "gazebo_training_fast" and not attach_to_existing:
-        resolved_transport_backend = "cli"
+        resolved_transport_backend = "auto"
     image_ready_timeout_s = 1.0 if normalized_live_mode == "gazebo_training_fast" else 10.0
     normalized_image_mode = str(image_observation_mode).strip().lower()
     if normalized_image_mode not in {"artifact_validation", "async_training"}:

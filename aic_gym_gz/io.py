@@ -5,10 +5,15 @@ from __future__ import annotations
 from abc import ABC, abstractmethod
 import ast
 from dataclasses import dataclass, field
+import json
 import math
 import os
+from pathlib import Path
 import re
+import shutil
 import subprocess
+import sys
+import tempfile
 import threading
 import time
 from typing import Any
@@ -409,6 +414,7 @@ class RosCameraSubscriber:
         image_shape: tuple[int, int, int] = (256, 256, 3),
         topic_map: dict[str, str] | None = None,
         node_name: str = "aic_gym_gz_camera_sidecar",
+        reliable_qos: bool = False,
     ) -> None:
         self._image_shape = image_shape
         self._topic_map = topic_map or {
@@ -417,6 +423,7 @@ class RosCameraSubscriber:
             "right": "/right_camera/image",
         }
         self._node_name = str(node_name)
+        self._reliable_qos = bool(reliable_qos)
         self._latest_images: dict[str, np.ndarray] = {
             name: np.zeros(image_shape, dtype=np.uint8) for name in self._topic_map
         }
@@ -485,7 +492,7 @@ class RosCameraSubscriber:
         from rclpy.context import Context
         from rclpy.executors import SingleThreadedExecutor
         from rclpy.node import Node
-        from rclpy.qos import qos_profile_sensor_data
+        from rclpy.qos import QoSProfile, ReliabilityPolicy, qos_profile_sensor_data
         from sensor_msgs.msg import CameraInfo, Image
 
         context = Context()
@@ -497,19 +504,22 @@ class RosCameraSubscriber:
         executor.add_node(node)
         self._node = node
         self._executor = executor
+        image_qos = qos_profile_sensor_data
+        if self._reliable_qos:
+            image_qos = QoSProfile(depth=5, reliability=ReliabilityPolicy.RELIABLE)
 
         for name, topic in self._topic_map.items():
             node.create_subscription(
                 Image,
                 topic,
                 lambda message, camera_name=name: self._image_callback(camera_name, message),
-                qos_profile_sensor_data,
+                image_qos,
             )
             node.create_subscription(
                 CameraInfo,
                 topic.replace("/image", "/camera_info"),
                 lambda message, camera_name=name: self._camera_info_callback(camera_name, message),
-                qos_profile_sensor_data,
+                image_qos,
             )
 
         while rclpy.ok(context=context) and not self._stop_event.is_set():
@@ -531,6 +541,74 @@ class RosCameraSubscriber:
                 "k": np.asarray(message.k, dtype=np.float32),
                 "p": np.asarray(message.p, dtype=np.float32),
             }
+
+
+class GazeboCameraSubscriber:
+    """Persistent Gazebo-topic image subscriber for paused exact-step worlds."""
+
+    def __init__(
+        self,
+        *,
+        image_shape: tuple[int, int, int] = (256, 256, 3),
+        topic_map: dict[str, str] | None = None,
+        quiet_period_s: float = 0.03,
+    ) -> None:
+        from aic_utils.aic_gazebo_env.aic_gazebo_env.gazebo_client import (
+            PersistentGazeboTopicReader,
+        )
+
+        self._image_shape = image_shape
+        self._topic_map = topic_map or {
+            "left": "/left_camera/image",
+            "center": "/center_camera/image",
+            "right": "/right_camera/image",
+        }
+        executable = _resolve_executable_from_active_env("gz")
+        self._readers = (
+            {}
+            if executable is None
+            else {
+                name: PersistentGazeboTopicReader(
+                    executable=executable,
+                    topic=topic,
+                    quiet_period_s=quiet_period_s,
+                )
+                for name, topic in self._topic_map.items()
+            }
+        )
+        self._latest_images: dict[str, np.ndarray] = {
+            name: np.zeros(image_shape, dtype=np.uint8) for name in self._topic_map
+        }
+        self._latest_timestamps: dict[str, float] = {name: 0.0 for name in self._topic_map}
+        self._latest_generations: dict[str, int] = {name: 0 for name in self._topic_map}
+
+    def start(self) -> None:
+        for reader in self._readers.values():
+            reader.start()
+
+    def latest_images(self, *, timeout_s: float = 0.01) -> tuple[dict[str, np.ndarray], dict[str, float]]:
+        for name, reader in self._readers.items():
+            try:
+                sample, generation = reader.get_sample(
+                    after_generation=self._latest_generations.get(name, 0),
+                    timeout=max(float(timeout_s), 0.001),
+                )
+            except TimeoutError:
+                continue
+            frame = _gazebo_image_text_to_array(sample, expected_shape=self._image_shape)
+            if not _is_nonblank_image(frame):
+                continue
+            self._latest_images[name] = np.asarray(frame, dtype=np.uint8)
+            self._latest_timestamps[name] = time.time()
+            self._latest_generations[name] = int(generation)
+        return (
+            {name: image.copy() for name, image in self._latest_images.items()},
+            dict(self._latest_timestamps),
+        )
+
+    def close(self) -> None:
+        for reader in self._readers.values():
+            reader.stop()
 
 
 class CameraBridgeSidecar:
@@ -558,11 +636,16 @@ class CameraBridgeSidecar:
     def start(self) -> None:
         if self._process is not None and self._process.poll() is None:
             return
-        env = dict(os.environ)
-        env.setdefault("GZ_IP", "127.0.0.1")
+        env = _ros_gz_subprocess_env()
+        ros2_executable = _resolve_executable_from_active_env("ros2")
+        if ros2_executable is None:
+            raise FileNotFoundError(
+                "Could not find 'ros2' for the wrist camera bridge. Run from an "
+                "activated ROS/Pixi environment or put ros2 on PATH."
+            )
         self._process = subprocess.Popen(
             [
-                "ros2",
+                ros2_executable,
                 "run",
                 "ros_gz_bridge",
                 "parameter_bridge",
@@ -588,11 +671,92 @@ class CameraBridgeSidecar:
         self._process = None
 
 
+class RosImageFileSubscriber:
+    """System-Python ROS image subscriber with file-backed frame handoff."""
+
+    def __init__(
+        self,
+        *,
+        image_shape: tuple[int, int, int],
+        topic_map: dict[str, str] | None = None,
+    ) -> None:
+        self._image_shape = image_shape
+        self._topic_map = topic_map or {
+            "left": "/left_camera/image",
+            "center": "/center_camera/image",
+            "right": "/right_camera/image",
+        }
+        self._process: subprocess.Popen[str] | None = None
+        self._frame_dir = Path(tempfile.mkdtemp(prefix="aic_ros_image_frames_"))
+        self._latest_images: dict[str, np.ndarray] = {
+            name: np.zeros(image_shape, dtype=np.uint8) for name in self._topic_map
+        }
+        self._latest_timestamps: dict[str, float] = {name: 0.0 for name in self._topic_map}
+
+    def start(self) -> None:
+        if self._process is not None and self._process.poll() is None:
+            return
+        script = Path(__file__).with_name("ros_image_file_subscriber.py")
+        if not script.exists():
+            return
+        executable = "/usr/bin/python3" if Path("/usr/bin/python3").exists() else sys.executable
+        self._process = subprocess.Popen(
+            [
+                executable,
+                str(script),
+                "--topics-json",
+                json.dumps(self._topic_map, sort_keys=True),
+                "--output-dir",
+                str(self._frame_dir),
+                "--height",
+                str(int(self._image_shape[0])),
+                "--width",
+                str(int(self._image_shape[1])),
+            ],
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+            text=True,
+        )
+
+    def latest_images(self) -> tuple[dict[str, np.ndarray], dict[str, float]]:
+        for name in self._topic_map:
+            meta_path = self._frame_dir / f"{name}.json"
+            frame_path = self._frame_dir / f"{name}.npy"
+            if not meta_path.exists() or not frame_path.exists():
+                continue
+            try:
+                meta = json.loads(meta_path.read_text(encoding="utf-8"))
+                frame = np.load(frame_path)
+            except Exception:
+                continue
+            if not _is_nonblank_image(frame):
+                continue
+            self._latest_images[name] = np.asarray(frame, dtype=np.uint8)
+            self._latest_timestamps[name] = max(float(meta.get("timestamp", 0.0)), time.time())
+        return (
+            {name: image.copy() for name, image in self._latest_images.items()},
+            dict(self._latest_timestamps),
+        )
+
+    def close(self) -> None:
+        if self._process is not None and self._process.poll() is None:
+            self._process.terminate()
+            try:
+                self._process.wait(timeout=3.0)
+            except subprocess.TimeoutExpired:
+                self._process.kill()
+                self._process.wait(timeout=3.0)
+        self._process = None
+        shutil.rmtree(self._frame_dir, ignore_errors=True)
+
+
 @dataclass
 class RosCameraSidecarIO(AicGazeboIO):
     """Live IO path with ROS-only image fallback."""
 
     camera_subscriber: RosCameraSubscriber | None = None
+    gazebo_camera_subscriber: GazeboCameraSubscriber | None = None
+    file_camera_subscriber: RosImageFileSubscriber | None = None
     camera_bridge: CameraBridgeSidecar = field(default_factory=CameraBridgeSidecar)
     ready_timeout_s: float = 10.0
     image_shape: tuple[int, int, int] = (256, 256, 3)
@@ -601,6 +765,7 @@ class RosCameraSidecarIO(AicGazeboIO):
     allow_direct_fetch_fallback: bool = True
     background_direct_fetch: bool = False
     _wrist_bootstrapped: bool = field(default=False, init=False, repr=False)
+    _wrist_ready_wait_attempted: bool = field(default=False, init=False, repr=False)
     _last_good_images: dict[str, np.ndarray] = field(default_factory=dict, init=False, repr=False)
     _last_good_timestamps: dict[str, float] = field(default_factory=dict, init=False, repr=False)
     _last_good_camera_info: dict[str, dict[str, np.ndarray]] = field(default_factory=dict, init=False, repr=False)
@@ -610,6 +775,10 @@ class RosCameraSidecarIO(AicGazeboIO):
     def __post_init__(self) -> None:
         if self.camera_subscriber is None:
             self.camera_subscriber = RosCameraSubscriber(image_shape=self.image_shape)
+        if self.gazebo_camera_subscriber is None:
+            self.gazebo_camera_subscriber = GazeboCameraSubscriber(image_shape=self.image_shape)
+        if self.file_camera_subscriber is None:
+            self.file_camera_subscriber = RosImageFileSubscriber(image_shape=self.image_shape)
         self._ensure_camera_pipeline_started()
 
     def observation_from_state(
@@ -631,7 +800,8 @@ class RosCameraSidecarIO(AicGazeboIO):
             )
             self._background_fetch_thread.start()
         bootstrap = not self._wrist_bootstrapped
-        if bootstrap and self.blocking_bootstrap:
+        if bootstrap and self.blocking_bootstrap and not self._wrist_ready_wait_attempted:
+            self._wrist_ready_wait_attempted = True
             print('{"io_stage":"wait_until_ready_begin"}', flush=True)
             ready = self.camera_subscriber.wait_until_ready(timeout_s=self.ready_timeout_s)
             print(f'{{"io_stage":"wait_until_ready_done","ready":{str(bool(ready)).lower()}}}', flush=True)
@@ -659,7 +829,7 @@ class RosCameraSidecarIO(AicGazeboIO):
             ),
         )
         if bootstrap:
-            self._wrist_bootstrapped = True
+            self._wrist_bootstrapped = _has_all_wrist_frames(images, timestamps)
         observation["images"] = images
         observation["image_timestamps"] = np.array(
             [
@@ -680,12 +850,20 @@ class RosCameraSidecarIO(AicGazeboIO):
         if self._background_fetch_thread is not None:
             self._background_fetch_thread.join(timeout=2.0)
         self._background_fetch_thread = None
+        if self.gazebo_camera_subscriber is not None:
+            self.gazebo_camera_subscriber.close()
+        if self.file_camera_subscriber is not None:
+            self.file_camera_subscriber.close()
         self.camera_subscriber.close()
         self.camera_bridge.close()
 
     def _ensure_camera_pipeline_started(self) -> None:
+        if self.gazebo_camera_subscriber is not None:
+            self.gazebo_camera_subscriber.start()
         if self.start_bridge:
             self.camera_bridge.start()
+        if self.file_camera_subscriber is not None:
+            self.file_camera_subscriber.start()
         self.camera_subscriber.start()
 
     def _collect_live_wrist_frames(
@@ -701,16 +879,27 @@ class RosCameraSidecarIO(AicGazeboIO):
         printed_direct_begin = False
         any_direct_success = False
         while True:
+            if self.gazebo_camera_subscriber is not None:
+                gazebo_images, gazebo_timestamps = self.gazebo_camera_subscriber.latest_images()
+                for name, image in gazebo_images.items():
+                    timestamp = float(gazebo_timestamps.get(name, 0.0))
+                    if _is_nonblank_image(image) and timestamp > 0.0:
+                        images[name] = image
+                        timestamps[name] = timestamp
+            if self.file_camera_subscriber is not None:
+                file_images, file_timestamps = self.file_camera_subscriber.latest_images()
+                for name, image in file_images.items():
+                    timestamp = float(file_timestamps.get(name, 0.0))
+                    if _is_nonblank_image(image) and timestamp > 0.0:
+                        images[name] = image
+                        timestamps[name] = timestamp
+                        camera_info.setdefault(name, _default_camera_info())
             subscriber_images, subscriber_timestamps, camera_info = self.camera_subscriber.latest_images()
-            images = {
-                name: image
-                for name, image in subscriber_images.items()
-                if _is_nonblank_image(image) and float(subscriber_timestamps.get(name, 0.0)) > 0.0
-            }
-            timestamps = {
-                name: float(subscriber_timestamps.get(name, 0.0))
-                for name in images
-            }
+            for name, image in subscriber_images.items():
+                timestamp = float(subscriber_timestamps.get(name, 0.0))
+                if _is_nonblank_image(image) and timestamp > 0.0:
+                    images[name] = image
+                    timestamps[name] = timestamp
             missing = [name for name in ("left", "center", "right") if name not in images]
             if not missing:
                 break
@@ -767,6 +956,16 @@ class RosCameraSidecarIO(AicGazeboIO):
             try:
                 subscriber_images, subscriber_timestamps, camera_info = self.camera_subscriber.latest_images()
                 updated_any = False
+                if self.file_camera_subscriber is not None:
+                    file_images, file_timestamps = self.file_camera_subscriber.latest_images()
+                    for name in ("left", "center", "right"):
+                        timestamp = float(file_timestamps.get(name, 0.0))
+                        image = file_images.get(name)
+                        if _is_nonblank_image(image) and timestamp > 0.0:
+                            self._last_good_images[name] = np.asarray(image, dtype=np.uint8).copy()
+                            self._last_good_timestamps[name] = timestamp
+                            self._last_good_camera_info.setdefault(name, _default_camera_info())
+                            updated_any = True
                 for name in ("left", "center", "right"):
                     timestamp = float(subscriber_timestamps.get(name, 0.0))
                     image = subscriber_images.get(name)
@@ -908,3 +1107,41 @@ def _is_nonblank_image(image: np.ndarray | None) -> bool:
         and getattr(image, "size", 0) > 0
         and int(np.asarray(image, dtype=np.uint8).sum()) > 0
     )
+
+
+def _has_all_wrist_frames(
+    images: dict[str, np.ndarray],
+    timestamps: dict[str, float],
+) -> bool:
+    return all(
+        _is_nonblank_image(images.get(name)) and float(timestamps.get(name, 0.0)) > 0.0
+        for name in ("left", "center", "right")
+    )
+
+
+def _resolve_executable_from_active_env(name: str) -> str | None:
+    resolved = shutil.which(name)
+    if resolved is not None:
+        return resolved
+    prefix_bin = Path(sys.prefix) / "bin" / name
+    if prefix_bin.exists():
+        return str(prefix_bin)
+    conda_prefix = os.environ.get("CONDA_PREFIX")
+    if conda_prefix:
+        conda_bin = Path(conda_prefix) / "bin" / name
+        if conda_bin.exists():
+            return str(conda_bin)
+    return None
+
+
+def _ros_gz_subprocess_env() -> dict[str, str]:
+    env = _gazebo_subprocess_env()
+    prefix = Path(os.environ.get("CONDA_PREFIX") or sys.prefix)
+    prefix_bin = prefix / "bin"
+    if prefix_bin.exists():
+        env["PATH"] = f"{prefix_bin}{os.pathsep}{env.get('PATH', '')}"
+    if prefix.exists():
+        env.setdefault("AMENT_PREFIX_PATH", str(prefix))
+        env.setdefault("COLCON_PREFIX_PATH", str(prefix))
+    env.setdefault("ROS_DISTRO", "kilted")
+    return env
