@@ -198,6 +198,12 @@ def sanitize_training_world_sdf(
         re.DOTALL,
     )
     sanitized = re.sub(overview_pattern, "\n", sanitized)
+    selected_overview_models = overview_models or _generated_overview_rig_models(setup_script=resolve_official_setup_script())
+    if all(topic not in sanitized for topic in ("/overview_camera/image", "/overview_front_camera/image", "/overview_side_camera/image", "/overview_oblique_camera/image")):
+        closing = "</world>"
+        idx = sanitized.rfind(closing)
+        if idx != -1:
+            sanitized = sanitized[:idx] + selected_overview_models + "\n" + sanitized[idx:]
     selected_scene_probe_model = scene_probe_model or _generated_scene_probe_model(setup_script=resolve_official_setup_script())
     if "scene_probe_camera" not in sanitized:
         closing = "</world>"

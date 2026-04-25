@@ -27,6 +27,58 @@ from .replay import TeacherReplayArtifact, save_teacher_replay
 from .types import TeacherRolloutLog, TeacherStepLog
 
 
+def _feedback_track_dense_point(
+    *,
+    state,
+    point,
+    segment_metadata: dict[str, Any],
+) -> tuple[np.ndarray, dict[str, Any] | None]:
+    """Track an optimized Cartesian target from the latest observed TCP pose.
+
+    The smoother still owns the dense target path. This tracker only replaces
+    stale open-loop deltas with a bounded feedback velocity toward the current
+    dense target, which is important for live Gazebo runs where the cable/tool
+    link does not exactly follow the previous command.
+    """
+    gate = segment_metadata.get("port_frame_alignment_gate")
+    if not isinstance(gate, dict) or not bool(gate.get("active", False)):
+        return np.asarray(point.action, dtype=np.float32), None
+    if gate.get("gate_action") != "align_lateral_and_yaw_at_pre_insert_standoff":
+        return np.asarray(point.action, dtype=np.float32), None
+    target_pose = np.asarray(point.target_tcp_pose, dtype=np.float64)
+    current_pose = np.asarray(state.tcp_pose, dtype=np.float64)
+    dt = max(float(point.dt), 1e-6)
+    pose_error = target_pose[:6] - current_pose[:6]
+    pose_error[3:6] = [_wrap_to_pi(float(value)) for value in pose_error[3:6]]
+    linear_limit = max(
+        float(segment_metadata.get("segment_linear_speed_limit_mps") or 0.03),
+        0.06,
+    )
+    angular_limit = 0.5
+    linear = _clip_vector_norm(pose_error[:3] / dt, max_norm=linear_limit)
+    angular = _clip_vector_norm(pose_error[3:6] / dt, max_norm=angular_limit)
+    action = np.concatenate([linear, angular]).astype(np.float32)
+    return action, {
+        "control_source": "feedback_cartesian_tracker",
+        "target_space": "tcp_pose",
+        "linear_speed_limit_mps": float(linear_limit),
+        "angular_speed_limit_radps": float(angular_limit),
+        "tcp_position_error_m": [float(value) for value in pose_error[:3].tolist()],
+        "tcp_orientation_error_rad": [float(value) for value in pose_error[3:6].tolist()],
+    }
+
+
+def _clip_vector_norm(vector: np.ndarray, *, max_norm: float) -> np.ndarray:
+    norm = float(np.linalg.norm(vector))
+    if norm <= float(max_norm) or norm <= 1e-12:
+        return np.asarray(vector, dtype=np.float64)
+    return np.asarray(vector, dtype=np.float64) * (float(max_norm) / norm)
+
+
+def _wrap_to_pi(angle: float) -> float:
+    return float((float(angle) + np.pi) % (2.0 * np.pi) - np.pi)
+
+
 @dataclass(frozen=True)
 class TeacherRolloutResult:
     artifact: TeacherReplayArtifact
@@ -329,10 +381,17 @@ def run_teacher_rollout(
             if terminated or truncated:
                 break
         trajectory_segments.append(segment.to_dict())
+        segment_metadata = dict(segment.conversion_metadata)
         for point in segment.points:
             if _check_teacher_max_steps():
                 break
-            action = np.asarray(point.action, dtype=np.float32)
+            state_before_action = env._state
+            assert state_before_action is not None
+            action, feedback_tracker_metadata = _feedback_track_dense_point(
+                state=state_before_action,
+                point=point,
+                segment_metadata=segment_metadata,
+            )
             observation, reward, terminated, truncated, last_info = env.step(action)
             state = env._state
             assert state is not None
@@ -392,7 +451,17 @@ def run_teacher_rollout(
                     terminated=bool(terminated),
                     truncated=bool(truncated),
                     planner_rationale=controller.last_rationale or "",
-                    trajectory_point=point.to_dict(),
+                    trajectory_point={
+                        **point.to_dict(),
+                        "planned_action": [float(value) for value in point.action],
+                        "action": [float(value) for value in action.tolist()],
+                        **(
+                            {"feedback_tracker": feedback_tracker_metadata}
+                            if feedback_tracker_metadata is not None
+                            else {}
+                        ),
+                        "executed_action": [float(value) for value in action.tolist()],
+                    },
                     dynamics_summary=history.dynamics_summary().to_dict(),
                     observation_summary=_observation_summary(
                         observation,

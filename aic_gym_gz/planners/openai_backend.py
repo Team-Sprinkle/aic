@@ -145,7 +145,10 @@ class OpenAIPlannerBackend(PlannerBackend):
                 self._consume_budget()
                 payload = self.build_request_payload(state, candidate_index=candidate_index)
                 response_payload = self._post_responses_request(payload)
-                plan = self._parse_response_payload(response_payload)
+                plan = self._apply_planner_port_frame_guard(
+                    state=state,
+                    plan=self._parse_response_payload(response_payload),
+                )
                 self._write_trace_record(
                     call_kind="segment_plan",
                     state=state,
@@ -395,6 +398,10 @@ class OpenAIPlannerBackend(PlannerBackend):
                                 "coordinate system: first reduce lateral offset at the pre_insertion_waypoint, then "
                                 "advance along the positive insertion axis only after lateral error is small. Avoid "
                                 "large vertical or behind-port detours when a short port-frame correction is sufficient. "
+                                "Never choose guarded_insert while port_frame_error.plug_lateral_offset_norm_m exceeds "
+                                "the alignment threshold or yaw_error_to_target exceeds 0.10 rad; in that case emit "
+                                "pre_insert_align to the pre_insertion_waypoint_world_xyz with target_yaw and low "
+                                "speed_scale. Treat waypoint xyz as plug-tip targets, not TCP targets. "
                                 "Always fill decision_diagnostics with "
                                 "the concrete gaps or ambiguities that limit confidence, plus the extra tools or "
                                 "visual aids that would most improve the next decision. Explicitly mention if frame "
@@ -482,8 +489,10 @@ class OpenAIPlannerBackend(PlannerBackend):
             ],
             "port_frame_planning_rule": (
                 "Coordinate frame: port_entrance_frame. Origin is target_port_entrance_pose, positive axis points "
-                "from entrance to target_port_pose. Prefer waypoints that decrease lateral offset and move toward "
-                "pre_insertion_waypoint before guarded insertion."
+                "from entrance to target_port_pose. Gate sequence: orient to target_yaw, reduce lateral offset at "
+                "pre_insertion_waypoint_world_xyz below threshold, move to guarded_entry_waypoint_world_xyz, then "
+                "advance only along the positive insertion axis. Waypoint xyz values are plug-tip world targets; "
+                "the optimizer converts them to TCP targets with the observed plug_to_tcp offset."
             ),
             "signal_quality_summary": {
                 signal: {
@@ -781,6 +790,62 @@ class OpenAIPlannerBackend(PlannerBackend):
                     item.strip() for item in payload.decision_diagnostics.assumptions_used if item.strip()
                 ],
             },
+        )
+
+    def _apply_planner_port_frame_guard(
+        self,
+        *,
+        state: TeacherPlanningState,
+        plan: TeacherPlan,
+    ) -> TeacherPlan:
+        port_error = (
+            (state.policy_context.get("relative_geometry") or {}).get("port_frame_error") or {}
+        )
+        if not isinstance(port_error, dict):
+            return plan
+        lateral = _safe_float(port_error.get("plug_lateral_offset_norm_m"))
+        lateral_threshold = _safe_float(port_error.get("alignment_threshold_lateral_m"), default=0.008)
+        yaw_error = abs(_safe_float(state.policy_context.get("yaw_error_to_target"), default=0.0))
+        pre_insert = port_error.get("pre_insertion_waypoint_world_xyz")
+        target_yaw = _safe_float(state.policy_context.get("target_yaw"), default=0.0)
+        if pre_insert is None or len(pre_insert) < 3:
+            return plan
+        is_near_port_plan = plan.next_phase in {"pre_insert_align", "guarded_insert"} or plan.motion_mode == "guarded_insert"
+        if not is_near_port_plan:
+            return plan
+        if lateral <= lateral_threshold and yaw_error <= 0.10 and plan.next_phase != "guarded_insert":
+            return plan
+        if lateral <= lateral_threshold and yaw_error <= 0.10:
+            return plan
+        diagnostics = dict(plan.decision_diagnostics)
+        assumptions = list(diagnostics.get("assumptions_used", []))
+        assumptions.append(
+            "planner_port_frame_guard rewrote near-port plan to pre_insert_align because lateral/yaw gate was not satisfied"
+        )
+        diagnostics["assumptions_used"] = assumptions[:6]
+        gaps = list(diagnostics.get("blocking_gaps", []))
+        gaps.append("guarded insertion blocked until port-frame lateral and yaw alignment are below thresholds")
+        diagnostics["blocking_gaps"] = gaps[:6]
+        return TeacherPlan(
+            next_phase="pre_insert_align",
+            waypoints=(
+                TeacherWaypoint(
+                    position_xyz=(float(pre_insert[0]), float(pre_insert[1]), float(pre_insert[2])),
+                    yaw=float(target_yaw),
+                    speed_scale=min(max(plan.waypoints[0].speed_scale if plan.waypoints else 0.25, 0.15), 0.35),
+                    clearance_hint=plan.waypoints[0].clearance_hint if plan.waypoints else 0.0,
+                ),
+            ),
+            motion_mode="fine_cartesian",
+            caution_flag=True,
+            should_probe=False,
+            segment_horizon_steps=max(int(plan.segment_horizon_steps), 16),
+            segment_granularity="fine",
+            rationale_summary=(
+                f"{plan.rationale_summary.strip()} Port-frame guard redirected this segment to the "
+                "pre-insertion standoff because lateral/yaw alignment is not ready for insertion."
+            )[:400],
+            decision_diagnostics=diagnostics,
         )
 
     def _post_responses_request(self, payload: dict[str, Any]) -> dict[str, Any]:
@@ -1162,6 +1227,13 @@ def _model_supports_temperature(model: str) -> bool:
     normalized = model.strip().lower()
     # GPT-5 reasoning models reject the Responses API temperature parameter.
     return not normalized.startswith("gpt-5")
+
+
+def _safe_float(value: Any, *, default: float = 0.0) -> float:
+    try:
+        return float(value)
+    except (TypeError, ValueError):
+        return float(default)
 
 
 def _http_error_body(error: HTTPError) -> str:

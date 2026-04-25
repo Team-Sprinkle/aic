@@ -293,7 +293,7 @@ class HeadlessTrajectoryVideoRecorder:
                 for view_name in self.OVERVIEW_TOPIC_MAP
                 if view_name not in refreshed
             )
-            if missing_views:
+            if missing_views and self.allow_direct_overview_fetch:
                 probe_frames = capture_scene_probe_images(
                     view_names=missing_views,
                     expected_shape=self.live_overview_shape,
@@ -323,6 +323,11 @@ class HeadlessTrajectoryVideoRecorder:
             if not self.require_live_overview:
                 frames = refreshed
                 break
+            if not self.allow_direct_overview_fetch and not refreshed:
+                raise RuntimeError(
+                    "Live overview camera frames were required, but no overview topic frames "
+                    "were available and direct scene-probe fallback is disabled."
+                )
             time.sleep(0.2)
         for view_name in self.OVERVIEW_TOPIC_MAP:
             if view_name in frames:
@@ -381,6 +386,8 @@ class HeadlessTrajectoryVideoRecorder:
             or self._writers[f"overview_{view_name}"].frame_count <= 0
         ]
         if not missing_views:
+            return
+        if not self.allow_direct_overview_fetch:
             return
         refreshed: dict[str, tuple[np.ndarray, str]] = {}
         for view_name in missing_views:

@@ -5,10 +5,12 @@ from __future__ import annotations
 import argparse
 from contextlib import contextmanager
 from dataclasses import dataclass
+from datetime import datetime, timezone
 import json
 from pathlib import Path
 import signal
 import shutil
+import traceback
 from typing import Any
 
 from aic_gym_gz.env import make_default_env, make_live_env
@@ -54,13 +56,100 @@ def _parse_optional_float(value: str) -> float | None:
     return float(value)
 
 
-def _run_dir(args: argparse.Namespace) -> Path:
-    root = Path(args.output_root)
+def _count_group(args: argparse.Namespace) -> str:
     if args.task_family == "sfp_to_nic":
-        group = f"nic_cards_{args.nic_cards}"
-    else:
-        group = f"sc_ports_{args.sc_ports}"
-    return root / args.task_family / "vlm_planner" / group / f"n{args.trajectory_index}"
+        return f"nic_cards_{args.nic_cards}"
+    return f"sc_ports_{args.sc_ports}"
+
+
+def _base_run_dir(args: argparse.Namespace) -> Path:
+    root = Path(args.output_root)
+    return root / args.task_family / "vlm_planner" / _count_group(args) / f"n{args.trajectory_index}"
+
+
+def _utc_timestamp_slug() -> str:
+    return datetime.now(timezone.utc).strftime("%Y_%m%d_%H%M%S")
+
+
+def _next_trial_index(base_dir: Path) -> int:
+    if not base_dir.exists():
+        return 1
+    indices: list[int] = []
+    for path in base_dir.iterdir():
+        if not path.is_dir() or not path.name.startswith("trial"):
+            continue
+        suffix = path.name.removeprefix("trial").split("_", 1)[0]
+        if suffix.isdigit():
+            indices.append(int(suffix))
+    return max(indices, default=0) + 1
+
+
+def _run_dir(args: argparse.Namespace) -> Path:
+    """Return a unique trial directory without overwriting previous runs."""
+    base_dir = _base_run_dir(args)
+    trial_index = _next_trial_index(base_dir)
+    timestamp = _utc_timestamp_slug()
+    candidate = base_dir / f"trial{trial_index}_{timestamp}"
+    while candidate.exists():
+        trial_index += 1
+        candidate = base_dir / f"trial{trial_index}_{timestamp}"
+    return candidate
+
+
+def _append_jsonl(path: Path, row: dict[str, Any]) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    with path.open("a", encoding="utf-8") as handle:
+        handle.write(json.dumps(to_jsonable(row), sort_keys=True) + "\n")
+
+
+def _attempt_log_paths(args: argparse.Namespace, output_dir: Path) -> tuple[Path, Path]:
+    return (
+        Path(args.output_root) / "runtime_attempts.jsonl",
+        output_dir / "attempt_log.jsonl",
+    )
+
+
+def _append_attempt_logs(paths: tuple[Path, Path], row: dict[str, Any]) -> None:
+    for path in paths:
+        _append_jsonl(path, row)
+
+
+def _attempt_common_fields(
+    args: argparse.Namespace,
+    *,
+    output_dir: Path,
+    run_started_at: str,
+    status: str,
+    event: str,
+) -> dict[str, Any]:
+    return {
+        "event": event,
+        "status": status,
+        "timestamp_utc": datetime.now(timezone.utc).isoformat(),
+        "run_started_at_utc": run_started_at,
+        "output_dir": str(output_dir),
+        "base_run_dir": str(_base_run_dir(args)),
+        "task_family": args.task_family,
+        "policy": "vlm_planner",
+        "count_group": _count_group(args),
+        "trajectory_index": int(args.trajectory_index),
+        "seed": int(args.seed),
+        "debug_mock_backend": bool(args.debug_mock_backend),
+        "runtime_backend": "mock_debug" if args.debug_mock_backend else "scenario_gym_gz",
+        "live_mode": args.live_mode if not args.debug_mock_backend else "mock",
+        "source_entity_name": args.source_entity_name if not args.debug_mock_backend else "mock",
+        "transport_backend": args.transport_backend,
+        "ticks_per_step": int(args.ticks_per_step),
+        "command_timestep_s": 0.002 * float(args.ticks_per_step),
+        "image_observation_mode": args.image_observation_mode,
+        "state_observation_mode": args.state_observation_mode,
+        "planner_backend": args.planner_backend,
+        "openai_model": args.openai_model,
+        "max_env_steps": int(args.max_env_steps),
+        "max_planner_calls": int(args.max_planner_calls),
+        "candidate_plan_count": int(args.candidate_plan_count),
+        "final_feedback_frames_per_angle": int(args.final_feedback_frames_per_angle),
+    }
 
 
 def _build_scenario(args: argparse.Namespace) -> tuple[AicScenario, dict[str, Any]]:
@@ -325,14 +414,29 @@ def _final_port_frame_metrics(artifact: dict[str, Any]) -> dict[str, Any]:
 def _parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser()
     parser.add_argument("--task-family", choices=("sfp_to_nic", "sc_to_sc"), required=True)
-    parser.add_argument("--output-root", default="aic_gym_gz/artifacts/inspect_runs")
+    parser.add_argument("--output-root", default="outputs/trajectory_datasets")
     parser.add_argument("--trajectory-index", type=int, default=1)
     parser.add_argument("--seed", type=int, default=123)
     parser.add_argument("--ticks-per-step", type=int, default=25)
     parser.add_argument("--debug-mock-backend", action="store_true")
+    parser.add_argument(
+        "--live-mode",
+        choices=("gazebo_training_fast", "gazebo_pose_delta_fast", "controller_velocity_wip"),
+        default="gazebo_training_fast",
+    )
     parser.add_argument("--live-timeout", type=float, default=30.0)
     parser.add_argument("--attach-ready-timeout", type=float, default=90.0)
     parser.add_argument("--rollout-wall-timeout", type=float, default=900.0)
+    parser.add_argument(
+        "--source-entity-name",
+        default="ati/tool_link",
+        help=(
+            "Gazebo entity that receives delta_source_pose commands in "
+            "gazebo_pose_delta_fast mode. The default matches the tool-link "
+            "runtime path; cable_0 is useful when validating plug-tip servo "
+            "behavior against honest Gazebo cable dynamics."
+        ),
+    )
     parser.add_argument("--transport-backend", choices=("auto", "transport", "cli"), default="auto")
     parser.add_argument(
         "--image-observation-mode",
@@ -378,6 +482,47 @@ def _parser() -> argparse.ArgumentParser:
 def main() -> None:
     args = _parser().parse_args()
     output_dir = _run_dir(args)
+    output_dir.mkdir(parents=True, exist_ok=False)
+    run_started_at = datetime.now(timezone.utc).isoformat()
+    log_paths = _attempt_log_paths(args, output_dir)
+    _append_attempt_logs(
+        log_paths,
+        _attempt_common_fields(
+            args,
+            output_dir=output_dir,
+            run_started_at=run_started_at,
+            status="started",
+            event="trajectory_attempt_started",
+        ),
+    )
+    try:
+        _run_main(args=args, output_dir=output_dir, run_started_at=run_started_at, log_paths=log_paths)
+    except BaseException as exc:
+        failure = _attempt_common_fields(
+            args,
+            output_dir=output_dir,
+            run_started_at=run_started_at,
+            status="failed",
+            event="trajectory_attempt_failed",
+        )
+        failure.update(
+            {
+                "error_type": type(exc).__name__,
+                "error": str(exc),
+                "traceback": traceback.format_exc(),
+            }
+        )
+        _append_attempt_logs(log_paths, failure)
+        raise
+
+
+def _run_main(
+    *,
+    args: argparse.Namespace,
+    output_dir: Path,
+    run_started_at: str,
+    log_paths: tuple[Path, Path],
+) -> None:
     output_dir.mkdir(parents=True, exist_ok=True)
     trace_dir = output_dir / "openai_traces"
     video_dir = output_dir / "videos"
@@ -439,7 +584,8 @@ def main() -> None:
             timeout=args.live_timeout,
             attach_ready_timeout=args.attach_ready_timeout,
             image_shape=image_shape,
-            live_mode="gazebo_training_fast",
+            live_mode=args.live_mode,
+            source_entity_name=args.source_entity_name,
             image_observation_mode=args.image_observation_mode,
             observation_transport_override="persistent",
             state_observation_mode=args.state_observation_mode,
@@ -447,7 +593,7 @@ def main() -> None:
             allow_synthetic_plug_pose=False,
         )
         real_video_required = True
-        runtime_backend = "scenario_gym_gz"
+        runtime_backend = f"scenario_gym_gz:{args.live_mode}"
     env.randomizer = FixedScenarioProvider(scenario)  # type: ignore[assignment]
     dataset_frames: list[RolloutDatasetFrame] = []
     recorder = HeadlessTrajectoryVideoRecorder(
@@ -457,7 +603,7 @@ def main() -> None:
         require_real_wrist_images=real_video_required,
         require_live_overview=real_video_required,
         prefer_live_overview_camera=real_video_required,
-        allow_direct_overview_fetch=not real_video_required,
+        allow_direct_overview_fetch=True,
         overview_capture_stride=max(int(args.overview_capture_stride), 1),
     )
     result = None
@@ -576,6 +722,19 @@ def main() -> None:
         final_vlm_feedback_summary=final_vlm_feedback_summary,
         trace_files=trace_files,
     )
+    summary_metrics = dict(performance_summary.get("metrics") or {})
+    performance_summary.update(
+        {
+            "score": summary_metrics.get("gym_final_score"),
+            "distance_to_target": summary_metrics.get("distance_to_target_m"),
+            "distance_to_entrance": summary_metrics.get("distance_to_entrance_m"),
+            "training_reward_total": summary_metrics.get("training_reward_total"),
+            "insertion_progress": summary_metrics.get("insertion_progress"),
+            "lateral_misalignment": summary_metrics.get("lateral_misalignment_m"),
+            "orientation_error": summary_metrics.get("orientation_error_rad"),
+            "partial_insertion": summary_metrics.get("partial_insertion"),
+        }
+    )
     performance_summary["task_metadata"] = task_metadata
     performance_summary["hybrid_policy"] = {
         "vlm_role": "Sparse global/coarse planning in Cartesian coordinates.",
@@ -592,8 +751,34 @@ def main() -> None:
     manifest = {
         "run_name": run_name,
         "output_dir": str(output_dir),
+        "base_run_dir": str(_base_run_dir(args)),
         "seed": args.seed,
         "runtime_backend": runtime_backend,
+        "run_started_at_utc": run_started_at,
+        "args": {
+            "task_family": args.task_family,
+            "output_root": args.output_root,
+            "trajectory_index": args.trajectory_index,
+            "ticks_per_step": args.ticks_per_step,
+            "command_timestep_s": 0.002 * float(args.ticks_per_step),
+            "debug_mock_backend": args.debug_mock_backend,
+            "live_mode": args.live_mode if not args.debug_mock_backend else "mock",
+            "source_entity_name": args.source_entity_name if not args.debug_mock_backend else "mock",
+            "transport_backend": args.transport_backend,
+            "image_observation_mode": args.image_observation_mode,
+            "state_observation_mode": args.state_observation_mode,
+            "planner_backend": args.planner_backend,
+            "openai_model": args.openai_model,
+            "max_env_steps": args.max_env_steps,
+            "max_planner_calls": args.max_planner_calls,
+            "candidate_plan_count": args.candidate_plan_count,
+            "final_feedback_frames_per_angle": args.final_feedback_frames_per_angle,
+            "nic_cards": args.nic_cards,
+            "target_nic_index": args.target_nic_index,
+            "target_nic_port": args.target_nic_port,
+            "sc_ports": args.sc_ports,
+            "target_sc_index": args.target_sc_index,
+        },
         "task_metadata": task_metadata,
         "artifacts": {
             "task_metadata_json": str(task_metadata_path),
@@ -617,10 +802,50 @@ def main() -> None:
                 "Videos are always generated. Dataset-quality runs require real Gazebo wrist and overview streams; "
                 "diagnostic schematic renders are only available with --debug-mock-backend."
             ),
-            "dataset_layout": "Matches inspect_runs/{task_family}/vlm_planner/{count_group}/n{trajectory_index}.",
+            "dataset_layout": (
+                "Non-overwriting layout: {output_root}/{task_family}/vlm_planner/"
+                "{count_group}/n{trajectory_index}/trial{index}_{utc_timestamp}."
+            ),
+            "frames_for_final_feedback": (
+                "Final GPT-5 feedback samples up to final_feedback_frames_per_angle equally spaced "
+                "frames per video stream and includes timestamps plus angle descriptions."
+            ),
         },
     }
     _write_json(manifest_path, manifest)
+    success_log = _attempt_common_fields(
+        args,
+        output_dir=output_dir,
+        run_started_at=run_started_at,
+        status="completed",
+        event="trajectory_attempt_completed",
+    )
+    success_log.update(
+        {
+            "success": bool(performance_summary.get("success", False)),
+            "termination_reason": performance_summary.get("termination_reason"),
+            "score": performance_summary.get("score"),
+            "distance_to_target": performance_summary.get("distance_to_target"),
+            "distance_to_entrance": performance_summary.get("distance_to_entrance"),
+            "insertion_progress": performance_summary.get("insertion_progress"),
+            "lateral_misalignment": performance_summary.get("lateral_misalignment"),
+            "orientation_error": performance_summary.get("orientation_error"),
+            "video_streams": {
+                name: {
+                    "frame_count": stream.get("frame_count"),
+                    "fps": stream.get("fps"),
+                    "first_sim_time": stream.get("first_sim_time"),
+                    "last_sim_time": stream.get("last_sim_time"),
+                }
+                for name, stream in dict(video_summary.get("streams", {})).items()
+                if isinstance(stream, dict)
+            },
+            "final_gpt5_vlm_feedback": _feedback_manifest_summary(final_vlm_feedback_summary),
+            "performance_summary_json": str(performance_summary_path),
+            "manifest_json": str(manifest_path),
+        }
+    )
+    _append_attempt_logs(log_paths, success_log)
     print(json.dumps(to_jsonable(manifest), indent=2, sort_keys=True))
 
 

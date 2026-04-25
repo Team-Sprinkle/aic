@@ -120,6 +120,10 @@ class TeacherSmoothingTest(unittest.TestCase):
             segment.conversion_metadata["optimizer_metrics"]["max_command_linear_speed_mps"],
             smoother.max_linear_speed + 1e-9,
         )
+        self.assertEqual(
+            segment.conversion_metadata["optimizer_metrics"]["guarded_insert_speed_limit_mps"],
+            smoother.guarded_insert_speed_limit,
+        )
 
     def test_optimizer_slows_near_final_target(self) -> None:
         smoother = MinimumJerkSmoother(base_dt=0.02, max_linear_speed=0.12)
@@ -220,6 +224,74 @@ class TeacherSmoothingTest(unittest.TestCase):
         np.testing.assert_allclose(first_action[:3], [0.1, -0.2, 0.3])
         self.assertAlmostEqual(first_action[5], 0.4, places=6)
         self.assertTrue(segment.conversion_metadata["native_action_override_used"])
+
+    def test_port_frame_gate_blocks_guarded_insert_until_aligned(self) -> None:
+        smoother = MinimumJerkSmoother(base_dt=0.02)
+        state = self._state()
+        state.plug_pose[:3] = [0.10, 0.02, 1.0]
+        state.tcp_pose[:3] = [0.10, 0.02, 1.0]
+        state.plug_pose[5] = 0.8
+        state.tcp_pose[5] = 0.8
+        state.target_port_entrance_pose[:3] = [0.0, 0.0, 0.95]
+        state.target_port_pose[:3] = [0.0, 0.0, 0.90]
+        state.target_port_pose[5] = 0.0
+        plan = TeacherPlan(
+            next_phase="guarded_insert",
+            waypoints=(TeacherWaypoint(position_xyz=(0.0, 0.0, 0.90), yaw=0.0, speed_scale=1.0),),
+            motion_mode="guarded_insert",
+            caution_flag=True,
+            should_probe=False,
+            segment_horizon_steps=8,
+            segment_granularity="guarded",
+            rationale_summary="bad premature insertion",
+        )
+
+        segment = smoother.smooth(state=state, plan=plan)
+
+        gate = segment.conversion_metadata["port_frame_alignment_gate"]
+        self.assertTrue(gate["active"])
+        self.assertEqual(gate["gate_action"], "align_lateral_and_yaw_at_pre_insert_standoff")
+        final_pose = np.asarray(segment.points[-1].target_tcp_pose)
+        # The insertion axis is negative world Z, so pre-insert is 25 mm before
+        # the entrance plane in the opposite direction.
+        self.assertAlmostEqual(final_pose[0], 0.0, places=4)
+        self.assertAlmostEqual(final_pose[1], 0.0, places=4)
+        self.assertAlmostEqual(final_pose[2], 0.975, places=4)
+        self.assertAlmostEqual(final_pose[5], 0.0, places=4)
+        self.assertAlmostEqual(gate["final_target_lateral_error_m"], 0.0, places=6)
+        self.assertAlmostEqual(gate["final_target_axial_depth_m"], -0.025, places=6)
+        self.assertAlmostEqual(gate["final_target_yaw_error_rad"], 0.0, places=6)
+        self.assertEqual(gate["guarded_insert_speed_limit_mps"], smoother.guarded_insert_speed_limit)
+
+    def test_port_frame_alignment_gate_uses_stable_near_port_speed_limit(self) -> None:
+        smoother = MinimumJerkSmoother(base_dt=0.05)
+        state = self._state()
+        state.plug_pose[:3] = [0.16, 0.0, 1.0]
+        state.tcp_pose[:3] = [0.16, 0.0, 1.0]
+        state.target_port_entrance_pose[:3] = [0.0, 0.0, 0.95]
+        state.target_port_pose[:3] = [0.0, 0.0, 0.90]
+        plan = TeacherPlan(
+            next_phase="pre_insert_align",
+            waypoints=(TeacherWaypoint(position_xyz=(0.0, 0.0, 0.975), yaw=0.0, speed_scale=0.1),),
+            motion_mode="fine_cartesian",
+            caution_flag=True,
+            should_probe=False,
+            segment_horizon_steps=8,
+            segment_granularity="fine",
+            rationale_summary="slow VLM prealign should be stable near the cable",
+        )
+
+        segment = smoother.smooth(state=state, plan=plan)
+
+        self.assertEqual(segment.conversion_metadata["gated_alignment_min_speed_scale"], 0.8)
+        self.assertEqual(
+            segment.conversion_metadata["segment_linear_speed_limit_mps"],
+            smoother.port_alignment_unaligned_speed_limit,
+        )
+        self.assertLess(len(segment.points), 180)
+        self.assertGreater(len(segment.points), 80)
+        max_speed = max(float(np.linalg.norm(point.action[:3])) for point in segment.points)
+        self.assertLessEqual(max_speed, smoother.port_alignment_unaligned_speed_limit + 1e-9)
 
 
 if __name__ == "__main__":

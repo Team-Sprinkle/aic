@@ -119,6 +119,23 @@ class CloseRangePolicyTest(unittest.TestCase):
         self.assertAlmostEqual(float(np.linalg.norm(action[:3])), 0.0, places=6)
         self.assertGreater(action[5], 0.0)
 
+    def test_handoff_waits_for_near_port_lateral_and_yaw_alignment(self) -> None:
+        policy = CloseRangeInsertionPolicy()
+        observation = {
+            "score_geometry": {
+                "distance_to_entrance": [0.045],
+                "distance_to_target": [0.055],
+                "lateral_misalignment": [0.025],
+                "orientation_error": [0.25],
+            },
+        }
+
+        self.assertFalse(policy.should_handoff(observation))
+
+        observation["score_geometry"]["lateral_misalignment"] = [0.004]
+        observation["score_geometry"]["orientation_error"] = [0.04]
+        self.assertTrue(policy.should_handoff(observation))
+
 
 if __name__ == "__main__":
     unittest.main()

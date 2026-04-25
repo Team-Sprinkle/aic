@@ -54,10 +54,12 @@ class OfficialSceneLaunchSpecTest(unittest.TestCase):
         world_sdf = "<sdf version='1.9'><world name='aic_world'></world></sdf>"
         sanitized = sanitize_training_world_sdf(
             world_sdf,
-            overview_models="\n<model name='overview_camera_array'></model>\n",
+            overview_models="\n<model name='overview_camera_array'><link name='camera'><sensor name='overview'><topic>/overview_camera/image</topic></sensor></link></model>\n",
             scene_probe_model="\n<model name='scene_probe_camera'></model>\n",
         )
         self.assertIn("scene_probe_camera", sanitized)
+        self.assertIn("overview_camera_array", sanitized)
+        self.assertIn("/overview_camera/image", sanitized)
 
     def test_sanitize_training_world_injects_joint_target_plugin(self) -> None:
         world_sdf = (
