@@ -322,7 +322,7 @@ class AicScoreCalculator:
         return AicEvaluationSummary(
             tier2=tier2,
             tier3={"score": tier3_score},
-            total_score=1.0 + tier3_score + float(sum(tier2.values())),
+            total_score=tier3_score + float(sum(tier2.values())),
             message=tier3_message,
             parity_notes=[
                 "This report is the local gazebo-gym final score path (`gym_final_score` / `gym_reward`), not the official toolkit evaluation.",

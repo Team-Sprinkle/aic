@@ -27,6 +27,10 @@ from .visual_context import (
 )
 
 
+def _wrap_to_pi(angle: float) -> float:
+    return float((angle + np.pi) % (2.0 * np.pi) - np.pi)
+
+
 @dataclass(frozen=True)
 class TeacherContextExtractor:
     """Builds compact planner inputs from policy and oracle context."""
@@ -73,6 +77,9 @@ class TeacherContextExtractor:
                 if state.target_port_entrance_pose is None
                 else state.target_port_entrance_pose.astype(float).tolist()
             ),
+            "current_yaw": float(state.plug_pose[5]),
+            "target_yaw": float(state.target_port_pose[5]),
+            "yaw_error_to_target": float(_wrap_to_pi(float(state.target_port_pose[5] - state.plug_pose[5]))),
             "wrench": state.wrench.astype(float).tolist(),
             "official_current_wrench": state.wrench.astype(float).tolist(),
             "wrench_timestamp": float(state.wrench_timestamp),
@@ -258,6 +265,11 @@ class TeacherContextExtractor:
         lateral_error_to_entrance = float(
             np.linalg.norm(plug_to_entrance - axial_error_to_entrance * insertion_axis_unit)
         )
+        plug_offset_from_entrance = plug - entrance
+        plug_axial_depth = float(np.dot(plug_offset_from_entrance, insertion_axis_unit))
+        plug_lateral_vector = plug_offset_from_entrance - plug_axial_depth * insertion_axis_unit
+        pre_insertion_waypoint = entrance - 0.025 * insertion_axis_unit
+        guarded_entry_waypoint = entrance - 0.005 * insertion_axis_unit
         return {
             "tcp_to_target_port_xyz": tcp_to_target.astype(float).tolist(),
             "tcp_to_target_port_distance": float(np.linalg.norm(tcp_to_target)),
@@ -272,6 +284,24 @@ class TeacherContextExtractor:
             "insertion_axis_world_xyz": insertion_axis_unit.astype(float).tolist(),
             "axial_error_to_entrance_m": axial_error_to_entrance,
             "lateral_error_to_entrance_m": lateral_error_to_entrance,
+            "port_frame_error": {
+                "coordinate_frame": "port_entrance_frame",
+                "origin_world_xyz": entrance.astype(float).tolist(),
+                "axis_positive_direction": "from port entrance toward fully inserted target",
+                "axis_unit_world_xyz": insertion_axis_unit.astype(float).tolist(),
+                "plug_axial_depth_from_entrance_m": plug_axial_depth,
+                "plug_signed_distance_before_entrance_plane_m": -plug_axial_depth,
+                "plug_lateral_offset_norm_m": float(np.linalg.norm(plug_lateral_vector)),
+                "plug_lateral_offset_vector_world_m": plug_lateral_vector.astype(float).tolist(),
+                "pre_insertion_waypoint_world_xyz": pre_insertion_waypoint.astype(float).tolist(),
+                "guarded_entry_waypoint_world_xyz": guarded_entry_waypoint.astype(float).tolist(),
+                "alignment_threshold_lateral_m": 0.008,
+                "entry_threshold_before_plane_m": 0.010,
+                "instruction": (
+                    "Before insertion, reduce lateral offset at the pre_insertion_waypoint. "
+                    "Only move positive along the insertion axis after lateral offset is below threshold."
+                ),
+            },
         }
 
     def _frame_context(self) -> dict[str, Any]:

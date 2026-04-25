@@ -1,5 +1,6 @@
 #include <google/protobuf/message.h>
 #include <gz/msgs/boolean.pb.h>
+#include <gz/msgs/double.pb.h>
 #include <gz/msgs/pose.pb.h>
 #include <gz/msgs/pose_v.pb.h>
 #include <gz/msgs/serialized_map.pb.h>
@@ -21,6 +22,8 @@
 #include <sstream>
 #include <string>
 #include <thread>
+#include <unordered_map>
+#include <vector>
 
 namespace {
 
@@ -32,6 +35,25 @@ struct TopicSample {
   std::size_t generation{0};
   Clock::time_point received_at{};
 };
+
+std::string Trim(const std::string &value) {
+  const auto first = value.find_first_not_of(" \t\r\n");
+  if (first == std::string::npos) {
+    return "";
+  }
+  const auto last = value.find_last_not_of(" \t\r\n");
+  return value.substr(first, last - first + 1);
+}
+
+std::vector<std::string> Split(const std::string &value, char delimiter) {
+  std::vector<std::string> parts;
+  std::stringstream stream(value);
+  std::string part;
+  while (std::getline(stream, part, delimiter)) {
+    parts.push_back(Trim(part));
+  }
+  return parts;
+}
 
 class BridgeServer {
  public:
@@ -307,31 +329,59 @@ class BridgeServer {
   rapidjson::Document HandleJointTarget(const rapidjson::Document &request,
                                         rapidjson::Document response) {
     auto &allocator = response.GetAllocator();
-    if (!request.HasMember("service") || !request["service"].IsString()) {
-      this->AddError(response, "joint_target requires string service");
-      return response;
-    }
     if (!request.HasMember("request_text") || !request["request_text"].IsString()) {
       this->AddError(response, "joint_target requires string request_text");
       return response;
     }
-
-    gz::msgs::StringMsg req;
-    req.set_data(request["request_text"].GetString());
-
-    const unsigned int timeoutMs =
-        static_cast<unsigned int>(this->ReadOptionalInt(request, "timeout_ms").value_or(1000));
-    gz::msgs::Boolean rep;
-    bool result = false;
-    const bool requested = this->RequestWithRetry(
-        request["service"].GetString(), req, timeoutMs, rep, result);
-    response.AddMember("ok", requested && result && rep.data(), allocator);
-    response.AddMember("requested", requested, allocator);
-    response.AddMember("result", result, allocator);
-    response.AddMember("reply_text", rapidjson::Value(rep.DebugString().c_str(), allocator), allocator);
-    if (!(requested && result && rep.data())) {
-      this->AddError(response, "joint_target request failed");
+    std::unordered_map<std::string, std::string> fields;
+    for (const auto &item : Split(request["request_text"].GetString(), ';')) {
+      const auto idx = item.find('=');
+      if (idx == std::string::npos) {
+        continue;
+      }
+      fields[Trim(item.substr(0, idx))] = Trim(item.substr(idx + 1));
     }
+    const auto jointsIt = fields.find("joint_names");
+    const auto positionsIt = fields.find("positions");
+    if (jointsIt == fields.end() || positionsIt == fields.end()) {
+      this->AddError(response, "joint_target request_text requires joint_names and positions");
+      return response;
+    }
+    const auto jointNames = Split(jointsIt->second, ',');
+    const auto positionTexts = Split(positionsIt->second, ',');
+    if (jointNames.empty() || jointNames.size() != positionTexts.size()) {
+      this->AddError(response, "joint_target joint_names and positions length mismatch");
+      return response;
+    }
+    bool published = true;
+    for (std::size_t i = 0; i < jointNames.size(); ++i) {
+      double position = 0.0;
+      try {
+        position = std::stod(positionTexts[i]);
+      } catch (const std::exception &) {
+        this->AddError(response, "joint_target position is not numeric");
+        return response;
+      }
+      const std::string topic = "/aic/joint_target/" + jointNames[i];
+      auto pubIt = this->jointTargetPubs_.find(topic);
+      if (pubIt == this->jointTargetPubs_.end()) {
+        auto publisher = this->node_.Advertise<gz::msgs::Double>(topic);
+        pubIt = this->jointTargetPubs_.emplace(topic, std::move(publisher)).first;
+        std::this_thread::sleep_for(Milliseconds(50));
+      }
+      gz::msgs::Double msg;
+      msg.set_data(position);
+      for (int repeat = 0; repeat < 3; ++repeat) {
+        published = pubIt->second.Publish(msg) && published;
+        std::this_thread::sleep_for(Milliseconds(10));
+      }
+    }
+    gz::msgs::Boolean rep;
+    rep.set_data(published);
+    response.AddMember("ok", published, allocator);
+    response.AddMember("requested", true, allocator);
+    response.AddMember("result", published, allocator);
+    response.AddMember("reply_text", rapidjson::Value(rep.DebugString().c_str(), allocator), allocator);
     return response;
   }
 
@@ -511,6 +561,7 @@ class BridgeServer {
   std::condition_variable condition_;
   TopicSample state_;
   TopicSample pose_;
+  std::unordered_map<std::string, gz::transport::Node::Publisher> jointTargetPubs_;
   std::size_t stateCallbackCount_{0};
   std::size_t stateParseFailureCount_{0};
   std::size_t poseCallbackCount_{0};

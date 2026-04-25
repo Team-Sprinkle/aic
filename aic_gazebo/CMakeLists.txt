@@ -23,6 +23,10 @@ find_package(gz_msgs_vendor REQUIRED)
 find_package(gz-msgs REQUIRED)
 set(GZ_MSGS_VER ${gz-msgs_VERSION_MAJOR})
 
+find_package(gz_transport_vendor REQUIRED)
+find_package(gz-transport REQUIRED)
+set(GZ_TRANSPORT_VER ${gz-transport_VERSION_MAJOR})
+
 find_package(gz_sim_vendor REQUIRED)
 find_package(gz-sim REQUIRED)
 set(GZ_SIM_VER ${gz-sim_VERSION_MAJOR})
@@ -98,6 +102,22 @@ target_link_libraries(ResetJointsPlugin PRIVATE
 
 install(
   TARGETS ResetJointsPlugin
+  DESTINATION lib/${PROJECT_NAME}
+)
+
+add_library(JointTargetPlugin
+  SHARED
+  src/JointTargetPlugin.cc
+)
+
+target_link_libraries(JointTargetPlugin PRIVATE
+  gz-sim${GZ_SIM_VER}::gz-sim${GZ_SIM_VER}
+  gz-transport${GZ_TRANSPORT_VER}::gz-transport${GZ_TRANSPORT_VER}
+  gz-msgs${GZ_MSGS_VER}::gz-msgs${GZ_MSGS_VER}
+)
+
+install(
+  TARGETS JointTargetPlugin
   DESTINATION lib/${PROJECT_NAME}
 )
 

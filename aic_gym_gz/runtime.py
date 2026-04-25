@@ -22,6 +22,11 @@ from .scenario import AicScenario
 
 def _configure_ros_eval_session_env() -> None:
     """Best-effort middleware setup so in-process ROS clients join eval Zenoh."""
+    if os.environ.get("AIC_GYM_GZ_FORCE_CYCLONEDDS", "").strip() in {"1", "true", "TRUE"}:
+        os.environ["RMW_IMPLEMENTATION"] = "rmw_cyclonedds_cpp"
+        os.environ.pop("ZENOH_SESSION_CONFIG_URI", None)
+        os.environ.pop("ZENOH_CONFIG_OVERRIDE", None)
+        return
     repo_root = Path(__file__).resolve().parents[1]
     eval_dir = repo_root / "docker" / "aic_eval"
     session_config = eval_dir / "aic_zenoh_config.json5"
@@ -352,7 +357,10 @@ class ScenarioGymGzBackend(RuntimeBackend):
             print('{"backend_stage":"start_runtime_begin"}', flush=True)
             self._start_runtime()
             print('{"backend_stage":"start_runtime_done"}', flush=True)
-        if self._ros_observer is None:
+        if (
+            self._ros_observer is None
+            and (self._attach_to_existing or self._use_controller_velocity_commands)
+        ):
             self._ros_observer = _RuntimeRosObserver()
         self._action[:] = 0.0
         if self._attach_to_existing:
@@ -370,7 +378,7 @@ class ScenarioGymGzBackend(RuntimeBackend):
                 self._seed_fast_source_pose_cache(synthetic_reset)
                 print('{"backend_stage":"synthetic_training_reset_shortcut"}', flush=True)
                 return synthetic_reset
-        if self._live_mode == "gazebo_training_fast":
+        if self._live_mode in {"gazebo_training_fast", "controller_velocity_wip"}:
             print('{"backend_stage":"connect_started_world_begin"}', flush=True)
             return self._connect_started_world(timeout_s=min(max(self._timeout, 5.0), 10.0))
         observation, info = self._runtime.reset(seed=seed, options={})
@@ -381,13 +389,15 @@ class ScenarioGymGzBackend(RuntimeBackend):
         if self._runtime is None:
             raise RuntimeError("Live runtime must be started before connecting to a fresh world.")
         bootstrap_timeout_s = min(max(timeout_s * 0.2, 5.0), 20.0)
-        print('{"backend_stage":"bootstrap_cli_begin"}', flush=True)
-        bootstrap_state = self._bootstrap_existing_world_state(timeout_s=bootstrap_timeout_s)
-        if bootstrap_state is not None:
-            self._seed_fast_source_pose_cache(bootstrap_state)
-            print('{"backend_stage":"bootstrap_cli_done"}', flush=True)
-            return bootstrap_state
-        print('{"backend_stage":"bootstrap_cli_miss"}', flush=True)
+        if os.environ.get("AIC_GYM_GZ_ENABLE_CLI_BOOTSTRAP") == "1":
+            print('{"backend_stage":"bootstrap_cli_begin"}', flush=True)
+            bootstrap_state = self._bootstrap_existing_world_state(timeout_s=bootstrap_timeout_s)
+            if bootstrap_state is not None:
+                bootstrap_state = self._settle_training_fast_home(bootstrap_state)
+                self._seed_fast_source_pose_cache(bootstrap_state)
+                print('{"backend_stage":"bootstrap_cli_done"}', flush=True)
+                return bootstrap_state
+            print('{"backend_stage":"bootstrap_cli_miss"}', flush=True)
         deadline = time.monotonic() + timeout_s
         last_error: Exception | None = None
         while time.monotonic() < deadline:
@@ -399,6 +409,7 @@ class ScenarioGymGzBackend(RuntimeBackend):
                 self._last_state = self._runtime_state_from_observation(observation, info)
                 if not self._state_is_sane_for_live_reset(self._last_state):
                     raise RuntimeError("Fresh training-fast world is not yet exposing a sane reset pose.")
+                self._last_state = self._settle_training_fast_home(self._last_state)
                 self._seed_fast_source_pose_cache(self._last_state)
                 print('{"backend_stage":"connect_started_world_done"}', flush=True)
                 return self._last_state
@@ -423,7 +434,43 @@ class ScenarioGymGzBackend(RuntimeBackend):
             f"target_entity={self._target_entity_name}"
         )
 
+    def _settle_training_fast_home(self, state: RuntimeState) -> RuntimeState:
+        if self._live_mode != "gazebo_training_fast" or self._runtime is None:
+            return state
+        target = np.array([-0.1597, -1.3542, -1.6648, -1.6933, 1.5710, 1.4110], dtype=np.float64)
+        latest_state = state
+        for chunk in (500, 500, 500, 500):
+            try:
+                observation, _, _, _, info = self._runtime.step(
+                    {
+                        "set_joint_positions": {
+                            "model_name": "ur5e",
+                            "joint_names": [
+                                "shoulder_pan_joint",
+                                "shoulder_lift_joint",
+                                "elbow_joint",
+                                "wrist_1_joint",
+                                "wrist_2_joint",
+                                "wrist_3_joint",
+                            ],
+                            "positions": target.tolist(),
+                        },
+                        "multi_step": int(chunk),
+                    }
+                )
+                self._last_observation = dict(observation)
+                self._last_info = dict(info)
+                latest_state = self._runtime_state_from_observation(observation, info)
+                joints = np.asarray(latest_state.joint_positions, dtype=np.float64)
+                if joints.shape == target.shape and np.max(np.abs(joints - target)) < 0.05:
+                    return latest_state
+            except Exception:
+                return latest_state
+        return latest_state
+
     def _synthetic_training_fast_reset_state(self) -> RuntimeState | None:
+        if getattr(self, "_state_observation_mode", "honest_live") != "synthetic_training":
+            return None
         if self._scenario is None or self._task is None:
             return None
         synthetic_target = _synthetic_target_pose_from_scenario(
@@ -580,9 +627,14 @@ class ScenarioGymGzBackend(RuntimeBackend):
             np.clip(self._action[3:], -2.0, 2.0) * 0.002 * tick_count
         )
         if self._use_controller_velocity_commands and self._ros_observer is not None:
+            controller_linear, controller_angular = self._action_twist_for_controller_frame(
+                linear_xyz=np.clip(self._action[:3], -0.12, 0.12),
+                angular_xyz=np.clip(self._action[3:], -0.5, 0.5),
+                frame_id="base_link",
+            )
             used_controller_command = self._ros_observer.publish_velocity_command(
-                linear_xyz=np.clip(self._action[:3], -0.25, 0.25),
-                angular_xyz=np.clip(self._action[3:], -2.0, 2.0),
+                linear_xyz=controller_linear,
+                angular_xyz=controller_angular,
                 frame_id="base_link",
                 timeout_s=min(max(self._timeout, 1.0), 2.0),
             )
@@ -595,16 +647,38 @@ class ScenarioGymGzBackend(RuntimeBackend):
             )
         if used_controller_command or used_pose_command:
             observation, _, _, _, info = self._runtime.step({"multi_step": tick_count})
+            if used_controller_command and self._ros_observer is not None:
+                stopped = self._ros_observer.publish_velocity_command(
+                    linear_xyz=np.zeros(3, dtype=np.float64),
+                    angular_xyz=np.zeros(3, dtype=np.float64),
+                    frame_id="base_link",
+                    timeout_s=min(max(self._timeout, 1.0), 2.0),
+                )
+                info = dict(info)
+                info["sent_controller_velocity_stop"] = bool(stopped)
         else:
-            observation, _, _, _, info = self._runtime.step(
-                {
-                    "delta_source_pose": {
-                        "position_delta": position_delta.tolist(),
-                        "orientation_delta": rotation_delta,
-                    },
-                    "multi_step": tick_count,
-                }
-            )
+            if getattr(self, "_live_mode", "gazebo_training_fast") == "gazebo_training_fast":
+                joint_action = self._cartesian_action_to_joint_action(
+                    self._action,
+                    tick_count=tick_count,
+                )
+                joint_delta = joint_action * 0.002 * tick_count
+                observation, _, _, _, info = self._runtime.step(
+                    {
+                        "joint_position_delta": joint_delta.tolist(),
+                        "multi_step": tick_count,
+                    }
+                )
+            else:
+                observation, _, _, _, info = self._runtime.step(
+                    {
+                        "delta_source_pose": {
+                            "position_delta": position_delta.tolist(),
+                            "orientation_delta": rotation_delta,
+                        },
+                        "multi_step": tick_count,
+                    }
+                )
         step_window_end = time.monotonic()
         self._last_observation = dict(observation)
         self._last_info = dict(info)
@@ -617,6 +691,79 @@ class ScenarioGymGzBackend(RuntimeBackend):
             wall_time_window=(step_window_start, step_window_end),
         )
         return self._last_state
+
+    def _cartesian_action_to_joint_action(self, action: np.ndarray, *, tick_count: int) -> np.ndarray:
+        """Map world-frame Cartesian plug velocity action to local joint action.
+
+        The VLM / teacher stack emits Cartesian actions in the Gazebo world
+        frame. The no-ROS portable Gazebo path accepts only UR5e joint targets,
+        so this uses a measured local response matrix around the official
+        ground-truth home pose instead of treating xyz as joints 0/1/2.
+        Columns are plug xyz displacement, in meters, observed over one
+        128-tick command interval for a +0.25 action on each joint channel.
+        """
+        linear_velocity = np.clip(np.asarray(action[:3], dtype=np.float64), -0.25, 0.25)
+        desired_displacement = linear_velocity * 0.002 * float(tick_count)
+        if float(np.linalg.norm(desired_displacement)) <= 1e-9:
+            joint_action = np.zeros(6, dtype=np.float64)
+        else:
+            # Positive elbow, wrist_1 and wrist_3 actions are the measured
+            # directions that move the held SFP tip toward the board-side SFP
+            # port from the official home neighborhood. The full unconstrained
+            # pseudo-inverse over all six joints saturates into directions that
+            # move away from the target because several joints have opposite
+            # local signs under cable load.
+            joint_action = np.zeros(6, dtype=np.float64)
+            # Elbow-positive is the only measured command that reliably beats
+            # the passive cable/gravity drift while moving the SFP tip toward
+            # the board (+x, -y, -z). Keep wrist commands small; large wrist
+            # combinations dominated the least-squares solution and moved away.
+            approach_axis = np.array([0.25, -0.08, -0.86], dtype=np.float64)
+            approach_axis /= float(np.linalg.norm(approach_axis))
+            approach_amount = float(np.dot(desired_displacement, approach_axis))
+            joint_action[2] = np.clip(approach_amount / 0.025, 0.0, 0.25)
+            joint_action[5] = np.clip(0.15 * joint_action[2], 0.0, 0.04)
+        yaw_action = float(np.clip(action[5], -0.25, 0.25))
+        joint_action[5] += 0.25 * yaw_action
+        return np.clip(joint_action, -0.25, 0.25)
+
+    def _action_twist_for_controller_frame(
+        self,
+        *,
+        linear_xyz: np.ndarray,
+        angular_xyz: np.ndarray,
+        frame_id: str,
+    ) -> tuple[np.ndarray, np.ndarray]:
+        linear = np.asarray(linear_xyz, dtype=np.float64).copy()
+        angular = np.asarray(angular_xyz, dtype=np.float64).copy()
+        if frame_id != "base_link":
+            return linear, angular
+        yaw = self._robot_base_yaw_in_world()
+        cos_yaw = math.cos(yaw)
+        sin_yaw = math.sin(yaw)
+        world_from_base = np.array(
+            [
+                [cos_yaw, -sin_yaw, 0.0],
+                [sin_yaw, cos_yaw, 0.0],
+                [0.0, 0.0, 1.0],
+            ],
+            dtype=np.float64,
+        )
+        base_from_world = world_from_base.T
+        return base_from_world @ linear, base_from_world @ angular
+
+    def _robot_base_yaw_in_world(self) -> float:
+        metadata = getattr(self._scenario, "metadata", {}) if self._scenario is not None else {}
+        for key in ("robot_yaw", "robot_base_yaw", "robot_yaw_world"):
+            if key in metadata:
+                try:
+                    return float(metadata[key])
+                except (TypeError, ValueError):
+                    pass
+        # Official aic_gz_bringup default. The gym planner state is in Gazebo
+        # world coordinates, while the official Cartesian controller accepts
+        # base_link-frame twists.
+        return -3.141
 
     def _step_ticks_synthetic_training(self, tick_count: int) -> RuntimeState:
         if self._runtime is None or self._last_state is None:
@@ -691,6 +838,7 @@ class ScenarioGymGzBackend(RuntimeBackend):
         insertion_event, insertion_event_source = self._resolve_live_insertion_event(
             ros_sample=ros_sample,
             geometry=score_geometry,
+            allow_geometry_success=False,
         )
         world_entities_summary = dict(previous_state.world_entities_summary or {})
         world_entities_summary["runtime_diagnostics"] = {
@@ -815,7 +963,7 @@ class ScenarioGymGzBackend(RuntimeBackend):
             )
 
         plug_name = None
-        for candidate in ("lc_plug_link", "sc_plug_link", "sfp_module_link", "cable_0"):
+        for candidate in self._plug_candidates():
             if isinstance(entities_by_name.get(candidate), dict):
                 plug_name = candidate
                 break
@@ -1041,12 +1189,22 @@ class ScenarioGymGzBackend(RuntimeBackend):
             entities_by_name,
             *self._target_port_entrance_candidates(),
         )
-        for fallback_name in ("lc_plug_link", "sc_plug_link", "sfp_module_link", "cable_0"):
+        for fallback_name in self._plug_candidates():
             candidate = entities_by_name.get(fallback_name)
             if isinstance(candidate, dict):
                 plug = candidate
                 plug_name = fallback_name
                 break
+        source = self._maybe_promote_child_pose_to_world(
+            entities_by_name=entities_by_name,
+            entity_name=source_name,
+            entity_value=source,
+            parent_candidates=(
+                getattr(self._task, "cable_name", None),
+                "cable_0",
+                "ur5e",
+            ),
+        )
         plug = self._maybe_promote_child_pose_to_world(
             entities_by_name=entities_by_name,
             entity_name=plug_name,
@@ -1135,7 +1293,7 @@ class ScenarioGymGzBackend(RuntimeBackend):
             previous_state=previous_state,
             step_tick_count=step_tick_count,
         ):
-            tcp_pose = np.asarray(controller_tcp_pose, dtype=np.float64).copy()
+            tcp_pose = _controller_pose_to_runtime_pose(controller_tcp_pose)
             if source_name is None:
                 source_name = "controller_tcp_pose"
         synthesized_tcp_pose = (
@@ -1251,6 +1409,9 @@ class ScenarioGymGzBackend(RuntimeBackend):
         insertion_event, insertion_event_source = self._resolve_live_insertion_event(
             ros_sample=ros_sample,
             geometry=score_geometry,
+            allow_geometry_success=(
+                not synthesized_tcp_pose_used and not synthesized_plug_pose_used
+            ),
         )
         world_entities_summary = _world_entities_summary(
             entities_by_name=entities_by_name,
@@ -1373,15 +1534,21 @@ class ScenarioGymGzBackend(RuntimeBackend):
 
     def _plug_candidates(self) -> tuple[str, ...]:
         if self._task is None:
-            return ("lc_plug_link", "sc_plug_link", "sfp_module_link", "cable_0")
-        return (
+            return ("sfp_tip_link", "sfp_module_link", "lc_plug_link", "sc_plug_link", "cable_0")
+        task_candidates = [
             f"{self._task.plug_name}_link",
             self._task.plug_name,
-            "lc_plug_link",
-            "sc_plug_link",
-            "sfp_module_link",
-            "cable_0",
-        )
+        ]
+        plug_type = str(getattr(self._task, "plug_type", ""))
+        plug_name = str(getattr(self._task, "plug_name", ""))
+        if plug_type == "sfp" or plug_name.startswith("sfp"):
+            task_candidates.extend(["sfp_tip_link", "sfp_module_link"])
+        elif plug_type == "lc" or plug_name.startswith("lc"):
+            task_candidates.append("lc_plug_link")
+        elif plug_type == "sc" or plug_name.startswith("sc"):
+            task_candidates.append("sc_plug_link")
+        task_candidates.extend(["lc_plug_link", "sc_plug_link", "sfp_module_link", "cable_0"])
+        return tuple(dict.fromkeys(task_candidates))
 
     def _target_candidates(self) -> tuple[str, ...]:
         if self._task is None:
@@ -1588,10 +1755,15 @@ class ScenarioGymGzBackend(RuntimeBackend):
         *,
         ros_sample: dict[str, Any],
         geometry: dict[str, Any],
+        allow_geometry_success: bool = False,
     ) -> tuple[str | None, str]:
         official_event = ros_sample.get("official_insertion_event")
         if isinstance(official_event, str) and official_event.strip():
             return official_event.strip(), "official_topic"
+        if allow_geometry_success:
+            geometry_event = self._live_insertion_event_from_geometry(geometry)
+            if geometry_event is not None:
+                return geometry_event, "world_frame_geometry"
         return None, "none"
 
     def _scene_alignment_diagnostics(
@@ -1723,6 +1895,9 @@ class MockStepperBackend(RuntimeBackend):
     def step_ticks(self, tick_count: int) -> RuntimeState:
         if self._state is None:
             raise RuntimeError("Backend must be reset before stepping.")
+        if self._scenario is None:
+            raise RuntimeError("Backend must retain a scenario before stepping.")
+        task = next(iter(self._scenario.tasks.values()))
         tick_count = int(tick_count)
         if tick_count <= 0:
             raise ValueError("tick_count must be positive.")
@@ -2341,13 +2516,17 @@ def _build_score_geometry(
     tracked_pair: dict[str, Any],
 ) -> dict[str, Any]:
     target_distance = float(np.linalg.norm(target_pose[:3] - plug_pose[:3]))
+    tracked_orientation_error = tracked_pair.get("orientation_error")
+    yaw_orientation_error = abs(_wrap_to_pi(float(plug_pose[5] - target_pose[5])))
     geometry: dict[str, Any] = {
         "plug_name": plug_name,
         "target_port_name": target_name,
         "port_entrance_name": entrance_name,
         "distance_to_target": target_distance,
         "tracked_distance": tracked_pair.get("distance"),
-        "orientation_error": tracked_pair.get("orientation_error"),
+        "tracked_orientation_error": tracked_orientation_error,
+        "orientation_error": yaw_orientation_error,
+        "orientation_error_source": "plug_target_yaw_in_runtime_world",
     }
     if entrance_pose is not None:
         insertion_axis = target_pose[:3] - entrance_pose[:3]
@@ -2517,6 +2696,31 @@ def _pose_dict_to_array(pose_like: dict[str, Any]) -> np.ndarray:
         ],
         dtype=np.float64,
     )
+
+
+def _controller_pose_to_runtime_pose(pose: Any) -> np.ndarray:
+    """Convert controller [x,y,z,qx,qy,qz,qw] pose to runtime yaw pose."""
+    array = np.asarray(pose, dtype=np.float64)
+    if array.shape[0] < 7:
+        raise ValueError("Controller pose must contain position plus quaternion.")
+    quaternion = array[3:7]
+    yaw = _quaternion_to_yaw(quaternion)
+    return np.array(
+        [
+            float(array[0]),
+            float(array[1]),
+            float(array[2]),
+            0.0,
+            0.0,
+            float(yaw),
+            float(quaternion[3]),
+        ],
+        dtype=np.float64,
+    )
+
+
+def _wrap_to_pi(angle: float) -> float:
+    return (float(angle) + math.pi) % (2.0 * math.pi) - math.pi
 
 
 def _pose_like_to_pose_dict(pose_like: dict[str, Any]) -> dict[str, np.ndarray]:

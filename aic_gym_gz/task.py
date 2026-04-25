@@ -190,6 +190,7 @@ class AicInsertionTask:
             "training_reward_total": float(sum(self._trace.rl_step_rewards)),
             "success": self._trace.success,
             "wrong_port": wrong_port,
+            "insertion_event": current_state.insertion_event,
         }
         return rl_step_reward, terminated, truncated, info
 

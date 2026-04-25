@@ -27,3 +27,7 @@ class PlannerBackend(ABC):
         """Return optional low-frequency global guidance metadata."""
         del state, candidate_index
         return None
+
+    def remaining_episode_plan_calls(self) -> int | None:
+        """Return remaining low-level plan calls, or None when unlimited/unknown."""
+        return None

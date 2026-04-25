@@ -21,6 +21,23 @@ def main() -> None:
     parser.add_argument("--ticks-per-step", type=int, default=128)
     parser.add_argument("--include-images", action="store_true")
     parser.add_argument("--live", action="store_true")
+    parser.add_argument("--enable-randomization", action="store_true")
+    parser.add_argument("--world-path", default=None)
+    parser.add_argument(
+        "--image-observation-mode",
+        choices=("artifact_validation", "async_training"),
+        default="async_training",
+    )
+    parser.add_argument(
+        "--state-observation-mode",
+        choices=("honest_live", "synthetic_training"),
+        default="honest_live",
+    )
+    parser.add_argument(
+        "--observation-transport-override",
+        choices=("auto", "one_shot", "persistent"),
+        default="persistent",
+    )
     parser.add_argument("--output", default="aic_gym_gz/artifacts/teacher_rollout.json")
     parser.add_argument("--planner-backend", choices=("mock", "openai"), default="mock")
     parser.add_argument("--openai-model", default="gpt-5.4-mini")
@@ -30,6 +47,7 @@ def main() -> None:
     parser.add_argument("--openai-max-calls-per-episode", type=int, default=8)
     parser.add_argument("--openai-global-max-calls-per-episode", type=int, default=5)
     parser.add_argument("--openai-cache-dir", default=None)
+    parser.add_argument("--openai-trace-dir", default=None)
     parser.add_argument("--enable-global-guidance", action="store_true")
     parser.add_argument("--global-plan-interval-segments", type=int, default=2)
     parser.add_argument(
@@ -56,9 +74,13 @@ def main() -> None:
     env = (
         make_live_env(
             include_images=include_images,
-            enable_randomization=False,
+            enable_randomization=bool(args.enable_randomization),
             ticks_per_step=args.ticks_per_step,
+            world_path=args.world_path,
             image_shape=image_shape,
+            image_observation_mode=args.image_observation_mode,
+            state_observation_mode=args.state_observation_mode,
+            observation_transport_override=args.observation_transport_override,
         )
         if args.live
         else make_default_env(
@@ -83,6 +105,7 @@ def main() -> None:
                     global_max_calls_per_episode=args.openai_global_max_calls_per_episode,
                     enable_global_guidance=args.enable_global_guidance,
                     cache_dir=args.openai_cache_dir,
+                    trace_dir=args.openai_trace_dir,
                 )
             )
         )

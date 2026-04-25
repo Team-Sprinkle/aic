@@ -42,6 +42,7 @@ from launch_ros.parameter_descriptions import ParameterValue
 from launch_ros.substitutions import FindPackageShare
 from ros_gz_bridge.actions import RosGzBridge
 from ros_gz_sim.actions import GzServer
+from ament_index_python.packages import PackageNotFoundError, get_package_prefix
 
 
 def on_aic_engine_exit(event, context):
@@ -351,20 +352,32 @@ def launch_setup(context, *args, **kwargs):
         use_composition="True",
     )
 
-    ground_truth_tf_relay = Node(
-        package="topic_tools",
-        executable="relay",
-        name="tf_relay",
-        output="screen",
-        parameters=[
-            {
-                "input_topic": "/scoring/tf",
-                "output_topic": "/tf",
-                "lazy": True,
-            }
-        ],
-        condition=IfCondition(ground_truth),
-    )
+    try:
+        get_package_prefix("topic_tools")
+        ground_truth_tf_relay = Node(
+            package="topic_tools",
+            executable="relay",
+            name="tf_relay",
+            output="screen",
+            parameters=[
+                {
+                    "input_topic": "/scoring/tf",
+                    "output_topic": "/tf",
+                    "lazy": True,
+                }
+            ],
+            condition=IfCondition(ground_truth),
+        )
+    except PackageNotFoundError:
+        ground_truth_tf_relay = ExecuteProcess(
+            cmd=[
+                "bash",
+                "-lc",
+                "echo 'topic_tools not found; skipping optional ground-truth TF relay'",
+            ],
+            condition=IfCondition(ground_truth),
+            output="screen",
+        )
 
     ground_truth_static_tf_publisher = Node(
         package="tf2_ros",

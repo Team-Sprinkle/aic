@@ -69,7 +69,7 @@ class _PlanPayload(BaseModel):
 class OpenAIPlannerConfig:
     model: str = "gpt-5.4-mini"
     temperature: float | None = 0.1
-    max_output_tokens: int = 1200
+    max_output_tokens: int = 4000
     reasoning_effort: Literal["minimal", "low", "medium", "high"] | None = "low"
     text_verbosity: Literal["low", "medium", "high"] = "low"
     timeout_s: float = 20.0
@@ -119,6 +119,9 @@ class OpenAIPlannerBackend(PlannerBackend):
         self._global_episode_call_count = 0
         self._episode_visual_image_count = 0
         self._trace_call_index = 0
+
+    def remaining_episode_plan_calls(self) -> int:
+        return max(int(self.config.max_calls_per_episode) - int(self._episode_call_count), 0)
 
     def set_search_budget_key(self, key: str) -> None:
         self._search_budget_key = key
@@ -326,7 +329,9 @@ class OpenAIPlannerBackend(PlannerBackend):
                 "verbosity": self.config.text_verbosity,
             },
         }
-        if self.config.global_temperature is not None:
+        if self.config.global_temperature is not None and _model_supports_temperature(
+            self.config.global_model or self.config.model
+        ):
             payload["temperature"] = self.config.global_temperature
         if self.config.reasoning_effort is not None:
             payload["reasoning"] = {"effort": self.config.reasoning_effort}
@@ -381,7 +386,16 @@ class OpenAIPlannerBackend(PlannerBackend):
                                 "If the segment would be long, emit only the next short segment that makes progress "
                                 "toward the phase guidance instead of a whole-episode path. Do not stay in one phase "
                                 "indefinitely when the phase guidance recommends advancement. Treat the structured "
-                                "task_definition as the authoritative goal. Always fill decision_diagnostics with "
+                                "task_definition as the authoritative goal. All numeric poses in current_observation "
+                                "are parsed in coordinate_frame='gazebo_world' as 7D poses [x,y,z,qx,qy,qz,qw]. "
+                                "Planner waypoint positions must be plug positions in that same coordinate frame "
+                                "('gazebo_world'). Waypoint yaw is an absolute yaw in radians in the same Gazebo world frame; unless deliberately probing orientation, set "
+                                "waypoint yaw to current_observation.target_yaw so the plug is aligned with the port. "
+                                "Use current_observation.relative_geometry.port_frame_error as the primary near-port "
+                                "coordinate system: first reduce lateral offset at the pre_insertion_waypoint, then "
+                                "advance along the positive insertion axis only after lateral error is small. Avoid "
+                                "large vertical or behind-port detours when a short port-frame correction is sufficient. "
+                                "Always fill decision_diagnostics with "
                                 "the concrete gaps or ambiguities that limit confidence, plus the extra tools or "
                                 "visual aids that would most improve the next decision. Explicitly mention if frame "
                                 "transforms, distances/clearances, xyz-axis arrows, insertion-axis overlays, click "
@@ -405,7 +419,7 @@ class OpenAIPlannerBackend(PlannerBackend):
                 "verbosity": self.config.text_verbosity,
             },
         }
-        if self.config.temperature is not None:
+        if self.config.temperature is not None and _model_supports_temperature(self.config.model):
             payload["temperature"] = self.config.temperature
         if self.config.reasoning_effort is not None:
             payload["reasoning"] = {"effort": self.config.reasoning_effort}
@@ -441,6 +455,9 @@ class OpenAIPlannerBackend(PlannerBackend):
             "partial_insertion": score_geometry.get("partial_insertion"),
             "lateral_misalignment": score_geometry.get("lateral_misalignment"),
             "orientation_error": score_geometry.get("orientation_error"),
+            "current_yaw": policy.get("current_yaw"),
+            "target_yaw": policy.get("target_yaw"),
+            "yaw_error_to_target": policy.get("yaw_error_to_target"),
             "temporal_summary": state.temporal_context.get("dynamics_summary", {}),
             "geometry_progress_summary": state.temporal_context.get("geometry_progress_summary", {}),
             "wrench_contact_trend_summary": state.temporal_context.get("wrench_contact_trend_summary", {}),
@@ -463,6 +480,11 @@ class OpenAIPlannerBackend(PlannerBackend):
                 "zoomed_crop_request",
                 "additional_camera_angle_request",
             ],
+            "port_frame_planning_rule": (
+                "Coordinate frame: port_entrance_frame. Origin is target_port_entrance_pose, positive axis points "
+                "from entrance to target_port_pose. Prefer waypoints that decrease lateral offset and move toward "
+                "pre_insertion_waypoint before guarded insertion."
+            ),
             "signal_quality_summary": {
                 signal: {
                     "is_real": quality.get("is_real"),
@@ -493,6 +515,9 @@ class OpenAIPlannerBackend(PlannerBackend):
                 "plug_pose": policy.get("plug_pose"),
                 "target_port_pose": policy.get("target_port_pose"),
                 "target_port_entrance_pose": policy.get("target_port_entrance_pose"),
+                "current_yaw": policy.get("current_yaw"),
+                "target_yaw": policy.get("target_yaw"),
+                "yaw_error_to_target": policy.get("yaw_error_to_target"),
                 "wrench": policy.get("wrench"),
                 "wrench_timestamp": policy.get("wrench_timestamp"),
                 "distance_to_target": policy.get("distance_to_target"),
@@ -699,7 +724,7 @@ class OpenAIPlannerBackend(PlannerBackend):
                 "verbosity": self.config.text_verbosity,
             },
         }
-        if self.config.temperature is not None:
+        if self.config.temperature is not None and _model_supports_temperature(self.config.model):
             payload["temperature"] = self.config.temperature
         if self.config.reasoning_effort is not None:
             payload["reasoning"] = {"effort": self.config.reasoning_effort}
@@ -822,7 +847,9 @@ class OpenAIPlannerBackend(PlannerBackend):
         normalized = json.dumps(
             {
                 "model": self.config.model,
-                "temperature": self.config.temperature,
+                "temperature": self.config.temperature
+                if _model_supports_temperature(self.config.model)
+                else None,
                 "candidate_index": candidate_index,
                 "planning_state": state.to_dict(),
             },
@@ -1129,6 +1156,12 @@ def sanitize_payload(payload: Any) -> Any:
     if isinstance(payload, list):
         return [sanitize_payload(item) for item in payload]
     return payload
+
+
+def _model_supports_temperature(model: str) -> bool:
+    normalized = model.strip().lower()
+    # GPT-5 reasoning models reject the Responses API temperature parameter.
+    return not normalized.startswith("gpt-5")
 
 
 def _http_error_body(error: HTTPError) -> str:

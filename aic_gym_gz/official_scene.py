@@ -137,8 +137,11 @@ patterns = [
     "gz_server",
     "aic_adapter",
     "robot_state_publisher",
+    "parameter_bridge",
+    "ros_gz_bridge",
     "component_container",
     "controller_manager/spawner",
+    "aic_gz_transport_bridge",
 ]
 current = os.getpid()
 ppid = os.getppid()
@@ -185,6 +188,11 @@ def sanitize_training_world_sdf(
         re.DOTALL,
     )
     sanitized = re.sub(plugin_pattern, "", world_sdf)
+    ros2_control_plugin_pattern = re.compile(
+        r"\s*<plugin[^>]*(?:gz_ros2_control-system|GazeboSimROS2ControlPlugin)[^>]*>.*?</plugin>",
+        re.DOTALL,
+    )
+    sanitized = re.sub(ros2_control_plugin_pattern, "", sanitized)
     overview_pattern = re.compile(
         r"\s*<model name=['\"]overview_camera_rig['\"].*?<model name=['\"]overview_oblique_camera_rig['\"].*?</model>\s*",
         re.DOTALL,
@@ -196,7 +204,112 @@ def sanitize_training_world_sdf(
         idx = sanitized.rfind(closing)
         if idx != -1:
             sanitized = sanitized[:idx] + selected_scene_probe_model + "\n" + sanitized[idx:]
-    return sanitized
+    sanitized = ensure_joint_target_plugin(sanitized)
+    return rewrite_training_world_resource_uris(sanitized)
+
+
+def ensure_joint_target_plugin(world_sdf: str) -> str:
+    """Ensure portable no-ROS training worlds expose Gazebo joint targets."""
+    if "JointTargetPlugin" in world_sdf and "gz::sim::systems::JointPositionController" in world_sdf:
+        return world_sdf
+    plugin = (
+        "\n      <plugin name='aic_gazebo::JointTargetPlugin' "
+        "filename='JointTargetPlugin'>\n"
+        "        <world_name>aic_world</world_name>\n"
+        "        <initial_joint_names>shoulder_pan_joint,shoulder_lift_joint,elbow_joint,wrist_1_joint,wrist_2_joint,wrist_3_joint</initial_joint_names>\n"
+        "        <initial_positions>-0.1597,-1.3542,-1.6648,-1.6933,1.5710,1.4110</initial_positions>\n"
+        "        <initial_reset_ticks>0</initial_reset_ticks>\n"
+        "      </plugin>"
+        "\n      <plugin filename='gz-sim-joint-state-publisher-system' "
+        "name='gz::sim::systems::JointStatePublisher'/>"
+        + _joint_position_controller_plugins()
+    )
+    reset = "<plugin name='aic_gazebo::ResetJointsPlugin' filename='ResetJointsPlugin'/>"
+    if reset in world_sdf:
+        return world_sdf.replace(reset, reset + plugin, 1)
+    ur5e_close = re.search(r"(</model>\s*)(?=\s*<frame name=['\"]attach_overview_camera['\"])", world_sdf)
+    if ur5e_close is not None:
+        return world_sdf[: ur5e_close.start(1)] + plugin + world_sdf[ur5e_close.start(1) :]
+    return world_sdf
+
+
+def _joint_position_controller_plugins() -> str:
+    joints = (
+        ("shoulder_pan_joint", -0.1597),
+        ("shoulder_lift_joint", -1.3542),
+        ("elbow_joint", -1.6648),
+        ("wrist_1_joint", -1.6933),
+        ("wrist_2_joint", 1.5710),
+        ("wrist_3_joint", 1.4110),
+    )
+    blocks = []
+    for joint_name, initial_position in joints:
+        blocks.append(
+            "\n      <plugin filename='gz-sim-joint-position-controller-system' "
+            "name='gz::sim::systems::JointPositionController'>\n"
+            f"        <joint_name>{joint_name}</joint_name>\n"
+            f"        <topic>/aic/joint_target/{joint_name}</topic>\n"
+            f"        <initial_position>{initial_position}</initial_position>\n"
+            "        <p_gain>5000</p_gain>\n"
+            "        <i_gain>0</i_gain>\n"
+            "        <d_gain>120</d_gain>\n"
+            "        <cmd_max>5000</cmd_max>\n"
+            "        <cmd_min>-5000</cmd_min>\n"
+            "      </plugin>"
+        )
+    return "".join(blocks)
+
+
+def rewrite_training_world_resource_uris(world_sdf: str) -> str:
+    """Rewrite generated install-prefix resource URIs for this checkout."""
+    repo_root = Path(__file__).resolve().parent.parent
+    conda_prefix = Path(os.environ["CONDA_PREFIX"]) if os.environ.get("CONDA_PREFIX") else None
+    replacements = {
+        "/ws_aic/install/share/aic_assets": str(repo_root / "aic_assets"),
+        "/ws_aic/install/share/aic_bringup": str(repo_root / "aic_bringup"),
+        "/ws_aic/install/share/aic_description": str(repo_root / "aic_description"),
+        str(repo_root / "install" / "share" / "aic_assets"): str(repo_root / "aic_assets"),
+        str(repo_root / "install" / "share" / "aic_bringup"): str(repo_root / "aic_bringup"),
+        str(repo_root / "install" / "share" / "aic_description"): str(repo_root / "aic_description"),
+    }
+    if conda_prefix is not None:
+        ur_description_share = conda_prefix / "share" / "ur_description"
+        if ur_description_share.exists():
+            replacements["/ws_aic/install/share/ur_description"] = str(ur_description_share)
+            replacements[str(repo_root / "install" / "share" / "ur_description")] = str(ur_description_share)
+    rewritten = world_sdf
+    for old, new in replacements.items():
+        rewritten = rewritten.replace(old, new)
+    rewritten = rewritten.replace(
+        "file://<urdf-string>/model://aic_assets/models/",
+        f"file://{repo_root / 'aic_assets' / 'models'}/",
+    )
+    rewritten = rewritten.replace(
+        "file://<urdf-string>/model://aic_assets/",
+        f"file://{repo_root / 'aic_assets'}/",
+    )
+    rewritten = rewritten.replace(
+        "model://aic_assets/models/",
+        f"file://{repo_root / 'aic_assets' / 'models'}/",
+    )
+    rewritten = rewritten.replace(
+        "model://aic_assets/",
+        f"file://{repo_root / 'aic_assets'}/",
+    )
+    asset_meshes = (repo_root / "aic_assets" / "models").glob("**/*")
+    for mesh_path in asset_meshes:
+        if mesh_path.suffix.lower() not in {".glb", ".dae", ".stl"}:
+            continue
+        rewritten = rewritten.replace(
+            f"file://<urdf-string>/{mesh_path.name}",
+            f"file://{mesh_path}",
+        )
+        rewritten = rewritten.replace(
+            f"file:///{mesh_path.name}",
+            f"file://{mesh_path}",
+        )
+    rewritten = rewritten.replace("file://<urdf-string>/", f"file://{repo_root}/")
+    return rewritten
 
 
 def _generated_overview_rig_models(*, setup_script: str | Path) -> str:
@@ -375,9 +488,10 @@ def _generate_world_sdf(
             f"stdout={completed.stdout.strip()} stderr={completed.stderr.strip()}"
         )
     payload = completed.stdout.strip()
-    if not payload.startswith("data: "):
+    data_index = payload.find("data: ")
+    if data_index < 0:
         raise RuntimeError(f"Unexpected generate_world_sdf payload: {payload[:200]}")
-    return ast.literal_eval(payload[len("data: "):])
+    return ast.literal_eval(payload[data_index + len("data: "):])
 
 
 def bringup_launch_args_for_scenario(
@@ -533,7 +647,7 @@ def _official_cable_spawn_xyz(cable_type: str, *, attach_to_gripper: bool) -> tu
 
 def _official_scene_shell_environment(*, setup_script: str | Path) -> dict[str, str]:
     if not _should_enable_official_eval_middleware(setup_script=setup_script):
-        return {}
+        return _local_official_scene_shell_environment()
     if _should_use_container_entrypoint(setup_script=setup_script):
         return {
             "RMW_IMPLEMENTATION": "rmw_zenoh_cpp",
@@ -546,6 +660,65 @@ def _official_scene_shell_environment(*, setup_script: str | Path) -> dict[str, 
         "RMW_IMPLEMENTATION": "rmw_zenoh_cpp",
         "ZENOH_CONFIG_OVERRIDE": "transport/shared_memory/enabled=false",
     }
+
+
+def _local_official_scene_shell_environment() -> dict[str, str]:
+    """Use self-contained local DDS for official-scene export.
+
+    The Pixi shell used by the gym path may already export rmw_zenoh_cpp.
+    Without the official eval router bootstrap, that inherited middleware
+    causes ros_gz_sim spawn calls to wait forever for a router. For local
+    no-container exports, force CycloneDDS so the official launch can spawn
+    the scene without requiring a Zenoh router.
+    """
+    env = _local_gazebo_shell_environment()
+    if os.environ.get("AIC_OFFICIAL_SCENE_RMW_IMPLEMENTATION"):
+        env["RMW_IMPLEMENTATION"] = os.environ["AIC_OFFICIAL_SCENE_RMW_IMPLEMENTATION"]
+        return env
+    current_rmw = os.environ.get("RMW_IMPLEMENTATION", "").strip()
+    if not current_rmw or current_rmw == "rmw_zenoh_cpp":
+        env["RMW_IMPLEMENTATION"] = "rmw_cyclonedds_cpp"
+    return env
+
+
+def _local_gazebo_shell_environment() -> dict[str, str]:
+    repo_root = Path(__file__).resolve().parent.parent
+    conda_prefix = Path(os.environ.get("CONDA_PREFIX", repo_root / ".pixi" / "envs" / "default"))
+    gazebo_config_paths = [
+        repo_root / "install" / "share" / "gz",
+        conda_prefix / "share" / "gz",
+    ]
+    gazebo_resource_paths = [
+        repo_root / "aic_assets" / "models",
+        repo_root / "aic_assets",
+        repo_root / "aic_description",
+    ]
+    gazebo_plugin_paths = [
+        repo_root / "install" / "lib" / "aic_gazebo",
+        conda_prefix / "lib",
+    ]
+    return {
+        "GZ_CONFIG_PATH": _path_list_with_existing(gazebo_config_paths, os.environ.get("GZ_CONFIG_PATH")),
+        "GZ_SIM_RESOURCE_PATH": _path_list_with_existing(
+            gazebo_resource_paths,
+            os.environ.get("GZ_SIM_RESOURCE_PATH"),
+        ),
+        "GZ_SIM_SYSTEM_PLUGIN_PATH": _path_list_with_existing(
+            gazebo_plugin_paths,
+            os.environ.get("GZ_SIM_SYSTEM_PLUGIN_PATH"),
+        ),
+        "LD_LIBRARY_PATH": _path_list_with_existing(
+            [repo_root / "install" / "lib" / "aic_gazebo", repo_root / "install" / "lib", conda_prefix / "lib"],
+            os.environ.get("LD_LIBRARY_PATH"),
+        ),
+    }
+
+
+def _path_list_with_existing(paths: list[Path], existing: str | None) -> str:
+    values = [str(path) for path in paths if path.exists()]
+    if existing:
+        values.extend(part for part in existing.split(":") if part)
+    return ":".join(dict.fromkeys(values))
 
 
 def _should_enable_official_eval_middleware(*, setup_script: str | Path) -> bool:
