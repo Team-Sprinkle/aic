@@ -168,14 +168,6 @@ class LiveRuntimeManager:
                 workspace_root=_workspace_root_from_setup(setup_script),
                 diagnostics=preflight,
             )
-        if isinstance(setup_script, str):
-            return LiveEnvironmentContext(
-                repo_root=str(self.repo_root),
-                mode="local_sourced",
-                setup_script=setup_script,
-                workspace_root=_workspace_root_from_setup(setup_script),
-                diagnostics=preflight,
-            )
         if self._container_exists():
             return LiveEnvironmentContext(
                 repo_root=str(self.repo_root),
@@ -184,6 +176,25 @@ class LiveRuntimeManager:
                 workspace_root="/ws_aic",
                 container_name=self.container_name,
                 container_image=self.container_image,
+                diagnostics=preflight,
+            )
+        docker_container = self._docker_container_name()
+        if docker_container is not None:
+            return LiveEnvironmentContext(
+                repo_root=str(self.repo_root),
+                mode="docker_exec",
+                setup_script="/ws_aic/install/setup.bash",
+                workspace_root="/ws_aic",
+                container_name=docker_container,
+                container_image=self.container_image,
+                diagnostics=preflight,
+            )
+        if isinstance(setup_script, str):
+            return LiveEnvironmentContext(
+                repo_root=str(self.repo_root),
+                mode="local_sourced",
+                setup_script=setup_script,
+                workspace_root=_workspace_root_from_setup(setup_script),
                 diagnostics=preflight,
             )
         return LiveEnvironmentContext(
@@ -208,6 +219,14 @@ class LiveRuntimeManager:
             self._maybe_create_container()
             context = self.discover_context()
         if context.mode == "distrobox_attach" and auto_launch:
+            if not self._world_ready(context):
+                launch_command = (
+                    "/entrypoint.sh ground_truth:=false start_aic_engine:=true "
+                    "gazebo_gui:=false launch_rviz:=false"
+                )
+                self._launch_background(context, launch_command, timeout_s=15.0)
+                context.launch_command = launch_command
+        elif context.mode == "docker_exec" and auto_launch:
             if not self._world_ready(context):
                 launch_command = (
                     "/entrypoint.sh ground_truth:=false start_aic_engine:=true "
@@ -310,6 +329,34 @@ class LiveRuntimeManager:
             or line.strip().startswith(f"{self.container_name} ")
             for line in completed.stdout.splitlines()
         )
+
+    def _docker_container_name(self) -> str | None:
+        docker = shutil.which("docker")
+        if docker is None:
+            return None
+        completed = subprocess.run(
+            [
+                docker,
+                "ps",
+                "--format",
+                "{{.Names}}|{{.Image}}",
+            ],
+            check=False,
+            capture_output=True,
+            text=True,
+        )
+        if completed.returncode != 0:
+            return None
+        fallback: str | None = None
+        for line in completed.stdout.splitlines():
+            if "|" not in line:
+                continue
+            name, image = (part.strip() for part in line.split("|", 1))
+            if name == self.container_name:
+                return name
+            if image == self.container_image or image.startswith(f"{self.container_image}@"):
+                fallback = fallback or name
+        return fallback
 
     def _maybe_create_container(self) -> None:
         distrobox = shutil.which("distrobox")
@@ -471,6 +518,26 @@ class LiveRuntimeManager:
                         f"DBX_CONTAINER_MANAGER=docker distrobox enter -r "
                         f"{shlex.quote(context.container_name)} -- bash -lc {shlex.quote(inner)}"
                     ),
+                ],
+                check=False,
+                capture_output=True,
+                text=True,
+                timeout=timeout_s,
+            )
+        elif context.mode == "docker_exec":
+            if context.container_name is None:
+                raise RuntimeError("docker_exec context is missing container_name")
+            inner = (
+                f"source /ws_aic/install/setup.bash && cd {repo_root} && {command}"
+            )
+            process = subprocess.run(
+                [
+                    "docker",
+                    "exec",
+                    context.container_name,
+                    "bash",
+                    "-lc",
+                    inner,
                 ],
                 check=False,
                 capture_output=True,

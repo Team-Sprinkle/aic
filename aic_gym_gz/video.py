@@ -20,7 +20,7 @@ from .io import (
     fetch_ros_topic_image,
 )
 def default_video_output_dir(*, run_name: str) -> Path:
-    return Path("aic_gym_gz/artifacts/videos") / run_name
+    return Path("aic_gym_gz/artifacts/inspect_runs") / run_name / "videos"
 
 
 def build_run_name(*, prefix: str, seed: int | None, trial_id: str | None) -> str:

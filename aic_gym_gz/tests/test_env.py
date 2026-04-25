@@ -4,7 +4,7 @@ import unittest
 
 import numpy as np
 
-from aic_gym_gz.env import live_env_health_check, make_default_env
+from aic_gym_gz.env import live_env_health_check, make_default_env, make_live_env
 
 
 class EnvTest(unittest.TestCase):
@@ -71,6 +71,11 @@ class EnvTest(unittest.TestCase):
 
     def test_live_health_check_signature_works_for_mock_free_import(self) -> None:
         self.assertTrue(callable(live_env_health_check))
+
+    def test_training_fast_live_env_uses_auto_transport_by_default(self) -> None:
+        env = make_live_env(include_images=False, enable_randomization=False)
+        self.assertEqual(env.runtime.backend._transport_backend, "auto")
+        env.close()
 
 
 if __name__ == "__main__":

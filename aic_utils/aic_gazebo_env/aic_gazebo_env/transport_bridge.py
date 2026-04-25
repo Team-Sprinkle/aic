@@ -54,10 +54,14 @@ class GazeboTransportBridge:
         resolution = resolve_transport_helper_executable(helper_executable)
         return resolution.resolved_path
 
-    def start(self) -> None:
+    def start(self, *, require_ready: bool = True) -> None:
         """Start the helper process and verify it responds."""
         process = self._process
         if process is not None and process.poll() is None:
+            if require_ready and not self._ready_ok:
+                self.wait_until_ready(timeout_s=self._config.startup_timeout_s)
+                if self._config.startup_settle_s > 0.0:
+                    time.sleep(self._config.startup_settle_s)
             return
         self._startup_ok = False
         self._ready_ok = False
@@ -106,9 +110,10 @@ class GazeboTransportBridge:
                 timeout_s=self._config.startup_timeout_s,
             )
             self._startup_ok = True
-            self.wait_until_ready(timeout_s=self._config.startup_timeout_s)
-            if self._config.startup_settle_s > 0.0:
-                time.sleep(self._config.startup_settle_s)
+            if require_ready:
+                self.wait_until_ready(timeout_s=self._config.startup_timeout_s)
+                if self._config.startup_settle_s > 0.0:
+                    time.sleep(self._config.startup_settle_s)
         except Exception as exc:
             status = self._last_status
             stderr_snippet = self.recent_stderr_snippet()
@@ -149,7 +154,7 @@ class GazeboTransportBridge:
         timeout_s: float | None = None,
     ) -> dict[str, Any]:
         """Send one JSON request and return one JSON response."""
-        self.start()
+        self.start(require_ready=not _can_run_before_sample_ready(payload))
         return self._request_no_start(payload, timeout_s=timeout_s)
 
     def _request_no_start(
@@ -270,3 +275,7 @@ class GazeboTransportBridge:
                 if line:
                     return line.strip()
         raise GazeboTransportBridgeError("timed out waiting for transport bridge response")
+
+
+def _can_run_before_sample_ready(payload: dict[str, Any]) -> bool:
+    return payload.get("op") in {"world_control", "set_pose", "joint_target", "status", "ping", "shutdown"}

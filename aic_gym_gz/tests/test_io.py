@@ -175,6 +175,63 @@ class IoTest(unittest.TestCase):
         self.assertTrue(np.array_equal(observation["images"]["right"], np.full((4, 4, 3), 9, dtype=np.uint8)))
         io.close()
 
+    def test_ros_camera_sidecar_io_does_not_bootstrap_on_missing_wrist_frames(self) -> None:
+        class _FakeSubscriber:
+            def start(self):
+                return None
+
+            def wait_until_ready(self, *, timeout_s: float = 10.0) -> bool:
+                del timeout_s
+                return False
+
+            def latest_images(self):
+                images = {
+                    "left": np.zeros((4, 4, 3), dtype=np.uint8),
+                    "center": np.zeros((4, 4, 3), dtype=np.uint8),
+                    "right": np.zeros((4, 4, 3), dtype=np.uint8),
+                }
+                timestamps = {"left": 0.0, "center": 0.0, "right": 0.0}
+                return images, timestamps, {}
+
+            def close(self):
+                return None
+
+        class _FakeBridge:
+            def start(self):
+                return None
+
+            def close(self):
+                return None
+
+        io = RosCameraSidecarIO(
+            camera_subscriber=_FakeSubscriber(),
+            camera_bridge=_FakeBridge(),
+            ready_timeout_s=0.01,
+            image_shape=(4, 4, 3),
+            allow_direct_fetch_fallback=False,
+        )
+        state = RuntimeState(
+            sim_tick=0,
+            sim_time=0.0,
+            joint_positions=np.zeros(6, dtype=np.float64),
+            joint_velocities=np.zeros(6, dtype=np.float64),
+            gripper_position=0.0,
+            tcp_pose=np.zeros(7, dtype=np.float64),
+            tcp_velocity=np.zeros(6, dtype=np.float64),
+            plug_pose=np.zeros(7, dtype=np.float64),
+            target_port_pose=np.zeros(7, dtype=np.float64),
+            target_port_entrance_pose=np.zeros(7, dtype=np.float64),
+            wrench=np.zeros(6, dtype=np.float64),
+            wrench_timestamp=0.0,
+            off_limit_contact=False,
+            controller_state={},
+            score_geometry={},
+        )
+        observation = io.observation_from_state(state, include_images=True, step_count=0)
+        self.assertFalse(io._wrist_bootstrapped)
+        self.assertEqual([float(value) for value in observation["image_timestamps"]], [0.0, 0.0, 0.0])
+        io.close()
+
     def test_video_recorder_rejects_blank_wrist_frames_when_real_required(self) -> None:
         with tempfile.TemporaryDirectory() as tmpdir:
             recorder = HeadlessTrajectoryVideoRecorder(
