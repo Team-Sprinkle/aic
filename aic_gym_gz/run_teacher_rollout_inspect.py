@@ -12,7 +12,7 @@ from typing import Any
 
 from aic_gym_gz.env import make_default_env, make_live_env
 from aic_gym_gz.io import RosCameraSubscriber
-from aic_gym_gz.official_scene import build_official_launch_spec
+from aic_gym_gz.official_scene import build_official_launch_spec, export_training_world_for_scenario
 from aic_gym_gz.planners.mock import DeterministicMockPlannerBackend
 from aic_gym_gz.planners.openai_backend import OpenAIPlannerBackend, OpenAIPlannerConfig
 from aic_gym_gz.randomizer import AicEnvRandomizer
@@ -21,6 +21,22 @@ from aic_gym_gz.teacher.analysis import analyze_rollout_artifact
 from aic_gym_gz.teacher.dataset_export import RolloutDatasetFrame, export_rollout_lerobot_dataset
 from aic_gym_gz.utils import to_jsonable
 from aic_gym_gz.video import HeadlessTrajectoryVideoRecorder, build_run_name, default_video_output_dir
+
+
+def _resolve_official_setup_script() -> Path:
+    candidates = [
+        Path.cwd() / "install" / "setup.bash",
+        Path.cwd().parent / "install" / "setup.bash",
+        Path.cwd().parent.parent / "install" / "setup.bash",
+        Path("/ws_aic/install/setup.bash"),
+    ]
+    for candidate in candidates:
+        if candidate.exists():
+            return candidate
+    raise FileNotFoundError(
+        "Could not locate the official ROS setup script. "
+        f"checked={[str(candidate) for candidate in candidates]}"
+    )
 
 
 def _optional_float(value: str) -> float | None:
@@ -296,12 +312,18 @@ def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--seed", type=int, default=123)
     parser.add_argument("--trial-id", default=None)
-    parser.add_argument("--ticks-per-step", type=int, default=128)
+    parser.add_argument("--ticks-per-step", type=int, default=25)
     parser.add_argument("--live", action="store_true")
     parser.add_argument("--attach-to-existing", action="store_true")
     parser.add_argument("--transport-backend", choices=("transport", "cli"), default="transport")
     parser.add_argument("--live-timeout", type=float, default=20.0)
     parser.add_argument("--attach-ready-timeout", type=float, default=60.0)
+    parser.add_argument("--use-controller-velocity-commands", action="store_true")
+    parser.add_argument(
+        "--live-mode",
+        choices=("gazebo_training_fast", "controller_velocity_wip"),
+        default="gazebo_training_fast",
+    )
     parser.add_argument("--skip-preflight", action="store_true")
     parser.add_argument("--prepare-official-scene", action="store_true")
     parser.add_argument("--official-ground-truth", action="store_true")
@@ -321,6 +343,7 @@ def main() -> None:
     parser.add_argument("--dataset-repo-id", default="local/aic_gym_gz_teacher_rollout")
     parser.add_argument("--dataset-root", default=None)
     parser.add_argument("--dataset-no-videos", action="store_true")
+    parser.add_argument("--skip-dataset-export", action="store_true")
     parser.add_argument("--image-height", type=int, default=256)
     parser.add_argument("--image-width", type=int, default=256)
     parser.add_argument("--run-name", default=None)
@@ -351,6 +374,8 @@ def main() -> None:
     launched_scene_log = output_dir / "official_scene_launch.log"
     official_scene_spec = None
     official_scene_ready = None
+    generated_world_metadata = None
+    live_world_path = None
     if args.prepare_official_scene:
         _cleanup_stale_official_scene_processes()
         scenario = AicEnvRandomizer(enable_randomization=False).sample(
@@ -359,7 +384,7 @@ def main() -> None:
         )
         official_scene_spec = build_official_launch_spec(
             scenario,
-            setup_script=Path.cwd() / "install" / "setup.bash",
+            setup_script=_resolve_official_setup_script(),
             ground_truth=args.official_ground_truth,
             start_aic_engine=False,
             gazebo_gui=False,
@@ -390,6 +415,17 @@ def main() -> None:
                 "Official scene did not become ready before attach. "
                 f"readiness={official_scene_ready}"
             )
+    elif args.live and not args.attach_to_existing and args.live_mode == "gazebo_training_fast":
+        export_scenario = AicEnvRandomizer(enable_randomization=False).sample(
+            seed=args.seed,
+            trial_id=args.trial_id,
+        )
+        generated_world_path = output_dir / "generated_world.sdf"
+        generated_world_metadata = export_training_world_for_scenario(
+            export_scenario,
+            output_path=generated_world_path,
+        )
+        live_world_path = str(generated_world_path)
     if args.prepare_official_scene:
         args.skip_preflight = True
         preflight_summary = {
@@ -407,11 +443,14 @@ def main() -> None:
             include_images=include_images,
             enable_randomization=False,
             ticks_per_step=args.ticks_per_step,
+            world_path=live_world_path,
             attach_to_existing=args.attach_to_existing,
             transport_backend=args.transport_backend,
             timeout=args.live_timeout,
             attach_ready_timeout=args.attach_ready_timeout,
             image_shape=image_shape,
+            use_controller_velocity_commands=args.use_controller_velocity_commands,
+            live_mode=args.live_mode,
         )
         if args.live
         else make_default_env(
@@ -451,6 +490,7 @@ def main() -> None:
                 hold_ticks_per_action=args.ticks_per_step,
                 planner_output_mode=args.planner_output_mode,
                 prefer_live_scene_overview=args.prefer_live_scene_overview,
+                require_live_scene_overview=True,
                 enable_global_guidance=args.enable_global_guidance,
             ),
         )
@@ -513,23 +553,44 @@ def main() -> None:
     analysis_md_path.write_text(analysis.markdown, encoding="utf-8")
     step_table = _flatten_step_table(artifact)
     _write_jsonl(step_table_path, step_table)
-    dataset_result = export_rollout_lerobot_dataset(
-        dataset_frames,
-        repo_id=args.dataset_repo_id,
-        output_root=dataset_root,
-        single_task="Insert cable into target port",
-        fps=_rollout_fps_from_ticks(args.ticks_per_step),
-        use_videos=not args.dataset_no_videos,
-        metadata={
-            "run_name": run_name,
-            "trial_id": result.artifact.metadata.get("trial_id"),
-            "task_id": result.artifact.metadata.get("task_id"),
-            "planner_backend": result.artifact.metadata.get("planner_backend"),
-            "ticks_per_step": int(args.ticks_per_step),
-            "max_planner_calls": int(args.max_planner_calls),
-            "max_env_steps": int(args.max_env_steps),
-        },
-    )
+    dataset_result = None
+    dataset_export_status: dict[str, Any]
+    if args.skip_dataset_export:
+        dataset_export_status = {
+            "skipped": True,
+            "reason": "skip_dataset_export_flag",
+        }
+    else:
+        try:
+            dataset_result = export_rollout_lerobot_dataset(
+                dataset_frames,
+                repo_id=args.dataset_repo_id,
+                output_root=dataset_root,
+                single_task="Insert cable into target port",
+                fps=_rollout_fps_from_ticks(args.ticks_per_step),
+                use_videos=not args.dataset_no_videos,
+                metadata={
+                    "run_name": run_name,
+                    "trial_id": result.artifact.metadata.get("trial_id"),
+                    "task_id": result.artifact.metadata.get("task_id"),
+                    "planner_backend": result.artifact.metadata.get("planner_backend"),
+                    "ticks_per_step": int(args.ticks_per_step),
+                    "max_planner_calls": int(args.max_planner_calls),
+                    "max_env_steps": int(args.max_env_steps),
+                },
+            )
+            dataset_export_status = {
+                "skipped": False,
+                "dataset_path": str(dataset_result.dataset_path),
+                "metadata_path": str(dataset_result.metadata_path),
+                "format": dataset_result.format,
+            }
+        except ModuleNotFoundError as exc:
+            dataset_export_status = {
+                "skipped": True,
+                "reason": "missing_dataset_dependency",
+                "error": str(exc),
+            }
 
     trace_files = sorted(str(path) for path in trace_dir.glob("*.json"))
     manifest = {
@@ -548,8 +609,9 @@ def main() -> None:
             "openai_trace_files": trace_files,
             "video_dir": str(video_dir),
             "video_summary": video_summary,
-            "lerobot_dataset_dir": str(dataset_result.dataset_path),
-            "lerobot_dataset_metadata": str(dataset_result.metadata_path),
+            "lerobot_dataset_dir": None if dataset_result is None else str(dataset_result.dataset_path),
+            "lerobot_dataset_metadata": None if dataset_result is None else str(dataset_result.metadata_path),
+            "dataset_export_status": dataset_export_status,
         },
         "notes": {
             "rollout_artifact_json": "Full nested artifact including metadata, planner_candidates, trajectory_segments, step_logs, final_info.",
@@ -572,6 +634,7 @@ def main() -> None:
                 "readiness": official_scene_ready,
             }
         ),
+        "generated_world": generated_world_metadata,
     }
     _write_json(manifest_path, manifest)
     print(json.dumps(to_jsonable(manifest), indent=2, sort_keys=True))

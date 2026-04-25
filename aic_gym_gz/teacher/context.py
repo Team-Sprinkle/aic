@@ -32,7 +32,8 @@ class TeacherContextExtractor:
     """Builds compact planner inputs from policy and oracle context."""
 
     max_recent_visual_frames: int = 12
-    prefer_live_scene_overview: bool = False
+    prefer_live_scene_overview: bool = True
+    require_live_scene_overview: bool = True
 
     def build_planning_state(
         self,
@@ -125,6 +126,7 @@ class TeacherContextExtractor:
             scenario=scenario,
             state=state,
             live_images_by_view=live_overview_images,
+            require_live_images=self.require_live_scene_overview,
         )
         scene_overview_sources = {
             str(item.get("view_name")): str(item.get("source"))
@@ -207,6 +209,7 @@ class TeacherContextExtractor:
                     any(item.get("source") == "live_overview_topic" for item in scene_overview_images)
                 ),
                 "prefer_live_scene_overview": self.prefer_live_scene_overview,
+                "require_live_scene_overview": self.require_live_scene_overview,
                 "recent_visual_frame_budget": self.max_recent_visual_frames,
                 "history_window_size": len(temporal_buffer),
                 "teacher_history_is_additive": True,

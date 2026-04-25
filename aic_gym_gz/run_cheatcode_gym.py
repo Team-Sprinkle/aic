@@ -10,6 +10,8 @@ from typing import Any
 import numpy as np
 
 from aic_gym_gz.env import make_default_env, make_live_env
+from aic_gym_gz.official_scene import export_training_world_for_scenario
+from aic_gym_gz.randomizer import AicEnvRandomizer
 from aic_gym_gz.teacher.close_range import CloseRangeInsertionPolicy
 from aic_gym_gz.teacher.dataset_export import RolloutDatasetFrame, export_rollout_lerobot_dataset
 from aic_gym_gz.utils import to_jsonable
@@ -33,41 +35,90 @@ def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--episodes", type=int, default=1)
     parser.add_argument("--seed", type=int, default=123)
+    parser.add_argument("--trial-id", default=None)
     parser.add_argument("--max-steps", type=int, default=400)
-    parser.add_argument("--ticks-per-step", type=int, default=8)
+    parser.add_argument("--ticks-per-step", type=int, default=25)
     parser.add_argument("--live", action="store_true")
     parser.add_argument("--attach-to-existing", action="store_true")
     parser.add_argument("--transport-backend", choices=("transport", "cli"), default="transport")
+    parser.add_argument(
+        "--live-mode",
+        choices=("gazebo_training_fast", "controller_velocity_wip"),
+        default="gazebo_training_fast",
+    )
     parser.add_argument("--live-timeout", type=float, default=20.0)
     parser.add_argument("--attach-ready-timeout", type=float, default=90.0)
     parser.add_argument("--include-images", action="store_true")
     parser.add_argument("--disable-video", action="store_true")
+    parser.add_argument(
+        "--image-observation-mode",
+        choices=("artifact_validation", "async_training"),
+        default=None,
+    )
+    parser.add_argument(
+        "--observation-transport",
+        choices=("auto", "one_shot", "persistent"),
+        default=None,
+    )
     parser.add_argument("--video-dir", default=None)
     parser.add_argument("--dataset-repo-id", default="local/aic_gym_gz_cheatcode")
     parser.add_argument("--dataset-root", default="aic_gym_gz/artifacts/lerobot_datasets")
     parser.add_argument("--dataset-no-videos", action="store_true")
+    parser.add_argument("--skip-dataset-export", action="store_true")
     parser.add_argument("--image-height", type=int, default=256)
     parser.add_argument("--image-width", type=int, default=256)
     parser.add_argument("--output", default="aic_gym_gz/artifacts/cheatcode_gym_summary.json")
     args = parser.parse_args()
 
     include_images = bool(args.include_images or not args.disable_video)
+    image_observation_mode = (
+        str(args.image_observation_mode)
+        if args.image_observation_mode is not None
+        else ("artifact_validation" if not args.disable_video else "async_training")
+    )
+    observation_transport_override = (
+        str(args.observation_transport)
+        if args.observation_transport is not None
+        else ("persistent" if image_observation_mode == "async_training" else None)
+    )
     image_shape = (int(args.image_height), int(args.image_width), 3)
     if include_images and not args.live:
         raise RuntimeError(
             "Real images/video require --live. "
             "The default mock env does not provide real wrist-camera frames."
         )
+    generated_world_metadata = None
+    live_world_path = None
+    if args.live and not args.attach_to_existing and args.live_mode == "gazebo_training_fast":
+        export_scenario = AicEnvRandomizer(enable_randomization=False).sample(
+            seed=args.seed,
+            trial_id=args.trial_id,
+        )
+        export_run_name = build_run_name(
+            prefix="gazebo_training_fast_world",
+            seed=args.seed,
+            trial_id=args.trial_id,
+        )
+        generated_world_path = Path(args.output).resolve().parent / f"{export_run_name}.sdf"
+        generated_world_metadata = export_training_world_for_scenario(
+            export_scenario,
+            output_path=generated_world_path,
+        )
+        live_world_path = str(generated_world_path)
     env = (
         make_live_env(
             include_images=include_images,
             enable_randomization=False,
             ticks_per_step=args.ticks_per_step,
+            world_path=live_world_path,
             attach_to_existing=args.attach_to_existing,
             transport_backend=args.transport_backend,
             timeout=args.live_timeout,
             attach_ready_timeout=args.attach_ready_timeout,
             image_shape=image_shape,
+            live_mode=args.live_mode,
+            image_observation_mode=image_observation_mode,
+            observation_transport_override=observation_transport_override,
         )
         if args.live
         else make_default_env(
@@ -81,7 +132,12 @@ def main() -> None:
         episode_summaries: list[dict[str, Any]] = []
         dataset_outputs: list[dict[str, Any]] = []
         for episode in range(args.episodes):
-            observation, info = env.reset(seed=args.seed + episode)
+            print(json.dumps({"stage": "reset_start", "episode": episode}, sort_keys=True), flush=True)
+            observation, info = env.reset(
+                seed=args.seed + episode,
+                options={"trial_id": args.trial_id} if args.trial_id else None,
+            )
+            print(json.dumps({"stage": "reset_done", "episode": episode, "trial_id": info.get("trial_id")}, sort_keys=True), flush=True)
             scenario = env._scenario
             state = env._state
             if scenario is None or state is None:
@@ -99,7 +155,9 @@ def main() -> None:
                 require_real_wrist_images=not args.disable_video,
                 require_live_overview=not args.disable_video,
             )
+            print(json.dumps({"stage": "recorder_ready", "episode": episode}, sort_keys=True), flush=True)
             recorder.capture(observation=observation, scenario=scenario, state=state)
+            print(json.dumps({"stage": "first_capture_done", "episode": episode}, sort_keys=True), flush=True)
             policy = CheatCodeGymAdapter()
             total_reward = 0.0
             terminated = truncated = False
@@ -123,6 +181,7 @@ def main() -> None:
                 observation, reward, terminated, truncated, last_info = env.step(action)
                 total_reward += float(reward)
                 step_count += 1
+                print(json.dumps({"stage": "step_done", "episode": episode, "step_count": step_count, "terminated": bool(terminated), "truncated": bool(truncated)}, sort_keys=True), flush=True)
                 state = env._state
                 assert state is not None
                 recorder.capture(observation=observation, scenario=scenario, state=state)
@@ -145,34 +204,51 @@ def main() -> None:
                     last_info["termination_reason"] = "max_steps_guard"
             final_eval = dict(last_info.get("final_evaluation") or {})
             video_summary = recorder.close()
-            dataset_repo_id = f"{args.dataset_repo_id}_ep{episode}"
-            dataset_result = export_rollout_lerobot_dataset(
-                dataset_frames,
-                repo_id=dataset_repo_id,
-                output_root=Path(args.dataset_root),
-                single_task="Insert cable into target port",
-                fps=_rollout_fps_from_ticks(args.ticks_per_step),
-                use_videos=not args.dataset_no_videos,
-                metadata={
-                    "trial_id": info.get("trial_id"),
-                    "seed": args.seed + episode,
-                    "policy": "CheatCodeGymAdapter",
-                    "ticks_per_step": int(args.ticks_per_step),
-                },
-            )
-            dataset_outputs.append(
-                {
+            print(json.dumps({"stage": "video_closed", "episode": episode}, sort_keys=True), flush=True)
+            dataset_output: dict[str, Any]
+            if args.skip_dataset_export:
+                dataset_output = {
                     "episode": episode,
-                    "dataset_path": str(dataset_result.dataset_path),
-                    "metadata_path": str(dataset_result.metadata_path),
-                    "format": dataset_result.format,
+                    "skipped": True,
+                    "reason": "skip_dataset_export_flag",
                 }
-            )
+            else:
+                dataset_repo_id = f"{args.dataset_repo_id}_ep{episode}"
+                try:
+                    dataset_result = export_rollout_lerobot_dataset(
+                        dataset_frames,
+                        repo_id=dataset_repo_id,
+                        output_root=Path(args.dataset_root),
+                        single_task="Insert cable into target port",
+                        fps=_rollout_fps_from_ticks(args.ticks_per_step),
+                        use_videos=not args.dataset_no_videos,
+                        metadata={
+                            "trial_id": info.get("trial_id"),
+                            "seed": args.seed + episode,
+                            "policy": "CheatCodeGymAdapter",
+                            "ticks_per_step": int(args.ticks_per_step),
+                        },
+                    )
+                    dataset_output = {
+                        "episode": episode,
+                        "dataset_path": str(dataset_result.dataset_path),
+                        "metadata_path": str(dataset_result.metadata_path),
+                        "format": dataset_result.format,
+                    }
+                except ModuleNotFoundError as exc:
+                    dataset_output = {
+                        "episode": episode,
+                        "skipped": True,
+                        "reason": "missing_dataset_dependency",
+                        "error": str(exc),
+                    }
+            dataset_outputs.append(dataset_output)
             episode_summaries.append(
                 {
                     "episode": episode,
                     "seed": args.seed + episode,
                     "trial_id": info.get("trial_id"),
+                    "generated_world": generated_world_metadata,
                     "return": total_reward,
                     "length": int(observation["step_count"]),
                     "termination_reason": (
@@ -183,7 +259,7 @@ def main() -> None:
                     "gym_final_score": final_eval.get("gym_final_score"),
                     "phase_at_end": policy.phase,
                     "video_output": video_summary,
-                    "dataset_output": dataset_outputs[-1],
+                    "dataset_output": dataset_output,
                 }
             )
         payload = {
@@ -192,15 +268,19 @@ def main() -> None:
                 "This gym adapter preserves the staged strategy but outputs native 6D Cartesian velocity actions.",
                 "The gym observation does not expose the full official TF tree or the exact motion-update interface.",
             ],
+            "generated_world": generated_world_metadata,
             "episodes": episode_summaries,
             "datasets": dataset_outputs,
         }
         output_path = Path(args.output)
         output_path.parent.mkdir(parents=True, exist_ok=True)
         output_path.write_text(json.dumps(to_jsonable(payload), indent=2, sort_keys=True) + "\n", encoding="utf-8")
+        print(json.dumps({"stage": "summary_written", "output": str(output_path)}, sort_keys=True), flush=True)
         print(json.dumps(to_jsonable(payload), indent=2, sort_keys=True))
     finally:
+        print(json.dumps({"stage": "env_close_start"}, sort_keys=True), flush=True)
         env.close()
+        print(json.dumps({"stage": "env_close_done"}, sort_keys=True), flush=True)
 
 
 if __name__ == "__main__":

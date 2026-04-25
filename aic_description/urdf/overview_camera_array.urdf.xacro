@@ -1,0 +1,45 @@
+<?xml version="1.0"?>
+<robot xmlns:xacro="http://wiki.ros.org/xacro" name="overview_camera_array">
+  <xacro:include filename="$(find aic_assets)/models/Basler Camera/basler_camera_macro.xacro"/>
+
+  <link name="overview_base">
+    <inertial>
+      <origin xyz="0 0 0" rpy="0 0 0"/>
+      <mass value="0.001"/>
+      <inertia ixx="0.000001" ixy="0" ixz="0" iyy="0.000001" iyz="0" izz="0.000001"/>
+    </inertial>
+  </link>
+
+  <gazebo reference="overview_base">
+    <gravity>false</gravity>
+  </gazebo>
+
+  <xacro:basler_camera name="overview_camera" tf_prefix="overview_camera/" use_sim_cam="${True}"/>
+  <xacro:basler_camera name="overview_front_camera" tf_prefix="overview_front_camera/" use_sim_cam="${True}"/>
+  <xacro:basler_camera name="overview_side_camera" tf_prefix="overview_side_camera/" use_sim_cam="${True}"/>
+  <xacro:basler_camera name="overview_oblique_camera" tf_prefix="overview_oblique_camera/" use_sim_cam="${True}"/>
+
+  <joint name="attach_overview_camera" type="fixed">
+    <origin xyz="0.95 -0.1 1.3" rpy="0 0 3.14"/>
+    <parent link="overview_base"/>
+    <child link="overview_camera/camera_link"/>
+  </joint>
+
+  <joint name="attach_overview_front_camera" type="fixed">
+    <origin xyz="0.15 -1.05 1.22" rpy="1.5708 0 1.5708"/>
+    <parent link="overview_base"/>
+    <child link="overview_front_camera/camera_link"/>
+  </joint>
+
+  <joint name="attach_overview_side_camera" type="fixed">
+    <origin xyz="-0.95 -0.15 1.18" rpy="0 0 0"/>
+    <parent link="overview_base"/>
+    <child link="overview_side_camera/camera_link"/>
+  </joint>
+
+  <joint name="attach_overview_oblique_camera" type="fixed">
+    <origin xyz="0.95 -0.95 1.55" rpy="0 0 2.35"/>
+    <parent link="overview_base"/>
+    <child link="overview_oblique_camera/camera_link"/>
+  </joint>
+</robot>

@@ -20,6 +20,7 @@
 
 #include <chrono>
 #include <string>
+#include <vector>
 
 #include <gz/transport/Node.hh>
 #include <gz/sim/EntityComponentManager.hh>
@@ -55,6 +56,13 @@ namespace aic_gazebo
 
     /// \brief Local path of where to save the file
     private: std::chrono::duration<double> saveWorldDelay;
+
+    /// \brief Optional entity names that must exist before exporting.
+    private: std::vector<std::string> requiredEntityNames;
+
+    /// \brief Maximum additional wait before exporting even if required
+    /// entities never appear.
+    private: std::chrono::duration<double> forceSaveAfter;
 };
 }
 #endif

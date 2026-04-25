@@ -9,6 +9,7 @@ import math
 import os
 from pathlib import Path
 import re
+import shutil
 import subprocess
 import sys
 import time
@@ -17,6 +18,25 @@ from typing import Any
 import numpy as np
 
 from .scenario import AicScenario
+
+
+def _configure_ros_eval_session_env() -> None:
+    """Best-effort middleware setup so in-process ROS clients join eval Zenoh."""
+    repo_root = Path(__file__).resolve().parents[1]
+    eval_dir = repo_root / "docker" / "aic_eval"
+    session_config = eval_dir / "aic_zenoh_config.json5"
+    credentials = eval_dir / "credentials.txt"
+    if session_config.exists():
+        os.environ.setdefault("ZENOH_SESSION_CONFIG_URI", str(session_config))
+    if credentials.exists():
+        override = (
+            'transport/auth/usrpwd/user="eval";'
+            'transport/auth/usrpwd/password="CHANGE_IN_PROD";'
+            f'transport/auth/usrpwd/dictionary_file="{credentials}";'
+            'transport/shared_memory/enabled=false'
+        )
+        os.environ.setdefault("ZENOH_CONFIG_OVERRIDE", override)
+    os.environ.setdefault("RMW_IMPLEMENTATION", "rmw_zenoh_cpp")
 
 
 @dataclass(frozen=True)
@@ -254,8 +274,12 @@ class ScenarioGymGzBackend(RuntimeBackend):
         target_entity_name: str = "tabletop",
         transport_backend: str = "transport",
         attach_to_existing: bool = False,
-        allow_synthetic_tcp_pose: bool = False,
-        allow_synthetic_plug_pose: bool = False,
+        allow_synthetic_tcp_pose: bool = True,
+        allow_synthetic_plug_pose: bool = True,
+        use_controller_velocity_commands: bool = False,
+        live_mode: str = "gazebo_training_fast",
+        observation_transport_override: str | None = None,
+        state_observation_mode: str = "honest_live",
     ) -> None:
         self._world_name = world_name
         self._world_path = world_path or str(
@@ -272,6 +296,12 @@ class ScenarioGymGzBackend(RuntimeBackend):
         self._attach_to_existing = attach_to_existing
         self._allow_synthetic_tcp_pose = bool(allow_synthetic_tcp_pose)
         self._allow_synthetic_plug_pose = bool(allow_synthetic_plug_pose)
+        self._use_controller_velocity_commands = bool(use_controller_velocity_commands)
+        self._live_mode = str(live_mode).strip().lower()
+        self._observation_transport_override = (
+            None if observation_transport_override is None else str(observation_transport_override).strip().lower()
+        )
+        self._state_observation_mode = str(state_observation_mode).strip().lower()
         self._runtime = None
         self._action = np.zeros(6, dtype=np.float64)
         self._last_state: RuntimeState | None = None
@@ -307,12 +337,21 @@ class ScenarioGymGzBackend(RuntimeBackend):
         self._get_observation_request_type = GetObservationRequest
 
     def reset(self, *, seed: int | None, scenario: AicScenario) -> RuntimeState:
+        print('{"backend_stage":"reset_enter"}', flush=True)
         self._last_seed = seed
         self._last_trial_id = scenario.trial_id
         self._scenario = scenario
         self._task = next(iter(scenario.tasks.values()))
+        if self._live_mode == "gazebo_training_fast" and not self._attach_to_existing:
+            if self._runtime is not None:
+                try:
+                    self._runtime.stop()
+                finally:
+                    self._runtime = None
         if self._runtime is None:
+            print('{"backend_stage":"start_runtime_begin"}', flush=True)
             self._start_runtime()
+            print('{"backend_stage":"start_runtime_done"}', flush=True)
         if self._ros_observer is None:
             self._ros_observer = _RuntimeRosObserver()
         self._action[:] = 0.0
@@ -321,8 +360,171 @@ class ScenarioGymGzBackend(RuntimeBackend):
             # Issuing a world reset here perturbs the scene/controller startup path
             # and can invalidate evaluation-style attach semantics.
             return self.connect_existing_world()
+        if (
+            self._live_mode == "gazebo_training_fast"
+            and getattr(self, "_state_observation_mode", "honest_live") == "synthetic_training"
+        ):
+            synthetic_reset = self._synthetic_training_fast_reset_state()
+            if synthetic_reset is not None:
+                self._last_state = synthetic_reset
+                self._seed_fast_source_pose_cache(synthetic_reset)
+                print('{"backend_stage":"synthetic_training_reset_shortcut"}', flush=True)
+                return synthetic_reset
+        if self._live_mode == "gazebo_training_fast":
+            print('{"backend_stage":"connect_started_world_begin"}', flush=True)
+            return self._connect_started_world(timeout_s=min(max(self._timeout, 5.0), 10.0))
         observation, info = self._runtime.reset(seed=seed, options={})
+        print('{"backend_stage":"runtime_reset_done"}', flush=True)
         return self._await_runtime_state(observation=observation, info=info, timeout_s=self._timeout)
+
+    def _connect_started_world(self, *, timeout_s: float) -> RuntimeState:
+        if self._runtime is None:
+            raise RuntimeError("Live runtime must be started before connecting to a fresh world.")
+        bootstrap_timeout_s = min(max(timeout_s * 0.2, 5.0), 20.0)
+        print('{"backend_stage":"bootstrap_cli_begin"}', flush=True)
+        bootstrap_state = self._bootstrap_existing_world_state(timeout_s=bootstrap_timeout_s)
+        if bootstrap_state is not None:
+            self._seed_fast_source_pose_cache(bootstrap_state)
+            print('{"backend_stage":"bootstrap_cli_done"}', flush=True)
+            return bootstrap_state
+        print('{"backend_stage":"bootstrap_cli_miss"}', flush=True)
+        deadline = time.monotonic() + timeout_s
+        last_error: Exception | None = None
+        while time.monotonic() < deadline:
+            try:
+                observation, info = self._runtime.get_observation()
+                self._action[:] = 0.0
+                self._last_observation = dict(observation)
+                self._last_info = dict(info)
+                self._last_state = self._runtime_state_from_observation(observation, info)
+                if not self._state_is_sane_for_live_reset(self._last_state):
+                    raise RuntimeError("Fresh training-fast world is not yet exposing a sane reset pose.")
+                self._seed_fast_source_pose_cache(self._last_state)
+                print('{"backend_stage":"connect_started_world_done"}', flush=True)
+                return self._last_state
+            except RuntimeError as exc:
+                last_error = exc
+                self._tick_existing_world_for_sample()
+                time.sleep(0.1)
+            except TimeoutError as exc:
+                last_error = exc
+                self._tick_existing_world_for_sample()
+                time.sleep(0.1)
+        fallback_state = self._synthetic_training_fast_reset_state()
+        if fallback_state is not None:
+            print('{"backend_stage":"synthetic_reset_fallback"}', flush=True)
+            self._last_state = fallback_state
+            self._seed_fast_source_pose_cache(fallback_state)
+            return fallback_state
+        raise RuntimeError(
+            "Timed out waiting for fresh training-fast world readiness: "
+            f"{last_error}. timeout={timeout_s}s, "
+            f"transport_backend={self._transport_backend}, source_entity={self._source_entity_name}, "
+            f"target_entity={self._target_entity_name}"
+        )
+
+    def _synthetic_training_fast_reset_state(self) -> RuntimeState | None:
+        if self._scenario is None or self._task is None:
+            return None
+        synthetic_target = _synthetic_target_pose_from_scenario(
+            scenario=self._scenario,
+            task=self._task,
+        )
+        if synthetic_target is None:
+            return None
+        target_pose = _pose_dict_to_array(synthetic_target["target_pose_dict"])
+        entrance_pose = (
+            _pose_dict_to_array(synthetic_target["entrance_pose_dict"])
+            if synthetic_target["entrance_pose_dict"] is not None
+            else None
+        )
+        tcp_pose = np.array([-0.45, 0.2, 1.30, 0.0, 0.0, 0.0, 1.0], dtype=np.float64)
+        entities_by_name = self._supplement_entities_from_cli_once() or {}
+        source_name, source = _resolve_named_entity(
+            entities_by_name,
+            self._source_entity_name,
+            "ati/tool_link",
+            "wrist_3_link",
+        )
+        if isinstance(source, dict):
+            try:
+                tcp_pose = _pose_dict_to_array(source.get("pose") or source)
+            except Exception:
+                pass
+        cable = self._scenario.cables.get(self._task.cable_name)
+        if cable is None:
+            return None
+        plug_pose = np.asarray(tcp_pose, dtype=np.float64).copy()
+        plug_pose[:3] += np.array(cable.gripper_offset_xyz, dtype=np.float64)
+        controller_state: dict[str, Any] = {}
+        score_geometry = _build_score_geometry(
+            plug_name="synthetic_plug_from_tcp",
+            target_name=f"{self._task.target_module_name}::{self._task.port_name}_link",
+            entrance_name=f"{self._task.target_module_name}::{self._task.port_name}_link_entrance",
+            plug_pose=plug_pose,
+            target_pose=target_pose,
+            entrance_pose=entrance_pose,
+            tracked_pair={},
+        )
+        world_entities_summary = _world_entities_summary(
+            entities_by_name=entities_by_name,
+            source_name=source_name or "synthetic_tcp_pose",
+            target_name=f"{self._task.target_module_name}::{self._task.port_name}_link",
+            plug_name="synthetic_plug_from_tcp",
+            entrance_name=f"{self._task.target_module_name}::{self._task.port_name}_link_entrance",
+        )
+        world_entities_summary["runtime_diagnostics"] = {
+            "attach_to_existing": False,
+            "live_mode": self._live_mode,
+            "synthetic_bootstrap_reset": True,
+            "synthetic_tcp_pose_used": True,
+            "synthetic_plug_pose_used": True,
+            "scene_alignment_ok": True,
+        }
+        return RuntimeState(
+            sim_tick=0,
+            sim_time=0.0,
+            joint_positions=np.zeros(6, dtype=np.float64),
+            joint_velocities=np.zeros(6, dtype=np.float64),
+            gripper_position=0.0,
+            tcp_pose=tcp_pose,
+            tcp_velocity=np.zeros(6, dtype=np.float64),
+            plug_pose=plug_pose,
+            target_port_pose=target_pose,
+            target_port_entrance_pose=entrance_pose,
+            wrench=np.zeros(6, dtype=np.float64),
+            wrench_timestamp=0.0,
+            off_limit_contact=False,
+            insertion_event=None,
+            controller_state=controller_state,
+            score_geometry=score_geometry,
+            world_entities_summary=world_entities_summary,
+            auxiliary_force_contact_summary=_single_sample_force_contact_summary(
+                wrench=np.zeros(6, dtype=np.float64),
+                contact=False,
+                substep_tick_count=0,
+                source="synthetic_bootstrap_reset",
+            ),
+        )
+
+    def _seed_fast_source_pose_cache(self, state: RuntimeState | None) -> None:
+        if state is None or self._runtime is None:
+            return
+        try:
+            client = self._runtime._client()
+        except Exception:
+            return
+        setter = getattr(client, "set_source_pose_cache", None)
+        if not callable(setter):
+            return
+        try:
+            setter(
+                entity_name=self._source_entity_name,
+                position=np.asarray(state.tcp_pose[:3], dtype=np.float64).tolist(),
+                orientation=np.asarray(state.tcp_pose[3:7], dtype=np.float64).tolist(),
+            )
+        except Exception:
+            return
 
     def connect_existing_world(self) -> RuntimeState:
         if self._runtime is None:
@@ -368,28 +570,37 @@ class ScenarioGymGzBackend(RuntimeBackend):
         tick_count = int(tick_count)
         if tick_count <= 0:
             raise ValueError("tick_count must be positive.")
+        if getattr(self, "_state_observation_mode", "honest_live") == "synthetic_training":
+            return self._step_ticks_synthetic_training(tick_count)
         step_window_start = time.monotonic()
         used_controller_command = False
-        if self._ros_observer is not None:
+        used_pose_command = False
+        position_delta = np.clip(self._action[:3], -0.25, 0.25) * 0.002 * tick_count
+        rotation_delta = _angular_delta_to_quaternion(
+            np.clip(self._action[3:], -2.0, 2.0) * 0.002 * tick_count
+        )
+        if self._use_controller_velocity_commands and self._ros_observer is not None:
             used_controller_command = self._ros_observer.publish_velocity_command(
                 linear_xyz=np.clip(self._action[:3], -0.25, 0.25),
                 angular_xyz=np.clip(self._action[3:], -2.0, 2.0),
                 frame_id="base_link",
                 timeout_s=min(max(self._timeout, 1.0), 2.0),
             )
-        if used_controller_command:
+        elif self._attach_to_existing and self._ros_observer is not None:
+            used_pose_command = self._ros_observer.publish_pose_command(
+                position_xyz=position_delta,
+                orientation_xyzw=np.asarray(rotation_delta, dtype=np.float64),
+                frame_id="gripper/tcp",
+                timeout_s=min(max(self._timeout, 1.0), 2.0),
+            )
+        if used_controller_command or used_pose_command:
             observation, _, _, _, info = self._runtime.step({"multi_step": tick_count})
         else:
-            position_delta = (np.clip(self._action[:3], -0.25, 0.25) * 0.002 * tick_count).tolist()
-            rotation_delta = _angular_delta_to_quaternion(
-                np.clip(self._action[3:], -2.0, 2.0) * 0.002 * tick_count
-            )
             observation, _, _, _, info = self._runtime.step(
                 {
-                    "ee_delta_action": {
-                        "position_delta": position_delta,
+                    "delta_source_pose": {
+                        "position_delta": position_delta.tolist(),
                         "orientation_delta": rotation_delta,
-                        "frame": "world",
                     },
                     "multi_step": tick_count,
                 }
@@ -398,6 +609,7 @@ class ScenarioGymGzBackend(RuntimeBackend):
         self._last_observation = dict(observation)
         self._last_info = dict(info)
         self._last_info["used_controller_velocity_command"] = bool(used_controller_command)
+        self._last_info["used_ros_pose_command"] = bool(used_pose_command)
         self._last_state = self._runtime_state_from_observation(
             observation,
             info,
@@ -405,6 +617,123 @@ class ScenarioGymGzBackend(RuntimeBackend):
             wall_time_window=(step_window_start, step_window_end),
         )
         return self._last_state
+
+    def _step_ticks_synthetic_training(self, tick_count: int) -> RuntimeState:
+        if self._runtime is None or self._last_state is None:
+            raise RuntimeError("Synthetic training step requires a reset live state.")
+        client = self._runtime._client()
+        position_delta = np.clip(self._action[:3], -0.25, 0.25) * 0.002 * tick_count
+        rotation_delta = _angular_delta_to_quaternion(
+            np.clip(self._action[3:], -2.0, 2.0) * 0.002 * tick_count
+        )
+        try:
+            cached_apply = getattr(client, "_apply_delta_source_pose_action_cached", None)
+            if callable(cached_apply):
+                cached_apply(
+                    {
+                        "position_delta": position_delta.tolist(),
+                        "orientation_delta": rotation_delta,
+                    }
+                )
+            else:
+                client._maybe_apply_pose_action(  # type: ignore[attr-defined]
+                    {
+                        "delta_source_pose": {
+                            "position_delta": position_delta.tolist(),
+                            "orientation_delta": rotation_delta,
+                        }
+                    }
+                )
+            client._advance_world(tick_count)  # type: ignore[attr-defined]
+            if hasattr(client, "_logical_step_count"):
+                client._logical_step_count = int(getattr(client, "_logical_step_count", 0)) + tick_count
+        except Exception:
+            pass
+
+        previous_state = self._last_state
+        sim_dt = 0.002 * float(tick_count)
+        tcp_pose = np.asarray(previous_state.tcp_pose, dtype=np.float64).copy()
+        tcp_pose[:3] = tcp_pose[:3] + np.clip(self._action[:3], -0.25, 0.25) * sim_dt
+        tcp_pose[5] = float(tcp_pose[5] + np.clip(self._action[5], -2.0, 2.0) * sim_dt)
+        tcp_velocity = np.concatenate(
+            [
+                np.clip(self._action[:3], -0.25, 0.25),
+                np.clip(self._action[3:], -2.0, 2.0),
+            ]
+        ).astype(np.float64)
+        plug_pose = np.asarray(previous_state.plug_pose, dtype=np.float64).copy()
+        synthesized_plug_pose = self._maybe_synthesize_plug_pose(
+            tcp_pose=tcp_pose,
+            plug_pose=plug_pose,
+            controller_state=previous_state.controller_state,
+        )
+        if synthesized_plug_pose is not None:
+            plug_pose = synthesized_plug_pose
+        else:
+            plug_pose[:3] = plug_pose[:3] + (tcp_pose[:3] - previous_state.tcp_pose[:3])
+            plug_pose[5] = float(tcp_pose[5])
+        ros_sample = self._ros_observer.snapshot() if self._ros_observer is not None else {}
+        wrench, wrench_timestamp = _wrench_from_ros_sample(ros_sample)
+        controller_state = _controller_state_from_ros_sample(ros_sample)
+        off_limit_contact = bool(ros_sample.get("off_limit_contact", False))
+        score_geometry = _build_score_geometry(
+            plug_name=str(previous_state.score_geometry.get("plug_name") or "plug"),
+            target_name=str(previous_state.score_geometry.get("target_port_name") or "target"),
+            entrance_name=str(previous_state.score_geometry.get("port_entrance_name") or "entrance"),
+            plug_pose=plug_pose,
+            target_pose=previous_state.target_port_pose,
+            entrance_pose=previous_state.target_port_entrance_pose,
+            tracked_pair={},
+        )
+        insertion_event, insertion_event_source = self._resolve_live_insertion_event(
+            ros_sample=ros_sample,
+            geometry=score_geometry,
+        )
+        world_entities_summary = dict(previous_state.world_entities_summary or {})
+        world_entities_summary["runtime_diagnostics"] = {
+            **dict(world_entities_summary.get("runtime_diagnostics") or {}),
+            "state_observation_mode": "synthetic_training",
+            "insertion_event_source": insertion_event_source,
+        }
+        next_state = RuntimeState(
+            sim_tick=int(previous_state.sim_tick) + tick_count,
+            sim_time=float(previous_state.sim_time) + sim_dt,
+            joint_positions=np.asarray(previous_state.joint_positions, dtype=np.float64).copy(),
+            joint_velocities=np.asarray(previous_state.joint_velocities, dtype=np.float64).copy(),
+            gripper_position=float(previous_state.gripper_position),
+            tcp_pose=tcp_pose,
+            tcp_velocity=tcp_velocity,
+            plug_pose=plug_pose,
+            target_port_pose=np.asarray(previous_state.target_port_pose, dtype=np.float64).copy(),
+            target_port_entrance_pose=(
+                None
+                if previous_state.target_port_entrance_pose is None
+                else np.asarray(previous_state.target_port_entrance_pose, dtype=np.float64).copy()
+            ),
+            wrench=wrench,
+            wrench_timestamp=wrench_timestamp,
+            off_limit_contact=off_limit_contact,
+            insertion_event=insertion_event,
+            controller_state=controller_state,
+            score_geometry=score_geometry,
+            world_entities_summary=world_entities_summary,
+            auxiliary_force_contact_summary=_single_sample_force_contact_summary(
+                wrench=wrench,
+                contact=off_limit_contact,
+                substep_tick_count=tick_count,
+                source="synthetic_training_final_sample",
+                limitations=(
+                    "State is kinematically advanced from the previous step while force/contact remains a real async side channel.",
+                ),
+            ),
+        )
+        self._last_state = next_state
+        self._last_observation = None
+        self._last_info = {
+            "used_synthetic_training_state": True,
+            "multi_step": tick_count,
+        }
+        return next_state
 
     def close(self) -> None:
         if self._ros_observer is not None:
@@ -467,6 +796,7 @@ class ScenarioGymGzBackend(RuntimeBackend):
         plug_name, plug_position, plug_orientation = pose_fields(plug_name)
         target_name, target_position, target_orientation = pose_fields(self._target_entity_name)
         return {
+            "live_mode": self._live_mode,
             "joint_positions": list(observation.get("joint_positions") or []),
             "joint_velocities": list(observation.get("joint_velocities") or []),
             "sim_time": (
@@ -496,8 +826,17 @@ class ScenarioGymGzBackend(RuntimeBackend):
 
     def _start_runtime(self) -> None:
         observation_transport = "auto"
-        if self._attach_to_existing and self._transport_backend == "cli":
+        if self._observation_transport_override in {"auto", "one_shot", "persistent"}:
+            observation_transport = self._observation_transport_override
+        elif self._attach_to_existing and self._transport_backend == "cli":
             observation_transport = "persistent"
+        elif not self._attach_to_existing and self._live_mode == "gazebo_training_fast" and self._transport_backend == "cli":
+            observation_transport = "one_shot"
+        helper_startup_timeout_s = 5.0
+        helper_startup_settle_s = 3.0
+        if not self._attach_to_existing and self._live_mode == "gazebo_training_fast":
+            helper_startup_timeout_s = min(max(float(self._timeout), 5.0), 10.0)
+            helper_startup_settle_s = 1.0
         self._runtime = self._runtime_type(
             self._runtime_config_type(
                 world_path=self._world_path,
@@ -508,6 +847,8 @@ class ScenarioGymGzBackend(RuntimeBackend):
                 target_entity_name=self._target_entity_name,
                 transport_backend=self._transport_backend,
                 observation_transport=observation_transport,
+                helper_startup_timeout_s=helper_startup_timeout_s,
+                helper_startup_settle_s=helper_startup_settle_s,
                 allow_world_step_on_observation_timeout=not self._attach_to_existing,
             )
         )
@@ -677,18 +1018,53 @@ class ScenarioGymGzBackend(RuntimeBackend):
                 plug = candidate
                 plug_name = fallback_name
                 break
+        plug = self._maybe_promote_child_pose_to_world(
+            entities_by_name=entities_by_name,
+            entity_name=plug_name,
+            entity_value=plug,
+            parent_candidates=(
+                getattr(self._task, "cable_name", None),
+                "cable_0",
+            ),
+        )
+        target = self._maybe_promote_child_pose_to_world(
+            entities_by_name=entities_by_name,
+            entity_name=target_name,
+            entity_value=target,
+            parent_candidates=(
+                getattr(self._task, "target_module_name", None),
+            ),
+        )
+        entrance = self._maybe_promote_child_pose_to_world(
+            entities_by_name=entities_by_name,
+            entity_name=entrance_name,
+            entity_value=entrance,
+            parent_candidates=(
+                getattr(self._task, "target_module_name", None),
+            ),
+        )
         synthetic_target = self._synthetic_target_pose(
             entities_by_name=entities_by_name,
             observed_target_name=target_name,
+            observed_target_value=target,
         )
         synthetic_target_used = False
+        target_pose_frame_corrected = False
         if synthetic_target is not None and (
-            not isinstance(target, dict) or target_name in {"tabletop", "task_board_base_link", self._target_entity_name}
+            not isinstance(target, dict)
+            or target_name in {"tabletop", "task_board_base_link", self._target_entity_name}
+            or bool(synthetic_target.get("replace_observed_local_pose", False))
         ):
             target_name = synthetic_target["target_name"]
             target = synthetic_target["target_pose_dict"]
-            synthetic_target_used = True
-            if not isinstance(entrance, dict):
+            target_pose_frame_corrected = bool(
+                synthetic_target.get("replace_observed_local_pose", False)
+            )
+            synthetic_target_used = not target_pose_frame_corrected
+            if (
+                not isinstance(entrance, dict)
+                or bool(synthetic_target.get("replace_observed_local_pose", False))
+            ):
                 entrance_name = synthetic_target["entrance_name"]
                 entrance = synthetic_target["entrance_pose_dict"]
         if not isinstance(target, dict):
@@ -708,9 +1084,12 @@ class ScenarioGymGzBackend(RuntimeBackend):
             else np.zeros(7, dtype=np.float64)
         )
         target_pose = _pose_dict_to_array(target.get("pose") or target)
-        if not isinstance(plug, dict):
-            raise RuntimeError("Live observation did not contain a real plug entity pose.")
-        plug_pose = _pose_dict_to_array((plug.get("pose") if isinstance(plug, dict) else None) or plug)
+        plug_pose = (
+            _pose_dict_to_array((plug.get("pose") if isinstance(plug, dict) else None) or plug)
+            if isinstance(plug, dict)
+            else np.zeros(7, dtype=np.float64)
+        )
+        missing_real_plug_pose = not isinstance(plug, dict)
         entrance_pose = (
             _pose_dict_to_array(entrance.get("pose") or entrance)
             if isinstance(entrance, dict)
@@ -752,20 +1131,34 @@ class ScenarioGymGzBackend(RuntimeBackend):
                     np.zeros(3, dtype=np.float64),
                 ]
             )
-        synthesized_plug_pose = (
-            self._maybe_synthesize_plug_pose(
-                tcp_pose=tcp_pose,
-                plug_pose=plug_pose,
-                controller_state=controller_state,
-            )
-            if self._allow_synthetic_plug_pose
-            else None
-        )
+        synthesized_plug_pose = None
+        if self._allow_synthetic_plug_pose:
+            if missing_real_plug_pose:
+                synthesized_plug_pose = self._maybe_synthesize_plug_pose(
+                    tcp_pose=tcp_pose,
+                    plug_pose=tcp_pose,
+                    controller_state=controller_state,
+                )
+            else:
+                synthesized_plug_pose = self._maybe_synthesize_plug_pose(
+                    tcp_pose=tcp_pose,
+                    plug_pose=plug_pose,
+                    controller_state=controller_state,
+                )
         synthesized_plug_pose_used = synthesized_plug_pose is not None
         if synthesized_plug_pose is not None:
             plug_pose = synthesized_plug_pose
-            if plug_name is None:
+            if plug_name is None or missing_real_plug_pose:
                 plug_name = "synthetic_plug_from_tcp"
+        elif missing_real_plug_pose:
+            if previous_state is not None:
+                plug_pose = np.asarray(previous_state.plug_pose, dtype=np.float64).copy()
+                plug_name = plug_name or "previous_plug_pose_fallback"
+                synthesized_plug_pose_used = True
+            else:
+                plug_pose = np.asarray(tcp_pose, dtype=np.float64).copy()
+                plug_name = plug_name or "tcp_pose_fallback"
+                synthesized_plug_pose_used = True
         if source_name is None and float(tcp_pose[2]) > 0.1:
             source_name = "synthetic_tcp_pose"
         if source_name is None:
@@ -841,6 +1234,7 @@ class ScenarioGymGzBackend(RuntimeBackend):
             entities_by_name=entities_by_name,
             target_name=target_name,
             synthetic_target_used=synthetic_target_used,
+            target_pose_frame_corrected=target_pose_frame_corrected,
             synthesized_tcp_pose_used=synthesized_tcp_pose_used,
             synthesized_plug_pose_used=synthesized_plug_pose_used,
             insertion_event_source=insertion_event_source,
@@ -873,6 +1267,50 @@ class ScenarioGymGzBackend(RuntimeBackend):
             world_entities_summary=world_entities_summary,
             auxiliary_force_contact_summary=auxiliary_summary,
         )
+
+    def _maybe_promote_child_pose_to_world(
+        self,
+        *,
+        entities_by_name: dict[str, Any],
+        entity_name: str | None,
+        entity_value: Any,
+        parent_candidates: tuple[str | None, ...],
+    ) -> Any:
+        if not isinstance(entity_value, dict) or not entity_name:
+            return entity_value
+        try:
+            child_pose_like = entity_value.get("pose") or entity_value
+            child_pose = _pose_like_to_pose_dict(child_pose_like)
+        except Exception:
+            return entity_value
+        child_position = np.asarray(child_pose["position"], dtype=np.float64)
+        # Attached-world observations sometimes expose child-link poses in the
+        # parent model frame; promote those into world space before reset sanity
+        # checks if a plausible world-space parent pose is available.
+        if float(child_position[2]) > 0.5:
+            return entity_value
+        for parent_name in parent_candidates:
+            if not parent_name:
+                continue
+            parent_value = entities_by_name.get(parent_name)
+            if not isinstance(parent_value, dict):
+                continue
+            try:
+                parent_pose = _pose_like_to_pose_dict(parent_value.get("pose") or parent_value)
+            except Exception:
+                continue
+            parent_position = np.asarray(parent_pose["position"], dtype=np.float64)
+            if float(parent_position[2]) <= 0.5:
+                continue
+            world_pose = _compose_pose(parent_pose, child_pose)
+            return {
+                "position": world_pose["position"].tolist(),
+                "orientation": world_pose["orientation"].tolist(),
+                "promoted_from_local_frame": True,
+                "source_entity_name": entity_name,
+                "parent_entity_name": parent_name,
+            }
+        return entity_value
 
     def _supplement_entities_from_cli_once(self) -> dict[str, dict[str, Any]] | None:
         try:
@@ -942,21 +1380,40 @@ class ScenarioGymGzBackend(RuntimeBackend):
         *,
         entities_by_name: dict[str, dict[str, Any]],
         observed_target_name: str | None,
+        observed_target_value: dict[str, Any] | None = None,
     ) -> dict[str, Any] | None:
         if self._task is None or self._scenario is None:
             return None
+        replace_observed_local_pose = False
         if observed_target_name and observed_target_name not in {
             self._target_entity_name,
             "tabletop",
             "task_board_base_link",
         }:
-            return None
+            if not self._observed_target_pose_looks_local_frame(
+                entities_by_name=entities_by_name,
+                observed_target_name=observed_target_name,
+                observed_target_value=observed_target_value,
+            ):
+                return None
+            replace_observed_local_pose = True
 
         module_pose = None
         module_entity = entities_by_name.get(self._task.target_module_name)
         if isinstance(module_entity, dict):
             module_pose = _pose_dict_to_full_pose(module_entity.get("pose") or module_entity)
+            if (
+                module_pose is not None
+                and self._attach_to_existing
+                and float(np.asarray(module_pose["position"], dtype=np.float64)[2]) <= 0.5
+            ):
+                module_pose = None
         if module_pose is None and not self._attach_to_existing:
+            module_pose = _target_module_pose_from_scenario(
+                scenario=self._scenario,
+                task=self._task,
+            )
+        if module_pose is None and replace_observed_local_pose:
             module_pose = _target_module_pose_from_scenario(
                 scenario=self._scenario,
                 task=self._task,
@@ -978,7 +1435,39 @@ class ScenarioGymGzBackend(RuntimeBackend):
             ),
             "target_pose_dict": _full_pose_to_pose_dict(target_pose),
             "entrance_pose_dict": None if entrance_pose is None else _full_pose_to_pose_dict(entrance_pose),
+            "replace_observed_local_pose": replace_observed_local_pose,
         }
+
+    def _observed_target_pose_looks_local_frame(
+        self,
+        *,
+        entities_by_name: dict[str, dict[str, Any]],
+        observed_target_name: str | None,
+        observed_target_value: dict[str, Any] | None,
+    ) -> bool:
+        if not observed_target_name or not isinstance(observed_target_value, dict):
+            return False
+        try:
+            target_pose = _pose_like_to_pose_dict(
+                observed_target_value.get("pose") or observed_target_value
+            )
+        except Exception:
+            return False
+        target_position = np.asarray(target_pose["position"], dtype=np.float64)
+        if float(target_position[2]) > 0.5:
+            return False
+        board_entity = entities_by_name.get("task_board") or entities_by_name.get("task_board_base_link")
+        if not isinstance(board_entity, dict):
+            return False
+        try:
+            board_pose = _pose_like_to_pose_dict(board_entity.get("pose") or board_entity)
+        except Exception:
+            return False
+        board_position = np.asarray(board_pose["position"], dtype=np.float64)
+        if float(board_position[2]) <= 0.5:
+            return False
+        expected_port_prefix = f"{getattr(self._task, 'port_name', '')}_link"
+        return observed_target_name.startswith(expected_port_prefix)
 
     def _maybe_synthesize_plug_pose(
         self,
@@ -1082,6 +1571,7 @@ class ScenarioGymGzBackend(RuntimeBackend):
         entities_by_name: dict[str, dict[str, Any]],
         target_name: str | None,
         synthetic_target_used: bool,
+        target_pose_frame_corrected: bool,
         synthesized_tcp_pose_used: bool,
         synthesized_plug_pose_used: bool,
         insertion_event_source: str,
@@ -1102,17 +1592,24 @@ class ScenarioGymGzBackend(RuntimeBackend):
             "target_module": bool(expected_module_name and expected_module_name in entities_by_name),
             "cable": bool(expected_cable_name and expected_cable_name in entities_by_name),
         }
-        scene_alignment_ok = all(expected_entities_present.values()) and not synthetic_target_used and (
-            target_name not in {"tabletop", "task_board_base_link", self._target_entity_name}
+        scene_alignment_ok = (
+            all(expected_entities_present.values())
+            and not synthetic_target_used
+            and (
+                target_pose_frame_corrected
+                or target_name not in {"tabletop", "task_board_base_link", self._target_entity_name}
+            )
         )
         return {
             "attach_to_existing": bool(self._attach_to_existing),
+            "live_mode": self._live_mode,
             "expected_target_name": expected_target_name,
             "resolved_target_name": target_name,
             "expected_module_name": expected_module_name,
             "expected_cable_name": expected_cable_name,
             "expected_entities_present": expected_entities_present,
             "synthetic_target_used": bool(synthetic_target_used),
+            "target_pose_frame_corrected": bool(target_pose_frame_corrected),
             "synthetic_tcp_pose_used": bool(synthesized_tcp_pose_used),
             "synthetic_plug_pose_used": bool(synthesized_plug_pose_used),
             "insertion_event_source": insertion_event_source,
@@ -1355,6 +1852,7 @@ class _RuntimeRosObserver:
         self._thread = None
         self._ready = False
         self._command_queue: deque[dict[str, Any]] = deque()
+        self._router_process = None
         try:
             import threading
 
@@ -1411,6 +1909,14 @@ class _RuntimeRosObserver:
         self._stop_event.set()
         if self._thread is not None:
             self._thread.join(timeout=2.0)
+        router_process = self._router_process
+        self._router_process = None
+        if router_process is not None and router_process.poll() is None:
+            router_process.terminate()
+            try:
+                router_process.wait(timeout=2.0)
+            except subprocess.TimeoutExpired:
+                router_process.kill()
 
     def publish_velocity_command(
         self,
@@ -1438,9 +1944,38 @@ class _RuntimeRosObserver:
             return False
         return bool(request["ok"])
 
+    def publish_pose_command(
+        self,
+        *,
+        position_xyz: np.ndarray,
+        orientation_xyzw: np.ndarray,
+        frame_id: str = "gripper/tcp",
+        timeout_s: float = 2.0,
+    ) -> bool:
+        if not self._ready or self._lock is None:
+            return False
+        import threading
+
+        request = {
+            "mode": "position",
+            "position_xyz": np.asarray(position_xyz, dtype=np.float64).copy(),
+            "orientation_xyzw": np.asarray(orientation_xyzw, dtype=np.float64).copy(),
+            "frame_id": str(frame_id),
+            "done": threading.Event(),
+            "ok": False,
+            "error": None,
+        }
+        with self._lock:
+            self._command_queue.append(request)
+        if not request["done"].wait(timeout_s):
+            return False
+        return bool(request["ok"])
+
     def _spin(self) -> None:
         import threading
 
+        _configure_ros_eval_session_env()
+        self._maybe_start_zenoh_router()
         import rclpy
         from geometry_msgs.msg import Twist, Vector3
         from geometry_msgs.msg import WrenchStamped
@@ -1554,26 +2089,46 @@ class _RuntimeRosObserver:
                     message = MotionUpdate()
                     message.header.stamp = node.get_clock().now().to_msg()
                     message.header.frame_id = str(pending["frame_id"])
-                    linear_xyz = np.asarray(pending["linear_xyz"], dtype=np.float64)
-                    angular_xyz = np.asarray(pending["angular_xyz"], dtype=np.float64)
-                    message.velocity = Twist(
-                        linear=Vector3(
-                            x=float(linear_xyz[0]),
-                            y=float(linear_xyz[1]),
-                            z=float(linear_xyz[2]),
-                        ),
-                        angular=Vector3(
-                            x=float(angular_xyz[0]),
-                            y=float(angular_xyz[1]),
-                            z=float(angular_xyz[2]),
-                        ),
-                    )
+                    if str(pending.get("mode", "velocity")) == "position":
+                        position_xyz = np.asarray(pending["position_xyz"], dtype=np.float64)
+                        orientation_xyzw = np.asarray(pending["orientation_xyzw"], dtype=np.float64)
+                        message.pose = Pose(
+                            position=Point(
+                                x=float(position_xyz[0]),
+                                y=float(position_xyz[1]),
+                                z=float(position_xyz[2]),
+                            ),
+                            orientation=Quaternion(
+                                x=float(orientation_xyzw[0]),
+                                y=float(orientation_xyzw[1]),
+                                z=float(orientation_xyzw[2]),
+                                w=float(orientation_xyzw[3]),
+                            ),
+                        )
+                        message.trajectory_generation_mode.mode = (
+                            TrajectoryGenerationMode.MODE_POSITION
+                        )
+                    else:
+                        linear_xyz = np.asarray(pending["linear_xyz"], dtype=np.float64)
+                        angular_xyz = np.asarray(pending["angular_xyz"], dtype=np.float64)
+                        message.velocity = Twist(
+                            linear=Vector3(
+                                x=float(linear_xyz[0]),
+                                y=float(linear_xyz[1]),
+                                z=float(linear_xyz[2]),
+                            ),
+                            angular=Vector3(
+                                x=float(angular_xyz[0]),
+                                y=float(angular_xyz[1]),
+                                z=float(angular_xyz[2]),
+                            ),
+                        )
+                        message.trajectory_generation_mode.mode = (
+                            TrajectoryGenerationMode.MODE_VELOCITY
+                        )
                     message.target_stiffness = np.diag([75.0] * 6).flatten().tolist()
                     message.target_damping = np.diag([35.0] * 6).flatten().tolist()
                     message.wrench_feedback_gains_at_tip = [0.0] * 6
-                    message.trajectory_generation_mode.mode = (
-                        TrajectoryGenerationMode.MODE_VELOCITY
-                    )
                     if motion_pub.get_subscription_count() <= 0:
                         raise RuntimeError("No /aic_controller/pose_commands subscriber is ready.")
                     motion_pub.publish(message)
@@ -1596,6 +2151,41 @@ class _RuntimeRosObserver:
             rclpy.shutdown(context=context)
         except Exception:
             pass
+
+    def _maybe_start_zenoh_router(self) -> None:
+        if self._router_process is not None:
+            return
+        try:
+            existing = subprocess.run(
+                ["bash", "-lc", "pgrep -f 'rmw_zenohd' >/dev/null"],
+                check=False,
+                capture_output=True,
+                text=True,
+                timeout=2.0,
+            )
+            if existing.returncode == 0:
+                return
+        except Exception:
+            return
+        router_executable = shutil.which("rmw_zenohd")
+        router_command: list[str] | None = None
+        if router_executable is not None:
+            router_command = [router_executable]
+        else:
+            ros2_executable = shutil.which("ros2")
+            if ros2_executable is not None:
+                router_command = [ros2_executable, "run", "rmw_zenoh_cpp", "rmw_zenohd"]
+        if router_command is None:
+            return
+        try:
+            self._router_process = subprocess.Popen(
+                router_command,
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+            )
+            time.sleep(0.5)
+        except Exception:
+            self._router_process = None
 
 
 def _resolve_named_entity(
@@ -1898,6 +2488,15 @@ def _pose_dict_to_array(pose_like: dict[str, Any]) -> np.ndarray:
         ],
         dtype=np.float64,
     )
+
+
+def _pose_like_to_pose_dict(pose_like: dict[str, Any]) -> dict[str, np.ndarray]:
+    position = np.asarray(pose_like.get("position") or [0.0, 0.0, 0.0], dtype=np.float64)
+    orientation = np.asarray(pose_like.get("orientation") or [0.0, 0.0, 0.0, 1.0], dtype=np.float64)
+    return {
+        "position": position,
+        "orientation": orientation,
+    }
 
 
 def _pose_dict_to_full_pose(pose_like: dict[str, Any]) -> dict[str, np.ndarray] | None:

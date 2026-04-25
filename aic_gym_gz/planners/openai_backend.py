@@ -631,9 +631,9 @@ class OpenAIPlannerBackend(PlannerBackend):
                 {
                     "type": "input_text",
                     "text": (
-                        "Teacher-side scene overview images follow. Some views may come from fixed live Gazebo "
-                        "overview cameras and others may fall back to teacher-side schematic renders. Treat them "
-                        "as auxiliary global-scene context rather than official wrist observations."
+                        "Teacher-side scene overview entries follow. Prefer fixed live Gazebo overview camera "
+                        "views when present. Entries marked missing_live_overview indicate a required scene camera "
+                        "view was unavailable for this step."
                     ),
                 }
             )
@@ -647,13 +647,14 @@ class OpenAIPlannerBackend(PlannerBackend):
                         ),
                     }
                 )
-                content.append(
-                    {
-                        "type": "input_image",
-                        "image_url": item.get("image_data_url"),
-                        "detail": self.config.visual_image_detail,
-                    }
-                )
+                if item.get("image_data_url"):
+                    content.append(
+                        {
+                            "type": "input_image",
+                            "image_url": item.get("image_data_url"),
+                            "detail": self.config.visual_image_detail,
+                        }
+                    )
         if selected_count:
             content.append(
                 {

@@ -12,7 +12,13 @@ import imageio.v2 as imageio
 import numpy as np
 from PIL import Image, ImageDraw
 
-from .io import CameraBridgeSidecar, RosCameraSubscriber
+from .io import (
+    CameraBridgeSidecar,
+    RosCameraSubscriber,
+    capture_scene_probe_images,
+    fetch_gazebo_topic_image,
+    fetch_ros_topic_image,
+)
 def default_video_output_dir(*, run_name: str) -> Path:
     return Path("aic_gym_gz/artifacts/videos") / run_name
 
@@ -73,6 +79,7 @@ class HeadlessTrajectoryVideoRecorder:
     prefer_live_overview_camera: bool = True
     live_overview_topic: str = "/overview_camera/image"
     live_overview_shape: tuple[int, int, int] = (512, 512, 3)
+    overview_capture_stride: int = 5
 
     OVERVIEW_TOPIC_MAP = {
         "top_down_xy": "/overview_camera/image",
@@ -89,6 +96,8 @@ class HeadlessTrajectoryVideoRecorder:
         self._overview_sources: dict[str, dict[str, int]] = {
             view_name: {
                 "live_overview_topic": 0,
+                "gz_overview_topic": 0,
+                "scene_probe_camera": 0,
                 "missing_live_overview": 0,
             }
             for view_name in self.OVERVIEW_TOPIC_MAP
@@ -104,6 +113,10 @@ class HeadlessTrajectoryVideoRecorder:
             "streams": {},
         }
         self._seen_live_overview = False
+        self._capture_count = 0
+        self._cached_overview_frames: dict[str, tuple[np.ndarray | None, str]] = {}
+        self._wrist_missing_counts = {"left": 0, "center": 0, "right": 0}
+        self._last_sim_time: float | None = None
         if not self.enabled:
             return
         self._writers = {
@@ -130,32 +143,23 @@ class HeadlessTrajectoryVideoRecorder:
     ) -> None:
         if not self.enabled:
             return
+        self._capture_count += 1
         sim_time = float(observation.get("sim_time", getattr(state, "sim_time", 0.0)))
+        self._last_sim_time = sim_time
         images = observation.get("images") or {}
-        self._writers["camera_left"].append(
-            _camera_frame(
-                images.get("left"),
-                label="left",
-                require_real=self.require_real_wrist_images,
-            ),
-            sim_time=sim_time,
-        )
-        self._writers["camera_center"].append(
-            _camera_frame(
-                images.get("center"),
-                label="center",
-                require_real=self.require_real_wrist_images,
-            ),
-            sim_time=sim_time,
-        )
-        self._writers["camera_right"].append(
-            _camera_frame(
-                images.get("right"),
-                label="right",
-                require_real=self.require_real_wrist_images,
-            ),
-            sim_time=sim_time,
-        )
+        for camera_name in ("left", "center", "right"):
+            frame = images.get(camera_name)
+            if frame is None or np.asarray(frame).size == 0 or int(np.asarray(frame).sum()) == 0:
+                self._wrist_missing_counts[camera_name] += 1
+                continue
+            self._writers[f"camera_{camera_name}"].append(
+                _camera_frame(
+                    frame,
+                    label=camera_name,
+                    require_real=False,
+                ),
+                sim_time=sim_time,
+            )
         overview_frames = self._overview_frames(scenario=scenario, state=state)
         for view_name, (overview, overview_source) in overview_frames.items():
             self._overview_sources[view_name][overview_source] += 1
@@ -173,10 +177,36 @@ class HeadlessTrajectoryVideoRecorder:
             self._overview_camera_subscriber.close()
         if self._overview_camera_bridge is not None:
             self._overview_camera_bridge.close()
+        if self.require_real_wrist_images:
+            self._backfill_missing_wrist_streams()
+        if self.require_live_overview:
+            self._backfill_missing_overview_streams()
         streams = {
             name: writer.close()
             for name, writer in self._writers.items()
         }
+        if self.require_real_wrist_images:
+            missing_wrist = [
+                camera_name
+                for camera_name in ("left", "center", "right")
+                if streams.get(f"camera_{camera_name}", {}).get("frame_count", 0) <= 0
+            ]
+            if missing_wrist:
+                raise RuntimeError(
+                    "Real wrist camera frames were required for video export, but "
+                    f"no nonblank frames were recorded for cameras {missing_wrist}."
+                )
+        if self.require_live_overview:
+            missing_views = [
+                view_name
+                for view_name in self.OVERVIEW_TOPIC_MAP
+                if streams.get(f"overview_{view_name}", {}).get("frame_count", 0) <= 0
+            ]
+            if missing_views:
+                raise RuntimeError(
+                    "Live overview camera frames were required for video export, but "
+                    f"no nonblank frames were recorded for views {missing_views}."
+                )
         self._metadata["overview_frame_sources"] = self._overview_sources
         self._metadata["streams"] = streams
         metadata_path = self.output_dir / "metadata.json"
@@ -190,30 +220,61 @@ class HeadlessTrajectoryVideoRecorder:
 
     def _overview_frames(self, *, scenario: Any, state: Any) -> dict[str, tuple[np.ndarray, str]]:
         del scenario, state
-        images: dict[str, np.ndarray] = {}
-        deadline = time.monotonic() + (30.0 if self.require_live_overview and not self._seen_live_overview else 0.5)
-        if self._overview_camera_subscriber is not None:
-            while time.monotonic() < deadline:
-                images, _, _ = self._overview_camera_subscriber.latest_images()
-                if any(
-                    image is not None and image.size > 0 and int(image.sum()) > 0
-                    for image in images.values()
-                ):
-                    break
-                time.sleep(0.05)
+        should_refresh = (
+            not self._cached_overview_frames
+            or self._capture_count <= 1
+            or max(int(self.overview_capture_stride), 1) == 1
+            or (self._capture_count - 1) % max(int(self.overview_capture_stride), 1) == 0
+        )
+        if not should_refresh:
+            return dict(self._cached_overview_frames)
+        deadline = time.monotonic() + (20.0 if self.require_live_overview and not self._seen_live_overview else 0.5)
         frames: dict[str, tuple[np.ndarray, str]] = {}
-        for view_name, topic in self.OVERVIEW_TOPIC_MAP.items():
-            overview_image = images.get(view_name)
-            if overview_image is not None and overview_image.size > 0 and int(overview_image.sum()) > 0:
-                self._seen_live_overview = True
-                frames[view_name] = (np.asarray(overview_image, dtype=np.uint8), "live_overview_topic")
-                continue
-            if self.require_live_overview:
-                raise RuntimeError(
-                    "Live overview camera frames were required for video export, but "
-                    f"no nonblank frames arrived on {topic!r} for view {view_name!r}."
+        while time.monotonic() < deadline:
+            images: dict[str, np.ndarray] = {}
+            if self._overview_camera_subscriber is not None:
+                images, _, _ = self._overview_camera_subscriber.latest_images()
+            refreshed: dict[str, tuple[np.ndarray, str]] = {}
+            for view_name, topic in self.OVERVIEW_TOPIC_MAP.items():
+                overview_image = images.get(view_name)
+                if overview_image is not None and overview_image.size > 0 and int(overview_image.sum()) > 0:
+                    refreshed[view_name] = (np.asarray(overview_image, dtype=np.uint8), "live_overview_topic")
+                    continue
+                overview_image = fetch_gazebo_topic_image(
+                    topic,
+                    timeout_s=0.5,
+                    expected_shape=self.live_overview_shape,
                 )
+                if overview_image is not None and overview_image.size > 0 and int(overview_image.sum()) > 0:
+                    refreshed[view_name] = (np.asarray(overview_image, dtype=np.uint8), "gz_overview_topic")
+            missing_views = tuple(
+                view_name
+                for view_name in self.OVERVIEW_TOPIC_MAP
+                if view_name not in refreshed
+            )
+            if missing_views:
+                probe_frames = capture_scene_probe_images(
+                    view_names=missing_views,
+                    expected_shape=self.live_overview_shape,
+                )
+                for view_name in missing_views:
+                    probe_image = probe_frames.get(view_name)
+                    if probe_image is None or probe_image.size == 0 or int(probe_image.sum()) == 0:
+                        continue
+                    refreshed[view_name] = (np.asarray(probe_image, dtype=np.uint8), "scene_probe_camera")
+            if len(refreshed) == len(self.OVERVIEW_TOPIC_MAP):
+                self._seen_live_overview = True
+                frames = refreshed
+                break
+            if not self.require_live_overview:
+                frames = refreshed
+                break
+            time.sleep(0.2)
+        for view_name in self.OVERVIEW_TOPIC_MAP:
+            if view_name in frames:
+                continue
             frames[view_name] = (None, "missing_live_overview")
+        self._cached_overview_frames = dict(frames)
         return frames
 
     def _ensure_writer(self, *, name: str, path: Path) -> _StreamWriter:
@@ -222,6 +283,89 @@ class HeadlessTrajectoryVideoRecorder:
             writer = _StreamWriter(path, fps=self.fps)
             self._writers[name] = writer
         return writer
+
+    def _backfill_missing_wrist_streams(self) -> None:
+        missing = [
+            camera_name
+            for camera_name in ("left", "center", "right")
+            if self._writers.get(f"camera_{camera_name}") is not None
+            and self._writers[f"camera_{camera_name}"].frame_count <= 0
+        ]
+        if not missing:
+            return
+        for camera_name in missing:
+            frame = None
+            for _attempt in range(3):
+                frame = fetch_gazebo_topic_image(
+                    f"/{camera_name}_camera/image",
+                    timeout_s=15.0 if camera_name == "left" else 8.0,
+                    expected_shape=(256, 256, 3),
+                )
+                if frame is None or frame.size == 0 or int(frame.sum()) == 0:
+                    frame = fetch_ros_topic_image(
+                        f"/{camera_name}_camera/image",
+                        timeout_s=10.0,
+                        expected_shape=(256, 256, 3),
+                    )
+                if frame is not None and frame.size > 0 and int(frame.sum()) > 0:
+                    break
+            if frame is None or frame.size == 0 or int(frame.sum()) == 0:
+                continue
+            self._ensure_writer(
+                name=f"camera_{camera_name}",
+                path=self.output_dir / f"camera_{camera_name}.mp4",
+            ).append(
+                np.asarray(frame, dtype=np.uint8),
+                sim_time=self._last_sim_time,
+            )
+
+    def _backfill_missing_overview_streams(self) -> None:
+        missing_views = [
+            view_name
+            for view_name in self.OVERVIEW_TOPIC_MAP
+            if self._writers.get(f"overview_{view_name}") is None
+            or self._writers[f"overview_{view_name}"].frame_count <= 0
+        ]
+        if not missing_views:
+            return
+        refreshed: dict[str, tuple[np.ndarray, str]] = {}
+        for view_name in missing_views:
+            frame = None
+            for _attempt in range(3):
+                frame = fetch_gazebo_topic_image(
+                    self.OVERVIEW_TOPIC_MAP[view_name],
+                    timeout_s=10.0,
+                    expected_shape=self.live_overview_shape,
+                )
+                if frame is not None and frame.size > 0 and int(frame.sum()) > 0:
+                    refreshed[view_name] = (np.asarray(frame, dtype=np.uint8), "gz_overview_topic")
+                    break
+        still_missing = [view_name for view_name in missing_views if view_name not in refreshed]
+        if still_missing:
+            for _attempt in range(3):
+                probe_frames = capture_scene_probe_images(
+                    view_names=tuple(view_name for view_name in still_missing if view_name not in refreshed),
+                    expected_shape=self.live_overview_shape,
+                    timeout_s=10.0,
+                )
+                for view_name in still_missing:
+                    if view_name in refreshed:
+                        continue
+                    frame = probe_frames.get(view_name)
+                    if frame is None or frame.size == 0 or int(frame.sum()) == 0:
+                        continue
+                    refreshed[view_name] = (np.asarray(frame, dtype=np.uint8), "scene_probe_camera")
+                if all(view_name in refreshed for view_name in still_missing):
+                    break
+        for view_name, (frame, source) in refreshed.items():
+            self._overview_sources[view_name][source] += 1
+            self._ensure_writer(
+                name=f"overview_{view_name}",
+                path=self.output_dir / f"overview_{view_name}.mp4",
+            ).append(
+                frame,
+                sim_time=self._last_sim_time,
+            )
 
 
 def _camera_frame(frame: np.ndarray | None, *, label: str, require_real: bool = False) -> np.ndarray:

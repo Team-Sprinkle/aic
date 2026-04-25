@@ -6,12 +6,13 @@ import atexit
 import base64
 from dataclasses import dataclass
 from io import BytesIO
+import time
 from typing import Any
 
 import numpy as np
 from PIL import Image, ImageDraw
 
-from ..io import RosCameraSubscriber
+from ..io import RosCameraSubscriber, capture_scene_probe_images, fetch_gazebo_topic_image
 
 
 SCENE_OVERVIEW_VIEWS: tuple[tuple[str, str, str], ...] = (
@@ -58,25 +59,53 @@ class LiveOverviewCameraProvider:
         image_size: tuple[int, int] = (256, 256),
     ) -> dict[str, np.ndarray]:
         self._ensure_started()
-        deadline = timeout_s
-        self._subscriber.wait_until_ready(timeout_s=deadline)
-        images, timestamps, _ = self._subscriber.latest_images()
-        if not any(float(value) > 0.0 for value in timestamps.values()):
-            return {}
-        resized: dict[str, np.ndarray] = {}
-        for view_name, image in images.items():
-            if image is None:
-                continue
-            frame = np.asarray(image, dtype=np.uint8)
-            if frame.size == 0 or int(frame.sum()) == 0:
-                continue
-            if frame.shape[:2] != image_size:
-                frame = np.asarray(
-                    Image.fromarray(frame).resize((image_size[1], image_size[0]), Image.BILINEAR),
-                    dtype=np.uint8,
+        deadline = time.monotonic() + max(float(timeout_s), 0.5)
+        self._subscriber.wait_until_ready(timeout_s=max(float(timeout_s), 0.5))
+        while time.monotonic() < deadline:
+            images, timestamps, _ = self._subscriber.latest_images()
+            resized: dict[str, np.ndarray] = {}
+            if any(float(value) > 0.0 for value in timestamps.values()):
+                for view_name, image in images.items():
+                    if image is None:
+                        continue
+                    frame = np.asarray(image, dtype=np.uint8)
+                    if frame.size == 0 or int(frame.sum()) == 0:
+                        continue
+                    if frame.shape[:2] != image_size:
+                        frame = np.asarray(
+                            Image.fromarray(frame).resize((image_size[1], image_size[0]), Image.BILINEAR),
+                            dtype=np.uint8,
+                        )
+                    resized[view_name] = frame
+            for view_name, topic in self.topic_map.items():
+                if view_name in resized:
+                    continue
+                frame = fetch_gazebo_topic_image(
+                    topic,
+                    timeout_s=min(timeout_s, 2.0),
+                    expected_shape=(image_size[0], image_size[1], 3),
                 )
-            resized[view_name] = frame
-        return resized
+                if frame is None or frame.size == 0 or int(frame.sum()) == 0:
+                    continue
+                resized[view_name] = np.asarray(frame, dtype=np.uint8)
+            missing_views = tuple(
+                view_name
+                for view_name in self.topic_map
+                if view_name not in resized
+            )
+            if missing_views:
+                probe_images = capture_scene_probe_images(
+                    view_names=missing_views,
+                    expected_shape=(image_size[0], image_size[1], 3),
+                )
+                for view_name, frame in probe_images.items():
+                    if frame is None or frame.size == 0 or int(frame.sum()) == 0:
+                        continue
+                    resized[view_name] = np.asarray(frame, dtype=np.uint8)
+            if len(resized) == len(self.topic_map):
+                return resized
+            time.sleep(0.2)
+        return resized if "resized" in locals() else {}
 
     def close(self) -> None:
         if not self._started:
@@ -178,6 +207,7 @@ def build_scene_overview_images(
     state,
     image_size: tuple[int, int] = (256, 256),
     live_images_by_view: dict[str, np.ndarray] | None = None,
+    require_live_images: bool = False,
 ) -> list[dict[str, Any]]:
     images: list[dict[str, Any]] = []
     for view_name, _, _ in SCENE_OVERVIEW_VIEWS:
@@ -186,6 +216,9 @@ def build_scene_overview_images(
         if live_image is not None:
             image = np.asarray(live_image, dtype=np.uint8)
             source = "live_overview_topic"
+        elif require_live_images:
+            image = None
+            source = "missing_live_overview"
         else:
             image = render_scene_overview_frame(
                 scenario=scenario,
@@ -199,7 +232,7 @@ def build_scene_overview_images(
                 "view_name": view_name,
                 "source": source,
                 "timestamp": None,
-                "image_data_url": encode_image_data_url(image),
+                "image_data_url": None if image is None else encode_image_data_url(image),
             }
         )
     return images

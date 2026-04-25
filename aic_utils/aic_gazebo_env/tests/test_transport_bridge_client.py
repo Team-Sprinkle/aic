@@ -356,6 +356,7 @@ def test_transport_client_reset_advances_world_before_fresh_observation(tmp_path
             {"state_generation": 3},
             {"requested": True, "result": True, "reply_text": "data: true\n"},
             {"requested": True, "result": True, "reply_text": "data: true\n"},
+            {"pose_generation": 3},
                 {
                     "state_generation": 4,
                     "pose_generation": 4,
@@ -376,7 +377,8 @@ def test_transport_client_reset_advances_world_before_fresh_observation(tmp_path
     assert response.info["world_control_ok"] is True
     assert client._bridge.calls[1]["reset_all"] is True
     assert client._bridge.calls[2]["multi_step"] == client.config.reset_post_reset_ticks
-    assert client._bridge.calls[3]["after_generation"] == 3
+    assert client._bridge.calls[4]["after_generation"] == 3
+    assert client._bridge.calls[5]["pose_after_generation"] == 3
 
 
 def test_transport_client_observation_fallback_only_on_transport_freshness_failure(tmp_path: Path) -> None:
@@ -401,6 +403,71 @@ def test_transport_client_observation_fallback_only_on_transport_freshness_failu
     response = client.get_observation(GetObservationRequest())
     assert response.info["transport_backend"] == "transport_cli_fallback"
     assert response.info["fallback_used"] is True
+
+
+def test_transport_client_normalizes_parent_local_link_poses_into_world_space(tmp_path: Path) -> None:
+    world = tmp_path / "world.sdf"
+    _write_world(world)
+    client = GazeboTransportClient(
+        GazeboCliClientConfig(
+            world_path=str(world),
+            world_name="test_world",
+            executable="gz",
+            timeout=0.2,
+            transport_backend="transport",
+            source_entity_name="ati/tool_link",
+            target_entity_name="sfp_port_0_link",
+        )
+    )
+    observation = client._parse_live_observation(
+        state_payload='world: "test_world"\nstep_count: 0\n',
+        pose_payload=(
+            'pose {\n'
+            '  name: "task_board"\n'
+            '  position {\n    x: 0.15\n    y: -0.2\n    z: 1.14\n  }\n'
+            '  orientation {\n    w: 1.0\n  }\n'
+            '}\n'
+            'pose {\n'
+            '  name: "nic_card_mount_0"\n'
+            '  position {\n    x: -0.045418\n    y: -0.1745\n    z: 0.012\n  }\n'
+            '  orientation {\n    w: 1.0\n  }\n'
+            '}\n'
+            'pose {\n'
+            '  name: "nic_card_link"\n'
+            '  position {\n    x: -0.002\n    y: -0.01785\n    z: 0.0899\n  }\n'
+            '  orientation {\n    x: -0.70710678\n    w: 0.70710678\n  }\n'
+            '}\n'
+            'pose {\n'
+            '  name: "sfp_port_0_link"\n'
+            '  position {\n    x: 0.01095\n    y: -0.012865\n    z: 0.121476\n  }\n'
+            '  orientation {\n    x: 0.99998\n    w: 0.006321\n  }\n'
+            '}\n'
+            'pose {\n'
+            '  name: "sfp_port_0_link_entrance"\n'
+            '  position {\n    x: 0.01095\n    y: -0.012286\n    z: 0.167272\n  }\n'
+            '  orientation {\n    x: 0.99998\n    w: 0.006321\n  }\n'
+            '}\n'
+            'pose {\n'
+            '  name: "cable_0"\n'
+            '  position {\n    x: 0.1725\n    y: 0.0244\n    z: 1.5084\n  }\n'
+            '  orientation {\n    w: 1.0\n  }\n'
+            '}\n'
+            'pose {\n'
+            '  name: "lc_plug_link"\n'
+            '  position {\n    x: -0.01386\n    y: -0.01737\n    z: -0.03445\n  }\n'
+            '  orientation {\n    w: 1.0\n  }\n'
+            '}\n'
+        ),
+        world_name="test_world",
+    )
+    entities = observation["entities_by_name"]
+    assert entities["nic_card_mount_0"]["pose_frame_status"] == "parent_composed_world"
+    assert entities["nic_card_link"]["pose_frame_status"] == "parent_composed_world"
+    assert entities["sfp_port_0_link"]["pose_frame_status"] == "parent_composed_world"
+    assert entities["sfp_port_0_link_entrance"]["pose_frame_status"] == "parent_composed_world"
+    assert entities["lc_plug_link"]["pose_frame_status"] == "parent_composed_world"
+    assert float(entities["lc_plug_link"]["position"][2]) > 1.4
+    assert float(entities["sfp_port_0_link"]["position"][2]) > 1.2
 
 
 def test_client_prefers_configured_world_name_without_service_scan(tmp_path: Path) -> None:

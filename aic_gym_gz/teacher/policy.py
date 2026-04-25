@@ -28,7 +28,8 @@ class TeacherConfig:
     hold_ticks_per_action: int = 8
     planner_backend_name: str = "mock-deterministic"
     planner_output_mode: str = "absolute_cartesian_waypoint"
-    prefer_live_scene_overview: bool = False
+    prefer_live_scene_overview: bool = True
+    require_live_scene_overview: bool = True
     enable_global_guidance: bool = False
     global_plan_interval_segments: int = 4
     enable_close_range_handoff: bool = True
@@ -63,6 +64,11 @@ class AgentTeacherController:
             self.context_extractor = replace(
                 self.context_extractor,
                 prefer_live_scene_overview=self.config.prefer_live_scene_overview,
+            )
+        if self.context_extractor.require_live_scene_overview != self.config.require_live_scene_overview:
+            self.context_extractor = replace(
+                self.context_extractor,
+                require_live_scene_overview=self.config.require_live_scene_overview,
             )
 
     def select_plan(

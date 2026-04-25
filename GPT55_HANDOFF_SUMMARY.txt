@@ -1,0 +1,176 @@
+Summary from GPT-5.4 for continuation.
+
+Repo / context:
+- Workspace: `/home/ubuntu/ws_aic/src/aic`
+- Branch was `feat/agent-teacher`
+- Main goal: restore `gazebo_training_fast` as default live Gazebo gym mode with:
+  - fast `.step()`
+  - real wrist images
+  - real multi-angle scene images
+  - no made-up images
+  - okay to use synthetic TCP / plug observations and synthetic state stepping
+  - target env/image cadence around 20 Hz (`dt=0.002`, `ticks_per_step=25`)
+
+What GPT-5.4 already fixed:
+1. Fast-state stepping no longer does a hidden full world observation each step.
+- Files:
+  - [aic_utils/aic_gazebo_env/aic_gazebo_env/gazebo_client.py](/home/ubuntu/ws_aic/src/aic/aic_utils/aic_gazebo_env/aic_gazebo_env/gazebo_client.py)
+  - [aic_gym_gz/runtime.py](/home/ubuntu/ws_aic/src/aic/aic_gym_gz/runtime.py)
+- Added cached source-pose stepping so delta-pose actuation doesn’t call `get_observation()` in the hot loop.
+- This materially improved step latency.
+
+2. `gazebo_training_fast` is the default mode.
+- File:
+  - [aic_gym_gz/env.py](/home/ubuntu/ws_aic/src/aic/aic_gym_gz/env.py)
+- `controller_velocity_wip` remains opt-in.
+
+3. Real scene overview cameras were restored.
+- Files:
+  - [aic_description/urdf/ur_gz.urdf.xacro](/home/ubuntu/ws_aic/src/aic/aic_description/urdf/ur_gz.urdf.xacro)
+  - [aic_gym_gz/official_scene.py](/home/ubuntu/ws_aic/src/aic/aic_gym_gz/official_scene.py)
+- Multi-angle scene cameras now advertise properly in the generated fast world.
+
+4. Frame bug was fixed for link poses.
+- File:
+  - [aic_utils/aic_gazebo_env/aic_gazebo_env/gazebo_client.py](/home/ubuntu/ws_aic/src/aic/aic_utils/aic_gazebo_env/aic_gazebo_env/gazebo_client.py)
+- Child-link poses coming from Gazebo were being misread as world-frame. Parent-chain world reconstruction was added.
+
+5. `ticks_per_step` defaults were aligned to 20 Hz.
+- Files:
+  - [aic_gym_gz/run_cheatcode_gym.py](/home/ubuntu/ws_aic/src/aic/aic_gym_gz/run_cheatcode_gym.py)
+  - [aic_gym_gz/run_teacher_rollout_inspect.py](/home/ubuntu/ws_aic/src/aic/aic_gym_gz/run_teacher_rollout_inspect.py)
+- Default is now `25` ticks/step.
+
+6. A working bounded artifact path exists.
+- Artifacts that completed earlier:
+  - [cheatcode_live_eval_fast_generated_20260424_v15/cheatcode_summary.json](/home/ubuntu/ws_aic/src/aic/aic_gym_gz/artifacts/inspect_runs/cheatcode_live_eval_fast_generated_20260424_v15/cheatcode_summary.json)
+  - [teacher_live_openai_fast_generated_20260424_v2/rollout_analysis.json](/home/ubuntu/ws_aic/src/aic/aic_gym_gz/artifacts/inspect_runs/teacher_live_openai_fast_generated_20260424_v2/rollout_analysis.json)
+- But those were bounded validation runs, not yet a restored high-throughput training-quality image loop.
+
+Important earlier artifact to compare against:
+- [teacher_live_inspect_ctrl_20260423/videos/metadata.json](/home/ubuntu/ws_aic/src/aic/aic_gym_gz/artifacts/inspect_runs/teacher_live_inspect_ctrl_20260423/videos/metadata.json)
+- This older path had:
+  - real wrist images
+  - real overview images
+  - one frame per step
+  - practical sync
+- GPT-5.4 concluded this proves the current image problem is a regression, not a fundamental limitation.
+
+Critical image-path findings from GPT-5.4:
+1. The current generated-world fast path still fails to reliably deliver wrist images in `async_training`.
+- Even after multiple fixes, reset often returns:
+  - `image_timestamps = [0,0,0]`
+  - no wrist images
+
+2. This is not just a gym cache bug.
+- Direct Gazebo fetch probe while the benchmark world was live showed:
+  - `/left_camera/image` returned a real image
+  - `/center_camera/image` returned no payload
+  - `/right_camera/image` returned no payload
+- Probe result:
+  - left: `ok=true`, sum ~`29158061`
+  - center/right: `ok=false`
+
+3. The generated world file itself does contain all three wrist sensors correctly.
+- File checked:
+  - [aic_gym_gz/artifacts/inspect_runs/fast_direct_bench_20260424/world.sdf](/home/ubuntu/ws_aic/src/aic/aic_gym_gz/artifacts/inspect_runs/fast_direct_bench_20260424/world.sdf)
+- It includes:
+  - `left_camera`
+  - `center_camera`
+  - `right_camera`
+  - each with `/.../image` topic entries
+
+4. Existing launch logs strongly suggest lazy bridge / sensor enable timing is a real culprit.
+- File:
+  - [aic_gym_gz/artifacts/inspect_runs/fast_direct_bench_20260424/world.launch.log](/home/ubuntu/ws_aic/src/aic/aic_gym_gz/artifacts/inspect_runs/fast_direct_bench_20260424/world.launch.log)
+- Key observations:
+  - the composed `ros_gz_bridge` creates wrist bridges with `Lazy 1`
+  - cameras are advertised early
+  - actual “Enabling camera sensor ... data generation” happens much later
+  - in that log:
+    - center enabled at `23:05:14`
+    - left enabled at `23:05:19`
+    - right enabled at `23:05:26`
+- This was one of the strongest clues.
+
+5. The repo already contains a note confirming the lazy bridge is unreliable in this container.
+- File:
+  - [aic_gym_gz/official_trace.py](/home/ubuntu/ws_aic/src/aic/aic_gym_gz/official_trace.py)
+- Around line ~720 it explicitly says image capture uses a dedicated non-lazy ROS `parameter_bridge` sidecar because the composed lazy bridge is unreliable in this container.
+- That is likely the right direction for the training path too.
+
+Recent GPT-5.4 code edits that were still in-progress / not fully validated:
+1. `async_training` config in [aic_gym_gz/env.py](/home/ubuntu/ws_aic/src/aic/aic_gym_gz/env.py)
+- Current intended shape:
+  - short bootstrap
+  - no direct per-step subprocess fetches
+  - persistent sidecar/subscriber model
+- This block was edited multiple times.
+- Latest state at the moment of handoff:
+  - `ready_timeout_s=3.0`
+  - `blocking_bootstrap=True`
+  - `allow_direct_fetch_fallback=False`
+  - `background_direct_fetch=False`
+  - `start_bridge=True` again for async training, because GPT-5.4 found `official_trace.py` and decided the dedicated non-lazy bridge is likely necessary.
+
+2. `RosCameraSidecarIO` in [aic_gym_gz/io.py](/home/ubuntu/ws_aic/src/aic/aic_gym_gz/io.py)
+- Added field:
+  - `start_bridge: bool = True`
+- `_ensure_camera_pipeline_started()` now respects `start_bridge`
+- `__post_init__()` currently starts the camera pipeline immediately again:
+  - `self._ensure_camera_pipeline_started()`
+- This was done because GPT-5.4 suspected lazy startup was one regression relative to the older good path.
+
+3. `AicInsertionEnv.reset()` warm-up in [aic_gym_gz/env.py](/home/ubuntu/ws_aic/src/aic/aic_gym_gz/env.py)
+- GPT-5.4 added reset warm-up logic:
+  - after initial `observation_from_state()`, if wrist images are not live, call `_warm_images_on_reset(state)`
+  - `_warm_images_on_reset()` now steps zero actions up to 8 times with `warm_ticks = hold_action_ticks`
+  - helper `_observation_has_live_wrist_images()` checks for all three wrist images nonblank and timestamps > 0
+- This passed local `test_env.py`, but in live probe it still did not produce real wrist images.
+
+Most recent live probe result before handoff:
+- GPT-5.4 was rerunning a reset-only probe after restoring:
+  - early sidecar startup
+  - dedicated bridge for async training
+  - reset warm-up
+- Command session id `65745` was started but the user aborted the turn before result came back.
+- So the last probe outcome is unknown.
+- Before that final rerun, the most recent completed reset probe still showed:
+  - reset wall ~27.9s
+  - sim_time ~0.4 after warm-up
+  - wrist timestamps still `[0,0,0]`
+  - no wrist images
+- That was before `start_bridge=True` was restored.
+
+Tests passing at handoff:
+- `./.pixi/envs/default/bin/python3.12 -m pytest aic_gym_gz/tests/test_io.py aic_gym_gz/tests/test_env.py -q`
+  - passed after several edits
+- `python3 -m py_compile aic_gym_gz/env.py aic_gym_gz/io.py`
+  - passed
+- Focused env/io tests were green after the latest patches too.
+
+Strongest current hypothesis from GPT-5.4:
+- The remaining critical issue is the wrist-image transport path in `gazebo_training_fast`.
+- State stepping is now much better.
+- Scene overviews are fixed.
+- The generated-world ROS/Gazebo wrist camera delivery is still unreliable.
+- The best next move is probably to align `async_training` with the known-good workaround from [official_trace.py](/home/ubuntu/ws_aic/src/aic/aic_gym_gz/official_trace.py):
+  - dedicated non-lazy wrist image bridge sidecar
+  - persistent subscriber
+  - one-time warm-up before rollout
+- If that still fails, the next debugging target should be:
+  - whether center/right wrist sensors are actually publishing frames in the live generated-world runtime, not just being advertised
+
+Useful files to inspect next:
+- [aic_gym_gz/env.py](/home/ubuntu/ws_aic/src/aic/aic_gym_gz/env.py)
+- [aic_gym_gz/io.py](/home/ubuntu/ws_aic/src/aic/aic_gym_gz/io.py)
+- [aic_gym_gz/official_trace.py](/home/ubuntu/ws_aic/src/aic/aic_gym_gz/official_trace.py)
+- [aic_bringup/config/ros_gz_bridge_config.yaml](/home/ubuntu/ws_aic/src/aic/aic_bringup/config/ros_gz_bridge_config.yaml)
+- [aic_gym_gz/artifacts/inspect_runs/fast_direct_bench_20260424/world.launch.log](/home/ubuntu/ws_aic/src/aic/aic_gym_gz/artifacts/inspect_runs/fast_direct_bench_20260424/world.launch.log)
+- [aic_gym_gz/artifacts/inspect_runs/teacher_live_inspect_ctrl_20260423/videos/metadata.json](/home/ubuntu/ws_aic/src/aic/aic_gym_gz/artifacts/inspect_runs/teacher_live_inspect_ctrl_20260423/videos/metadata.json)
+
+Short version of GPT-5.4 status:
+- Fast-state stepping: largely fixed
+- Scene overview images: fixed
+- Wrist image delivery in `gazebo_training_fast`: still the main unresolved critical issue
+- Latest promising direction: reuse the dedicated non-lazy bridge approach from `official_trace.py` and verify the final reset probe that was interrupted
