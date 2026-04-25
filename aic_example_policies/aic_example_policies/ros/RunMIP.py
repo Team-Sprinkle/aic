@@ -26,19 +26,21 @@ class RunMIP(Policy):
     def __init__(self, parent_node: Node):
         super().__init__(parent_node)
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+        self._checkpoint_name = os.getenv("AIC_MIP_CHECKPOINT", "model_90000.pt")
+        self._network_config_name = os.getenv(
+            "AIC_MIP_NETWORK_CONFIG", "chitransformer.yaml"
+        )
 
         # Paths for repo-local MIP artifacts.
         self._assets_root = self._resolve_assets_root()
-        self._checkpoint_path = self._assets_root / "model_100000.pt"
+        self._checkpoint_path = self._assets_root / self._checkpoint_name
         self._task_cfg_path = (
             self._assets_root / "configs" / "task" / "aic_lerobot_image_state.yaml"
         )
         self._net_base_cfg_path = (
             self._assets_root / "configs" / "network" / "_base.yaml"
         )
-        self._net_cfg_path = (
-            self._assets_root / "configs" / "network" / "mlp.yaml"
-        )
+        self._net_cfg_path = self._assets_root / "configs" / "network" / self._network_config_name
         self._opt_cfg_path = (
             self._assets_root / "configs" / "optimization" / "default.yaml"
         )
@@ -129,12 +131,18 @@ class RunMIP(Policy):
         )
 
         for candidate in candidates:
-            if (candidate / "model_latest.pt").exists():
+            checkpoint_candidates = [
+                candidate / self._checkpoint_name,
+                candidate / "model_latest.pt",
+                candidate / "model_100000_0423.pt",
+            ]
+            if any(path.exists() for path in checkpoint_candidates):
                 self.get_logger().info(f"Using MIP assets root: {candidate}")
                 return candidate
 
         raise FileNotFoundError(
-            "Could not locate MIP assets directory containing model_latest.pt. "
+            "Could not locate MIP assets directory containing "
+            f"'{self._checkpoint_name}' (or compatible fallback checkpoint names). "
             "Set AIC_MIP_ASSETS_DIR or place artifacts under "
             "aic_example_policies/aic_example_policies/assets/mip."
         )
