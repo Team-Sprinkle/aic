@@ -18,8 +18,18 @@ from aic_teacher_official.postprocess import (
     minimum_jerk_fraction,
     postprocess_piecewise_trajectory,
 )
-from aic_teacher_official.review import build_review_bundle
+from aic_teacher_official.review import (
+    _compact_manifest_for_gpt,
+    build_comparison_review_bundle,
+    build_review_bundle,
+)
 from aic_teacher_official.replay import SmoothTrajectoryReplayPolicy
+from aic_teacher_official.iteration import (
+    build_recording_command,
+    loop_roots,
+    parse_total_score,
+    run_name_for_loop,
+)
 from aic_teacher_official.trajectory import (
     PhaseLabel,
     PiecewiseTrajectory,
@@ -335,3 +345,162 @@ def test_review_bundle_generation_missing_images_gracefully(tmp_path):
     assert manifest["images"]["missing_wrist_images"] is True
     assert manifest["images"]["missing_gazebo_images"] is True
     assert loaded["critique"]["api_called"] is False
+
+
+def test_comparison_review_bundle_includes_multiple_loop_contexts(tmp_path):
+    smooth = postprocess_piecewise_trajectory(_piecewise(), sample_dt=0.2)
+    loop1_smooth = tmp_path / "loop1_smooth.json"
+    loop2_smooth = tmp_path / "loop2_smooth.json"
+    smooth.save_json(loop1_smooth)
+    smooth.save_json(loop2_smooth)
+    loop1_score = tmp_path / "loop1_score.yaml"
+    loop2_score = tmp_path / "loop2_score.yaml"
+    loop1_score.write_text("total: 97.0\n", encoding="utf-8")
+    loop2_score.write_text("total: 44.0\n", encoding="utf-8")
+
+    manifest = build_comparison_review_bundle(
+        [
+            {
+                "label": "loop_1",
+                "trajectory_path": loop1_smooth,
+                "scoring_path": loop1_score,
+            },
+            {
+                "label": "loop_2",
+                "trajectory_path": loop2_smooth,
+                "scoring_path": loop2_score,
+            },
+        ],
+        tmp_path / "comparison_review.json",
+        samples=10,
+    )
+
+    assert [run["label"] for run in manifest["runs"]] == ["loop_1", "loop_2"]
+    assert manifest["runs"][0]["score_total"] == pytest.approx(97.0)
+    assert manifest["runs"][1]["score_total"] == pytest.approx(44.0)
+    assert manifest["samples_per_run"] == 10
+    assert manifest["runs"][0]["samples"][0]["planned"]["tcp_pose"]
+
+
+def test_review_bundle_includes_container_scoring_messages(tmp_path):
+    smooth_path = tmp_path / "smooth.json"
+    smooth = postprocess_piecewise_trajectory(_piecewise(), sample_dt=0.2)
+    smooth.save_json(smooth_path)
+    scoring_path = tmp_path / "scores" / "trial_1_trial_000001" / "scoring.yaml"
+    scoring_path.parent.mkdir(parents=True)
+    scoring_path.write_text(
+        "total: 58.0\ntrial_000001:\n  tier_3:\n    message: Partial insertion detected with distance of 0.05m.\n",
+        encoding="utf-8",
+    )
+    log_dir = tmp_path / "logs" / "per_trial_tmp"
+    log_dir.mkdir(parents=True)
+    (log_dir / "trial_1_trial_000001_simulation.log").write_text(
+        "scoring total: 58.0\nresult: OK\n",
+        encoding="utf-8",
+    )
+
+    manifest = build_review_bundle(
+        smooth_path,
+        tmp_path / "review.json",
+        scoring_path=scoring_path,
+        samples=4,
+    )
+
+    context = manifest["container_scoring_context"]
+    assert context["available"] is True
+    assert "Partial insertion detected" in context["scoring_yaml_text"]
+    assert context["log_excerpts"][0]["matching_lines"] == ["scoring total: 58.0", "result: OK"]
+
+
+def test_gpt_review_payload_is_compacted(tmp_path):
+    smooth_path = tmp_path / "smooth.json"
+    smooth = postprocess_piecewise_trajectory(_piecewise(), sample_dt=0.2)
+    smooth.save_json(smooth_path)
+    scoring_path = tmp_path / "scores" / "trial_1_trial_000001" / "scoring.yaml"
+    scoring_path.parent.mkdir(parents=True)
+    scoring_path.write_text("total: 97.0\n", encoding="utf-8")
+
+    manifest = build_review_bundle(
+        smooth_path,
+        tmp_path / "review.json",
+        scoring_path=scoring_path,
+        samples=4,
+    )
+    compact = _compact_manifest_for_gpt(manifest)
+
+    assert "recorded_dataset" not in compact
+    assert "trajectory_metadata" not in compact
+    assert compact["score"]["total"] == pytest.approx(97.0)
+
+
+def test_iteration_loop_names_and_score_parse(tmp_path):
+    roots = loop_roots(
+        root_dir=tmp_path,
+        task_family="sfp_to_nic",
+        scene_count_label="nic_cards_2",
+        attempt_label="n1",
+        base_run_name="trial9_2026_0425_205620",
+        loop_index=2,
+    )
+    scoring = roots.scoring_path
+    scoring.parent.mkdir(parents=True)
+    scoring.write_text("total: 97.5\n", encoding="utf-8")
+
+    assert run_name_for_loop("trial9_2026_0425_205620", 1) == "trial9_2026_0425_205620_loop_1"
+    assert run_name_for_loop("trial9_2026_0425_205620", 2) == "trial9_2026_0425_205620_loop_2"
+    assert "vlm_planner_postprocessed" in str(roots.postprocessed_root)
+    assert parse_total_score(scoring) == pytest.approx(97.5)
+
+
+def test_iteration_recording_command_uses_stable_waits(tmp_path):
+    cmd = build_recording_command(
+        engine_config="engine.yaml",
+        sim_distrobox="aic_eval",
+        smooth_path=tmp_path / "smooth.json",
+        dataset_repo_id="local/test",
+        dataset_root=tmp_path / "raw_dataset",
+        scores_root=tmp_path / "scores",
+        tmp_dir=tmp_path / "tmp",
+    )
+
+    assert "--startup-delay-sec" in cmd
+    assert cmd[cmd.index("--startup-delay-sec") + 1] == "8"
+    assert "--per-trial-timeout-sec" in cmd
+    assert cmd[cmd.index("--per-trial-timeout-sec") + 1] == "0"
+
+
+def test_iteration_cli_dry_run_writes_loop_dirs(tmp_path):
+    engine_config = tmp_path / "engine.yaml"
+    engine_config.write_text("trials: {trial_000001: {}}\n", encoding="utf-8")
+    script = Path("scripts/official_teacher_iterate.py")
+
+    result = subprocess.run(
+        [
+            sys.executable,
+            str(script),
+            "--root-dir",
+            str(tmp_path),
+            "--base-run-name",
+            "trial9_2026_0425_205620",
+            "--engine-config",
+            str(engine_config),
+            "--max-loops",
+            "2",
+            "--dry-run",
+        ],
+        check=True,
+        text=True,
+        capture_output=True,
+    )
+
+    assert "trial9_2026_0425_205620_loop_1" in result.stdout
+    assert "trial9_2026_0425_205620_loop_2" in result.stdout
+    assert (
+        tmp_path
+        / "sfp_to_nic"
+        / "vlm_planner_postprocessed"
+        / "nic_cards_2"
+        / "n1"
+        / "trial9_2026_0425_205620_loop_2"
+        / "smooth_trajectory.json"
+    ).exists()
