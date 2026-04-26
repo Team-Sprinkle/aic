@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import argparse
+import json
 from pathlib import Path
 import sys
 
@@ -82,6 +83,10 @@ def main() -> None:
         default=[],
         help="Optional image path for VLM planning. Repeatable.",
     )
+    parser.add_argument(
+        "--planner-feedback",
+        help="Optional JSON file containing previous-loop GPT-5 critique/feedback.",
+    )
     args = parser.parse_args()
 
     context = None
@@ -95,6 +100,10 @@ def main() -> None:
             port_name=args.port_name,
         )
 
+    planner_feedback = None
+    if args.planner_feedback:
+        planner_feedback = json.loads(Path(args.planner_feedback).read_text(encoding="utf-8"))
+
     vlm_delta_plan = None
     if args.use_vlm:
         vlm_context = context or OfficialTeacherContext(
@@ -106,6 +115,7 @@ def main() -> None:
         vlm_delta_plan = call_gpt5_mini_delta_planner(
             vlm_context,
             image_paths=[Path(path) for path in args.image],
+            planner_feedback=planner_feedback,
             max_calls=args.max_vlm_calls,
             model=args.vlm_model,
         )
@@ -125,6 +135,7 @@ def main() -> None:
         task_name=args.task_name,
         context=context,
         vlm_delta_plan=vlm_delta_plan,
+        planner_feedback=planner_feedback,
     )
     trajectory = generate_piecewise_file(config, args.output)
     print(f"Wrote {len(trajectory.waypoints)} piecewise waypoints to {args.output}")
