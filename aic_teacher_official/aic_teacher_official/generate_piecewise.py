@@ -35,6 +35,7 @@ class PiecewiseGeneratorConfig:
     task_name: str = "Insert cable into target port"
     context: OfficialTeacherContext | None = None
     vlm_delta_plan: dict[str, Any] | None = None
+    planner_feedback: dict[str, Any] | None = None
 
 
 def _pose(position: list[float], orientation_xyzw: list[float]) -> TCPPose:
@@ -185,6 +186,7 @@ def generate_piecewise_trajectory(config: PiecewiseGeneratorConfig) -> Piecewise
             "vlm_pause_allowed": True,
             "context": config.context.to_dict() if config.context is not None else None,
             "vlm_delta_plan": config.vlm_delta_plan,
+            "planner_feedback": config.planner_feedback,
             "automatic_context_extraction": (
                 "official_ros_tf" if config.context is not None else "explicit_cli_or_todo"
             ),

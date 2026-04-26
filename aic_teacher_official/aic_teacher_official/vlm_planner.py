@@ -65,8 +65,10 @@ def call_gpt5_mini_delta_planner(
     context: OfficialTeacherContext,
     *,
     image_paths: list[Path] | None = None,
+    planner_feedback: dict[str, Any] | None = None,
     max_calls: int = 20,
     model: str = "gpt-5-mini",
+    request_timeout_sec: float = 120.0,
 ) -> dict[str, Any]:
     """Ask GPT-5 mini for approach/alignment Cartesian delta waypoints.
 
@@ -98,6 +100,7 @@ def call_gpt5_mini_delta_planner(
             "Prefer conservative z clearance before moving near the port.",
         ],
         "context": context.to_dict(),
+        "previous_loop_feedback": planner_feedback,
         "response_schema": {
             "waypoints": [
                 {
@@ -112,6 +115,7 @@ def call_gpt5_mini_delta_planner(
     }
     response = client.responses.create(
         model=model,
+        timeout=request_timeout_sec,
         instructions=(
             "You are a robotics trajectory planner. Output JSON only. "
             "Use Cartesian delta waypoints in meters in base_link."
@@ -139,6 +143,7 @@ def call_gpt5_mini_delta_planner(
             "max_calls_budget": max_calls,
             "image_count": len(image_paths[:8]),
             "prompt_format": "cartesian_delta_waypoints_base_link",
+            "planner_feedback_used": planner_feedback is not None,
         }
     )
     return parsed
