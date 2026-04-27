@@ -6,6 +6,7 @@ __all__ = [
     "gym_env",
     "ipc",
     "observation",
+    "rollout",
     "runner",
     "score_parser",
     "train",

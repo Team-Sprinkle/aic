@@ -25,6 +25,17 @@ class GazeboRLEnv:
         port: int = 0,
         command_dt_sec: float = 0.05,
         results_dir: str | Path = "outputs/gazebo_rl/results",
+        record_lerobot: bool = False,
+        record_root: str | Path | None = None,
+        record_repo_id: str = "local/gazebo_rl_rollout",
+        record_single_task: str = "gazebo_rl rollout",
+        record_video: bool = True,
+        record_fps: int = 30,
+        record_resume: bool = False,
+        record_drain_sec: float = 20.0,
+        record_image_writer_processes: int = 0,
+        record_image_writer_threads_per_camera: int = 4,
+        record_video_encoding_batch_size: int = 1,
     ):
         self.workspace_dir = Path(workspace_dir).resolve()
         self.max_steps = int(max_steps)
@@ -48,6 +59,17 @@ class GazeboRLEnv:
                 port=self._server.port,
                 command_dt_sec=command_dt_sec,
                 results_dir=Path(results_dir).resolve(),
+                record_lerobot=record_lerobot,
+                record_root=Path(record_root).resolve() if record_root is not None else None,
+                record_repo_id=record_repo_id,
+                record_single_task=record_single_task,
+                record_video=record_video,
+                record_fps=record_fps,
+                record_resume=record_resume,
+                record_drain_sec=record_drain_sec,
+                record_image_writer_processes=record_image_writer_processes,
+                record_image_writer_threads_per_camera=record_image_writer_threads_per_camera,
+                record_video_encoding_batch_size=record_video_encoding_batch_size,
             )
         )
 

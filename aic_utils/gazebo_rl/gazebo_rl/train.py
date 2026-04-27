@@ -88,6 +88,14 @@ class TinyPolicy:
         else:
             np.savez(path.with_suffix(".npz"), weights=self.weights)
 
+    def load(self, path: Path) -> None:
+        if self.torch is not None and self.model is not None:
+            checkpoint = self.torch.load(path, map_location="cpu")
+            self.model.load_state_dict(checkpoint["model_state_dict"])
+        else:
+            data = np.load(path.with_suffix(".npz"))
+            self.weights = data["weights"]
+
 
 def run_short_training(args: argparse.Namespace) -> dict[str, Any]:
     started = time.monotonic()
@@ -114,6 +122,17 @@ def run_short_training(args: argparse.Namespace) -> dict[str, Any]:
             max_steps=args.max_steps,
             per_trial_timeout_sec=args.per_trial_timeout_sec,
             results_dir=results_dir,
+            record_lerobot=args.record_lerobot,
+            record_root=args.record_root,
+            record_repo_id=args.record_repo_id,
+            record_single_task=args.record_single_task,
+            record_video=args.record_video,
+            record_fps=args.record_fps,
+            record_resume=args.record_resume or iteration > 0,
+            record_drain_sec=args.record_drain_sec,
+            record_image_writer_processes=args.record_image_writer_processes,
+            record_image_writer_threads_per_camera=args.record_image_writer_threads_per_camera,
+            record_video_encoding_batch_size=args.record_video_encoding_batch_size,
         )
         iter_reward = 0.0
         real_steps = 0
@@ -180,7 +199,32 @@ def build_arg_parser() -> argparse.ArgumentParser:
     parser.add_argument("--per-trial-timeout-sec", type=float, default=300.0)
     parser.add_argument("--output-dir", default="outputs/gazebo_rl")
     parser.add_argument("--seed", type=int, default=0)
+    add_recording_args(parser)
     return parser
+
+
+def add_recording_args(parser: argparse.ArgumentParser) -> None:
+    parser.add_argument(
+        "--record-lerobot",
+        action="store_true",
+        help="Start the existing aic-policy-recorder sidecar during each rollout.",
+    )
+    parser.add_argument(
+        "--record-root",
+        default=None,
+        help="LeRobot dataset root for optional rollout recording.",
+    )
+    parser.add_argument("--record-repo-id", default="local/gazebo_rl_rollout")
+    parser.add_argument("--record-single-task", default="gazebo_rl rollout")
+    parser.add_argument("--record-video", dest="record_video", action="store_true")
+    parser.add_argument("--no-record-video", dest="record_video", action="store_false")
+    parser.set_defaults(record_video=True)
+    parser.add_argument("--record-fps", type=int, default=30)
+    parser.add_argument("--record-resume", action="store_true")
+    parser.add_argument("--record-drain-sec", type=float, default=20.0)
+    parser.add_argument("--record-image-writer-processes", type=int, default=0)
+    parser.add_argument("--record-image-writer-threads-per-camera", type=int, default=4)
+    parser.add_argument("--record-video-encoding-batch-size", type=int, default=1)
 
 
 def main(argv: list[str] | None = None) -> None:

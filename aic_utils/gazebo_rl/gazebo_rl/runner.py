@@ -52,6 +52,18 @@ class GazeboRLRunnerConfig:
     port: int = 8765
     command_dt_sec: float = 0.05
     results_dir: Path = field(default_factory=lambda: Path("outputs/gazebo_rl/results"))
+    record_lerobot: bool = False
+    record_root: Path | None = None
+    record_repo_id: str = "local/gazebo_rl_rollout"
+    record_single_task: str = "gazebo_rl rollout"
+    record_video: bool = True
+    record_fps: int = 30
+    record_max_episodes: int = 1
+    record_resume: bool = False
+    record_drain_sec: float = 20.0
+    record_image_writer_processes: int = 0
+    record_image_writer_threads_per_camera: int = 4
+    record_video_encoding_batch_size: int = 1
 
 
 class ManagedProcess:
@@ -149,6 +161,36 @@ class GazeboRLRunner:
             "policy:=gazebo_rl.bridge_policy.GazeboRLBridgePolicy",
         ]
 
+    def recorder_command(self) -> list[str]:
+        record_root = self.config.record_root or (
+            self.config.results_dir.parent / "lerobot_rollout_dataset"
+        )
+        cmd = [
+            "pixi",
+            "run",
+            "aic-policy-recorder",
+            f"--dataset.repo_id={self.config.record_repo_id}",
+            f"--dataset.single_task={self.config.record_single_task}",
+            f"--dataset.root={record_root}",
+            f"--dataset.fps={self.config.record_fps}",
+            f"--dataset.num_image_writer_processes={self.config.record_image_writer_processes}",
+            (
+                "--dataset.num_image_writer_threads_per_camera="
+                f"{self.config.record_image_writer_threads_per_camera}"
+            ),
+            f"--dataset.video_encoding_batch_size={self.config.record_video_encoding_batch_size}",
+            f"--max_episodes={self.config.record_max_episodes}",
+            "--save_failed_episodes",
+            "--action_mode=cartesian",
+        ]
+        if self.config.record_video:
+            cmd.append("--dataset.video")
+        else:
+            cmd.append("--no-dataset.video")
+        if self.config.record_resume:
+            cmd.append("--dataset.resume")
+        return cmd
+
     def start(self) -> None:
         self.config.results_dir.mkdir(parents=True, exist_ok=True)
         self._validate_distrobox()
@@ -161,6 +203,15 @@ class GazeboRLRunner:
         )
         self.processes.append(ManagedProcess("simulation", sim))
         time.sleep(2.0)
+        if self.config.record_lerobot:
+            recorder = subprocess.Popen(
+                self.recorder_command(),
+                cwd=self.config.workspace_dir,
+                env=env,
+                text=True,
+            )
+            self.processes.append(ManagedProcess("recorder", recorder))
+            time.sleep(1.0)
         policy = subprocess.Popen(
             self.policy_command(),
             cwd=self.config.workspace_dir,
@@ -189,6 +240,7 @@ class GazeboRLRunner:
                 check=True,
                 capture_output=True,
                 text=True,
+                env=self._env(),
             )
         except OSError as ex:
             raise RuntimeError(f"Could not list distrobox containers: {ex}") from ex
@@ -206,6 +258,58 @@ class GazeboRLRunner:
             )
 
     def close(self) -> None:
-        for managed in reversed(self.processes):
+        recorder_processes = [managed for managed in self.processes if managed.name == "recorder"]
+        for managed in recorder_processes:
+            if managed.process.poll() is None and self.config.record_drain_sec > 0.0:
+                try:
+                    managed.process.wait(timeout=self.config.record_drain_sec)
+                except subprocess.TimeoutExpired:
+                    pass
+        for managed in reversed([p for p in self.processes if p.name != "recorder"]):
+            managed.terminate()
+        self._cleanup_distrobox_processes()
+        for managed in recorder_processes:
             managed.terminate()
         self.processes.clear()
+
+    def _cleanup_distrobox_processes(self) -> None:
+        if not self.config.sim_distrobox:
+            return
+        patterns = [
+            "/entrypoint.sh",
+            "aic_gz_bringup",
+            "rmw_zenohd",
+            "/aic_engine/aic_engine",
+            "aic_adapter",
+            "robot_state_publisher",
+            "component_container",
+            "topic_tools",
+            "static_transform_publisher",
+            "controller_manager/spawner",
+        ]
+        for signal_name in ("-INT", "-TERM"):
+            for pattern in patterns:
+                try:
+                    subprocess.run(
+                        [
+                            "distrobox",
+                            "enter",
+                            "-r",
+                            "--no-tty",
+                            self.config.sim_distrobox,
+                            "--",
+                            "pkill",
+                            signal_name,
+                            "-f",
+                            pattern,
+                        ],
+                        check=False,
+                        stdout=subprocess.DEVNULL,
+                        stderr=subprocess.DEVNULL,
+                        env=self._env(),
+                        timeout=5.0,
+                    )
+                except (OSError, subprocess.TimeoutExpired):
+                    pass
+            if signal_name == "-INT":
+                time.sleep(2.0)

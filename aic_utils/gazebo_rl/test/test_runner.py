@@ -42,6 +42,58 @@ def test_simulation_command_with_distrobox_uses_exact_user_name():
     ]
 
 
+def test_recorder_command_uses_existing_policy_recorder():
+    runner = GazeboRLRunner(
+        GazeboRLRunnerConfig(
+            workspace_dir=Path("/tmp/aic_ws"),
+            results_dir=Path("/tmp/aic_ws/outputs/gazebo_rl/results/iter_000"),
+            record_lerobot=True,
+            record_root=Path("/tmp/aic_ws/outputs/gazebo_rl/rollout_dataset"),
+            record_repo_id="local/test_rollout",
+            record_video=True,
+            record_fps=15,
+        )
+    )
+    cmd = runner.recorder_command()
+    assert cmd[:3] == ["pixi", "run", "aic-policy-recorder"]
+    assert "--dataset.repo_id=local/test_rollout" in cmd
+    assert "--dataset.root=/tmp/aic_ws/outputs/gazebo_rl/rollout_dataset" in cmd
+    assert "--dataset.fps=15" in cmd
+    assert "--dataset.video" in cmd
+    assert "--save_failed_episodes" in cmd
+    assert "--action_mode=cartesian" in cmd
+
+
+def test_start_does_not_precreate_lerobot_dataset_root(monkeypatch, tmp_path):
+    class FakePopen:
+        def __init__(self, *args, **kwargs):
+            self.args = args
+            self.kwargs = kwargs
+
+        def poll(self):
+            return None
+
+    record_root = tmp_path / "new_lerobot_dataset"
+    runner = GazeboRLRunner(
+        GazeboRLRunnerConfig(
+            workspace_dir=tmp_path,
+            results_dir=tmp_path / "results",
+            record_lerobot=True,
+            record_root=record_root,
+        )
+    )
+    monkeypatch.setattr(runner, "_validate_distrobox", lambda: None)
+    monkeypatch.setattr(runner_module.subprocess, "Popen", FakePopen)
+    monkeypatch.setattr(runner_module.time, "sleep", lambda *_: None)
+
+    try:
+        runner.start()
+        assert (tmp_path / "results").is_dir()
+        assert not record_root.exists()
+    finally:
+        runner.processes.clear()
+
+
 def test_distrobox_preflight_is_skipped_when_not_configured(monkeypatch):
     def fail_run(*args, **kwargs):
         raise AssertionError("distrobox list should not be called")

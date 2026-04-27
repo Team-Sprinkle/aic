@@ -22,3 +22,4 @@ outputs
 *.bag
 *.db3
 *.mcap
+*.lock

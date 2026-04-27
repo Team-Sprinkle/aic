@@ -63,6 +63,38 @@ pixi run python aic_utils/gazebo_rl/scripts/gazebo_rl_train_short.py \
 
 Outputs are written under `outputs/gazebo_rl/`, including `checkpoints/` and `run_summary.json`.
 
+## Checkpoint Rollout and Recording
+
+Roll out a saved checkpoint without recording a LeRobot dataset:
+
+```bash
+pixi run python aic_utils/gazebo_rl/scripts/gazebo_rl_rollout.py \
+  --checkpoint outputs/gazebo_rl/checkpoints/gazebo_rl_short.pt \
+  --sim-distrobox <your_eval_container> \
+  --max-steps 25 \
+  --ground-truth true \
+  --gazebo-gui false \
+  --launch-rviz false
+```
+
+To save trajectory rows and camera videos in the same native LeRobot format used by teleop/policy recording, add the existing `aic-policy-recorder` sidecar:
+
+```bash
+pixi run python aic_utils/gazebo_rl/scripts/gazebo_rl_rollout.py \
+  --checkpoint outputs/gazebo_rl/checkpoints/gazebo_rl_short.pt \
+  --sim-distrobox <your_eval_container> \
+  --max-steps 25 \
+  --record-lerobot \
+  --record-root outputs/gazebo_rl/rollouts/latest/lerobot_dataset \
+  --record-video \
+  --record-fps 30 \
+  --ground-truth true \
+  --gazebo-gui false \
+  --launch-rviz false
+```
+
+The recorder is a separate ROS process. It passively subscribes to `/observations`, `/aic_controller/pose_commands`, `/aic_controller/joint_commands`, and action status topics, so file and video writing do not happen inside the RL policy control loop.
+
 ## Policy Loading
 
 The bridge policy can be loaded by `aic_model` with:

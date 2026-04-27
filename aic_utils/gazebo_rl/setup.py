@@ -18,6 +18,7 @@ setup(
     license="Apache-2.0",
     entry_points={
         "console_scripts": [
+            "gazebo_rl_rollout = gazebo_rl.rollout:main",
             "gazebo_rl_train_short = gazebo_rl.train:main",
         ],
     },
