@@ -163,7 +163,14 @@ def build_arg_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description="Run a short real Gazebo RL training proof.")
     parser.add_argument("--workspace-dir", default=".")
     parser.add_argument("--engine-config", default=None)
-    parser.add_argument("--sim-distrobox", default=None)
+    parser.add_argument(
+        "--sim-distrobox",
+        default=None,
+        help=(
+            "Optional user-created distrobox container name for the evaluation "
+            "environment. Omit to use the local pixi launch path."
+        ),
+    )
     parser.add_argument("--ground-truth", type=lambda x: str(x).lower() == "true", default=True)
     parser.add_argument("--gazebo-gui", type=lambda x: str(x).lower() == "true", default=False)
     parser.add_argument("--launch-rviz", type=lambda x: str(x).lower() == "true", default=False)

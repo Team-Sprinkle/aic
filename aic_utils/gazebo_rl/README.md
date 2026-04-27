@@ -25,11 +25,21 @@ The policy loaded by `aic_model` is the boundary. `GazeboRLBridgePolicy` convert
 
 ## Smoke
 
-Run one short random-action rollout:
+Run one short random-action rollout using the local pixi launch path:
 
 ```bash
 pixi run python aic_utils/gazebo_rl/scripts/gazebo_rl_smoke.py \
-  --sim-distrobox aic_eval \
+  --max-steps 5 \
+  --ground-truth true \
+  --gazebo-gui false \
+  --launch-rviz false
+```
+
+Or run through a user-created distrobox evaluation container:
+
+```bash
+pixi run python aic_utils/gazebo_rl/scripts/gazebo_rl_smoke.py \
+  --sim-distrobox <your_eval_container> \
   --max-steps 5 \
   --ground-truth true \
   --gazebo-gui false \
@@ -42,7 +52,7 @@ Run at most five iterations or five minutes:
 
 ```bash
 pixi run python aic_utils/gazebo_rl/scripts/gazebo_rl_train_short.py \
-  --sim-distrobox aic_eval \
+  --sim-distrobox <your_eval_container> \
   --max-iterations 5 \
   --ax-minutes 5 \
   --max-steps 25 \
@@ -63,10 +73,15 @@ pixi run ros2 run aic_model aic_model --ros-args \
   -p policy:=gazebo_rl.bridge_policy.GazeboRLBridgePolicy
 ```
 
-With `--sim-distrobox aic_eval`, the runner starts the evaluation container using the documented form:
+`--sim-distrobox` is optional. If omitted, the runner uses the local source launch path:
+`pixi run ros2 launch aic_bringup aic_gz_bringup.launch.py ...`.
+
+If provided, `--sim-distrobox` must be the name of a distrobox container that the user already created locally. `aic_eval` is not a toolkit resource; it may be the name a user chose while following setup instructions, but users should pass whatever container name they created.
+
+With `--sim-distrobox <your_eval_container>`, the runner starts the evaluation container using:
 
 ```bash
-distrobox enter -r aic_eval -- /entrypoint.sh ground_truth:=true start_aic_engine:=true
+distrobox enter -r --no-tty <your_eval_container> -- /entrypoint.sh ground_truth:=true start_aic_engine:=true
 ```
 
 Use `--ground-truth false` for non-oracle state observations. The trainer environment starts the TCP server and passes connection settings through:

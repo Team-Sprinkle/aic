@@ -21,7 +21,14 @@ def main() -> None:
     parser = argparse.ArgumentParser(description="Run one short Gazebo RL random-action rollout.")
     parser.add_argument("--workspace-dir", default=".")
     parser.add_argument("--engine-config", default=None)
-    parser.add_argument("--sim-distrobox", default=None)
+    parser.add_argument(
+        "--sim-distrobox",
+        default=None,
+        help=(
+            "Optional user-created distrobox container name for the evaluation "
+            "environment. Omit to use the local pixi launch path."
+        ),
+    )
     parser.add_argument("--ground-truth", type=_bool, default=True)
     parser.add_argument("--gazebo-gui", type=_bool, default=False)
     parser.add_argument("--launch-rviz", type=_bool, default=False)

@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import os
 import signal
+import shutil
 import subprocess
 import time
 from dataclasses import dataclass, field
@@ -10,6 +11,31 @@ from pathlib import Path
 
 def _bool_arg(value: bool) -> str:
     return "true" if value else "false"
+
+
+def _parse_distrobox_names(output: str) -> set[str]:
+    names: set[str] = set()
+    for line in output.splitlines():
+        stripped = line.strip()
+        if not stripped:
+            continue
+        if "|" in stripped:
+            columns = [column.strip() for column in stripped.split("|")]
+            lowered = [column.lower() for column in columns]
+            if "name" in lowered:
+                continue
+            if len(columns) >= 2 and columns[1]:
+                names.add(columns[1])
+            continue
+
+        tokens = stripped.split()
+        if not tokens or tokens[0].lower() in {"id", "name"}:
+            continue
+        if len(tokens) >= 2:
+            names.add(tokens[1])
+        else:
+            names.add(tokens[0])
+    return names
 
 
 @dataclass
@@ -78,7 +104,6 @@ class GazeboRLRunner:
                 "enter",
                 "-r",
                 "--no-tty",
-                "--name",
                 self.config.sim_distrobox,
                 "--",
                 "/entrypoint.sh",
@@ -153,6 +178,11 @@ class GazeboRLRunner:
     def _validate_distrobox(self) -> None:
         if not self.config.sim_distrobox:
             return
+        if shutil.which("distrobox") is None:
+            raise RuntimeError(
+                "distrobox is not installed or is not on PATH, but "
+                f"--sim-distrobox {self.config.sim_distrobox!r} was provided."
+            )
         try:
             result = subprocess.run(
                 ["distrobox", "list"],
@@ -160,17 +190,19 @@ class GazeboRLRunner:
                 capture_output=True,
                 text=True,
             )
-        except (OSError, subprocess.CalledProcessError) as ex:
+        except OSError as ex:
             raise RuntimeError(f"Could not list distrobox containers: {ex}") from ex
-        names = {
-            line.split("|")[1].strip()
-            for line in result.stdout.splitlines()
-            if "|" in line and not line.startswith("ID")
-        }
+        except subprocess.CalledProcessError as ex:
+            detail = ex.stderr.strip() or ex.stdout.strip() or str(ex)
+            raise RuntimeError(f"Could not list distrobox containers: {detail}") from ex
+
+        names = _parse_distrobox_names(result.stdout)
         if self.config.sim_distrobox not in names:
             raise RuntimeError(
                 f"Distrobox container '{self.config.sim_distrobox}' was not found. "
-                "Create it first with the aic_eval image from docs/getting_started.md."
+                "This is a user-created container name, not a toolkit resource. "
+                "Pass --sim-distrobox <your-container-name>, or omit --sim-distrobox "
+                "to use the local pixi launch path."
             )
 
     def close(self) -> None:
