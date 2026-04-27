@@ -4,6 +4,8 @@
 
 Isaac Lab remains the high-throughput training environment under `aic_utils/aic_isaac`. This package is intended for short real rollouts, sim-to-sim adaptation checks, and validation against the same stack used by challenge evaluation.
 
+For a deeper architecture and file-by-file explanation, see [`PIPELINE.md`](PIPELINE.md).
+
 ## Architecture
 
 ```text
