@@ -23,7 +23,6 @@ from functools import cached_property
 from threading import Thread
 from typing import Any, Callable, TypedDict, cast
 
-import cv2
 import numpy as np
 import rclpy
 from aic_control_interfaces.msg import (
@@ -34,7 +33,8 @@ from aic_control_interfaces.msg import (
     TrajectoryGenerationMode,
 )
 from aic_control_interfaces.srv import ChangeTargetMode
-from geometry_msgs.msg import Twist, Vector3, Wrench
+from geometry_msgs.msg import Vector3, Wrench, WrenchStamped
+from aic_model.policy import build_pose_from_vectors, pose_to_position_motion_update, rotation_vector_to_quaternion_xyzw
 from lerobot.cameras import CameraConfig, make_cameras_from_configs
 from lerobot.robots import Robot, RobotConfig
 from lerobot.utils.errors import DeviceAlreadyConnectedError, DeviceNotConnectedError
@@ -52,6 +52,12 @@ from .aic_robot import aic_cameras, arm_joint_names
 from .types import JointMotionUpdateActionDict, MotionUpdateActionDict
 
 logger = logging.getLogger(__name__)
+
+
+def _get_cv2():
+    import cv2
+
+    return cv2
 
 
 ObservationState = TypedDict(
@@ -83,6 +89,12 @@ ObservationState = TypedDict(
         "joint_positions.4": float,
         "joint_positions.5": float,
         "joint_positions.6": float,
+        "wrist_wrench.force.x": float,
+        "wrist_wrench.force.y": float,
+        "wrist_wrench.force.z": float,
+        "wrist_wrench.torque.x": float,
+        "wrist_wrench.torque.y": float,
+        "wrist_wrench.torque.z": float,
     },
 )
 
@@ -123,12 +135,14 @@ class AICRos2Interface:
     joint_motion_update_pub: Publisher[JointMotionUpdate]
     controller_state_sub: Subscription[ControllerState]
     joint_states_sub: Subscription[JointState]
+    wrench_sub: Subscription[WrenchStamped]
     logger: RcutilsLogger
 
     @staticmethod
     def connect(
         controller_state_cb: Callable[[ControllerState], None],
         joint_states_cb: Callable[[JointState], None],
+        wrench_cb: Callable[[WrenchStamped], None],
     ) -> "AICRos2Interface":
         if not rclpy.ok():
             rclpy.init()
@@ -162,6 +176,9 @@ class AICRos2Interface:
         joint_states_sub = node.create_subscription(
             JointState, "/joint_states", joint_states_cb, qos_profile_sensor_data
         )
+        wrench_sub = node.create_subscription(
+            WrenchStamped, "/fts_broadcaster/wrench", wrench_cb, qos_profile_sensor_data
+        )
 
         executor = SingleThreadedExecutor()
         executor.add_node(node)
@@ -178,6 +195,7 @@ class AICRos2Interface:
             joint_motion_update_pub=joint_motion_update_pub,
             controller_state_sub=controller_state_sub,
             joint_states_sub=joint_states_sub,
+            wrench_sub=wrench_sub,
             logger=logger,
         )
 
@@ -192,6 +210,7 @@ class AICRobotAICController(Robot):
         self.ros2_interface: AICRos2Interface | None = None
         self.last_controller_state: ControllerState | None = None
         self.last_joint_states: JointState | None = None
+        self.last_wrench: WrenchStamped | None = None
 
         self._is_connected = False
 
@@ -283,8 +302,11 @@ class AICRobotAICController(Robot):
         def joint_states_cb(msg: JointState):
             self.last_joint_states = msg
 
+        def wrench_cb(msg: WrenchStamped):
+            self.last_wrench = msg
+
         self.ros2_interface = AICRos2Interface.connect(
-            controller_state_cb, joint_states_cb
+            controller_state_cb, joint_states_cb, wrench_cb
         )
 
         change_mode_req = (
@@ -320,6 +342,21 @@ class AICRobotAICController(Robot):
         tcp_velocity = self.last_controller_state.tcp_velocity
         tcp_error = self.last_controller_state.tcp_error
         joint_positions = self.last_joint_states.position
+        if self.last_wrench is None:
+            wrench_force_x = 0.0
+            wrench_force_y = 0.0
+            wrench_force_z = 0.0
+            wrench_torque_x = 0.0
+            wrench_torque_y = 0.0
+            wrench_torque_z = 0.0
+        else:
+            wrench = self.last_wrench.wrench
+            wrench_force_x = float(wrench.force.x)
+            wrench_force_y = float(wrench.force.y)
+            wrench_force_z = float(wrench.force.z)
+            wrench_torque_x = float(wrench.torque.x)
+            wrench_torque_y = float(wrench.torque.y)
+            wrench_torque_z = float(wrench.torque.z)
         controller_state_obs: ObservationState = {
             "tcp_pose.position.x": tcp_pose.position.x,
             "tcp_pose.position.y": tcp_pose.position.y,
@@ -347,6 +384,12 @@ class AICRobotAICController(Robot):
             "joint_positions.4": joint_positions[4],
             "joint_positions.5": joint_positions[5],
             "joint_positions.6": joint_positions[6],
+            "wrist_wrench.force.x": wrench_force_x,
+            "wrist_wrench.force.y": wrench_force_y,
+            "wrist_wrench.force.z": wrench_force_z,
+            "wrist_wrench.torque.x": wrench_torque_x,
+            "wrist_wrench.torque.y": wrench_torque_y,
+            "wrist_wrench.torque.z": wrench_torque_z,
         }
 
         # Capture images from cameras
@@ -357,6 +400,7 @@ class AICRobotAICController(Robot):
                 if data is not None and data.size > 0:
                     image_scale = self.config.camera_image_scaling[cam_key]
                     if image_scale != 1:
+                        cv2 = _get_cv2()
                         cam_obs[cam_key] = cv2.resize(
                             data,
                             None,
@@ -382,40 +426,50 @@ class AICRobotAICController(Robot):
     def send_action_cartesian(self, action: dict[str, Any]) -> None:
         if not self._is_connected or not self.ros2_interface:
             raise DeviceNotConnectedError()
+        if self.config.record_only:
+            return
 
         motion_update_action = cast(MotionUpdateActionDict, action)
-
-        twist_msg = Twist()
-
         try:
-            twist_msg.linear.x = float(motion_update_action["linear.x"])
+            delta_position = np.array(
+                [
+                    float(motion_update_action["delta_position.x"]),
+                    float(motion_update_action["delta_position.y"]),
+                    float(motion_update_action["delta_position.z"]),
+                ],
+                dtype=np.float64,
+            )
         except KeyError:
             raise KeyError(
-                "Missing key 'linear.x'. If using `--teleop.type=aic_keyboard_joint`, have you set `--robot.teleop_target_mode=joint`?"
+                "Missing key 'delta_position.x'. If using `--teleop.type=aic_keyboard_joint`, have you set `--robot.teleop_target_mode=joint`?"
             ) from None
-        twist_msg.linear.y = float(motion_update_action["linear.y"])
-        twist_msg.linear.z = float(motion_update_action["linear.z"])
-        twist_msg.angular.x = float(motion_update_action["angular.x"])
-        twist_msg.angular.y = float(motion_update_action["angular.y"])
-        twist_msg.angular.z = float(motion_update_action["angular.z"])
+        delta_rotation = np.array(
+            [
+                float(motion_update_action["delta_rotation.x"]),
+                float(motion_update_action["delta_rotation.y"]),
+                float(motion_update_action["delta_rotation.z"]),
+            ],
+            dtype=np.float64,
+        )
 
-        msg = MotionUpdate()
-        msg.header.stamp = self.ros2_interface.node.get_clock().now().to_msg()
-        msg.header.frame_id = self.frame_id
-        msg.velocity = twist_msg
-        msg.target_stiffness = np.diag([85.0, 85.0, 85.0, 85.0, 85.0, 85.0]).flatten()
-        msg.target_damping = np.diag([75.0, 75.0, 75.0, 75.0, 75.0, 75.0]).flatten()
-        msg.feedforward_wrench_at_tip = Wrench(
-            force=Vector3(x=0.0, y=0.0, z=0.0),
-            torque=Vector3(x=0.0, y=0.0, z=0.0),
+        msg = pose_to_position_motion_update(
+            build_pose_from_vectors(
+                delta_position,
+                rotation_vector_to_quaternion_xyzw(delta_rotation),
+            ),
+            stamp=self.ros2_interface.node.get_clock().now().to_msg(),
+            frame_id=self.frame_id,
+            stiffness=[85.0, 85.0, 85.0, 85.0, 85.0, 85.0],
+            damping=[75.0, 75.0, 75.0, 75.0, 75.0, 75.0],
         )
         msg.wrench_feedback_gains_at_tip = [0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
-        msg.trajectory_generation_mode.mode = TrajectoryGenerationMode.MODE_VELOCITY
         self.ros2_interface.motion_update_pub.publish(msg)
 
     def send_action_joint(self, action: dict[str, Any]) -> None:
         if not self._is_connected or not self.ros2_interface:
             raise DeviceNotConnectedError()
+        if self.config.record_only:
+            return
 
         joint_motion_update_action = cast(JointMotionUpdateActionDict, action)
         msg = JointMotionUpdate()

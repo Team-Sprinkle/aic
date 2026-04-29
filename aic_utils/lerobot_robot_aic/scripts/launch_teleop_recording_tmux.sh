@@ -1,0 +1,230 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+WORKSPACE_DIR_DEFAULT="$(cd "${SCRIPT_DIR}/../../.." && pwd)"
+
+SESSION_NAME="${SESSION_NAME:-aic_lerobot_teleop}"
+WORKSPACE_DIR="${WORKSPACE_DIR:-${WORKSPACE_DIR_DEFAULT}}"
+ENGINE_CONFIG_FILE="${ENGINE_CONFIG_FILE:-${WORKSPACE_DIR}/outputs/configs/random_trials_eval_like.yaml}"
+DATASET_REPO_ID="${DATASET_REPO_ID:-${HF_USER:-local}/aic_teleop_eval_like}"
+DATASET_ROOT="${DATASET_ROOT:-${WORKSPACE_DIR}/outputs/lerobot_datasets}"
+DATASET_SINGLE_TASK="${DATASET_SINGLE_TASK:-Insert cable into target port}"
+TELEOP_TYPE="${TELEOP_TYPE:-aic_keyboard_ee}"
+TELEOP_TARGET_MODE="${TELEOP_TARGET_MODE:-cartesian}"
+TELEOP_FRAME_ID="${TELEOP_FRAME_ID:-base_link}"
+MAX_EPISODES="${MAX_EPISODES:-}"
+SAVE_FAILED_EPISODES="${SAVE_FAILED_EPISODES:-true}"
+POLICY_CLASS="${POLICY_CLASS:-aic_example_policies.ros.NoOp}"
+SIM_DISTROBOX_NAME="${SIM_DISTROBOX_NAME:-aic_eval}"
+AUTO_ATTACH="${AUTO_ATTACH:-true}"
+PUSH_TO_HUB="${PUSH_TO_HUB:-false}"
+FPS="${FPS:-30}"
+
+usage() {
+  cat <<EOF
+Usage: $(basename "$0") [options]
+
+Launch three tmux windows for teleoperation data collection:
+1) simulation + aic_engine (board setups from engine config)
+2) NoOp policy (or custom passive policy)
+3) teleop recorder (aic-teleop-record)
+
+Options:
+  --session-name NAME         tmux session name (default: ${SESSION_NAME})
+  --workspace-dir PATH        workspace root containing pixi.toml (default: ${WORKSPACE_DIR})
+  --engine-config PATH        aic_engine config yaml (default: ${ENGINE_CONFIG_FILE})
+  --policy-class CLASS        policy class path (default: ${POLICY_CLASS})
+  --sim-distrobox NAME        distrobox name for simulation window (default: ${SIM_DISTROBOX_NAME})
+  --dataset-repo-id ID        LeRobot dataset repo id (default: ${DATASET_REPO_ID})
+  --dataset-root PATH         LeRobot dataset root (default: ${DATASET_ROOT})
+  --dataset-single-task TXT   dataset task prompt (default: "${DATASET_SINGLE_TASK}")
+  --teleop-type TYPE          teleop type (default: ${TELEOP_TYPE})
+  --teleop-target-mode MODE   teleop target mode (default: ${TELEOP_TARGET_MODE})
+  --teleop-frame-id FRAME     teleop frame id (default: ${TELEOP_FRAME_ID})
+  --fps N                     recording fps (default: ${FPS})
+  --max-episodes N            max episodes (default: auto from config trials count)
+  --save-failed-episodes BOOL save failed/aborted episodes (default: ${SAVE_FAILED_EPISODES})
+  --push-to-hub BOOL          push dataset to hub at end (default: ${PUSH_TO_HUB})
+  --no-attach                 do not auto-attach to tmux session
+  -h, --help                  show this help text
+
+Environment variable equivalents are also supported:
+  SESSION_NAME, WORKSPACE_DIR, ENGINE_CONFIG_FILE, POLICY_CLASS, SIM_DISTROBOX_NAME,
+  DATASET_REPO_ID, DATASET_ROOT, DATASET_SINGLE_TASK, TELEOP_TYPE, TELEOP_TARGET_MODE,
+  TELEOP_FRAME_ID, FPS, MAX_EPISODES, SAVE_FAILED_EPISODES, PUSH_TO_HUB
+
+Notes:
+  - Press 'n' in the recorder/teleop window to call /cancel_task and advance to next trial.
+  - With aic-teleop-record, trial status drives episode boundaries automatically.
+EOF
+}
+
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    --session-name)
+      SESSION_NAME="$2"
+      shift 2
+      ;;
+    --workspace-dir)
+      WORKSPACE_DIR="$2"
+      shift 2
+      ;;
+    --engine-config)
+      ENGINE_CONFIG_FILE="$2"
+      shift 2
+      ;;
+    --policy-class)
+      POLICY_CLASS="$2"
+      shift 2
+      ;;
+    --sim-distrobox)
+      SIM_DISTROBOX_NAME="$2"
+      shift 2
+      ;;
+    --dataset-repo-id)
+      DATASET_REPO_ID="$2"
+      shift 2
+      ;;
+    --dataset-root)
+      DATASET_ROOT="$2"
+      shift 2
+      ;;
+    --dataset-single-task)
+      DATASET_SINGLE_TASK="$2"
+      shift 2
+      ;;
+    --teleop-type)
+      TELEOP_TYPE="$2"
+      shift 2
+      ;;
+    --teleop-target-mode)
+      TELEOP_TARGET_MODE="$2"
+      shift 2
+      ;;
+    --teleop-frame-id)
+      TELEOP_FRAME_ID="$2"
+      shift 2
+      ;;
+    --fps)
+      FPS="$2"
+      shift 2
+      ;;
+    --max-episodes)
+      MAX_EPISODES="$2"
+      shift 2
+      ;;
+    --save-failed-episodes)
+      SAVE_FAILED_EPISODES="$2"
+      shift 2
+      ;;
+    --push-to-hub)
+      PUSH_TO_HUB="$2"
+      shift 2
+      ;;
+    --no-attach)
+      AUTO_ATTACH="false"
+      shift
+      ;;
+    -h|--help)
+      usage
+      exit 0
+      ;;
+    *)
+      echo "Unknown option: $1" >&2
+      usage
+      exit 1
+      ;;
+  esac
+done
+
+count_trials_in_engine_config() {
+  local config_path="$1"
+  cd "${WORKSPACE_DIR}"
+  pixi run python - "${config_path}" <<'PY'
+import sys
+from pathlib import Path
+
+import yaml
+
+config_path = Path(sys.argv[1])
+data = yaml.safe_load(config_path.read_text(encoding="utf-8"))
+if not isinstance(data, dict):
+    raise SystemExit("Engine config must be a YAML map.")
+trials = data.get("trials")
+if not isinstance(trials, dict):
+    raise SystemExit("Engine config missing YAML map key: 'trials'.")
+print(len(trials))
+PY
+}
+
+if ! command -v tmux >/dev/null 2>&1; then
+  echo "Error: tmux is required but not installed." >&2
+  exit 1
+fi
+
+if ! command -v distrobox >/dev/null 2>&1; then
+  echo "Error: distrobox is required but not installed." >&2
+  exit 1
+fi
+
+if ! command -v pixi >/dev/null 2>&1; then
+  echo "Error: pixi is required but not installed." >&2
+  exit 1
+fi
+
+if [[ ! -d "${WORKSPACE_DIR}" ]]; then
+  echo "Error: workspace directory does not exist: ${WORKSPACE_DIR}" >&2
+  exit 1
+fi
+
+if [[ ! -f "${ENGINE_CONFIG_FILE}" ]]; then
+  echo "Error: engine config file does not exist: ${ENGINE_CONFIG_FILE}" >&2
+  echo "Hint: generate one with:" >&2
+  echo "  python generate_random_trials_config.py --output ./outputs/configs/random_trials_eval_like.yaml --num_trials 10 --seed 2026" >&2
+  exit 1
+fi
+
+if [[ -z "${MAX_EPISODES}" ]]; then
+  MAX_EPISODES="$(count_trials_in_engine_config "${ENGINE_CONFIG_FILE}")"
+  if ! [[ "${MAX_EPISODES}" =~ ^[0-9]+$ ]]; then
+    echo "Error: failed to determine trial count from config: ${ENGINE_CONFIG_FILE}" >&2
+    exit 1
+  fi
+  if [[ "${MAX_EPISODES}" -le 0 ]]; then
+    echo "Error: config has no trials. Cannot auto-set max episodes." >&2
+    exit 1
+  fi
+  echo "Auto-set recorder max episodes to ${MAX_EPISODES} from config trials."
+fi
+
+if tmux has-session -t "${SESSION_NAME}" 2>/dev/null; then
+  echo "Error: tmux session '${SESSION_NAME}' already exists." >&2
+  echo "Either attach to it with: tmux attach -t ${SESSION_NAME}" >&2
+  echo "Or use a different name via --session-name." >&2
+  exit 1
+fi
+
+SIM_CMD="/entrypoint.sh ground_truth:=true start_aic_engine:=true aic_engine_config_file:=${ENGINE_CONFIG_FILE} shutdown_on_aic_engine_exit:=true"
+SIM_CMD_IN_CONTAINER="export DBX_CONTAINER_MANAGER=docker && distrobox enter -r ${SIM_DISTROBOX_NAME} -- bash -lc 'cd \"${WORKSPACE_DIR}\" && ${SIM_CMD}'"
+POLICY_CMD="pixi run ros2 run aic_model aic_model --ros-args -p use_sim_time:=true -p policy:=${POLICY_CLASS}"
+RECORDER_CMD="pixi run aic-teleop-record --robot.type=aic_controller --robot.id=aic --teleop.type=${TELEOP_TYPE} --teleop.id=aic --robot.teleop_target_mode=${TELEOP_TARGET_MODE} --robot.teleop_frame_id=${TELEOP_FRAME_ID} --dataset.repo_id=${DATASET_REPO_ID} --dataset.single_task=\"${DATASET_SINGLE_TASK}\" --dataset.root=${DATASET_ROOT} --dataset.fps=${FPS} --max_episodes=${MAX_EPISODES} --save_failed_episodes=${SAVE_FAILED_EPISODES} --dataset.push_to_hub=${PUSH_TO_HUB} --display_data=true --play_sounds=false"
+
+tmux new-session -d -s "${SESSION_NAME}" -n simulation
+tmux send-keys -t "${SESSION_NAME}:simulation" "cd \"${WORKSPACE_DIR}\" && ${SIM_CMD_IN_CONTAINER}" C-m
+
+tmux new-window -t "${SESSION_NAME}" -n model
+tmux send-keys -t "${SESSION_NAME}:model" "cd \"${WORKSPACE_DIR}\" && ${POLICY_CMD}" C-m
+
+tmux new-window -t "${SESSION_NAME}" -n recorder
+tmux send-keys -t "${SESSION_NAME}:recorder" "cd \"${WORKSPACE_DIR}\" && ${RECORDER_CMD}" C-m
+
+tmux select-window -t "${SESSION_NAME}:recorder"
+
+echo "Launched tmux session '${SESSION_NAME}' with windows: simulation, model, recorder."
+echo "Attach with: tmux attach -t ${SESSION_NAME}"
+echo "In recorder window, press 'n' to end current trial and advance to next setup."
+
+if [[ "${AUTO_ATTACH}" == "true" ]]; then
+  tmux attach -t "${SESSION_NAME}"
+fi
