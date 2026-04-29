@@ -81,6 +81,8 @@ ros2 run aic_engine aic_engine --ros-args \
 | `model_deactivate_timeout_seconds` | int | 60 | Timeout for model deactivation |
 | `model_cleanup_timeout_seconds` | int | 60 | Timeout for model cleanup |
 | `model_shutdown_timeout_seconds` | int | 60 | Timeout for model shutdown |
+| `recorder_status_service_name` | string | "/aic_policy_recorder/get_episode_save_status" | Recorder status service to query per-goal save finalization |
+| `recorder_save_timeout_seconds` | int | 60 | Timeout for recorder save confirmation when recorder service is running. If recorder finalizes without saving or times out, engine enters error state and stops before next trial. |
 
 ### Environment Variables
 
@@ -99,4 +101,74 @@ ros2 run aic_engine aic_engine --ros-args \
   -p skip_model_ready:=false \
   -p skip_ready_simulator:=false \
   -p use_sim_time:=true
+```
+
+### Generate Randomized Trial Configs
+
+For data collection, you can generate a config with randomized board/component
+placements across `N` board setups:
+
+```bash
+cd ~/ws_aic/src/aic
+python generate_random_trials_config.py \
+  --output ./outputs/configs/random_trials_50.yaml \
+  --num_trials 50 \
+  --episodes_per_setup 1 \
+  --seed 42
+```
+
+`--episodes_per_setup` controls how many episodes are collected per randomized
+board setup. Total trial count in the generated config is:
+`num_trials * episodes_per_setup`.
+
+By default, the script uses `--profile qualification_eval_like`, which is
+intended to better match qualification/evaluation randomization characteristics:
+- board/component roll and pitch fixed to `0.0`
+- SC rail entity yaw fixed to `0.0`
+- NIC yaw randomized within ±10 degrees
+- smaller grasp-pose jitter (about ±2 mm and ±0.04 rad)
+- SFP target port randomized between `sfp_port_0` and `sfp_port_1`
+- scenario sampling weighted by default to 2:1 (`sfp_to_nic`:`sc_to_sc`)
+
+Useful generation flags:
+- `--profile {qualification_eval_like,training_broad}`: randomization preset
+- `--sfp_to_nic_weight`, `--sc_to_sc_weight`: scenario mix weights
+- `--board_x_min/--board_x_max`, `--board_y_min/--board_y_max`,
+  `--board_yaw_min/--board_yaw_max`: board pose bounds
+- `--max_board_offset_xy`: optional distance limit from nominal board XY pose
+
+Example (qualification/eval-like config):
+```bash
+cd ~/ws_aic/src/aic
+python generate_random_trials_config.py \
+  --output ./outputs/configs/random_trials_eval_like.yaml \
+  --num_trials 60 \
+  --episodes_per_setup 1 \
+  --profile qualification_eval_like \
+  --sfp_to_nic_weight 2 \
+  --sc_to_sc_weight 1 \
+  --seed 42
+```
+
+Example (broader training randomization):
+```bash
+cd ~/ws_aic/src/aic
+python generate_random_trials_config.py \
+  --output ./outputs/configs/random_trials_broad.yaml \
+  --num_trials 200 \
+  --episodes_per_setup 1 \
+  --profile training_broad \
+  --sfp_to_nic_weight 1 \
+  --sc_to_sc_weight 1 \
+  --seed 42
+```
+
+Then launch bringup with that generated config:
+
+```bash
+cd ~/ws_aic/src/aic
+pixi run ros2 launch aic_bringup aic_gz_bringup.launch.py \
+  ground_truth:=true \
+  start_aic_engine:=true \
+  aic_engine_config_file:=/home/jk/ws_aic/src/aic/outputs/configs/random_trials_50.yaml
 ```

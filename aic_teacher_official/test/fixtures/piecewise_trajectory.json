@@ -1,0 +1,37 @@
+{
+  "metadata": {
+    "schema_version": "official_teacher_trajectory/v0",
+    "task": {
+      "name": "fixture"
+    }
+  },
+  "waypoints": [
+    {
+      "timestamp": 0.0,
+      "tcp_pose": {
+        "position": [0.0, 0.0, 0.3],
+        "orientation_xyzw": [0.0, 0.0, 0.0, 1.0]
+      },
+      "phase": "approach",
+      "source": "vlm"
+    },
+    {
+      "timestamp": 1.0,
+      "tcp_pose": {
+        "position": [0.1, 0.0, 0.2],
+        "orientation_xyzw": [0.0, 0.0, 0.0, 1.0]
+      },
+      "phase": "alignment",
+      "source": "optimizer"
+    },
+    {
+      "timestamp": 2.0,
+      "tcp_pose": {
+        "position": [0.1, 0.0, 0.1],
+        "orientation_xyzw": [0.0, 0.0, 0.0, 1.0]
+      },
+      "phase": "final_insertion",
+      "source": "cheatcode"
+    }
+  ]
+}
