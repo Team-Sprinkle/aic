@@ -262,6 +262,7 @@ def generate_piecewise_trajectory(config: PiecewiseGeneratorConfig) -> Piecewise
                 ),
             ]
         )
+    insertion_start_waypoint_index = len(waypoints)
     waypoints.extend(
         [
             TrajectoryWaypoint(
@@ -292,6 +293,14 @@ def generate_piecewise_trajectory(config: PiecewiseGeneratorConfig) -> Piecewise
             ),
         ]
     )
+    metadata.planning["phase_boundaries"] = {
+        "insertion_start_waypoint_index": insertion_start_waypoint_index,
+        "insertion_end_waypoint_index": insertion_start_waypoint_index + 1,
+        "insertion_start_timestamp": t3,
+        "insertion_end_timestamp": t3 + config.insertion_duration,
+        "insertion_source": SourceLabel.CHEATCODE.value,
+        "smoothing_policy": "global smoothing stops before insertion; insertion replay is deterministic CheatCode geometry",
+    }
     return PiecewiseTrajectory(waypoints=waypoints, metadata=metadata)
 
 

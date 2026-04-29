@@ -55,9 +55,12 @@ class OfficialTeacherReplay(Policy):
             "relative_delta_gripper_tcp",
         )
         self._online_cheatcode_final_insertion = (
-            os.environ.get("AIC_OFFICIAL_TEACHER_ONLINE_CHEATCODE_INSERTION", "false").lower()
+            os.environ.get("AIC_OFFICIAL_TEACHER_ONLINE_CHEATCODE_INSERTION", "true").lower()
             == "true"
         )
+        self._tip_x_error_integrator = 0.0
+        self._tip_y_error_integrator = 0.0
+        self._max_integrator_windup = 0.05
         if self._action_mode not in {
             "relative_delta_gripper_tcp",
             "absolute_cartesian_pose_base_link",
@@ -112,6 +115,7 @@ class OfficialTeacherReplay(Policy):
         slerp_fraction: float = 1.0,
         position_fraction: float = 1.0,
         z_offset: float = 0.1,
+        reset_xy_integrator: bool = False,
     ) -> Pose:
         q_port = (
             port_transform.rotation.w,
@@ -162,10 +166,32 @@ class OfficialTeacherReplay(Policy):
             dtype=np.float64,
         )
         plug_tip_gripper_offset = gripper_xyz - plug_xyz
-        target_xyz = np.asarray(
+        tip_x_error = port_transform.translation.x - plug_tf_stamped.transform.translation.x
+        tip_y_error = port_transform.translation.y - plug_tf_stamped.transform.translation.y
+        if reset_xy_integrator:
+            self._tip_x_error_integrator = 0.0
+            self._tip_y_error_integrator = 0.0
+        else:
+            self._tip_x_error_integrator = float(
+                np.clip(
+                    self._tip_x_error_integrator + tip_x_error,
+                    -self._max_integrator_windup,
+                    self._max_integrator_windup,
+                )
+            )
+            self._tip_y_error_integrator = float(
+                np.clip(
+                    self._tip_y_error_integrator + tip_y_error,
+                    -self._max_integrator_windup,
+                    self._max_integrator_windup,
+                )
+            )
+
+        i_gain = 0.15
+        target_xyz = np.array(
             [
-                port_transform.translation.x,
-                port_transform.translation.y,
+                port_transform.translation.x + i_gain * self._tip_x_error_integrator,
+                port_transform.translation.y + i_gain * self._tip_y_error_integrator,
                 port_transform.translation.z + z_offset - plug_tip_gripper_offset[2],
             ],
             dtype=np.float64,
@@ -224,6 +250,7 @@ class OfficialTeacherReplay(Policy):
                     slerp_fraction=fraction,
                     position_fraction=fraction,
                     z_offset=0.2,
+                    reset_xy_integrator=True,
                 )
                 self._send_relative_target(move_robot, target_pose)
             except TransformException as ex:

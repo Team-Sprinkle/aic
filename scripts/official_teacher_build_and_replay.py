@@ -4,11 +4,15 @@
 from __future__ import annotations
 
 import argparse
+import csv
+import json
+from dataclasses import replace
 from datetime import datetime
 from pathlib import Path
 import shlex
 import subprocess
 import sys
+from typing import Any
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "aic_teacher_official"))
 
@@ -18,6 +22,7 @@ from aic_teacher_official.generate_piecewise import (
 )
 from aic_teacher_official.postprocess import postprocess_file
 from aic_teacher_official.context import OfficialTeacherContext
+from aic_teacher_official.trajectory import PiecewiseTrajectory, SmoothTrajectory
 from aic_teacher_official.vlm_planner import call_gpt5_mini_delta_planner
 
 from official_teacher_generate_piecewise import _vector
@@ -48,6 +53,8 @@ def default_run_roots(args: argparse.Namespace) -> tuple[Path, Path]:
 
 def recording_command(args: argparse.Namespace) -> str:
     cmd = [
+        "env",
+        "AIC_OFFICIAL_TEACHER_ONLINE_CHEATCODE_INSERTION=true",
         "bash",
         "./aic_utils/lerobot_robot_aic/scripts/launch_policy_recording_per_trial.sh",
         "--engine-config",
@@ -62,6 +69,8 @@ def recording_command(args: argparse.Namespace) -> str:
         args.dataset_repo_id,
         "--dataset-root",
         args.dataset_root,
+        "--results-root",
+        args.results_root,
         "--gazebo-gui",
         str(args.gazebo_gui).lower(),
         "--launch-rviz",
@@ -74,8 +83,123 @@ def recording_command(args: argparse.Namespace) -> str:
         str(args.recorder_drain_sec),
         "--require-recorder-save-log",
         str(args.require_recorder_save_log).lower(),
+        "--remove-bag-data",
+        str(args.remove_bag_data).lower(),
     ]
+    if args.sim_distrobox:
+        cmd.extend(["--sim-distrobox", args.sim_distrobox])
+    if args.tmp_dir:
+        cmd.extend(["--tmp-dir", args.tmp_dir])
     return " ".join(shlex.quote(part) for part in cmd)
+
+
+def _score_from_summary(score_summary_csv: Path) -> dict[str, Any]:
+    if not score_summary_csv.exists():
+        return {
+            "score_summary_csv": str(score_summary_csv),
+            "score_summary_exists": False,
+            "status": None,
+            "score_total": None,
+            "scoring_yaml": None,
+        }
+    rows = list(csv.DictReader(score_summary_csv.open("r", encoding="utf-8")))
+    if not rows:
+        return {
+            "score_summary_csv": str(score_summary_csv),
+            "score_summary_exists": True,
+            "status": None,
+            "score_total": None,
+            "scoring_yaml": None,
+        }
+    last = rows[-1]
+    try:
+        score_total = float(last.get("total_score") or "")
+    except ValueError:
+        score_total = None
+    return {
+        "score_summary_csv": str(score_summary_csv),
+        "score_summary_exists": True,
+        "status": last.get("status"),
+        "score_total": score_total,
+        "scoring_yaml": last.get("scoring_yaml"),
+        "rows": rows,
+    }
+
+
+def _segment_manifest(
+    *,
+    piecewise: PiecewiseTrajectory,
+    smooth: SmoothTrajectory,
+    args: argparse.Namespace,
+    planner_root: Path | None,
+    postprocessed_root: Path | None,
+    record_result: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    insertion_start_index = smooth.metadata.postprocessing.get("insertion_start_waypoint_index")
+    segments = []
+    for segment_index, (start, end) in enumerate(zip(piecewise.waypoints, piecewise.waypoints[1:])):
+        insertion_segment = (
+            insertion_start_index is not None and segment_index >= int(insertion_start_index)
+        )
+        segments.append(
+            {
+                "segment_index": segment_index,
+                "start_waypoint_index": segment_index,
+                "end_waypoint_index": segment_index + 1,
+                "start_timestamp": start.timestamp,
+                "end_timestamp": end.timestamp,
+                "phase": end.phase.value,
+                "source": end.source.value,
+                "vlm_based": start.source.value == "vlm" or end.source.value == "vlm",
+                "insertion_segment": insertion_segment,
+                "global_smoothing_applied": not insertion_segment,
+                "start_tcp_pose": start.tcp_pose.to_dict(),
+                "end_tcp_pose": end.tcp_pose.to_dict(),
+                "start_diagnostics": start.diagnostics,
+                "end_diagnostics": end.diagnostics,
+            }
+        )
+    return {
+        "piecewise_output": args.piecewise_output,
+        "smooth_output": args.smooth_output,
+        "planner_root": None if planner_root is None else str(planner_root),
+        "postprocessed_root": None if postprocessed_root is None else str(postprocessed_root),
+        "task_name": args.task_name,
+        "action_mode": args.action_mode,
+        "planning_metadata": piecewise.metadata.to_dict(),
+        "postprocessing_metadata": smooth.metadata.to_dict(),
+        "insertion_boundary": {
+            "start_waypoint_index": insertion_start_index,
+            "start_timestamp": smooth.metadata.postprocessing.get("insertion_start_timestamp"),
+            "policy": "global smoothing excluded; final insertion follows CheatCode geometry",
+        },
+        "segments": segments,
+        "recording": record_result
+        or {
+            "requested": bool(args.record),
+            "ran_successfully": None,
+            "exit_code": None,
+            "status": None,
+            "score_total": None,
+        },
+    }
+
+
+def _write_manifest(path: Path, manifest: dict[str, Any]) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps(manifest, indent=2) + "\n", encoding="utf-8")
+
+
+def _update_smooth_recording_metadata(smooth_path: str | Path, record_result: dict[str, Any]) -> None:
+    trajectory = SmoothTrajectory.load_json(smooth_path)
+    trajectory = replace(
+        trajectory,
+        metadata=replace(
+            trajectory.metadata,
+            recording={**trajectory.metadata.recording, **record_result},
+        ),
+    )
+    trajectory.save_json(smooth_path)
 
 
 def main() -> None:
@@ -102,6 +226,9 @@ def main() -> None:
     parser.add_argument("--engine-config", default="./outputs/configs/random_trials_10.yaml")
     parser.add_argument("--dataset-repo-id", default="${HF_USER}/official_teacher_dataset")
     parser.add_argument("--dataset-root", default="./outputs/lerobot_datasets")
+    parser.add_argument("--results-root", default="./outputs/aic_results_per_trial")
+    parser.add_argument("--tmp-dir", default="")
+    parser.add_argument("--sim-distrobox", default="")
     parser.add_argument(
         "--action-mode",
         choices=["relative_delta_gripper_tcp", "absolute_cartesian_pose_base_link"],
@@ -118,6 +245,7 @@ def main() -> None:
     parser.add_argument("--per-trial-timeout-sec", type=int, default=0)
     parser.add_argument("--recorder-drain-sec", type=int, default=120)
     parser.add_argument("--require-recorder-save-log", action="store_true")
+    parser.add_argument("--remove-bag-data", action=argparse.BooleanOptionalAction, default=True)
     parser.add_argument("--dry-run", action="store_true", help="Build artifacts and print commands.")
     parser.add_argument("--run", action="store_true", help="Run the replay policy command only.")
     parser.add_argument("--record", action="store_true", help="Run the official per-trial recording launcher.")
@@ -130,6 +258,8 @@ def main() -> None:
         args.piecewise_output = str(planner_root / "piecewise_trajectory.json")
         args.smooth_output = str(postprocessed_root / "smooth_trajectory.json")
         args.dataset_root = str(postprocessed_root / "raw_dataset")
+        args.results_root = str(postprocessed_root / "scores")
+        args.tmp_dir = str(postprocessed_root / "tmp")
 
     context = OfficialTeacherContext.load_json(args.context_json) if args.context_json else None
     vlm_delta_plan = None
@@ -162,18 +292,33 @@ def main() -> None:
         (planner_root / "metadata").mkdir(parents=True, exist_ok=True)
         (postprocessed_root / "metadata").mkdir(parents=True, exist_ok=True)
         (planner_root / "metadata" / "run_roots.json").write_text(
-            __import__("json").dumps(
+            json.dumps(
                 {
                     "planner_root": str(planner_root),
                     "postprocessed_root": str(postprocessed_root),
                     "piecewise_output": args.piecewise_output,
                     "smooth_output": args.smooth_output,
+                    "results_root": args.results_root,
                 },
                 indent=2,
             )
             + "\n",
             encoding="utf-8",
         )
+        manifest_path = planner_root / "metadata" / "segment_vlm_trajectory.json"
+        postprocessed_manifest_path = postprocessed_root / "metadata" / "segment_vlm_trajectory.json"
+    else:
+        manifest_path = Path(args.piecewise_output).with_name("segment_vlm_trajectory.json")
+        postprocessed_manifest_path = Path(args.smooth_output).with_name("segment_vlm_trajectory.json")
+    manifest = _segment_manifest(
+        piecewise=piecewise,
+        smooth=smooth,
+        args=args,
+        planner_root=planner_root,
+        postprocessed_root=postprocessed_root,
+    )
+    _write_manifest(manifest_path, manifest)
+    _write_manifest(postprocessed_manifest_path, manifest)
     print(f"Wrote {len(piecewise.waypoints)} piecewise waypoints to {args.piecewise_output}")
     print(f"Wrote {len(smooth.waypoints)} smooth waypoints to {args.smooth_output}")
 
@@ -185,7 +330,26 @@ def main() -> None:
     print(record_shell)
 
     if args.record:
-        raise SystemExit(subprocess.call(record_shell, shell=True))
+        exit_code = subprocess.call(record_shell, shell=True)
+        score = _score_from_summary(Path(args.results_root) / "score_summary.csv")
+        record_result = {
+            "requested": True,
+            "ran_successfully": exit_code == 0 and score.get("status") == "OK",
+            "exit_code": exit_code,
+            **score,
+        }
+        updated_manifest = _segment_manifest(
+            piecewise=piecewise,
+            smooth=smooth,
+            args=args,
+            planner_root=planner_root,
+            postprocessed_root=postprocessed_root,
+            record_result=record_result,
+        )
+        _write_manifest(manifest_path, updated_manifest)
+        _write_manifest(postprocessed_manifest_path, updated_manifest)
+        _update_smooth_recording_metadata(args.smooth_output, record_result)
+        raise SystemExit(exit_code)
     if args.run:
         raise SystemExit(subprocess.call(build_command(args.smooth_output, args.action_mode)))
     if not args.dry_run:

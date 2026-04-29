@@ -130,6 +130,45 @@ def test_final_insertion_phase_is_marked_cheatcode_derived():
     assert all(w.diagnostics["cheatcode_derived"] for w in insertion_waypoints)
 
 
+def test_final_insertion_is_not_bent_by_global_smoothing():
+    piecewise = PiecewiseTrajectory(
+        waypoints=[
+            TrajectoryWaypoint(
+                timestamp=0.0,
+                tcp_pose=TCPPose([0.0, 0.0, 0.3], [0.0, 0.0, 0.0, 1.0]),
+                phase=PhaseLabel.APPROACH,
+                source=SourceLabel.VLM,
+            ),
+            TrajectoryWaypoint(
+                timestamp=1.0,
+                tcp_pose=TCPPose([0.2, 0.2, 0.2], [0.0, 0.0, 0.0, 1.0]),
+                phase=PhaseLabel.ALIGNMENT,
+                source=SourceLabel.VLM,
+            ),
+            TrajectoryWaypoint(
+                timestamp=2.0,
+                tcp_pose=TCPPose([0.1, 0.0, 0.15], [0.0, 0.0, 0.0, 1.0]),
+                phase=PhaseLabel.PRE_INSERTION,
+                source=SourceLabel.OPTIMIZER,
+            ),
+            TrajectoryWaypoint(
+                timestamp=4.0,
+                tcp_pose=TCPPose([0.1, 0.0, 0.105], [0.0, 0.0, 0.0, 1.0]),
+                phase=PhaseLabel.FINAL_INSERTION,
+                source=SourceLabel.CHEATCODE,
+            ),
+        ]
+    )
+
+    smooth = postprocess_piecewise_trajectory(piecewise, sample_dt=0.2)
+    insertion = [w for w in smooth.waypoints if w.diagnostics["insertion_smoothing_protected"]]
+
+    assert insertion
+    assert smooth.metadata.postprocessing["insertion_start_waypoint_index"] == 2
+    assert all(w.tcp_pose.position[0] == pytest.approx(0.1) for w in insertion)
+    assert all(w.tcp_pose.position[1] == pytest.approx(0.0) for w in insertion)
+
+
 def test_replay_policy_imports_no_vlm_backend():
     before = set(sys.modules)
     module = importlib.import_module("aic_teacher_official.replay")
@@ -277,6 +316,10 @@ def test_vlm_delta_plan_generates_vlm_waypoints_and_cheatcode_insertion():
     assert any(w.source == SourceLabel.VLM for w in piecewise.waypoints)
     assert piecewise.waypoints[-1].source == SourceLabel.CHEATCODE
     assert piecewise.metadata.planning["vlm_delta_plan"] is not None
+    assert (
+        piecewise.metadata.planning["phase_boundaries"]["insertion_start_waypoint_index"]
+        == len(piecewise.waypoints) - 2
+    )
 
 
 def test_orchestration_cli_dry_run(tmp_path):
@@ -300,8 +343,10 @@ def test_orchestration_cli_dry_run(tmp_path):
 
     assert piecewise.exists()
     assert smooth.exists()
+    assert (tmp_path / "segment_vlm_trajectory.json").exists()
     assert "--teacher-trajectory" in result.stdout
     assert "--teacher-action-mode" in result.stdout
+    assert "--results-root" in result.stdout
     assert "aic_teacher_official.OfficialTeacherReplay" in result.stdout
 
 
@@ -325,6 +370,20 @@ def test_orchestration_cli_dataset_layout(tmp_path):
 
     assert "vlm_planner/nic_cards_2/n1/trial9_2026_0425_205620" in result.stdout
     assert "vlm_planner_postprocessed/nic_cards_2/n1/trial9_2026_0425_205620" in result.stdout
+    manifest = json.loads(
+        (
+            tmp_path
+            / "sfp_to_nic"
+            / "vlm_planner"
+            / "nic_cards_2"
+            / "n1"
+            / "trial9_2026_0425_205620"
+            / "metadata"
+            / "segment_vlm_trajectory.json"
+        ).read_text(encoding="utf-8")
+    )
+    assert manifest["insertion_boundary"]["start_waypoint_index"] is not None
+    assert any(segment["insertion_segment"] for segment in manifest["segments"])
 
 
 def test_review_bundle_generation_missing_images_gracefully(tmp_path):
