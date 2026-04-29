@@ -85,6 +85,13 @@ def _compute_c1_waypoint_velocities(
     return velocities
 
 
+def insertion_start_waypoint_index(waypoints: list[TrajectoryWaypoint]) -> int | None:
+    for index, waypoint in enumerate(waypoints):
+        if waypoint.phase == PhaseLabel.FINAL_INSERTION:
+            return max(0, index - 1)
+    return None
+
+
 def _hermite_position_velocity(
     p0: np.ndarray,
     p1: np.ndarray,
@@ -109,6 +116,17 @@ def _hermite_position_velocity(
     return position, velocity
 
 
+def _linear_position_velocity(
+    p0: np.ndarray,
+    p1: np.ndarray,
+    duration: float,
+    fraction: float,
+) -> tuple[np.ndarray, np.ndarray]:
+    s = float(np.clip(fraction, 0.0, 1.0))
+    velocity = (p1 - p0) / duration
+    return p0 + s * (p1 - p0), velocity
+
+
 def postprocess_piecewise_trajectory(
     piecewise: PiecewiseTrajectory,
     *,
@@ -116,17 +134,25 @@ def postprocess_piecewise_trajectory(
 ) -> SmoothTrajectory:
     """Convert a piecewise plan to a smooth sampled trajectory.
 
-    This version computes one global C1 cubic Hermite curve over all piecewise
-    waypoints. It keeps the simple minimum-jerk helper available for tests and
-    future time scaling, but avoids per-segment stop-and-go behavior by sharing
-    velocity estimates across boundaries. Future work should replace this with
-    a constrained spline/optimizer that preserves clearance and contact limits.
+    This version computes one C1 cubic Hermite curve over approach/alignment
+    waypoints only. Final insertion is kept as deterministic CheatCode geometry
+    and is sampled linearly from the pre-insertion pose to the inserted pose, so
+    a global curve cannot bend the insertion path away from the port axis.
     """
     if sample_dt <= 0.0:
         raise ValueError("sample_dt must be positive")
     assert_monotonic_timestamps(piecewise.waypoints)
 
-    waypoint_velocities = _compute_c1_waypoint_velocities(piecewise.waypoints)
+    insertion_start_index = insertion_start_waypoint_index(piecewise.waypoints)
+    if insertion_start_index is None:
+        waypoint_velocities = _compute_c1_waypoint_velocities(piecewise.waypoints)
+    else:
+        smoothing_waypoints = piecewise.waypoints[: insertion_start_index + 1]
+        waypoint_velocities = _compute_c1_waypoint_velocities(smoothing_waypoints)
+        waypoint_velocities.extend(
+            np.zeros(3, dtype=np.float64)
+            for _ in piecewise.waypoints[insertion_start_index + 1 :]
+        )
     smooth: list[TrajectoryWaypoint] = []
     for segment_index, (start, end) in enumerate(
         zip(piecewise.waypoints, piecewise.waypoints[1:])
@@ -141,20 +167,26 @@ def postprocess_piecewise_trajectory(
         start_velocity = waypoint_velocities[segment_index]
         end_velocity = waypoint_velocities[segment_index + 1]
         phase = end.phase
-        segment_source = SourceLabel.CHEATCODE if phase == PhaseLabel.FINAL_INSERTION else end.source
+        insertion_segment = (
+            insertion_start_index is not None and segment_index >= insertion_start_index
+        )
+        segment_source = SourceLabel.CHEATCODE if insertion_segment else end.source
 
         first_sample = 0 if segment_index == 0 else 1
         for i in range(first_sample, steps + 1):
             raw = i / steps
             timestamp = start.timestamp + duration * raw
-            position, velocity = _hermite_position_velocity(
-                start_pos,
-                end_pos,
-                start_velocity,
-                end_velocity,
-                duration,
-                raw,
-            )
+            if insertion_segment:
+                position, velocity = _linear_position_velocity(start_pos, end_pos, duration, raw)
+            else:
+                position, velocity = _hermite_position_velocity(
+                    start_pos,
+                    end_pos,
+                    start_velocity,
+                    end_velocity,
+                    duration,
+                    raw,
+                )
             sample_phase = start.phase if segment_index == 0 and i == 0 else phase
             sample_source = start.source if segment_index == 0 and i == 0 else segment_source
             waypoint = TrajectoryWaypoint(
@@ -174,14 +206,19 @@ def postprocess_piecewise_trajectory(
                 phase=sample_phase,
                 source=sample_source,
                 diagnostics={
-                    "postprocessor": "minimum_jerk_v0",
-                    "global_smoother": "c1_cubic_hermite_v0",
+                    "postprocessor": "phase_aware_c1_cubic_hermite_v1",
+                    "global_smoother": (
+                        "disabled_for_cheatcode_insertion"
+                        if insertion_segment
+                        else "c1_cubic_hermite_v0"
+                    ),
                     "segment_index": segment_index,
                     "raw_fraction": raw,
                     "input_start_source": start.source.value,
                     "input_end_source": end.source.value,
-                    "cheatcode_derived": sample_phase == PhaseLabel.FINAL_INSERTION,
-                    "todo": "Replace independent segment interpolation with constrained continuous optimizer.",
+                    "cheatcode_derived": insertion_segment,
+                    "insertion_smoothing_protected": insertion_segment,
+                    "todo": "Replace non-insertion interpolation with constrained continuous optimizer.",
                 },
             )
             smooth.append(waypoint)
@@ -191,15 +228,23 @@ def postprocess_piecewise_trajectory(
         piecewise.metadata,
         postprocessing={
             **piecewise.metadata.postprocessing,
-            "method": "global_c1_cubic_hermite_v0",
+            "method": "phase_aware_c1_cubic_hermite_v1",
             "sample_dt": sample_dt,
+            "insertion_start_waypoint_index": insertion_start_index,
+            "insertion_start_timestamp": (
+                None
+                if insertion_start_index is None
+                else piecewise.waypoints[insertion_start_index].timestamp
+            ),
             "guarantees": [
                 "strictly_monotonic_timestamps",
                 "continuous_position",
-                "continuous_velocity_at_piece_boundaries",
+                "continuous_velocity_at_non_insertion_piece_boundaries",
                 "explicit_phase_labels",
                 "source_labels_preserved_except_postprocessor_diagnostics",
                 "final_insertion_marked_cheatcode_derived",
+                "global_smoothing_excludes_final_insertion",
+                "final_insertion_linear_between_cheatcode_geometry_waypoints",
             ],
         },
     )

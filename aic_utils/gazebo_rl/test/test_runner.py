@@ -83,6 +83,7 @@ def test_start_does_not_precreate_lerobot_dataset_root(monkeypatch, tmp_path):
         )
     )
     monkeypatch.setattr(runner, "_validate_distrobox", lambda: None)
+    monkeypatch.setattr(runner, "_cleanup_stale_zenoh_router", lambda: None)
     monkeypatch.setattr(runner_module.subprocess, "Popen", FakePopen)
     monkeypatch.setattr(runner_module.time, "sleep", lambda *_: None)
 
@@ -144,3 +145,51 @@ def test_distrobox_preflight_missing_container_has_clear_error(monkeypatch):
     assert "user-created container name" in message
     assert "--sim-distrobox <your-container-name>" in message
     assert "aic_eval" not in message
+
+
+def test_start_runs_stale_zenoh_cleanup_before_launch(monkeypatch, tmp_path):
+    events = []
+
+    class FakePopen:
+        def __init__(self, *args, **kwargs):
+            events.append("popen")
+            self.args = args
+            self.kwargs = kwargs
+
+        def poll(self):
+            return None
+
+    runner = GazeboRLRunner(
+        GazeboRLRunnerConfig(
+            workspace_dir=tmp_path,
+            results_dir=tmp_path / "results",
+        )
+    )
+    monkeypatch.setattr(runner, "_validate_distrobox", lambda: events.append("validate"))
+    monkeypatch.setattr(runner, "_cleanup_stale_zenoh_router", lambda: events.append("cleanup"))
+    monkeypatch.setattr(runner_module.subprocess, "Popen", FakePopen)
+    monkeypatch.setattr(runner_module.time, "sleep", lambda *_: None)
+
+    try:
+        runner.start()
+        assert events[:3] == ["validate", "cleanup", "popen"]
+    finally:
+        runner.processes.clear()
+
+
+def test_cleanup_stale_zenoh_kills_host_and_distrobox(monkeypatch):
+    calls = []
+
+    def fake_run(cmd, **kwargs):
+        calls.append(cmd)
+        return subprocess.CompletedProcess(args=cmd, returncode=0)
+
+    runner = _runner(sim_distrobox="my_box")
+    monkeypatch.setattr(runner_module.subprocess, "run", fake_run)
+    monkeypatch.setattr(runner_module.time, "sleep", lambda *_: None)
+
+    runner._cleanup_stale_zenoh_router()
+
+    assert ["pkill", "-f", "rmw_zenohd"] in calls
+    assert ["pkill", "-f", "rmw_zenoh_cpp rmw_zenohd"] in calls
+    assert any(call[:6] == ["distrobox", "enter", "-r", "--no-tty", "my_box", "--"] for call in calls)

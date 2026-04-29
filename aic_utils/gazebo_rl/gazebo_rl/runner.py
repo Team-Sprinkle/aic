@@ -64,6 +64,7 @@ class GazeboRLRunnerConfig:
     record_image_writer_processes: int = 0
     record_image_writer_threads_per_camera: int = 4
     record_video_encoding_batch_size: int = 1
+    clean_stale_zenoh: bool = True
 
 
 class ManagedProcess:
@@ -194,6 +195,8 @@ class GazeboRLRunner:
     def start(self) -> None:
         self.config.results_dir.mkdir(parents=True, exist_ok=True)
         self._validate_distrobox()
+        if self.config.clean_stale_zenoh:
+            self._cleanup_stale_zenoh_router()
         env = self._env()
         sim = subprocess.Popen(
             self.simulation_command(),
@@ -256,6 +259,46 @@ class GazeboRLRunner:
                 "Pass --sim-distrobox <your-container-name>, or omit --sim-distrobox "
                 "to use the local pixi launch path."
             )
+
+    def _cleanup_stale_zenoh_router(self) -> None:
+        patterns = ["rmw_zenohd", "rmw_zenoh_cpp rmw_zenohd"]
+        for pattern in patterns:
+            try:
+                subprocess.run(
+                    ["pkill", "-f", pattern],
+                    check=False,
+                    stdout=subprocess.DEVNULL,
+                    stderr=subprocess.DEVNULL,
+                    env=self._env(),
+                    timeout=5.0,
+                )
+            except (OSError, subprocess.TimeoutExpired):
+                pass
+
+        if self.config.sim_distrobox:
+            for pattern in patterns:
+                try:
+                    subprocess.run(
+                        [
+                            "distrobox",
+                            "enter",
+                            "-r",
+                            "--no-tty",
+                            self.config.sim_distrobox,
+                            "--",
+                            "pkill",
+                            "-f",
+                            pattern,
+                        ],
+                        check=False,
+                        stdout=subprocess.DEVNULL,
+                        stderr=subprocess.DEVNULL,
+                        env=self._env(),
+                        timeout=5.0,
+                    )
+                except (OSError, subprocess.TimeoutExpired):
+                    pass
+        time.sleep(2.0)
 
     def close(self) -> None:
         recorder_processes = [managed for managed in self.processes if managed.name == "recorder"]
