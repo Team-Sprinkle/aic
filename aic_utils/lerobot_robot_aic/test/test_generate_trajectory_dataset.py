@@ -4,10 +4,12 @@ import importlib.util
 import json
 import math
 import argparse
+import os
 import subprocess
 import sys
 from pathlib import Path
 
+os.environ.setdefault("PYGAME_HIDE_SUPPORT_PROMPT", "1")
 import pytest
 import yaml
 
@@ -250,6 +252,9 @@ def test_act_training_command_uses_local_root_and_act_policy(tmp_path: Path) -> 
         num_workers=1,
         lr="1e-4",
         dataset_video_backend="pyav",
+        chunk_size=16,
+        n_action_steps=8,
+        n_obs_steps=1,
         wandb=False,
         policy_repo_id=None,
         extra_arg=[],
@@ -262,5 +267,8 @@ def test_act_training_command_uses_local_root_and_act_policy(tmp_path: Path) -> 
     assert "--optimizer.lr=1e-4" in cmd
     assert "--policy.optimizer_lr=1e-4" in cmd
     assert "--policy.optimizer_lr_backbone=1e-4" in cmd
+    assert "--policy.chunk_size=16" in cmd
+    assert "--policy.n_action_steps=8" in cmd
+    assert "--policy.n_obs_steps=1" in cmd
     assert "--policy.push_to_hub=false" in cmd
     assert "--wandb.enable=false" in cmd

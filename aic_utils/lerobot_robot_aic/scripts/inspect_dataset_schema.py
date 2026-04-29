@@ -5,9 +5,11 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 from pathlib import Path
 import sys
 
+os.environ.setdefault("PYGAME_HIDE_SUPPORT_PROMPT", "1")
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from lerobot_robot_aic.dataset_schema import summarize_dataset_schema
 

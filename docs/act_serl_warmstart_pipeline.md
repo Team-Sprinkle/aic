@@ -7,7 +7,9 @@ Gazebo CheatCode expert rollouts -> native LeRobot dataset -> ACT smoke training
 ```
 
 It deliberately uses CheatCode-based trajectories only. It does not use VLM
-planner trajectories, SERL offline RL, Isaac Lab RL, or Gazebo recovery rollouts.
+planner trajectories, Isaac Lab RL, or Gazebo recovery rollouts. A minimal
+offline SERL-style pretraining smoke path is documented separately in
+[`offline_serl_pretrain.md`](offline_serl_pretrain.md).
 The repo has a `Team-Sprinkle/mip` dependency and `RunMIP` runtime policy
 integration, but no direct in-repo MIP ACT training wrapper for this flow; this
 smoke path uses LeRobot training directly.
@@ -71,12 +73,17 @@ pixi run python aic_utils/lerobot_robot_aic/scripts/train_act_policy.py \
   --job-name act_smoke \
   --steps 200 \
   --batch-size 4 \
+  --chunk-size 16 \
+  --n-action-steps 8 \
   --device cuda
 ```
 
 The wrapper builds a `lerobot-train` command with `--policy.type=act`,
 `--dataset.video_backend=pyav`, local `--dataset.root`, and wandb disabled by
-default. Use `--dry-run` to print the exact command first.
+default. It also exposes ACT action chunking through `--chunk-size`,
+`--n-action-steps`, and `--n-obs-steps` and passes them to LeRobot as
+`--policy.chunk_size`, `--policy.n_action_steps`, and `--policy.n_obs_steps`.
+Use `--dry-run` to print the exact command first.
 
 ## Future Task Compatibility
 

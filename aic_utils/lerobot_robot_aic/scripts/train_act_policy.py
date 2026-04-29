@@ -4,10 +4,12 @@
 from __future__ import annotations
 
 import argparse
+import os
 import subprocess
 import sys
 from pathlib import Path
 
+os.environ.setdefault("PYGAME_HIDE_SUPPORT_PROMPT", "1")
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from lerobot_robot_aic.dataset_schema import summarize_dataset_schema
 
@@ -29,6 +31,24 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--num-workers", type=int, default=1)
     parser.add_argument("--lr", default="1e-4", help="Optimizer learning rate.")
     parser.add_argument("--dataset-video-backend", default="pyav")
+    parser.add_argument(
+        "--chunk-size",
+        type=int,
+        default=100,
+        help="ACT action prediction chunk size in environment steps.",
+    )
+    parser.add_argument(
+        "--n-action-steps",
+        type=int,
+        default=100,
+        help="Number of ACT chunk actions executed per policy invocation.",
+    )
+    parser.add_argument(
+        "--n-obs-steps",
+        type=int,
+        default=1,
+        help="Observation history steps. Installed LeRobot ACT currently supports 1.",
+    )
     parser.add_argument("--wandb", action="store_true", help="Enable wandb logging.")
     parser.add_argument(
         "--policy-repo-id",
@@ -54,6 +74,8 @@ def _local_repo_id(dataset_root: Path) -> str:
 
 
 def build_lerobot_train_cmd(args: argparse.Namespace) -> list[str]:
+    if args.n_action_steps > args.chunk_size:
+        raise ValueError("--n-action-steps must be <= --chunk-size for ACT")
     if args.dataset_root:
         dataset_root = args.dataset_root.resolve()
         summary = summarize_dataset_schema(dataset_root)
@@ -81,6 +103,9 @@ def build_lerobot_train_cmd(args: argparse.Namespace) -> list[str]:
         f"--optimizer.lr={args.lr}",
         f"--policy.optimizer_lr={args.lr}",
         f"--policy.optimizer_lr_backbone={args.lr}",
+        f"--policy.chunk_size={args.chunk_size}",
+        f"--policy.n_action_steps={args.n_action_steps}",
+        f"--policy.n_obs_steps={args.n_obs_steps}",
         f"--steps={args.steps}",
         f"--dataset.video_backend={args.dataset_video_backend}",
     ]
