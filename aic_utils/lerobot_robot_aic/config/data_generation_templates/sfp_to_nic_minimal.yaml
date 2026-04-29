@@ -1,0 +1,18 @@
+root_dir: outputs/trajectory_datasets
+task_family: sfp_to_nic
+suffix: first_batch
+
+generation:
+  target_accepted_trajectories: 200
+  max_attempts: 400
+  policy: cheatcode
+  seed: 42
+  append_if_exists: true
+
+acceptance:
+  success_only: true
+  min_score: 90.0
+
+scene:
+  nic_cards:
+    count: 1

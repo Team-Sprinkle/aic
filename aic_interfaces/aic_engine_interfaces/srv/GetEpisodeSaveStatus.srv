@@ -1,0 +1,15 @@
+# Goal UUID from /insert_cable action status.
+uint8[16] goal_id
+
+---
+
+# True if recorder has seen this goal ID.
+bool goal_known
+# True once recorder finished save-or-drop handling.
+bool finalized
+# True if episode was persisted (saved), false if dropped/failed.
+bool saved
+# Terminal goal state from action_msgs/GoalStatus (or 0 if unknown yet).
+int32 terminal_state
+# Human-readable recorder status details.
+string message

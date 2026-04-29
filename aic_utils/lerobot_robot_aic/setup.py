@@ -31,6 +31,10 @@ setup(
     maintainer="koonpeng",
     maintainer_email="koonpeng@intrinsic.ai",
     entry_points={
-        "console_scripts": [],
+        "console_scripts": [
+            "aic-policy-recorder = lerobot_robot_aic.policy_recorder:main",
+            "aic-teleop-record = lerobot_robot_aic.lerobot_record_policy:main",
+            "aic-validate-dataset-compat = lerobot_robot_aic.validate_dataset_compatibility:main",
+        ],
     },
 )
