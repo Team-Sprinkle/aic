@@ -29,6 +29,7 @@ from generate_random_trials_config import (  # noqa: E402
 
 TASK_FAMILIES = {"sfp_to_nic", "sc_to_sc"}
 POLICY_CLASS = {"cheatcode": "aic_example_policies.ros.CheatCode"}
+ACTION_MODES = {"cartesian", "joint"}
 NIC_RAILS = [f"nic_rail_{i}" for i in range(5)]
 SC_RAILS = [f"sc_rail_{i}" for i in range(2)]
 MOUNT_RAILS = [
@@ -101,6 +102,9 @@ def validate_request(request: dict[str, Any]) -> None:
     policy = require_path(request, "generation.policy")
     if policy not in POLICY_CLASS:
         raise ValueError(f"Unsupported generation.policy '{policy}'. Supported: {sorted(POLICY_CLASS)}")
+    action_mode = request.get("generation", {}).get("action_mode", "cartesian")
+    if action_mode not in ACTION_MODES:
+        raise ValueError(f"Unsupported generation.action_mode '{action_mode}'. Supported: {sorted(ACTION_MODES)}")
     require_path(request, "acceptance.min_score")
     if task_family == "sfp_to_nic":
         require_path(request, "scene.nic_cards.count")
@@ -554,6 +558,8 @@ def main() -> int:
         str(output_dir / "scores"),
         "--policy-class",
         POLICY_CLASS[request["generation"]["policy"]],
+        "--action-mode",
+        request.get("generation", {}).get("action_mode", "cartesian"),
         "--gazebo-gui",
         "false",
         "--launch-rviz",
@@ -604,6 +610,7 @@ def main() -> int:
         "output_dir": str(output_dir),
         "task_family": request["task_family"],
         "policy": request["generation"]["policy"],
+        "action_mode": request.get("generation", {}).get("action_mode", "cartesian"),
         "count_label": _count_label(request["task_family"], request),
         "target_accepted_trajectories": target,
         "max_attempts": max_attempts,

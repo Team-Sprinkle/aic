@@ -1,7 +1,9 @@
 from __future__ import annotations
 
 import importlib.util
+import json
 import math
+import argparse
 import subprocess
 import sys
 from pathlib import Path
@@ -18,6 +20,17 @@ spec = importlib.util.spec_from_file_location("generate_trajectory_dataset", SCR
 gtd = importlib.util.module_from_spec(spec)
 assert spec.loader is not None
 spec.loader.exec_module(gtd)
+
+PACKAGE_DIR = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(PACKAGE_DIR))
+
+from lerobot_robot_aic.dataset_schema import summarize_dataset_schema  # noqa: E402
+
+TRAIN_SCRIPT = PACKAGE_DIR / "scripts" / "train_act_policy.py"
+train_spec = importlib.util.spec_from_file_location("train_act_policy", TRAIN_SCRIPT)
+train_act_policy = importlib.util.module_from_spec(train_spec)
+assert train_spec.loader is not None
+train_spec.loader.exec_module(train_act_policy)
 
 
 def base_request(tmp_path: Path, task_family: str = "sfp_to_nic") -> dict:
@@ -152,3 +165,102 @@ def test_dry_run_creates_expected_files(tmp_path: Path) -> None:
     assert (out / "engine_config.yaml").exists()
     assert (out / "trials" / "trial_000001.yaml").exists()
     assert (out / "generation_summary.json").exists()
+    summary = json.loads((out / "generation_summary.json").read_text(encoding="utf-8"))
+    assert summary["action_mode"] == "cartesian"
+
+
+def write_fake_info(dataset_root: Path, action_names: list[str]) -> None:
+    meta = dataset_root / "meta"
+    meta.mkdir(parents=True)
+    info = {
+        "fps": 20,
+        "robot_type": "ur5e_aic",
+        "features": {
+            "action": {
+                "dtype": "float32",
+                "shape": [len(action_names)],
+                "names": action_names,
+            },
+            "observation.state": {
+                "dtype": "float32",
+                "shape": [31],
+                "names": ["tcp_pose.position.x"],
+            },
+        },
+    }
+    (meta / "info.json").write_text(json.dumps(info), encoding="utf-8")
+
+
+def test_dataset_schema_detects_cartesian_action_mode(tmp_path: Path) -> None:
+    dataset_root = tmp_path / "accepted_dataset"
+    write_fake_info(
+        dataset_root,
+        [
+            "delta_position.x",
+            "delta_position.y",
+            "delta_position.z",
+            "delta_rotation.x",
+            "delta_rotation.y",
+            "delta_rotation.z",
+        ],
+    )
+    summary = summarize_dataset_schema(dataset_root)
+    assert summary.action_mode == "cartesian"
+    assert summary.fps == 20
+    assert summary.robot_type == "ur5e_aic"
+
+
+def test_dataset_schema_detects_joint_action_mode(tmp_path: Path) -> None:
+    dataset_root = tmp_path / "accepted_dataset"
+    write_fake_info(
+        dataset_root,
+        [
+            "shoulder_pan_joint",
+            "shoulder_lift_joint",
+            "elbow_joint",
+            "wrist_1_joint",
+            "wrist_2_joint",
+            "wrist_3_joint",
+        ],
+    )
+    assert summarize_dataset_schema(dataset_root).action_mode == "joint"
+
+
+def test_act_training_command_uses_local_root_and_act_policy(tmp_path: Path) -> None:
+    dataset_root = tmp_path / "accepted_dataset"
+    write_fake_info(
+        dataset_root,
+        [
+            "delta_position.x",
+            "delta_position.y",
+            "delta_position.z",
+            "delta_rotation.x",
+            "delta_rotation.y",
+            "delta_rotation.z",
+        ],
+    )
+    args = argparse.Namespace(
+        dataset_root=dataset_root,
+        dataset_repo_id=None,
+        output_dir=tmp_path / "train",
+        job_name="act_smoke",
+        steps=200,
+        batch_size=4,
+        device="cpu",
+        num_workers=1,
+        lr="1e-4",
+        dataset_video_backend="pyav",
+        wandb=False,
+        policy_repo_id=None,
+        extra_arg=[],
+    )
+    cmd = train_act_policy.build_lerobot_train_cmd(args)
+    assert "lerobot-train" == cmd[0]
+    assert "--policy.type=act" in cmd
+    assert f"--dataset.root={dataset_root.resolve()}" in cmd
+    assert "--dataset.video_backend=pyav" in cmd
+    assert "--optimizer.lr=1e-4" in cmd
+    assert "--policy.optimizer_lr=1e-4" in cmd
+    assert "--policy.optimizer_lr_backbone=1e-4" in cmd
+    assert "--policy.push_to_hub=false" in cmd
+    assert "--wandb.enable=false" in cmd
