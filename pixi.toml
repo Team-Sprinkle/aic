@@ -48,8 +48,6 @@ mujoco = "==3.5.0"
 pynput = ">=1.7.6,<2"
 pyspacemouse = ">=2.0.0, <3"
 openai = ">=2.0.0,<3"
-pynput = ">=1.7.6,<2"
-pyspacemouse = ">=2.0.0, <3"
 mip = { git = "https://github.com/Team-Sprinkle/mip.git", rev = "f66bdb4e451481d1a968e77fe7118a6f0dac7d72" }
 
 [pypi-options.dependency-overrides]
