@@ -20,6 +20,7 @@ from lerobot_robot_aic.offline_rl_dataset import (
     OfflineRLTransitionDataset,
     load_lerobot_transitions,
 )
+from lerobot_robot_aic.act_warmstart import inspect_act_checkpoint, load_act_action_head_bias
 from lerobot_robot_aic.offline_serl import OfflineSERLConfig, OfflineSERLTrainer
 
 
@@ -51,6 +52,16 @@ def parse_args() -> argparse.Namespace:
     )
     parser.add_argument("--obs-mode", choices=["lowdim"], default="lowdim")
     parser.add_argument("--act-checkpoint", type=Path, default=None)
+    parser.add_argument(
+        "--act-warmstart-mode",
+        choices=["metadata", "action_head_bias"],
+        default="action_head_bias",
+        help=(
+            "How to consume --act-checkpoint. 'action_head_bias' transfers the "
+            "single-step ACT output bias as a repeated chunk prior; 'metadata' "
+            "only validates and records checkpoint metadata."
+        ),
+    )
     parser.add_argument("--save-every", type=int, default=500)
     parser.add_argument("--dry-run", action="store_true")
     return parser.parse_args()
@@ -89,12 +100,10 @@ def _write_json(path: Path, data: dict[str, Any]) -> None:
 
 def main() -> int:
     args = parse_args()
+    act_warmstart: dict[str, Any] | None = None
     if args.act_checkpoint is not None:
-        raise NotImplementedError(
-            "--act-checkpoint is reserved for the next integration step. "
-            "This smoke implementation trains the MLP actor from scratch and does not "
-            "silently map ACT weights into an incompatible actor architecture."
-        )
+        act_warmstart = inspect_act_checkpoint(args.act_checkpoint)
+        act_warmstart["mode"] = args.act_warmstart_mode
 
     arrays, schema = load_lerobot_transitions(
         args.dataset_root,
@@ -136,6 +145,10 @@ def main() -> int:
         ),
         device=args.device,
     )
+    if args.act_checkpoint is not None and args.act_warmstart_mode == "action_head_bias":
+        bias = load_act_action_head_bias(args.act_checkpoint)
+        transfer_report = trainer.warm_start_actor_bias_from_action_head(bias)
+        act_warmstart = {**(act_warmstart or {}), **transfer_report}
     loader = DataLoader(dataset, batch_size=args.batch_size, shuffle=True, drop_last=False)
     metrics_path = run_dir / "metrics.jsonl"
     latest_path = run_dir / "checkpoint_latest.pt"
@@ -157,6 +170,7 @@ def main() -> int:
                     schema_summary=schema.as_dict(),
                     normalization_stats=dataset.stats.as_dict(),
                     step=step,
+                    warmstart_metadata=act_warmstart,
                 )
             if step >= args.steps:
                 break
@@ -167,6 +181,7 @@ def main() -> int:
         schema_summary=schema.as_dict(),
         normalization_stats=dataset.stats.as_dict(),
         step=step,
+        warmstart_metadata=act_warmstart,
     )
     print(f"Wrote offline SERL checkpoint: {latest_path}")
     print(f"Wrote metrics: {metrics_path}")

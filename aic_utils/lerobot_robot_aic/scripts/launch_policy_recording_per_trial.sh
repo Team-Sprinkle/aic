@@ -14,6 +14,7 @@ POLICY_CLASS="${POLICY_CLASS:-aic_example_policies.ros.CheatCode}"
 AIC_OFFICIAL_TEACHER_TRAJECTORY="${AIC_OFFICIAL_TEACHER_TRAJECTORY:-}"
 AIC_OFFICIAL_TEACHER_ACTION_MODE="${AIC_OFFICIAL_TEACHER_ACTION_MODE:-relative_delta_gripper_tcp}"
 SIM_DISTROBOX_NAME="${SIM_DISTROBOX_NAME:-aic_eval}"
+RESTART_SIM_CONTAINER="${RESTART_SIM_CONTAINER:-false}"
 SAVE_FAILED_EPISODES="${SAVE_FAILED_EPISODES:-false}"
 PER_TRIAL_TIMEOUT_SEC="${PER_TRIAL_TIMEOUT_SEC:-0}"
 STARTUP_DELAY_SEC="${STARTUP_DELAY_SEC:-8}"
@@ -52,6 +53,8 @@ Options:
                                  absolute_cartesian_pose_base_link
                                  (default: ${AIC_OFFICIAL_TEACHER_ACTION_MODE})
   --sim-distrobox NAME           Distrobox name for simulation (default: ${SIM_DISTROBOX_NAME})
+  --restart-sim-container BOOL   Restart Docker eval container before each trial
+                                 (default: ${RESTART_SIM_CONTAINER})
   --dataset-repo-id ID           LeRobot dataset repo id (default: ${DATASET_REPO_ID})
   --dataset-root PATH            LeRobot dataset root (default: ${DATASET_ROOT})
   --dataset-single-task TXT      Dataset task prompt (default: "${DATASET_SINGLE_TASK}")
@@ -85,7 +88,7 @@ Options:
 Environment variable equivalents:
   WORKSPACE_DIR, ENGINE_CONFIG_FILE, POLICY_CLASS,
   AIC_OFFICIAL_TEACHER_TRAJECTORY, AIC_OFFICIAL_TEACHER_ACTION_MODE,
-  SIM_DISTROBOX_NAME,
+  SIM_DISTROBOX_NAME, RESTART_SIM_CONTAINER,
   DATASET_REPO_ID, DATASET_ROOT, DATASET_SINGLE_TASK, ACTION_MODE,
   SAVE_FAILED_EPISODES, PER_TRIAL_TIMEOUT_SEC, STARTUP_DELAY_SEC,
   PAUSE_BETWEEN_TRIALS_SEC, CONTINUE_ON_FAILURE, PUSH_TO_HUB, TMP_DIR,
@@ -102,6 +105,7 @@ while [[ $# -gt 0 ]]; do
     --teacher-trajectory) AIC_OFFICIAL_TEACHER_TRAJECTORY="$2"; shift 2 ;;
     --teacher-action-mode) AIC_OFFICIAL_TEACHER_ACTION_MODE="$2"; shift 2 ;;
     --sim-distrobox) SIM_DISTROBOX_NAME="$2"; shift 2 ;;
+    --restart-sim-container) RESTART_SIM_CONTAINER="$2"; shift 2 ;;
     --dataset-repo-id) DATASET_REPO_ID="$2"; shift 2 ;;
     --dataset-root) DATASET_ROOT="$2"; shift 2 ;;
     --dataset-single-task) DATASET_SINGLE_TASK="$2"; shift 2 ;;
@@ -165,6 +169,7 @@ fi
 mkdir -p "${RESULTS_ROOT}"
 
 bool_or_die "${SAVE_FAILED_EPISODES}" "--save-failed-episodes"
+bool_or_die "${RESTART_SIM_CONTAINER}" "--restart-sim-container"
 bool_or_die "${CONTINUE_ON_FAILURE}" "--continue-on-failure"
 bool_or_die "${PUSH_TO_HUB}" "--push-to-hub"
 bool_or_die "${REQUIRE_RECORDER_SAVE_LOG}" "--require-recorder-save-log"
@@ -309,6 +314,20 @@ cleanup_stale_sim_router() {
   # echo "  preflight: WARNING unable to run distrobox cleanup after retries; stale router may remain."
 }
 
+restart_sim_container() {
+  if [[ "${RESTART_SIM_CONTAINER}" != "true" ]]; then
+    return
+  fi
+  if ! command -v docker >/dev/null 2>&1; then
+    echo "Error: --restart-sim-container=true requires 'docker'." >&2
+    exit 1
+  fi
+
+  echo "  preflight: restarting sim container '${SIM_DISTROBOX_NAME}'..."
+  docker restart "${SIM_DISTROBOX_NAME}" >/dev/null
+  sleep 2
+}
+
 cleanup_trial_bags() {
   local trial_results_dir="$1"
   if [[ "${REMOVE_BAG_DATA}" != "true" ]]; then
@@ -354,11 +373,12 @@ echo "  temp dir: ${TMP_DIR}"
 echo "  recorder drain after sim exit: ${RECORDER_DRAIN_SEC}s"
 echo "  strict save-log check: ${REQUIRE_RECORDER_SAVE_LOG}"
 echo "  sudo keepalive: ${SUDO_KEEPALIVE}"
-  echo "  gazebo gui: ${GAZEBO_GUI}"
-  if [[ -n "${AIC_OFFICIAL_TEACHER_TRAJECTORY}" ]]; then
-    echo "  teacher trajectory: ${AIC_OFFICIAL_TEACHER_TRAJECTORY}"
-    echo "  teacher action mode: ${AIC_OFFICIAL_TEACHER_ACTION_MODE}"
-  fi
+echo "  restart sim container: ${RESTART_SIM_CONTAINER}"
+echo "  gazebo gui: ${GAZEBO_GUI}"
+if [[ -n "${AIC_OFFICIAL_TEACHER_TRAJECTORY}" ]]; then
+  echo "  teacher trajectory: ${AIC_OFFICIAL_TEACHER_TRAJECTORY}"
+  echo "  teacher action mode: ${AIC_OFFICIAL_TEACHER_ACTION_MODE}"
+fi
 echo "  launch rviz: ${LAUNCH_RVIZ}"
 echo "  per-trial scoring results root: ${RESULTS_ROOT}"
 echo "  remove bag data: ${REMOVE_BAG_DATA}"
@@ -394,6 +414,7 @@ for TRIAL_ID in "${TRIAL_IDS[@]}"; do
   mkdir -p "${TRIAL_RESULTS_DIR}"
   echo "  scoring dir: ${TRIAL_RESULTS_DIR}"
 
+  restart_sim_container
   cleanup_stale_sim_router
 
   SIM_CMD="/entrypoint.sh ground_truth:=true start_aic_engine:=true gazebo_gui:=${GAZEBO_GUI} launch_rviz:=${LAUNCH_RVIZ} aic_engine_config_file:=${SINGLE_CONFIG_PATH} shutdown_on_aic_engine_exit:=true"
@@ -403,6 +424,16 @@ for TRIAL_ID in "${TRIAL_IDS[@]}"; do
     distrobox enter -r "${SIM_DISTROBOX_NAME}" -- bash -lc "cd \"${WORKSPACE_DIR}\" && export AIC_RESULTS_DIR=\"${TRIAL_RESULTS_DIR}\" && ${SIM_CMD}"
   ) >"${SIM_LOG}" 2>&1 &
   SIM_PID=$!
+
+  (
+    cd "${WORKSPACE_DIR}"
+    if [[ -n "${AIC_OFFICIAL_TEACHER_TRAJECTORY}" ]]; then
+      export AIC_OFFICIAL_TEACHER_TRAJECTORY
+      export AIC_OFFICIAL_TEACHER_ACTION_MODE
+    fi
+    pixi run ros2 run aic_model aic_model --ros-args -p use_sim_time:=true -p "policy:=${POLICY_CLASS}"
+  ) >"${POLICY_LOG}" 2>&1 &
+  POLICY_PID=$!
 
   sleep "${STARTUP_DELAY_SEC}"
 
@@ -430,16 +461,6 @@ for TRIAL_ID in "${TRIAL_IDS[@]}"; do
     "${RECORDER_CMD[@]}"
   ) >"${RECORDER_LOG}" 2>&1 &
   RECORDER_PID=$!
-
-  (
-    cd "${WORKSPACE_DIR}"
-    if [[ -n "${AIC_OFFICIAL_TEACHER_TRAJECTORY}" ]]; then
-      export AIC_OFFICIAL_TEACHER_TRAJECTORY
-      export AIC_OFFICIAL_TEACHER_ACTION_MODE
-    fi
-    pixi run ros2 run aic_model aic_model --ros-args -p use_sim_time:=true -p "policy:=${POLICY_CLASS}"
-  ) >"${POLICY_LOG}" 2>&1 &
-  POLICY_PID=$!
 
   START_EPOCH="$(date +%s)"
   SIM_EXIT_EPOCH=0

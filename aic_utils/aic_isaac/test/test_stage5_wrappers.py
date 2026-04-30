@@ -4,8 +4,6 @@ import argparse
 import importlib.util
 from pathlib import Path
 
-import pytest
-
 SCRIPT = Path(__file__).resolve().parents[1] / "scripts" / "train_isaac_ppo_stage5.py"
 spec = importlib.util.spec_from_file_location("train_isaac_ppo_stage5", SCRIPT)
 stage5 = importlib.util.module_from_spec(spec)
@@ -47,7 +45,7 @@ def test_stage5_command_sets_randomization_env(tmp_path: Path) -> None:
     assert env["AIC_ISAAC_OUTPUT_DIR"] == str(tmp_path / "isaac")
 
 
-def test_stage5_rejects_non_native_init_checkpoint(tmp_path: Path) -> None:
+def test_stage5_passes_offline_serl_init_checkpoint(tmp_path: Path) -> None:
     args = argparse.Namespace(
         task="AIC-Task-v0",
         num_envs=4,
@@ -68,5 +66,6 @@ def test_stage5_rejects_non_native_init_checkpoint(tmp_path: Path) -> None:
         dry_run=True,
         extra_arg=[],
     )
-    with pytest.raises(NotImplementedError):
-        stage5.build_command(args)
+    cmd, _ = stage5.build_command(args)
+    assert "--init_policy_checkpoint" in cmd
+    assert str(tmp_path / "offline_serl.pt") in cmd

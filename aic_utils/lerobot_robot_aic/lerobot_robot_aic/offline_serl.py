@@ -112,6 +112,34 @@ class OfflineSERLTrainer:
         critic_params = list(self.critic1.parameters()) + list(self.critic2.parameters())
         self.critic_opt = torch.optim.Adam(critic_params, lr=config.lr)
 
+    def warm_start_actor_bias_from_action_head(self, action_head_bias: torch.Tensor) -> dict[str, Any]:
+        """Seed the actor output bias from a compatible ACT action head bias.
+
+        ACT and this offline SERL actor have different architectures, so only
+        the output prior can be transferred without fabricating hidden-layer
+        semantics. For chunked SERL actions, the single-step ACT bias is repeated
+        across the configured action horizon.
+        """
+        if action_head_bias.ndim != 1:
+            raise ValueError(f"Expected 1D ACT action_head.bias, got {tuple(action_head_bias.shape)}")
+        single_action_dim = int(action_head_bias.numel())
+        expected_dim = single_action_dim * int(self.config.action_horizon)
+        if expected_dim != self.config.action_dim:
+            raise ValueError(
+                "ACT action head and SERL actor dimensions are incompatible: "
+                f"{single_action_dim} * horizon {self.config.action_horizon} != {self.config.action_dim}"
+            )
+        repeated = action_head_bias.detach().to(self.device, dtype=self.actor.mean_head.bias.dtype)
+        repeated = repeated.repeat(int(self.config.action_horizon))
+        with torch.no_grad():
+            self.actor.mean_head.bias.copy_(repeated)
+        return {
+            "mode": "action_head_bias",
+            "single_action_dim": single_action_dim,
+            "action_horizon": int(self.config.action_horizon),
+            "transferred_tensors": ["model.action_head.bias -> actor.mean_head.bias"],
+        }
+
     def _to_device(self, batch: dict[str, torch.Tensor]) -> dict[str, torch.Tensor]:
         return {k: v.to(self.device) for k, v in batch.items()}
 
@@ -188,6 +216,7 @@ class OfflineSERLTrainer:
         schema_summary: dict[str, Any],
         normalization_stats: dict[str, Any],
         step: int,
+        warmstart_metadata: dict[str, Any] | None = None,
     ) -> None:
         path.parent.mkdir(parents=True, exist_ok=True)
         torch.save(
@@ -203,6 +232,7 @@ class OfflineSERLTrainer:
                 "train_config": train_config,
                 "dataset_schema": schema_summary,
                 "normalization_stats": normalization_stats,
+                "warmstart_metadata": warmstart_metadata or {},
                 "step": step,
             },
             path,

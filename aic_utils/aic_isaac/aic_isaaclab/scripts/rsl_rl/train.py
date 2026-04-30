@@ -62,6 +62,12 @@ parser.add_argument(
     help="Export IO descriptors.",
 )
 parser.add_argument(
+    "--init_policy_checkpoint",
+    type=str,
+    default=None,
+    help="Optional offline SERL checkpoint used to initialize the RSL-RL actor prior.",
+)
+parser.add_argument(
     "--ray-proc-id",
     "-rid",
     type=int,
@@ -160,6 +166,7 @@ from isaaclab_rl.rsl_rl import RslRlBaseRunnerCfg, RslRlVecEnvWrapper
 import isaaclab_tasks  # noqa: F401
 from isaaclab_tasks.utils import get_checkpoint_path
 from isaaclab_tasks.utils.hydra import hydra_task_config
+from serl_warmstart import apply_offline_serl_warmstart, write_report
 
 # import logger
 logger = logging.getLogger(__name__)
@@ -339,6 +346,15 @@ def main(
         print(f"[INFO]: Loading model checkpoint from: {resume_path}")
         # load previously trained model
         runner.load(resume_path)
+    elif args_cli.init_policy_checkpoint:
+        actor_critic = getattr(getattr(runner, "alg", None), "actor_critic", None)
+        if actor_critic is None:
+            raise RuntimeError("RSL-RL runner does not expose alg.actor_critic for warm-starting.")
+        print(f"[INFO]: Initializing PPO actor prior from offline SERL checkpoint: {args_cli.init_policy_checkpoint}")
+        report = apply_offline_serl_warmstart(actor_critic, args_cli.init_policy_checkpoint)
+        report_path = os.path.join(log_dir, "params", "offline_serl_warmstart.json")
+        write_report(report_path, report)
+        print(f"[INFO]: Offline SERL warm-start report: {report_path}")
 
     # dump the configuration into log-directory
     dump_yaml(os.path.join(log_dir, "params", "env.yaml"), env_cfg)

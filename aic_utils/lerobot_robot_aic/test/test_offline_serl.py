@@ -8,6 +8,7 @@ from pathlib import Path
 
 os.environ.setdefault("PYGAME_HIDE_SUPPORT_PROMPT", "1")
 import pandas as pd
+import pytest
 import torch
 
 PACKAGE_DIR = Path(__file__).resolve().parents[1]
@@ -105,6 +106,16 @@ def test_offline_serl_train_step_and_checkpoint(tmp_path: Path) -> None:
         step=1,
     )
     assert ckpt.exists()
+
+
+def test_offline_serl_act_bias_warmstart_repeats_horizon() -> None:
+    trainer = OfflineSERLTrainer(
+        OfflineSERLConfig(obs_dim=3, action_dim=4, action_horizon=2),
+        device="cpu",
+    )
+    report = trainer.warm_start_actor_bias_from_action_head(torch.tensor([0.1, -0.2]))
+    assert report["mode"] == "action_head_bias"
+    assert trainer.actor.mean_head.bias.detach().tolist() == pytest.approx([0.1, -0.2, 0.1, -0.2])
 
 
 def test_train_offline_serl_dry_run(tmp_path: Path) -> None:

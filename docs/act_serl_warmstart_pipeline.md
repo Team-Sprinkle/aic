@@ -21,6 +21,10 @@ The runtime policy/control interfaces are left untouched. In particular,
 `MotionUpdate` and joint-space `JointMotionUpdate` commands through
 `MoveRobotCallback`. Action mode is a recorder/dataset/training concern.
 
+For the current Stage 1-4 hybrid cleanup commands and 2026-04-30 runtime
+results, see
+[`hybrid_stage1_to_4_nominal_warmstart.md`](hybrid_stage1_to_4_nominal_warmstart.md).
+
 ## Generate Dataset Artifacts Without Gazebo
 
 ```bash
@@ -65,6 +69,26 @@ python aic_utils/lerobot_robot_aic/scripts/inspect_dataset_schema.py \
 The inspector reads `meta/info.json`, prints feature keys, FPS, robot type, and
 infers whether the action schema is Cartesian or joint-like from feature names.
 
+For the canonical hybrid metadata view:
+
+```bash
+cd ~/ws_aic/src/aic
+pixi run python aic_utils/lerobot_robot_aic/scripts/inspect_hybrid_schema.py \
+  --dataset-root outputs/trajectory_datasets/hybrid_nominal_sfp2nic_cheatcode_n10/accepted_dataset \
+  --action-horizon 8 \
+  --json
+```
+
+The 2026-04-30 nominal hybrid cleanup produced this accepted dataset:
+
+```text
+outputs/trajectory_datasets/hybrid_nominal_sfp2nic_cheatcode_n10/accepted_dataset
+```
+
+It contains 10 Gazebo CheatCode/no-contact episodes, 5399 frames, 6D
+Cartesian delta-pose actions, 32D low-dimensional state, and three camera video
+streams.
+
 ## Train ACT Smoke Policy
 
 ```bash
@@ -104,8 +128,8 @@ Use `--dry-run` to print the exact command first.
 2. Collect Gazebo nominal expert trajectories using CheatCode/no-contact mode.
 3. Train ACT / BC warm-start policy on expert trajectories.
 4. Run minimal offline SERL pretraining on Gazebo expert data. Current
-   limitation: lowdim smoke path only; ACT checkpoint loading is not implemented
-   yet.
+   limitation: lowdim path only; ACT checkpoint loading transfers an output
+   action prior, not full transformer hidden layers.
 5. Train Isaac Lab online RL using PPO/RSL-RL for acceleration. Current
    implementation: PPO/RSL-RL, not true off-policy SERL/SAC yet. Main additions:
    richer domain randomization and optional insertion-aware rewards.
@@ -126,5 +150,6 @@ Use `--dry-run` to print the exact command first.
 10. Repeat coarse Isaac <-> Gazebo loop.
 11. Final official Gazebo eval.
 
-Future work: true Isaac SERL/SAC replay-buffer training, ACT checkpoint loading
-into compatible policies, and Gazebo recovery automation.
+Future work: true Isaac SERL/SAC replay-buffer training, full checkpoint
+transfer into architecture-compatible policies, and same-state Gazebo recovery
+automation.

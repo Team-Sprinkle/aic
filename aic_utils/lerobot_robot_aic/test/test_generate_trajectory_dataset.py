@@ -78,6 +78,22 @@ def test_output_directory_derivation(tmp_path: Path) -> None:
     )
     request["scene"]["nic_cards"]["count"] = [1, 2]
     assert "nic_cards_mixed" in str(gtd.derive_output_dir(request))
+    request["output_dir"] = str(tmp_path / "custom_output")
+    assert gtd.derive_output_dir(request) == tmp_path / "custom_output"
+
+
+def test_derived_dataset_repo_id_is_hf_validation_safe(tmp_path: Path) -> None:
+    output_dir = (
+        tmp_path
+        / "outputs"
+        / "sfp_to_nic"
+        / "cheatcode"
+        / "nic_cards_1"
+        / "n10__hybrid_nominal_sfp_to_nic_cheatcode_with_extra_suffix"
+    )
+    repo_id = gtd.derived_dataset_repo_id(output_dir)
+    assert repo_id.startswith("local/")
+    assert len(repo_id) <= 96
 
 
 def test_sample_value_scalar_list_and_minmax() -> None:
@@ -167,6 +183,8 @@ def test_dry_run_creates_expected_files(tmp_path: Path) -> None:
     assert (out / "engine_config.yaml").exists()
     assert (out / "trials" / "trial_000001.yaml").exists()
     assert (out / "generation_summary.json").exists()
+    assert not (out / "raw_dataset").exists()
+    assert not (out / "accepted_dataset").exists()
     summary = json.loads((out / "generation_summary.json").read_text(encoding="utf-8"))
     assert summary["action_mode"] == "cartesian"
 

@@ -1,0 +1,24 @@
+root_dir: outputs/trajectory_datasets
+output_dir: outputs/trajectory_datasets/hybrid_nominal_sfp2nic_cheatcode_n10
+task_family: sfp_to_nic
+suffix: hybrid_nominal
+
+generation:
+  target_accepted_trajectories: 10
+  max_attempts: 15
+  policy: cheatcode
+  action_mode: cartesian
+  simulator_source: gazebo
+  seed: 42
+  append_if_exists: true
+  restart_sim_container: true
+  startup_delay_sec: 0
+  per_trial_timeout_sec: 900
+
+acceptance:
+  success_only: true
+  min_score: 90.0
+
+scene:
+  nic_cards:
+    count: 1

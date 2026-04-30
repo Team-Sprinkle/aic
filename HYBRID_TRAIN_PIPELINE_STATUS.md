@@ -1,7 +1,8 @@
 # Hybrid Train Pipeline Status
 
-Last updated: 2026-04-30 on branch `feat/hybrid-train`, after commit `049fa64`
-plus local camera-required training/evaluation fixes.
+Last updated: 2026-04-30 on branch `feat/hybrid-train`, after canonical
+hybrid schema cleanup, nominal Gazebo CheatCode dataset generation, ACT smoke
+training, and offline SERL smoke training.
 
 Purpose: this file is the handoff state for future Codex sessions working on the
 full hybrid training pipeline. It distinguishes actual artifact-producing runs
@@ -9,36 +10,83 @@ from short smoke/adapter checks.
 
 ## Overall State
 
-The Isaac Lab PPO path is implemented enough to train and roll out a checkpoint
-with camera image observations enabled. It is not yet the full hybrid pipeline:
-Gazebo expert collection, ACT/SERL warm starts, Isaac-to-Gazebo transfer loops,
-failure classification, recovery buffers, and final official Gazebo evaluation
-are still incomplete or only partially represented by older unrelated utilities.
+The first nominal warm-start artifacts now exist: a 10-episode accepted Gazebo
+CheatCode LeRobot dataset, a 200-step ACT checkpoint, and a 200-step offline
+SERL checkpoint trained on the same dataset. It is not yet the full hybrid
+pipeline: Isaac-to-Gazebo transfer loops, failure classification, recovery
+buffers, true online SERL/SAC, and final official Gazebo evaluation are still
+incomplete or only partially represented by older unrelated utilities.
 
 ## Step Status
 
 1. Standardize obs/action interface
-   - Status: Partial.
+   - Status: Improved/partial.
    - Implemented: Isaac Lab `AIC-Task-v0` uses a 6D differential IK relative-pose action on `wrist_3_link`.
    - Implemented: camera-required Isaac policy observations are validated at runtime: `center_rgb`, `left_rgb`, and `right_rgb` must exist and load.
    - Confirmed camera policy observation shape: `(3154,)`, with three `(1000,)` ResNet18 image-feature terms plus low-dimensional terms.
-   - Missing: one canonical shared schema across Gazebo, ACT/BC, SERL, Isaac PPO, and final policy adapter.
+   - Implemented: canonical dataset/training metadata inspection in
+     `aic_utils/lerobot_robot_aic/lerobot_robot_aic/hybrid_schema.py`.
+   - Implemented: CLI JSON inspector in
+     `aic_utils/lerobot_robot_aic/scripts/inspect_hybrid_schema.py`.
+   - The schema reports `task_family`, `simulator_source`, `action_mode`,
+     `action_dim`, `action_horizon`, `obs_mode`, `obs_dim`, camera keys, and
+     low-dimensional observation keys without assuming all actions are 6D or all
+     tasks are SFP-to-NIC.
+   - Missing: final Isaac/Gazebo runtime policy adapter that consumes this
+     canonical metadata during transfer/evaluation.
 
 2. Collect Gazebo nominal expert trajectories, no-contact VLM/oracle + CheatCode insertion
-   - Status: Not complete for this branch goal.
-   - Existing repo has official-teacher/CheatCode utilities and historical notes, but this session did not produce a new Gazebo nominal expert dataset for the hybrid pipeline.
-   - Missing: documented command that generates the nominal expert dataset to be consumed by ACT/SERL.
+   - Status: Complete for the requested 10-episode nominal smoke dataset.
+   - Added request YAML:
+     `aic_utils/lerobot_robot_aic/config/data_generation_templates/sfp_to_nic_hybrid_nominal_10.yaml`.
+   - Accepted dataset path:
+     `outputs/trajectory_datasets/hybrid_nominal_sfp2nic_cheatcode_n10/accepted_dataset`.
+   - Accepted episodes: 10.
+   - Accepted frames: 5399.
+   - Raw generation result: 15 attempts, 14 saved raw episodes, 13 score-passing
+     episodes before capping accepted output at the requested 10.
+   - Videos/images exist: yes, three video streams under
+     `videos/observation.images.{center,left,right}_camera/`.
+   - Command attempted:
+     `pixi run python aic_utils/lerobot_robot_aic/scripts/generate_trajectory_dataset.py --request-yaml aic_utils/lerobot_robot_aic/config/data_generation_templates/sfp_to_nic_hybrid_nominal_10.yaml --target-accepted-override 10 --max-attempts-override 15`.
+   - Fixes needed during generation: restart the eval container per trial, raise
+     per-trial timeout to 900 seconds, record per-camera video shapes correctly,
+     cap accepted selection at the requested target, and allow filtering to run
+     even if some attempts fail after enough raw episodes are saved.
+   - Schema summary: `task_family=sfp_to_nic`, `simulator_source=gazebo`,
+     `action_mode=cartesian`, `action_dim=6`, `action_horizon=8`,
+     `obs_mode=image_lowdim`, `obs_dim=32`.
 
 3. Train ACT / BC warm start
-   - Status: Not complete in the Isaac pipeline.
-   - Existing ACT/offline docs and scripts exist elsewhere in the repo, but no ACT checkpoint was produced or connected to Isaac PPO in this session.
-   - Missing: artifact path for an ACT/BC warm-start checkpoint and adapter into the standardized obs/action schema.
+   - Status: Complete for a 200-step smoke ACT run.
+   - Dataset:
+     `outputs/trajectory_datasets/hybrid_nominal_sfp2nic_cheatcode_n10/accepted_dataset`.
+   - Output path: `outputs/train/hybrid_act_nominal_n10`.
+   - ACT checkpoint:
+     `outputs/train/hybrid_act_nominal_n10/checkpoints/000200/pretrained_model/model.safetensors`.
+   - ACT settings: `steps=200`, `batch_size=4`, `chunk_size=16`,
+     `n_action_steps=8`, `n_obs_steps=1`.
+   - Note: first ACT run completed optimization but failed to create the
+     checkpoint because `outputs/train` was root-owned by prior generated
+     artifacts; ownership was fixed and the same command was rerun successfully.
 
 4. SERL offline pretrain on Gazebo expert data
-   - Status: Partial/historical only.
+   - Status: Complete for a 200-step low-dimensional offline SERL smoke run.
    - Existing offline SERL path is documented as a low-dimensional smoke/pretrain path.
-   - Missing: SERL pretrain using the finalized Gazebo expert dataset and camera/standardized observation schema.
-   - Missing: bridge from SERL checkpoint into Isaac/RSL-RL. `--init-policy-checkpoint` intentionally raises because cross-framework checkpoint loading is not implemented.
+   - Dataset:
+     `outputs/trajectory_datasets/hybrid_nominal_sfp2nic_cheatcode_n10/accepted_dataset`.
+   - Checkpoint:
+     `outputs/train/hybrid_offline_serl_nominal_n10/checkpoint_latest.pt`.
+   - Offline SERL settings: `steps=200`, `batch_size=32`, `action_horizon=8`,
+     `hidden_dim=256`, `num_layers=3`.
+   - Checkpoint metadata: `obs_dim=32`, flattened actor `action_dim=48`,
+     `action_horizon=8`, dataset `action_mode=cartesian`; normalization stats
+     include `obs_mean`, `obs_std`, `action_mean`, and `action_std`.
+   - Implemented after the nominal smoke run: `--act-checkpoint` support in
+     `train_offline_serl.py`. The bridge validates a LeRobot ACT checkpoint and
+     transfers `model.action_head.bias` into the SERL actor output bias repeated
+     across the configured action horizon. This is an action-prior warm start,
+     not full ACT transformer-to-MLP hidden-layer transfer.
 
 5. Isaac Lab RL with dense reward + heavy randomization
    - Status: Partial, with camera-required PPO validated.
@@ -47,16 +95,32 @@ are still incomplete or only partially represented by older unrelated utilities.
    - Implemented: randomization profile plumbing for `none`, `light`, and `heavy`.
    - Implemented: training now enables cameras by default and fails if camera observations do not exist or do not load.
    - Actual artifact-producing camera training run: one PPO iteration, 24 timesteps, produced `model_0.pt`.
+   - Implemented after the nominal smoke run: `--init-policy-checkpoint` now
+     accepts an offline SERL checkpoint and passes it into the RSL-RL train
+     entrypoint. The current bridge initializes PPO actor output bias/std from
+     the SERL first-action prior and copies exact-shape tensors if future
+     architectures match.
    - Missing: long heavy-randomization training to convergence.
    - Missing: insertion reward based on semantic cable-tip/port frames; current optional insertion terms use approximate object roots.
 
 6. Gazebo transfer validation in instrumented mode
-   - Status: Not complete.
-   - This session only ran Isaac Lab evaluator rollout, not Gazebo transfer.
-   - Missing: adapter/export path from Isaac checkpoint to Gazebo policy class and an instrumented Gazebo rollout command.
+   - Status: Implemented as a SERL checkpoint validation path; not yet run to
+     final score in this update.
+   - Added:
+     `aic_utils/gazebo_rl/scripts/serl_transfer_validate.py`.
+   - Added:
+     `aic_utils/gazebo_rl/gazebo_rl/serl_policy.py`.
+   - The validator loads an offline SERL checkpoint, converts Gazebo bridge
+     observations into the canonical 32D low-dimensional state, emits the first
+     6D action from the chunked SERL actor, parses Gazebo scoring output, and
+     writes `transfer_validation_summary.json`.
+   - Missing: Isaac PPO checkpoint export into the Gazebo policy bridge. The
+     implemented transfer validator is SERL -> Gazebo, not RSL-RL PPO -> Gazebo.
 
 7. Classify failures
-   - Status: Not implemented.
+   - Status: Minimal transfer validator classification implemented.
+   - `serl_transfer_validate.py` classifies transfer rollouts as `success`,
+     `transfer_failure`, or `no_score` from scoring output.
    - Required buckets are still missing:
      - A. nonsense/interface failure -> debug adapter
      - B. near-port contact failure -> oracle takeover/recovery
@@ -65,7 +129,9 @@ are still incomplete or only partially represented by older unrelated utilities.
      - E. unrecoverable failure -> failed prefix only
 
 8. Store data
-   - Status: Not implemented for the hybrid loop.
+   - Status: Partially implemented for transfer validation only.
+   - `serl_transfer_validate.py` can run the existing LeRobot recorder sidecar
+     through the Gazebo RL bridge recording flags.
    - Missing: `online_buffer` writer for failed policy prefixes.
    - Missing: `demo_buffer_recovery` writer for oracle recovery suffixes.
 

@@ -7,7 +7,8 @@ Gazebo expert data -> ACT / offline SERL smoke checkpoints -> Isaac Lab PPO/RSL-
 ```
 
 This is not true online SERL/SAC yet. The current Isaac path starts PPO from
-scratch or resumes an RSL-RL-native checkpoint.
+scratch, resumes an RSL-RL-native checkpoint, or applies a conservative offline
+SERL action-prior initialization before PPO training.
 
 ## Current Training Method
 
@@ -128,15 +129,43 @@ Optional insertion reward weights:
 
 ## Checkpoint Bridge Status
 
-Current checkpoints are not directly interchangeable:
+Checkpoints are not fully interchangeable, but there is now a bounded bridge:
 
 - ACT produces a LeRobot ACT checkpoint.
-- Offline SERL produces a minimal lowdim MLP actor-critic checkpoint.
+- Offline SERL can consume an ACT checkpoint through
+  `--act-checkpoint`; because ACT and offline SERL have different
+  architectures, the implemented transfer validates the ACT checkpoint and
+  initializes the SERL actor output bias from the ACT action head bias repeated
+  across the configured SERL action horizon.
+- Offline SERL produces a lowdim MLP actor-critic checkpoint.
 - Isaac PPO uses RSL-RL's PPO actor-critic architecture.
 
-The wrapper exposes `--init-policy-checkpoint`, but it fails clearly because
-direct checkpoint loading is not implemented. Use RSL-RL `--resume`,
-`--load-run`, and `--checkpoint` for RSL-RL-native checkpoint resume.
+The Stage 5 wrapper accepts `--init-policy-checkpoint` for an offline SERL
+checkpoint and forwards it to the Isaac Lab RSL-RL train entrypoint. The train
+entrypoint applies a conservative warm start:
+
+- exact-shape tensors are copied when future SERL/RSL architectures match;
+- current lowdim SERL -> camera PPO initializes the PPO actor output bias and
+  `std` from the first single-step action prior in SERL normalization stats;
+- hidden-layer transfer is not claimed when observation/action architectures
+  differ.
+
+Use RSL-RL `--resume`, `--load-run`, and `--checkpoint` for RSL-RL-native
+checkpoint resume.
+
+Example SERL-initialized PPO command:
+
+```bash
+pixi run python aic_utils/aic_isaac/scripts/train_isaac_ppo_stage5.py \
+  --task AIC-Task-v0 \
+  --num-envs 4 \
+  --max-iterations 1 \
+  --seed 1 \
+  --headless \
+  --randomization-profile light \
+  --output-dir outputs/train/isaac_stage5_serl_warmstart \
+  --init-policy-checkpoint outputs/train/hybrid_offline_serl_nominal_n10/checkpoint_latest.pt
+```
 
 Use the compatibility checker for metadata inspection:
 
@@ -150,8 +179,11 @@ pixi run python aic_utils/aic_isaac/scripts/check_policy_checkpoint_compatibilit
 ## Current Limitations
 
 - Isaac online RL is PPO/RSL-RL, not off-policy SERL/SAC.
-- Offline SERL is still a lowdim smoke path.
-- Offline SERL does not consume ACT checkpoints yet.
+- Offline SERL is still a lowdim path; ACT warm-start transfers only an output
+  action prior, not full transformer weights.
+- Isaac PPO warm-start from offline SERL is a partial action-prior
+  initialization, not full actor-critic hidden-layer transfer for the current
+  camera-enabled PPO architecture.
 - The optional insertion-aware rewards use approximate target object poses.
 - Gazebo online RL, recovery intervention, and Isaac-to-Gazebo recovery loops
   are not implemented yet.

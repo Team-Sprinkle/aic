@@ -6,6 +6,7 @@ from __future__ import annotations
 import argparse
 import copy
 import csv
+import hashlib
 import json
 import math
 import random
@@ -149,6 +150,9 @@ def _count_label(task_family: str, request: dict[str, Any]) -> str:
 
 
 def derive_output_dir(request: dict[str, Any]) -> Path:
+    explicit_output_dir = request.get("output_dir")
+    if explicit_output_dir:
+        return Path(str(explicit_output_dir))
     policy = request["generation"]["policy"]
     target = int(request["generation"]["target_accepted_trajectories"])
     suffix = str(request.get("suffix", "dataset"))
@@ -164,6 +168,15 @@ def derive_output_dir(request: dict[str, Any]) -> Path:
 def derived_dataset_name(output_dir: Path) -> str:
     parts = output_dir.parts[-5:]
     return "__".join(p.replace("/", "_") for p in parts)
+
+
+def derived_dataset_repo_id(output_dir: Path) -> str:
+    name = derived_dataset_name(output_dir)
+    max_name_len = 96 - len("local/")
+    if len(name) > max_name_len:
+        digest = hashlib.sha1(name.encode("utf-8")).hexdigest()[:8]
+        name = f"{name[: max_name_len - len(digest) - 1]}_{digest}"
+    return f"local/{name}"
 
 
 def _validate_spec_range(spec: Any, lo: float, hi: float, field: str) -> None:
@@ -470,15 +483,17 @@ def write_engine_configs(request: dict[str, Any], output_dir: Path, num_trials: 
     return out_path
 
 
-def run_command(cmd: list[str], dry_run: bool) -> dict[str, Any]:
+def run_command(cmd: list[str], dry_run: bool, *, allow_failure: bool = False) -> dict[str, Any]:
     rendered = " ".join(str(c) for c in cmd)
     if dry_run:
         print(f"[dry-run] {rendered}")
         return {"cmd": cmd, "skipped": True, "returncode": None}
     print(f"[run] {rendered}")
     result = subprocess.run(cmd, cwd=REPO_ROOT, check=False)
-    if result.returncode != 0:
+    if result.returncode != 0 and not allow_failure:
         raise RuntimeError(f"Command failed with exit code {result.returncode}: {rendered}")
+    if result.returncode != 0:
+        print(f"[warn] Command failed with exit code {result.returncode}; continuing: {rendered}")
     return {"cmd": cmd, "skipped": False, "returncode": result.returncode}
 
 
@@ -537,14 +552,14 @@ def main() -> int:
         raise FileExistsError(f"Output directory exists and append_if_exists is false: {output_dir}")
     for child in ("scores", "trials", "logs"):
         (output_dir / child).mkdir(parents=True, exist_ok=True)
-    if args.dry_run or args.skip_recording:
+    if args.skip_recording and not args.dry_run:
         for child in ("raw_dataset", "accepted_dataset"):
             (output_dir / child).mkdir(parents=True, exist_ok=True)
     shutil.copy2(args.request_yaml, output_dir / "request.yaml")
     engine_config_path = write_engine_configs(request, output_dir, num_trials)
 
     commands: list[dict[str, Any]] = []
-    dataset_repo_id = f"local/{derived_dataset_name(output_dir)}"
+    dataset_repo_id = derived_dataset_repo_id(output_dir)
     recording_cmd = [
         "bash",
         str(REPO_ROOT / "aic_utils/lerobot_robot_aic/scripts/launch_policy_recording_per_trial.sh"),
@@ -571,8 +586,19 @@ def main() -> int:
         "--tmp-dir",
         str(output_dir / "logs" / "per_trial_tmp"),
     ]
+    if "startup_delay_sec" in request.get("generation", {}):
+        recording_cmd.extend(
+            ["--startup-delay-sec", str(int(request["generation"]["startup_delay_sec"]))]
+        )
+    if "per_trial_timeout_sec" in request.get("generation", {}):
+        recording_cmd.extend(
+            ["--per-trial-timeout-sec", str(int(request["generation"]["per_trial_timeout_sec"]))]
+        )
+    if "restart_sim_container" in request.get("generation", {}):
+        restart_sim_container = str(bool(request["generation"]["restart_sim_container"])).lower()
+        recording_cmd.extend(["--restart-sim-container", restart_sim_container])
     if not args.skip_recording:
-        commands.append(run_command(recording_cmd, args.dry_run))
+        commands.append(run_command(recording_cmd, args.dry_run, allow_failure=True))
 
     filter_cmd = [
         "pixi",
@@ -587,6 +613,8 @@ def main() -> int:
         str(float(request["acceptance"]["min_score"])),
         "--output",
         str(output_dir / "accepted_dataset"),
+        "--max-selected-episodes",
+        str(target),
         "--include-videos",
         "--overwrite",
     ]

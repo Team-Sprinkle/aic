@@ -32,10 +32,12 @@ def main() -> int:
         "architecture": "OfflineSERL MLP actor-critic",
         "isaac_target": "RSL-RL PPO actor-critic",
         "direct_weight_transfer_supported": False,
+        "partial_action_prior_init_supported": True,
         "reason": (
-            "Offline SERL currently saves a standalone MLP actor-critic, while "
-            "Stage 5 uses RSL-RL's PPO actor-critic. Shape-compatible dims are "
-            "necessary but not sufficient for direct weight loading."
+            "Offline SERL and RSL-RL PPO use different actor-critic architectures. "
+            "The Stage 5 bridge can initialize a safe PPO action prior from SERL "
+            "action normalization stats and can copy exact-shape tensors if a future "
+            "configuration matches, but it does not claim full hidden-layer transfer."
         ),
     }
     if args.expected_obs_dim is not None:

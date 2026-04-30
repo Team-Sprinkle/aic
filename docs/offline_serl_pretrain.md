@@ -73,19 +73,42 @@ outputs/train/offline_serl_smoke/metrics.jsonl
 The checkpoint contains the actor, twin critics, target critics, optimizer
 state, dataset schema summary, training config, and normalization statistics.
 It is a metadata-compatible handoff artifact for future bridge work, but Stage 5
-currently trains Isaac Lab PPO/RSL-RL from scratch or from RSL-RL-native
-checkpoints; see `isaac_rl_stage5.md`.
+can now consume it as a conservative PPO action-prior initialization; see
+`isaac_rl_stage5.md`.
+
+## ACT Warm Start
+
+`--act-checkpoint` accepts a LeRobot ACT `pretrained_model` directory or
+`model.safetensors` file:
+
+```bash
+pixi run python aic_utils/lerobot_robot_aic/scripts/train_offline_serl.py \
+  --dataset-root outputs/trajectory_datasets/hybrid_nominal_sfp2nic_cheatcode_n10/accepted_dataset \
+  --output-dir outputs/train/hybrid_offline_serl_nominal_n10_actwarm \
+  --steps 200 \
+  --batch-size 32 \
+  --action-horizon 8 \
+  --hidden-dim 256 \
+  --num-layers 3 \
+  --device cuda \
+  --act-checkpoint outputs/train/hybrid_act_nominal_n10/checkpoints/000200/pretrained_model
+```
+
+Because ACT is a vision transformer and offline SERL is a lowdim MLP, the
+implemented transfer is deliberately conservative: it validates the ACT
+checkpoint metadata and initializes the SERL actor output bias from ACT
+`model.action_head.bias`, repeated over the configured action horizon. The
+checkpoint records this in `warmstart_metadata`.
 
 ## Current Limitations
 
-- The actor is a lowdim Gaussian MLP trained from scratch. Use
+- The actor is a lowdim Gaussian MLP. Use
   `--hidden-dim`, `--num-layers`, and `--action-horizon` to make the smoke model
   wider, deeper, or chunked without changing runtime policy interfaces.
-- `--act-checkpoint` is reserved but intentionally not loaded yet; the script
-  fails clearly if it is provided rather than pretending ACT-to-MLP weight
-  transfer is valid.
+- ACT warm-start transfers an output action prior only; it does not map ACT
+  transformer hidden layers into the MLP.
 - Rewards are replay-data rewards when present, otherwise final-success or zero
   fallback modes.
-- The checkpoint is intended as a future initialization artifact for Isaac or
-  Gazebo online RL, but no online environment consumes it yet.
+- The checkpoint can initialize Isaac PPO's action prior and can run through the
+  Gazebo SERL transfer validator, but true online SERL/SAC is still not present.
 - Runtime `policy.py` and command abstractions remain untouched.

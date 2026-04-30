@@ -54,12 +54,6 @@ def parse_args() -> argparse.Namespace:
 
 
 def build_command(args: argparse.Namespace) -> tuple[list[str], dict[str, str]]:
-    if args.init_policy_checkpoint is not None:
-        raise NotImplementedError(
-            "--init-policy-checkpoint is reserved for a future checkpoint bridge. "
-            "Current Stage 5 PPO starts from scratch or resumes an RSL-RL-native checkpoint."
-        )
-
     cmd = [
         args.isaaclab,
         "-p",
@@ -86,6 +80,8 @@ def build_command(args: argparse.Namespace) -> tuple[list[str], dict[str, str]]:
         cmd.extend(["--checkpoint", args.checkpoint])
     if args.load_run:
         cmd.extend(["--load_run", args.load_run])
+    if args.init_policy_checkpoint:
+        cmd.extend(["--init_policy_checkpoint", str(args.init_policy_checkpoint)])
     cmd.extend(args.extra_arg)
 
     env = os.environ.copy()
