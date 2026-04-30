@@ -15,6 +15,9 @@ try:
     _BLACKLIST_PKGS = ["utils", ".mdp"]
     # Import all configs in this package
     import_packages(__name__, _BLACKLIST_PKGS)
-except:
-    print("running in Isaac Sim")
+except Exception:
     pass
+
+# Keep task registration available even when package discovery does not import
+# nested manager-based task packages.
+from .manager_based import aic_task  # noqa: F401

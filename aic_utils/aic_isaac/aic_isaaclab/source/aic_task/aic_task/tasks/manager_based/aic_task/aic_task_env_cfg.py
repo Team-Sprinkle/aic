@@ -215,6 +215,13 @@ class AICTaskSceneCfg(InteractiveSceneCfg):
     def __post_init__(self):
         super().__post_init__()
 
+        if os.environ.get("AIC_ISAAC_DISABLE_CAMERAS", "0").lower() in {
+            "1",
+            "true",
+            "yes",
+        }:
+            return
+
         _cam_spawn = sim_utils.PinholeCameraCfg(
             focal_length=22.48,
             focus_distance=0.0,
@@ -443,6 +450,14 @@ class ObservationsCfg:
         def __post_init__(self):
             self.enable_corruption = False
             self.concatenate_terms = True
+            if os.environ.get("AIC_ISAAC_DISABLE_CAMERAS", "0").lower() in {
+                "1",
+                "true",
+                "yes",
+            }:
+                self.center_rgb = None
+                self.left_rgb = None
+                self.right_rgb = None
 
     # observation groups
     policy: PolicyCfg = PolicyCfg()
