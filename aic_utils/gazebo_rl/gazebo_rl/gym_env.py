@@ -36,6 +36,7 @@ class GazeboRLEnv:
         record_image_writer_processes: int = 0,
         record_image_writer_threads_per_camera: int = 4,
         record_video_encoding_batch_size: int = 1,
+        include_images: bool = False,
     ):
         self.workspace_dir = Path(workspace_dir).resolve()
         self.max_steps = int(max_steps)
@@ -70,6 +71,7 @@ class GazeboRLEnv:
                 record_image_writer_processes=record_image_writer_processes,
                 record_image_writer_threads_per_camera=record_image_writer_threads_per_camera,
                 record_video_encoding_batch_size=record_video_encoding_batch_size,
+                include_images=include_images,
             )
         )
 
@@ -85,8 +87,11 @@ class GazeboRLEnv:
         while time.monotonic() < deadline:
             if self._conn is None:
                 raise RuntimeError("IPC connection is not open")
-            timeout = max(0.1, min(1.0, deadline - time.monotonic()))
-            msg = self._conn.recv(timeout_sec=timeout)
+            timeout = max(0.1, min(30.0, deadline - time.monotonic()))
+            try:
+                msg = self._conn.recv(timeout_sec=timeout)
+            except TimeoutError:
+                continue
             if msg.type == "hello":
                 self._hello = msg.payload
                 continue

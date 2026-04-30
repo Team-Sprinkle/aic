@@ -2,7 +2,10 @@
 
 Last updated: 2026-04-30 on branch `feat/hybrid-train`, after canonical
 hybrid schema cleanup, nominal Gazebo CheatCode dataset generation, ACT smoke
-training, and offline SERL smoke training.
+training, lowdim offline SERL smoke training, direct-ACT vision offline SERL
+smoke training, ACT-adapter vision offline SERL smoke training, Isaac online
+SERL/SAC runs, ACT-adapter Gazebo transfer-adapter wiring, and bounded
+adapter/action execution guards.
 
 Purpose: this file is the handoff state for future Codex sessions working on the
 full hybrid training pipeline. It distinguishes actual artifact-producing runs
@@ -11,11 +14,19 @@ from short smoke/adapter checks.
 ## Overall State
 
 The first nominal warm-start artifacts now exist: a 10-episode accepted Gazebo
-CheatCode LeRobot dataset, a 200-step ACT checkpoint, and a 200-step offline
-SERL checkpoint trained on the same dataset. It is not yet the full hybrid
-pipeline: Isaac-to-Gazebo transfer loops, failure classification, recovery
-buffers, true online SERL/SAC, and final official Gazebo evaluation are still
-incomplete or only partially represented by older unrelated utilities.
+CheatCode LeRobot dataset, a 200-step ACT checkpoint, a 200-step lowdim offline
+SERL checkpoint, a 200-step direct-ACT vision SERL checkpoint, and a 200-step
+ACT-adapter vision SERL checkpoint trained on the same dataset. The primary
+hybrid actor architecture is now ACT plus a small trainable adapter:
+`obs -> ACT -> a_ACT`, then `state + a_ACT -> adapter -> delta`, with final
+action `a_ACT + scale * delta`. ACT is frozen by default so SERL refines ACT
+instead of overwriting it. Isaac online SERL/SAC now runs the same ACT-adapter
+actor and saves real online checkpoints. Offline SERL, online Isaac SERL, and
+Gazebo transfer execution now support explicit `adapter_delta_clip` and
+`action_clip` guards so an unstable adapter cannot emit unbounded corrections
+during validation. It is still not the full hybrid pipeline: recovery buffers,
+failure-specific offline refresh, and final official Gazebo evaluation are still
+incomplete or only partially represented by current utilities.
 
 ## Step Status
 
@@ -32,8 +43,25 @@ incomplete or only partially represented by older unrelated utilities.
      `action_dim`, `action_horizon`, `obs_mode`, `obs_dim`, camera keys, and
      low-dimensional observation keys without assuming all actions are 6D or all
      tasks are SFP-to-NIC.
-   - Missing: final Isaac/Gazebo runtime policy adapter that consumes this
-     canonical metadata during transfer/evaluation.
+   - Implemented: Isaac online SERL runtime adapter consumes the ACT TorchScript
+     base plus the offline/online adapter checkpoint while keeping cameras
+     enabled.
+   - Implemented: Gazebo transfer validator can now load the ACT-adapter SERL
+     checkpoint shape through a TorchScript ACT base.
+   - Implemented: Gazebo bridge IPC can opt into live RGB image payloads via
+     `AIC_GAZEBO_RL_INCLUDE_IMAGES=true` / `--include-images`, using the
+     existing `aic_model_interfaces/Observation` camera fields.
+   - Runtime note: local `pixi run ros2 launch` cannot find package
+     `aic_bringup` because `/home/ubuntu/ws_aic/install` is not present, but
+     the user-created `aic_eval` distrobox/Docker container from
+     `docs/getting_started.md` is available and works through
+     `--sim-distrobox aic_eval`.
+   - Implemented: the Gazebo runner now prepends the source
+     `aic_utils/gazebo_rl` package on `PYTHONPATH` so bridge subprocesses use
+     the edited source tree rather than a stale installed package.
+   - Implemented: image IPC is resized to ACT input size `(288, 256)` and
+     JPEG-encoded before newline-JSON transport. The policy decodes
+     `jpeg_rgb8` payloads back into ACT image tensors.
 
 2. Collect Gazebo nominal expert trajectories, no-contact VLM/oracle + CheatCode insertion
    - Status: Complete for the requested 10-episode nominal smoke dataset.
@@ -71,25 +99,87 @@ incomplete or only partially represented by older unrelated utilities.
      artifacts; ownership was fixed and the same command was rerun successfully.
 
 4. SERL offline pretrain on Gazebo expert data
-   - Status: Complete for a 200-step low-dimensional offline SERL smoke run.
-   - Existing offline SERL path is documented as a low-dimensional smoke/pretrain path.
+   - Status: Complete for 200-step low-dimensional, direct-ACT vision, and
+     ACT-adapter vision offline SERL smoke runs.
+   - Existing `train_offline_serl.py` path remains a low-dimensional
+     smoke/pretrain path and is still supported.
    - Dataset:
      `outputs/trajectory_datasets/hybrid_nominal_sfp2nic_cheatcode_n10/accepted_dataset`.
-   - Checkpoint:
+   - Lowdim checkpoint:
      `outputs/train/hybrid_offline_serl_nominal_n10/checkpoint_latest.pt`.
    - Offline SERL settings: `steps=200`, `batch_size=32`, `action_horizon=8`,
      `hidden_dim=256`, `num_layers=3`.
    - Checkpoint metadata: `obs_dim=32`, flattened actor `action_dim=48`,
      `action_horizon=8`, dataset `action_mode=cartesian`; normalization stats
      include `obs_mean`, `obs_std`, `action_mean`, and `action_std`.
-   - Implemented after the nominal smoke run: `--act-checkpoint` support in
-     `train_offline_serl.py`. The bridge validates a LeRobot ACT checkpoint and
-     transfers `model.action_head.bias` into the SERL actor output bias repeated
-     across the configured action horizon. This is an action-prior warm start,
-     not full ACT transformer-to-MLP hidden-layer transfer.
+   - Vision offline SERL added:
+     `aic_utils/lerobot_robot_aic/lerobot_robot_aic/vision_offline_serl.py` and
+     `aic_utils/lerobot_robot_aic/scripts/train_vision_offline_serl.py`.
+   - Vision checkpoint:
+     `outputs/train/hybrid_vision_offline_serl_nominal_n10/checkpoint_latest.pt`.
+   - Vision settings: `steps=200`, `batch_size=2`, `action_horizon=8`,
+     `bc_weight=1.0`, `cql_weight=0.0`, `lr=1e-4`, `device=cuda`.
+   - Vision metadata: `state_dim=32`, single-step `action_dim=6`, flattened
+     actor `action_dim=48`, `action_horizon=8`, cameras
+     `observation.images.center_camera`, `observation.images.left_camera`, and
+     `observation.images.right_camera`.
+   - Vision ACT warm-start: ACT checkpoint
+     `outputs/train/hybrid_act_nominal_n10/checkpoints/000200/pretrained_model`
+     is reconstructed with LeRobot `ACTPolicy` and wrapped as the SERL actor.
+     Warm-start report: 153 compatible trainable ACT tensors loaded,
+     234 compatible ACT state tensors loaded, 51,580,806 of 51,580,854 actor
+     parameters initialized from ACT, 99.99990694221542% actor-parameter
+     coverage, no skipped tensors. The remaining actor parameter is the new
+     global Gaussian `log_std`.
+   - Latest vision metrics at step 200: `bc_loss=0.007389282342046499`,
+     `critic_loss=4.0039492887444794e-05`, `actor_loss=-0.018424563109874725`,
+     `q_mean=0.013945362530648708`.
+   - ACT-adapter vision SERL checkpoint:
+     `outputs/train/hybrid_vision_offline_serl_adapter_nominal_n10/checkpoint_latest.pt`.
+   - ACT-adapter settings: `actor_mode=act_adapter`, `freeze_act=true`,
+     `steps=200`, `batch_size=2`, `action_horizon=8`, `bc_weight=1.0`,
+     `adapter_penalty_weight=1e-3`, `act_preservation_weight=1e-2`,
+     `smoothness_weight=0.0`, `cql_weight=0.0`.
+   - ACT-adapter architecture: frozen LeRobot ACT base actor produces the
+     flattened 8-step action chunk; a zero-initialized MLP adapter with input
+     `observation.state` plus `a_ACT` and 98,864 parameters predicts `delta`.
+     The actor has 51,679,718 parameters total, with 98,912 trainable by
+     default including adapter and `log_std`; ACT trainable parameters: 0.
+   - ACT-adapter warm-start report: 153 compatible ACT trainable tensors loaded,
+     234 compatible ACT state tensors loaded, 51,580,806 ACT parameters loaded,
+     99.80860576677296% of total actor parameters covered by ACT, no skipped
+     tensors, `initial_delta_norm=0.0`, `initial_final_minus_act_norm=0.0`.
+   - Latest ACT-adapter metrics at step 200:
+     `bc_loss=0.009551051072776318`,
+     `critic_loss=1.258803968084976e-05`,
+     `actor_loss=0.005853863433003426`,
+     `adapter_delta_norm=1.6950193643569946`,
+     `final_minus_act_norm=1.6950193643569946`,
+     `adapter_penalty=0.05986534804105759`,
+     `act_preservation_loss=0.05986534059047699`.
+   - Guarded few-step ACT-adapter offline run:
+     `outputs/train/hybrid_vision_offline_serl_adapter_clipped_fewstep/checkpoint_latest.pt`.
+   - Guarded few-step command used `steps=3`, `batch_size=2`,
+     `adapter_penalty_weight=0.1`, `act_preservation_weight=1.0`,
+     `adapter_delta_clip=0.05`, and `action_clip=0.05`.
+   - Guarded few-step final metrics at step 3:
+     `bc_loss=0.002062457147985697`,
+     `critic_loss=8.358272316399962e-05`,
+     `actor_loss=0.04385317116975784`,
+     `raw_adapter_delta_norm=0.03374718874692917`,
+     `adapter_delta_norm=0.03374718874692917`,
+     `final_minus_act_norm=1.163395643234253`.
+   - Note: with `action_clip` enabled, the final action may differ from raw ACT
+     even when the adapter is zero because the final ACT-plus-adapter action is
+     clamped. With `action_clip` disabled, the zero-initialized adapter path
+     starts exactly at ACT.
+   - The older lowdim `--act-checkpoint` bridge still exists and transfers only
+     `model.action_head.bias` as an action-prior warm start. The new vision
+     ACT-adapter path is the primary compatible ACT/SERL warm-start path.
 
 5. Isaac Lab RL with dense reward + heavy randomization
-   - Status: Partial, with camera-required PPO validated.
+   - Status: PPO/RSL-RL legacy smoke path validated; online SERL/SAC primary
+     path is now short-run artifact-producing.
    - Implemented: Isaac Lab PPO/RSL-RL training entry points.
    - Implemented: dense-ish reward terms for end-effector pose tracking, orientation tracking, sparse reaching bonus, smoothness penalties, and optional insertion-aware terms.
    - Implemented: randomization profile plumbing for `none`, `light`, and `heavy`.
@@ -100,22 +190,161 @@ incomplete or only partially represented by older unrelated utilities.
      entrypoint. The current bridge initializes PPO actor output bias/std from
      the SERL first-action prior and copies exact-shape tensors if future
      architectures match.
+   - Missing: architecture-compatible transfer from the new vision SERL actor
+     into the current camera PPO/RSL-RL actor. The current PPO actor is still a
+     camera-feature-conditioned RSL-RL MLP, not the ACT-backed vision SERL
+     actor.
+   - Added online SERL/SAC design doc:
+     `aic_utils/aic_isaac/docs/isaac_online_serl_design.md`.
+   - Added online SERL host launcher:
+     `aic_utils/aic_isaac/scripts/train_isaac_serl_stage5.py`.
+   - Added Isaac Lab online SERL trainer:
+     `aic_utils/aic_isaac/aic_isaaclab/scripts/serl/train.py`.
+   - Added ACT TorchScript export utility:
+     `aic_utils/lerobot_robot_aic/scripts/export_act_torchscript.py`.
+   - ACT TorchScript artifact used by Isaac:
+     `outputs/train/hybrid_act_nominal_n10/act_policy_ts_cuda.pt`.
+   - The online SERL trainer loads the ACT TorchScript base, keeps Isaac camera
+     sensors enabled, disables only PPO-specific ResNet observation terms,
+     reads raw Isaac camera RGB tensors, resizes them to `(3, 256, 288)`, runs
+     the trained adapter actor, collects replay, updates twin critics and the
+     adapter, and saves an online checkpoint.
+   - Actual artifact-producing online SERL run:
+     `outputs/train/isaac_stage5_online_serl_adapter/2026-04-30_20-18-32_online_serl_adapter_short/checkpoint_latest.pt`.
+   - Online run result: 3 Isaac steps, 2 online updates, final metrics
+     `reward_mean=-0.017923442646861076`,
+     `critic_loss=0.01120422501116991`,
+     `actor_loss=0.08170586079359055`,
+     `adapter_delta_norm=0.1511501669883728`,
+     `q_mean=-0.0775182694196701`.
+   - Online sanity run with 30-minute wall-time guard:
+     `outputs/train/isaac_stage5_online_serl_adapter/2026-04-30_20-55-36_online_serl_adapter_sanity_300/checkpoint_latest.pt`.
+   - Sanity command requested `steps=300`, `updates=100`, `batch_size=8`,
+     `max_wall_time_minutes=30`; it stopped by `target_updates`, not by wall
+     time, after 107 Isaac steps, 100 online updates, and 4.087678201599981
+     elapsed minutes.
+   - Sanity final metrics:
+     `reward_mean=-0.029265476390719414`,
+     `critic_loss=0.00016353523824363947`,
+     `actor_loss=-0.12103446573019028`,
+     `adapter_delta_norm=5.718219757080078`,
+     `adapter_penalty=0.6926227807998657`,
+     `act_preservation_loss=0.6926227807998657`,
+     `q_mean=0.01647045835852623`.
+   - 1k guarded online SERL run:
+     `outputs/train/isaac_stage5_online_serl_adapter/2026-04-30_21-11-49_online_serl_adapter_1k_guarded/checkpoint_latest.pt`.
+   - 1k command requested `steps=1000`, `updates=1000`, `batch_size=8`,
+     `max_wall_time_minutes=30`, `adapter_penalty_weight=0.01`, and
+     `act_preservation_weight=0.1`; it stopped by `max_steps`, not wall time,
+     after 1000 Isaac steps, 993 online updates, and 5.902379688616626 elapsed
+     minutes. Updates are 993 because the replay buffer needed the first 7
+     transitions before `batch_size=8` sampling could begin.
+   - 1k final metrics:
+     `reward_mean=-0.025411013513803482`,
+     `critic_loss=0.015914855524897575`,
+     `actor_loss=-3.8696117401123047`,
+     `adapter_delta_norm=24.33574676513672`,
+     `adapter_penalty=12.340703964233398`,
+     `act_preservation_loss=12.340703964233398`,
+     `q_mean=3.136911392211914`.
+   - Concern: adapter correction grew substantially during the 1k run. Before
+     treating the checkpoint as a policy candidate, reduce adapter learning rate
+     and/or increase ACT-preservation regularization. Bounded delta/action
+     clipping has now been added to offline SERL, Isaac online SERL, and Gazebo
+     transfer execution; this prevents unsafe actions but does not make the 1k
+     checkpoint a good policy candidate.
    - Missing: long heavy-randomization training to convergence.
    - Missing: insertion reward based on semantic cable-tip/port frames; current optional insertion terms use approximate object roots.
 
 6. Gazebo transfer validation in instrumented mode
-   - Status: Implemented as a SERL checkpoint validation path; not yet run to
-     final score in this update.
+   - Status: Lowdim SERL validation path implemented; ACT-adapter SERL loader,
+     Gazebo live-image IPC, and short online Gazebo SERL training implemented;
+     true vision transfer scoring still needs to be run.
    - Added:
      `aic_utils/gazebo_rl/scripts/serl_transfer_validate.py`.
    - Added:
      `aic_utils/gazebo_rl/gazebo_rl/serl_policy.py`.
-   - The validator loads an offline SERL checkpoint, converts Gazebo bridge
-     observations into the canonical 32D low-dimensional state, emits the first
-     6D action from the chunked SERL actor, parses Gazebo scoring output, and
-     writes `transfer_validation_summary.json`.
-   - Missing: Isaac PPO checkpoint export into the Gazebo policy bridge. The
-     implemented transfer validator is SERL -> Gazebo, not RSL-RL PPO -> Gazebo.
+   - Added:
+     `aic_utils/gazebo_rl/gazebo_rl/serl_train.py`.
+   - Added:
+     `aic_utils/gazebo_rl/scripts/gazebo_serl_train.py`.
+   - The validator loads an offline lowdim SERL checkpoint, converts Gazebo
+     bridge observations into the canonical 32D low-dimensional state, emits the
+     first 6D action from the chunked SERL actor, parses Gazebo scoring output,
+     and writes `transfer_validation_summary.json`.
+   - Added ACT-adapter policy kind:
+     `--policy-kind act_adapter_serl --act-torchscript <act_policy_ts_cuda.pt>`.
+     This reconstructs the TorchScript ACT base plus adapter from an offline or
+     online ACT-adapter SERL checkpoint and emits the first 6D action from the
+     final chunk.
+   - The ACT-adapter Gazebo policy requires live camera images by default.
+     `serl_transfer_validate.py` now defaults `--include-images` to true for
+     `--policy-kind act_adapter_serl` unless `--allow-zero-images` is explicitly
+     requested. The bridge serializes `center_image`, `left_image`, and
+     `right_image` from the ROS `Observation` message into compact base64 image
+     payloads keyed as the ACT camera observations.
+   - `--allow-zero-images` exists only for explicit adapter interface validation
+     and must not be used as real transfer scoring.
+   - Actual short ACT-adapter Gazebo transfer command:
+     `pixi run python aic_utils/gazebo_rl/scripts/serl_transfer_validate.py --policy-kind act_adapter_serl --checkpoint outputs/train/isaac_stage5_online_serl_adapter/2026-04-30_21-11-49_online_serl_adapter_1k_guarded/checkpoint_latest.pt --act-torchscript outputs/train/hybrid_act_nominal_n10/act_policy_ts_cuda.pt --workspace-dir . --sim-distrobox aic_eval --device cuda --max-steps 3 --per-trial-timeout-sec 300 --ground-truth true --gazebo-gui false --launch-rviz false --output-dir outputs/gazebo_rl/serl_transfer_validation/act_adapter_3step_latest`.
+   - Actual short transfer summary:
+     `outputs/gazebo_rl/serl_transfer_validation/act_adapter_3step_latest/transfer_validation_summary.json`.
+   - Result: completed 3 real Gazebo steps with `include_images=true` and
+     `allow_zero_images=false`; elapsed 44.19805851899946 seconds,
+     `total_reward=-0.02`, `action_norm_mean=17.205318417729618`,
+     `action_norm_max=17.244454467997244`,
+     `adapter_delta_norm_mean=54.55885442097982`.
+   - Score/classification: `classification=no_score`, `total_score=None`,
+     because this was a 3-step max-steps wiring run and no terminal scoring file
+     was produced.
+   - Added bounded execution guards:
+     `--adapter-delta-clip 0.05` and `--action-clip 0.05` are now available in
+     `train_vision_offline_serl.py`, `train_isaac_serl_stage5.py`, Isaac
+     `aic_isaaclab/scripts/serl/train.py`, and `serl_transfer_validate.py`.
+     Isaac online SERL and Gazebo transfer default to `0.05` for both guards.
+   - Actual short clipped ACT-adapter Gazebo transfer command:
+     `pixi run python aic_utils/gazebo_rl/scripts/serl_transfer_validate.py --policy-kind act_adapter_serl --checkpoint outputs/train/isaac_stage5_online_serl_adapter/2026-04-30_21-11-49_online_serl_adapter_1k_guarded/checkpoint_latest.pt --act-torchscript outputs/train/hybrid_act_nominal_n10/act_policy_ts_cuda.pt --workspace-dir . --sim-distrobox aic_eval --device cuda --max-steps 3 --per-trial-timeout-sec 300 --ground-truth true --gazebo-gui false --launch-rviz false --adapter-delta-clip 0.05 --action-clip 0.05 --output-dir outputs/gazebo_rl/serl_transfer_validation/act_adapter_clipped_3step_latest`.
+   - Actual clipped transfer summary:
+     `outputs/gazebo_rl/serl_transfer_validation/act_adapter_clipped_3step_latest/transfer_validation_summary.json`.
+   - Clipped result: completed 3 real Gazebo steps with live images; elapsed
+     44.14124419899963 seconds, `total_reward=-0.02`,
+     `action_norm_mean=0.10949402778003287`,
+     `action_norm_max=0.10949986228346104`,
+     `adapter_delta_norm_mean=0.3464101552963257`,
+     `raw_adapter_delta_norm_mean=54.15252685546875`.
+   - Clipped score/classification: `classification=no_score`,
+     `total_score=None`, because this was still only a 3-step max-steps wiring
+     run. The clamp bounded execution as intended; the raw adapter correction is
+     still too large for a candidate checkpoint.
+   - Online Gazebo ACT-adapter SERL training dry-run command:
+     `pixi run python aic_utils/gazebo_rl/scripts/gazebo_serl_train.py --checkpoint outputs/train/hybrid_vision_offline_serl_adapter_nominal_n10/checkpoint_latest.pt --act-torchscript outputs/train/hybrid_act_nominal_n10/act_policy_ts_cuda.pt --output-dir outputs/gazebo_rl/online_serl/adapter_dry_run --device cuda --dry-run`.
+   - Dry-run result: loaded the real offline ACT-adapter checkpoint and ACT
+     TorchScript with `state_dim=32`, `action_dim=48`,
+     `single_action_dim=6`, `action_horizon=8`, `include_images=true`,
+     `adapter_delta_clip=0.05`, and `action_clip=0.05`.
+   - Actual short online Gazebo SERL training command:
+     `pixi run python aic_utils/gazebo_rl/scripts/gazebo_serl_train.py --checkpoint outputs/train/hybrid_vision_offline_serl_adapter_nominal_n10/checkpoint_latest.pt --act-torchscript outputs/train/hybrid_act_nominal_n10/act_policy_ts_cuda.pt --output-dir outputs/gazebo_rl/online_serl/adapter_2step_latest --workspace-dir . --sim-distrobox aic_eval --device cuda --max-episodes 1 --max-steps 2 --updates 1 --batch-size 1 --max-minutes 10 --per-trial-timeout-sec 300 --ground-truth true --gazebo-gui false --launch-rviz false --adapter-delta-clip 0.05 --action-clip 0.05`.
+   - Actual online Gazebo SERL training result:
+     `outputs/gazebo_rl/online_serl/adapter_2step_latest/checkpoint_latest.pt`.
+     It completed 1 real Gazebo step and 1 adapter/critic update in
+     44.723284710998996 seconds, then stopped because the requested update count
+     was reached.
+   - Online Gazebo SERL final metrics:
+     `reward=-0.01`,
+     `critic_loss=0.0003967539523728192`,
+     `actor_loss=0.06374824792146683`,
+     `raw_adapter_delta_norm=1.6684852838516235`,
+     `adapter_delta_norm=0.329450786113739`,
+     `final_action_norm=0.3193478584289551`,
+     `final_minus_act_norm=1.1606016159057617`.
+   - Reload check: `gazebo_serl_train.py --dry-run` successfully loaded the
+     Gazebo-trained checkpoint from
+     `outputs/gazebo_rl/online_serl/adapter_2step_latest/checkpoint_latest.pt`.
+   - Missing: run a longer scored ACT-adapter Gazebo transfer validation after
+     training a policy candidate with intrinsically bounded adapter corrections.
+   - Missing: Isaac PPO checkpoint export into the Gazebo policy bridge. PPO is
+     no longer the primary compatible hybrid path, so this is a legacy/baseline
+     concern rather than the main transfer path.
 
 7. Classify failures
    - Status: Minimal transfer validator classification implemented.
@@ -347,7 +576,8 @@ the Gazebo side of the hybrid loop:
 2. Produce a new nominal Gazebo expert dataset with no-contact oracle/VLM plus CheatCode insertion.
 3. Train an ACT/BC checkpoint and document the artifact path.
 4. Run SERL offline pretrain on that same dataset.
-5. Run longer Isaac camera PPO with `--randomization-profile heavy`, preferably from an initialized policy once checkpoint bridging exists.
+5. Implement the Isaac online SERL/SAC loop around the ACT-adapter actor.
+6. Keep PPO/RSL-RL for smoke/baseline checks, not as the primary hybrid-transfer path.
 6. Export/adapt the policy for instrumented Gazebo transfer validation.
 7. Implement failure classification and buffer writes.
 8. Implement offline refresh and the repeat Isaac <-> Gazebo loop.

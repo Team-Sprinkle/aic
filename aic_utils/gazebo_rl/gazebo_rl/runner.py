@@ -65,6 +65,7 @@ class GazeboRLRunnerConfig:
     record_image_writer_threads_per_camera: int = 4
     record_video_encoding_batch_size: int = 1
     clean_stale_zenoh: bool = True
+    include_images: bool = False
 
 
 class ManagedProcess:
@@ -97,14 +98,22 @@ class GazeboRLRunner:
 
     def _env(self) -> dict[str, str]:
         env = os.environ.copy()
+        source_python_paths = [
+            str(self.config.workspace_dir / "aic_utils" / "gazebo_rl"),
+        ]
+        existing_pythonpath = env.get("PYTHONPATH")
+        if existing_pythonpath:
+            source_python_paths.append(existing_pythonpath)
         env.update(
             {
                 "DBX_CONTAINER_MANAGER": env.get("DBX_CONTAINER_MANAGER", "docker"),
+                "PYTHONPATH": os.pathsep.join(source_python_paths),
                 "AIC_GAZEBO_RL_HOST": self.config.host,
                 "AIC_GAZEBO_RL_PORT": str(self.config.port),
                 "AIC_GAZEBO_RL_COMMAND_DT_SEC": str(self.config.command_dt_sec),
                 "AIC_GAZEBO_RL_MAX_STEPS": str(self.config.max_steps),
                 "AIC_GAZEBO_RL_GROUND_TRUTH": _bool_arg(self.config.ground_truth),
+                "AIC_GAZEBO_RL_INCLUDE_IMAGES": _bool_arg(self.config.include_images),
                 "AIC_RESULTS_DIR": str(self.config.results_dir),
             }
         )

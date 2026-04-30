@@ -120,9 +120,11 @@ class GazeboRLBridgePolicy(Policy):
         max_steps = self._env_int("AIC_GAZEBO_RL_MAX_STEPS", 50)
         action_timeout_sec = self._env_float("AIC_GAZEBO_RL_ACTION_TIMEOUT_SEC", 30.0)
         ground_truth = self._env_bool("AIC_GAZEBO_RL_GROUND_TRUTH", False)
+        include_images = self._env_bool("AIC_GAZEBO_RL_INCLUDE_IMAGES", False)
 
         self.get_logger().info(
-            f"GazeboRLBridgePolicy starting task {task.id}; max_steps={max_steps}, dt={command_dt_sec}"
+            f"GazeboRLBridgePolicy starting task {task.id}; max_steps={max_steps}, "
+            f"dt={command_dt_sec}, include_images={include_images}"
         )
 
         try:
@@ -148,6 +150,7 @@ class GazeboRLBridgePolicy(Policy):
                         step_count=self._step_count,
                         tf_buffer=getattr(self._parent_node, "_tf_buffer", None),
                         ground_truth=ground_truth,
+                        include_images=include_images,
                         logger=lambda msg: self.get_logger().warn(msg),
                     )
                 except Exception as ex:

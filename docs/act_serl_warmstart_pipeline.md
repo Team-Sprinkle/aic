@@ -3,14 +3,14 @@
 This is the first minimal end-to-end imitation-learning path for AIC:
 
 ```text
-Gazebo CheatCode expert rollouts -> native LeRobot dataset -> ACT smoke training -> offline SERL smoke -> Isaac PPO/RSL-RL
+Gazebo CheatCode expert rollouts -> native LeRobot dataset -> ACT smoke training -> offline SERL -> Isaac online SERL/SAC
 ```
 
 It deliberately uses CheatCode-based trajectories only. It does not use VLM
 planner trajectories or Gazebo recovery rollouts. A minimal offline SERL-style
 pretraining smoke path is documented in
 [`offline_serl_pretrain.md`](offline_serl_pretrain.md), and the current Isaac
-PPO/RSL-RL Stage 5 path is documented in
+legacy PPO/RSL-RL Stage 5 smoke path is documented in
 [`isaac_rl_stage5.md`](isaac_rl_stage5.md).
 The repo has a `Team-Sprinkle/mip` dependency and `RunMIP` runtime policy
 integration, but no direct in-repo MIP ACT training wrapper for this flow; this
@@ -24,6 +24,8 @@ The runtime policy/control interfaces are left untouched. In particular,
 For the current Stage 1-4 hybrid cleanup commands and 2026-04-30 runtime
 results, see
 [`hybrid_stage1_to_4_nominal_warmstart.md`](hybrid_stage1_to_4_nominal_warmstart.md).
+The current ACT-aligned offline SERL path is the vision trainer documented in
+[`offline_serl_pretrain.md`](offline_serl_pretrain.md#vision-offline-serl).
 
 ## Generate Dataset Artifacts Without Gazebo
 
@@ -127,12 +129,22 @@ Use `--dry-run` to print the exact command first.
    `policy.py`.
 2. Collect Gazebo nominal expert trajectories using CheatCode/no-contact mode.
 3. Train ACT / BC warm-start policy on expert trajectories.
-4. Run minimal offline SERL pretraining on Gazebo expert data. Current
-   limitation: lowdim path only; ACT checkpoint loading transfers an output
-   action prior, not full transformer hidden layers.
-5. Train Isaac Lab online RL using PPO/RSL-RL for acceleration. Current
-   implementation: PPO/RSL-RL, not true off-policy SERL/SAC yet. Main additions:
-   richer domain randomization and optional insertion-aware rewards.
+4. Run offline SERL pretraining on Gazebo expert data. Two paths exist:
+   lowdim SERL remains available for lightweight smoke checks, and vision SERL
+   now uses the ACT-adapter actor as the primary compatible path:
+   `obs -> ACT -> a_ACT`, `state + a_ACT -> adapter -> delta`, and
+   `a = a_ACT + scale * delta`. On the nominal n10 dataset, the adapter path
+   loaded 153 compatible ACT trainable tensors, froze ACT by default, trained a
+   98,864-parameter zero-initialized adapter, and initialized 51,580,806 of
+   51,679,718 actor parameters from ACT (99.80860576677296% coverage).
+   Initial delta norm was 0.0; final step delta norm after 200 smoke steps was
+   1.6950193643569946 over the flattened 48D action chunk.
+5. Train Isaac Lab online RL using the same ACT-adapter actor with an
+   off-policy SERL/SAC loop. Current implementation is short-run capable: it
+   collects Isaac replay, updates twin critics plus the adapter actor, keeps ACT
+   frozen by default, and saves real checkpoints. PPO/RSL-RL remains implemented
+   as a smoke/baseline/backup path, but is not the primary compatible
+   hybrid-transfer path.
 6. Validate Isaac-trained checkpoint in instrumented Gazebo rollout mode.
 7. Classify Gazebo rollout outcomes:
    A. immediate nonsense/interface failure: debug adapter, do not spend recovery
@@ -150,6 +162,7 @@ Use `--dry-run` to print the exact command first.
 10. Repeat coarse Isaac <-> Gazebo loop.
 11. Final official Gazebo eval.
 
-Future work: true Isaac SERL/SAC replay-buffer training, full checkpoint
-transfer into architecture-compatible policies, and same-state Gazebo recovery
-automation.
+Future work: tune and scale Isaac SERL/SAC around the ACT-adapter actor and
+implement same-state Gazebo recovery automation. The PPO actor uses a different
+camera-feature-conditioned MLP architecture, so PPO is retained as a legacy
+smoke/baseline path rather than the main hybrid-transfer target.

@@ -177,6 +177,25 @@ def test_start_runs_stale_zenoh_cleanup_before_launch(monkeypatch, tmp_path):
         runner.processes.clear()
 
 
+def test_runner_env_can_request_bridge_images(tmp_path):
+    runner = GazeboRLRunner(
+        GazeboRLRunnerConfig(
+            workspace_dir=tmp_path,
+            include_images=True,
+        )
+    )
+
+    assert runner._env()["AIC_GAZEBO_RL_INCLUDE_IMAGES"] == "true"
+
+
+def test_runner_env_prefers_source_gazebo_rl_package(tmp_path):
+    runner = GazeboRLRunner(GazeboRLRunnerConfig(workspace_dir=tmp_path))
+
+    pythonpath = runner._env()["PYTHONPATH"].split(":")
+
+    assert pythonpath[0] == str(tmp_path / "aic_utils" / "gazebo_rl")
+
+
 def test_cleanup_stale_zenoh_kills_host_and_distrobox(monkeypatch):
     calls = []
 

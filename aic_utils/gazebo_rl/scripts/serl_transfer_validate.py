@@ -13,7 +13,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from gazebo_rl.gym_env import GazeboRLEnv
 from gazebo_rl.score_parser import score_from_scoring_yaml
-from gazebo_rl.serl_policy import OfflineSERLGazeboPolicy
+from gazebo_rl.serl_policy import ACTAdapterSERLGazeboPolicy, OfflineSERLGazeboPolicy
 from gazebo_rl.train import add_recording_args
 
 
@@ -22,7 +22,7 @@ def _bool(value: str) -> bool:
 
 
 def classify_rollout(score: dict, *, success_threshold: float) -> str:
-    total = score.get("total")
+    total = score.get("total_score", score.get("total"))
     if total is None:
         return "no_score"
     if float(total) >= success_threshold:
@@ -34,7 +34,21 @@ def run_validation(args: argparse.Namespace) -> dict:
     started = time.monotonic()
     output_dir = Path(args.output_dir).resolve()
     results_dir = output_dir / "results"
-    policy = OfflineSERLGazeboPolicy(args.checkpoint, device=args.device)
+    if args.policy_kind == "lowdim_serl":
+        policy = OfflineSERLGazeboPolicy(args.checkpoint, device=args.device)
+    elif args.policy_kind == "act_adapter_serl":
+        if args.act_torchscript is None:
+            raise ValueError("--act-torchscript is required for --policy-kind act_adapter_serl")
+        policy = ACTAdapterSERLGazeboPolicy(
+            args.checkpoint,
+            act_torchscript=args.act_torchscript,
+            device=args.device,
+            allow_zero_images=args.allow_zero_images,
+            adapter_delta_clip=args.adapter_delta_clip,
+            action_clip=args.action_clip,
+        )
+    else:
+        raise ValueError(f"Unsupported policy kind: {args.policy_kind}")
     env = GazeboRLEnv(
         workspace_dir=args.workspace_dir,
         engine_config=args.engine_config,
@@ -56,15 +70,25 @@ def run_validation(args: argparse.Namespace) -> dict:
         record_image_writer_processes=args.record_image_writer_processes,
         record_image_writer_threads_per_camera=args.record_image_writer_threads_per_camera,
         record_video_encoding_batch_size=args.record_video_encoding_batch_size,
+        include_images=args.include_images,
     )
     real_steps = 0
     total_reward = 0.0
     terminal_info = {}
+    action_norms: list[float] = []
+    delta_norms: list[float] = []
+    raw_delta_norms: list[float] = []
     try:
         obs, reset_info = env.reset()
         terminal_info["reset"] = reset_info
         for _ in range(args.max_steps):
             action = policy.act(obs)
+            action_norms.append(sum(float(x) * float(x) for x in action) ** 0.5)
+            components = getattr(policy, "last_action_components", {})
+            if "delta_action_norm" in components:
+                delta_norms.append(float(components["delta_action_norm"]))
+            if "raw_delta_action_norm" in components:
+                raw_delta_norms.append(float(components["raw_delta_action_norm"]))
             obs, reward, terminated, truncated, info = env.step(action)
             total_reward += float(reward)
             real_steps += 1
@@ -76,10 +100,18 @@ def run_validation(args: argparse.Namespace) -> dict:
 
     score = score_from_scoring_yaml(results_dir)
     summary = {
+        "policy_kind": args.policy_kind,
         "checkpoint": str(Path(args.checkpoint).resolve()),
+        "act_torchscript": str(Path(args.act_torchscript).resolve()) if args.act_torchscript else None,
+        "allow_zero_images": bool(args.allow_zero_images),
+        "include_images": bool(args.include_images),
         "elapsed_sec": time.monotonic() - started,
         "real_steps": real_steps,
         "total_reward": total_reward,
+        "action_norm_mean": sum(action_norms) / len(action_norms) if action_norms else None,
+        "action_norm_max": max(action_norms) if action_norms else None,
+        "adapter_delta_norm_mean": sum(delta_norms) / len(delta_norms) if delta_norms else None,
+        "raw_adapter_delta_norm_mean": sum(raw_delta_norms) / len(raw_delta_norms) if raw_delta_norms else None,
         "results_dir": str(results_dir),
         "score": score,
         "classification": classify_rollout(score, success_threshold=args.success_threshold),
@@ -95,6 +127,25 @@ def run_validation(args: argparse.Namespace) -> dict:
 def build_arg_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--checkpoint", required=True)
+    parser.add_argument("--policy-kind", choices=["lowdim_serl", "act_adapter_serl"], default="lowdim_serl")
+    parser.add_argument("--act-torchscript", default=None)
+    parser.add_argument(
+        "--include-images",
+        action=argparse.BooleanOptionalAction,
+        default=None,
+        help=(
+            "Send live RGB images through the Gazebo bridge IPC. Defaults to true "
+            "for ACT-adapter SERL unless --allow-zero-images is used, otherwise false."
+        ),
+    )
+    parser.add_argument(
+        "--allow-zero-images",
+        action="store_true",
+        help=(
+            "Allow ACT-adapter validation with zero RGB images when the Gazebo IPC observation is lowdim-only. "
+            "Use only for interface validation, not real transfer scoring."
+        ),
+    )
     parser.add_argument("--workspace-dir", default=".")
     parser.add_argument("--engine-config", default=None)
     parser.add_argument("--sim-distrobox", default=None)
@@ -105,6 +156,8 @@ def build_arg_parser() -> argparse.ArgumentParser:
     parser.add_argument("--per-trial-timeout-sec", type=float, default=900.0)
     parser.add_argument("--success-threshold", type=float, default=90.0)
     parser.add_argument("--device", default="cpu")
+    parser.add_argument("--adapter-delta-clip", type=float, default=0.05)
+    parser.add_argument("--action-clip", type=float, default=0.05)
     parser.add_argument("--output-dir", default="outputs/gazebo_rl/serl_transfer_validation/latest")
     add_recording_args(parser)
     return parser
@@ -112,6 +165,8 @@ def build_arg_parser() -> argparse.ArgumentParser:
 
 def main(argv: list[str] | None = None) -> None:
     args = build_arg_parser().parse_args(argv)
+    if args.include_images is None:
+        args.include_images = args.policy_kind == "act_adapter_serl" and not args.allow_zero_images
     print(json.dumps(run_validation(args), indent=2, sort_keys=True))
 
 
