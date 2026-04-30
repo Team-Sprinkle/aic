@@ -218,7 +218,23 @@ def _sample_pose_on_rail(
     }
 
 
-def _selected_rails(section: dict[str, Any], all_rails: list[str], count: int, rng: random.Random) -> list[str]:
+def _rail_from_target(target_spec: Any, prefix: str) -> str | None:
+    if target_spec in (None, "auto"):
+        return None
+    if isinstance(target_spec, int):
+        return f"{prefix}_{target_spec}"
+    text = str(target_spec)
+    return text if text.startswith(prefix) else f"{prefix}_{text.rsplit('_', 1)[-1]}"
+
+
+def _selected_rails(
+    section: dict[str, Any],
+    all_rails: list[str],
+    count: int,
+    rng: random.Random,
+    *,
+    required_rail: str | None = None,
+) -> list[str]:
     rails_spec = section.get("rails", all_rails)
     rails = list(rails_spec)
     unknown = sorted(set(rails) - set(all_rails))
@@ -226,17 +242,20 @@ def _selected_rails(section: dict[str, Any], all_rails: list[str], count: int, r
         raise ValueError(f"Unknown rails in request: {unknown}")
     if count > len(rails):
         raise ValueError(f"Requested count {count} exceeds available rails {rails}")
-    return sorted(rng.sample(rails, count))
+    if required_rail is None:
+        return sorted(rng.sample(rails, count))
+    if required_rail not in rails:
+        raise ValueError(f"Target rail {required_rail!r} must be among candidate rails {rails}")
+    if count < 1:
+        raise ValueError(f"Requested count {count} cannot include target rail {required_rail!r}")
+    remaining = [rail for rail in rails if rail != required_rail]
+    return sorted([required_rail, *rng.sample(remaining, count - 1)])
 
 
 def _target_index(target_spec: Any, present_rails: list[str], prefix: str, rng: random.Random) -> int:
-    if target_spec in (None, "auto"):
+    rail = _rail_from_target(target_spec, prefix)
+    if rail is None:
         rail = rng.choice(present_rails)
-    elif isinstance(target_spec, int):
-        rail = f"{prefix}_{target_spec}"
-    else:
-        text = str(target_spec)
-        rail = text if text.startswith(prefix) else f"{prefix}_{text.split('_')[-1]}"
     if rail not in present_rails:
         raise ValueError(f"Target {target_spec!r} must be among present rails {present_rails}")
     return int(rail.rsplit("_", 1)[1])
@@ -265,7 +284,8 @@ def _apply_nic_overrides(
     if "count" not in section and not required_exact:
         return None
     count = _as_count(sample_value(section.get("count"), None, rng), "scene.nic_cards.count")
-    present = _selected_rails(section, NIC_RAILS, count, rng)
+    required_rail = _rail_from_target(section.get("target_card"), "nic_rail")
+    present = _selected_rails(section, NIC_RAILS, count, rng, required_rail=required_rail)
     nic_defaults = profile_cfg["nic_pose"]
     for rail in NIC_RAILS:
         if rail not in present:
@@ -292,7 +312,8 @@ def _apply_sc_overrides(
     if "count" not in section and not required_exact:
         return None
     count = _as_count(sample_value(section.get("count"), None, rng), "scene.sc_ports.count")
-    present = _selected_rails(section, SC_RAILS, count, rng)
+    required_rail = _rail_from_target(section.get("target_port"), "sc_rail")
+    present = _selected_rails(section, SC_RAILS, count, rng, required_rail=required_rail)
     sc_defaults = profile_cfg["sc_pose"]
     for rail in SC_RAILS:
         if rail not in present:
@@ -466,16 +487,30 @@ def write_engine_configs(request: dict[str, Any], output_dir: Path, num_trials: 
     return out_path
 
 
-def run_command(cmd: list[str], dry_run: bool) -> dict[str, Any]:
+def run_command(cmd: list[str], dry_run: bool, *, check: bool = True) -> dict[str, Any]:
     rendered = " ".join(str(c) for c in cmd)
     if dry_run:
         print(f"[dry-run] {rendered}")
         return {"cmd": cmd, "skipped": True, "returncode": None}
     print(f"[run] {rendered}")
     result = subprocess.run(cmd, cwd=REPO_ROOT, check=False)
-    if result.returncode != 0:
+    if check and result.returncode != 0:
         raise RuntimeError(f"Command failed with exit code {result.returncode}: {rendered}")
     return {"cmd": cmd, "skipped": False, "returncode": result.returncode}
+
+
+def recording_outputs_complete(output_dir: Path, expected_trials: int) -> tuple[bool, str]:
+    score_csv = output_dir / "scores" / "score_summary.csv"
+    raw_info = output_dir / "raw_dataset" / "meta" / "info.json"
+    if not score_csv.exists():
+        return False, f"missing {score_csv}"
+    if not raw_info.exists():
+        return False, f"missing {raw_info}"
+    with score_csv.open("r", encoding="utf-8", newline="") as f:
+        attempted = sum(1 for _ in csv.DictReader(f))
+    if attempted < expected_trials:
+        return False, f"score_summary.csv has {attempted}/{expected_trials} trial rows"
+    return True, f"score_summary.csv has {attempted}/{expected_trials} trial rows"
 
 
 def count_selected(selection_report: Path) -> int | None:
@@ -536,7 +571,9 @@ def main() -> int:
     if args.dry_run or args.skip_recording:
         for child in ("raw_dataset", "accepted_dataset"):
             (output_dir / child).mkdir(parents=True, exist_ok=True)
-    shutil.copy2(args.request_yaml, output_dir / "request.yaml")
+    request_copy_path = output_dir / "request.yaml"
+    if args.request_yaml.resolve() != request_copy_path.resolve():
+        shutil.copy2(args.request_yaml, request_copy_path)
     engine_config_path = write_engine_configs(request, output_dir, num_trials)
 
     commands: list[dict[str, Any]] = []
@@ -566,7 +603,20 @@ def main() -> int:
         str(output_dir / "logs" / "per_trial_tmp"),
     ]
     if not args.skip_recording:
-        commands.append(run_command(recording_cmd, args.dry_run))
+        recording_result = run_command(recording_cmd, args.dry_run, check=False)
+        commands.append(recording_result)
+        if recording_result["returncode"] not in (0, None):
+            complete, reason = recording_outputs_complete(output_dir, num_trials)
+            if not complete:
+                rendered = " ".join(str(c) for c in recording_cmd)
+                raise RuntimeError(
+                    f"Recording command failed with exit code {recording_result['returncode']} "
+                    f"and recording outputs are incomplete ({reason}): {rendered}"
+                )
+            print(
+                "[warn] Recording command reported failed trials but completed all requested attempts; "
+                f"continuing to filtering ({reason})."
+            )
 
     filter_cmd = [
         "pixi",
