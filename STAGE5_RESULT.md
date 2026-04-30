@@ -32,6 +32,9 @@ RUN_NAME=stage5_helper_smoke OUTPUT_DIR=/workspace/isaaclab/aic/outputs/train/is
 AIC_ISAAC_DISABLE_CAMERAS=1 NUM_ENVS=64 MAX_ITERATIONS=1000 RUN_NAME=stage5_aic_lowdim_ppo \
   OUTPUT_DIR=/workspace/isaaclab/aic/outputs/train/stage5_aic_lowdim_ppo \
   aic/aic_utils/aic_isaac/aic_isaaclab/scripts/train_aic_isaaclab_ppo_smoke.sh
+CHECKPOINT=/workspace/isaaclab/aic/outputs/train/stage5_aic_lowdim_ppo/aic_task/2026-04-30_09-08-49_stage5_aic_lowdim_ppo/model_200.pt \
+  NUM_ENVS=4 NUM_EPISODES=4 MAX_STEPS=6500 AIC_ISAAC_DISABLE_CAMERAS=1 \
+  aic/aic_utils/aic_isaac/aic_isaaclab/scripts/eval_aic_isaaclab_ppo.sh
 ```
 
 ## Discovered task IDs
@@ -93,11 +96,37 @@ AIC_ISAAC_DISABLE_CAMERAS=1 NUM_ENVS=64 MAX_ITERATIONS=1000 RUN_NAME=stage5_aic_
   - `params/agent.yaml`
   - `params/env.yaml`
 
+## Checkpoint evaluation result
+
+- Evaluator: `aic/aic_utils/aic_isaac/aic_isaaclab/scripts/eval_aic_isaaclab_ppo.sh`
+- Checkpoint: `outputs/train/stage5_aic_lowdim_ppo/aic_task/2026-04-30_09-08-49_stage5_aic_lowdim_ppo/model_200.pt`
+- Settings:
+  - `TASK_ID=AIC-Task-v0`
+  - `NUM_ENVS=4`
+  - `NUM_EPISODES=4`
+  - `MAX_STEPS=6500`
+  - `SEED=1`
+  - `AIC_ISAAC_DISABLE_CAMERAS=1`
+- Result: success.
+- Completed episodes: `4`
+- Vector-env steps: `6000`
+- Average reward: `-180.4537`
+- Average episode length: `6000.0`
+- Reaching episode rate: `0.0`
+- Reaching step rate: `0.0`
+- Video recorded: `false`
+- Notes:
+  - The default AIC timeout is `200s`, which is about `6000` env steps.
+  - A shorter 1-env, 4096-step diagnostic confirmed checkpoint load and rollout but produced no completed episodes.
+  - Videos were not recorded because the validated EC2 path disables cameras; camera-enabled headless startup remains a separate limitation.
+
 ## Files changed
 
 - `aic_utils/aic_isaac/aic_isaaclab/source/aic_task/aic_task/tasks/__init__.py`
 - `aic_utils/aic_isaac/aic_isaaclab/source/aic_task/aic_task/tasks/manager_based/aic_task/aic_task_env_cfg.py`
+- `aic_utils/aic_isaac/aic_isaaclab/scripts/eval_aic_isaaclab_ppo.sh`
 - `aic_utils/aic_isaac/aic_isaaclab/scripts/install_aic_task.sh`
+- `aic_utils/aic_isaac/aic_isaaclab/scripts/rsl_rl/eval.py`
 - `aic_utils/aic_isaac/aic_isaaclab/scripts/smoke_import_aic_task.sh`
 - `aic_utils/aic_isaac/aic_isaaclab/scripts/smoke_aic_isaaclab_env.sh`
 - `aic_utils/aic_isaac/aic_isaaclab/scripts/train_aic_isaaclab_ppo_smoke.sh`

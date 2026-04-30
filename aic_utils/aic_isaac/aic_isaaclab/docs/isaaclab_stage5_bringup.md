@@ -60,6 +60,21 @@ Defaults:
 - `AIC_ISAAC_RANDOMIZATION_PROFILE=none`
 - `AIC_ISAAC_DISABLE_CAMERAS=1`
 
+## Checkpoint evaluation
+
+Use the finite RSL-RL evaluator for headless checkpoint metrics:
+
+```bash
+cd /workspace/isaaclab
+CHECKPOINT=/workspace/isaaclab/aic/outputs/train/stage5_aic_lowdim_ppo/aic_task/2026-04-30_09-08-49_stage5_aic_lowdim_ppo/model_200.pt \
+  NUM_ENVS=4 NUM_EPISODES=4 MAX_STEPS=6500 AIC_ISAAC_DISABLE_CAMERAS=1 \
+  aic/aic_utils/aic_isaac/aic_isaaclab/scripts/eval_aic_isaaclab_ppo.sh
+```
+
+The evaluator prints a single `AIC_EVAL_METRICS` JSON line with average reward,
+average episode length, reaching episode rate, reaching step rate, and video
+status. The default AIC episode timeout is `200s`, or about `6000` env steps.
+
 ## Known limitations
 
 - Full camera-enabled headless startup was slow/stalled on this EC2 run. Low-dimensional smoke mode is the validated path.
