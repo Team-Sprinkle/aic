@@ -39,9 +39,11 @@ def test_stage5_command_sets_randomization_env(tmp_path: Path) -> None:
     assert "--task" in cmd
     assert "AIC-Task-v0" in cmd
     assert "--headless" in cmd
+    assert "--enable_cameras" in cmd
     assert env["AIC_ISAAC_RANDOMIZATION_PROFILE"] == "heavy"
     assert env["AIC_ISAAC_INSERTION_DISTANCE_WEIGHT"] == "0.05"
     assert env["AIC_ISAAC_INSERTION_LATERAL_WEIGHT"] == "-0.01"
+    assert env["AIC_ISAAC_DISABLE_CAMERAS"] == "0"
     assert env["AIC_ISAAC_OUTPUT_DIR"] == str(tmp_path / "isaac")
 
 

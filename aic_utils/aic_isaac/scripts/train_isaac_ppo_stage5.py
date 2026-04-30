@@ -77,6 +77,7 @@ def build_command(args: argparse.Namespace) -> tuple[list[str], dict[str, str]]:
     ]
     if args.headless:
         cmd.append("--headless")
+    cmd.append("--enable_cameras")
     if args.device:
         cmd.extend(["--device", args.device])
     if args.resume:
@@ -91,6 +92,7 @@ def build_command(args: argparse.Namespace) -> tuple[list[str], dict[str, str]]:
     env["AIC_ISAAC_RANDOMIZATION_PROFILE"] = args.randomization_profile
     env["AIC_ISAAC_INSERTION_DISTANCE_WEIGHT"] = str(args.insertion_distance_weight)
     env["AIC_ISAAC_INSERTION_LATERAL_WEIGHT"] = str(args.insertion_lateral_weight)
+    env["AIC_ISAAC_DISABLE_CAMERAS"] = "0"
     env["AIC_ISAAC_OUTPUT_DIR"] = str(args.output_dir)
     return cmd, env
 

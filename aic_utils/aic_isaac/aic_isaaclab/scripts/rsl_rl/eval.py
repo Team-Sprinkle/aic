@@ -6,6 +6,7 @@
 """Launch Isaac Sim Simulator first."""
 
 import argparse
+import os
 import sys
 
 from isaaclab.app import AppLauncher
@@ -32,8 +33,21 @@ cli_args.add_rsl_rl_args(parser)
 AppLauncher.add_app_launcher_args(parser)
 args_cli, hydra_args = parser.parse_known_args()
 
-if args_cli.video:
-    args_cli.enable_cameras = True
+CAMERA_OBS_TERMS = {"center_rgb", "left_rgb", "right_rgb"}
+CAMERA_SENSOR_NAMES = {"center_camera", "left_camera", "right_camera"}
+
+
+def _is_truthy(value: str | None) -> bool:
+    return value is not None and value.lower() in {"1", "true", "yes"}
+
+
+if _is_truthy(os.environ.get("AIC_ISAAC_DISABLE_CAMERAS")):
+    raise RuntimeError(
+        "Camera images are required for AIC Isaac evaluation. "
+        "Unset AIC_ISAAC_DISABLE_CAMERAS or set it to 0/false."
+    )
+
+args_cli.enable_cameras = True
 
 sys.argv = [sys.argv[0]] + hydra_args
 
@@ -43,7 +57,6 @@ simulation_app = app_launcher.app
 """Rest everything follows."""
 
 import json
-import os
 
 import gymnasium as gym
 import torch
@@ -76,6 +89,46 @@ def _get_reaching_term(base_env):
         return None
 
 
+def _assert_camera_observations(env) -> None:
+    base_env = env.unwrapped
+    sensors = set(getattr(base_env.scene, "sensors", {}).keys())
+    missing_sensors = sorted(CAMERA_SENSOR_NAMES - sensors)
+    if missing_sensors:
+        raise RuntimeError(
+            "Camera sensors are required but were not created: "
+            f"{', '.join(missing_sensors)}"
+        )
+
+    obs_manager = getattr(base_env, "observation_manager", None)
+    active_terms = getattr(obs_manager, "active_terms", {})
+    policy_terms = list(active_terms.get("policy", []))
+    missing_terms = sorted(CAMERA_OBS_TERMS - set(policy_terms))
+    if missing_terms:
+        raise RuntimeError(
+            "Camera image observation terms are required but missing: "
+            f"{', '.join(missing_terms)}"
+        )
+
+    term_dims = getattr(obs_manager, "group_obs_term_dim", {}).get("policy", [])
+    for term_name in sorted(CAMERA_OBS_TERMS):
+        term_index = policy_terms.index(term_name)
+        term_dim = term_dims[term_index]
+        if not term_dim or any(dim <= 0 for dim in term_dim):
+            raise RuntimeError(
+                f"Camera image observation term '{term_name}' has invalid shape: {term_dim}"
+            )
+
+    try:
+        policy_obs = obs_manager.compute_group("policy", update_history=False)
+    except Exception as exc:
+        raise RuntimeError("Camera image observations failed to load.") from exc
+    if not isinstance(policy_obs, torch.Tensor) or policy_obs.shape[-1] < 3000:
+        raise RuntimeError(
+            "Camera image observations did not produce the expected policy tensor: "
+            f"{getattr(policy_obs, 'shape', type(policy_obs))}"
+        )
+
+
 @hydra_task_config(args_cli.task, args_cli.agent)
 def main(
     env_cfg: ManagerBasedRLEnvCfg | DirectRLEnvCfg | DirectMARLEnvCfg,
@@ -97,6 +150,7 @@ def main(
     env_cfg.log_dir = log_dir
 
     base_env = gym.make(args_cli.task, cfg=env_cfg, render_mode="rgb_array" if args_cli.video else None)
+    _assert_camera_observations(base_env)
 
     if isinstance(base_env.unwrapped, DirectMARLEnv):
         base_env = multi_agent_to_single_agent(base_env)

@@ -44,7 +44,9 @@ cd /workspace/isaaclab
 aic/aic_utils/aic_isaac/aic_isaaclab/scripts/smoke_aic_isaaclab_env.sh
 ```
 
-The smoke defaults to `AIC_ISAAC_DISABLE_CAMERAS=1` so it can run headless on EC2 without rendering extensions. This keeps low-dimensional policy observations and does not change the default task behavior.
+The smoke defaults to camera-enabled observations. If `AIC_ISAAC_DISABLE_CAMERAS`
+is set to `1`, the camera-required training and evaluation entry points fail
+instead of silently falling back to low-dimensional observations.
 
 ## Smoke PPO training
 
@@ -58,7 +60,7 @@ Defaults:
 - `NUM_ENVS=1`
 - `MAX_ITERATIONS=1`
 - `AIC_ISAAC_RANDOMIZATION_PROFILE=none`
-- `AIC_ISAAC_DISABLE_CAMERAS=1`
+- `AIC_ISAAC_DISABLE_CAMERAS=0`
 
 ## Checkpoint evaluation
 
@@ -67,7 +69,7 @@ Use the finite RSL-RL evaluator for headless checkpoint metrics:
 ```bash
 cd /workspace/isaaclab
 CHECKPOINT=/workspace/isaaclab/aic/outputs/train/stage5_aic_lowdim_ppo/aic_task/2026-04-30_09-08-49_stage5_aic_lowdim_ppo/model_200.pt \
-  NUM_ENVS=4 NUM_EPISODES=4 MAX_STEPS=6500 AIC_ISAAC_DISABLE_CAMERAS=1 \
+  NUM_ENVS=4 NUM_EPISODES=4 MAX_STEPS=6500 \
   aic/aic_utils/aic_isaac/aic_isaaclab/scripts/eval_aic_isaaclab_ppo.sh
 ```
 
@@ -77,10 +79,9 @@ status. The default AIC episode timeout is `200s`, or about `6000` env steps.
 
 ## Known limitations
 
-- Full camera-enabled headless startup was slow/stalled on this EC2 run. Low-dimensional smoke mode is the validated path.
-- Isaac logs warn that referenced GLB visuals in the USD cannot be opened as USD-format assets. The environment and lowdim PPO smoke still run.
+- Isaac logs warn that referenced GLB visuals in the USD cannot be opened as USD-format assets. The environment and camera PPO smoke still run.
 - IsaacLab `v2.3.2` image build can miss `isaaclab` because `flatdict==4.0.1` fails under isolated build dependencies; the helper script repairs this in-container.
 
 ## Next steps
 
-Use the smoke command above for readiness checks. For longer PPO runs, increase `NUM_ENVS`, `MAX_ITERATIONS`, and choose `AIC_ISAAC_RANDOMIZATION_PROFILE=light` or `heavy` after confirming the lowdim smoke remains stable.
+Use the smoke command above for readiness checks. For longer PPO runs, increase `NUM_ENVS`, `MAX_ITERATIONS`, and choose `AIC_ISAAC_RANDOMIZATION_PROFILE=light` or `heavy` after confirming the camera smoke remains stable.

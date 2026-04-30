@@ -7,7 +7,7 @@ TASK_ID="${TASK_ID:-AIC-Task-v0}"
 NUM_ENVS="${NUM_ENVS:-1}"
 DEVICE="${DEVICE:-cuda:0}"
 export AIC_ISAAC_RANDOMIZATION_PROFILE="${AIC_ISAAC_RANDOMIZATION_PROFILE:-none}"
-export AIC_ISAAC_DISABLE_CAMERAS="${AIC_ISAAC_DISABLE_CAMERAS:-1}"
+export AIC_ISAAC_DISABLE_CAMERAS="${AIC_ISAAC_DISABLE_CAMERAS:-0}"
 
 PYTHONUNBUFFERED=1 ./isaaclab.sh -p - "$TASK_ID" "$NUM_ENVS" "$DEVICE" <<'PY'
 import sys
@@ -18,7 +18,7 @@ task_id = sys.argv[1]
 num_envs = int(sys.argv[2])
 device = sys.argv[3]
 
-app_launcher = AppLauncher(headless=True)
+app_launcher = AppLauncher(headless=True, enable_cameras=True)
 simulation_app = app_launcher.app
 status = 1
 try:

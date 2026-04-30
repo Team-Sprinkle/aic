@@ -16,7 +16,7 @@ if [[ -z "${CHECKPOINT}" ]]; then
   exit 2
 fi
 
-export AIC_ISAAC_DISABLE_CAMERAS="${AIC_ISAAC_DISABLE_CAMERAS:-1}"
+export AIC_ISAAC_DISABLE_CAMERAS="${AIC_ISAAC_DISABLE_CAMERAS:-0}"
 
 cd "${ISAACLAB_ROOT}"
 
@@ -29,6 +29,7 @@ args=(
   --max_steps "${MAX_STEPS}"
   --seed "${SEED}"
   --checkpoint "${CHECKPOINT}"
+  --enable_cameras
 )
 
 if [[ "${VIDEO}" == "1" || "${VIDEO}" == "true" ]]; then
