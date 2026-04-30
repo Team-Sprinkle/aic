@@ -203,7 +203,8 @@ def main(
         agent_cfg.seed = seed
 
     # specify directory for logging experiments
-    log_root_path = os.path.join("logs", "rsl_rl", agent_cfg.experiment_name)
+    log_root_base = os.environ.get("AIC_ISAAC_OUTPUT_DIR", os.path.join("logs", "rsl_rl"))
+    log_root_path = os.path.join(log_root_base, agent_cfg.experiment_name)
     log_root_path = os.path.abspath(log_root_path)
     print(f"[INFO] Logging experiment in directory: {log_root_path}")
     # specify directory for logging runs: {time-stamp}_{run_name}

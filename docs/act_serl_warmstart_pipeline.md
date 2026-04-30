@@ -3,13 +3,15 @@
 This is the first minimal end-to-end imitation-learning path for AIC:
 
 ```text
-Gazebo CheatCode expert rollouts -> native LeRobot dataset -> ACT smoke training
+Gazebo CheatCode expert rollouts -> native LeRobot dataset -> ACT smoke training -> offline SERL smoke -> Isaac PPO/RSL-RL
 ```
 
 It deliberately uses CheatCode-based trajectories only. It does not use VLM
-planner trajectories, Isaac Lab RL, or Gazebo recovery rollouts. A minimal
-offline SERL-style pretraining smoke path is documented separately in
-[`offline_serl_pretrain.md`](offline_serl_pretrain.md).
+planner trajectories or Gazebo recovery rollouts. A minimal offline SERL-style
+pretraining smoke path is documented in
+[`offline_serl_pretrain.md`](offline_serl_pretrain.md), and the current Isaac
+PPO/RSL-RL Stage 5 path is documented in
+[`isaac_rl_stage5.md`](isaac_rl_stage5.md).
 The repo has a `Team-Sprinkle/mip` dependency and `RunMIP` runtime policy
 integration, but no direct in-repo MIP ACT training wrapper for this flow; this
 smoke path uses LeRobot training directly.
@@ -94,3 +96,35 @@ Use `--dry-run` to print the exact command first.
   narrowing `policy.py`.
 - Reuse the same schema inspector and training wrapper before training on larger
   mixed datasets.
+
+## Corrected Warm-Start Loop
+
+1. Standardize obs/action inspection around datasets without narrowing
+   `policy.py`.
+2. Collect Gazebo nominal expert trajectories using CheatCode/no-contact mode.
+3. Train ACT / BC warm-start policy on expert trajectories.
+4. Run minimal offline SERL pretraining on Gazebo expert data. Current
+   limitation: lowdim smoke path only; ACT checkpoint loading is not implemented
+   yet.
+5. Train Isaac Lab online RL using PPO/RSL-RL for acceleration. Current
+   implementation: PPO/RSL-RL, not true off-policy SERL/SAC yet. Main additions:
+   richer domain randomization and optional insertion-aware rewards.
+6. Validate Isaac-trained checkpoint in instrumented Gazebo rollout mode.
+7. Classify Gazebo rollout outcomes:
+   A. immediate nonsense/interface failure: debug adapter, do not spend recovery
+      budget.
+   B. near-port contact/insertion failure: save failed policy prefix to
+      `online_buffer`; oracle takes over from current state; save recovery
+      suffix to `demo_buffer_recovery`.
+   C. wandering/timeout: save failed rollout to `online_buffer` only.
+   D. success: save rollout/checkpoint candidate.
+   E. unrecoverable failure: save prefix with failure penalty; no recovery demo
+      unless recovery succeeds.
+8. Offline refresh: critic/value training on all data; BC only on nominal +
+   oracle recovery demos.
+9. Update Isaac randomization based on Gazebo failure modes.
+10. Repeat coarse Isaac <-> Gazebo loop.
+11. Final official Gazebo eval.
+
+Future work: true Isaac SERL/SAC replay-buffer training, ACT checkpoint loading
+into compatible policies, and Gazebo recovery automation.

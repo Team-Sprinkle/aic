@@ -72,6 +72,9 @@ outputs/train/offline_serl_smoke/metrics.jsonl
 
 The checkpoint contains the actor, twin critics, target critics, optimizer
 state, dataset schema summary, training config, and normalization statistics.
+It is a metadata-compatible handoff artifact for future bridge work, but Stage 5
+currently trains Isaac Lab PPO/RSL-RL from scratch or from RSL-RL-native
+checkpoints; see `isaac_rl_stage5.md`.
 
 ## Current Limitations
 
