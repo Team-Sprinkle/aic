@@ -108,12 +108,92 @@ def test_exact_nic_count_behavior(tmp_path: Path) -> None:
     assert sum(1 for rail in gtd.NIC_RAILS if board[rail]["entity_present"]) == 3
 
 
+def test_explicit_target_card_is_present_with_single_nic(tmp_path: Path) -> None:
+    request = base_request(tmp_path)
+    request["scene"]["nic_cards"] = {
+        "count": 1,
+        "rails": gtd.NIC_RAILS,
+        "target_card": 1,
+        "target_port": "sfp_port_1",
+    }
+    trial = next(iter(gtd.generate_trials(request, 1).values()))
+    board = trial["scene"]["task_board"]
+    assert board["nic_rail_1"]["entity_present"]
+    assert sum(1 for rail in gtd.NIC_RAILS if board[rail]["entity_present"]) == 1
+    assert trial["tasks"]["task_1"]["target_module_name"] == "nic_card_mount_1"
+    assert trial["tasks"]["task_1"]["port_name"] == "sfp_port_1"
+
+
+def test_explicit_target_card_is_present_with_mixed_nic_counts(tmp_path: Path) -> None:
+    request = base_request(tmp_path)
+    request["generation"]["seed"] = 11
+    request["scene"]["nic_cards"] = {
+        "count": [1, 2, 3],
+        "rails": gtd.NIC_RAILS,
+        "target_card": 1,
+    }
+    trials = gtd.generate_trials(request, 20)
+    seen_counts = set()
+    for trial in trials.values():
+        board = trial["scene"]["task_board"]
+        present_count = sum(1 for rail in gtd.NIC_RAILS if board[rail]["entity_present"])
+        seen_counts.add(present_count)
+        assert board["nic_rail_1"]["entity_present"]
+        assert trial["tasks"]["task_1"]["target_module_name"] == "nic_card_mount_1"
+    assert seen_counts <= {1, 2, 3}
+    assert len(seen_counts) > 1
+
+
 def test_exact_sc_count_behavior(tmp_path: Path) -> None:
     request = base_request(tmp_path, task_family="sc_to_sc")
     request["scene"]["sc_ports"] = {"count": 1}
     trial = next(iter(gtd.generate_trials(request, 1).values()))
     board = trial["scene"]["task_board"]
     assert sum(1 for rail in gtd.SC_RAILS if board[rail]["entity_present"]) == 1
+
+
+def test_recording_outputs_complete_accepts_failed_trial_rows(tmp_path: Path) -> None:
+    output_dir = tmp_path / "run"
+    (output_dir / "raw_dataset" / "meta").mkdir(parents=True)
+    (output_dir / "raw_dataset" / "meta" / "info.json").write_text("{}", encoding="utf-8")
+    (output_dir / "scores").mkdir()
+    (output_dir / "scores" / "score_summary.csv").write_text(
+        "\n".join(
+            [
+                "run_index,trial_id,status,total_score,scoring_yaml",
+                "1,trial_000001,OK,95,path/to/scoring.yaml",
+                "2,trial_000002,FAILED,0,path/to/scoring.yaml",
+                "3,trial_000003,OK,94,path/to/scoring.yaml",
+            ]
+        ),
+        encoding="utf-8",
+    )
+
+    complete, reason = gtd.recording_outputs_complete(output_dir, expected_trials=3)
+
+    assert complete
+    assert "3/3" in reason
+
+
+def test_recording_outputs_complete_rejects_incomplete_score_summary(tmp_path: Path) -> None:
+    output_dir = tmp_path / "run"
+    (output_dir / "raw_dataset" / "meta").mkdir(parents=True)
+    (output_dir / "raw_dataset" / "meta" / "info.json").write_text("{}", encoding="utf-8")
+    (output_dir / "scores").mkdir()
+    (output_dir / "scores" / "score_summary.csv").write_text(
+        "\n".join(
+            [
+                "run_index,trial_id,status,total_score,scoring_yaml",
+                "1,trial_000001,OK,95,path/to/scoring.yaml",
+            ]
+        ),
+        encoding="utf-8",
+    )
+
+    complete, reason = gtd.recording_outputs_complete(output_dir, expected_trials=3)
+
+    assert not complete
+    assert "1/3" in reason
 
 
 def test_dry_run_creates_expected_files(tmp_path: Path) -> None:
