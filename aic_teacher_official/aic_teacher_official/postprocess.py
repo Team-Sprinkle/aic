@@ -200,6 +200,17 @@ def postprocess_piecewise_trajectory(
                     ),
                 ),
                 tcp_velocity=velocity.tolist(),
+                joint_names=end.joint_names,
+                joint_positions=_interpolate_optional_vector(
+                    start.joint_positions,
+                    end.joint_positions,
+                    raw,
+                ),
+                joint_velocities=_interpolate_optional_vector(
+                    start.joint_velocities,
+                    end.joint_velocities,
+                    raw,
+                ),
                 gripper_state=end.gripper_state,
                 cable_state=end.cable_state,
                 port_state=end.port_state,
@@ -249,6 +260,18 @@ def postprocess_piecewise_trajectory(
         },
     )
     return SmoothTrajectory(waypoints=smooth, metadata=metadata)
+
+
+def _interpolate_optional_vector(
+    start: list[float] | None,
+    end: list[float] | None,
+    fraction: float,
+) -> list[float] | None:
+    if start is None or end is None or len(start) != len(end):
+        return end
+    left = np.asarray(start, dtype=np.float64)
+    right = np.asarray(end, dtype=np.float64)
+    return (left + float(np.clip(fraction, 0.0, 1.0)) * (right - left)).tolist()
 
 
 def postprocess_file(input_path: str | Path, output_path: str | Path, sample_dt: float) -> SmoothTrajectory:

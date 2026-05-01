@@ -1,0 +1,20 @@
+[package.build.backend]
+name = "pixi-build-ros"
+version = "==0.3.3.20260113.c8b6a54"
+channels = [
+    "https://prefix.dev/pixi-build-backends",
+    "robostack-kilted",
+    "conda-forge",
+]
+
+[package.host-dependencies]
+ros-kilted-aic-assets = { path = "../aic_assets/package.xml" }
+ros-kilted-moveit-py = "*"
+ros-kilted-moveit-planners-ompl = "*"
+ros-kilted-moveit-ros-move-group = "*"
+
+[package.build-dependencies]
+ros-kilted-aic-assets = { path = "../aic_assets/package.xml" }
+ros-kilted-moveit-py = "*"
+ros-kilted-moveit-planners-ompl = "*"
+ros-kilted-moveit-ros-move-group = "*"

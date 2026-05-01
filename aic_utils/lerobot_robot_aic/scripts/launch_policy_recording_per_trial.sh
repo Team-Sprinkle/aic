@@ -28,6 +28,8 @@ GAZEBO_GUI="${GAZEBO_GUI:-true}"
 LAUNCH_RVIZ="${LAUNCH_RVIZ:-true}"
 RESULTS_ROOT="${RESULTS_ROOT:-${WORKSPACE_DIR}/outputs/aic_results_per_trial}"
 REMOVE_BAG_DATA="${REMOVE_BAG_DATA:-true}"
+LAUNCH_MOVEIT="${LAUNCH_MOVEIT:-false}"
+MOVEIT_LAUNCH_FILE="${MOVEIT_LAUNCH_FILE:-aic_moveit_config moveit.launch.py}"
 
 usage() {
   cat <<EOF_USAGE
@@ -80,6 +82,11 @@ Options:
                                  (default: ${RESULTS_ROOT})
   --remove-bag-data BOOL         Remove per-trial scoring bag_* dirs after each trial
                                  (default: ${REMOVE_BAG_DATA})
+  --launch-moveit BOOL           Start MoveIt alongside simulation for planner policies
+                                 (default: ${LAUNCH_MOVEIT})
+  --moveit-launch-file "PKG FILE"
+                                 ros2 launch target for MoveIt
+                                 (default: "${MOVEIT_LAUNCH_FILE}")
   -h, --help                     Show this help text
 
 Environment variable equivalents:
@@ -90,7 +97,8 @@ Environment variable equivalents:
   SAVE_FAILED_EPISODES, PER_TRIAL_TIMEOUT_SEC, STARTUP_DELAY_SEC,
   PAUSE_BETWEEN_TRIALS_SEC, CONTINUE_ON_FAILURE, PUSH_TO_HUB, TMP_DIR,
   RECORDER_DRAIN_SEC, REQUIRE_RECORDER_SAVE_LOG, SUDO_KEEPALIVE,
-  GAZEBO_GUI, LAUNCH_RVIZ, RESULTS_ROOT, REMOVE_BAG_DATA
+  GAZEBO_GUI, LAUNCH_RVIZ, RESULTS_ROOT, REMOVE_BAG_DATA,
+  LAUNCH_MOVEIT, MOVEIT_LAUNCH_FILE
 EOF_USAGE
 }
 
@@ -120,6 +128,8 @@ while [[ $# -gt 0 ]]; do
     --launch-rviz) LAUNCH_RVIZ="$2"; shift 2 ;;
     --results-root) RESULTS_ROOT="$2"; shift 2 ;;
     --remove-bag-data) REMOVE_BAG_DATA="$2"; shift 2 ;;
+    --launch-moveit) LAUNCH_MOVEIT="$2"; shift 2 ;;
+    --moveit-launch-file) MOVEIT_LAUNCH_FILE="$2"; shift 2 ;;
     -h|--help) usage; exit 0 ;;
     *)
       echo "Unknown option: $1" >&2
@@ -172,6 +182,7 @@ bool_or_die "${SUDO_KEEPALIVE}" "--sudo-keepalive"
 bool_or_die "${GAZEBO_GUI}" "--gazebo-gui"
 bool_or_die "${LAUNCH_RVIZ}" "--launch-rviz"
 bool_or_die "${REMOVE_BAG_DATA}" "--remove-bag-data"
+bool_or_die "${LAUNCH_MOVEIT}" "--launch-moveit"
 int_or_die "${PER_TRIAL_TIMEOUT_SEC}" "--per-trial-timeout-sec"
 int_or_die "${STARTUP_DELAY_SEC}" "--startup-delay-sec"
 int_or_die "${PAUSE_BETWEEN_TRIALS_SEC}" "--pause-between-trials-sec"
@@ -287,26 +298,100 @@ terminate_process() {
 }
 
 cleanup_stale_sim_router() {
-  # echo "  preflight: cleaning stale rmw_zenohd in distrobox '${SIM_DISTROBOX_NAME}'..."
-  # Best-effort host cleanup in case rmw_zenohd is bound in host namespace.
-  pkill -f rmw_zenohd >/dev/null 2>&1 || true
-  pkill -f "rmw_zenoh_cpp rmw_zenohd" >/dev/null 2>&1 || true
+  echo "  preflight: cleaning stale ROS/Gazebo processes in distrobox '${SIM_DISTROBOX_NAME}'..."
+  cleanup_host_sim_processes "preflight"
+  cleanup_sim_container_processes "preflight"
+  cleanup_host_sim_processes "preflight"
+  sleep 2
+}
 
-  sleep 10
+cleanup_host_sim_processes() {
+  local phase="${1:-cleanup}"
+  local patterns=(
+    "ros2 launch aic_bringup"
+    "aic_gz_bringup.launch.py"
+    "/opt/ros/kilted/lib/rclcpp_components/component_container"
+    "/ws_aic/install/lib/aic_engine/aic_engine"
+    "/ws_aic/install/lib/aic_adapter/aic_adapter"
+    "/ws_aic/install/lib/controller_manager/ros2_control_node"
+    "/opt/ros/kilted/lib/controller_manager/spawner"
+    "/opt/ros/kilted/lib/robot_state_publisher/robot_state_publisher"
+    "/opt/ros/kilted/lib/topic_tools/relay"
+    "/opt/ros/kilted/lib/tf2_ros/static_transform_publisher"
+    "/opt/ros/kilted/lib/moveit_ros_move_group/move_group"
+    "gz sim"
+    "gzserver"
+    "ruby.*gz sim"
+    "rmw_zenoh_cpp rmw_zenohd"
+    "/opt/ros/kilted/lib/rmw_zenoh_cpp/rmw_zenohd"
+  )
+  local signal_name pattern pids remaining
+  for signal_name in INT TERM KILL; do
+    for pattern in "${patterns[@]}"; do
+      pkill "-${signal_name}" -f "${pattern}" >/dev/null 2>&1 || true
+      pids="$(pgrep -f "${pattern}" | awk -v self="$$" '$1 != self' || true)"
+      if [[ -n "${pids}" ]]; then
+        kill "-${signal_name}" ${pids} >/dev/null 2>&1 || true
+      fi
+    done
+    sleep 1
+  done
 
-  # local attempt
-  # for attempt in {1..5}; do
-  #   if (
-  #     export DBX_CONTAINER_MANAGER=docker
-  #     distrobox enter -r "${SIM_DISTROBOX_NAME}" -- bash -lc "pkill -f rmw_zenohd >/dev/null 2>&1 || true; pkill -f 'rmw_zenoh_cpp rmw_zenohd' >/dev/null 2>&1 || true"
-  #   ); then
-  #     return 0
-  #   fi
-  #   echo "  preflight: distrobox cleanup attempt ${attempt}/5 failed; retrying..."
-  #   sleep 2
-  # done
+  remaining=0
+  for pattern in "${patterns[@]}"; do
+    if pgrep -f "${pattern}" >/dev/null 2>&1; then
+      remaining=$((remaining + 1))
+    fi
+  done
+  if [[ "${remaining}" -gt 0 ]]; then
+    echo "  ${phase}: warning: ${remaining} stale host ROS/Gazebo process pattern(s) still matched after cleanup" >&2
+  fi
+}
 
-  # echo "  preflight: WARNING unable to run distrobox cleanup after retries; stale router may remain."
+cleanup_sim_container_processes() {
+  local phase="${1:-cleanup}"
+  local cleanup_script
+  cleanup_script=$(cat <<'EOF_CLEANUP'
+patterns=(
+  "ros2 launch aic_bringup"
+  "aic_gz_bringup.launch.py"
+  "/opt/ros/kilted/lib/rclcpp_components/component_container"
+  "/ws_aic/install/lib/aic_engine/aic_engine"
+  "/ws_aic/install/lib/controller_manager/ros2_control_node"
+  "controller_manager/spawner"
+  "gz sim"
+  "gzserver"
+  "ruby.*gz sim"
+  "robot_state_publisher"
+  "aic_adapter"
+  "topic_tools"
+  "static_transform_publisher"
+  "rmw_zenoh_cpp rmw_zenohd"
+  "/opt/ros/kilted/lib/rmw_zenoh_cpp/rmw_zenohd"
+)
+for signal_name in INT TERM KILL; do
+  for pattern in "${patterns[@]}"; do
+    pids="$(pgrep -f "${pattern}" || true)"
+    if [[ -n "${pids}" ]]; then
+      kill "-${signal_name}" ${pids} >/dev/null 2>&1 || true
+    fi
+  done
+  sleep 1
+done
+EOF_CLEANUP
+)
+
+  if command -v docker >/dev/null 2>&1 && docker ps --format '{{.Names}}' | grep -Fxq "${SIM_DISTROBOX_NAME}"; then
+    docker exec "${SIM_DISTROBOX_NAME}" bash -lc "${cleanup_script}" >/dev/null 2>&1 || true
+    return
+  fi
+
+  if command -v distrobox >/dev/null 2>&1; then
+    (
+      export DBX_CONTAINER_MANAGER=docker
+      distrobox enter -r --no-tty "${SIM_DISTROBOX_NAME}" -- bash -lc "${cleanup_script}"
+    ) >/dev/null 2>&1 || echo "  ${phase}: warning: unable to clean distrobox '${SIM_DISTROBOX_NAME}'" >&2
+  fi
 }
 
 cleanup_trial_bags() {
@@ -359,7 +444,8 @@ echo "  sudo keepalive: ${SUDO_KEEPALIVE}"
     echo "  teacher trajectory: ${AIC_OFFICIAL_TEACHER_TRAJECTORY}"
     echo "  teacher action mode: ${AIC_OFFICIAL_TEACHER_ACTION_MODE}"
   fi
-echo "  launch rviz: ${LAUNCH_RVIZ}"
+  echo "  launch rviz: ${LAUNCH_RVIZ}"
+  echo "  launch moveit: ${LAUNCH_MOVEIT}"
 echo "  per-trial scoring results root: ${RESULTS_ROOT}"
 echo "  remove bag data: ${REMOVE_BAG_DATA}"
 
@@ -406,6 +492,34 @@ for TRIAL_ID in "${TRIAL_IDS[@]}"; do
 
   sleep "${STARTUP_DELAY_SEC}"
 
+  MOVEIT_PID=""
+  if [[ "${LAUNCH_MOVEIT}" == "true" ]]; then
+    MOVEIT_LOG="${LOG_PREFIX}_moveit.log"
+    (
+      cd "${WORKSPACE_DIR}"
+      pixi run ros2 launch ${MOVEIT_LAUNCH_FILE}
+    ) >"${MOVEIT_LOG}" 2>&1 &
+    MOVEIT_PID=$!
+    echo "  moveit log: ${MOVEIT_LOG}"
+    sleep 5
+  fi
+
+  (
+    cd "${WORKSPACE_DIR}"
+    if [[ -n "${AIC_OFFICIAL_TEACHER_TRAJECTORY}" ]]; then
+      export AIC_OFFICIAL_TEACHER_TRAJECTORY
+      export AIC_OFFICIAL_TEACHER_ACTION_MODE
+    fi
+    pixi run env "PYTHONPATH=${WORKSPACE_DIR}/aic_teacher_official:${PYTHONPATH:-}" \
+      ros2 run aic_model aic_model --ros-args -p use_sim_time:=true -p "policy:=${POLICY_CLASS}"
+  ) >"${POLICY_LOG}" 2>&1 &
+  POLICY_PID=$!
+
+  # Start the control policy before the LeRobot sidecar. The AIC engine has a
+  # finite participant-model discovery window, while the recorder can spend
+  # time building/updating the pixi package cache before it starts spinning.
+  sleep 1
+
   RECORDER_CMD=(
     pixi run aic-policy-recorder
     "--dataset.repo_id=${DATASET_REPO_ID}"
@@ -430,16 +544,6 @@ for TRIAL_ID in "${TRIAL_IDS[@]}"; do
     "${RECORDER_CMD[@]}"
   ) >"${RECORDER_LOG}" 2>&1 &
   RECORDER_PID=$!
-
-  (
-    cd "${WORKSPACE_DIR}"
-    if [[ -n "${AIC_OFFICIAL_TEACHER_TRAJECTORY}" ]]; then
-      export AIC_OFFICIAL_TEACHER_TRAJECTORY
-      export AIC_OFFICIAL_TEACHER_ACTION_MODE
-    fi
-    pixi run ros2 run aic_model aic_model --ros-args -p use_sim_time:=true -p "policy:=${POLICY_CLASS}"
-  ) >"${POLICY_LOG}" 2>&1 &
-  POLICY_PID=$!
 
   START_EPOCH="$(date +%s)"
   SIM_EXIT_EPOCH=0
@@ -479,8 +583,13 @@ for TRIAL_ID in "${TRIAL_IDS[@]}"; do
   if kill -0 "${SIM_PID}" >/dev/null 2>&1; then
     terminate_process "${SIM_PID}" "simulation"
   fi
+  cleanup_sim_container_processes "teardown"
+  cleanup_host_sim_processes "teardown"
   if kill -0 "${POLICY_PID}" >/dev/null 2>&1; then
     terminate_process "${POLICY_PID}" "policy"
+  fi
+  if [[ -n "${MOVEIT_PID}" ]] && kill -0 "${MOVEIT_PID}" >/dev/null 2>&1; then
+    terminate_process "${MOVEIT_PID}" "moveit"
   fi
   if kill -0 "${RECORDER_PID}" >/dev/null 2>&1; then
     terminate_process "${RECORDER_PID}" "recorder"
@@ -490,6 +599,10 @@ for TRIAL_ID in "${TRIAL_IDS[@]}"; do
   if ! wait "${SIM_PID}"; then SIM_EXIT=$?; fi
   POLICY_EXIT=0
   if ! wait "${POLICY_PID}"; then POLICY_EXIT=$?; fi
+  MOVEIT_EXIT=0
+  if [[ -n "${MOVEIT_PID}" ]]; then
+    if ! wait "${MOVEIT_PID}"; then MOVEIT_EXIT=$?; fi
+  fi
   RECORDER_EXIT=0
   if ! wait "${RECORDER_PID}"; then RECORDER_EXIT=$?; fi
 
@@ -525,6 +638,7 @@ for TRIAL_ID in "${TRIAL_IDS[@]}"; do
     FAILURES=$((FAILURES + 1))
     echo "  result: FAILED"
     echo "  exit codes: sim=${SIM_EXIT}, policy=${POLICY_EXIT}, recorder=${RECORDER_EXIT}"
+    if [[ -n "${MOVEIT_PID}" ]]; then echo "  moveit exit code: ${MOVEIT_EXIT}"; fi
     echo "  inspect logs: ${SIM_LOG}"
     echo "${RUN_INDEX},${TRIAL_ID},FAILED,${TRIAL_TOTAL_SCORE},${SCORING_FILE}" >> "${SCORE_SUMMARY_CSV}"
     if [[ "${CONTINUE_ON_FAILURE}" != "true" ]]; then
@@ -534,6 +648,7 @@ for TRIAL_ID in "${TRIAL_IDS[@]}"; do
   else
     echo "  result: OK"
     echo "  exit codes: sim=${SIM_EXIT}, policy=${POLICY_EXIT}, recorder=${RECORDER_EXIT}"
+    if [[ -n "${MOVEIT_PID}" ]]; then echo "  moveit exit code: ${MOVEIT_EXIT}"; fi
     echo "${RUN_INDEX},${TRIAL_ID},OK,${TRIAL_TOTAL_SCORE},${SCORING_FILE}" >> "${SCORE_SUMMARY_CSV}"
   fi
 

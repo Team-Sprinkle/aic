@@ -69,6 +69,9 @@ class TrajectoryWaypoint:
     phase: PhaseLabel
     source: SourceLabel
     tcp_velocity: list[float] | None = None
+    joint_names: list[str] | None = None
+    joint_positions: list[float] | None = None
+    joint_velocities: list[float] | None = None
     gripper_state: dict[str, Any] | None = None
     cable_state: dict[str, Any] | None = None
     port_state: dict[str, Any] | None = None
@@ -77,6 +80,11 @@ class TrajectoryWaypoint:
     def __post_init__(self) -> None:
         if self.tcp_velocity is not None and len(self.tcp_velocity) != 3:
             raise ValueError("tcp_velocity must contain [vx, vy, vz]")
+        if self.joint_positions is not None:
+            if self.joint_names is not None and len(self.joint_positions) != len(self.joint_names):
+                raise ValueError("joint_positions length must match joint_names")
+            if self.joint_velocities is not None and len(self.joint_velocities) != len(self.joint_positions):
+                raise ValueError("joint_velocities length must match joint_positions")
 
     @classmethod
     def from_dict(cls, data: dict[str, Any]) -> "TrajectoryWaypoint":
@@ -86,6 +94,21 @@ class TrajectoryWaypoint:
             tcp_velocity=(
                 [float(v) for v in data["tcp_velocity"]]
                 if data.get("tcp_velocity") is not None
+                else None
+            ),
+            joint_names=(
+                [str(v) for v in data["joint_names"]]
+                if data.get("joint_names") is not None
+                else None
+            ),
+            joint_positions=(
+                [float(v) for v in data["joint_positions"]]
+                if data.get("joint_positions") is not None
+                else None
+            ),
+            joint_velocities=(
+                [float(v) for v in data["joint_velocities"]]
+                if data.get("joint_velocities") is not None
                 else None
             ),
             gripper_state=data.get("gripper_state"),
@@ -106,6 +129,12 @@ class TrajectoryWaypoint:
         }
         if self.tcp_velocity is not None:
             data["tcp_velocity"] = [float(v) for v in self.tcp_velocity]
+        if self.joint_names is not None:
+            data["joint_names"] = [str(v) for v in self.joint_names]
+        if self.joint_positions is not None:
+            data["joint_positions"] = [float(v) for v in self.joint_positions]
+        if self.joint_velocities is not None:
+            data["joint_velocities"] = [float(v) for v in self.joint_velocities]
         if self.gripper_state is not None:
             data["gripper_state"] = self.gripper_state
         if self.cable_state is not None:

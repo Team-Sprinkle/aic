@@ -9,6 +9,7 @@ from __future__ import annotations
 import os
 
 import numpy as np
+from aic_control_interfaces.msg import JointMotionUpdate, TrajectoryGenerationMode
 from aic_model.policy import (
     compute_delta_pose,
     GetObservationCallback,
@@ -23,6 +24,7 @@ from rclpy.time import Time
 from std_msgs.msg import String
 from tf2_ros import TransformException
 from transforms3d._gohlketransforms import quaternion_multiply, quaternion_slerp
+from trajectory_msgs.msg import JointTrajectoryPoint
 
 from aic_teacher_official.replay import ReplayTarget, SmoothTrajectoryReplayPolicy
 
@@ -64,10 +66,12 @@ class OfficialTeacherReplay(Policy):
         if self._action_mode not in {
             "relative_delta_gripper_tcp",
             "absolute_cartesian_pose_base_link",
+            "joint_position_then_cheatcode",
         }:
             raise RuntimeError(
                 "AIC_OFFICIAL_TEACHER_ACTION_MODE must be one of: "
-                "relative_delta_gripper_tcp, absolute_cartesian_pose_base_link"
+                "relative_delta_gripper_tcp, absolute_cartesian_pose_base_link, "
+                "joint_position_then_cheatcode"
             )
         self.get_logger().info(
             "Loaded official teacher replay trajectory: "
@@ -214,6 +218,38 @@ class OfficialTeacherReplay(Policy):
             frame_id="gripper/tcp",
         )
 
+    def _send_joint_target(self, move_robot: MoveRobotCallback, target: ReplayTarget) -> None:
+        if target.joint_positions is None:
+            self.get_logger().warn(
+                "Joint replay target is missing joint_positions; falling back to Cartesian pose command."
+            )
+            self.set_pose_target(
+                move_robot=move_robot,
+                pose=self.target_to_pose(target),
+                frame_id="base_link",
+            )
+            return
+        n_joints = len(target.joint_positions)
+        velocities = (
+            list(target.joint_velocities)
+            if target.joint_velocities is not None
+            else [0.0] * n_joints
+        )
+        move_robot(
+            joint_motion_update=JointMotionUpdate(
+                target_state=JointTrajectoryPoint(
+                    positions=[float(v) for v in target.joint_positions],
+                    velocities=[float(v) for v in velocities],
+                ),
+                target_stiffness=[100.0] * n_joints,
+                target_damping=[20.0] * n_joints,
+                trajectory_generation_mode=TrajectoryGenerationMode(
+                    mode=TrajectoryGenerationMode.MODE_POSITION,
+                ),
+                target_feedforward_torque=[0.0] * n_joints,
+            )
+        )
+
     def _run_online_cheatcode_insertion(
         self,
         task: Task,
@@ -347,17 +383,14 @@ class OfficialTeacherReplay(Policy):
             elapsed = (self.time_now() - start_time).nanoseconds * 1e-9
             target = self._replay.sample(elapsed)
             pose = self.target_to_pose(target)
+            if self._online_cheatcode_final_insertion and target.waypoint.phase == "final_insertion":
+                return self._run_online_cheatcode_insertion(
+                    task,
+                    move_robot,
+                    send_feedback,
+                )
             if self._action_mode == "relative_delta_gripper_tcp":
                 try:
-                    if (
-                        self._online_cheatcode_final_insertion
-                        and target.waypoint.phase == "final_insertion"
-                    ):
-                        return self._run_online_cheatcode_insertion(
-                            task,
-                            move_robot,
-                            send_feedback,
-                        )
                     delta_pose = self.target_to_delta_pose(target, self._current_tcp_pose())
                     self.set_delta_pose_target(
                         move_robot=move_robot,
@@ -371,7 +404,10 @@ class OfficialTeacherReplay(Policy):
                     )
                     self.set_pose_target(move_robot=move_robot, pose=pose, frame_id="base_link")
             else:
-                self.set_pose_target(move_robot=move_robot, pose=pose, frame_id="base_link")
+                if self._action_mode == "joint_position_then_cheatcode":
+                    self._send_joint_target(move_robot, target)
+                else:
+                    self.set_pose_target(move_robot=move_robot, pose=pose, frame_id="base_link")
 
             if self._task_completed_in_simulation(task):
                 send_feedback("official_teacher_replay_insertion_event")
@@ -408,7 +444,10 @@ class OfficialTeacherReplay(Policy):
                                 frame_id="base_link",
                             )
                     else:
-                        self.set_pose_target(move_robot=move_robot, pose=pose, frame_id="base_link")
+                        if self._action_mode == "joint_position_then_cheatcode":
+                            self._send_joint_target(move_robot, target)
+                        else:
+                            self.set_pose_target(move_robot=move_robot, pose=pose, frame_id="base_link")
                     self.sleep_for(command_dt_sec)
                 send_feedback("official_teacher_replay_finished")
                 return True
