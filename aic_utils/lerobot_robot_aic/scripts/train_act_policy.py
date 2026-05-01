@@ -12,6 +12,10 @@ from pathlib import Path
 os.environ.setdefault("PYGAME_HIDE_SUPPORT_PROMPT", "1")
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from lerobot_robot_aic.dataset_schema import summarize_dataset_schema
+from lerobot_robot_aic.task_metadata import (
+    append_task_vectors_to_observation_state_dataset,
+    infer_task_metadata_path,
+)
 
 
 def parse_args() -> argparse.Namespace:
@@ -59,6 +63,22 @@ def parse_args() -> argparse.Namespace:
         "--dry-run",
         action="store_true",
         help="Print the lerobot-train command without executing it.",
+    )
+    parser.add_argument(
+        "--task-metadata",
+        type=Path,
+        default=None,
+        help="Optional manifests/accepted.csv or episode_task_metadata.jsonl with 10-dim task vectors.",
+    )
+    parser.add_argument(
+        "--task-conditioning",
+        choices=["off", "append-state", "zeros"],
+        default="off",
+        help=(
+            "Task conditioning mode. append-state creates a derived local dataset with "
+            "the 10-dim task vector appended to observation.state. zeros appends zeros "
+            "when metadata is unavailable."
+        ),
     )
     parser.add_argument(
         "--extra-arg",
@@ -117,8 +137,39 @@ def build_lerobot_train_cmd(args: argparse.Namespace) -> list[str]:
     return cmd
 
 
+def prepare_task_conditioned_dataset(args: argparse.Namespace) -> None:
+    if args.task_conditioning == "off":
+        return
+    if not args.dataset_root:
+        raise ValueError("--task-conditioning requires --dataset-root so a local derived dataset can be created")
+    dataset_root = args.dataset_root.resolve()
+    manifest_path = args.task_metadata.resolve() if args.task_metadata else infer_task_metadata_path(dataset_root)
+    if args.task_conditioning == "append-state" and manifest_path is None:
+        raise FileNotFoundError(
+            "Task conditioning requested but no manifest was provided or found at "
+            "<dataset_parent>/manifests/accepted.csv"
+        )
+    output_dir = args.output_dir.resolve()
+    derived_root = output_dir.parent / f"{output_dir.name}_task_conditioned_dataset"
+    if args.dry_run:
+        source = str(manifest_path) if manifest_path else "zero-vector fallback"
+        print(
+            f"[dry-run] would create task-conditioned dataset at {derived_root} "
+            f"from {dataset_root} using {source}"
+        )
+        return
+    append_task_vectors_to_observation_state_dataset(
+        dataset_root=dataset_root,
+        manifest_path=manifest_path,
+        output_root=derived_root,
+        missing="zeros" if args.task_conditioning == "zeros" else "error",
+    )
+    args.dataset_root = derived_root
+
+
 def main() -> int:
     args = parse_args()
+    prepare_task_conditioned_dataset(args)
     cmd = build_lerobot_train_cmd(args)
     rendered = " ".join(str(part) for part in cmd)
     if args.dry_run:

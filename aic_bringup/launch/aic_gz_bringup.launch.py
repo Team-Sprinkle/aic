@@ -95,6 +95,8 @@ def launch_setup(context, *args, **kwargs):
     start_aic_engine = LaunchConfiguration("start_aic_engine")
     shutdown_on_aic_engine_exit = LaunchConfiguration("shutdown_on_aic_engine_exit")
     aic_engine_config_file = LaunchConfiguration("aic_engine_config_file")
+    model_node_name = LaunchConfiguration("model_node_name")
+    insert_cable_action_name = LaunchConfiguration("insert_cable_action_name")
     model_discovery_timeout_seconds = LaunchConfiguration(
         "model_discovery_timeout_seconds"
     )
@@ -248,6 +250,8 @@ def launch_setup(context, *args, **kwargs):
             {
                 "config_file_path": aic_engine_config_file,
                 "use_sim_time": True,
+                "model_node_name": model_node_name,
+                "insert_cable_action_name": insert_cable_action_name,
                 "model_discovery_timeout_seconds": model_discovery_timeout_seconds,
                 "model_configure_timeout_seconds": model_configure_timeout_seconds,
             },
@@ -771,6 +775,20 @@ def generate_launch_description():
                 [FindPackageShare("aic_engine"), "config", "sample_config.yaml"]
             ),
             description="Absolute path to YAML file with the AIC engine configuration.",
+        )
+    )
+    declared_arguments.append(
+        DeclareLaunchArgument(
+            "model_node_name",
+            default_value="aic_model",
+            description="Lifecycle node name for the participant model.",
+        )
+    )
+    declared_arguments.append(
+        DeclareLaunchArgument(
+            "insert_cable_action_name",
+            default_value="/insert_cable",
+            description="Participant InsertCable action endpoint.",
         )
     )
     declared_arguments.append(

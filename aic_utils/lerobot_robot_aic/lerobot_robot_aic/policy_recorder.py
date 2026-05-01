@@ -81,6 +81,11 @@ class _EpisodeSaveState:
     message: str = "Waiting for terminal action status."
 
 
+def should_save_episode(terminal_state: int, save_failed_episodes: bool) -> bool:
+    """Return whether a terminal action status should be committed as an episode."""
+    return terminal_state == GoalStatus.STATUS_SUCCEEDED or save_failed_episodes
+
+
 def _fixed_len(values: list[float], length: int) -> list[float]:
     out = list(values[:length])
     if len(out) < length:
@@ -605,11 +610,10 @@ class PolicyRecorder(Node):
             return
 
         success = terminal_state == GoalStatus.STATUS_SUCCEEDED
-        success = True
         saved = False
         status_message = ""
         try:
-            if success or self.save_failed_episodes:
+            if should_save_episode(terminal_state, self.save_failed_episodes):
                 self._dataset.save_episode()
                 self._episodes_saved += 1
                 saved = True

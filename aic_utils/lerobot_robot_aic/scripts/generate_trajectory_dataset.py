@@ -20,6 +20,8 @@ import yaml
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
 ENGINE_SCRIPT_DIR = REPO_ROOT / "aic_engine" / "scripts"
+PACKAGE_ROOT = REPO_ROOT / "aic_utils" / "lerobot_robot_aic"
+sys.path.insert(0, str(PACKAGE_ROOT))
 sys.path.insert(0, str(ENGINE_SCRIPT_DIR))
 
 from generate_random_trials_config import (  # noqa: E402
@@ -27,10 +29,15 @@ from generate_random_trials_config import (  # noqa: E402
     _build_trial,
     _profile_defaults,
 )
+from lerobot_robot_aic.task_metadata import TASK_VECTOR_NAMES, task_vector_from_fields  # noqa: E402
 
 TASK_FAMILIES = {"sfp_to_nic", "sc_to_sc"}
 POLICY_CLASS = {"cheatcode": "aic_example_policies.ros.CheatCode"}
 ACTION_MODES = {"cartesian", "joint"}
+TASK_CABLE_TYPES = {
+    "sfp_to_nic": "sfp_sc_cable",
+    "sc_to_sc": "sfp_sc_cable_reversed",
+}
 NIC_RAILS = [f"nic_rail_{i}" for i in range(5)]
 SC_RAILS = [f"sc_rail_{i}" for i in range(2)]
 MOUNT_RAILS = [
@@ -380,14 +387,19 @@ def _apply_family_task_and_cable(
     rng: random.Random,
 ) -> None:
     cable_section = scene.get("cable", {}) if isinstance(scene.get("cable", {}), dict) else {}
+    expected_cable_type = TASK_CABLE_TYPES[task_family]
     if task_family == "sfp_to_nic":
         if target_nic is None:
             raise ValueError("sfp_to_nic requires at least one present NIC card")
         cable_name = "cable_0"
-        cable_type = str(sample_value(cable_section.get("cable_type"), "sfp_sc_cable", rng))
-        port_name = str(sample_value(scene.get("nic_cards", {}).get("target_port"), "sfp_port_0", rng))
-        if port_name == "auto":
+        cable_type = str(sample_value(cable_section.get("cable_type"), expected_cable_type, rng))
+        target_port_spec = scene.get("nic_cards", {}).get("target_port")
+        if target_port_spec in (None, "auto"):
             port_name = rng.choice(["sfp_port_0", "sfp_port_1"])
+        else:
+            port_name = str(sample_value(target_port_spec, None, rng))
+        if port_name not in {"sfp_port_0", "sfp_port_1"}:
+            raise ValueError(f"sfp_to_nic target_port must be sfp_port_0 or sfp_port_1, got {port_name!r}")
         task = {
             "cable_type": "sfp_sc",
             "cable_name": cable_name,
@@ -403,7 +415,7 @@ def _apply_family_task_and_cable(
         if target_sc is None:
             raise ValueError("sc_to_sc requires at least one present SC port")
         cable_name = "cable_1"
-        cable_type = str(sample_value(cable_section.get("cable_type"), "sfp_sc_cable_reversed", rng))
+        cable_type = str(sample_value(cable_section.get("cable_type"), expected_cable_type, rng))
         task = {
             "cable_type": "sfp_sc",
             "cable_name": cable_name,
@@ -415,6 +427,12 @@ def _apply_family_task_and_cable(
             "time_limit": 180,
         }
         default_offset = {"x": 0.0, "y": 0.015385, "z": 0.04045}
+
+    if cable_type != expected_cable_type:
+        raise ValueError(
+            f"{task_family} requires scene.cable.cable_type={expected_cable_type!r}; "
+            f"got {cable_type!r}"
+        )
 
     existing_pose = next(iter(trial["scene"]["cables"].values()))["pose"]
     offset_section = cable_section.get("gripper_offset", {})
@@ -474,7 +492,7 @@ def generate_trials(request: dict[str, Any], num_trials: int) -> dict[str, Any]:
     return generated
 
 
-def write_engine_configs(request: dict[str, Any], output_dir: Path, num_trials: int) -> Path:
+def write_engine_configs(request: dict[str, Any], output_dir: Path, num_trials: int) -> tuple[Path, dict[str, Any]]:
     base = yaml.safe_load(DEFAULT_TEMPLATE.read_text(encoding="utf-8"))
     trials = generate_trials(request, num_trials)
     engine_config = copy.deepcopy(base)
@@ -501,7 +519,7 @@ def write_engine_configs(request: dict[str, Any], output_dir: Path, num_trials: 
         (trials_dir / f"{trial_id}.yaml").write_text(
             yaml.safe_dump(single, sort_keys=False), encoding="utf-8"
         )
-    return out_path
+    return out_path, trials
 
 
 def run_command(cmd: list[str], dry_run: bool, *, check: bool = True) -> dict[str, Any]:
@@ -537,6 +555,193 @@ def count_selected(selection_report: Path) -> int | None:
         return None
     with selection_report.open("r", encoding="utf-8", newline="") as f:
         return sum(1 for row in csv.DictReader(f) if str(row.get("selected", "")).lower() == "true")
+
+
+def _parse_index_from_suffix(text: str, prefix: str) -> int:
+    if not text.startswith(prefix):
+        raise ValueError(f"Expected {text!r} to start with {prefix!r}")
+    return int(text.rsplit("_", 1)[1])
+
+
+def _present_rails(task_board: dict[str, Any], rails: list[str]) -> list[str]:
+    return [rail for rail in rails if task_board.get(rail, {}).get("entity_present")]
+
+
+def _task_metadata_from_trial(task_family: str, trial: dict[str, Any]) -> dict[str, Any]:
+    task = trial["tasks"]["task_1"]
+    scene = trial["scene"]
+    task_board = scene["task_board"]
+    target_module_name = str(task["target_module_name"])
+    port_name = str(task["port_name"])
+    if task_family == "sfp_to_nic":
+        target_card_index = _parse_index_from_suffix(target_module_name, "nic_card_mount_")
+        target_port_index = _parse_index_from_suffix(port_name, "sfp_port_")
+        target_card_valid = 1
+    else:
+        target_card_index = -1
+        target_port_index = _parse_index_from_suffix(target_module_name, "sc_port_")
+        target_card_valid = 0
+    task_vector = task_vector_from_fields(task_family, target_port_index, target_card_index)
+    cable = next(iter(scene.get("cables", {}).values()), {})
+    return {
+        "task": {
+            "task_family": task_family,
+            "plug_type": task["plug_type"],
+            "plug_name": task["plug_name"],
+            "port_type": task["port_type"],
+            "port_name": port_name,
+            "target_module_name": target_module_name,
+            "target_port_index": target_port_index,
+            "target_card_index": target_card_index,
+            "target_card_valid": target_card_valid,
+            "task_vector": task_vector,
+        },
+        "scene_summary": {
+            "present_nic_rails": _present_rails(task_board, NIC_RAILS),
+            "present_sc_rails": _present_rails(task_board, SC_RAILS),
+            "board_pose": task_board.get("pose", {}),
+            "cable_type": cable.get("cable_type"),
+        },
+    }
+
+
+def _read_csv_by_trial(path: Path) -> dict[str, dict[str, str]]:
+    if not path.exists():
+        return {}
+    with path.open("r", encoding="utf-8", newline="") as f:
+        return {str(row.get("trial_id", "")): dict(row) for row in csv.DictReader(f)}
+
+
+def _read_selection_rows(path: Path) -> dict[str, dict[str, str]]:
+    rows = _read_csv_by_trial(path)
+    accepted_idx = 0
+    for row in rows.values():
+        if str(row.get("selected", "")).lower() != "true":
+            row["accepted_episode_index"] = ""
+            continue
+        row["accepted_episode_index"] = str(accepted_idx)
+        accepted_idx += 1
+    return rows
+
+
+def _optional_int(value: Any) -> int | None:
+    if value in (None, ""):
+        return None
+    return int(value)
+
+
+def write_task_manifests(
+    output_dir: Path,
+    task_family: str,
+    trials: dict[str, Any],
+    *,
+    score_csv: Path | None = None,
+    selection_report: Path | None = None,
+) -> dict[str, str]:
+    manifests_dir = output_dir / "manifests"
+    manifests_dir.mkdir(parents=True, exist_ok=True)
+    score_rows = _read_csv_by_trial(score_csv or output_dir / "scores" / "score_summary.csv")
+    selection_rows = _read_selection_rows(selection_report or output_dir / "accepted_dataset" / "selection_report.csv")
+
+    attempts_path = manifests_dir / "attempts.csv"
+    accepted_path = manifests_dir / "accepted.csv"
+    jsonl_path = manifests_dir / "episode_task_metadata.jsonl"
+    vector_fieldnames = [name for name in TASK_VECTOR_NAMES if name != "target_card_valid"]
+    fieldnames = [
+        "run_index",
+        "trial_id",
+        "status",
+        "total_score",
+        "selected",
+        "rejection_reason",
+        "source_episode_index",
+        "accepted_episode_index",
+        "trial_yaml_path",
+        "scoring_yaml_path",
+        "task_family",
+        "plug_type",
+        "plug_name",
+        "port_type",
+        "port_name",
+        "target_module_name",
+        "cable_type",
+        "target_port_index",
+        "target_card_index",
+        "target_card_valid",
+        *vector_fieldnames,
+        "task_vector",
+    ]
+    rows: list[dict[str, Any]] = []
+    json_rows: list[dict[str, Any]] = []
+    for fallback_index, (trial_id, trial) in enumerate(sorted(trials.items()), start=1):
+        score = score_rows.get(trial_id, {})
+        selection = selection_rows.get(trial_id, {})
+        metadata = _task_metadata_from_trial(task_family, trial)
+        task = metadata["task"]
+        scene_summary = metadata["scene_summary"]
+        run_index = int(score.get("run_index") or fallback_index)
+        source_episode_index = _optional_int(selection.get("mapped_episode_index") or score.get("episode_index"))
+        if source_episode_index is None and (score or selection):
+            source_episode_index = run_index - 1
+        selected = str(selection.get("selected", "")).lower() == "true"
+        accepted_episode_index = _optional_int(selection.get("accepted_episode_index"))
+        total_score = score.get("total_score") or selection.get("total_score") or ""
+        row = {
+            "run_index": run_index,
+            "trial_id": trial_id,
+            "status": score.get("status", "dry_run" if not score_rows else ""),
+            "total_score": total_score,
+            "selected": selected,
+            "rejection_reason": selection.get("reason", ""),
+            "source_episode_index": source_episode_index if source_episode_index is not None else "",
+            "accepted_episode_index": accepted_episode_index if accepted_episode_index is not None else "",
+            "trial_yaml_path": str(output_dir / "trials" / f"{trial_id}.yaml"),
+            "scoring_yaml_path": score.get("scoring_yaml", ""),
+            "task_family": task["task_family"],
+            "plug_type": task["plug_type"],
+            "plug_name": task["plug_name"],
+            "port_type": task["port_type"],
+            "port_name": task["port_name"],
+            "target_module_name": task["target_module_name"],
+            "cable_type": scene_summary["cable_type"],
+            "target_port_index": task["target_port_index"],
+            "target_card_index": task["target_card_index"],
+            "target_card_valid": task["target_card_valid"],
+            "task_vector": json.dumps(task["task_vector"]),
+        }
+        for name, value in zip(TASK_VECTOR_NAMES, task["task_vector"], strict=True):
+            row[name] = value
+        rows.append(row)
+        json_rows.append(
+            {
+                "trial_id": trial_id,
+                "source_episode_index": source_episode_index,
+                "accepted_episode_index": accepted_episode_index,
+                "selected": selected,
+                "status": row["status"],
+                "total_score": float(total_score) if total_score not in ("", None) else None,
+                "trial_yaml_path": row["trial_yaml_path"],
+                "task": task,
+                "scene_summary": scene_summary,
+            }
+        )
+
+    with attempts_path.open("w", encoding="utf-8", newline="") as f:
+        writer = csv.DictWriter(f, fieldnames=fieldnames)
+        writer.writeheader()
+        writer.writerows(rows)
+    with accepted_path.open("w", encoding="utf-8", newline="") as f:
+        writer = csv.DictWriter(f, fieldnames=fieldnames)
+        writer.writeheader()
+        writer.writerows([row for row in rows if row["selected"]])
+    with jsonl_path.open("w", encoding="utf-8") as f:
+        for row in json_rows:
+            f.write(json.dumps(row, sort_keys=True) + "\n")
+    return {
+        "attempts_csv": str(attempts_path),
+        "accepted_csv": str(accepted_path),
+        "episode_task_metadata_jsonl": str(jsonl_path),
+    }
 
 
 def compare_reference(local_dataset: Path, reference_repo_id: str) -> dict[str, Any]:
@@ -593,7 +798,7 @@ def main() -> int:
     request_copy_path = output_dir / "request.yaml"
     if args.request_yaml.resolve() != request_copy_path.resolve():
         shutil.copy2(args.request_yaml, request_copy_path)
-    engine_config_path = write_engine_configs(request, output_dir, num_trials)
+    engine_config_path, trials = write_engine_configs(request, output_dir, num_trials)
 
     commands: list[dict[str, Any]] = []
     dataset_repo_id = derived_dataset_repo_id(output_dir)
@@ -679,6 +884,13 @@ def main() -> int:
     if report_src.exists():
         shutil.copy2(report_src, output_dir / "selection_report.csv")
     accepted = count_selected(report_src)
+    manifest_paths = write_task_manifests(
+        output_dir,
+        request["task_family"],
+        trials,
+        score_csv=output_dir / "scores" / "score_summary.csv",
+        selection_report=report_src,
+    )
     schema_comparison = None
     if args.inspect_reference_dataset:
         schema_comparison = compare_reference(output_dir / "accepted_dataset", args.inspect_reference_dataset)
@@ -697,6 +909,7 @@ def main() -> int:
         "raw_dataset": str(output_dir / "raw_dataset"),
         "accepted_dataset": str(output_dir / "accepted_dataset"),
         "scores": str(output_dir / "scores"),
+        "manifests": manifest_paths,
         "number_attempted": num_trials,
         "number_accepted": accepted,
         "generated_engine_config": str(engine_config_path),
