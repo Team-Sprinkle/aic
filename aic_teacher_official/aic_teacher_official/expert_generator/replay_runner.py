@@ -33,6 +33,9 @@ class OfficialReplayConfig:
     remove_bag_data: bool = True
     expert_mode: str = "nominal"
     ft_threshold_n: float | None = None
+    recovery_backoff_distance_m: float | None = None
+    recovery_max_retries: int | None = None
+    recovery_release_force_threshold_n: float | None = None
 
 
 class OfficialRecordingReplayRunner:
@@ -76,6 +79,16 @@ class OfficialRecordingReplayRunner:
         env["AIC_OFFICIAL_TEACHER_RUNTIME_TRACE"] = str(attempt_dir / "runtime_trace.jsonl")
         if self.config.ft_threshold_n is not None:
             env["AIC_OFFICIAL_TEACHER_FT_THRESHOLD_N"] = str(self.config.ft_threshold_n)
+        if self.config.recovery_backoff_distance_m is not None:
+            env["AIC_OFFICIAL_TEACHER_RECOVERY_MAX_BACKOFF_DISTANCE_M"] = str(
+                self.config.recovery_backoff_distance_m
+            )
+        if self.config.recovery_max_retries is not None:
+            env["AIC_OFFICIAL_TEACHER_RECOVERY_MAX_RETRIES"] = str(self.config.recovery_max_retries)
+        if self.config.recovery_release_force_threshold_n is not None:
+            env["AIC_OFFICIAL_TEACHER_RECOVERY_RELEASE_FORCE_THRESHOLD_N"] = str(
+                self.config.recovery_release_force_threshold_n
+            )
         with (attempt_dir / "replay_stdout.txt").open("w", encoding="utf-8") as stdout, (
             attempt_dir / "replay_stderr.txt"
         ).open("w", encoding="utf-8") as stderr:

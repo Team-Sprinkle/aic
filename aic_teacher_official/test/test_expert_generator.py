@@ -639,6 +639,39 @@ def test_replay_runner_builds_official_recording_command(tmp_path):
     assert "--teacher-action-mode" in cmd
 
 
+def test_replay_runner_passes_recovery_env(monkeypatch, tmp_path):
+    captured = {}
+
+    def fake_run(cmd, cwd, env, text, stdout, stderr, check):
+        captured["env"] = env
+        return SimpleNamespace(returncode=0)
+
+    class FakeTrajectory:
+        def save_json(self, path):
+            path.write_text("{}", encoding="utf-8")
+
+    monkeypatch.setattr("subprocess.run", fake_run)
+    runner = OfficialRecordingReplayRunner(
+        OfficialReplayConfig(
+            repo_root=Path("/repo"),
+            engine_config=Path("/repo/config.yaml"),
+            output_dir=tmp_path,
+            ft_threshold_n=1.0,
+            recovery_backoff_distance_m=0.005,
+            recovery_max_retries=2,
+            recovery_release_force_threshold_n=2.0,
+        )
+    )
+
+    runner.replay_and_score(FakeTrajectory(), attempt_index=1, candidate_index=1)
+
+    env = captured["env"]
+    assert env["AIC_OFFICIAL_TEACHER_FT_THRESHOLD_N"] == "1.0"
+    assert env["AIC_OFFICIAL_TEACHER_RECOVERY_MAX_BACKOFF_DISTANCE_M"] == "0.005"
+    assert env["AIC_OFFICIAL_TEACHER_RECOVERY_MAX_RETRIES"] == "2"
+    assert env["AIC_OFFICIAL_TEACHER_RECOVERY_RELEASE_FORCE_THRESHOLD_N"] == "2.0"
+
+
 def test_expert_planner_runner_builds_live_policy_command(tmp_path):
     runner = ExpertPlannerRecordingRunner(
         ExpertPlannerRunConfig(

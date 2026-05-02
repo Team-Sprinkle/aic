@@ -78,6 +78,12 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--ft-hard-threshold", type=float, default=None, help=argparse.SUPPRESS)
     parser.add_argument("--backup-distance-m", type=float, default=0.002)
     parser.add_argument("--max-retries", type=int, default=3)
+    parser.add_argument(
+        "--recovery-release-force-threshold",
+        type=float,
+        default=None,
+        help="Optional force-delta threshold used only to decide that recovery backoff released contact.",
+    )
     parser.add_argument("--probe-pattern", choices=["small_cross", "small_spiral", "none"], default="small_cross")
     parser.add_argument("--gazebo-gui", type=str_bool, default=False)
     parser.add_argument("--launch-rviz", type=str_bool, default=False)
@@ -133,6 +139,9 @@ def main() -> int:
         recorder_drain_sec=args.recorder_drain_sec,
         per_trial_timeout_sec=args.per_trial_timeout_sec,
         sim_distrobox=args.sim_distrobox,
+        recovery_backoff_distance_m=args.backup_distance_m,
+        recovery_max_retries=args.max_retries,
+        recovery_release_force_threshold_n=args.recovery_release_force_threshold,
     )
     planner_config = ExpertPlannerRunConfig(
         repo_root=REPO_ROOT,
@@ -161,6 +170,7 @@ def main() -> int:
             "hard_threshold_n": ft_config.hard_threshold_n,
             "backup_distance_m": ft_config.backup_distance_m,
             "max_retries": ft_config.max_retries,
+            "recovery_release_force_threshold_n": args.recovery_release_force_threshold,
             "probe_pattern": ft_config.probe_pattern,
         },
         "replay": {

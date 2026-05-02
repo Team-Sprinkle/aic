@@ -627,6 +627,7 @@ class OfficialTeacherReplay(Policy):
         z_offset: float,
         lateral_offset_base: np.ndarray | None = None,
         preserve_current_z: bool = True,
+        max_speed_mps: float | None = None,
     ) -> None:
         start_pose = self._current_tcp_pose()
         target_pose = self._calc_cheatcode_gripper_pose(
@@ -644,14 +645,18 @@ class OfficialTeacherReplay(Policy):
         start_quat = self._pose_quat_wxyz(start_pose)
         target_quat = self._pose_quat_wxyz(target_pose)
         distance_m = float(np.linalg.norm(target_xyz - start_xyz))
-        max_speed_mps = float(os.environ.get("AIC_OFFICIAL_TEACHER_LOCAL_PREINSERT_ALIGN_SPEED_MPS", "0.08"))
-        effective_duration_sec = max(float(duration_sec), distance_m / max(max_speed_mps, 1e-6))
+        speed_limit_mps = (
+            float(max_speed_mps)
+            if max_speed_mps is not None
+            else float(os.environ.get("AIC_OFFICIAL_TEACHER_LOCAL_PREINSERT_ALIGN_SPEED_MPS", "0.08"))
+        )
+        effective_duration_sec = max(float(duration_sec), distance_m / max(speed_limit_mps, 1e-6))
         steps = max(1, int(effective_duration_sec / dt))
         self._trace_event(
             "local_preinsert_align_started",
             requested_duration_sec=duration_sec,
             duration_sec=effective_duration_sec,
-            max_speed_mps=max_speed_mps,
+            max_speed_mps=speed_limit_mps,
             z_offset=z_offset,
             preserve_current_z=preserve_current_z,
             lateral_offset_base=(
@@ -1233,6 +1238,9 @@ class OfficialTeacherReplay(Policy):
         backoff_duration = float(os.environ.get("AIC_OFFICIAL_TEACHER_RECOVERY_BACKOFF_SEC", "0.45"))
         release_timeout = float(os.environ.get("AIC_OFFICIAL_TEACHER_FORCE_RELEASE_TIMEOUT_SEC", "5.0"))
         release_check_sec = float(os.environ.get("AIC_OFFICIAL_TEACHER_FORCE_RELEASE_STAGE_CHECK_SEC", "0.10"))
+        release_threshold = float(
+            os.environ.get("AIC_OFFICIAL_TEACHER_RECOVERY_RELEASE_FORCE_THRESHOLD_N", str(self._ft_threshold_n))
+        )
         baseline = (
             np.asarray(release_baseline_force, dtype=np.float64)
             if release_baseline_force is not None
@@ -1246,6 +1254,7 @@ class OfficialTeacherReplay(Policy):
             backoff_increment_m=backoff_increment,
             max_backoff_distance_m=max_backoff_distance,
             release_timeout_sec=release_timeout,
+            release_threshold_n=release_threshold,
             start_tcp_pose=self._pose_to_trace_dict(start_pose),
         )
         force_released = False
@@ -1289,7 +1298,7 @@ class OfficialTeacherReplay(Policy):
             ):
                 force_delta = float(np.linalg.norm(self._force_vector(get_observation) - baseline))
                 self._send_absolute_target(move_robot, backoff_pose)
-                if force_delta < self._ft_threshold_n:
+                if force_delta < release_threshold:
                     force_released = True
                     break
                 self.sleep_for(dt)
@@ -1299,7 +1308,8 @@ class OfficialTeacherReplay(Policy):
         self._trace_event(
             "recovery_force_release_wait",
             force_released=force_released,
-            threshold_n=self._ft_threshold_n,
+            threshold_n=release_threshold,
+            contact_threshold_n=self._ft_threshold_n,
             backoff_distance_achieved_m=total_backoff,
             max_backoff_distance_m=max_backoff_distance,
         )
@@ -1340,7 +1350,18 @@ class OfficialTeacherReplay(Policy):
                 gate_context="after_force_release",
             ):
                 return False
-        self._trace_event("recovery_realign_started")
+        recovery_realign_preserve_current_z = os.environ.get(
+            "AIC_OFFICIAL_TEACHER_RECOVERY_REALIGN_PRESERVE_CURRENT_Z",
+            "true",
+        ).lower() in {"1", "true", "yes", "on"}
+        recovery_realign_speed_mps = float(
+            os.environ.get("AIC_OFFICIAL_TEACHER_RECOVERY_REALIGN_SPEED_MPS", "0.02")
+        )
+        self._trace_event(
+            "recovery_realign_started",
+            preserve_current_z=recovery_realign_preserve_current_z,
+            max_speed_mps=recovery_realign_speed_mps,
+        )
         self._run_local_preinsert_align(
             task,
             port_transform,
@@ -1348,7 +1369,8 @@ class OfficialTeacherReplay(Policy):
             duration_sec=float(os.environ.get("AIC_OFFICIAL_TEACHER_LOCAL_PREINSERT_ALIGN_SEC", "2.25")),
             dt=dt,
             z_offset=float(os.environ.get("AIC_OFFICIAL_TEACHER_CHEATCODE_START_Z_OFFSET", "0.03")),
-            preserve_current_z=False,
+            preserve_current_z=recovery_realign_preserve_current_z,
+            max_speed_mps=recovery_realign_speed_mps,
         )
         self._trace_event("recovery_realign_completed")
         if retry_start_z_m is not None:

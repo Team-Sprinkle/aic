@@ -1055,6 +1055,52 @@ post_insert_force_delta_n: 1.1542886447916316
 
 The official scorer reported the force above 20 N for only `0.02 s`, below its `1.00 s` penalty threshold. The parser now preserves that raw value as `official_max_force_n` but does not reject on `max_force_n` when the official scorer says the penalty was not applied.
 
+## Recovery Backoff Update - 2026-05-02
+
+Backoff is still actively being exercised. The latest recovery work found that the CLI `--backup-distance-m` was only recorded in generation metadata and was not controlling online replay's staged backoff distance. Replay now receives:
+
+```text
+AIC_OFFICIAL_TEACHER_RECOVERY_MAX_BACKOFF_DISTANCE_M
+AIC_OFFICIAL_TEACHER_RECOVERY_MAX_RETRIES
+AIC_OFFICIAL_TEACHER_RECOVERY_RELEASE_FORCE_THRESHOLD_N
+```
+
+The new `--recovery-release-force-threshold` CLI flag decouples the force-delta threshold used to trigger contact from the threshold used to decide that a recovery backoff released force. This matters for strict debug runs because a `1.0 N` contact trigger is below the residual/noise level seen after small backoffs. Recovery realign also now preserves current TCP Z by default through `AIC_OFFICIAL_TEACHER_RECOVERY_REALIGN_PRESERVE_CURRENT_Z=true` and uses a slower recovery-specific speed cap, `AIC_OFFICIAL_TEACHER_RECOVERY_REALIGN_SPEED_MPS=0.02`.
+
+Live forced-backoff runs:
+
+```text
+outputs/expert_debug/nominalrecovery_forced_backoff_release2_max5mm_v1_20260502T170239Z
+```
+
+This proved the CLI/env wiring worked: the backoff stopped at exactly `0.005 m`, and force release passed with a separate `2.0 N` release threshold. It still failed because the post-release realign did not preserve Z and the next gate failed with about `9.17 mm` tracking error and `2.18 N` force delta.
+
+```text
+outputs/expert_debug/nominalrecovery_forced_backoff_release2_max5mm_preservez_v2_20260502T170736Z
+```
+
+This is the best recovery mechanics run so far. It used `--ft-threshold 1.0`, `--backup-distance-m 0.005`, `--max-retries 2`, `--recovery-release-force-threshold 2.0`, and Z-preserving slower recovery realign. It still rejected because insertion did not complete, but the recovery stages behaved correctly:
+
+```text
+backoff_occurred: true
+backoff_distance_achieved_m: 0.005
+force_release_before_realign: true
+recovery_post_realign_gate: passed
+retry_tracking_gate: passed
+max_guarded_insert_speed_mps: 0.004922984356074967
+official_max_force_n: 0.0
+```
+
+The retry then contacted again around `1.09 N` under the deliberately strict `1.0 N` threshold and exhausted retries. Increasing only `--max-retries` to `3` repeated the same pattern: recovery and retry gates passed, guarded insertion resumed at low speed, then another small residual force delta exhausted the extra retry.
+
+GPT-5 failure analysis on this run concluded that speed was no longer the root failure (`max_guarded_insert_speed_mps=0.00492`). The remaining issue is that the handoff/tracking gate can fail with large XY/Z tracking error and still start guarded insertion through live-Z repair. The recommended change is to make live-Z repair conditional on XY/yaw being in spec, then re-enable small body/port-frame micro-alignment before descent instead of allowing a Z-only descent from a laterally imperfect pose.
+
+```text
+outputs/expert_debug/nominalrecovery_forced_backoff_ft12_release2_max5mm_preservez_v1_20260502T171851Z
+```
+
+Raising the contact threshold to `1.2 N` still forced an initial backoff, but the fixed `5 mm` retreat did not satisfy the `2.0 N` release threshold in that run. This suggests the controller/backoff difficulty is not just the threshold value: small absolute-Z retreats can release in one run and not another because Cartesian `MODE_POSITION` targets are filtered through controller dynamics and residual cable/plug loading.
+
 ## Current Controller Finding
 
 The speed/backoff difficulty appears partly inherent to `aic_controller`: Cartesian `MODE_POSITION` targets do not directly command TCP velocity. They provide position references to the controller, and the impedance dynamics plus current tracking error determine the actual TCP motion. That makes small commanded deltas and nominal insertion speeds only indirect controls over measured speed, contact timing, and backoff distance.
@@ -1074,26 +1120,18 @@ Try these in order, one variation at a time:
 
 1. Re-run `nominalrecovery_preserve_z_fast_insert` for multiple seeds/candidates to check repeatability at score threshold 90.
 2. Try the same preserve-Z/speed-gated settings in strict `--nominal`; nominal should still reject rather than recover on confirmed contact.
-3. Explicitly exercise backoff by using nominalrecovery with a stricter F/T threshold or a deliberately lower start margin. The backoff path is still active, but the current accepted run did not trigger it.
-4. Add high-rate F/T debug around the handoff and start-of-insertion window so the short official force spikes can be localized instead of inferred from scoring YAML.
-5. Longer-term, implement executable joint retiming/cross-fade for the MoveIt-to-Cartesian handoff and consider a port-frame delta-Z insertion formulation so the final descent starts from the measured live preinsert pose rather than from an assumed geometric pose.
+3. Tighten live-Z repair: only allow it when XY/orientation tracking is already within spec. If the handoff gate fails from a large pose error, run body/port-frame micro-align or reject instead of beginning Z descent.
+4. For recovery data, do not keep increasing retries blindly. The forced runs show stable 5 mm recovery mechanics but repeated shallow contacts under strict thresholds. Next try an adaptive backoff distance: start at 5 mm, but if release is not observed or the next retry contacts before meaningful depth progress, increase to 10-15 mm before realign.
+5. Add high-rate F/T debug around the handoff and start-of-insertion window so the short official force spikes can be localized instead of inferred from scoring YAML.
+6. Longer-term, implement executable joint retiming/cross-fade for the MoveIt-to-Cartesian handoff and consider a port-frame delta-Z insertion formulation so the final descent starts from the measured live preinsert pose rather than from an assumed geometric pose.
 
 ## Tests Last Run
 
 After the latest code changes:
 
 ```text
-pixi run python -m pytest aic_teacher_official/test -q
-70 passed
-
-pixi run python -m pytest aic_utils/lerobot_robot_aic/test -q
-11 passed
-
-pixi run python -m pytest aic_model/test -q
-2 passed
-
-git diff --check
-passed
+pixi run pytest aic_teacher_official/test/test_expert_generator.py -q
+41 passed
 ```
 
 ## Important Constraint Reminder
