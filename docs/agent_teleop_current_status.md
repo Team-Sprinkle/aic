@@ -1326,6 +1326,74 @@ Postprocessed nominalrecovery policy-data smoothing:
 /home/ubuntu/ws_aic/src/aic/outputs/expert_debug/nominalrecovery_minbackoff15_live_lateral_repair_v1_20260502T191023Z/replay_attempts/attempt_000001_candidate_00/dataset_compacted_stalls_cadence15_v1
 ```
 
+## 2026-05-02 Central-Camera GPT-5 Follow-up
+
+Current issue summary:
+
+- VLM/MoveIt transport is no longer the main blocker. The runs generally reach the cage mouth, then fail during final insertion or recovery.
+- Live-Z repair is now safer because it is disabled by default in nominal and gated in recovery, but the remaining failure is still geometric: the plug can be slightly low or laterally biased, then exact-position descent scrubs the face/lower lip.
+- The inherent controller makes precise sub-millimeter gating difficult. Some runs settle near `0.6-0.8 mm` lateral error and are useful; others settle around `2-3.5 mm` even after several seconds. A new optional `AIC_OFFICIAL_TEACHER_TRACKING_GATE_MAX_LATERAL_ERROR_M` gate prevents descent from those bad residuals, but strict values can make runs reject before recovery starts.
+- Postprocessing removes stalls and recomputes actions, but it cannot create insertion progress if the online run never inserts.
+
+New controls added:
+
+```text
+AIC_OFFICIAL_TEACHER_MICRO_ALIGN_COMMAND_MODE=base_absolute
+AIC_OFFICIAL_TEACHER_PREINSERT_VERTICAL_BIAS_M=<meters>
+AIC_OFFICIAL_TEACHER_TRACKING_GATE_MAX_LATERAL_ERROR_M=<meters>
+```
+
+The `base_absolute` micro-align mode was added as a diagnostic alternative to relative `gripper/tcp` deltas. The vertical bias adds a base-Z offset to CheatCode preinsert/insertion target generation. The lateral gate is separate from aggregate controller TCP error, so we can reject or recover when the final x/y residual is too large even if controller error passes.
+
+Runs and outcomes:
+
+```text
+outputs/expert_debug/nominal_aligned_z45_ft15_microalign_base_inverted_v1_20260502T203855Z
+```
+
+Base-frame micro-align with inverted gain improved compared with the positive base-frame sign. It still failed, but reached about `z_offset=0.0394` before contact, versus immediate/shallow contacts in several earlier nominal runs. GPT-5 central-camera analysis still called this a geometric lower-lip/low-start miss, not a timing-only issue.
+
+```text
+outputs/expert_debug/nominal_aligned_z45_up12_ft15_v1_20260502T204552Z
+outputs/expert_debug/nominal_aligned_z45_up12_strictgate_ft15_v1_20260502T204931Z
+```
+
+A `+1.2 mm` vertical bias alone was not reliable. Without a strict lateral gate it contacted almost immediately; with a strict gate it correctly rejected before descent because final lateral error stayed around `1.9 mm`.
+
+```text
+outputs/expert_debug/nominalrecovery_z45_up06_microbase_inv_lateral15_ft15_v1_20260502T205422Z
+```
+
+Combined `+0.6 mm` vertical bias, inverted base-frame micro-align, `1.5 mm` lateral gate, and `1.5 N` contact threshold. It descended about `2.2 mm`, detected contact, backed off all the way to `30 mm`, but failed force release with the too-strict `0.5 N` release threshold.
+
+```text
+outputs/expert_debug/nominalrecovery_z45_up06_microbase_inv_lateral15_release15_ft15_v1_20260502T205818Z
+```
+
+Same idea with a relaxed release threshold, but the initial controller settle landed about `3.46 mm` lateral error. The new lateral gate prevented descent, which is the right safety behavior but also shows the current alignment path is not reliably precise enough.
+
+```text
+outputs/expert_debug/nominalrecovery_z45_ft15_release15_control_v1_20260502T210206Z
+```
+
+Best current recovery-mechanics run from this follow-up. No vertical bias, no micro-align, no lateral gate. Initial lateral was sub-millimeter, contact occurred, backoff reached `15 mm`, force release passed at `1.5 N`, return-to-preinsert gates passed, and retries reached `retry_count=2`. It still did not insert; each retry eventually contacted before insertion. GPT-5 central-camera analysis recommended an explicit near-preinsert S-curve target and ensuring recovery resets and re-runs a real guarded descent after backoff/realign.
+
+Compacted policy-data version:
+
+```text
+/home/ubuntu/ws_aic/src/aic/outputs/expert_debug/nominalrecovery_z45_ft15_release15_control_v1_20260502T210206Z/replay_attempts/attempt_000001_candidate_00/dataset_compacted_stalls_cadence15_v1
+```
+
+Compaction reduced `2430 -> 468` frames and removed `64` cadence windows. Videos are copied unchanged; state/action data is recomputed and retimed.
+
+Recommended next steps:
+
+1. Implement a real near-preinsert aligned target: compute a pose from plug/port TFs, place it about `6-8 mm` from the mouth along the port axis, fully match port orientation, and move there with one smooth S-curve before guarded descent.
+2. Keep the lateral gate, but use it as a reject/recover safety filter after the near-preinsert target is improved. The controller is too variable for a strict gate to work with the current coarse handoff.
+3. Make recovery explicitly reset descent state after backoff and realign, then consume a retry only after a real guarded descent attempt. The best run shows backoff/release/return are working, but insertion retries still need better re-entry geometry.
+4. Prefer `ft-threshold` around `2.0-2.5 N` with a debounce for nominalrecovery exploration. The official scorer still reports no force penalty in these light-contact failures, while the teacher threshold at `1.0-1.5 N` often stops before useful insertion progress.
+5. Continue post-replay stall compaction at `1.5 s` cadence, but only after generating runs that contain meaningful insertion or recovery motion.
+
 ## Tests Last Run
 
 After the latest code changes:

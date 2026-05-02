@@ -265,6 +265,9 @@ class OfficialTeacherReplay(Policy):
             ],
             dtype=np.float64,
         )
+        vertical_bias_m = float(os.environ.get("AIC_OFFICIAL_TEACHER_PREINSERT_VERTICAL_BIAS_M", "0.0"))
+        if abs(vertical_bias_m) > 0.0:
+            target_xyz[2] += vertical_bias_m
         if lateral_offset_base is not None:
             lateral_offset = np.asarray(lateral_offset_base, dtype=np.float64)
             target_xyz[:2] += lateral_offset[:2]
@@ -661,6 +664,7 @@ class OfficialTeacherReplay(Policy):
             duration_sec=effective_duration_sec,
             max_speed_mps=speed_limit_mps,
             z_offset=z_offset,
+            vertical_bias_m=float(os.environ.get("AIC_OFFICIAL_TEACHER_PREINSERT_VERTICAL_BIAS_M", "0.0")),
             preserve_current_z=preserve_current_z,
             lateral_offset_base=(
                 np.asarray(lateral_offset_base, dtype=np.float64).tolist()
@@ -696,6 +700,7 @@ class OfficialTeacherReplay(Policy):
         steps = max(1, int(duration_sec / dt))
         max_xy_step = float(os.environ.get("AIC_OFFICIAL_TEACHER_MICRO_ALIGN_MAX_XY_STEP_M", "0.0005"))
         gain = float(os.environ.get("AIC_OFFICIAL_TEACHER_MICRO_ALIGN_GAIN", "0.45"))
+        command_mode = os.environ.get("AIC_OFFICIAL_TEACHER_MICRO_ALIGN_COMMAND_MODE", "tcp_delta")
         force_abort_fraction = float(
             os.environ.get("AIC_OFFICIAL_TEACHER_MICRO_ALIGN_FORCE_ABORT_FRACTION", "0.75")
         )
@@ -706,8 +711,9 @@ class OfficialTeacherReplay(Policy):
             duration_sec=duration_sec,
             max_xy_step_m=max_xy_step,
             gain=gain,
-            frame="gripper/tcp",
-            representation="relative_delta",
+            command_mode=command_mode,
+            frame="base_link" if command_mode == "base_absolute" else "gripper/tcp",
+            representation="absolute_cartesian_pose" if command_mode == "base_absolute" else "relative_delta",
             start_tcp_pose=self._pose_to_trace_dict(start_pose),
         )
         final_tip_error = None
@@ -737,28 +743,43 @@ class OfficialTeacherReplay(Policy):
                     ],
                     dtype=np.float64,
                 )
-                current_quat_xyzw = np.asarray(
-                    [
-                        current_pose.orientation.x,
-                        current_pose.orientation.y,
-                        current_pose.orientation.z,
-                        current_pose.orientation.w,
-                    ],
-                    dtype=np.float64,
-                )
-                rot_tcp_to_base = quaternion_xyzw_to_rotation_matrix(current_quat_xyzw)
-                correction_tcp = gain * (rot_tcp_to_base.T @ tip_error_base)
-                correction_tcp[2] = 0.0
-                norm = float(np.linalg.norm(correction_tcp))
-                if norm > max_xy_step:
-                    correction_tcp *= max_xy_step / norm
-                self.set_delta_pose_target_from_components(
-                    move_robot=move_robot,
-                    delta_position_xyz=correction_tcp,
-                    delta_rotation_xyz=np.zeros(3, dtype=np.float64),
-                    frame_id="gripper/tcp",
-                    max_translation=max_xy_step,
-                )
+                if command_mode == "base_absolute":
+                    correction_base = gain * tip_error_base
+                    correction_base[2] = 0.0
+                    norm = float(np.linalg.norm(correction_base))
+                    if norm > max_xy_step:
+                        correction_base *= max_xy_step / norm
+                    current_xyz = self._pose_position_array(current_pose)
+                    self._send_absolute_target(
+                        move_robot,
+                        self._make_pose(
+                            current_xyz + correction_base,
+                            self._pose_quat_wxyz(current_pose),
+                        ),
+                    )
+                else:
+                    current_quat_xyzw = np.asarray(
+                        [
+                            current_pose.orientation.x,
+                            current_pose.orientation.y,
+                            current_pose.orientation.z,
+                            current_pose.orientation.w,
+                        ],
+                        dtype=np.float64,
+                    )
+                    rot_tcp_to_base = quaternion_xyzw_to_rotation_matrix(current_quat_xyzw)
+                    correction_tcp = gain * (rot_tcp_to_base.T @ tip_error_base)
+                    correction_tcp[2] = 0.0
+                    norm = float(np.linalg.norm(correction_tcp))
+                    if norm > max_xy_step:
+                        correction_tcp *= max_xy_step / norm
+                    self.set_delta_pose_target_from_components(
+                        move_robot=move_robot,
+                        delta_position_xyz=correction_tcp,
+                        delta_rotation_xyz=np.zeros(3, dtype=np.float64),
+                        frame_id="gripper/tcp",
+                        max_translation=max_xy_step,
+                    )
                 final_tip_error = float(np.linalg.norm(tip_error_base[:2]))
             except TransformException as ex:
                 self.get_logger().warn(f"Pre-insertion micro-align TF lookup failed: {ex}")
@@ -905,6 +926,9 @@ class OfficialTeacherReplay(Policy):
     ) -> bool:
         threshold = self._tracking_gate_threshold_m
         speed_threshold = float(os.environ.get("AIC_OFFICIAL_TEACHER_TRACKING_GATE_SPEED_MPS", "0.005"))
+        max_lateral_error_m = float(
+            os.environ.get("AIC_OFFICIAL_TEACHER_TRACKING_GATE_MAX_LATERAL_ERROR_M", "0.0")
+        )
         force_fraction = float(os.environ.get("AIC_OFFICIAL_TEACHER_TRACKING_GATE_FORCE_FRACTION", "1.0"))
         force_threshold = self._ft_threshold_n * force_fraction
         timeout_sec = max(settle_sec, self._tracking_gate_timeout_sec)
@@ -914,6 +938,7 @@ class OfficialTeacherReplay(Policy):
         final_error = None
         final_speed = None
         final_force_delta = None
+        final_lateral_error = None
         gate_threshold = threshold
         gate_source = "unavailable"
         while (self.time_now() - started) < Duration(seconds=timeout_sec):
@@ -951,9 +976,31 @@ class OfficialTeacherReplay(Policy):
                 gate_source = "tf_pose_error_fallback"
             final_speed = self._tcp_speed_norm(get_observation)
             final_force_delta = self._force_delta_norm(get_observation, baseline_force)
+            final_lateral_error = None
+            if target_pose is not None:
+                try:
+                    current_pose_for_gate = self._current_tcp_pose()
+                    current_xyz_for_gate = self._pose_position_array(current_pose_for_gate)
+                    target_xyz_for_gate = self._pose_position_array(target_pose)
+                    final_lateral_error = float(
+                        np.linalg.norm((current_xyz_for_gate - target_xyz_for_gate)[:2])
+                    )
+                except TransformException:
+                    final_lateral_error = None
             speed_ok = final_speed is None or final_speed <= speed_threshold
             force_ok = final_force_delta < force_threshold
-            passed = bool(final_error is not None and final_error <= gate_threshold and speed_ok and force_ok)
+            lateral_ok = (
+                max_lateral_error_m <= 0.0
+                or final_lateral_error is None
+                or final_lateral_error <= max_lateral_error_m
+            )
+            passed = bool(
+                final_error is not None
+                and final_error <= gate_threshold
+                and speed_ok
+                and force_ok
+                and lateral_ok
+            )
             if passed:
                 if (self.time_now() - started) >= Duration(seconds=settle_sec):
                     break
@@ -973,7 +1020,6 @@ class OfficialTeacherReplay(Policy):
             ).transform
         except TransformException:
             plug_transform = None
-        final_lateral_error = None
         if current_pose is not None and target_pose is not None:
             current_xyz = self._pose_position_array(current_pose)
             target_xyz = self._pose_position_array(target_pose)
@@ -988,6 +1034,7 @@ class OfficialTeacherReplay(Policy):
             final_tracking_error_m=final_error,
             final_lateral_error_m=final_lateral_error,
             speed_threshold_mps=speed_threshold,
+            max_lateral_error_m=max_lateral_error_m if max_lateral_error_m > 0.0 else None,
             final_tcp_speed_mps=final_speed,
             force_delta_n=final_force_delta,
             ft_threshold_n=self._ft_threshold_n,
@@ -1198,6 +1245,7 @@ class OfficialTeacherReplay(Policy):
             "cheatcode_handoff_started",
             from_z_offset=from_z_offset,
             to_z_offset=to_z_offset,
+            vertical_bias_m=float(os.environ.get("AIC_OFFICIAL_TEACHER_PREINSERT_VERTICAL_BIAS_M", "0.0")),
             duration_sec=steps * dt,
             handoff_speed_mps=handoff_speed_mps,
             command_mode="absolute_cartesian_pose_base_link",
@@ -1911,6 +1959,7 @@ class OfficialTeacherReplay(Policy):
                 cheatcode_z_mode=cheatcode_z_mode,
                 insertion_command_mode=insertion_command_mode,
                 insertion_start_z_offset=guarded_start_z_offset,
+                vertical_bias_m=float(os.environ.get("AIC_OFFICIAL_TEACHER_PREINSERT_VERTICAL_BIAS_M", "0.0")),
                 insertion_depth_m=guarded_insertion_distance,
                 fallback_insertion_depth_m=fallback_distance,
                 insertion_duration_sec=insertion_duration,
