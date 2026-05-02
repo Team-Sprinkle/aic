@@ -34,8 +34,10 @@ class OfficialReplayConfig:
     expert_mode: str = "nominal"
     ft_threshold_n: float | None = None
     recovery_backoff_distance_m: float | None = None
+    recovery_min_backoff_distance_m: float | None = None
     recovery_max_retries: int | None = None
     recovery_release_force_threshold_n: float | None = None
+    force_confirm_sec: float | None = None
 
 
 class OfficialRecordingReplayRunner:
@@ -83,12 +85,18 @@ class OfficialRecordingReplayRunner:
             env["AIC_OFFICIAL_TEACHER_RECOVERY_MAX_BACKOFF_DISTANCE_M"] = str(
                 self.config.recovery_backoff_distance_m
             )
+        if self.config.recovery_min_backoff_distance_m is not None:
+            env["AIC_OFFICIAL_TEACHER_RECOVERY_MIN_BACKOFF_DISTANCE_M"] = str(
+                self.config.recovery_min_backoff_distance_m
+            )
         if self.config.recovery_max_retries is not None:
             env["AIC_OFFICIAL_TEACHER_RECOVERY_MAX_RETRIES"] = str(self.config.recovery_max_retries)
         if self.config.recovery_release_force_threshold_n is not None:
             env["AIC_OFFICIAL_TEACHER_RECOVERY_RELEASE_FORCE_THRESHOLD_N"] = str(
                 self.config.recovery_release_force_threshold_n
             )
+        if self.config.force_confirm_sec is not None:
+            env["AIC_OFFICIAL_TEACHER_FORCE_CONFIRM_SEC"] = str(self.config.force_confirm_sec)
         with (attempt_dir / "replay_stdout.txt").open("w", encoding="utf-8") as stdout, (
             attempt_dir / "replay_stderr.txt"
         ).open("w", encoding="utf-8") as stderr:

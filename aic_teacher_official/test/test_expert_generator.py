@@ -658,8 +658,10 @@ def test_replay_runner_passes_recovery_env(monkeypatch, tmp_path):
             output_dir=tmp_path,
             ft_threshold_n=1.0,
             recovery_backoff_distance_m=0.005,
+            recovery_min_backoff_distance_m=0.015,
             recovery_max_retries=2,
             recovery_release_force_threshold_n=2.0,
+            force_confirm_sec=0.0,
         )
     )
 
@@ -668,8 +670,10 @@ def test_replay_runner_passes_recovery_env(monkeypatch, tmp_path):
     env = captured["env"]
     assert env["AIC_OFFICIAL_TEACHER_FT_THRESHOLD_N"] == "1.0"
     assert env["AIC_OFFICIAL_TEACHER_RECOVERY_MAX_BACKOFF_DISTANCE_M"] == "0.005"
+    assert env["AIC_OFFICIAL_TEACHER_RECOVERY_MIN_BACKOFF_DISTANCE_M"] == "0.015"
     assert env["AIC_OFFICIAL_TEACHER_RECOVERY_MAX_RETRIES"] == "2"
     assert env["AIC_OFFICIAL_TEACHER_RECOVERY_RELEASE_FORCE_THRESHOLD_N"] == "2.0"
+    assert env["AIC_OFFICIAL_TEACHER_FORCE_CONFIRM_SEC"] == "0.0"
 
 
 def test_expert_planner_runner_builds_live_policy_command(tmp_path):

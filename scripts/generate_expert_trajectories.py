@@ -76,8 +76,10 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--seed", type=int, default=0)
     parser.add_argument("--ft-soft-threshold", type=float, default=None, help=argparse.SUPPRESS)
     parser.add_argument("--ft-hard-threshold", type=float, default=None, help=argparse.SUPPRESS)
-    parser.add_argument("--backup-distance-m", type=float, default=0.002)
+    parser.add_argument("--backup-distance-m", type=float, default=0.015)
+    parser.add_argument("--min-backoff-distance-m", type=float, default=None)
     parser.add_argument("--max-retries", type=int, default=3)
+    parser.add_argument("--force-confirm-sec", type=float, default=0.0)
     parser.add_argument(
         "--recovery-release-force-threshold",
         type=float,
@@ -93,6 +95,8 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--per-trial-timeout-sec", type=int, default=0)
     parser.add_argument("--sim-distrobox", default="")
     parser.add_argument("--sample-dt", type=float, default=0.05)
+    parser.add_argument("--compact-stalls", type=str_bool, default=False)
+    parser.add_argument("--trajectory-speedup", type=float, default=2.0)
     parser.add_argument("--launch-moveit", type=str_bool, default=True)
     parser.add_argument("--moveit-launch-file", default="aic_moveit_config moveit.launch.py")
     parser.add_argument(
@@ -140,8 +144,12 @@ def main() -> int:
         per_trial_timeout_sec=args.per_trial_timeout_sec,
         sim_distrobox=args.sim_distrobox,
         recovery_backoff_distance_m=args.backup_distance_m,
+        recovery_min_backoff_distance_m=(
+            args.backup_distance_m if args.min_backoff_distance_m is None else args.min_backoff_distance_m
+        ),
         recovery_max_retries=args.max_retries,
         recovery_release_force_threshold_n=args.recovery_release_force_threshold,
+        force_confirm_sec=args.force_confirm_sec,
     )
     planner_config = ExpertPlannerRunConfig(
         repo_root=REPO_ROOT,
@@ -280,7 +288,13 @@ def run_live_generation(
             continue
         smooth_path = piecewise_path.with_name("smooth_trajectory.json")
         try:
-            smooth = postprocess_file(piecewise_path, smooth_path, args.sample_dt)
+            smooth = postprocess_file(
+                piecewise_path,
+                smooth_path,
+                args.sample_dt,
+                compact_stalls=args.compact_stalls,
+                speedup=args.trajectory_speedup,
+            )
         except Exception as ex:
             record["reason"] = "postprocess_failed"
             record["error"] = f"{type(ex).__name__}: {ex}"

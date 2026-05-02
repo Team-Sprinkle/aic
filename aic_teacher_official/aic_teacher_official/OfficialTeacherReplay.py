@@ -515,7 +515,9 @@ class OfficialTeacherReplay(Policy):
         *,
         dt: float,
     ) -> tuple[bool, float]:
-        self.sleep_for(dt)
+        confirm_sec = float(os.environ.get("AIC_OFFICIAL_TEACHER_FORCE_CONFIRM_SEC", str(dt)))
+        if confirm_sec > 0.0:
+            self.sleep_for(confirm_sec)
         confirmed_delta = self._force_delta_norm(get_observation, baseline_force)
         return confirmed_delta >= self._ft_threshold_n, confirmed_delta
 
@@ -1235,6 +1237,10 @@ class OfficialTeacherReplay(Policy):
         max_backoff_distance = float(
             os.environ.get("AIC_OFFICIAL_TEACHER_RECOVERY_MAX_BACKOFF_DISTANCE_M", "0.03")
         )
+        min_backoff_distance = float(
+            os.environ.get("AIC_OFFICIAL_TEACHER_RECOVERY_MIN_BACKOFF_DISTANCE_M", "0.0")
+        )
+        min_backoff_distance = min(max_backoff_distance, max(0.0, min_backoff_distance))
         backoff_duration = float(os.environ.get("AIC_OFFICIAL_TEACHER_RECOVERY_BACKOFF_SEC", "0.45"))
         release_timeout = float(os.environ.get("AIC_OFFICIAL_TEACHER_FORCE_RELEASE_TIMEOUT_SEC", "5.0"))
         release_check_sec = float(os.environ.get("AIC_OFFICIAL_TEACHER_FORCE_RELEASE_STAGE_CHECK_SEC", "0.10"))
@@ -1253,6 +1259,7 @@ class OfficialTeacherReplay(Policy):
             "recovery_backoff_started",
             backoff_increment_m=backoff_increment,
             max_backoff_distance_m=max_backoff_distance,
+            min_backoff_distance_m=min_backoff_distance,
             release_timeout_sec=release_timeout,
             release_threshold_n=release_threshold,
             start_tcp_pose=self._pose_to_trace_dict(start_pose),
@@ -1291,6 +1298,9 @@ class OfficialTeacherReplay(Policy):
                 backoff_distance_achieved_m=total_backoff,
             )
 
+            if total_backoff < min_backoff_distance:
+                continue
+
             stage_release_started = self.time_now()
             while (
                 (self.time_now() - stage_release_started) < Duration(seconds=release_check_sec)
@@ -1311,6 +1321,7 @@ class OfficialTeacherReplay(Policy):
             threshold_n=release_threshold,
             contact_threshold_n=self._ft_threshold_n,
             backoff_distance_achieved_m=total_backoff,
+            min_backoff_distance_m=min_backoff_distance,
             max_backoff_distance_m=max_backoff_distance,
         )
         if not force_released:
@@ -1633,7 +1644,16 @@ class OfficialTeacherReplay(Policy):
                 send_feedback("official_teacher_replay_precontact_port_align_force_abort")
                 return False
             active_lateral_offset = retry_lateral_offset + self._last_precontact_lateral_offset_base
-            if micro_align_sec > 0.0 or port_align_sec > 0.0 or retry_count > 0:
+            skip_retry_preinsert_gate = os.environ.get(
+                "AIC_OFFICIAL_TEACHER_SKIP_PREINSERT_GATE_ON_RECOVERY_RETRY",
+                "true",
+            ).lower() in {"1", "true", "yes", "on"}
+            should_check_preinsert_gate = (
+                micro_align_sec > 0.0
+                or port_align_sec > 0.0
+                or (retry_count > 0 and not skip_retry_preinsert_gate)
+            )
+            if should_check_preinsert_gate:
                 retry_gate_target_z = original_preinsert_z if retry_count > 0 and cheatcode_z_mode == "tf_depth" else None
                 gate_passed = self._hold_preinsert_until_tracking_gate(
                     task,
@@ -1659,7 +1679,11 @@ class OfficialTeacherReplay(Policy):
                 self._trace_event(
                     "preinsert_micro_align_gate_skipped",
                     retry_count=retry_count,
-                    reason="no_precontact_alignment_stage",
+                    reason=(
+                        "recovery_retry_gate_skipped"
+                        if retry_count > 0 and skip_retry_preinsert_gate
+                        else "no_precontact_alignment_stage"
+                    ),
                 )
             baseline_force = self._force_vector(get_observation)
             if cheatcode_z_mode == "cheatcode_offsets":
@@ -1749,6 +1773,39 @@ class OfficialTeacherReplay(Policy):
                     if z_offset < live_z_offset <= max_live_start_z_offset:
                         guarded_start_z_offset = live_z_offset
                         guarded_insertion_distance = max(0.0, live_z_offset - fixed_end_z_offset)
+                        preserve_live_lateral = os.environ.get(
+                            "AIC_OFFICIAL_TEACHER_PRESERVE_LIVE_LATERAL_ON_Z_REPAIR",
+                            "true",
+                        ).lower() in {"1", "true", "yes", "on"}
+                        if preserve_live_lateral:
+                            try:
+                                nominal_live_pose = self._calc_cheatcode_gripper_pose(
+                                    task,
+                                    port_transform,
+                                    z_offset=live_z_offset,
+                                    lateral_offset_base=active_lateral_offset,
+                                )
+                                current_xyz = self._pose_position_array(self._current_tcp_pose())
+                                nominal_xyz = self._pose_position_array(nominal_live_pose)
+                                live_lateral_offset = np.array(
+                                    [
+                                        current_xyz[0] - nominal_xyz[0],
+                                        current_xyz[1] - nominal_xyz[1],
+                                        0.0,
+                                    ],
+                                    dtype=np.float64,
+                                )
+                                max_live_lateral_offset = float(
+                                    os.environ.get(
+                                        "AIC_OFFICIAL_TEACHER_MAX_LIVE_LATERAL_REPAIR_M",
+                                        "0.02",
+                                    )
+                                )
+                                live_lateral_norm = float(np.linalg.norm(live_lateral_offset[:2]))
+                                if 0.0 < live_lateral_norm <= max_live_lateral_offset:
+                                    active_lateral_offset = active_lateral_offset + live_lateral_offset
+                            except TransformException as ex:
+                                self.get_logger().warn(f"Live lateral repair TF lookup failed: {ex}")
                         self._trace_event(
                             "cheatcode_handoff_gate_repaired_with_live_z_offset",
                             retry_count=retry_count,
@@ -1756,6 +1813,7 @@ class OfficialTeacherReplay(Policy):
                             nominal_start_z_offset=z_offset,
                             guarded_insertion_distance_m=guarded_insertion_distance,
                             max_live_start_z_offset=max_live_start_z_offset,
+                            lateral_offset_base_m=active_lateral_offset.tolist(),
                         )
                         gate_passed = True
                     else:
@@ -1839,21 +1897,33 @@ class OfficialTeacherReplay(Policy):
                     send_feedback("official_teacher_replay_recovery_force_release_failed")
                     self._trace_event("recovery_force_release_failed", retry_count=retry_count)
                     return False
-                gate_passed = self._hold_preinsert_until_tracking_gate(
-                    task,
-                    port_transform,
-                    get_observation,
-                    move_robot,
-                    settle_sec=settle_sec,
-                    dt=dt,
-                    z_offset=z_offset,
-                    target_z_m=original_preinsert_z,
-                )
-                self._trace_event(
-                    "recovery_retry_tracking_gate_checked",
-                    retry_count=retry_count,
-                    tracking_gate_passed=gate_passed,
-                )
+                skip_retry_gate = os.environ.get(
+                    "AIC_OFFICIAL_TEACHER_SKIP_RETRY_GATE_AFTER_RECOVERY",
+                    "true",
+                ).lower() in {"1", "true", "yes", "on"}
+                if skip_retry_gate:
+                    gate_passed = True
+                    self._trace_event(
+                        "recovery_retry_tracking_gate_skipped",
+                        retry_count=retry_count,
+                        reason="backoff_realign_already_gated",
+                    )
+                else:
+                    gate_passed = self._hold_preinsert_until_tracking_gate(
+                        task,
+                        port_transform,
+                        get_observation,
+                        move_robot,
+                        settle_sec=settle_sec,
+                        dt=dt,
+                        z_offset=z_offset,
+                        target_z_m=original_preinsert_z,
+                    )
+                    self._trace_event(
+                        "recovery_retry_tracking_gate_checked",
+                        retry_count=retry_count,
+                        tracking_gate_passed=gate_passed,
+                    )
                 if not gate_passed:
                     send_feedback("official_teacher_replay_tracking_gate_failed")
                     return False

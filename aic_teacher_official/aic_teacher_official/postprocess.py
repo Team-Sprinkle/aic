@@ -127,6 +127,99 @@ def _linear_position_velocity(
     return p0 + s * (p1 - p0), velocity
 
 
+def _quat_angle_rad(q0: Iterable[float], q1: Iterable[float]) -> float:
+    qa = normalize_quaternion_xyzw(q0)
+    qb = normalize_quaternion_xyzw(q1)
+    dot = abs(float(np.dot(qa, qb)))
+    return 2.0 * math.acos(float(np.clip(dot, -1.0, 1.0)))
+
+
+def compact_stall_intervals(
+    trajectory: SmoothTrajectory,
+    *,
+    speedup: float = 2.0,
+    min_segment_sec: float = 0.05,
+    stall_translation_m: float = 0.00025,
+    stall_rotation_rad: float = 0.002,
+) -> SmoothTrajectory:
+    """Drop repeated low-motion samples and retime the remaining waypoints.
+
+    This is intentionally geometric: it compacts intervals where adjacent TCP
+    poses barely move, then recomputes timestamps and TCP velocities. It does
+    not change waypoint poses or phases.
+    """
+    if speedup <= 0.0:
+        raise ValueError("speedup must be positive")
+    if min_segment_sec <= 0.0:
+        raise ValueError("min_segment_sec must be positive")
+    if len(trajectory.waypoints) < 2:
+        return trajectory
+
+    compacted = [trajectory.waypoints[0]]
+    removed = 0
+    for waypoint in trajectory.waypoints[1:-1]:
+        prev = compacted[-1]
+        distance = float(
+            np.linalg.norm(
+                np.asarray(waypoint.tcp_pose.position, dtype=np.float64)
+                - np.asarray(prev.tcp_pose.position, dtype=np.float64)
+            )
+        )
+        angle = _quat_angle_rad(prev.tcp_pose.orientation_xyzw, waypoint.tcp_pose.orientation_xyzw)
+        same_phase = waypoint.phase == prev.phase
+        if same_phase and distance < stall_translation_m and angle < stall_rotation_rad:
+            removed += 1
+            continue
+        compacted.append(waypoint)
+    compacted.append(trajectory.waypoints[-1])
+
+    retimed: list[TrajectoryWaypoint] = []
+    current_time = 0.0
+    for index, waypoint in enumerate(compacted):
+        if index == 0:
+            retimed.append(replace(waypoint, timestamp=0.0))
+            continue
+        prev_original = compacted[index - 1]
+        original_dt = max(min_segment_sec, waypoint.timestamp - prev_original.timestamp)
+        new_dt = max(min_segment_sec, original_dt / speedup)
+        current_time += new_dt
+        position_delta = (
+            np.asarray(waypoint.tcp_pose.position, dtype=np.float64)
+            - np.asarray(prev_original.tcp_pose.position, dtype=np.float64)
+        )
+        retimed.append(
+            replace(
+                waypoint,
+                timestamp=float(current_time),
+                tcp_velocity=(position_delta / new_dt).tolist(),
+                diagnostics={
+                    **waypoint.diagnostics,
+                    "stall_compaction": "retimed_after_low_motion_removal_v1",
+                },
+            )
+        )
+    assert_monotonic_timestamps(retimed)
+    metadata = replace(
+        trajectory.metadata,
+        postprocessing={
+            **trajectory.metadata.postprocessing,
+            "stall_compaction": {
+                "method": "drop_low_motion_samples_and_retime_v1",
+                "speedup": speedup,
+                "min_segment_sec": min_segment_sec,
+                "stall_translation_m": stall_translation_m,
+                "stall_rotation_rad": stall_rotation_rad,
+                "input_waypoints": len(trajectory.waypoints),
+                "output_waypoints": len(retimed),
+                "removed_waypoints": removed,
+                "input_duration_sec": trajectory.waypoints[-1].timestamp - trajectory.waypoints[0].timestamp,
+                "output_duration_sec": retimed[-1].timestamp - retimed[0].timestamp,
+            },
+        },
+    )
+    return SmoothTrajectory(waypoints=retimed, metadata=metadata)
+
+
 def postprocess_piecewise_trajectory(
     piecewise: PiecewiseTrajectory,
     *,
@@ -275,8 +368,17 @@ def _interpolate_optional_vector(
     return (left + float(np.clip(fraction, 0.0, 1.0)) * (right - left)).tolist()
 
 
-def postprocess_file(input_path: str | Path, output_path: str | Path, sample_dt: float) -> SmoothTrajectory:
+def postprocess_file(
+    input_path: str | Path,
+    output_path: str | Path,
+    sample_dt: float,
+    *,
+    compact_stalls: bool = False,
+    speedup: float = 2.0,
+) -> SmoothTrajectory:
     piecewise = PiecewiseTrajectory.load_json(input_path)
     smooth = postprocess_piecewise_trajectory(piecewise, sample_dt=sample_dt)
+    if compact_stalls:
+        smooth = compact_stall_intervals(smooth, speedup=speedup, min_segment_sec=sample_dt)
     smooth.save_json(output_path)
     return smooth

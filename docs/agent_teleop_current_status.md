@@ -1125,13 +1125,153 @@ Try these in order, one variation at a time:
 5. Add high-rate F/T debug around the handoff and start-of-insertion window so the short official force spikes can be localized instead of inferred from scoring YAML.
 6. Longer-term, implement executable joint retiming/cross-fade for the MoveIt-to-Cartesian handoff and consider a port-frame delta-Z insertion formulation so the final descent starts from the measured live preinsert pose rather than from an assumed geometric pose.
 
+## What Works Consistently So Far
+
+Working:
+
+- VLM strategy generation constrained to high-level planning plus MoveIt free-space approach, with CheatCode/geometric final insertion, remains the right architecture.
+- Preserve-current-Z preinsert alignment and preinsert gate repair are the most reliable nominalrecovery configuration so far.
+- Exact-position CheatCode-offset guarded insertion with measured TCP speed gating works for accepted nominal insertion. The best runs keep guarded speed below validation thresholds and reach insertion without contact.
+- Recovery backoff is active and observable. With the latest wiring, `--backup-distance-m`, `--max-retries`, and `--recovery-release-force-threshold` reach online replay; 5 mm backoff plus Z-preserving recovery realign can release force and pass retry gates.
+- GPT-5 failure analysis is useful for separating speed failures from geometry/gate failures; the latest analysis identified live-Z repair after failed lateral tracking as the next issue.
+
+Not working reliably:
+
+- Blindly lowering commanded insertion speed. The controller's impedance dynamics mean commanded speed is only indirect; measured TCP speed gates are required.
+- Relative gripper/tcp insertion and mixed frame semantics. Earlier runs showed actual TCP speeds far above commanded speed.
+- Pinned XY/orientation insertion as a default. It reduced speed but missed insertion in live testing.
+- Precontact port align and TCP micro-align as previously configured. They tended to create sub-threshold force buildup or worsen contact timing.
+- Increasing retry count alone. Forced-backoff runs with 2 and 3 retries repeated the same shallow contact pattern under strict thresholds.
+- Fixed 5 mm backoff as a universal recovery distance. It can release in one run and fail release in another because the Cartesian controller does not make physical separation exactly equal commanded retreat.
+- Live-Z repair after a failed handoff gate. It can rescue Z bookkeeping, but if XY/yaw are not already in spec it permits a Z-only descent from a laterally imperfect pose.
+
+## Nominalrecovery Smoothing Update
+
+The current nominalrecovery priority is no longer to speed up the live replay trajectory before execution. A live attempt with pre-replay stall compaction and `2x` retiming made the replay controller produce excessive guarded-insert speed and failed validation. The better split is:
+
+1. Keep live replay conservative and controller-gated.
+2. Make backoff more deterministic online with immediate force confirmation and a minimum physical backoff distance before release checks.
+3. Compact stalls after the real replay is recorded, then train/evaluate policy data from the postprocessed LeRobot dataset.
+
+New controls:
+
+```text
+--backup-distance-m 0.015
+--min-backoff-distance-m 0.015
+--force-confirm-sec 0.0
+--compact-stalls false
+```
+
+`--min-backoff-distance-m` is now passed to replay as `AIC_OFFICIAL_TEACHER_RECOVERY_MIN_BACKOFF_DISTANCE_M`. `OfficialTeacherReplay` will continue staged Z backoff until at least that distance is reached before it starts checking whether force has released. This addresses the observed failure mode where a `15 mm` max backoff still stopped at the first `5 mm` stage because force release happened early.
+
+One live check with `--backup-distance-m 0.015`, `--min-backoff-distance-m 0.015`, and no pre-replay compaction confirmed the fix:
+
+```text
+outputs/expert_debug/nominalrecovery_minbackoff15_nocompact_v1_20260502T185340Z
+backoff_occurred: true
+backoff_distance_achieved_m: 0.015
+force_release_before_realign: true
+```
+
+That run still rejected with score `1.0`, no insertion event, and `max_guarded_insert_speed_mps: 0.01293`. The important failure moved downstream: recovery returned with zero force and passed its internal return gates, but the redundant post-recovery retry gate then commanded back to the nominal port-center target, reintroduced about `2.0 N` force, and aborted before a real retry. The current mitigation is `AIC_OFFICIAL_TEACHER_SKIP_RETRY_GATE_AFTER_RECOVERY=true` by default, because `_backoff_and_realign` already checks the return-to-preinsert pose after force release and after realign.
+
+Two follow-up live checks clarified the next bottleneck:
+
+```text
+outputs/expert_debug/nominalrecovery_minbackoff15_skipretrygate_v1_20260502T185920Z
+```
+
+Skipping the redundant recovery retry gate moved execution forward, but retry `1` failed at the forced retry preinsert micro-align gate. That gate ran even though micro-align and port-align durations were both disabled, and again pulled toward the nominal port-center target. The current mitigation is `AIC_OFFICIAL_TEACHER_SKIP_PREINSERT_GATE_ON_RECOVERY_RETRY=true` by default.
+
+```text
+outputs/expert_debug/nominalrecovery_minbackoff15_skip_retry_preinsert_gates_v1_20260502T190348Z
+```
+
+Skipping both redundant gates allowed actual retries. The run performed repeated `15 mm` backoffs and exhausted `--max-retries 2`. Backoff and force-release behavior was consistent, but every retry contacted immediately on the first guarded insert command. Measured guarded speed stayed below the configured speed gate (`max_guarded_insert_speed_mps: 0.00935`), so this was no longer a speed problem.
+
+```text
+outputs/expert_debug/nominalrecovery_minbackoff15_live_lateral_repair_v1_20260502T191023Z
+```
+
+Preserving measured live lateral offset during live-Z repair did not fix the first-command contact. It produced traceable offsets such as:
+
+```text
+lateral_offset_base_m: [-0.004825, -0.009798, 0.0]
+```
+
+but still contacted immediately and worsened measured guarded speed (`max_guarded_insert_speed_mps: 0.01664`). Treat this branch as not working reliably. The next likely change should be more structural: do not permit live-Z-repaired guarded descent when the retry context is laterally/force suspicious; either regenerate/replan the preinsert target, use a retry-specific insertion target policy that holds measured XY/orientation for the first few millimeters, or reject this recovery sample after recording the successful backoff.
+
+For policy smoothing, use the post-replay compactor instead of pre-replay compaction:
+
+```bash
+.pixi/envs/default/bin/python scripts/compact_lerobot_stalls.py \
+  --input-dataset <attempt>/dataset \
+  --output-dataset <attempt>/dataset_compacted_stalls_motion005_v1 \
+  --stall-translation-m 0.00005 \
+  --stall-action-norm 0.00005 \
+  --min-stall-frames 5 \
+  --no-trim-videos \
+  --overwrite
+```
+
+The first tuned compaction pass on a forced-backoff nominalrecovery attempt reduced the frame table from `2469` frames to `316` frames and retimed it from about `123.4 s` to `15.75 s`, while recomputing delta-pose actions from consecutive TCP states. Videos are copied unchanged unless `--trim-videos` is explicitly enabled, so this compacted dataset should be used for state/action policy data first.
+
+Additional compaction passes:
+
+```text
+nominalrecovery_minbackoff15_nocompact_v1_20260502T185340Z: 927 -> 577 frames
+nominalrecovery_minbackoff15_skipretrygate_v1_20260502T185920Z: 925 -> 464 frames
+nominalrecovery_minbackoff15_skip_retry_preinsert_gates_v1_20260502T190348Z: 1701 -> 681 frames
+nominalrecovery_minbackoff15_live_lateral_repair_v1_20260502T191023Z: 1705 -> 1000 frames
+```
+
+These contain increasingly complete recovery/backoff behavior, but none is an accepted insertion trajectory.
+
+Useful success/debug folders:
+
+Nominal:
+
+```text
+/home/ubuntu/ws_aic/src/aic/outputs/expert_debug/nominal_smoke/accepted_dataset_nominal
+/home/ubuntu/ws_aic/src/aic/outputs/trajectory_datasets/sfp_to_nic/cheatcode/nic_cards_1/n2__act_smoke/accepted_dataset
+/home/ubuntu/ws_aic/src/aic/outputs/trajectory_datasets/sfp_to_nic/cheatcode/nic_cards_1/n10__act_smoke/accepted_dataset
+```
+
+Nominalrecovery accepted:
+
+```text
+/home/ubuntu/ws_aic/src/aic/outputs/expert_debug/nominalrecovery_preserve_z_fast_insert_v1_20260502T155554Z
+/home/ubuntu/ws_aic/src/aic/outputs/expert_debug/nominalrecovery_preserve_z_fast_insert_v1_20260502T155554Z/accepted_dataset_nominalrecovery
+/home/ubuntu/ws_aic/src/aic/outputs/expert_debug/nominalrecovery_preserve_z_repeat_single_v1_20260502T165045Z
+/home/ubuntu/ws_aic/src/aic/outputs/expert_debug/nominalrecovery_preserve_z_repeat_single_v1_20260502T165045Z/accepted_dataset_nominalrecovery
+```
+
+Recovery/backoff mechanics, not accepted insertion yet:
+
+```text
+/home/ubuntu/ws_aic/src/aic/outputs/expert_debug/nominalrecovery_forced_backoff_release2_max5mm_v1_20260502T170239Z
+/home/ubuntu/ws_aic/src/aic/outputs/expert_debug/nominalrecovery_forced_backoff_release2_max5mm_preservez_v2_20260502T170736Z
+/home/ubuntu/ws_aic/src/aic/outputs/expert_debug/nominalrecovery_forced_backoff_release2_max5mm_preservez_max3_v1_20260502T171312Z
+/home/ubuntu/ws_aic/src/aic/outputs/expert_debug/nominalrecovery_forced_backoff_ft12_release2_max5mm_preservez_v1_20260502T171851Z
+```
+
+Postprocessed nominalrecovery policy-data smoothing:
+
+```text
+/home/ubuntu/ws_aic/src/aic/outputs/expert_debug/nominalrecovery_forced_backoff_release2_max5mm_preservez_v2_20260502T170736Z/replay_attempts/attempt_000001_candidate_00/dataset_compacted_stalls_motion005_v1
+/home/ubuntu/ws_aic/src/aic/outputs/expert_debug/nominalrecovery_minbackoff15_nocompact_v1_20260502T185340Z/replay_attempts/attempt_000001_candidate_00/dataset_compacted_stalls_motion005_v1
+/home/ubuntu/ws_aic/src/aic/outputs/expert_debug/nominalrecovery_minbackoff15_skipretrygate_v1_20260502T185920Z/replay_attempts/attempt_000001_candidate_00/dataset_compacted_stalls_motion005_v1
+/home/ubuntu/ws_aic/src/aic/outputs/expert_debug/nominalrecovery_minbackoff15_skip_retry_preinsert_gates_v1_20260502T190348Z/replay_attempts/attempt_000001_candidate_00/dataset_compacted_stalls_motion005_v1
+/home/ubuntu/ws_aic/src/aic/outputs/expert_debug/nominalrecovery_minbackoff15_live_lateral_repair_v1_20260502T191023Z/replay_attempts/attempt_000001_candidate_00/dataset_compacted_stalls_motion005_v1
+```
+
 ## Tests Last Run
 
 After the latest code changes:
 
 ```text
-pixi run pytest aic_teacher_official/test/test_expert_generator.py -q
-41 passed
+.pixi/envs/default/bin/python -m pytest aic_teacher_official/test/test_official_teacher_pipeline.py aic_teacher_official/test/test_expert_generator.py -q
+65 passed
 ```
 
 ## Important Constraint Reminder

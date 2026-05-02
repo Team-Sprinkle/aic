@@ -15,6 +15,7 @@ from aic_teacher_official.generate_piecewise import (
 )
 from aic_teacher_official.context import OfficialTeacherContext
 from aic_teacher_official.postprocess import (
+    compact_stall_intervals,
     minimum_jerk_fraction,
     postprocess_piecewise_trajectory,
 )
@@ -167,6 +168,30 @@ def test_final_insertion_is_not_bent_by_global_smoothing():
     assert smooth.metadata.postprocessing["insertion_start_waypoint_index"] == 2
     assert all(w.tcp_pose.position[0] == pytest.approx(0.1) for w in insertion)
     assert all(w.tcp_pose.position[1] == pytest.approx(0.0) for w in insertion)
+
+
+def test_compact_stall_intervals_removes_stationary_samples_and_retimes():
+    smooth = postprocess_piecewise_trajectory(_piecewise(), sample_dt=0.5)
+    stalled = type(smooth)(
+        waypoints=[
+            smooth.waypoints[0],
+            TrajectoryWaypoint(
+                timestamp=1.0,
+                tcp_pose=smooth.waypoints[0].tcp_pose,
+                phase=smooth.waypoints[0].phase,
+                source=smooth.waypoints[0].source,
+            ),
+            *smooth.waypoints[1:],
+        ],
+        metadata=smooth.metadata,
+    )
+
+    compacted = compact_stall_intervals(stalled, speedup=2.0, min_segment_sec=0.05)
+
+    assert len(compacted.waypoints) < len(stalled.waypoints)
+    assert_monotonic_timestamps(compacted.waypoints)
+    assert compacted.waypoints[-1].timestamp < stalled.waypoints[-1].timestamp
+    assert compacted.metadata.postprocessing["stall_compaction"]["removed_waypoints"] >= 1
 
 
 def test_replay_policy_imports_no_vlm_backend():
