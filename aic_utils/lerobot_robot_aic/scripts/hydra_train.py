@@ -286,6 +286,10 @@ def _uses_direct_act_torchrun(cfg: DictConfig) -> bool:
     return bool(cfg.hardware.get("distributed", {}).get("enabled", False)) and str(cfg.train.stage) == "bc"
 
 
+def _uses_lerobot_act_output_dir(cfg: DictConfig) -> bool:
+    return str(cfg.train.stage) == "bc"
+
+
 def _prepare_run_metadata(cfg: DictConfig, cuda_summary: dict[str, Any]) -> None:
     run_dir = Path(str(cfg.run.output_dir))
     if not run_dir.is_absolute():
@@ -317,7 +321,7 @@ def main(cfg: DictConfig) -> int:
     cmd = maybe_wrap_torchrun(build_command(cfg), cfg, selected)
     if bool(hardware.dry_run_selection) or bool(cfg.train.get("dry_run", False)):
         print(json.dumps({"cuda": cuda_summary, "command": cmd}, indent=2, sort_keys=True))
-    defer_metadata = _uses_direct_act_torchrun(cfg) and not bool(hardware.dry_run_selection)
+    defer_metadata = _uses_lerobot_act_output_dir(cfg) and not bool(hardware.dry_run_selection)
     if not defer_metadata:
         _prepare_run_metadata(cfg, cuda_summary)
     if bool(hardware.dry_run_selection):

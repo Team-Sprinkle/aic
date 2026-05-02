@@ -12,9 +12,9 @@ run:
   dataset_tag: ${data.dataset_tag}
   model_family: ${model.family}
   stage: ${train.stage}
-  name: hf_sfp2nic_card0_port0_act_20hz_chunk8_nact2_4gpu_v1
+  name: hf_sfp2nic_card0_port0_act_20hz_chunk8_nact2_4gpu_eval_all_v1
   output_root: outputs/train
-  output_dir: ${run.output_root}/${run.task_family}/${run.dataset_tag}/${run.model_family}/${run.stage}/20260502_act_20hz_chunk8_nact2_4gpu_v1
+  output_dir: ${run.output_root}/${run.task_family}/${run.dataset_tag}/${run.model_family}/${run.stage}/20260502_act_20hz_chunk8_nact2_4gpu_eval_all_v1
 
 train:
   # The 10D task vector is already materialized into observation.state.

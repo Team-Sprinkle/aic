@@ -116,6 +116,11 @@ def run_short_training(args: argparse.Namespace) -> dict[str, Any]:
             workspace_dir=args.workspace_dir,
             engine_config=args.engine_config,
             sim_distrobox=args.sim_distrobox,
+            sim_docker_container=args.sim_docker_container,
+            docker_host=args.docker_host,
+            workspace_container=args.workspace_container,
+            host=args.host,
+            port=args.port,
             ground_truth=args.ground_truth,
             gazebo_gui=args.gazebo_gui,
             launch_rviz=args.launch_rviz,
@@ -190,6 +195,23 @@ def build_arg_parser() -> argparse.ArgumentParser:
             "environment. Omit to use the local pixi launch path."
         ),
     )
+    parser.add_argument(
+        "--sim-docker-container",
+        default=None,
+        help="Optional rootless Docker evaluation container name, for example aic_eval.",
+    )
+    parser.add_argument(
+        "--docker-host",
+        default=None,
+        help="Docker host socket. Defaults to DOCKER_HOST or Docker's default.",
+    )
+    parser.add_argument(
+        "--workspace-container",
+        default="/home/chmin/yj/ws_aic/src/aic",
+        help="Path to this checkout inside the evaluation container.",
+    )
+    parser.add_argument("--host", default="127.0.0.1", help="Gazebo RL bridge host/IP.")
+    parser.add_argument("--port", type=int, default=0, help="Gazebo RL bridge port; 0 picks a free port.")
     parser.add_argument("--ground-truth", type=lambda x: str(x).lower() == "true", default=True)
     parser.add_argument("--gazebo-gui", type=lambda x: str(x).lower() == "true", default=False)
     parser.add_argument("--launch-rviz", type=lambda x: str(x).lower() == "true", default=False)

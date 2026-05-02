@@ -99,6 +99,9 @@ def _local_repo_id(dataset_root: Path) -> str:
 def build_lerobot_train_cmd(args: argparse.Namespace) -> list[str]:
     if args.n_action_steps > args.chunk_size:
         raise ValueError("--n-action-steps must be <= --chunk-size for ACT")
+    save_freq = getattr(args, "save_freq", 20000)
+    log_freq = getattr(args, "log_freq", 200)
+    eval_freq = getattr(args, "eval_freq", 0)
     if args.dataset_root:
         dataset_root = args.dataset_root.resolve()
         summary = summarize_dataset_schema(dataset_root)
@@ -130,9 +133,9 @@ def build_lerobot_train_cmd(args: argparse.Namespace) -> list[str]:
         f"--policy.n_action_steps={args.n_action_steps}",
         f"--policy.n_obs_steps={args.n_obs_steps}",
         f"--steps={args.steps}",
-        f"--save_freq={args.save_freq}",
-        f"--log_freq={args.log_freq}",
-        f"--eval_freq={args.eval_freq}",
+        f"--save_freq={save_freq}",
+        f"--log_freq={log_freq}",
+        f"--eval_freq={eval_freq}",
         f"--dataset.video_backend={args.dataset_video_backend}",
     ]
     if dataset_root is not None:
