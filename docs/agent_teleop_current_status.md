@@ -1,6 +1,6 @@
 # Agent Teleop Expert Generator Current Status
 
-Last updated: 2026-05-01
+Last updated: 2026-05-02
 
 This document summarizes the current state of the VLM/MoveIt/CheatCode expert trajectory generator on `feat/agent-teleop`. It is intended as a handoff for continuing development after the first successful real nominal run.
 
@@ -954,29 +954,18 @@ These are intentional:
      --model gpt-5
    ```
 
-## Recommended Next Step
+## 2026-05-02 Measured Speed Gate Update
 
-Do not keep blindly changing insertion speed.
+Measured-speed-gated advancement has now been implemented in `OfficialTeacherReplay._run_online_cheatcode_insertion` for `exact_position` guarded insertion.
 
-The next targeted fix should be measured-speed-gated advancement during `exact_position` guarded insertion:
-
-1. Keep dynamic CheatCode exact-position targets.
-2. Keep commanded speed at `0.0013 m/s` initially.
-3. During guarded insertion, measure actual TCP speed each control tick.
-4. If actual TCP speed exceeds the speed gate, hold the previous target and do not advance depth.
-5. Resume depth advancement only after measured speed falls below the gate.
-6. Keep nominal behavior strict: if F/T threshold is exceeded, reject; no post-contact recovery in `--nominal`.
-7. In `--nominalrecovery` and `--recovery`, if F/T threshold is exceeded, stop descent immediately and use smooth staged backoff before any realignment.
-
-Suggested implementation location:
+The new controls are:
 
 ```text
-aic_teacher_official/aic_teacher_official/OfficialTeacherReplay.py
+AIC_OFFICIAL_TEACHER_GUARDED_INSERT_SPEED_GATE_MPS=0.012
+AIC_OFFICIAL_TEACHER_GUARDED_INSERT_SPEED_GATE_MAX_HOLD_SEC=1.20
 ```
 
-Specifically inside `_run_online_cheatcode_insertion`, in the guarded insertion loop after `target_pose` is computed and before advancing to the next depth step.
-
-Suggested trace fields:
+When actual TCP speed is above the gate, replay holds the previous absolute target and does not advance insertion depth. The guarded loop still checks F/T while held, so `--nominal` rejects on confirmed contact and `--nominalrecovery`/`--recovery` can enter the staged backoff path. Runtime traces now include `guarded_insert_speed_gate_hold` and `guarded_insert_speed_gate_advance` with:
 
 ```text
 guarded_insert_speed_gate_checked
@@ -987,44 +976,69 @@ held_depth_step_count
 target_z_offset
 ```
 
-After implementing, rerun:
-
-```bash
-pixi run python scripts/generate_expert_trajectories.py \
-  --nominal \
-  --debug \
-  --config outputs/trajectory_datasets/sfp_to_nic/cheatcode/nic_cards_1/n1__test_n3/engine_config.yaml \
-  --target-accepted-trajectories 1 \
-  --max-total-attempts 5 \
-  --candidates-per-scene 5 \
-  --score-threshold 90 \
-  --ft-threshold 5.0 \
-  --require-insertion-event true \
-  --rerandomize-scene false \
-  --strategy-model gpt-5-mini \
-  --output-dir outputs/expert_debug/nominal_speed_gate_v1
-```
-
-Then run GPT-5 analysis on the best complete debug folder:
-
-```bash
-pixi run python scripts/analyze_expert_trajectory_failure.py \
-  --debug-dir outputs/expert_debug/nominal_speed_gate_v1/rejected_attempts/attempt_00000X/debug \
-  --model gpt-5
-```
-
-Compare against `nominal_exact_position_v1`:
+Live results so far:
 
 ```text
-score
-insertion_event_reached
-contact_detected
-max_guarded_insert_speed_mps
-p95_guarded_insert_speed_mps
-max_tracking_error_m
-post_insert_force_delta_n
-video smoothness
+outputs/expert_debug/nominal_speed_gate_v2_20260502T150033Z
 ```
+
+This first implementation settled after every insertion step. It made the speed profile much cleaner but was too slow for useful nominal data: official score `1`, no insertion event, and a late contact near `z_offset=0.0042 m` after about 186 seconds.
+
+```text
+outputs/expert_debug/nominal_speed_gate_v3_20260502T151604Z
+```
+
+This corrected the gate to hold only on measured speed spikes. It failed early in nominal at the top of insertion: official score `1`, no insertion event, `max_guarded_insert_speed_mps=0.025878`, and confirmed contact at about `z_offset=0.02999 m`.
+
+```text
+outputs/expert_debug/nominalrecovery_speed_gate_v1_20260502T152011Z
+```
+
+This is the best current run. It mechanically succeeded and reached insertion, but validation rejected it only for the guarded-insert speed threshold:
+
+```text
+score: 92.04770098350596
+task_score_excluding_tier_1: 91.04770098350596
+insertion_event_reached: true
+trajectory_duration_s: 36.22
+contact_detected: false
+backoff_occurred: false
+post_insert_force_delta_n: 3.539299581344664
+max_guarded_insert_speed_mps: 0.02221033771474994
+p95_guarded_insert_speed_mps: 0.003956474725662291
+median_guarded_insert_speed_mps: 0.0014781773340932912
+```
+
+The trace had 421 `guarded_insert_speed_gate_advance` events and 12 `guarded_insert_speed_gate_hold` events. Backoff is still available in `--nominalrecovery`/`--recovery`, but this run did not exercise it because no contact was confirmed.
+
+```text
+outputs/expert_debug/nominalrecovery_speed_gate_v2_20260502T152433Z
+```
+
+This attempted a stricter `0.006 m/s` gate but is inconclusive. The engine timed out waiting for the `aic_model` lifecycle state before a useful runtime trace was produced.
+
+## Current Controller Finding
+
+The speed/backoff difficulty appears partly inherent to `aic_controller`: Cartesian `MODE_POSITION` targets do not directly command TCP velocity. They provide position references to the controller, and the impedance dynamics plus current tracking error determine the actual TCP motion. That makes small commanded deltas and nominal insertion speeds only indirect controls over measured speed, contact timing, and backoff distance.
+
+The practical mitigation is to keep using closed-loop gates around the controller:
+
+1. Measure actual TCP speed and hold insertion depth when it spikes.
+2. Measure actual TCP pose before descent and reject or realign if the preinsert pose is not tight enough.
+3. Measure force release during recovery backoff instead of assuming commanded backoff distance equals physical separation.
+4. Prefer port-frame or measured-pose delta logic for the final insertion path, but still execute it through bounded absolute targets.
+
+## Recommended Next Steps
+
+Do not keep blindly changing insertion speed. The latest GPT-5 failure analysis concluded that the successful run was rejected because of a small speed spike, while the pre-insertion pose was not actually pinned tightly enough before descent.
+
+Try these in order, one variation at a time:
+
+1. Tighten the pre-insertion tracking gate for live experiments to `3-5 mm` and force a local realign or reject before insertion if it does not pass. The successful rejected run had earlier local alignment near `1.2 mm`, but the actual TCP later drifted by roughly `16 mm` before insertion.
+2. Add or tune a measured settle-at-pinned-pose gate before descent: low TCP speed, low force delta, and measured pose within threshold.
+3. Re-run nominalrecovery with `AIC_OFFICIAL_TEACHER_GUARDED_INSERT_SPEED_GATE_MPS=0.009` to `0.010` after the stricter preinsert gate. The current `0.012` gate allowed one measured spike just above the `0.02 m/s` validator threshold.
+4. Explicitly exercise backoff by using nominalrecovery with a strict F/T threshold once the nominal insertion speed path is stable. The backoff path is still active, but the current best speed-gate run did not trigger it.
+5. Longer-term, implement executable joint retiming/cross-fade for the MoveIt-to-Cartesian handoff and consider a port-frame delta-Z insertion formulation so the final descent starts from the measured live preinsert pose rather than from an assumed geometric pose.
 
 ## Tests Last Run
 

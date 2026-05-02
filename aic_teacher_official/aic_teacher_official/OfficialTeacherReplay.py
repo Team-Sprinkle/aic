@@ -579,6 +579,7 @@ class OfficialTeacherReplay(Policy):
         max_force_delta = 0.0
         final_speed = None
         speed_gate_passed = False
+        held_count = 0
         while (self.time_now() - started) < Duration(seconds=max_settle_sec):
             self._send_absolute_target(move_robot, target_pose)
             force_delta = self._force_delta_norm(get_observation, baseline_force)
@@ -594,11 +595,15 @@ class OfficialTeacherReplay(Policy):
             speed_gate_passed = final_speed is None or final_speed <= speed_threshold
             if (self.time_now() - started) >= Duration(seconds=min_settle_sec) and speed_gate_passed:
                 break
+            held_count += 1
             self.sleep_for(dt)
         waited = (self.time_now() - started).nanoseconds * 1e-9
         self._trace_event(
             "guarded_insert_exact_position_settle_checked",
             retry_count=retry_count,
+            guarded_insert_speed_gate_checked=True,
+            guarded_insert_speed_gate_held=held_count > 0,
+            held_depth_step_count=held_count,
             z_offset=z_offset,
             min_settle_sec=min_settle_sec,
             max_settle_sec=max_settle_sec,
@@ -1859,9 +1864,76 @@ class OfficialTeacherReplay(Policy):
                     return True
                 return recover_after_contact()
 
-            for descent_step in range(1, insertion_steps + 1):
+            speed_gate_mps = float(
+                os.environ.get("AIC_OFFICIAL_TEACHER_GUARDED_INSERT_SPEED_GATE_MPS", "0.012")
+            )
+            speed_gate_max_hold_count = int(
+                max(
+                    1,
+                    math.ceil(
+                        float(
+                            os.environ.get(
+                                "AIC_OFFICIAL_TEACHER_GUARDED_INSERT_SPEED_GATE_MAX_HOLD_SEC",
+                                "1.20",
+                            )
+                        )
+                        / dt
+                    ),
+                )
+            )
+            speed_gate_hold_count = 0
+            last_target_pose = None
+            descent_step = 1
+            while descent_step <= insertion_steps:
+                actual_tcp_speed = (
+                    self._tcp_speed_norm(get_observation)
+                    if insertion_command_mode == "exact_position"
+                    else None
+                )
+                if (
+                    insertion_command_mode == "exact_position"
+                    and actual_tcp_speed is not None
+                    and actual_tcp_speed > speed_gate_mps
+                    and speed_gate_hold_count < speed_gate_max_hold_count
+                ):
+                    if last_target_pose is not None:
+                        self._send_absolute_target(move_robot, last_target_pose)
+                    self._trace_event(
+                        "guarded_insert_speed_gate_hold",
+                        retry_count=retry_count,
+                        guarded_insert_speed_gate_checked=True,
+                        guarded_insert_speed_gate_held=True,
+                        held_depth_step_count=speed_gate_hold_count + 1,
+                        actual_tcp_speed_mps=actual_tcp_speed,
+                        speed_threshold_mps=speed_gate_mps,
+                        target_z_offset=current_z,
+                    )
+                    speed_gate_hold_count += 1
+                    force_delta = self._force_delta_norm(get_observation, baseline_force)
+                    if force_delta >= self._ft_threshold_n:
+                        confirmed, confirmed_delta = self._force_trigger_confirmed(
+                            get_observation,
+                            baseline_force,
+                            dt=dt,
+                        )
+                        if confirmed:
+                            self._trace_event(
+                                "contact_detected",
+                                retry_count=retry_count,
+                                force_delta_n=max(force_delta, confirmed_delta),
+                                threshold_n=self._ft_threshold_n,
+                                z_offset=current_z,
+                                sample_source="during_speed_gate_hold",
+                            )
+                            if not recover_after_contact():
+                                return False
+                            break
+                    self.sleep_for(dt)
+                    continue
+                speed_gate_hold_count = 0
                 fraction = self._minimum_jerk_fraction(descent_step / insertion_steps)
                 current_z = guarded_start_z_offset - fraction * guarded_insertion_distance
+                contact_confirmed = False
                 try:
                     if pin_insertion_target:
                         target_xyz = self._pose_position_array(insertion_reference_pose)
@@ -1882,17 +1954,27 @@ class OfficialTeacherReplay(Policy):
                         target_pose.position.z = insertion_start_z - fraction * guarded_insertion_distance
                     if insertion_command_mode == "exact_position":
                         self._send_absolute_target(move_robot, target_pose)
+                        last_target_pose = target_pose
+                        self._trace_event(
+                            "guarded_insert_speed_gate_advance",
+                            retry_count=retry_count,
+                            guarded_insert_speed_gate_checked=actual_tcp_speed is not None,
+                            guarded_insert_speed_gate_held=False,
+                            actual_tcp_speed_mps=actual_tcp_speed,
+                            speed_threshold_mps=speed_gate_mps,
+                            target_z_offset=current_z,
+                        )
                     else:
                         self._send_relative_target(
                             move_robot,
                             target_pose,
                             max_translation_step_m=insertion_max_step_m,
                         )
+                        contact_confirmed = False
                 except TransformException as ex:
                     self.get_logger().warn(f"Online CheatCode TF lookup failed: {ex}")
                     continue
 
-                contact_confirmed = False
                 for sample_source in ("after_command", "after_settle"):
                     if sample_source == "after_settle":
                         self.sleep_for(dt)
@@ -1933,7 +2015,7 @@ class OfficialTeacherReplay(Policy):
                     return True
                 if success_result is False:
                     return False
-                continue
+                descent_step += 1
                 if retry_requested:
                     break
             if retry_requested:
