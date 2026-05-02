@@ -1394,6 +1394,93 @@ Recommended next steps:
 4. Prefer `ft-threshold` around `2.0-2.5 N` with a debounce for nominalrecovery exploration. The official scorer still reports no force penalty in these light-contact failures, while the teacher threshold at `1.0-1.5 N` often stops before useful insertion progress.
 5. Continue post-replay stall compaction at `1.5 s` cadence, but only after generating runs that contain meaningful insertion or recovery motion.
 
+## 2026-05-02 Video Annotation Summary
+
+User video review adds the following visual diagnosis:
+
+- Transport to insertion is usually smooth enough. The main visible failure is after first gate contact.
+- Many early recovery videos stall after collision or move laterally without improving alignment:
+  - `nominalrecovery_preserve_z_repeat_single_v1_20260502T165045Z`
+  - `nominalrecovery_forced_backoff_v1_20260502T165507Z`
+  - `nominalrecovery_forced_backoff_release2_max5mm_v1_20260502T170239Z`
+  - `nominalrecovery_forced_backoff_release2_max5mm_preservez_v2_20260502T170736Z`
+  - `nominalrecovery_forced_backoff_release2_max5mm_preservez_max3_v1_20260502T171312Z`
+  - `nominalrecovery_forced_backoff_ft12_release2_max5mm_preservez_v1_20260502T171851Z`
+- `nominalrecovery_backoff15_immediate_compact_v1_20260502T184624Z` visibly does not back off enough; it stalls or drifts laterally, then wanders left/right without improvement.
+- `nominalrecovery_minbackoff15_nocompact_v1_20260502T185340Z` and `nominalrecovery_minbackoff15_skipretrygate_v1_20260502T185920Z` back off, but the reaction is slow and lateral realignment does not help.
+- `nominalrecovery_minbackoff15_skip_retry_preinsert_gates_v1_20260502T190348Z` has a good backup amount, but after backup the next moves are bad wandering rather than immediate realign-and-retry insertion.
+- `nominal_aligned_start_z40_v1_20260502T194635Z` and `nominal_aligned_start_z40_gate7_v1_20260502T195006Z` have the best visible reaction so far: fast reaction after collision, but backup should be about `2x` faster and about `2x` farther, followed by immediate retry after realignment.
+- `nominal_aligned_start_z45_v1_20260502T201000Z` is similar but worse: backup is less immediate and too slow.
+
+Force scoring check:
+
+```text
+nominalrecovery_forced_backoff_release2_max5mm_v1_20260502T170239Z:
+official max insertion force = 24.44 N
+official excessive-force duration = 0.02 s
+official penalty threshold duration = 1.00 s
+force penalty applied = false
+```
+
+The other forced-backoff variants checked above report no excessive insertion force in official scoring.
+
+Updated priorities from video review:
+
+1. Make backoff more immediate, about `2x` faster, and use about `2x` the useful backup distance seen in `nominal_aligned_start_z40_v1_20260502T194635Z`.
+2. After backup, do not wander laterally. Fully stop, verify lateral/pose alignment, then immediately retry CheatCode-style descent.
+3. Improve transport final accuracy: the final pre-descent pose should be exact laterally and in orientation, with near-zero residual speed before insertion. The remaining motion should be mostly a straight descent into the target.
+4. Treat lateral realignment as suspect until proven otherwise. In the videos it often makes the situation worse or produces wandering; prefer a deterministic near-preinsert target and settle gate over exploratory lateral moves.
+
+Follow-up runs after the video review:
+
+```text
+outputs/expert_debug/nominalrecovery_z45_ft20_fastbackoff2x_retrygate_v1_20260502T211843Z
+```
+
+This is the best current non-cheatcode expert-debug trajectory. Settings included `AIC_OFFICIAL_TEACHER_CHEATCODE_START_Z_OFFSET=0.045`, `ft-threshold=2.0`, `AIC_OFFICIAL_TEACHER_TRACKING_GATE_TIMEOUT_SEC=4.0`, `AIC_OFFICIAL_TEACHER_TRACKING_GATE_SPEED_MPS=0.003`, and fast recovery settings (`10 mm` backoff stages, `30 mm` minimum backoff, `60 mm` max backoff, `0.225 s` stage duration, retry gates enabled). The run accepted with score `92.032`, reached insertion, had no contact event, no backoff needed, no official force penalty, and max guarded insertion speed about `0.006 m/s`.
+
+Videos:
+
+```text
+/home/ubuntu/ws_aic/src/aic/outputs/expert_debug/nominalrecovery_z45_ft20_fastbackoff2x_retrygate_v1_20260502T211843Z/replay_attempts/attempt_000001_candidate_00/dataset/videos/observation.images.center_camera/chunk-000/file-000.mp4
+/home/ubuntu/ws_aic/src/aic/outputs/expert_debug/nominalrecovery_z45_ft20_fastbackoff2x_retrygate_v1_20260502T211843Z/replay_attempts/attempt_000001_candidate_00/dataset/videos/observation.images.left_camera/chunk-000/file-000.mp4
+/home/ubuntu/ws_aic/src/aic/outputs/expert_debug/nominalrecovery_z45_ft20_fastbackoff2x_retrygate_v1_20260502T211843Z/replay_attempts/attempt_000001_candidate_00/dataset/videos/observation.images.right_camera/chunk-000/file-000.mp4
+```
+
+Accepted/debug folder:
+
+```text
+/home/ubuntu/ws_aic/src/aic/outputs/expert_debug/nominalrecovery_z45_ft20_fastbackoff2x_retrygate_v1_20260502T211843Z/accepted_dataset_nominalrecovery
+```
+
+Compacted state/action dataset:
+
+```text
+/home/ubuntu/ws_aic/src/aic/outputs/expert_debug/nominalrecovery_z45_ft20_fastbackoff2x_retrygate_v1_20260502T211843Z/replay_attempts/attempt_000001_candidate_00/dataset_compacted_stalls_cadence15_v1
+```
+
+Compaction reduced `1273 -> 882` frames and removed `11` cadence windows. Videos were copied unchanged.
+
+Nominal follow-up:
+
+```text
+outputs/expert_debug/nominal_z45_ft20_settle4_v1_20260502T212418Z
+```
+
+Nominal with the same `z45`, `ft-threshold=2.0`, and `4 s` settle got much farther than earlier nominal attempts: final handoff lateral residual was about `0.48 mm`, then it descended to `z_offset=0.03487` before teacher contact at `2.08 N`. Official force stayed `0.0` and no force penalty was applied, but insertion was not reached.
+
+```text
+outputs/expert_debug/nominal_z45_ft25_settle4_v1_20260502T212820Z
+```
+
+Raising nominal to `ft-threshold=2.5` did not solve it. This run had a worse final lateral residual around `3.2 mm`, then contacted at `2.60 N` before insertion.
+
+```text
+outputs/expert_debug/nominal_z45_ft25_lateral1mm_batch3_v1_20260502T213217Z
+```
+
+Strict nominal batch with `AIC_OFFICIAL_TEACHER_TRACKING_GATE_MAX_LATERAL_ERROR_M=0.001` rejected all three candidates before descent. Final lateral residuals were about `3.70 mm`, `1.78 mm`, and `1.55 mm`. This supports the video diagnosis: high-scoring nominal is possible only when the final pose happens to be accurate, but the current transport/handoff cannot reliably hit a sub-millimeter lateral target. The next nominal improvement should be deterministic final-pose refinement or a near-preinsert target computed from plug/port pose, not force-threshold tuning.
+
 ## Tests Last Run
 
 After the latest code changes:
