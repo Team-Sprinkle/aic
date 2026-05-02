@@ -65,6 +65,46 @@ pixi run python aic_utils/gazebo_rl/scripts/gazebo_rl_train_short.py \
 
 Outputs are written under `outputs/gazebo_rl/`, including `checkpoints/` and `run_summary.json`.
 
+## ACT-Adapter SERL Training
+
+The primary hybrid policy can also be trained directly through `GazeboRLEnv`.
+This path loads the same ACT TorchScript base and ACT-adapter SERL checkpoint
+used by Isaac/Gazebo transfer validation, requires live camera IPC by default,
+collects real Gazebo transitions, updates the adapter plus twin critics, and
+saves a reloadable checkpoint:
+
+```bash
+pixi run python aic_utils/gazebo_rl/scripts/gazebo_serl_train.py \
+  --checkpoint outputs/train/hybrid_vision_offline_serl_adapter_nominal_n10/checkpoint_latest.pt \
+  --act-torchscript outputs/train/hybrid_act_nominal_n10/act_policy_ts_cuda.pt \
+  --output-dir outputs/gazebo_rl/online_serl/adapter_latest \
+  --sim-distrobox <your_eval_container> \
+  --device cuda \
+  --max-episodes 1 \
+  --max-steps 5 \
+  --updates 2 \
+  --batch-size 1 \
+  --adapter-delta-clip 0.05 \
+  --action-clip 0.05 \
+  --ground-truth true \
+  --gazebo-gui false \
+  --launch-rviz false
+```
+
+Use `--dry-run` first to verify checkpoint and ACT TorchScript loading without
+starting Gazebo. Outputs are:
+
+```text
+outputs/gazebo_rl/online_serl/adapter_latest/checkpoint_latest.pt
+outputs/gazebo_rl/online_serl/adapter_latest/metrics.jsonl
+outputs/gazebo_rl/online_serl/adapter_latest/train_config.json
+outputs/gazebo_rl/online_serl/adapter_latest/run_summary.json
+```
+
+The saved checkpoint can be passed back to `gazebo_serl_train.py`,
+`serl_transfer_validate.py --policy-kind act_adapter_serl`, or
+`ACTAdapterSERLGazeboPolicy`.
+
 ## Checkpoint Rollout and Recording
 
 Roll out a saved checkpoint without recording a LeRobot dataset:
@@ -130,6 +170,17 @@ Use `--ground-truth false` for non-oracle state observations. The trainer enviro
 
 - Low throughput: every step is a real ROS/Gazebo/controller tick.
 - Sparse reward: v1 uses a small per-step penalty and terminal score parsed from `scoring.yaml`.
-- State-only observations: images are intentionally not required for the initial proof.
+- Bridge observations contain low-dimensional ROS/controller state by default.
+  Live RGB frames can be sent to the policy process by setting
+  `AIC_GAZEBO_RL_INCLUDE_IMAGES=true` or by using
+  `serl_transfer_validate.py --policy-kind act_adapter_serl --include-images`.
+- ACT-adapter SERL transfer loading exists in
+  `scripts/serl_transfer_validate.py --policy-kind act_adapter_serl`. It uses
+  the live `center_image`, `left_image`, and `right_image` fields from
+  `aic_model_interfaces/Observation`, resized to `(288, 256)` and JPEG-encoded
+  for IPC; `--allow-zero-images` is only for explicit interface validation.
+- ACT-adapter SERL online Gazebo training exists in
+  `scripts/gazebo_serl_train.py`. It is low-throughput and intended for short
+  high-fidelity adaptation or validation, not broad exploration.
 - Intended for sim-to-sim adaptation and validation, not broad RL exploration.
 - The runner defaults to the existing launch flow and supports a configurable distrobox wrapper, but local environments may need workspace-specific distrobox naming or `/entrypoint.sh` wiring.

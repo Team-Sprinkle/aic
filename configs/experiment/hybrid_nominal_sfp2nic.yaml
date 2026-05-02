@@ -1,0 +1,21 @@
+# @package _global_
+
+defaults:
+  - /train: vision_offline_serl
+  - /model: act_adapter_serl
+  - /data: nominal_gazebo
+  - /hardware: default
+  - _self_
+
+run:
+  task_family: ${data.task_family}
+  dataset_tag: ${data.dataset_tag}
+  model_family: ${model.family}
+  stage: ${train.stage}
+  name: hybrid_nominal_sfp2nic
+  output_root: outputs/train
+  output_dir: ${run.output_root}/${run.task_family}/${run.dataset_tag}/${run.model_family}/${run.stage}/${now:%Y%m%d_%H%M%S}_${run.name}
+
+logging:
+  save_resolved_config: true
+  save_git_info: true

@@ -16,6 +16,9 @@ class GazeboRLEnv:
         workspace_dir: str | Path,
         engine_config: str | None = None,
         sim_distrobox: str | None = None,
+        sim_docker_container: str | None = None,
+        docker_host: str | None = None,
+        workspace_container: str | Path = "/home/chmin/yj/ws_aic/src/aic",
         ground_truth: bool = True,
         gazebo_gui: bool = False,
         launch_rviz: bool = False,
@@ -36,6 +39,7 @@ class GazeboRLEnv:
         record_image_writer_processes: int = 0,
         record_image_writer_threads_per_camera: int = 4,
         record_video_encoding_batch_size: int = 1,
+        include_images: bool = False,
     ):
         self.workspace_dir = Path(workspace_dir).resolve()
         self.max_steps = int(max_steps)
@@ -50,6 +54,9 @@ class GazeboRLEnv:
                 workspace_dir=self.workspace_dir,
                 engine_config=engine_config,
                 sim_distrobox=sim_distrobox,
+                sim_docker_container=sim_docker_container,
+                docker_host=docker_host,
+                workspace_container=Path(workspace_container),
                 ground_truth=ground_truth,
                 gazebo_gui=gazebo_gui,
                 launch_rviz=launch_rviz,
@@ -70,6 +77,7 @@ class GazeboRLEnv:
                 record_image_writer_processes=record_image_writer_processes,
                 record_image_writer_threads_per_camera=record_image_writer_threads_per_camera,
                 record_video_encoding_batch_size=record_video_encoding_batch_size,
+                include_images=include_images,
             )
         )
 
@@ -85,8 +93,11 @@ class GazeboRLEnv:
         while time.monotonic() < deadline:
             if self._conn is None:
                 raise RuntimeError("IPC connection is not open")
-            timeout = max(0.1, min(1.0, deadline - time.monotonic()))
-            msg = self._conn.recv(timeout_sec=timeout)
+            timeout = max(0.1, min(30.0, deadline - time.monotonic()))
+            try:
+                msg = self._conn.recv(timeout_sec=timeout)
+            except TimeoutError:
+                continue
             if msg.type == "hello":
                 self._hello = msg.payload
                 continue

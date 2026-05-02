@@ -215,6 +215,13 @@ class AICTaskSceneCfg(InteractiveSceneCfg):
     def __post_init__(self):
         super().__post_init__()
 
+        if os.environ.get("AIC_ISAAC_DISABLE_CAMERAS", "0").lower() in {
+            "1",
+            "true",
+            "yes",
+        }:
+            return
+
         _cam_spawn = sim_utils.PinholeCameraCfg(
             focal_length=22.48,
             focus_distance=0.0,
@@ -443,6 +450,14 @@ class ObservationsCfg:
         def __post_init__(self):
             self.enable_corruption = False
             self.concatenate_terms = True
+            if os.environ.get("AIC_ISAAC_DISABLE_CAMERAS", "0").lower() in {
+                "1",
+                "true",
+                "yes",
+            }:
+                self.center_rgb = None
+                self.left_rgb = None
+                self.right_rgb = None
 
     # observation groups
     policy: PolicyCfg = PolicyCfg()
@@ -510,6 +525,29 @@ class RewardsCfg:
             "asset_cfg": SceneEntityCfg("robot", body_names=MISSING),
             "threshold": 0.02,
             "command_name": "ee_pose",
+        },
+    )
+
+    # -- Optional insertion-aware shaping --
+    # These terms are disabled by default. They use the available rigid-object
+    # root poses as approximate targets until canonical cable-tip / port-axis
+    # frames are exposed by the Isaac assets.
+    target_distance_tanh = RewTerm(
+        func=mdp.body_to_object_distance_tanh,
+        weight=0.0,
+        params={
+            "body_cfg": SceneEntityCfg("robot", body_names=MISSING),
+            "target_cfg": SceneEntityCfg("sc_port"),
+            "std": 0.05,
+        },
+    )
+    target_lateral_error = RewTerm(
+        func=mdp.body_to_object_lateral_error,
+        weight=0.0,
+        params={
+            "body_cfg": SceneEntityCfg("robot", body_names=MISSING),
+            "target_cfg": SceneEntityCfg("sc_port"),
+            "axis": 0,
         },
     )
 
@@ -588,6 +626,8 @@ class AICTaskEnvCfg(ManagerBasedRLEnvCfg):
             "asset_cfg"
         ].body_names = ee_body
         self.rewards.reaching_bonus.params["asset_cfg"].body_names = ee_body
+        self.rewards.target_distance_tanh.params["body_cfg"].body_names = ee_body
+        self.rewards.target_lateral_error.params["body_cfg"].body_names = ee_body
 
         # # Arm action: joint position control
         # self.actions.arm_action = JointPositionActionCfg(
@@ -619,6 +659,9 @@ class AICTaskEnvCfg(ManagerBasedRLEnvCfg):
         self.commands.ee_pose.body_name = "wrist_3_link"
         self.commands.ee_pose.ranges.pitch = (math.pi / 2, math.pi / 2)
 
+        self._apply_randomization_profile()
+        self._apply_optional_insertion_reward_weights()
+
         # Teleop device configuration
         self.teleop_devices = DevicesCfg(
             devices={
@@ -638,3 +681,129 @@ class AICTaskEnvCfg(ManagerBasedRLEnvCfg):
                 ),
             },
         )
+
+    def _apply_randomization_profile(self) -> None:
+        profile = os.environ.get("AIC_ISAAC_RANDOMIZATION_PROFILE", "light").lower()
+        if profile not in {"none", "light", "heavy"}:
+            raise ValueError(
+                "AIC_ISAAC_RANDOMIZATION_PROFILE must be one of: none, light, heavy"
+            )
+
+        if profile == "none":
+            self.events.reset_robot_joints.params["position_range"] = (0.0, 0.0)
+            self.events.randomize_light.params["intensity_range"] = (2500.0, 2500.0)
+            self.events.randomize_light.params["color_range"] = (
+                (0.75, 0.75, 0.75),
+                (0.75, 0.75, 0.75),
+            )
+            self.events.randomize_board_and_parts.params["board_range"] = {
+                "x": (0.0, 0.0),
+                "y": (0.0, 0.0),
+                "z": (0.0, 0.0),
+                "yaw": (0.0, 0.0),
+            }
+            for part in self.events.randomize_board_and_parts.params["parts"]:
+                part["pose_range"] = {}
+            self.actions.arm_action.scale = 0.05
+            self.observations.policy.joint_pos.noise = Unoise(n_min=0.0, n_max=0.0)
+            self.observations.policy.joint_vel.noise = Unoise(n_min=0.0, n_max=0.0)
+            self.observations.policy.eef_pose.noise = Unoise(n_min=0.0, n_max=0.0)
+            return
+
+        if profile == "light":
+            self.events.reset_robot_joints.params["position_range"] = (-0.05, 0.05)
+            self.events.randomize_light.params["intensity_range"] = (1500.0, 3500.0)
+            self.events.randomize_light.params["color_range"] = (
+                (0.5, 0.5, 0.5),
+                (1.0, 1.0, 1.0),
+            )
+            self.events.randomize_board_and_parts.params["board_range"] = {
+                "x": (-0.005, 0.005),
+                "y": (-0.005, 0.005),
+                "z": (0.0, 0.0),
+                "yaw": (0.0, 0.0),
+            }
+            self.events.randomize_board_and_parts.params["parts"] = [
+                {
+                    "scene_name": "sc_port",
+                    "offset": (0.0067, -0.0362, 0.005),
+                    "pose_range": {"x": (-0.005, 0.02)},
+                },
+                {
+                    "scene_name": "sc_port_2",
+                    "offset": (0.0076, -0.0783, 0.005),
+                    "pose_range": {"x": (-0.005, 0.02)},
+                },
+                {
+                    "scene_name": "nic_card",
+                    "offset": (-0.03235, 0.02329, 0.0743),
+                    "pose_range": {"y": (0.0, 0.12)},
+                    "snap_step": {"y": 0.04},
+                },
+            ]
+            self.actions.arm_action.scale = 0.05
+            return
+
+        # Heavy profile: still conservative enough for smoke PPO runs, but
+        # covers geometry, visual, robot reset, action scale, and lowdim sensor
+        # variation. Physics/material randomization is documented as future work
+        # because the current assets do not expose stable semantic handles for it.
+        self.events.reset_robot_joints.params["position_range"] = (-0.12, 0.12)
+        self.events.randomize_light.params["intensity_range"] = (800.0, 5000.0)
+        self.events.randomize_light.params["color_range"] = (
+            (0.35, 0.35, 0.4),
+            (1.0, 0.95, 0.9),
+        )
+        self.events.randomize_board_and_parts.params["board_range"] = {
+            "x": (-0.02, 0.02),
+            "y": (-0.02, 0.02),
+            "z": (-0.003, 0.003),
+            "yaw": (-0.08, 0.08),
+        }
+        self.events.randomize_board_and_parts.params["parts"] = [
+            {
+                "scene_name": "sc_port",
+                "offset": (0.0067, -0.0362, 0.005),
+                "pose_range": {
+                    "x": (-0.015, 0.03),
+                    "y": (-0.004, 0.004),
+                    "z": (-0.002, 0.002),
+                    "yaw": (-0.04, 0.04),
+                },
+            },
+            {
+                "scene_name": "sc_port_2",
+                "offset": (0.0076, -0.0783, 0.005),
+                "pose_range": {
+                    "x": (-0.015, 0.03),
+                    "y": (-0.004, 0.004),
+                    "z": (-0.002, 0.002),
+                    "yaw": (-0.04, 0.04),
+                },
+            },
+            {
+                "scene_name": "nic_card",
+                "offset": (-0.03235, 0.02329, 0.0743),
+                "pose_range": {
+                    "x": (-0.005, 0.005),
+                    "y": (0.0, 0.12),
+                    "z": (-0.003, 0.003),
+                    "yaw": (-0.04, 0.04),
+                },
+                "snap_step": {"y": 0.04},
+            },
+        ]
+        self.actions.arm_action.scale = 0.06
+        self.observations.policy.joint_pos.noise = Unoise(n_min=-0.025, n_max=0.025)
+        self.observations.policy.joint_vel.noise = Unoise(n_min=-0.025, n_max=0.025)
+        self.observations.policy.eef_pose.noise = Unoise(n_min=-0.003, n_max=0.003)
+
+    def _apply_optional_insertion_reward_weights(self) -> None:
+        distance_weight = float(
+            os.environ.get("AIC_ISAAC_INSERTION_DISTANCE_WEIGHT", "0.0")
+        )
+        lateral_weight = float(
+            os.environ.get("AIC_ISAAC_INSERTION_LATERAL_WEIGHT", "0.0")
+        )
+        self.rewards.target_distance_tanh.weight = distance_weight
+        self.rewards.target_lateral_error.weight = lateral_weight

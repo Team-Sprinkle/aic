@@ -138,6 +138,53 @@ def ee_reaching_bonus(
 
 
 # ---------------------------------------------------------------------------
+# Optional insertion-aware shaping
+# ---------------------------------------------------------------------------
+
+
+def body_to_object_distance_tanh(
+    env: ManagerBasedRLEnv,
+    std: float,
+    body_cfg: SceneEntityCfg,
+    target_cfg: SceneEntityCfg,
+) -> torch.Tensor:
+    """Reward a body approaching a target object's root pose.
+
+    This is intentionally generic: it can be pointed at an SC port, NIC card,
+    fixture, or future insertion target without changing the runtime policy
+    interface. It is disabled by default in the env config because current
+    assets do not expose a canonical cable-tip or port-insertion frame.
+    """
+    body_asset: RigidObject = env.scene[body_cfg.name]
+    target_asset: RigidObject = env.scene[target_cfg.name]
+    body_pos_w = body_asset.data.body_pos_w[:, body_cfg.body_ids[0]]  # type: ignore
+    target_pos_w = target_asset.data.root_pos_w
+    distance = torch.norm(body_pos_w - target_pos_w, dim=1)
+    return 1.0 - torch.tanh(distance / std)
+
+
+def body_to_object_lateral_error(
+    env: ManagerBasedRLEnv,
+    body_cfg: SceneEntityCfg,
+    target_cfg: SceneEntityCfg,
+    axis: int = 0,
+) -> torch.Tensor:
+    """Penalize lateral error to a target object's root pose.
+
+    ``axis`` is the assumed insertion axis in world coordinates. The current
+    Isaac scene does not yet expose a semantic port insertion frame, so this is
+    kept optional and low-level until those frames are added.
+    """
+    body_asset: RigidObject = env.scene[body_cfg.name]
+    target_asset: RigidObject = env.scene[target_cfg.name]
+    body_pos_w = body_asset.data.body_pos_w[:, body_cfg.body_ids[0]]  # type: ignore
+    delta = body_pos_w - target_asset.data.root_pos_w
+    mask = torch.ones(3, dtype=torch.bool, device=delta.device)
+    mask[axis] = False
+    return torch.norm(delta[:, mask], dim=1)
+
+
+# ---------------------------------------------------------------------------
 # Smoothness / safety penalties
 # ---------------------------------------------------------------------------
 

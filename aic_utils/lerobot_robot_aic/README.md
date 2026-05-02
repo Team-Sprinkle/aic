@@ -402,12 +402,46 @@ accepted_dataset/
 scores/
 trials/
 logs/
+manifests/
 generation_summary.json
 selection_report.csv  # after filtering
 ```
 
 `raw_dataset/` and `accepted_dataset/` are native LeRobot dataset roots with
 `meta/`, `data/`, and `videos/` when recording/filtering has run.
+
+`manifests/` contains sidecar task metadata without modifying the LeRobot
+schema:
+
+- `attempts.csv`: one row per attempted trial, including score/filter status,
+  source and accepted episode indices when available, resolved task fields, and
+  the task vector.
+- `accepted.csv`: selected episodes only, keyed by `accepted_episode_index`.
+- `episode_task_metadata.jsonl`: structured task and scene summaries for each
+  attempted episode.
+
+The task vector uses Option A conditioning:
+
+```text
+[task_family_sfp_to_nic, task_family_sc_to_sc,
+ target_port_0, target_port_1,
+ target_card_0, target_card_1, target_card_2, target_card_3, target_card_4,
+ target_card_valid]
+```
+
+Examples:
+
+- `sfp_to_nic`, target card 3, target port 1:
+  `[1, 0, 0, 1, 0, 0, 0, 1, 0, 1]`
+- `sc_to_sc`, target port 0:
+  `[0, 1, 1, 0, 0, 0, 0, 0, 0, 0]`
+
+For SC-to-SC, the target-card one-hot is all zeros and
+`target_card_valid=0`. Cable type, plug type/name, port type/name, and target
+module name are derived from the task family and selected target rails. Continuous
+scene poses are recorded in manifests for auditability, but are not fed as task
+conditioning; the model should infer geometry from observations while the task
+vector only identifies the discrete goal.
 
 Dry-run a minimal SFP-to-NIC request without Gazebo:
 
@@ -422,7 +456,19 @@ python aic_utils/lerobot_robot_aic/scripts/generate_trajectory_dataset.py \
 ```
 
 This writes `request.yaml`, `engine_config.yaml`, `trials/trial_*.yaml`, and
-`generation_summary.json`.
+`generation_summary.json`, plus dry-run task manifests.
+
+Dry-run the 10-trajectory CheatCode ACT smoke request without Gazebo:
+
+```bash
+cd ~/ws_aic/src/aic
+python aic_utils/lerobot_robot_aic/scripts/generate_trajectory_dataset.py \
+  --request-yaml aic_utils/lerobot_robot_aic/config/data_generation_templates/sfp_to_nic_minimal_10_cheatcode.yaml \
+  --target-accepted-override 2 \
+  --max-attempts-override 3 \
+  --dry-run \
+  --skip-recording
+```
 
 Run real generation in an environment with the simulator/runtime available:
 
@@ -430,6 +476,16 @@ Run real generation in an environment with the simulator/runtime available:
 cd ~/ws_aic/src/aic
 python aic_utils/lerobot_robot_aic/scripts/generate_trajectory_dataset.py \
   --request-yaml aic_utils/lerobot_robot_aic/config/data_generation_templates/sfp_to_nic_minimal.yaml
+```
+
+Generate the 10-trajectory CheatCode ACT smoke dataset:
+
+```bash
+cd ~/ws_aic/src/aic
+python aic_utils/lerobot_robot_aic/scripts/generate_trajectory_dataset.py \
+  --request-yaml aic_utils/lerobot_robot_aic/config/data_generation_templates/sfp_to_nic_minimal_10_cheatcode.yaml \
+  --target-accepted-override 10 \
+  --max-attempts-override 15
 ```
 
 The script invokes the per-trial recorder with:
@@ -455,6 +511,29 @@ pixi run python aic_utils/lerobot_robot_aic/scripts/filter_merge_lerobot_by_scor
   --include-videos \
   --overwrite
 ```
+
+Train ACT with task metadata by appending the fixed 10-D task vector to
+`observation.state` in a derived local dataset:
+
+```bash
+cd ~/ws_aic/src/aic
+pixi run python aic_utils/lerobot_robot_aic/scripts/train_act_policy.py \
+  --dataset-root <output_dir>/accepted_dataset \
+  --task-metadata <output_dir>/manifests/accepted.csv \
+  --task-conditioning append-state \
+  --output-dir outputs/act_task_conditioned \
+  --device cuda
+```
+
+If `--task-metadata` is omitted, the script looks for
+`<dataset_parent>/manifests/accepted.csv`. The source LeRobot dataset is left
+unchanged; the derived dataset is written under
+`<output-dir>/task_conditioned_dataset` and is what `lerobot-train` consumes.
+Use this same fixed-size vector for mixed SFP-to-NIC and SC-to-SC training; do
+not split the model into task-specific heads. To combine task families, merge
+compatible accepted LeRobot datasets with `filter_merge_lerobot_by_score.py` and
+merge or regenerate the corresponding `accepted.csv` rows so
+`accepted_episode_index` matches the combined dataset.
 
 To compare the accepted dataset schema with the reference LeRobot dataset
 `jskim/fixed_single_board_sfp2nic`, pass:
@@ -622,6 +701,32 @@ pixi run lerobot-train\
  --dataset.video_backend=pyav\
  --save_freq 5000
  ```
+
+For a local ACT smoke run from a generated `accepted_dataset`, use the AIC
+wrapper. It inspects the dataset schema first and then builds a `lerobot-train`
+command with `--policy.type=act`, local `--dataset.root`,
+`--dataset.video_backend=pyav`, and wandb disabled by default:
+
+```bash
+cd ~/ws_aic/src/aic
+pixi run python aic_utils/lerobot_robot_aic/scripts/train_act_policy.py \
+  --dataset-root outputs/trajectory_datasets/sfp_to_nic/cheatcode/nic_cards_1/n10__act_smoke/accepted_dataset \
+  --output-dir outputs/train/act_smoke \
+  --job-name act_smoke \
+  --steps 200 \
+  --batch-size 4 \
+  --device cuda
+```
+
+Inspect the schema manually with:
+
+```bash
+python aic_utils/lerobot_robot_aic/scripts/inspect_dataset_schema.py \
+  outputs/trajectory_datasets/sfp_to_nic/cheatcode/nic_cards_1/n10__act_smoke/accepted_dataset
+```
+
+See [docs/act_serl_warmstart_pipeline.md](../../docs/act_serl_warmstart_pipeline.md)
+for the complete smoke workflow and current non-goals.
 
 ### Merging Lerobot Datasets by score (assuming you have associated score files for each of the datasets, as outlined in this README's "Recording Autonomous Policy Rollouts" section)
 

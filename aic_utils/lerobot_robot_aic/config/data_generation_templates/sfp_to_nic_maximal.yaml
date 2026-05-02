@@ -81,7 +81,6 @@ scene:
       max: 60.0
 
   cable:
-    cable_type: sfp_sc_cable
     gripper_offset:
       x:
         min: -0.002

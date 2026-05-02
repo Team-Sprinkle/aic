@@ -1,0 +1,19 @@
+root_dir: outputs/trajectory_datasets
+task_family: sfp_to_nic
+suffix: act_smoke
+
+generation:
+  target_accepted_trajectories: 10
+  max_attempts: 15
+  policy: cheatcode
+  action_mode: cartesian
+  seed: 42
+  append_if_exists: true
+
+acceptance:
+  success_only: true
+  min_score: 90.0
+
+scene:
+  nic_cards:
+    count: 1

@@ -35,6 +35,7 @@ setup(
             "aic-policy-recorder = lerobot_robot_aic.policy_recorder:main",
             "aic-teleop-record = lerobot_robot_aic.lerobot_record_policy:main",
             "aic-validate-dataset-compat = lerobot_robot_aic.validate_dataset_compatibility:main",
+            "aic-inspect-dataset-schema = lerobot_robot_aic.dataset_schema:main",
         ],
     },
 )

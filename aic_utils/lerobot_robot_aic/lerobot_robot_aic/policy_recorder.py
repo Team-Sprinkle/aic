@@ -81,6 +81,11 @@ class _EpisodeSaveState:
     message: str = "Waiting for terminal action status."
 
 
+def should_save_episode(terminal_state: int, save_failed_episodes: bool) -> bool:
+    """Return whether a terminal action status should be committed as an episode."""
+    return terminal_state == GoalStatus.STATUS_SUCCEEDED or save_failed_episodes
+
+
 def _fixed_len(values: list[float], length: int) -> list[float]:
     out = list(values[:length])
     if len(out) < length:
@@ -490,7 +495,9 @@ class PolicyRecorder(Node):
         return self._cartesian_action_from_motion()
 
     def _init_dataset(self, obs_values: dict[str, Any]) -> None:
-        image_shape = tuple(int(x) for x in obs_values["left_camera"].shape)
+        left_image_shape = tuple(int(x) for x in obs_values["left_camera"].shape)
+        center_image_shape = tuple(int(x) for x in obs_values["center_camera"].shape)
+        right_image_shape = tuple(int(x) for x in obs_values["right_camera"].shape)
 
         obs_state_features = {
             "tcp_pose.position.x": float,
@@ -525,9 +532,9 @@ class PolicyRecorder(Node):
             "wrist_wrench.torque.x": float,
             "wrist_wrench.torque.y": float,
             "wrist_wrench.torque.z": float,
-            "left_camera": image_shape,
-            "center_camera": image_shape,
-            "right_camera": image_shape,
+            "left_camera": left_image_shape,
+            "center_camera": center_image_shape,
+            "right_camera": right_image_shape,
         }
 
         action_features: dict[str, type]
@@ -603,11 +610,10 @@ class PolicyRecorder(Node):
             return
 
         success = terminal_state == GoalStatus.STATUS_SUCCEEDED
-        success = True
         saved = False
         status_message = ""
         try:
-            if success or self.save_failed_episodes:
+            if should_save_episode(terminal_state, self.save_failed_episodes):
                 self._dataset.save_episode()
                 self._episodes_saved += 1
                 saved = True

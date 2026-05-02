@@ -14,20 +14,37 @@
 #  limitations under the License.
 #
 
+"""ACT policy runner for current AIC LeRobot datasets.
+
+This runner is intentionally matched to the current 20 Hz AIC observation stream
+and the 6D delta-pose action schema used by the converted/expert datasets:
+
+  action = [delta_position.xyz, delta_rotation.xyz]
+  action frame = gripper/tcp
+
+Set AIC_ACT_POLICY_PATH to a local LeRobot pretrained_model directory. If it is
+unset, AIC_ACT_POLICY_REPO_ID is downloaded from Hugging Face.
+"""
+
+from __future__ import annotations
+
+import json
 import os
+import time
+from pathlib import Path
+from typing import Any
 
 os.environ["HF_HUB_ENABLE_HF_TRANSFER"] = "1"
 
-import time
-import json
-import torch
-import numpy as np
 import cv2
 import draccus
-from pathlib import Path
-from typing import Callable, Dict, Any, List
+import numpy as np
+import torch
+from aic_control_interfaces.msg import MotionUpdate, TargetMode, TrajectoryGenerationMode
+from geometry_msgs.msg import Twist, Vector3, Wrench
+from huggingface_hub import snapshot_download
 from rclpy.node import Node
-from geometry_msgs.msg import Twist, Vector3
+from safetensors.torch import load_file
 
 from aic_model.policy import (
     GetObservationCallback,
@@ -37,202 +54,279 @@ from aic_model.policy import (
 )
 from aic_model_interfaces.msg import Observation
 from aic_task_interfaces.msg import Task
-
-from aic_control_interfaces.msg import (
-    MotionUpdate,
-    TrajectoryGenerationMode,
-)
-from geometry_msgs.msg import Wrench
-
-# LeRobot & Safetensors
-from lerobot.policies.act.modeling_act import ACTPolicy
 from lerobot.policies.act.configuration_act import ACTConfig
-from safetensors.torch import load_file
-from huggingface_hub import snapshot_download
+from lerobot.policies.act.modeling_act import ACTPolicy
+
+
+DEFAULT_POLICY_REPO_ID = "grkw/aic_act_policy"
+DEFAULT_CONTROL_HZ = 20.0
+DEFAULT_MAX_RUNTIME_SEC = 30.0
 
 
 class RunACT(Policy):
     def __init__(self, parent_node: Node):
         super().__init__(parent_node)
-        self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-
-        # -------------------------------------------------------------------------
-        # 1. Configuration & Weights Loading
-        # -------------------------------------------------------------------------
-        repo_id = "grkw/aic_act_policy"
-
-        # Path to your checkpoint folder
-        policy_path = Path(
-            snapshot_download(
-                repo_id=repo_id,
-                allow_patterns=["config.json", "model.safetensors", "*.safetensors"],
-            )
+        requested_device = os.environ.get("AIC_ACT_DEVICE")
+        self.device = torch.device(
+            requested_device or ("cuda" if torch.cuda.is_available() else "cpu")
         )
+        self.control_hz = float(os.environ.get("AIC_ACT_CONTROL_HZ", DEFAULT_CONTROL_HZ))
+        self.max_runtime_sec = float(
+            os.environ.get("AIC_ACT_MAX_RUNTIME_SEC", DEFAULT_MAX_RUNTIME_SEC)
+        )
+        self.start_delay_sec = float(os.environ.get("AIC_ACT_START_DELAY_SEC", 0.0))
+        self.command_mode = os.environ.get("AIC_ACT_COMMAND_MODE", "delta_pose")
+        self.command_frame = os.environ.get("AIC_ACT_COMMAND_FRAME", "gripper/tcp")
+        self.max_translation_delta = float(os.environ.get("AIC_ACT_MAX_TRANSLATION_DELTA", 0.02))
+        self.max_rotation_delta = float(os.environ.get("AIC_ACT_MAX_ROTATION_DELTA", 0.2))
+        self.translation_deadband = float(os.environ.get("AIC_ACT_TRANSLATION_DEADBAND", 5e-4))
+        self.rotation_deadband = float(os.environ.get("AIC_ACT_ROTATION_DEADBAND", 1e-3))
 
-        # Load Config Manually (Fixes 'Draccus' error by removing unknown 'type' field)
-        with open(policy_path / "config.json", "r") as f:
-            config_dict = json.load(f)
-            if "type" in config_dict:
-                del config_dict["type"]
-
+        self.policy_path = self._resolve_policy_path()
+        config_dict = self._load_config_dict(self.policy_path)
         config = draccus.decode(ACTConfig, config_dict)
+        config.device = str(self.device)
 
-        # Load Policy Architecture & Weights
         self.policy = ACTPolicy(config)
-        model_weights_path = policy_path / "model.safetensors"
-        self.policy.load_state_dict(load_file(model_weights_path))
+        self.policy.load_state_dict(load_file(self.policy_path / "model.safetensors"))
         self.policy.eval()
         self.policy.to(self.device)
 
-        self.get_logger().info(f"ACT Policy loaded on {self.device} from {policy_path}")
+        self.input_features = dict(config.input_features)
+        self.output_features = dict(config.output_features)
+        self.camera_shapes = self._camera_shapes(config_dict)
+        self.state_dim = int(config_dict["input_features"]["observation.state"]["shape"][0])
+        self.action_dim = int(config_dict["output_features"]["action"]["shape"][0])
+        if self.action_dim < 6:
+            raise ValueError(f"RunACT requires at least 6 action dimensions, got {self.action_dim}")
 
-        # -------------------------------------------------------------------------
-        # 2. Normalization Stats Loading
-        # -------------------------------------------------------------------------
-        stats_path = (
-            policy_path / "policy_preprocessor_step_3_normalizer_processor.safetensors"
+        stats = load_file(
+            self.policy_path / "policy_preprocessor_step_3_normalizer_processor.safetensors"
         )
-        stats = load_file(stats_path)
-
-        # Helper to extract and shape stats for broadcasting
-        def get_stat(key, shape):
-            return stats[key].to(self.device).view(*shape)
-
-        # Image Stats (1, 3, 1, 1) for broadcasting against (Batch, Channel, Height, Width)
         self.img_stats = {
-            "left": {
-                "mean": get_stat("observation.images.left_camera.mean", (1, 3, 1, 1)),
-                "std": get_stat("observation.images.left_camera.std", (1, 3, 1, 1)),
-            },
-            "center": {
-                "mean": get_stat("observation.images.center_camera.mean", (1, 3, 1, 1)),
-                "std": get_stat("observation.images.center_camera.std", (1, 3, 1, 1)),
-            },
-            "right": {
-                "mean": get_stat("observation.images.right_camera.mean", (1, 3, 1, 1)),
-                "std": get_stat("observation.images.right_camera.std", (1, 3, 1, 1)),
-            },
+            key: {
+                "mean": self._stat(stats, f"{key}.mean", (1, 3, 1, 1)),
+                "std": self._stat(stats, f"{key}.std", (1, 3, 1, 1)),
+            }
+            for key in self.camera_shapes
         }
-        print(f"Image stats: {self.img_stats}")
+        self.state_mean = self._stat(stats, "observation.state.mean", (1, -1))
+        self.state_std = self._stat(stats, "observation.state.std", (1, -1))
+        self.action_mean = self._stat(stats, "action.mean", (1, -1))
+        self.action_std = self._stat(stats, "action.std", (1, -1))
+        self._current_task: Task | None = None
 
-        # Robot State Stats (1, 26)
-        self.state_mean = get_stat("observation.state.mean", (1, -1))
-        self.state_std = get_stat("observation.state.std", (1, -1))
-        print(f"Robot state mean: {self.state_mean}")
-        print(f"Robot state std: {self.state_std}")
+        self.get_logger().info(
+            "ACT policy loaded from "
+            f"{self.policy_path} on {self.device}; "
+            f"state_dim={self.state_dim}, action_dim={self.action_dim}, "
+            f"control_hz={self.control_hz}, "
+            f"start_delay_sec={self.start_delay_sec}, "
+            f"chunk_size={self.policy.config.chunk_size}, "
+            f"n_action_steps={self.policy.config.n_action_steps}, "
+            f"action_mode=delta_pose, command_mode={self.command_mode}, "
+            f"action_frame=gripper/tcp, command_frame={self.command_frame}"
+        )
 
-        # Action Stats (1, 7) - Used for Un-normalization
-        self.action_mean = get_stat("action.mean", (1, -1))
-        self.action_std = get_stat("action.std", (1, -1))
-        print(f"Action mean: {self.action_mean}")
-        print(f"Action std: {self.action_std}")
+    def _resolve_policy_path(self) -> Path:
+        policy_path = os.environ.get("AIC_ACT_POLICY_PATH")
+        if policy_path:
+            path = Path(policy_path).expanduser()
+            if not path.exists():
+                raise FileNotFoundError(f"AIC_ACT_POLICY_PATH does not exist: {path}")
+            return path
 
-        # Config
-        self.image_scaling = 0.25  # Must match AICRobotAICControllerConfig
-
-        self.get_logger().info("Normalization statistics loaded successfully.")
+        repo_id = os.environ.get("AIC_ACT_POLICY_REPO_ID", DEFAULT_POLICY_REPO_ID)
+        return Path(
+            snapshot_download(
+                repo_id=repo_id,
+                allow_patterns=[
+                    "config.json",
+                    "model.safetensors",
+                    "policy_preprocessor_step_3_normalizer_processor.safetensors",
+                ],
+            )
+        )
 
     @staticmethod
-    def _img_to_tensor(
-        raw_img,
-        device: torch.device,
-        scale: float,
-        mean: torch.Tensor,
-        std: torch.Tensor,
-    ) -> torch.Tensor:
-        """Converts ROS Image -> Resized -> Permuted -> Normalized Tensor."""
-        # 1. Bytes to Numpy (H, W, C)
+    def _load_config_dict(policy_path: Path) -> dict[str, Any]:
+        with (policy_path / "config.json").open("r", encoding="utf-8") as f:
+            config_dict = json.load(f)
+        config_dict.pop("type", None)
+        return config_dict
+
+    def _stat(self, stats: dict[str, torch.Tensor], key: str, shape: tuple[int, ...]) -> torch.Tensor:
+        if key not in stats:
+            raise KeyError(f"policy normalizer is missing required statistic {key!r}")
+        return stats[key].to(self.device).view(*shape)
+
+    @staticmethod
+    def _camera_shapes(config_dict: dict[str, Any]) -> dict[str, tuple[int, int, int]]:
+        shapes = {}
+        for key, feature in config_dict["input_features"].items():
+            if not key.startswith("observation.images."):
+                continue
+            shape = tuple(int(v) for v in feature["shape"])
+            if len(shape) != 3 or shape[0] != 3:
+                raise ValueError(f"expected CHW RGB camera feature for {key}, got {shape}")
+            shapes[key] = shape
+        return shapes
+
+    @staticmethod
+    def _image_msg_to_chw_float(raw_img: Any, shape: tuple[int, int, int]) -> torch.Tensor:
+        channels, height, width = shape
         img_np = np.frombuffer(raw_img.data, dtype=np.uint8).reshape(
-            raw_img.height, raw_img.width, 3
+            raw_img.height,
+            raw_img.width,
+            channels,
         )
+        if raw_img.height != height or raw_img.width != width:
+            img_np = cv2.resize(img_np, (width, height), interpolation=cv2.INTER_AREA)
+        return torch.from_numpy(img_np).permute(2, 0, 1).float().div(255.0).unsqueeze(0)
 
-        # 2. Resize
-        if scale != 1.0:
-            img_np = cv2.resize(
-                img_np, None, fx=scale, fy=scale, interpolation=cv2.INTER_AREA
-            )
+    def _normalized_image(self, key: str, raw_img: Any) -> torch.Tensor:
+        tensor = self._image_msg_to_chw_float(raw_img, self.camera_shapes[key]).to(self.device)
+        return (tensor - self.img_stats[key]["mean"]) / self.img_stats[key]["std"]
 
-        # 3. To Tensor -> Permute (HWC -> CHW) -> Float -> Div(255) -> Batch Dim
-        tensor = (
-            torch.from_numpy(img_np)
-            .permute(2, 0, 1)
-            .float()
-            .div(255.0)
-            .unsqueeze(0)
-            .to(device)
-        )
+    @staticmethod
+    def _parse_index_from_suffix(value: str, prefix: str) -> int:
+        if not value.startswith(prefix):
+            raise ValueError(f"Expected {value!r} to start with {prefix!r}")
+        return int(value.removeprefix(prefix))
 
-        # 4. Normalize (Apply Mean/Std)
-        # Formula: (x - mean) / std
-        return (tensor - mean) / std
+    def _task_vector(self, task: Task) -> list[float]:
+        """Return the canonical 10D task vector for the active AIC task."""
+        if task.target_module_name.startswith("nic_card_mount_"):
+            card_index = self._parse_index_from_suffix(task.target_module_name, "nic_card_mount_")
+            port_index = self._parse_index_from_suffix(task.port_name, "sfp_port_")
+            if not 0 <= card_index <= 4:
+                raise ValueError(f"target card index must be in [0, 4], got {card_index}")
+            if port_index not in (0, 1):
+                raise ValueError(f"target port index must be 0 or 1, got {port_index}")
+            card = [0.0] * 5
+            card[card_index] = 1.0
+            return [1.0, 0.0, float(port_index == 0), float(port_index == 1), *card, 1.0]
 
-    def prepare_observations(self, obs_msg: Observation) -> Dict[str, torch.Tensor]:
-        """Convert ROS Observation message into dictionary of normalized tensors."""
+        if task.target_module_name.startswith("sc_port_"):
+            port_index = self._parse_index_from_suffix(task.target_module_name, "sc_port_")
+            if port_index not in (0, 1):
+                raise ValueError(f"target SC port index must be 0 or 1, got {port_index}")
+            return [0.0, 1.0, float(port_index == 0), float(port_index == 1), 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
 
-        # --- Process Cameras ---
-        obs = {
-            "observation.images.left_camera": self._img_to_tensor(
-                obs_msg.left_image,
-                self.device,
-                self.image_scaling,
-                self.img_stats["left"]["mean"],
-                self.img_stats["left"]["std"],
-            ),
-            "observation.images.center_camera": self._img_to_tensor(
-                obs_msg.center_image,
-                self.device,
-                self.image_scaling,
-                self.img_stats["center"]["mean"],
-                self.img_stats["center"]["std"],
-            ),
-            "observation.images.right_camera": self._img_to_tensor(
-                obs_msg.right_image,
-                self.device,
-                self.image_scaling,
-                self.img_stats["right"]["mean"],
-                self.img_stats["right"]["std"],
-            ),
+        raise ValueError(f"Cannot infer task vector from target_module_name={task.target_module_name!r}")
+
+    def prepare_observations(self, obs_msg: Observation) -> dict[str, torch.Tensor]:
+        obs = {}
+        camera_msg_by_key = {
+            "observation.images.left_camera": obs_msg.left_image,
+            "observation.images.center_camera": obs_msg.center_image,
+            "observation.images.right_camera": obs_msg.right_image,
         }
+        for key in self.camera_shapes:
+            obs[key] = self._normalized_image(key, camera_msg_by_key[key])
 
-        # --- Process Robot State ---
-        # Construct flat state vector (26 dims) matching training order
+        state_np = self._state_vector(obs_msg)
+        if state_np.shape[0] != self.state_dim:
+            raise ValueError(
+                f"checkpoint expects observation.state dim {self.state_dim}, "
+                f"but RunACT built {state_np.shape[0]}"
+            )
+        raw_state = torch.from_numpy(state_np).float().unsqueeze(0).to(self.device)
+        obs["observation.state"] = (raw_state - self.state_mean) / self.state_std
+        return obs
+
+    def _state_vector(self, obs_msg: Observation) -> np.ndarray:
         tcp_pose = obs_msg.controller_state.tcp_pose
         tcp_vel = obs_msg.controller_state.tcp_velocity
+        values = [
+            tcp_pose.position.x,
+            tcp_pose.position.y,
+            tcp_pose.position.z,
+            tcp_pose.orientation.x,
+            tcp_pose.orientation.y,
+            tcp_pose.orientation.z,
+            tcp_pose.orientation.w,
+            tcp_vel.linear.x,
+            tcp_vel.linear.y,
+            tcp_vel.linear.z,
+            tcp_vel.angular.x,
+            tcp_vel.angular.y,
+            tcp_vel.angular.z,
+            *obs_msg.controller_state.tcp_error,
+            *obs_msg.joint_states.position[:7],
+        ]
+        if self.state_dim >= 32:
+            values.extend(
+                [
+                    obs_msg.wrist_wrench.wrench.force.x,
+                    obs_msg.wrist_wrench.wrench.force.y,
+                    obs_msg.wrist_wrench.wrench.force.z,
+                    obs_msg.wrist_wrench.wrench.torque.x,
+                    obs_msg.wrist_wrench.wrench.torque.y,
+                    obs_msg.wrist_wrench.wrench.torque.z,
+                ]
+            )
+        if self.state_dim == 42:
+            if self._current_task is None:
+                raise ValueError("checkpoint expects task-conditioned 42D state, but no active task is set")
+            values.extend(self._task_vector(self._current_task))
+        return np.array(values, dtype=np.float32)
 
-        state_np = np.array(
-            [
-                # TCP Position (3)
-                tcp_pose.position.x,
-                tcp_pose.position.y,
-                tcp_pose.position.z,
-                # TCP Orientation (4)
-                tcp_pose.orientation.x,
-                tcp_pose.orientation.y,
-                tcp_pose.orientation.z,
-                tcp_pose.orientation.w,
-                # TCP Linear Vel (3)
-                tcp_vel.linear.x,
-                tcp_vel.linear.y,
-                tcp_vel.linear.z,
-                # TCP Angular Vel (3)
-                tcp_vel.angular.x,
-                tcp_vel.angular.y,
-                tcp_vel.angular.z,
-                # TCP Error (6)
-                *obs_msg.controller_state.tcp_error,
-                # Joint Positions (7)
-                *obs_msg.joint_states.position[:7],
-            ],
-            dtype=np.float32,
+    def select_delta_action(self, obs_msg: Observation) -> np.ndarray:
+        obs_tensors = self.prepare_observations(obs_msg)
+        with torch.inference_mode():
+            normalized_action = self.policy.select_action(obs_tensors)
+        raw_action = (normalized_action * self.action_std) + self.action_mean
+        return raw_action[0, :6].detach().cpu().numpy()
+
+    def _set_velocity_target(
+        self,
+        move_robot: MoveRobotCallback,
+        delta_position_xyz: np.ndarray,
+        delta_rotation_xyz: np.ndarray,
+    ) -> None:
+        position, rotation = self._clamp_action(delta_position_xyz, delta_rotation_xyz)
+        twist = Twist(
+            linear=Vector3(
+                x=float(position[0] * self.control_hz),
+                y=float(position[1] * self.control_hz),
+                z=float(position[2] * self.control_hz),
+            ),
+            angular=Vector3(
+                x=float(rotation[0] * self.control_hz),
+                y=float(rotation[1] * self.control_hz),
+                z=float(rotation[2] * self.control_hz),
+            ),
         )
-
-        # Normalize State
-        raw_state_tensor = (
-            torch.from_numpy(state_np).float().unsqueeze(0).to(self.device)
+        motion_update = MotionUpdate()
+        motion_update.velocity = twist
+        motion_update.header.frame_id = self.command_frame
+        motion_update.header.stamp = self.get_clock().now().to_msg()
+        motion_update.target_stiffness = np.diag([100.0, 100.0, 100.0, 50.0, 50.0, 50.0]).flatten()
+        motion_update.target_damping = np.diag([40.0, 40.0, 40.0, 15.0, 15.0, 15.0]).flatten()
+        motion_update.feedforward_wrench_at_tip = Wrench(
+            force=Vector3(x=0.0, y=0.0, z=0.0),
+            torque=Vector3(x=0.0, y=0.0, z=0.0),
         )
-        obs["observation.state"] = (raw_state_tensor - self.state_mean) / self.state_std
+        motion_update.wrench_feedback_gains_at_tip = [0.5, 0.5, 0.5, 0.0, 0.0, 0.0]
+        motion_update.trajectory_generation_mode.mode = TrajectoryGenerationMode.MODE_VELOCITY
+        move_robot(motion_update=motion_update)
 
-        return obs
+    def _clamp_action(
+        self,
+        delta_position_xyz: np.ndarray,
+        delta_rotation_xyz: np.ndarray,
+    ) -> tuple[np.ndarray, np.ndarray]:
+        from aic_model.policy import clamp_delta_pose_components
+
+        return clamp_delta_pose_components(
+            delta_position_xyz,
+            delta_rotation_xyz,
+            max_translation=self.max_translation_delta,
+            max_rotation=self.max_rotation_delta,
+            deadband_translation=self.translation_deadband,
+            deadband_rotation=self.rotation_deadband,
+        )
 
     def insert_cable(
         self,
@@ -241,80 +335,50 @@ class RunACT(Policy):
         move_robot: MoveRobotCallback,
         send_feedback: SendFeedbackCallback,
         **kwargs,
-    ):
+    ) -> bool:
         self.policy.reset()
+        self._current_task = task
         self.get_logger().info(f"RunACT.insert_cable() enter. Task: {task}")
+        if self.start_delay_sec > 0.0:
+            self.get_logger().info(f"Waiting {self.start_delay_sec:.2f}s before first ACT command.")
+            time.sleep(self.start_delay_sec)
 
-        start_time = time.time()
-
-        # Run inference for 30 seconds
-        while time.time() - start_time < 30.0:
-            loop_start = time.time()
-
-            # 1. Get & Process Observation
+        period_sec = 1.0 / self.control_hz
+        start_time = time.monotonic()
+        command_count = 0
+        while time.monotonic() - start_time < self.max_runtime_sec:
+            loop_start = time.monotonic()
             observation_msg = get_observation()
-
             if observation_msg is None:
                 self.get_logger().info("No observation received.")
+                time.sleep(period_sec)
                 continue
 
-            obs_tensors = self.prepare_observations(observation_msg)
+            action = self.select_delta_action(observation_msg)
+            if hasattr(self._parent_node, "_target_mode"):
+                self._parent_node._target_mode = TargetMode.MODE_CARTESIAN
+            if self.command_mode == "none":
+                pass
+            elif self.command_mode == "velocity":
+                self._set_velocity_target(move_robot, action[:3], action[3:6])
+            elif self.command_mode == "delta_pose":
+                self.set_delta_pose_target_from_components(
+                    move_robot=move_robot,
+                    delta_position_xyz=action[:3],
+                    delta_rotation_xyz=action[3:6],
+                    max_translation=self.max_translation_delta,
+                    max_rotation=self.max_rotation_delta,
+                    deadband_translation=self.translation_deadband,
+                    deadband_rotation=self.rotation_deadband,
+                )
+            else:
+                raise ValueError(f"Unsupported AIC_ACT_COMMAND_MODE={self.command_mode!r}")
+            command_count += 1
+            if command_count % max(1, int(self.control_hz)) == 0:
+                send_feedback(f"in progress; commands={command_count}")
 
-            # 2. Model Inference
-            with torch.inference_mode():
-                # returns shape [1, 7] (first action of chunk)
-                normalized_action = self.policy.select_action(obs_tensors)
-
-            # 3. Un-normalize Action
-            # Formula: (norm * std) + mean
-            raw_action_tensor = (normalized_action * self.action_std) + self.action_mean
-
-            # 4. Extract and Command
-            # raw_action_tensor is [1, 7], taking [0] gives vector of 7
-            action = raw_action_tensor[0].cpu().numpy()
-
-            self.get_logger().info(f"Action: {action}")
-
-            twist = Twist(
-                linear=Vector3(
-                    x=float(action[0]), y=float(action[1]), z=float(action[2])
-                ),
-                angular=Vector3(
-                    x=float(action[3]), y=float(action[4]), z=float(action[5])
-                ),
-            )
-            motion_update = self.set_cartesian_twist_target(twist)
-            move_robot(motion_update=motion_update)
-            send_feedback("in progress...")
-
-            # Maintain control rate (approx 4Hz loop = 0.25s sleep)
-            elapsed = time.time() - loop_start
-            time.sleep(max(0, 0.25 - elapsed))
+            elapsed = time.monotonic() - loop_start
+            time.sleep(max(0.0, period_sec - elapsed))
 
         self.get_logger().info("RunACT.insert_cable() exiting...")
         return True
-
-    def set_cartesian_twist_target(self, twist: Twist, frame_id: str = "base_link"):
-        motion_update_msg = MotionUpdate()
-        motion_update_msg.velocity = twist
-        motion_update_msg.header.frame_id = frame_id
-        motion_update_msg.header.stamp = self.get_clock().now().to_msg()
-
-        motion_update_msg.target_stiffness = np.diag(
-            [100.0, 100.0, 100.0, 50.0, 50.0, 50.0]
-        ).flatten()
-        motion_update_msg.target_damping = np.diag(
-            [40.0, 40.0, 40.0, 15.0, 15.0, 15.0]
-        ).flatten()
-
-        motion_update_msg.feedforward_wrench_at_tip = Wrench(
-            force=Vector3(x=0.0, y=0.0, z=0.0), torque=Vector3(x=0.0, y=0.0, z=0.0)
-        )
-
-        motion_update_msg.wrench_feedback_gains_at_tip = [0.5, 0.5, 0.5, 0.0, 0.0, 0.0]
-
-        motion_update_msg.trajectory_generation_mode.mode = (
-            TrajectoryGenerationMode.MODE_VELOCITY
-        )
-
-        return motion_update_msg

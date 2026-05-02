@@ -1,0 +1,52 @@
+# @package _global_
+
+defaults:
+  - /train: act
+  - /model: act
+  - /data: hf_sfp2nic_card0_port0_randomized
+  - /hardware: default
+  - _self_
+
+run:
+  task_family: ${data.task_family}
+  dataset_tag: ${data.dataset_tag}
+  model_family: ${model.family}
+  stage: ${train.stage}
+  name: hf_sfp2nic_card0_port0_act_20hz_chunk16_v1
+  output_root: outputs/train
+  output_dir: ${run.output_root}/${run.task_family}/${run.dataset_tag}/${run.model_family}/${run.stage}/20260502_act_20hz_chunk16_v1
+
+train:
+  # The 10D task vector is already materialized into observation.state.
+  task_conditioning: "off"
+  steps: 60000
+  batch_size: 4
+  num_workers: 4
+  lr: 0.0001
+  dataset_video_backend: pyav
+  # Save at 20k/40k/60k. Runtime eval can watch these checkpoints.
+  save_freq: 20000
+  log_freq: 200
+  eval_freq: 0
+  # Dataset is 20 Hz. Predict 0.8 s chunks and execute 0.4 s before replanning.
+  chunk_size: 16
+  n_action_steps: 8
+  n_obs_steps: 1
+  dry_run: false
+
+hardware:
+  cuda_devices:
+    - 0
+    - 1
+  num_devices: 2
+  effective_device: cuda:0
+  distributed:
+    enabled: true
+    launcher: torchrun
+    standalone: true
+    nnodes: 1
+    nproc_per_node: 2
+
+logging:
+  save_resolved_config: true
+  save_git_info: true

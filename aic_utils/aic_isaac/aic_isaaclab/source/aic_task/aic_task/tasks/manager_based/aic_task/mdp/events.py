@@ -62,6 +62,39 @@ def _sample_axis(pose_range: dict, snap_step: dict, axis: str) -> float:
     return torch.empty(1).uniform_(lo, hi).item()
 
 
+def _quat_mul_wxyz(lhs: torch.Tensor, rhs: torch.Tensor) -> torch.Tensor:
+    """Multiply quaternions stored as wxyz tensors."""
+    w1, x1, y1, z1 = lhs.unbind(dim=-1)
+    w2, x2, y2, z2 = rhs.unbind(dim=-1)
+    return torch.stack(
+        (
+            w1 * w2 - x1 * x2 - y1 * y2 - z1 * z2,
+            w1 * x2 + x1 * w2 + y1 * z2 - z1 * y2,
+            w1 * y2 - x1 * z2 + y1 * w2 + z1 * x2,
+            w1 * z2 + x1 * y2 - y1 * x2 + z1 * w2,
+        ),
+        dim=-1,
+    )
+
+
+def _yaw_offset_quat(yaw: torch.Tensor) -> torch.Tensor:
+    """Create a world-z yaw quaternion in wxyz order."""
+    half_yaw = 0.5 * yaw
+    zeros = torch.zeros_like(half_yaw)
+    return torch.stack(
+        (torch.cos(half_yaw), zeros, zeros, torch.sin(half_yaw)),
+        dim=-1,
+    )
+
+
+def _apply_yaw_noise(base_rot: torch.Tensor, yaw_range: tuple[float, float]) -> torch.Tensor:
+    lo, hi = yaw_range
+    if lo == 0.0 and hi == 0.0:
+        return base_rot
+    yaw = torch.empty(base_rot.shape[0], device=base_rot.device).uniform_(lo, hi)
+    return _quat_mul_wxyz(_yaw_offset_quat(yaw), base_rot)
+
+
 def _write_usd_xform_pose(
     stage,
     prim_path_template: str,
@@ -108,13 +141,15 @@ def randomize_board_and_parts(
     env_ids: torch.Tensor,
     board_scene_name: str = "task_board",
     board_default_pos: tuple = (0.0, 0.0, 0.0),
-    board_range: dict = {"x": (0.0, 0.0), "y": (0.0, 0.0)},
+    board_range: dict = {"x": (0.0, 0.0), "y": (0.0, 0.0), "z": (0.0, 0.0), "yaw": (0.0, 0.0)},
     parts: list[dict] = (),
     sync_usd_xforms: bool = True,
 ) -> None:
     """Randomize the task board and its attached parts on reset.
 
     The board position is drawn from ``board_range`` around ``board_default_pos``.
+    ``board_range`` and per-part ``pose_range`` support x/y/z offsets and a
+    world-z ``yaw`` offset in radians.
     Each part is offset from the board by a fixed ``offset`` plus a random
     delta from ``pose_range`` (optionally snapped to ``snap_step``).
 
@@ -136,13 +171,19 @@ def randomize_board_and_parts(
 
     # Board pose.
     board_asset = env.scene[board_scene_name]
-    board_rot = _cached_orientations[board_scene_name][env_ids]
+    board_rot = _apply_yaw_noise(
+        _cached_orientations[board_scene_name][env_ids],
+        board_range.get("yaw", (0.0, 0.0)),
+    )
     board_pos = torch.tensor([board_default_pos], device=device).expand(n, -1).clone()
     board_pos[:, 0] += torch.empty(n, device=device).uniform_(
         *board_range.get("x", (0.0, 0.0))
     )
     board_pos[:, 1] += torch.empty(n, device=device).uniform_(
         *board_range.get("y", (0.0, 0.0))
+    )
+    board_pos[:, 2] += torch.empty(n, device=device).uniform_(
+        *board_range.get("z", (0.0, 0.0))
     )
     board_world_pos = board_pos + env_origins
 
@@ -166,17 +207,20 @@ def randomize_board_and_parts(
     for part_cfg in parts:
         pname = part_cfg["scene_name"]
         part_asset = env.scene[pname]
-        part_rot = _cached_orientations[pname][env_ids]
+        pr = part_cfg.get("pose_range", {})
+        part_rot = _apply_yaw_noise(
+            _cached_orientations[pname][env_ids],
+            pr.get("yaw", (0.0, 0.0)),
+        )
 
         ox, oy, oz = part_cfg["offset"]
-        pr = part_cfg.get("pose_range", {})
         snap = part_cfg.get("snap_step", {})
 
         part_pos = board_world_pos.clone()
         for idx in range(n):
             part_pos[idx, 0] += ox + _sample_axis(pr, snap, "x")
             part_pos[idx, 1] += oy + _sample_axis(pr, snap, "y")
-            part_pos[idx, 2] = board_world_pos[idx, 2] + oz
+            part_pos[idx, 2] = board_world_pos[idx, 2] + oz + _sample_axis(pr, snap, "z")
 
         part_asset.write_root_pose_to_sim(
             torch.cat([part_pos, part_rot], dim=-1), env_ids=env_ids

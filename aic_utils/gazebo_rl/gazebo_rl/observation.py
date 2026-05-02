@@ -1,6 +1,9 @@
 from __future__ import annotations
 
+import base64
 from typing import Any, Callable
+
+import numpy as np
 
 
 LoggerFn = Callable[[str], None]
@@ -88,6 +91,55 @@ def task_to_dict(task: Any | None) -> dict[str, Any]:
     return {name: getattr(task, name, None) for name in names}
 
 
+def _rgb_array_from_image(image: Any, data: bytes) -> np.ndarray:
+    height = int(getattr(image, "height", 0))
+    width = int(getattr(image, "width", 0))
+    encoding = str(getattr(image, "encoding", "rgb8")).lower()
+    channels = 4 if encoding in {"rgba8", "bgra8"} else 1 if encoding in {"mono8", "8uc1"} else 3
+    expected = height * width * channels
+    array = np.frombuffer(data, dtype=np.uint8)
+    if height <= 0 or width <= 0 or array.size < expected:
+        raise ValueError(f"Invalid image payload for {height}x{width} {encoding}")
+    array = array[:expected].reshape(height, width, channels)
+    if encoding in {"bgr8", "bgra8"}:
+        return array[..., :3][..., ::-1].copy()
+    if encoding in {"rgba8", "rgb8"}:
+        return array[..., :3].copy()
+    if encoding in {"mono8", "8uc1"}:
+        return np.repeat(array, 3, axis=2)
+    return array[..., :3].copy()
+
+
+def image_to_dict(
+    image: Any | None,
+    *,
+    target_size: tuple[int, int] = (288, 256),
+    jpeg_quality: int = 80,
+) -> dict[str, Any] | None:
+    if image is None:
+        return None
+    data = bytes(getattr(image, "data", b"") or b"")
+    if not data:
+        return None
+    import cv2
+
+    rgb = _rgb_array_from_image(image, data)
+    resized = cv2.resize(rgb, target_size, interpolation=cv2.INTER_AREA)
+    bgr = cv2.cvtColor(resized, cv2.COLOR_RGB2BGR)
+    ok, encoded = cv2.imencode(".jpg", bgr, [int(cv2.IMWRITE_JPEG_QUALITY), int(jpeg_quality)])
+    if not ok:
+        raise ValueError("Could not JPEG-encode Gazebo observation image")
+    return {
+        "height": int(target_size[1]),
+        "width": int(target_size[0]),
+        "encoding": "jpeg_rgb8",
+        "is_bigendian": int(getattr(image, "is_bigendian", 0)),
+        "step": int(target_size[0] * 3),
+        "stamp": _stamp_to_sec(getattr(getattr(image, "header", None), "stamp", None)),
+        "data_b64": base64.b64encode(encoded.tobytes()).decode("ascii"),
+    }
+
+
 def _tf_pose(tf_buffer: Any, target_frame: str, source_frame: str) -> dict[str, Any]:
     from rclpy.time import Time
 
@@ -119,6 +171,7 @@ def observation_to_dict(
     step_count: int = 0,
     tf_buffer: Any | None = None,
     ground_truth: bool = False,
+    include_images: bool = False,
     logger: LoggerFn | None = None,
 ) -> dict[str, Any]:
     out: dict[str, Any] = {
@@ -135,12 +188,23 @@ def observation_to_dict(
             "tcp_error": [],
             "target_mode": None,
         },
+        "images": {},
         "oracle": {},
     }
 
     if observation is None:
         _warn(logger, "Missing Observation message; returning zero-like observation")
         return out
+
+    if include_images:
+        for field, key in (
+            ("center_image", "observation.images.center_camera"),
+            ("left_image", "observation.images.left_camera"),
+            ("right_image", "observation.images.right_camera"),
+        ):
+            image_dict = image_to_dict(getattr(observation, field, None))
+            if image_dict is not None:
+                out["images"][key] = image_dict
 
     joint_states = getattr(observation, "joint_states", None)
     if joint_states is not None:

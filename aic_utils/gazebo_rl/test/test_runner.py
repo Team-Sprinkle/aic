@@ -19,6 +19,22 @@ def _runner(sim_distrobox=None) -> GazeboRLRunner:
     )
 
 
+def _docker_runner() -> GazeboRLRunner:
+    return GazeboRLRunner(
+        GazeboRLRunnerConfig(
+            workspace_dir=Path("/data1/chmin/yj/ws_aic/src/aic"),
+            sim_docker_container="aic_eval",
+            docker_host="unix:///run/user/1008/docker.sock",
+            workspace_container=Path("/home/chmin/yj/ws_aic/src/aic"),
+            engine_config="/data1/chmin/yj/ws_aic/src/aic/outputs/test/engine_config.yaml",
+            results_dir=Path("/data1/chmin/yj/ws_aic/src/aic/outputs/test/results"),
+            ground_truth=True,
+            gazebo_gui=False,
+            launch_rviz=False,
+        )
+    )
+
+
 def test_simulation_command_without_distrobox_uses_local_pixi_launch():
     cmd = _runner(sim_distrobox=None).simulation_command()
     assert cmd[:5] == ["pixi", "run", "ros2", "launch", "aic_bringup"]
@@ -40,6 +56,32 @@ def test_simulation_command_with_distrobox_uses_exact_user_name():
         "gazebo_gui:=false",
         "launch_rviz:=false",
     ]
+
+
+def test_simulation_command_with_rootless_docker_uses_container_path():
+    cmd = _docker_runner().simulation_command()
+    assert cmd[:6] == [
+        "docker",
+        "--host",
+        "unix:///run/user/1008/docker.sock",
+        "exec",
+        "-i",
+        "aic_eval",
+    ]
+    rendered = " ".join(cmd)
+    assert "/entrypoint.sh" in rendered
+    assert "ground_truth:=true" in rendered
+    assert "start_aic_engine:=false" in rendered
+    assert "AIC_RESULTS_DIR=/home/chmin/yj/ws_aic/src/aic/outputs/test/results" in rendered
+
+
+def test_engine_command_with_rootless_docker_uses_isolated_model_node():
+    cmd = _docker_runner().engine_command()
+    assert cmd is not None
+    rendered = " ".join(cmd)
+    assert "ros2 run aic_engine aic_engine" in rendered
+    assert "config_file_path:=/home/chmin/yj/ws_aic/src/aic/outputs/test/engine_config.yaml" in rendered
+    assert "model_node_name:=aic_model_gazebo_rl" in rendered
 
 
 def test_recorder_command_uses_existing_policy_recorder():
@@ -82,7 +124,7 @@ def test_start_does_not_precreate_lerobot_dataset_root(monkeypatch, tmp_path):
             record_root=record_root,
         )
     )
-    monkeypatch.setattr(runner, "_validate_distrobox", lambda: None)
+    monkeypatch.setattr(runner, "_validate_runtime_container", lambda: None)
     monkeypatch.setattr(runner, "_cleanup_stale_zenoh_router", lambda: None)
     monkeypatch.setattr(runner_module.subprocess, "Popen", FakePopen)
     monkeypatch.setattr(runner_module.time, "sleep", lambda *_: None)
@@ -165,7 +207,7 @@ def test_start_runs_stale_zenoh_cleanup_before_launch(monkeypatch, tmp_path):
             results_dir=tmp_path / "results",
         )
     )
-    monkeypatch.setattr(runner, "_validate_distrobox", lambda: events.append("validate"))
+    monkeypatch.setattr(runner, "_validate_runtime_container", lambda: events.append("validate"))
     monkeypatch.setattr(runner, "_cleanup_stale_zenoh_router", lambda: events.append("cleanup"))
     monkeypatch.setattr(runner_module.subprocess, "Popen", FakePopen)
     monkeypatch.setattr(runner_module.time, "sleep", lambda *_: None)
@@ -175,6 +217,25 @@ def test_start_runs_stale_zenoh_cleanup_before_launch(monkeypatch, tmp_path):
         assert events[:3] == ["validate", "cleanup", "popen"]
     finally:
         runner.processes.clear()
+
+
+def test_runner_env_can_request_bridge_images(tmp_path):
+    runner = GazeboRLRunner(
+        GazeboRLRunnerConfig(
+            workspace_dir=tmp_path,
+            include_images=True,
+        )
+    )
+
+    assert runner._env()["AIC_GAZEBO_RL_INCLUDE_IMAGES"] == "true"
+
+
+def test_runner_env_prefers_source_gazebo_rl_package(tmp_path):
+    runner = GazeboRLRunner(GazeboRLRunnerConfig(workspace_dir=tmp_path))
+
+    pythonpath = runner._env()["PYTHONPATH"].split(":")
+
+    assert pythonpath[0] == str(tmp_path / "aic_utils" / "gazebo_rl")
 
 
 def test_cleanup_stale_zenoh_kills_host_and_distrobox(monkeypatch):

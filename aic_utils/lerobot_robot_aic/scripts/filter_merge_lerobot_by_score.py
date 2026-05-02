@@ -83,6 +83,12 @@ def parse_args() -> argparse.Namespace:
         ),
     )
     parser.add_argument(
+        "--max-selected-episodes",
+        type=int,
+        default=None,
+        help="Optional cap on selected episodes after score/status filtering.",
+    )
+    parser.add_argument(
         "--include-videos",
         action="store_true",
         help="Include video features in output dataset (default: false).",
@@ -479,6 +485,8 @@ def write_selection_report(rows: list[SelectionRow], report_path: Path) -> None:
 
 def main() -> int:
     args = parse_args()
+    if args.max_selected_episodes is not None and args.max_selected_episodes <= 0:
+        raise ValueError("--max-selected-episodes must be > 0")
     datasets = [p.resolve() for p in args.datasets]
     if args.score_csvs:
         score_csvs = [p.resolve() for p in args.score_csvs]
@@ -526,6 +534,19 @@ def main() -> int:
         )
         selected_by_dataset[dataset_root] = selected_episodes
         report_rows.extend(rows)
+
+    if args.max_selected_episodes is not None:
+        selected_seen = 0
+        for row in report_rows:
+            if not row.selected:
+                continue
+            selected_seen += 1
+            if selected_seen <= args.max_selected_episodes:
+                continue
+            row.selected = False
+            row.reason = "max_selected_episodes"
+            if row.mapped_episode_index is not None:
+                selected_by_dataset[row.dataset_root].discard(row.mapped_episode_index)
 
     repo_id = output_root.name
     writer = LeRobotDataset.create(

@@ -14,6 +14,9 @@ POLICY_CLASS="${POLICY_CLASS:-aic_example_policies.ros.CheatCode}"
 AIC_OFFICIAL_TEACHER_TRAJECTORY="${AIC_OFFICIAL_TEACHER_TRAJECTORY:-}"
 AIC_OFFICIAL_TEACHER_ACTION_MODE="${AIC_OFFICIAL_TEACHER_ACTION_MODE:-relative_delta_gripper_tcp}"
 SIM_DISTROBOX_NAME="${SIM_DISTROBOX_NAME:-aic_eval}"
+CONTAINER_WORKSPACE_DIR="${CONTAINER_WORKSPACE_DIR:-/home/chmin/yj/ws_aic/src/aic}"
+AIC_LAUNCH_BACKEND="${AIC_LAUNCH_BACKEND:-distrobox}"
+RESTART_SIM_CONTAINER="${RESTART_SIM_CONTAINER:-false}"
 SAVE_FAILED_EPISODES="${SAVE_FAILED_EPISODES:-false}"
 PER_TRIAL_TIMEOUT_SEC="${PER_TRIAL_TIMEOUT_SEC:-0}"
 STARTUP_DELAY_SEC="${STARTUP_DELAY_SEC:-8}"
@@ -52,6 +55,13 @@ Options:
                                  absolute_cartesian_pose_base_link
                                  (default: ${AIC_OFFICIAL_TEACHER_ACTION_MODE})
   --sim-distrobox NAME           Distrobox name for simulation (default: ${SIM_DISTROBOX_NAME})
+  --launch-backend MODE          Process backend: distrobox or docker_exec
+                                 (default: ${AIC_LAUNCH_BACKEND})
+  --container-workspace-dir PATH Workspace path inside the runtime container
+                                 for docker_exec backend
+                                 (default: ${CONTAINER_WORKSPACE_DIR})
+  --restart-sim-container BOOL   Restart Docker eval container before each trial
+                                 (default: ${RESTART_SIM_CONTAINER})
   --dataset-repo-id ID           LeRobot dataset repo id (default: ${DATASET_REPO_ID})
   --dataset-root PATH            LeRobot dataset root (default: ${DATASET_ROOT})
   --dataset-single-task TXT      Dataset task prompt (default: "${DATASET_SINGLE_TASK}")
@@ -85,7 +95,8 @@ Options:
 Environment variable equivalents:
   WORKSPACE_DIR, ENGINE_CONFIG_FILE, POLICY_CLASS,
   AIC_OFFICIAL_TEACHER_TRAJECTORY, AIC_OFFICIAL_TEACHER_ACTION_MODE,
-  SIM_DISTROBOX_NAME,
+  SIM_DISTROBOX_NAME, AIC_LAUNCH_BACKEND, CONTAINER_WORKSPACE_DIR,
+  RESTART_SIM_CONTAINER,
   DATASET_REPO_ID, DATASET_ROOT, DATASET_SINGLE_TASK, ACTION_MODE,
   SAVE_FAILED_EPISODES, PER_TRIAL_TIMEOUT_SEC, STARTUP_DELAY_SEC,
   PAUSE_BETWEEN_TRIALS_SEC, CONTINUE_ON_FAILURE, PUSH_TO_HUB, TMP_DIR,
@@ -102,6 +113,9 @@ while [[ $# -gt 0 ]]; do
     --teacher-trajectory) AIC_OFFICIAL_TEACHER_TRAJECTORY="$2"; shift 2 ;;
     --teacher-action-mode) AIC_OFFICIAL_TEACHER_ACTION_MODE="$2"; shift 2 ;;
     --sim-distrobox) SIM_DISTROBOX_NAME="$2"; shift 2 ;;
+    --launch-backend) AIC_LAUNCH_BACKEND="$2"; shift 2 ;;
+    --container-workspace-dir) CONTAINER_WORKSPACE_DIR="$2"; shift 2 ;;
+    --restart-sim-container) RESTART_SIM_CONTAINER="$2"; shift 2 ;;
     --dataset-repo-id) DATASET_REPO_ID="$2"; shift 2 ;;
     --dataset-root) DATASET_ROOT="$2"; shift 2 ;;
     --dataset-single-task) DATASET_SINGLE_TASK="$2"; shift 2 ;;
@@ -165,6 +179,7 @@ fi
 mkdir -p "${RESULTS_ROOT}"
 
 bool_or_die "${SAVE_FAILED_EPISODES}" "--save-failed-episodes"
+bool_or_die "${RESTART_SIM_CONTAINER}" "--restart-sim-container"
 bool_or_die "${CONTINUE_ON_FAILURE}" "--continue-on-failure"
 bool_or_die "${PUSH_TO_HUB}" "--push-to-hub"
 bool_or_die "${REQUIRE_RECORDER_SAVE_LOG}" "--require-recorder-save-log"
@@ -172,6 +187,10 @@ bool_or_die "${SUDO_KEEPALIVE}" "--sudo-keepalive"
 bool_or_die "${GAZEBO_GUI}" "--gazebo-gui"
 bool_or_die "${LAUNCH_RVIZ}" "--launch-rviz"
 bool_or_die "${REMOVE_BAG_DATA}" "--remove-bag-data"
+if [[ "${AIC_LAUNCH_BACKEND}" != "distrobox" && "${AIC_LAUNCH_BACKEND}" != "docker_exec" ]]; then
+  echo "Error: --launch-backend must be 'distrobox' or 'docker_exec' (got '${AIC_LAUNCH_BACKEND}')." >&2
+  exit 1
+fi
 int_or_die "${PER_TRIAL_TIMEOUT_SEC}" "--per-trial-timeout-sec"
 int_or_die "${STARTUP_DELAY_SEC}" "--startup-delay-sec"
 int_or_die "${PAUSE_BETWEEN_TRIALS_SEC}" "--pause-between-trials-sec"
@@ -292,6 +311,12 @@ cleanup_stale_sim_router() {
   pkill -f rmw_zenohd >/dev/null 2>&1 || true
   pkill -f "rmw_zenoh_cpp rmw_zenohd" >/dev/null 2>&1 || true
 
+  if [[ "${AIC_LAUNCH_BACKEND}" == "docker_exec" ]]; then
+    docker exec "${SIM_DISTROBOX_NAME}" bash -lc \
+      "pkill -f aic_policy_recorder >/dev/null 2>&1 || true; pkill -f 'ros2 run aic_model aic_model' >/dev/null 2>&1 || true; pkill -f rmw_zenohd >/dev/null 2>&1 || true; pkill -f 'rmw_zenoh_cpp rmw_zenohd' >/dev/null 2>&1 || true" \
+      >/dev/null 2>&1 || true
+  fi
+
   sleep 10
 
   # local attempt
@@ -307,6 +332,20 @@ cleanup_stale_sim_router() {
   # done
 
   # echo "  preflight: WARNING unable to run distrobox cleanup after retries; stale router may remain."
+}
+
+restart_sim_container() {
+  if [[ "${RESTART_SIM_CONTAINER}" != "true" ]]; then
+    return
+  fi
+  if ! command -v docker >/dev/null 2>&1; then
+    echo "Error: --restart-sim-container=true requires 'docker'." >&2
+    exit 1
+  fi
+
+  echo "  preflight: restarting sim container '${SIM_DISTROBOX_NAME}'..."
+  docker restart "${SIM_DISTROBOX_NAME}" >/dev/null
+  sleep 2
 }
 
 cleanup_trial_bags() {
@@ -354,11 +393,13 @@ echo "  temp dir: ${TMP_DIR}"
 echo "  recorder drain after sim exit: ${RECORDER_DRAIN_SEC}s"
 echo "  strict save-log check: ${REQUIRE_RECORDER_SAVE_LOG}"
 echo "  sudo keepalive: ${SUDO_KEEPALIVE}"
-  echo "  gazebo gui: ${GAZEBO_GUI}"
-  if [[ -n "${AIC_OFFICIAL_TEACHER_TRAJECTORY}" ]]; then
-    echo "  teacher trajectory: ${AIC_OFFICIAL_TEACHER_TRAJECTORY}"
-    echo "  teacher action mode: ${AIC_OFFICIAL_TEACHER_ACTION_MODE}"
-  fi
+echo "  restart sim container: ${RESTART_SIM_CONTAINER}"
+echo "  launch backend: ${AIC_LAUNCH_BACKEND}"
+echo "  gazebo gui: ${GAZEBO_GUI}"
+if [[ -n "${AIC_OFFICIAL_TEACHER_TRAJECTORY}" ]]; then
+  echo "  teacher trajectory: ${AIC_OFFICIAL_TEACHER_TRAJECTORY}"
+  echo "  teacher action mode: ${AIC_OFFICIAL_TEACHER_ACTION_MODE}"
+fi
 echo "  launch rviz: ${LAUNCH_RVIZ}"
 echo "  per-trial scoring results root: ${RESULTS_ROOT}"
 echo "  remove bag data: ${REMOVE_BAG_DATA}"
@@ -394,15 +435,45 @@ for TRIAL_ID in "${TRIAL_IDS[@]}"; do
   mkdir -p "${TRIAL_RESULTS_DIR}"
   echo "  scoring dir: ${TRIAL_RESULTS_DIR}"
 
+  restart_sim_container
   cleanup_stale_sim_router
 
   SIM_CMD="/entrypoint.sh ground_truth:=true start_aic_engine:=true gazebo_gui:=${GAZEBO_GUI} launch_rviz:=${LAUNCH_RVIZ} aic_engine_config_file:=${SINGLE_CONFIG_PATH} shutdown_on_aic_engine_exit:=true"
 
-  (
-    export DBX_CONTAINER_MANAGER=docker
-    distrobox enter -r "${SIM_DISTROBOX_NAME}" -- bash -lc "cd \"${WORKSPACE_DIR}\" && export AIC_RESULTS_DIR=\"${TRIAL_RESULTS_DIR}\" && ${SIM_CMD}"
-  ) >"${SIM_LOG}" 2>&1 &
+  if [[ "${AIC_LAUNCH_BACKEND}" == "docker_exec" ]]; then
+    (
+      docker exec -i "${SIM_DISTROBOX_NAME}" bash -lc "source /ws_aic/install/setup.bash && export RMW_IMPLEMENTATION=rmw_zenoh_cpp && cd \"${CONTAINER_WORKSPACE_DIR}\" && export AIC_RESULTS_DIR=\"${TRIAL_RESULTS_DIR}\" && ${SIM_CMD}"
+    ) >"${SIM_LOG}" 2>&1 &
+  elif [[ "${AIC_LAUNCH_BACKEND}" == "distrobox" ]]; then
+    (
+      export DBX_CONTAINER_MANAGER=docker
+      distrobox enter -r "${SIM_DISTROBOX_NAME}" -- bash -lc "cd \"${WORKSPACE_DIR}\" && export AIC_RESULTS_DIR=\"${TRIAL_RESULTS_DIR}\" && ${SIM_CMD}"
+    ) >"${SIM_LOG}" 2>&1 &
+  else
+    echo "Error: AIC_LAUNCH_BACKEND must be 'distrobox' or 'docker_exec' (got '${AIC_LAUNCH_BACKEND}')." >&2
+    exit 1
+  fi
   SIM_PID=$!
+
+  if [[ "${AIC_LAUNCH_BACKEND}" == "docker_exec" ]]; then
+    (
+      teacher_env=""
+      if [[ -n "${AIC_OFFICIAL_TEACHER_TRAJECTORY}" ]]; then
+        teacher_env="export AIC_OFFICIAL_TEACHER_TRAJECTORY=\"${AIC_OFFICIAL_TEACHER_TRAJECTORY}\" AIC_OFFICIAL_TEACHER_ACTION_MODE=\"${AIC_OFFICIAL_TEACHER_ACTION_MODE}\" &&"
+      fi
+      docker exec -i "${SIM_DISTROBOX_NAME}" bash -lc "source /ws_aic/install/setup.bash && export RMW_IMPLEMENTATION=rmw_zenoh_cpp && cd \"${CONTAINER_WORKSPACE_DIR}\" && ${teacher_env} pixi run ros2 run aic_model aic_model --ros-args -p use_sim_time:=true -p \"policy:=${POLICY_CLASS}\""
+    ) >"${POLICY_LOG}" 2>&1 &
+  else
+    (
+      cd "${WORKSPACE_DIR}"
+      if [[ -n "${AIC_OFFICIAL_TEACHER_TRAJECTORY}" ]]; then
+        export AIC_OFFICIAL_TEACHER_TRAJECTORY
+        export AIC_OFFICIAL_TEACHER_ACTION_MODE
+      fi
+      pixi run ros2 run aic_model aic_model --ros-args -p use_sim_time:=true -p "policy:=${POLICY_CLASS}"
+    ) >"${POLICY_LOG}" 2>&1 &
+  fi
+  POLICY_PID=$!
 
   sleep "${STARTUP_DELAY_SEC}"
 
@@ -425,21 +496,18 @@ for TRIAL_ID in "${TRIAL_IDS[@]}"; do
     RECORDER_CMD+=(--dataset.resume)
   fi
 
-  (
-    cd "${WORKSPACE_DIR}"
-    "${RECORDER_CMD[@]}"
-  ) >"${RECORDER_LOG}" 2>&1 &
+  if [[ "${AIC_LAUNCH_BACKEND}" == "docker_exec" ]]; then
+    printf -v RECORDER_CMD_QUOTED "%q " "${RECORDER_CMD[@]}"
+    (
+      docker exec -i "${SIM_DISTROBOX_NAME}" bash -lc "source /ws_aic/install/setup.bash && export RMW_IMPLEMENTATION=rmw_zenoh_cpp && cd \"${CONTAINER_WORKSPACE_DIR}\" && ${RECORDER_CMD_QUOTED}"
+    ) >"${RECORDER_LOG}" 2>&1 &
+  else
+    (
+      cd "${WORKSPACE_DIR}"
+      "${RECORDER_CMD[@]}"
+    ) >"${RECORDER_LOG}" 2>&1 &
+  fi
   RECORDER_PID=$!
-
-  (
-    cd "${WORKSPACE_DIR}"
-    if [[ -n "${AIC_OFFICIAL_TEACHER_TRAJECTORY}" ]]; then
-      export AIC_OFFICIAL_TEACHER_TRAJECTORY
-      export AIC_OFFICIAL_TEACHER_ACTION_MODE
-    fi
-    pixi run ros2 run aic_model aic_model --ros-args -p use_sim_time:=true -p "policy:=${POLICY_CLASS}"
-  ) >"${POLICY_LOG}" 2>&1 &
-  POLICY_PID=$!
 
   START_EPOCH="$(date +%s)"
   SIM_EXIT_EPOCH=0
