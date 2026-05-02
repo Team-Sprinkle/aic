@@ -1017,6 +1017,44 @@ outputs/expert_debug/nominalrecovery_speed_gate_v2_20260502T152433Z
 
 This attempted a stricter `0.006 m/s` gate but is inconclusive. The engine timed out waiting for the `aic_model` lifecycle state before a useful runtime trace was produced.
 
+Follow-up preserve-Z runs:
+
+```text
+outputs/expert_debug/nominalrecovery_strict_preinsert_speed_gate_v1_20260502T153950Z
+```
+
+This used a strict `5 mm` preinsert tracking gate and `0.010 m/s` speed gate. It showed that guarded insertion speed was no longer the limiter (`max_guarded_insert_speed_mps=0.00388`), but the preinsert gate correctly failed at about `16.2 mm` pose error before insertion. GPT-5 analysis confirmed that asking the preinsert gate to solve the axial Z descent was fighting the controller.
+
+```text
+outputs/expert_debug/nominalrecovery_preserve_z_gate_v1_20260502T154721Z
+```
+
+This added preserve-current-Z behavior for the preinsert align/gate before online insertion. It reached insertion with `score=89.9473`, `max_guarded_insert_speed_mps=0.00684`, no off-limit contacts, and post-insert force delta below the policy threshold. Validation still rejected it before the bookkeeping fix because the handoff gate was repaired with live Z but still recorded as a failed gate, and the official scorer reported a short force spike that explicitly had no penalty applied.
+
+```text
+outputs/expert_debug/nominalrecovery_preserve_z_fast_insert_v1_20260502T155554Z
+```
+
+This is the current best accepted nominalrecovery run. It kept the strict `5 mm` preinsert gate, preserve-Z preinsert alignment/gating, `0.010 m/s` measured speed gate, and used `AIC_OFFICIAL_TEACHER_CHEATCODE_INSERTION_SPEED_MPS=0.0018`:
+
+```text
+accepted: 1
+score: 91.74057004193335
+task_score_excluding_tier_1: 90.74057004193335
+insertion_event_reached: true
+trajectory_duration_s: 37.23
+contact_detected: false
+backoff_occurred: false
+max_guarded_insert_speed_mps: 0.00513056762681235
+p95_guarded_insert_speed_mps: 0.003838073376777609
+median_guarded_insert_speed_mps: 0.001623213218924153
+official_max_force_n: 26.0
+insertion_force_penalty_applied: false
+post_insert_force_delta_n: 1.1542886447916316
+```
+
+The official scorer reported the force above 20 N for only `0.02 s`, below its `1.00 s` penalty threshold. The parser now preserves that raw value as `official_max_force_n` but does not reject on `max_force_n` when the official scorer says the penalty was not applied.
+
 ## Current Controller Finding
 
 The speed/backoff difficulty appears partly inherent to `aic_controller`: Cartesian `MODE_POSITION` targets do not directly command TCP velocity. They provide position references to the controller, and the impedance dynamics plus current tracking error determine the actual TCP motion. That makes small commanded deltas and nominal insertion speeds only indirect controls over measured speed, contact timing, and backoff distance.
@@ -1030,14 +1068,14 @@ The practical mitigation is to keep using closed-loop gates around the controlle
 
 ## Recommended Next Steps
 
-Do not keep blindly changing insertion speed. The latest GPT-5 failure analysis concluded that the successful run was rejected because of a small speed spike, while the pre-insertion pose was not actually pinned tightly enough before descent.
+Do not keep blindly changing insertion speed. The preserve-Z run shows the nominalrecovery path can now produce accepted insertion trajectories with guarded speed below validation limits.
 
 Try these in order, one variation at a time:
 
-1. Tighten the pre-insertion tracking gate for live experiments to `3-5 mm` and force a local realign or reject before insertion if it does not pass. The successful rejected run had earlier local alignment near `1.2 mm`, but the actual TCP later drifted by roughly `16 mm` before insertion.
-2. Add or tune a measured settle-at-pinned-pose gate before descent: low TCP speed, low force delta, and measured pose within threshold.
-3. Re-run nominalrecovery with `AIC_OFFICIAL_TEACHER_GUARDED_INSERT_SPEED_GATE_MPS=0.009` to `0.010` after the stricter preinsert gate. The current `0.012` gate allowed one measured spike just above the `0.02 m/s` validator threshold.
-4. Explicitly exercise backoff by using nominalrecovery with a strict F/T threshold once the nominal insertion speed path is stable. The backoff path is still active, but the current best speed-gate run did not trigger it.
+1. Re-run `nominalrecovery_preserve_z_fast_insert` for multiple seeds/candidates to check repeatability at score threshold 90.
+2. Try the same preserve-Z/speed-gated settings in strict `--nominal`; nominal should still reject rather than recover on confirmed contact.
+3. Explicitly exercise backoff by using nominalrecovery with a stricter F/T threshold or a deliberately lower start margin. The backoff path is still active, but the current accepted run did not trigger it.
+4. Add high-rate F/T debug around the handoff and start-of-insertion window so the short official force spikes can be localized instead of inferred from scoring YAML.
 5. Longer-term, implement executable joint retiming/cross-fade for the MoveIt-to-Cartesian handoff and consider a port-frame delta-Z insertion formulation so the final descent starts from the measured live preinsert pose rather than from an assumed geometric pose.
 
 ## Tests Last Run

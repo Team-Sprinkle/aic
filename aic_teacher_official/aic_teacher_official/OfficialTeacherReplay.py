@@ -1446,6 +1446,14 @@ class OfficialTeacherReplay(Policy):
             "AIC_OFFICIAL_TEACHER_CHEATCODE_Z_MODE",
             "cheatcode_offsets",
         )
+        preinsert_align_preserve_current_z = os.environ.get(
+            "AIC_OFFICIAL_TEACHER_PREINSERT_ALIGN_PRESERVE_CURRENT_Z",
+            "true",
+        ).lower() in {"1", "true", "yes", "on"}
+        preinsert_gate_preserve_current_z = os.environ.get(
+            "AIC_OFFICIAL_TEACHER_PREINSERT_GATE_PRESERVE_CURRENT_Z",
+            "true",
+        ).lower() in {"1", "true", "yes", "on"}
         if not self._local_preinsert_align_done:
             self._run_local_preinsert_align(
                 task,
@@ -1454,7 +1462,7 @@ class OfficialTeacherReplay(Policy):
                 duration_sec=float(os.environ.get("AIC_OFFICIAL_TEACHER_LOCAL_PREINSERT_ALIGN_SEC", "2.25")),
                 dt=dt,
                 z_offset=z_offset,
-                preserve_current_z=False,
+                preserve_current_z=preinsert_align_preserve_current_z,
             )
             self._local_preinsert_align_done = True
         if not self._preinsert_settle_done:
@@ -1466,7 +1474,7 @@ class OfficialTeacherReplay(Policy):
                 settle_sec=settle_sec,
                 dt=dt,
                 z_offset=z_offset,
-                preserve_current_z=False,
+                preserve_current_z=preinsert_gate_preserve_current_z,
             )
             self._preinsert_settle_done = True
             if not gate_passed and self._expert_mode == "nominal":
@@ -1485,7 +1493,7 @@ class OfficialTeacherReplay(Policy):
                     ),
                     dt=dt,
                     z_offset=z_offset,
-                    preserve_current_z=False,
+                    preserve_current_z=preinsert_align_preserve_current_z,
                 )
                 gate_passed = self._hold_preinsert_until_tracking_gate(
                     task,
@@ -1495,7 +1503,7 @@ class OfficialTeacherReplay(Policy):
                     settle_sec=settle_sec,
                     dt=dt,
                     z_offset=z_offset,
-                    preserve_current_z=True,
+                    preserve_current_z=preinsert_gate_preserve_current_z,
                 )
                 self._trace_event(
                     "recovery_tracking_gate_realign_completed",
@@ -2183,6 +2191,14 @@ class OfficialTeacherReplay(Policy):
                         port_frame,
                         Time(),
                     ).transform
+                    preinsert_align_preserve_current_z = os.environ.get(
+                        "AIC_OFFICIAL_TEACHER_PREINSERT_ALIGN_PRESERVE_CURRENT_Z",
+                        "true",
+                    ).lower() in {"1", "true", "yes", "on"}
+                    preinsert_gate_preserve_current_z = os.environ.get(
+                        "AIC_OFFICIAL_TEACHER_PREINSERT_GATE_PRESERVE_CURRENT_Z",
+                        "true",
+                    ).lower() in {"1", "true", "yes", "on"}
                     gate_passed = self._hold_preinsert_until_tracking_gate(
                         task,
                         port_transform,
@@ -2196,7 +2212,7 @@ class OfficialTeacherReplay(Policy):
                         ),
                         dt=command_dt_sec,
                         z_offset=float(os.environ.get("AIC_OFFICIAL_TEACHER_CHEATCODE_START_Z_OFFSET", "0.03")),
-                        preserve_current_z=False,
+                        preserve_current_z=preinsert_gate_preserve_current_z,
                     )
                     self._preinsert_settle_done = True
                     if not gate_passed and self._expert_mode == "nominal":
@@ -2217,7 +2233,7 @@ class OfficialTeacherReplay(Policy):
                             z_offset=float(
                                 os.environ.get("AIC_OFFICIAL_TEACHER_CHEATCODE_START_Z_OFFSET", "0.03")
                             ),
-                            preserve_current_z=False,
+                            preserve_current_z=preinsert_align_preserve_current_z,
                         )
                         gate_passed = self._hold_preinsert_until_tracking_gate(
                             task,
@@ -2234,7 +2250,7 @@ class OfficialTeacherReplay(Policy):
                             z_offset=float(
                                 os.environ.get("AIC_OFFICIAL_TEACHER_CHEATCODE_START_Z_OFFSET", "0.03")
                             ),
-                            preserve_current_z=False,
+                            preserve_current_z=preinsert_gate_preserve_current_z,
                         )
                         self._trace_event(
                             "recovery_tracking_gate_realign_completed",

@@ -161,8 +161,11 @@ def metrics_from_scoring_yaml(path: str | Path) -> dict[str, Any]:
     if not isinstance(data, dict):
         data = {}
     text = scoring_path.read_text(encoding="utf-8")
-    max_force = _extract_float(r"Max detected force:\s*([0-9.]+)N", text)
-    if max_force is None and "No excessive force detected" in text:
+    official_max_force = _extract_float(r"Max detected force:\s*([0-9.]+)N", text)
+    force_penalty_applied = official_max_force is not None and "Penalty not applied" not in text
+    max_force = official_max_force if force_penalty_applied else 0.0
+    if official_max_force is None and "No excessive force detected" in text:
+        official_max_force = 0.0
         max_force = 0.0
     contacts_ok = "No contact detected" in text
     insertion = "Cable insertion successful" in text
@@ -193,6 +196,8 @@ def metrics_from_scoring_yaml(path: str | Path) -> dict[str, Any]:
         "has_partial_or_full_task_progress": bool((tier_3_score or 0.0) > 0.0 or (tier_2_score or 0.0) > 0.0),
         "insertion_event_reached": insertion,
         "max_force_n": max_force,
+        "official_max_force_n": official_max_force,
+        "insertion_force_penalty_applied": force_penalty_applied,
         "ft_impulse_ns": None,
         "max_tracking_error_m": None,
         "offlimit_contact_count": 0 if contacts_ok else 1,

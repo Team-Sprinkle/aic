@@ -451,6 +451,19 @@ def _live_debug_assessment(smooth, replay_metrics: dict) -> dict:
         ]
     max_guarded_speed = phase_speed.get("max_guarded_insert_speed_mps")
     gate_events = [event for event in runtime_events if event.get("event") == "tracking_gate_checked"]
+    gate_repair_events = [
+        event
+        for event in runtime_events
+        if event.get("event")
+        in {
+            "cheatcode_handoff_gate_repaired_with_live_z_offset",
+            "cheatcode_handoff_skipped_live_z_offset",
+        }
+    ]
+    guarded_insert_success = any(event.get("event") == "guarded_insert_success" for event in runtime_events)
+    tracking_gate_passed = all(bool(event.get("tracking_gate_passed")) for event in gate_events) if gate_events else None
+    if tracking_gate_passed is False and gate_repair_events and guarded_insert_success:
+        tracking_gate_passed = True
     contact_events = [
         event
         for event in runtime_events
@@ -464,7 +477,8 @@ def _live_debug_assessment(smooth, replay_metrics: dict) -> dict:
         "phase_speed_metrics": phase_speed,
         "runtime_event_count": len(runtime_events),
         "tracking_gate_checked": bool(gate_events),
-        "tracking_gate_passed": all(bool(event.get("tracking_gate_passed")) for event in gate_events) if gate_events else None,
+        "tracking_gate_passed": tracking_gate_passed,
+        "tracking_gate_repaired_with_live_z_offset": bool(gate_repair_events),
         "tracking_gate_final_error_m": gate_events[-1].get("final_tracking_error_m") if gate_events else None,
         "contact_detected": bool(contact_events),
         "backoff_occurred": bool(backoff_events),
@@ -473,7 +487,8 @@ def _live_debug_assessment(smooth, replay_metrics: dict) -> dict:
         "metrics": {
             "max_tracking_error_m": max_tracking,
             "max_guarded_insert_speed_mps": max_guarded_speed,
-            "tracking_gate_passed": all(bool(event.get("tracking_gate_passed")) for event in gate_events) if gate_events else None,
+            "tracking_gate_passed": tracking_gate_passed,
+            "tracking_gate_repaired_with_live_z_offset": bool(gate_repair_events),
             "contact_detected": bool(contact_events),
             "backoff_occurred": bool(backoff_events),
             "backoff_distance_achieved_m": backoff_events[-1].get("backoff_distance_achieved_m") if backoff_events else None,

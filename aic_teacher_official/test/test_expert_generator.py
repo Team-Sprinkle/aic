@@ -707,6 +707,8 @@ trial_000001:
     assert metrics["official_total_score"] == pytest.approx(96.5)
     assert metrics["insertion_event_reached"] is True
     assert metrics["max_force_n"] == pytest.approx(2.5)
+    assert metrics["official_max_force_n"] == pytest.approx(2.5)
+    assert metrics["insertion_force_penalty_applied"] is True
     assert metrics["offlimit_contact_count"] == 0
     assert metrics["trajectory_duration_s"] == pytest.approx(12.34)
 
@@ -759,6 +761,35 @@ trial_000001:
     assert metrics["has_partial_or_full_task_progress"] is False
     assert metrics["insertion_event_reached"] is False
     assert metrics["max_force_n"] == pytest.approx(0.0)
+    assert metrics["official_max_force_n"] == pytest.approx(0.0)
+    assert metrics["insertion_force_penalty_applied"] is False
+
+
+def test_scoring_yaml_metrics_parser_ignores_unpenalized_force_spike(tmp_path):
+    scoring = tmp_path / "scoring.yaml"
+    scoring.write_text(
+        """
+total: 89.9
+trial_000001:
+  tier_2:
+    categories:
+      contacts:
+        message: No contact detected.
+      duration:
+        message: "Task duration: 45.29 seconds."
+      insertion force:
+        message: "Insertion force above 20.00 N, detected for a time of 0.02 seconds. Max detected force: 27.46N. This is below the threshold of 1.00 seconds. Penalty not applied."
+  tier_3:
+    message: Cable insertion successful.
+""",
+        encoding="utf-8",
+    )
+
+    metrics = metrics_from_scoring_yaml(scoring)
+
+    assert metrics["max_force_n"] == pytest.approx(0.0)
+    assert metrics["official_max_force_n"] == pytest.approx(27.46)
+    assert metrics["insertion_force_penalty_applied"] is False
 
 
 def test_scoring_yaml_metrics_parser_preserves_partial_success_points(tmp_path):
