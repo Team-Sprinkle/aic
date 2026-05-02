@@ -80,6 +80,7 @@ class OfficialTeacherReplay(Policy):
         self._preinsert_settle_done = False
         self._last_tracking_gate_force_delta_n = None
         self._last_tracking_gate_error_m = None
+        self._last_tracking_gate_lateral_error_m = None
         self._last_tracking_gate_speed_mps = None
         self._last_precontact_lateral_offset_base = np.zeros(3, dtype=np.float64)
         runtime_trace = os.environ.get("AIC_OFFICIAL_TEACHER_RUNTIME_TRACE", "")
@@ -972,6 +973,11 @@ class OfficialTeacherReplay(Policy):
             ).transform
         except TransformException:
             plug_transform = None
+        final_lateral_error = None
+        if current_pose is not None and target_pose is not None:
+            current_xyz = self._pose_position_array(current_pose)
+            target_xyz = self._pose_position_array(target_pose)
+            final_lateral_error = float(np.linalg.norm((current_xyz - target_xyz)[:2]))
         self._trace_event(
             "tracking_gate_checked",
             tracking_gate_passed=passed,
@@ -980,6 +986,7 @@ class OfficialTeacherReplay(Policy):
             gate_source=gate_source if final_error is not None else "unavailable",
             timeout_sec=timeout_sec,
             final_tracking_error_m=final_error,
+            final_lateral_error_m=final_lateral_error,
             speed_threshold_mps=speed_threshold,
             final_tcp_speed_mps=final_speed,
             force_delta_n=final_force_delta,
@@ -1000,6 +1007,7 @@ class OfficialTeacherReplay(Policy):
         )
         self._last_tracking_gate_force_delta_n = final_force_delta
         self._last_tracking_gate_error_m = final_error
+        self._last_tracking_gate_lateral_error_m = final_lateral_error
         self._last_tracking_gate_speed_mps = final_speed
         return passed
 
@@ -1770,7 +1778,49 @@ class OfficialTeacherReplay(Policy):
                             return False
                         retry_count += 1
                         continue
-                    if z_offset < live_z_offset <= max_live_start_z_offset:
+                    live_z_repair_default = "false" if self._expert_mode == "nominal" else "true"
+                    live_z_repair_enabled = os.environ.get(
+                        "AIC_OFFICIAL_TEACHER_ENABLE_LIVE_Z_REPAIR",
+                        live_z_repair_default,
+                    ).lower() in {"1", "true", "yes", "on"}
+                    live_z_repair_max_start = float(
+                        os.environ.get(
+                            "AIC_OFFICIAL_TEACHER_LIVE_Z_REPAIR_MAX_START_Z_OFFSET_M",
+                            "0.035",
+                        )
+                    )
+                    live_z_repair_lateral_threshold = float(
+                        os.environ.get("AIC_OFFICIAL_TEACHER_LIVE_Z_REPAIR_MAX_LATERAL_ERROR_M", "0.003")
+                    )
+                    live_z_repair_force_threshold = float(
+                        os.environ.get("AIC_OFFICIAL_TEACHER_LIVE_Z_REPAIR_MAX_FORCE_DELTA_N", "0.7")
+                    )
+                    last_lateral_error = (
+                        float(self._last_tracking_gate_lateral_error_m)
+                        if self._last_tracking_gate_lateral_error_m is not None
+                        else None
+                    )
+                    live_z_repair_allowed = (
+                        live_z_repair_enabled
+                        and z_offset < live_z_offset <= min(max_live_start_z_offset, live_z_repair_max_start)
+                        and (last_lateral_error is None or last_lateral_error <= live_z_repair_lateral_threshold)
+                        and last_gate_force_delta <= live_z_repair_force_threshold
+                    )
+                    if z_offset < live_z_offset <= max_live_start_z_offset and not live_z_repair_allowed:
+                        self._trace_event(
+                            "cheatcode_handoff_live_z_repair_rejected",
+                            retry_count=retry_count,
+                            live_z_offset=live_z_offset,
+                            nominal_start_z_offset=z_offset,
+                            live_z_repair_enabled=live_z_repair_enabled,
+                            max_live_start_z_offset=max_live_start_z_offset,
+                            live_z_repair_max_start_z_offset=live_z_repair_max_start,
+                            lateral_error_m=last_lateral_error,
+                            lateral_threshold_m=live_z_repair_lateral_threshold,
+                            force_delta_n=last_gate_force_delta,
+                            force_threshold_n=live_z_repair_force_threshold,
+                        )
+                    if live_z_repair_allowed:
                         guarded_start_z_offset = live_z_offset
                         guarded_insertion_distance = max(0.0, live_z_offset - fixed_end_z_offset)
                         preserve_live_lateral = os.environ.get(

@@ -1145,6 +1145,30 @@ Not working reliably:
 - Fixed 5 mm backoff as a universal recovery distance. It can release in one run and fail release in another because the Cartesian controller does not make physical separation exactly equal commanded retreat.
 - Live-Z repair after a failed handoff gate. It can rescue Z bookkeeping, but if XY/yaw are not already in spec it permits a Z-only descent from a laterally imperfect pose.
 
+## GPT-5 Central-Camera Failure Analysis Update
+
+The latest GPT-5 failure analysis uses only central-camera frames, sampled every `1.5 s`, with the nearest LeRobot observation/action row attached to each frame. The prompt explicitly describes the two-step strategy:
+
+1. First trial: plan/execute segment-wise. Stalls are acceptable if geometry and recovery behavior are useful.
+2. Postprocess: remove stall intervals in image-retrieval cadence units, globally smooth except near the last insertion, convert to a policy/action dataset, and replay the policy to save a cleaner final trajectory.
+
+Artifacts:
+
+```text
+/home/ubuntu/ws_aic/src/aic/outputs/expert_debug/nominalrecovery_minbackoff15_live_lateral_repair_v1_20260502T191023Z/replay_attempts/attempt_000001_candidate_00/gpt5_replay_analysis/payload.json
+/home/ubuntu/ws_aic/src/aic/outputs/expert_debug/nominalrecovery_minbackoff15_live_lateral_repair_v1_20260502T191023Z/replay_attempts/attempt_000001_candidate_00/gpt5_replay_analysis/prompt.md
+/home/ubuntu/ws_aic/src/aic/outputs/expert_debug/nominalrecovery_minbackoff15_live_lateral_repair_v1_20260502T191023Z/replay_attempts/attempt_000001_candidate_00/gpt5_replay_analysis/analysis.md
+```
+
+GPT-5's core feedback: center-camera frames show the plug hovering offset at the cage mouth, and runtime trace shows `live_z_offset` around `44-46 mm` while lateral offsets can reach `~11 mm`. Recovery backoff succeeds, but the retry returns to the same misaligned preinsert and contacts immediately. This is an online geometry/gating problem; postprocessing cannot turn repeated first-step contacts into a successful insertion.
+
+Ranked directions after GPT-5 review and local trace inspection:
+
+1. **Gate or replace live-Z repair.** Only permit live-Z repair when lateral error, force, and live start height are all within bounds. Disable it by default in nominal.
+2. **Try a smooth aligned transport target.** Use plug/port pose to move to an aligned pose closer to the port than the old transport target, then descend. This is the more promising way to make the first trial smooth without relying on postprocessing to fix collisions.
+3. **Keep cadence-aware postprocessing.** Remove stalls after replay, in `1.5 s` central-frame cadence units, and protect the final insertion region from over-smoothing.
+4. **Improve recovery only after descent is meaningful.** Backoff now works; more retries do not help if every retry starts from the same bad lateral pose.
+
 ## Nominalrecovery Smoothing Update
 
 The current nominalrecovery priority is no longer to speed up the live replay trajectory before execution. A live attempt with pre-replay stall compaction and `2x` retiming made the replay controller produce excessive guarded-insert speed and failed validation. The better split is:
@@ -1201,6 +1225,38 @@ lateral_offset_base_m: [-0.004825, -0.009798, 0.0]
 
 but still contacted immediately and worsened measured guarded speed (`max_guarded_insert_speed_mps: 0.01664`). Treat this branch as not working reliably. The next likely change should be more structural: do not permit live-Z-repaired guarded descent when the retry context is laterally/force suspicious; either regenerate/replan the preinsert target, use a retry-specific insertion target policy that holds measured XY/orientation for the first few millimeters, or reject this recovery sample after recording the successful backoff.
 
+Strict live-Z gating was then implemented:
+
+```text
+AIC_OFFICIAL_TEACHER_ENABLE_LIVE_Z_REPAIR=false by default in nominal
+AIC_OFFICIAL_TEACHER_LIVE_Z_REPAIR_MAX_START_Z_OFFSET_M=0.035
+AIC_OFFICIAL_TEACHER_LIVE_Z_REPAIR_MAX_LATERAL_ERROR_M=0.003
+AIC_OFFICIAL_TEACHER_LIVE_Z_REPAIR_MAX_FORCE_DELTA_N=0.7
+```
+
+Live checks:
+
+```text
+outputs/expert_debug/nominalrecovery_strict_livez_gate_v1_20260502T193933Z
+```
+
+This rejected live-Z repair before descent. The trace showed `live_z_offset: 0.045776`, above the `0.035 m` cap, so the run stopped without immediate-contact recovery loops.
+
+```text
+outputs/expert_debug/nominal_strict_livez_disabled_v1_20260502T194301Z
+```
+
+Nominal rejected at the tracking gate with no live-Z repair, no descent, and no contact. This is safer than producing a bad nominal trajectory, but it is not enough to generate high-scoring nominal data.
+
+Aligned-start experiments:
+
+```text
+outputs/expert_debug/nominal_aligned_start_z40_v1_20260502T194635Z
+outputs/expert_debug/nominal_aligned_start_z40_gate7_v1_20260502T195006Z
+```
+
+Setting `AIC_OFFICIAL_TEACHER_CHEATCODE_START_Z_OFFSET=0.04` improved the initial aligned pose and sometimes passed the first gate, but did not produce insertion. With the strict `5 mm` gate, the handoff missed by about `6.3 mm`, mostly Z. With a `7 mm` gate, the initial gate failed due force (`~1.93 N`) before descent. This suggests the aligned-transport idea is still promising, but it needs an actual smooth target/settle policy and force-quiet check, not just a different z-offset.
+
 For policy smoothing, use the post-replay compactor instead of pre-replay compaction:
 
 ```bash
@@ -1210,6 +1266,9 @@ For policy smoothing, use the post-replay compactor instead of pre-replay compac
   --stall-translation-m 0.00005 \
   --stall-action-norm 0.00005 \
   --min-stall-frames 5 \
+  --cadence-sec 1.5 \
+  --cadence-stall-translation-m 0.001 \
+  --cadence-stall-action-norm 0.0001 \
   --no-trim-videos \
   --overwrite
 ```
@@ -1223,6 +1282,7 @@ nominalrecovery_minbackoff15_nocompact_v1_20260502T185340Z: 927 -> 577 frames
 nominalrecovery_minbackoff15_skipretrygate_v1_20260502T185920Z: 925 -> 464 frames
 nominalrecovery_minbackoff15_skip_retry_preinsert_gates_v1_20260502T190348Z: 1701 -> 681 frames
 nominalrecovery_minbackoff15_live_lateral_repair_v1_20260502T191023Z: 1705 -> 1000 frames
+nominalrecovery_minbackoff15_live_lateral_repair_v1_20260502T191023Z with 1.5s cadence windows: 1705 -> 891 frames, 24 cadence windows removed
 ```
 
 These contain increasingly complete recovery/backoff behavior, but none is an accepted insertion trajectory.
@@ -1263,6 +1323,7 @@ Postprocessed nominalrecovery policy-data smoothing:
 /home/ubuntu/ws_aic/src/aic/outputs/expert_debug/nominalrecovery_minbackoff15_skipretrygate_v1_20260502T185920Z/replay_attempts/attempt_000001_candidate_00/dataset_compacted_stalls_motion005_v1
 /home/ubuntu/ws_aic/src/aic/outputs/expert_debug/nominalrecovery_minbackoff15_skip_retry_preinsert_gates_v1_20260502T190348Z/replay_attempts/attempt_000001_candidate_00/dataset_compacted_stalls_motion005_v1
 /home/ubuntu/ws_aic/src/aic/outputs/expert_debug/nominalrecovery_minbackoff15_live_lateral_repair_v1_20260502T191023Z/replay_attempts/attempt_000001_candidate_00/dataset_compacted_stalls_motion005_v1
+/home/ubuntu/ws_aic/src/aic/outputs/expert_debug/nominalrecovery_minbackoff15_live_lateral_repair_v1_20260502T191023Z/replay_attempts/attempt_000001_candidate_00/dataset_compacted_stalls_cadence15_v1
 ```
 
 ## Tests Last Run

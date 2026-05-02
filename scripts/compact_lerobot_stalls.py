@@ -31,6 +31,9 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--stall-translation-m", type=float, default=0.00005)
     parser.add_argument("--stall-action-norm", type=float, default=0.00005)
     parser.add_argument("--min-stall-frames", type=int, default=5)
+    parser.add_argument("--cadence-sec", type=float, default=0.0)
+    parser.add_argument("--cadence-stall-translation-m", type=float, default=0.001)
+    parser.add_argument("--cadence-stall-action-norm", type=float, default=0.0001)
     parser.add_argument("--fps", type=float, default=20.0)
     parser.add_argument("--trim-videos", action=argparse.BooleanOptionalAction, default=False)
     parser.add_argument("--overwrite", action="store_true")
@@ -106,6 +109,39 @@ def _keep_mask(df: pd.DataFrame, *, stall_translation_m: float, stall_action_nor
     keep[0] = True
     keep[-1] = True
     return keep
+
+
+def _cadence_keep_mask(
+    df: pd.DataFrame,
+    *,
+    cadence_sec: float,
+    stall_translation_m: float,
+    stall_action_norm: float,
+) -> tuple[np.ndarray, int]:
+    if cadence_sec <= 0.0 or len(df) < 3:
+        return np.ones(len(df), dtype=bool), 0
+    states = np.stack([_state_array(value) for value in df["observation.state"]])
+    actions = np.stack([_action_array(value) for value in df["action"]])
+    timestamps = df["timestamp"].to_numpy(dtype=np.float64)
+    positions = states[:, :3]
+    keep = np.ones(len(df), dtype=bool)
+    removed_windows = 0
+    start_time = float(timestamps[0])
+    buckets = np.floor((timestamps - start_time) / cadence_sec).astype(np.int64)
+    for bucket in sorted(set(int(value) for value in buckets.tolist())):
+        indices = np.flatnonzero(buckets == bucket)
+        if len(indices) <= 1:
+            continue
+        if indices[0] == 0 or indices[-1] == len(df) - 1:
+            continue
+        window_translation = float(np.linalg.norm(positions[indices[-1]] - positions[indices[0]]))
+        window_action_norm = float(np.max(np.linalg.norm(actions[indices, :3], axis=1)))
+        if window_translation < stall_translation_m and window_action_norm < stall_action_norm:
+            keep[indices] = False
+            removed_windows += 1
+    keep[0] = True
+    keep[-1] = True
+    return keep, removed_windows
 
 
 def _recompute_actions(df: pd.DataFrame, *, fps: float) -> pd.DataFrame:
@@ -216,6 +252,15 @@ def main() -> int:
         stall_action_norm=args.stall_action_norm,
         min_stall_frames=args.min_stall_frames,
     )
+    cadence_keep, cadence_windows_removed = _cadence_keep_mask(
+        df,
+        cadence_sec=args.cadence_sec,
+        stall_translation_m=args.cadence_stall_translation_m,
+        stall_action_norm=args.cadence_stall_action_norm,
+    )
+    keep &= cadence_keep
+    keep[0] = True
+    keep[-1] = True
     compacted = _recompute_actions(df.loc[keep].copy(), fps=args.fps)
     output_file = output_root / "data" / "chunk-000" / "file-000.parquet"
     output_file.parent.mkdir(parents=True, exist_ok=True)
@@ -243,6 +288,10 @@ def main() -> int:
         "stall_translation_m": args.stall_translation_m,
         "stall_action_norm": args.stall_action_norm,
         "min_stall_frames": args.min_stall_frames,
+        "cadence_sec": args.cadence_sec,
+        "cadence_stall_translation_m": args.cadence_stall_translation_m,
+        "cadence_stall_action_norm": args.cadence_stall_action_norm,
+        "cadence_windows_removed": cadence_windows_removed,
         "actions": "recomputed_from_consecutive_tcp_state_pose_delta",
         "video_note": (
             "videos were trimmed to the kept frame indices"
