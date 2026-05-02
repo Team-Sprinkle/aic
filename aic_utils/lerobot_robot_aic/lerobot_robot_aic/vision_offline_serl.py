@@ -23,6 +23,10 @@ from .act_warmstart import inspect_act_checkpoint, resolve_act_checkpoint_dir
 RewardMode = Literal["dataset", "final_success", "zero"]
 
 
+def _unwrap_module(module: nn.Module) -> nn.Module:
+    return module.module if hasattr(module, "module") else module
+
+
 def _read_dataframes(dataset_root: Path) -> pd.DataFrame:
     files = sorted((dataset_root / "data").rglob("*.parquet"))
     if not files:
@@ -188,6 +192,9 @@ class ACTChunkActor(nn.Module):
     def mean_action(self, obs: dict[str, Any]) -> torch.Tensor:
         return self.act_action(obs)
 
+    def forward(self, obs: dict[str, Any]) -> dict[str, torch.Tensor]:
+        return self.action_components(obs)
+
     def action_components(self, obs: dict[str, Any]) -> dict[str, torch.Tensor]:
         action = self.mean_action(obs)
         return {
@@ -291,6 +298,9 @@ class ACTAdapterSERLActor(ACTChunkActor):
     def mean_action(self, obs: dict[str, Any]) -> torch.Tensor:
         return self.action_components(obs)["final_action"]
 
+    def forward(self, obs: dict[str, Any]) -> dict[str, torch.Tensor]:
+        return self.action_components(obs)
+
     def adapter_parameters(self):
         yield from self.adapter.parameters()
         yield self.log_std
@@ -392,6 +402,12 @@ class VisionOfflineSERLTrainer:
             lr=config.critic_lr,
         )
 
+    def actor_components(self, obs: dict[str, Any]) -> dict[str, torch.Tensor]:
+        return self.actor(obs)
+
+    def actor_mean_action(self, obs: dict[str, Any]) -> torch.Tensor:
+        return self.actor_components(obs)["final_action"]
+
     def _actor_param_groups(self) -> list[dict[str, Any]]:
         if isinstance(self.actor, ACTAdapterSERLActor):
             groups: list[dict[str, Any]] = [
@@ -431,7 +447,7 @@ class VisionOfflineSERLTrainer:
         done = batch["done"]
 
         with torch.no_grad():
-            next_action = self.actor.mean_action(next_obs)
+            next_action = self.actor_mean_action(next_obs)
             target_q = torch.minimum(
                 self.target_critic1(next_obs, next_action),
                 self.target_critic2(next_obs, next_action),
@@ -455,7 +471,7 @@ class VisionOfflineSERLTrainer:
         critic_loss.backward()
         self.critic_opt.step()
 
-        components = self.actor.action_components(obs)
+        components = self.actor_components(obs)
         delta_action = components["delta_action"]
         base_action = components["base_action"]
         actor_action = components["final_action"]
@@ -499,7 +515,7 @@ class VisionOfflineSERLTrainer:
                 .cpu()
             ),
             "smoothness_loss": float(smoothness_loss.detach().cpu()),
-            "log_std_mean": float(self.actor.log_std.mean().detach().cpu()),
+            "log_std_mean": float(_unwrap_module(self.actor).log_std.mean().detach().cpu()),
         }
 
     def _smoothness_loss(self, action: torch.Tensor) -> torch.Tensor:
@@ -527,9 +543,9 @@ class VisionOfflineSERLTrainer:
         path.parent.mkdir(parents=True, exist_ok=True)
         torch.save(
             {
-                "actor": self.actor.state_dict(),
-                "critic1": self.critic1.state_dict(),
-                "critic2": self.critic2.state_dict(),
+                "actor": _unwrap_module(self.actor).state_dict(),
+                "critic1": _unwrap_module(self.critic1).state_dict(),
+                "critic2": _unwrap_module(self.critic2).state_dict(),
                 "target_critic1": self.target_critic1.state_dict(),
                 "target_critic2": self.target_critic2.state_dict(),
                 "actor_optimizer": self.actor_opt.state_dict(),

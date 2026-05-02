@@ -13,7 +13,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from gazebo_rl.gym_env import GazeboRLEnv
 from gazebo_rl.score_parser import score_from_scoring_yaml
-from gazebo_rl.serl_policy import ACTAdapterSERLGazeboPolicy, OfflineSERLGazeboPolicy
+from gazebo_rl.serl_policy import ACTAdapterSERLGazeboPolicy, OfflineSERLGazeboPolicy, task_vector_from_context
 from gazebo_rl.train import add_recording_args
 
 
@@ -34,8 +34,15 @@ def run_validation(args: argparse.Namespace) -> dict:
     started = time.monotonic()
     output_dir = Path(args.output_dir).resolve()
     results_dir = output_dir / "results"
+    task_vector = task_vector_from_context(
+        task_family=args.task_family,
+        target_port_index=args.target_port_index,
+        target_card_index=args.target_card_index,
+        target_card_valid=args.target_card_valid,
+        task_context_json=args.task_context_json,
+    )
     if args.policy_kind == "lowdim_serl":
-        policy = OfflineSERLGazeboPolicy(args.checkpoint, device=args.device)
+        policy = OfflineSERLGazeboPolicy(args.checkpoint, device=args.device, task_vector=task_vector)
     elif args.policy_kind == "act_adapter_serl":
         if args.act_torchscript is None:
             raise ValueError("--act-torchscript is required for --policy-kind act_adapter_serl")
@@ -46,6 +53,7 @@ def run_validation(args: argparse.Namespace) -> dict:
             allow_zero_images=args.allow_zero_images,
             adapter_delta_clip=args.adapter_delta_clip,
             action_clip=args.action_clip,
+            task_vector=task_vector,
         )
     else:
         raise ValueError(f"Unsupported policy kind: {args.policy_kind}")
@@ -105,6 +113,7 @@ def run_validation(args: argparse.Namespace) -> dict:
         "act_torchscript": str(Path(args.act_torchscript).resolve()) if args.act_torchscript else None,
         "allow_zero_images": bool(args.allow_zero_images),
         "include_images": bool(args.include_images),
+        "task_vector": None if task_vector is None else task_vector.astype(float).tolist(),
         "elapsed_sec": time.monotonic() - started,
         "real_steps": real_steps,
         "total_reward": total_reward,
@@ -158,6 +167,11 @@ def build_arg_parser() -> argparse.ArgumentParser:
     parser.add_argument("--device", default="cpu")
     parser.add_argument("--adapter-delta-clip", type=float, default=0.05)
     parser.add_argument("--action-clip", type=float, default=0.05)
+    parser.add_argument("--task-family", choices=["sfp_to_nic", "sc_to_sc"], default=None)
+    parser.add_argument("--target-port-index", type=int, default=None)
+    parser.add_argument("--target-card-index", type=int, default=None)
+    parser.add_argument("--target-card-valid", type=int, default=None)
+    parser.add_argument("--task-context-json", default=None)
     parser.add_argument("--output-dir", default="outputs/gazebo_rl/serl_transfer_validation/latest")
     add_recording_args(parser)
     return parser

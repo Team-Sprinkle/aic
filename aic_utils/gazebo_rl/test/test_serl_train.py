@@ -3,6 +3,7 @@ from __future__ import annotations
 import argparse
 from pathlib import Path
 
+import pytest
 import torch
 from torch import nn
 
@@ -105,6 +106,15 @@ def _args(tmp_path: Path) -> argparse.Namespace:
         act_preservation_weight=1e-1,
         adapter_delta_clip=0.05,
         action_clip=0.05,
+        critic_init="checkpoint",
+        critic_checkpoint=None,
+        critic_only_steps=0,
+        actor_update_delay=1,
+        task_family=None,
+        target_port_index=None,
+        target_card_index=None,
+        target_card_valid=None,
+        task_context_json=None,
         include_images=True,
         allow_zero_images=True,
         dry_run=True,
@@ -149,6 +159,14 @@ def test_gazebo_serl_trainer_saves_reloadable_checkpoint(tmp_path: Path) -> None
     assert reloaded.state_dim == 32
     assert reloaded.action_dim == 48
     assert reloaded.action_horizon == 8
+
+
+def test_gazebo_serl_rejects_act_critic_init(tmp_path: Path) -> None:
+    args = _args(tmp_path)
+    args.critic_init = "act"
+
+    with pytest.raises(ValueError, match="ACT has no critic/value semantics"):
+        load_trainer(args)
 
 
 def test_replay_buffer_shapes_for_single_transition() -> None:

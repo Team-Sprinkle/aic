@@ -9,19 +9,13 @@ import shutil
 from pathlib import Path
 from typing import Any, Iterable
 
-TASK_VECTOR_DIM = 10
-TASK_VECTOR_NAMES = [
-    "task_family_sfp_to_nic",
-    "task_family_sc_to_sc",
-    "target_port_0",
-    "target_port_1",
-    "target_card_0",
-    "target_card_1",
-    "target_card_2",
-    "target_card_3",
-    "target_card_4",
-    "target_card_valid",
-]
+from .task_encoding import (
+    TASK_VECTOR_DIM,
+    TASK_VECTOR_NAMES,
+    encode_task_vector,
+    task_encoding_schema,
+    validate_task_vector as validate_task_vector_array,
+)
 
 
 def task_vector_from_fields(
@@ -30,25 +24,11 @@ def task_vector_from_fields(
     target_card_index: int,
 ) -> list[int]:
     """Return Option A task vector for one episode."""
-    if target_port_index not in (0, 1):
-        raise ValueError(f"target_port_index must be 0 or 1, got {target_port_index!r}")
-
-    if task_family == "sfp_to_nic":
-        if target_card_index not in range(5):
-            raise ValueError(
-                f"sfp_to_nic target_card_index must be in 0..4, got {target_card_index!r}"
-            )
-        card = [1 if i == target_card_index else 0 for i in range(5)]
-        return [1, 0, 1 if target_port_index == 0 else 0, 1 if target_port_index == 1 else 0, *card, 1]
-
-    if task_family == "sc_to_sc":
-        if target_card_index != -1:
-            raise ValueError(
-                f"sc_to_sc target_card_index must be -1, got {target_card_index!r}"
-            )
-        return [0, 1, 1 if target_port_index == 0 else 0, 1 if target_port_index == 1 else 0, 0, 0, 0, 0, 0, 0]
-
-    raise ValueError(f"Unsupported task_family {task_family!r}")
+    return [int(v) for v in encode_task_vector(
+        task_family=task_family,
+        target_port_index=target_port_index,
+        target_card_index=target_card_index,
+    ).tolist()]
 
 
 def validate_task_vector(

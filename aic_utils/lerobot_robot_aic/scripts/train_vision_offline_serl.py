@@ -15,8 +15,11 @@ os.environ.setdefault("PYGAME_HIDE_SUPPORT_PROMPT", "1")
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 import torch
+import torch.distributed as dist
 from torch import nn
+from torch.nn.parallel import DistributedDataParallel
 from torch.utils.data import DataLoader
+from torch.utils.data.distributed import DistributedSampler
 
 from lerobot_robot_aic.act_warmstart import inspect_act_checkpoint
 from lerobot_robot_aic.vision_offline_serl import (
@@ -26,6 +29,10 @@ from lerobot_robot_aic.vision_offline_serl import (
     load_act_actor,
     write_json,
 )
+
+
+def _unwrap_module(module: nn.Module) -> nn.Module:
+    return module.module if hasattr(module, "module") else module
 
 
 def parse_args() -> argparse.Namespace:
@@ -73,10 +80,50 @@ def parse_args() -> argparse.Namespace:
     return parser.parse_args()
 
 
-def _select_device(requested: str) -> str:
-    if requested.startswith("cuda") and not torch.cuda.is_available():
+def _ddp_env() -> dict[str, int]:
+    return {
+        "rank": int(os.environ.get("RANK", "0")),
+        "local_rank": int(os.environ.get("LOCAL_RANK", "0")),
+        "world_size": int(os.environ.get("WORLD_SIZE", "1")),
+    }
+
+
+def _is_rank0() -> bool:
+    return int(os.environ.get("RANK", "0")) == 0
+
+
+def _setup_distributed(requested: str) -> tuple[bool, torch.device, dict[str, Any]]:
+    env = _ddp_env()
+    distributed = env["world_size"] > 1
+    requested_device = torch.device(requested)
+    if requested_device.type == "cuda" and not torch.cuda.is_available():
         raise RuntimeError("CUDA was requested but torch.cuda.is_available() is false. Retry with --device cpu.")
-    return requested
+    if requested_device.type == "cuda":
+        torch.cuda.set_device(env["local_rank"])
+        device = torch.device("cuda", env["local_rank"])
+    else:
+        device = requested_device
+    if distributed and not dist.is_initialized():
+        backend = "nccl" if device.type == "cuda" else "gloo"
+        dist.init_process_group(backend=backend)
+    return distributed, device, {
+        **env,
+        "distributed": distributed,
+        "backend": dist.get_backend() if dist.is_initialized() else None,
+        "effective_device": str(device),
+    }
+
+
+def _wrap_ddp(trainer: VisionOfflineSERLTrainer, device: torch.device) -> None:
+    ddp_kwargs: dict[str, Any] = {}
+    if device.type == "cuda":
+        ddp_kwargs["device_ids"] = [device.index]
+        ddp_kwargs["output_device"] = device.index
+    trainer.actor = DistributedDataParallel(trainer.actor, **ddp_kwargs)
+    trainer.critic1 = DistributedDataParallel(trainer.critic1, **ddp_kwargs)
+    trainer.critic2 = DistributedDataParallel(trainer.critic2, **ddp_kwargs)
+    trainer.target_critic1.load_state_dict(_unwrap_module(trainer.critic1).state_dict())
+    trainer.target_critic2.load_state_dict(_unwrap_module(trainer.critic2).state_dict())
 
 
 def _camera_keys(args: argparse.Namespace) -> list[str]:
@@ -127,23 +174,24 @@ def _train_config(args: argparse.Namespace, dataset_summary: dict[str, Any], war
 
 
 def _model_summary(trainer: VisionOfflineSERLTrainer) -> dict[str, int]:
-    adapter_params = int(sum(p.numel() for p in getattr(trainer.actor, "adapter", nn.Module()).parameters()))
+    actor = _unwrap_module(trainer.actor)
+    adapter_params = int(sum(p.numel() for p in getattr(actor, "adapter", nn.Module()).parameters()))
     return {
-        "actor_parameters": int(sum(p.numel() for p in trainer.actor.parameters())),
-        "actor_trainable_parameters": int(sum(p.numel() for p in trainer.actor.parameters() if p.requires_grad)),
-        "act_trainable_parameters": int(sum(p.numel() for p in trainer.actor.act_policy.parameters() if p.requires_grad)),
+        "actor_parameters": int(sum(p.numel() for p in actor.parameters())),
+        "actor_trainable_parameters": int(sum(p.numel() for p in actor.parameters() if p.requires_grad)),
+        "act_trainable_parameters": int(sum(p.numel() for p in actor.act_policy.parameters() if p.requires_grad)),
         "adapter_parameters": adapter_params,
         "adapter_trainable_parameters": int(
-            sum(p.numel() for p in getattr(trainer.actor, "adapter", nn.Module()).parameters() if p.requires_grad)
+            sum(p.numel() for p in getattr(actor, "adapter", nn.Module()).parameters() if p.requires_grad)
         ),
-        "critic1_parameters": int(sum(p.numel() for p in trainer.critic1.parameters())),
-        "critic2_parameters": int(sum(p.numel() for p in trainer.critic2.parameters())),
+        "critic1_parameters": int(sum(p.numel() for p in _unwrap_module(trainer.critic1).parameters())),
+        "critic2_parameters": int(sum(p.numel() for p in _unwrap_module(trainer.critic2).parameters())),
     }
 
 
 def main() -> int:
     args = parse_args()
-    device = _select_device(args.device)
+    distributed, device, distributed_summary = _setup_distributed(args.device)
     camera_keys = _camera_keys(args)
 
     dataset = VisionOfflineSERLDataset(
@@ -189,10 +237,12 @@ def main() -> int:
         freeze_act=args.freeze_act,
     )
     trainer = VisionOfflineSERLTrainer(config=config, actor=actor, device=device)
+    if distributed:
+        _wrap_ddp(trainer, device)
     first_batch = next(iter(DataLoader(dataset, batch_size=min(args.batch_size, 2), shuffle=False, num_workers=0)))
     first_obs = trainer._obs_to_device(first_batch["obs"])
     with torch.no_grad():
-        initial_components = trainer.actor.action_components(first_obs)
+        initial_components = trainer.actor_components(first_obs)
         warmstart["initial_delta_norm"] = float(initial_components["delta_action"].norm(dim=-1).mean().detach().cpu())
         warmstart["initial_final_minus_act_norm"] = float(
             (initial_components["final_action"] - initial_components["base_action"]).norm(dim=-1).mean().detach().cpu()
@@ -201,33 +251,50 @@ def main() -> int:
     summary = {
         "training_config": train_config,
         "model_summary": _model_summary(trainer),
+        "distributed": distributed_summary,
         "dry_run": bool(args.dry_run),
     }
 
     if args.dry_run:
-        print(json.dumps(summary, indent=2, sort_keys=True))
+        if _is_rank0():
+            print(json.dumps(summary, indent=2, sort_keys=True))
+        if dist.is_initialized():
+            dist.destroy_process_group()
         return 0
 
     run_dir = args.output_dir
-    run_dir.mkdir(parents=True, exist_ok=True)
-    write_json(run_dir / "train_config.json", train_config)
-    write_json(run_dir / "warmstart_report.json", warmstart)
-    write_json(run_dir / "dataset_summary.json", dataset_summary)
+    if _is_rank0():
+        run_dir.mkdir(parents=True, exist_ok=True)
+        write_json(run_dir / "train_config.json", train_config)
+        write_json(run_dir / "warmstart_report.json", warmstart)
+        write_json(run_dir / "dataset_summary.json", dataset_summary)
+        write_json(run_dir / "distributed.json", distributed_summary)
 
-    loader = DataLoader(dataset, batch_size=args.batch_size, shuffle=True, drop_last=False, num_workers=0)
+    sampler = DistributedSampler(dataset, shuffle=True) if distributed else None
+    loader = DataLoader(
+        dataset,
+        batch_size=args.batch_size,
+        shuffle=sampler is None,
+        sampler=sampler,
+        drop_last=False,
+        num_workers=0,
+    )
     metrics_path = run_dir / "metrics.jsonl"
-    if metrics_path.exists():
+    if _is_rank0() and metrics_path.exists():
         metrics_path.unlink()
 
     step = 0
     while step < args.steps:
+        if sampler is not None:
+            sampler.set_epoch(step)
         for batch in loader:
             step += 1
             metrics = trainer.train_step(batch)
             metrics["step"] = step
-            with metrics_path.open("a", encoding="utf-8") as f:
-                f.write(json.dumps(metrics, sort_keys=True) + "\n")
-            if args.save_every > 0 and step % args.save_every == 0:
+            if _is_rank0():
+                with metrics_path.open("a", encoding="utf-8") as f:
+                    f.write(json.dumps(metrics, sort_keys=True) + "\n")
+            if _is_rank0() and args.save_every > 0 and step % args.save_every == 0:
                 trainer.save_checkpoint(
                     run_dir / f"checkpoint_{step:06d}.pt",
                     train_config=train_config,
@@ -239,16 +306,35 @@ def main() -> int:
                 break
 
     latest = run_dir / "checkpoint_latest.pt"
-    trainer.save_checkpoint(
-        latest,
-        train_config=train_config,
-        dataset_summary=dataset_summary,
-        warmstart_report=warmstart,
-        step=step,
-    )
-    print(f"Wrote vision offline SERL checkpoint: {latest}")
-    print(f"Wrote warm-start report: {run_dir / 'warmstart_report.json'}")
-    print(f"Wrote metrics: {metrics_path}")
+    if _is_rank0():
+        trainer.save_checkpoint(
+            latest,
+            train_config=train_config,
+            dataset_summary=dataset_summary,
+            warmstart_report={**warmstart, "distributed": distributed_summary},
+            step=step,
+        )
+        run_summary = {
+            "checkpoint_latest": str(latest),
+            "metrics": str(metrics_path),
+            "steps": step,
+            "actor_mode": args.actor_mode,
+            "freeze_act": args.freeze_act,
+            "act_checkpoint": str(args.act_checkpoint),
+            "critic_init": "scratch",
+            "critic_initialization_note": "Critic/value is scratch; ACT is used only as an actor/action prior.",
+            "model_summary": _model_summary(trainer),
+            "dataset_summary": dataset_summary,
+            "warmstart_report": warmstart,
+            "distributed": distributed_summary,
+        }
+        write_json(run_dir / "run_summary.json", run_summary)
+        print(f"Wrote vision offline SERL checkpoint: {latest}")
+        print(f"Wrote warm-start report: {run_dir / 'warmstart_report.json'}")
+        print(f"Wrote metrics: {metrics_path}")
+    if dist.is_initialized():
+        dist.barrier()
+        dist.destroy_process_group()
     return 0
 
 

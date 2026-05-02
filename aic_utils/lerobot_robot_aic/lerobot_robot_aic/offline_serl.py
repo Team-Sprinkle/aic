@@ -29,6 +29,10 @@ from torch import nn
 from torch.nn import functional as F
 
 
+def _unwrap_module(module: nn.Module) -> nn.Module:
+    return module.module if hasattr(module, "module") else module
+
+
 def mlp(sizes: list[int], activation: type[nn.Module] = nn.ReLU) -> nn.Sequential:
     layers: list[nn.Module] = []
     for idx in range(len(sizes) - 1):
@@ -52,17 +56,17 @@ class GaussianActor(nn.Module):
         self.log_std_head = nn.Linear(hidden_dims[-1], action_dim)
         self.log_std_bounds = log_std_bounds
 
-    def forward(self, obs: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor]:
+    def forward(self, obs: torch.Tensor) -> torch.Tensor:
+        h = self.backbone(obs)
+        return self.mean_head(h)
+
+    def mean_action(self, obs: torch.Tensor) -> torch.Tensor:
+        return self.forward(obs)
+
+    def sample_action(self, obs: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor]:
         h = self.backbone(obs)
         mean = self.mean_head(h)
         log_std = self.log_std_head(h).clamp(*self.log_std_bounds)
-        return mean, log_std
-
-    def mean_action(self, obs: torch.Tensor) -> torch.Tensor:
-        return self.forward(obs)[0]
-
-    def sample_action(self, obs: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor]:
-        mean, log_std = self.forward(obs)
         std = log_std.exp()
         dist = torch.distributions.Normal(mean, std)
         action = dist.rsample()
@@ -129,16 +133,28 @@ class OfflineSERLTrainer:
                 "ACT action head and SERL actor dimensions are incompatible: "
                 f"{single_action_dim} * horizon {self.config.action_horizon} != {self.config.action_dim}"
             )
-        repeated = action_head_bias.detach().to(self.device, dtype=self.actor.mean_head.bias.dtype)
+        actor = _unwrap_module(self.actor)
+        repeated = action_head_bias.detach().to(self.device, dtype=actor.mean_head.bias.dtype)
         repeated = repeated.repeat(int(self.config.action_horizon))
         with torch.no_grad():
-            self.actor.mean_head.bias.copy_(repeated)
+            actor.mean_head.bias.copy_(repeated)
         return {
             "mode": "action_head_bias",
             "single_action_dim": single_action_dim,
             "action_horizon": int(self.config.action_horizon),
             "transferred_tensors": ["model.action_head.bias -> actor.mean_head.bias"],
+            "semantics": "actor/action bias prior only; no critic/value parameters are initialized from ACT",
         }
+
+    def load_critic_checkpoint(self, checkpoint: dict[str, Any]) -> None:
+        required = ["critic1", "critic2"]
+        missing = [key for key in required if key not in checkpoint]
+        if missing:
+            raise ValueError(f"Critic checkpoint missing keys: {missing}")
+        _unwrap_module(self.critic1).load_state_dict(checkpoint["critic1"], strict=True)
+        _unwrap_module(self.critic2).load_state_dict(checkpoint["critic2"], strict=True)
+        self.target_critic1.load_state_dict(checkpoint.get("target_critic1", checkpoint["critic1"]), strict=True)
+        self.target_critic2.load_state_dict(checkpoint.get("target_critic2", checkpoint["critic2"]), strict=True)
 
     def _to_device(self, batch: dict[str, torch.Tensor]) -> dict[str, torch.Tensor]:
         return {k: v.to(self.device) for k, v in batch.items()}
@@ -152,7 +168,7 @@ class OfflineSERLTrainer:
         done = batch["done"]
 
         with torch.no_grad():
-            next_action = self.actor.mean_action(next_obs)
+            next_action = self.actor(next_obs)
             target_q = torch.minimum(
                 self.target_critic1(next_obs, next_action),
                 self.target_critic2(next_obs, next_action),
@@ -176,7 +192,7 @@ class OfflineSERLTrainer:
         critic_loss.backward()
         self.critic_opt.step()
 
-        actor_action = self.actor.mean_action(obs)
+        actor_action = self.actor(obs)
         actor_q = torch.minimum(
             self.critic1(obs, actor_action),
             self.critic2(obs, actor_action),
@@ -221,9 +237,9 @@ class OfflineSERLTrainer:
         path.parent.mkdir(parents=True, exist_ok=True)
         torch.save(
             {
-                "actor": self.actor.state_dict(),
-                "critic1": self.critic1.state_dict(),
-                "critic2": self.critic2.state_dict(),
+                "actor": _unwrap_module(self.actor).state_dict(),
+                "critic1": _unwrap_module(self.critic1).state_dict(),
+                "critic2": _unwrap_module(self.critic2).state_dict(),
                 "target_critic1": self.target_critic1.state_dict(),
                 "target_critic2": self.target_critic2.state_dict(),
                 "actor_optimizer": self.actor_opt.state_dict(),

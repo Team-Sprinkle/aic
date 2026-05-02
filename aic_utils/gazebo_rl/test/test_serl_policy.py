@@ -9,9 +9,12 @@ from torch import nn
 
 from gazebo_rl.serl_policy import (
     ACTAdapterSERLGazeboPolicy,
+    OfflineSERLGazeboPolicy,
     TorchScriptACTAdapterActor,
     lowdim_state_from_gazebo_observation,
 )
+from lerobot_robot_aic.offline_serl import GaussianActor
+from lerobot_robot_aic.task_encoding import encode_task_vector
 
 
 def test_lowdim_state_from_gazebo_observation_matches_dataset_order():
@@ -183,3 +186,36 @@ def test_act_adapter_gazebo_policy_clips_loaded_adapter_and_action(tmp_path):
 
     assert max(abs(value) for value in action) <= 0.20001
     assert policy.last_action_components["raw_delta_action_norm"] > policy.last_action_components["delta_action_norm"]
+
+
+def test_lowdim_serl_gazebo_policy_appends_task_vector(tmp_path):
+    actor = GaussianActor(obs_dim=42, action_dim=6, hidden_dims=(16,))
+    checkpoint = tmp_path / "lowdim_task.pt"
+    torch.save(
+        {
+            "offline_serl_config": {
+                "obs_dim": 42,
+                "action_dim": 6,
+                "hidden_dim": 16,
+                "num_layers": 1,
+                "action_horizon": 1,
+            },
+            "dataset_schema": {"action_shape": [6]},
+            "actor": actor.state_dict(),
+            "normalization_stats": {
+                "obs_mean": [0.0] * 42,
+                "obs_std": [1.0] * 42,
+                "action_mean": [0.0] * 6,
+                "action_std": [1.0] * 6,
+            },
+        },
+        checkpoint,
+    )
+
+    with pytest.raises(ValueError, match="pass task context"):
+        OfflineSERLGazeboPolicy(checkpoint)
+
+    task_vector = encode_task_vector(task_family="sfp_to_nic", target_port_index=1, target_card_index=3)
+    policy = OfflineSERLGazeboPolicy(checkpoint, task_vector=task_vector)
+
+    assert len(policy.act(_obs())) == 6

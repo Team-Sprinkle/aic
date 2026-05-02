@@ -40,6 +40,8 @@ import cv2
 import draccus
 import numpy as np
 import torch
+from aic_control_interfaces.msg import MotionUpdate, TargetMode, TrajectoryGenerationMode
+from geometry_msgs.msg import Twist, Vector3, Wrench
 from huggingface_hub import snapshot_download
 from rclpy.node import Node
 from safetensors.torch import load_file
@@ -72,6 +74,9 @@ class RunACT(Policy):
         self.max_runtime_sec = float(
             os.environ.get("AIC_ACT_MAX_RUNTIME_SEC", DEFAULT_MAX_RUNTIME_SEC)
         )
+        self.start_delay_sec = float(os.environ.get("AIC_ACT_START_DELAY_SEC", 0.0))
+        self.command_mode = os.environ.get("AIC_ACT_COMMAND_MODE", "delta_pose")
+        self.command_frame = os.environ.get("AIC_ACT_COMMAND_FRAME", "gripper/tcp")
         self.max_translation_delta = float(os.environ.get("AIC_ACT_MAX_TRANSLATION_DELTA", 0.02))
         self.max_rotation_delta = float(os.environ.get("AIC_ACT_MAX_ROTATION_DELTA", 0.2))
         self.translation_deadband = float(os.environ.get("AIC_ACT_TRANSLATION_DEADBAND", 5e-4))
@@ -109,15 +114,18 @@ class RunACT(Policy):
         self.state_std = self._stat(stats, "observation.state.std", (1, -1))
         self.action_mean = self._stat(stats, "action.mean", (1, -1))
         self.action_std = self._stat(stats, "action.std", (1, -1))
+        self._current_task: Task | None = None
 
         self.get_logger().info(
             "ACT policy loaded from "
             f"{self.policy_path} on {self.device}; "
             f"state_dim={self.state_dim}, action_dim={self.action_dim}, "
             f"control_hz={self.control_hz}, "
+            f"start_delay_sec={self.start_delay_sec}, "
             f"chunk_size={self.policy.config.chunk_size}, "
             f"n_action_steps={self.policy.config.n_action_steps}, "
-            "action_mode=delta_pose, action_frame=gripper/tcp"
+            f"action_mode=delta_pose, command_mode={self.command_mode}, "
+            f"action_frame=gripper/tcp, command_frame={self.command_frame}"
         )
 
     def _resolve_policy_path(self) -> Path:
@@ -180,6 +188,33 @@ class RunACT(Policy):
         tensor = self._image_msg_to_chw_float(raw_img, self.camera_shapes[key]).to(self.device)
         return (tensor - self.img_stats[key]["mean"]) / self.img_stats[key]["std"]
 
+    @staticmethod
+    def _parse_index_from_suffix(value: str, prefix: str) -> int:
+        if not value.startswith(prefix):
+            raise ValueError(f"Expected {value!r} to start with {prefix!r}")
+        return int(value.removeprefix(prefix))
+
+    def _task_vector(self, task: Task) -> list[float]:
+        """Return the canonical 10D task vector for the active AIC task."""
+        if task.target_module_name.startswith("nic_card_mount_"):
+            card_index = self._parse_index_from_suffix(task.target_module_name, "nic_card_mount_")
+            port_index = self._parse_index_from_suffix(task.port_name, "sfp_port_")
+            if not 0 <= card_index <= 4:
+                raise ValueError(f"target card index must be in [0, 4], got {card_index}")
+            if port_index not in (0, 1):
+                raise ValueError(f"target port index must be 0 or 1, got {port_index}")
+            card = [0.0] * 5
+            card[card_index] = 1.0
+            return [1.0, 0.0, float(port_index == 0), float(port_index == 1), *card, 1.0]
+
+        if task.target_module_name.startswith("sc_port_"):
+            port_index = self._parse_index_from_suffix(task.target_module_name, "sc_port_")
+            if port_index not in (0, 1):
+                raise ValueError(f"target SC port index must be 0 or 1, got {port_index}")
+            return [0.0, 1.0, float(port_index == 0), float(port_index == 1), 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
+
+        raise ValueError(f"Cannot infer task vector from target_module_name={task.target_module_name!r}")
+
     def prepare_observations(self, obs_msg: Observation) -> dict[str, torch.Tensor]:
         obs = {}
         camera_msg_by_key = {
@@ -231,6 +266,10 @@ class RunACT(Policy):
                     obs_msg.wrist_wrench.wrench.torque.z,
                 ]
             )
+        if self.state_dim == 42:
+            if self._current_task is None:
+                raise ValueError("checkpoint expects task-conditioned 42D state, but no active task is set")
+            values.extend(self._task_vector(self._current_task))
         return np.array(values, dtype=np.float32)
 
     def select_delta_action(self, obs_msg: Observation) -> np.ndarray:
@@ -239,6 +278,55 @@ class RunACT(Policy):
             normalized_action = self.policy.select_action(obs_tensors)
         raw_action = (normalized_action * self.action_std) + self.action_mean
         return raw_action[0, :6].detach().cpu().numpy()
+
+    def _set_velocity_target(
+        self,
+        move_robot: MoveRobotCallback,
+        delta_position_xyz: np.ndarray,
+        delta_rotation_xyz: np.ndarray,
+    ) -> None:
+        position, rotation = self._clamp_action(delta_position_xyz, delta_rotation_xyz)
+        twist = Twist(
+            linear=Vector3(
+                x=float(position[0] * self.control_hz),
+                y=float(position[1] * self.control_hz),
+                z=float(position[2] * self.control_hz),
+            ),
+            angular=Vector3(
+                x=float(rotation[0] * self.control_hz),
+                y=float(rotation[1] * self.control_hz),
+                z=float(rotation[2] * self.control_hz),
+            ),
+        )
+        motion_update = MotionUpdate()
+        motion_update.velocity = twist
+        motion_update.header.frame_id = self.command_frame
+        motion_update.header.stamp = self.get_clock().now().to_msg()
+        motion_update.target_stiffness = np.diag([100.0, 100.0, 100.0, 50.0, 50.0, 50.0]).flatten()
+        motion_update.target_damping = np.diag([40.0, 40.0, 40.0, 15.0, 15.0, 15.0]).flatten()
+        motion_update.feedforward_wrench_at_tip = Wrench(
+            force=Vector3(x=0.0, y=0.0, z=0.0),
+            torque=Vector3(x=0.0, y=0.0, z=0.0),
+        )
+        motion_update.wrench_feedback_gains_at_tip = [0.5, 0.5, 0.5, 0.0, 0.0, 0.0]
+        motion_update.trajectory_generation_mode.mode = TrajectoryGenerationMode.MODE_VELOCITY
+        move_robot(motion_update=motion_update)
+
+    def _clamp_action(
+        self,
+        delta_position_xyz: np.ndarray,
+        delta_rotation_xyz: np.ndarray,
+    ) -> tuple[np.ndarray, np.ndarray]:
+        from aic_model.policy import clamp_delta_pose_components
+
+        return clamp_delta_pose_components(
+            delta_position_xyz,
+            delta_rotation_xyz,
+            max_translation=self.max_translation_delta,
+            max_rotation=self.max_rotation_delta,
+            deadband_translation=self.translation_deadband,
+            deadband_rotation=self.rotation_deadband,
+        )
 
     def insert_cable(
         self,
@@ -249,7 +337,11 @@ class RunACT(Policy):
         **kwargs,
     ) -> bool:
         self.policy.reset()
+        self._current_task = task
         self.get_logger().info(f"RunACT.insert_cable() enter. Task: {task}")
+        if self.start_delay_sec > 0.0:
+            self.get_logger().info(f"Waiting {self.start_delay_sec:.2f}s before first ACT command.")
+            time.sleep(self.start_delay_sec)
 
         period_sec = 1.0 / self.control_hz
         start_time = time.monotonic()
@@ -263,15 +355,24 @@ class RunACT(Policy):
                 continue
 
             action = self.select_delta_action(observation_msg)
-            self.set_delta_pose_target_from_components(
-                move_robot=move_robot,
-                delta_position_xyz=action[:3],
-                delta_rotation_xyz=action[3:6],
-                max_translation=self.max_translation_delta,
-                max_rotation=self.max_rotation_delta,
-                deadband_translation=self.translation_deadband,
-                deadband_rotation=self.rotation_deadband,
-            )
+            if hasattr(self._parent_node, "_target_mode"):
+                self._parent_node._target_mode = TargetMode.MODE_CARTESIAN
+            if self.command_mode == "none":
+                pass
+            elif self.command_mode == "velocity":
+                self._set_velocity_target(move_robot, action[:3], action[3:6])
+            elif self.command_mode == "delta_pose":
+                self.set_delta_pose_target_from_components(
+                    move_robot=move_robot,
+                    delta_position_xyz=action[:3],
+                    delta_rotation_xyz=action[3:6],
+                    max_translation=self.max_translation_delta,
+                    max_rotation=self.max_rotation_delta,
+                    deadband_translation=self.translation_deadband,
+                    deadband_rotation=self.rotation_deadband,
+                )
+            else:
+                raise ValueError(f"Unsupported AIC_ACT_COMMAND_MODE={self.command_mode!r}")
             command_count += 1
             if command_count % max(1, int(self.control_hz)) == 0:
                 send_feedback(f"in progress; commands={command_count}")

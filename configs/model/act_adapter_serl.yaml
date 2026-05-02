@@ -1,0 +1,9 @@
+family: serl
+architecture: frozen_act_base_plus_mlp_delta_adapter
+act_base: frozen_torchscript
+adapter_output: flattened_action_delta
+final_action: act_base_action_plus_clipped_adapter_delta
+task_vector_dim: 10
+freeze_act_base: true
+train_adapter_only: true
+critic_init: scratch

@@ -35,6 +35,9 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--num-workers", type=int, default=1)
     parser.add_argument("--lr", default="1e-4", help="Optimizer learning rate.")
     parser.add_argument("--dataset-video-backend", default="pyav")
+    parser.add_argument("--save-freq", type=int, default=20000)
+    parser.add_argument("--log-freq", type=int, default=200)
+    parser.add_argument("--eval-freq", type=int, default=0)
     parser.add_argument(
         "--chunk-size",
         type=int,
@@ -127,6 +130,9 @@ def build_lerobot_train_cmd(args: argparse.Namespace) -> list[str]:
         f"--policy.n_action_steps={args.n_action_steps}",
         f"--policy.n_obs_steps={args.n_obs_steps}",
         f"--steps={args.steps}",
+        f"--save_freq={args.save_freq}",
+        f"--log_freq={args.log_freq}",
+        f"--eval_freq={args.eval_freq}",
         f"--dataset.video_backend={args.dataset_video_backend}",
     ]
     if dataset_root is not None:

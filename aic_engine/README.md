@@ -69,6 +69,7 @@ ros2 run aic_engine aic_engine --ros-args \
 |-----------|------|---------|-------------|
 | `config_file_path` | string | "" | **Required**. Path to the trial configuration YAML file |
 | `model_node_name` | string | "aic_model" | Name of the participant's lifecycle node |
+| `insert_cable_action_name` | string | "/insert_cable" | Participant InsertCable action endpoint |
 | `adapter_node_name` | string | "aic_adapter_node" | Name of the adapter node (future use) |
 | `gripper_frame_name` | string | "gripper/tcp" | Name of the gripper frame |
 | `ground_truth` | bool | false | Whether to publish ground truth poses from the task board |

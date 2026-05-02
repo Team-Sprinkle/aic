@@ -19,6 +19,7 @@ from lerobot_robot_aic.offline_rl_dataset import (  # noqa: E402
     load_lerobot_transitions,
 )
 from lerobot_robot_aic.offline_serl import OfflineSERLConfig, OfflineSERLTrainer  # noqa: E402
+from lerobot_robot_aic.task_encoding import TASK_VECTOR_DIM, encode_task_vector, task_encoding_schema  # noqa: E402
 
 
 def write_fake_lerobot_dataset(root: Path) -> None:
@@ -60,6 +61,41 @@ def write_fake_lerobot_dataset(root: Path) -> None:
     pd.DataFrame(rows).to_parquet(root / "data" / "chunk-000" / "file-000.parquet")
 
 
+def write_task_manifest(path: Path) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    rows = [
+        {
+            "accepted_episode_index": 0,
+            "source_episode_index": 0,
+            "task_family": "sfp_to_nic",
+            "target_port_index": 1,
+            "target_card_index": 3,
+            "target_card_valid": 1,
+            "task_vector": json.dumps(encode_task_vector(
+                task_family="sfp_to_nic",
+                target_port_index=1,
+                target_card_index=3,
+            ).astype(int).tolist()),
+            "total_score": 1.0,
+        },
+        {
+            "accepted_episode_index": 1,
+            "source_episode_index": 1,
+            "task_family": "sc_to_sc",
+            "target_port_index": 0,
+            "target_card_index": -1,
+            "target_card_valid": 0,
+            "task_vector": json.dumps(encode_task_vector(
+                task_family="sc_to_sc",
+                target_port_index=0,
+                target_card_index=-1,
+            ).astype(int).tolist()),
+            "total_score": 1.0,
+        },
+    ]
+    pd.DataFrame(rows).to_csv(path, index=False)
+
+
 def test_offline_dataset_constructs_transitions(tmp_path: Path) -> None:
     root = tmp_path / "dataset"
     write_fake_lerobot_dataset(root)
@@ -80,6 +116,26 @@ def test_offline_dataset_constructs_action_chunks(tmp_path: Path) -> None:
     assert arrays.action[0].tolist() == [0.0, 0.0, 1.0, 0.0]
     assert arrays.action[2].tolist() == [2.0, 0.0, 2.0, 0.0]
     assert arrays.action[3].tolist() == [0.0, 1.0, 1.0, 1.0]
+
+
+def test_offline_dataset_appends_task_vector(tmp_path: Path) -> None:
+    root = tmp_path / "dataset"
+    manifest = tmp_path / "manifests" / "accepted.csv"
+    write_fake_lerobot_dataset(root)
+    write_task_manifest(manifest)
+
+    arrays, _ = load_lerobot_transitions(
+        root,
+        reward_mode="final_success",
+        include_task_vector=True,
+        task_metadata=manifest,
+    )
+
+    assert arrays.obs.shape == (6, 3 + TASK_VECTOR_DIM)
+    assert arrays.next_obs.shape == (6, 3 + TASK_VECTOR_DIM)
+    assert arrays.obs[0, :3].tolist() == [0.0, 1.0, 0.0]
+    assert arrays.obs[0, 3:].tolist() == pytest.approx([1, 0, 0, 1, 0, 0, 0, 1, 0, 1])
+    assert arrays.obs[3, 3:].tolist() == pytest.approx([0, 1, 1, 0, 0, 0, 0, 0, 0, 0])
 
 
 def test_offline_serl_train_step_and_checkpoint(tmp_path: Path) -> None:
@@ -157,3 +213,140 @@ def test_train_offline_serl_dry_run(tmp_path: Path) -> None:
     assert summary["training_config"]["action_horizon"] == 2
     assert summary["training_config"]["hidden_dim"] == 64
     assert summary["training_config"]["num_layers"] == 3
+
+
+def test_train_offline_serl_dry_run_with_task_vector(tmp_path: Path) -> None:
+    root = tmp_path / "dataset"
+    manifest = tmp_path / "manifests" / "accepted.csv"
+    write_fake_lerobot_dataset(root)
+    write_task_manifest(manifest)
+    script = PACKAGE_DIR / "scripts" / "train_offline_serl.py"
+    result = subprocess.run(
+        [
+            sys.executable,
+            str(script),
+            "--dataset-root",
+            str(root),
+            "--task-metadata",
+            str(manifest),
+            "--include-task-vector",
+            "--output-dir",
+            str(tmp_path / "out"),
+            "--job-name",
+            "dry",
+            "--steps",
+            "1",
+            "--batch-size",
+            "2",
+            "--device",
+            "cpu",
+            "--dry-run",
+        ],
+        text=True,
+        capture_output=True,
+        check=False,
+    )
+    assert result.returncode == 0, result.stderr
+    summary = json.loads(result.stdout)
+    assert summary["training_config"]["original_obs_dim"] == 3
+    assert summary["training_config"]["effective_obs_dim"] == 3 + TASK_VECTOR_DIM
+    assert summary["task_conditioning"]["task_encoding_schema"] == task_encoding_schema()
+
+
+def test_train_offline_serl_rejects_act_critic_init(tmp_path: Path) -> None:
+    root = tmp_path / "dataset"
+    write_fake_lerobot_dataset(root)
+    script = PACKAGE_DIR / "scripts" / "train_offline_serl.py"
+    result = subprocess.run(
+        [
+            sys.executable,
+            str(script),
+            "--dataset-root",
+            str(root),
+            "--output-dir",
+            str(tmp_path / "out"),
+            "--critic-init",
+            "act",
+            "--dry-run",
+        ],
+        text=True,
+        capture_output=True,
+        check=False,
+    )
+    assert result.returncode != 0
+    assert "ACT has no critic/value semantics" in result.stderr
+
+
+def test_train_offline_serl_torchrun_cpu_smoke(tmp_path: Path) -> None:
+    root = tmp_path / "dataset"
+    out = tmp_path / "ddp_out"
+    write_fake_lerobot_dataset(root)
+    script = PACKAGE_DIR / "scripts" / "train_offline_serl.py"
+    result = subprocess.run(
+        [
+            sys.executable,
+            "-m",
+            "torch.distributed.run",
+            "--standalone",
+            "--nproc-per-node",
+            "2",
+            str(script),
+            "--dataset-root",
+            str(root),
+            "--output-dir",
+            str(out),
+            "--job-name",
+            "ddp_cpu",
+            "--steps",
+            "2",
+            "--batch-size",
+            "2",
+            "--device",
+            "cpu",
+            "--hidden-dim",
+            "16",
+            "--num-layers",
+            "1",
+            "--save-every",
+            "0",
+        ],
+        text=True,
+        capture_output=True,
+        check=False,
+        timeout=120,
+    )
+    assert result.returncode == 0, result.stderr
+    assert (out / "checkpoint_latest.pt").is_file()
+    summary = json.loads((out / "run_summary.json").read_text())
+    assert summary["distributed"]["world_size"] == 2
+
+
+def test_materialize_task_conditioned_dataset_script(tmp_path: Path) -> None:
+    root = tmp_path / "dataset"
+    manifest = tmp_path / "manifests" / "accepted.csv"
+    out = tmp_path / "task_conditioned"
+    write_fake_lerobot_dataset(root)
+    write_task_manifest(manifest)
+    script = PACKAGE_DIR / "scripts" / "materialize_task_conditioned_dataset.py"
+
+    result = subprocess.run(
+        [
+            sys.executable,
+            str(script),
+            "--dataset-root",
+            str(root),
+            "--task-metadata",
+            str(manifest),
+            "--output-root",
+            str(out),
+        ],
+        text=True,
+        capture_output=True,
+        check=False,
+    )
+
+    assert result.returncode == 0, result.stderr
+    summary = json.loads(result.stdout)
+    assert summary["materialized_dataset_root"] == str(out.resolve())
+    arrays, _ = load_lerobot_transitions(out, reward_mode="final_success")
+    assert arrays.obs.shape == (6, 3 + TASK_VECTOR_DIM)

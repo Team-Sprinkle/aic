@@ -12,7 +12,7 @@ from torch import nn
 from torch.nn import functional as F
 
 from gazebo_rl.gym_env import GazeboRLEnv
-from gazebo_rl.serl_policy import ACTAdapterSERLGazeboPolicy, ACT_CAMERA_KEYS
+from gazebo_rl.serl_policy import ACTAdapterSERLGazeboPolicy, ACT_CAMERA_KEYS, task_vector_from_context
 from gazebo_rl.train import add_recording_args
 
 
@@ -169,7 +169,7 @@ class GazeboOnlineSERLTrainer:
         first = torch.as_tensor(action, dtype=torch.float32, device=self.policy.device).reshape(1, -1)
         return first.repeat(1, self.policy.action_horizon).squeeze(0)
 
-    def train_step(self, batch: dict[str, Any]) -> dict[str, float]:
+    def train_step(self, batch: dict[str, Any], *, update_actor: bool = True) -> dict[str, float]:
         obs = batch["obs"]
         next_obs = batch["next_obs"]
         action = batch["action"]
@@ -202,12 +202,14 @@ class GazeboOnlineSERLTrainer:
             + self.adapter_penalty_weight * adapter_penalty
             + self.act_preservation_weight * act_preservation_loss
         )
-        self.actor_opt.zero_grad(set_to_none=True)
-        actor_loss.backward()
-        self.actor_opt.step()
+        if update_actor:
+            self.actor_opt.zero_grad(set_to_none=True)
+            actor_loss.backward()
+            self.actor_opt.step()
         self._soft_update()
 
         return {
+            "update_mode": "actor_critic" if update_actor else "critic_only",
             "actor_loss": float(actor_loss.detach().cpu()),
             "critic_loss": float(critic_loss.detach().cpu()),
             "q_mean": float(torch.minimum(q1, q2).mean().detach().cpu()),
@@ -264,6 +266,13 @@ def _jsonable(value: Any) -> Any:
 
 def load_trainer(args: argparse.Namespace) -> tuple[GazeboOnlineSERLTrainer, dict[str, Any]]:
     device = torch.device(args.device)
+    task_vector = task_vector_from_context(
+        task_family=getattr(args, "task_family", None),
+        target_port_index=getattr(args, "target_port_index", None),
+        target_card_index=getattr(args, "target_card_index", None),
+        target_card_valid=getattr(args, "target_card_valid", None),
+        task_context_json=getattr(args, "task_context_json", None),
+    )
     policy = ACTAdapterSERLGazeboPolicy(
         args.checkpoint,
         act_torchscript=args.act_torchscript,
@@ -271,12 +280,19 @@ def load_trainer(args: argparse.Namespace) -> tuple[GazeboOnlineSERLTrainer, dic
         allow_zero_images=args.allow_zero_images,
         adapter_delta_clip=args.adapter_delta_clip,
         action_clip=args.action_clip,
+        task_vector=task_vector,
     )
     checkpoint = torch.load(args.checkpoint, map_location="cpu")
     critic1 = VisionCritic(state_dim=policy.state_dim, camera_keys=ACT_CAMERA_KEYS, action_dim=policy.action_dim)
     critic2 = VisionCritic(state_dim=policy.state_dim, camera_keys=ACT_CAMERA_KEYS, action_dim=policy.action_dim)
-    critic1.load_state_dict(checkpoint["critic1"], strict=True)
-    critic2.load_state_dict(checkpoint["critic2"], strict=True)
+    critic_init = getattr(args, "critic_init", "scratch")
+    critic_checkpoint_path = getattr(args, "critic_checkpoint", None)
+    if critic_init == "act":
+        raise ValueError("critic_init=act is invalid: ACT has no critic/value semantics")
+    if critic_init == "checkpoint":
+        critic_checkpoint = torch.load(critic_checkpoint_path or args.checkpoint, map_location="cpu")
+        critic1.load_state_dict(critic_checkpoint["critic1"], strict=True)
+        critic2.load_state_dict(critic_checkpoint["critic2"], strict=True)
     trainer = GazeboOnlineSERLTrainer(
         policy=policy,
         critic1=critic1,
@@ -305,6 +321,12 @@ def load_trainer(args: argparse.Namespace) -> tuple[GazeboOnlineSERLTrainer, dic
             "action_clip": args.action_clip,
             "allow_zero_images": bool(args.allow_zero_images),
             "include_images": bool(args.include_images),
+            "task_vector": None if task_vector is None else task_vector.astype(float).tolist(),
+        },
+        "critic_initialization": {
+            "mode": critic_init,
+            "checkpoint": str(Path(critic_checkpoint_path).resolve()) if critic_checkpoint_path else None,
+            "note": "Critic/value is scratch by default; ACT is actor/action prior only.",
         },
         "args": _jsonable(vars(args)),
     }
@@ -408,7 +430,16 @@ def run_training(args: argparse.Namespace) -> dict[str, Any]:
                     **last_metrics,
                 }
                 if len(replay) >= args.batch_size and updates_done < args.updates:
-                    last_metrics = trainer.train_step(replay.sample(args.batch_size, trainer.policy.device))
+                    next_update = updates_done + 1
+                    critic_only_steps = getattr(args, "critic_only_steps", 0)
+                    actor_update_delay = getattr(args, "actor_update_delay", 1)
+                    update_actor = next_update > critic_only_steps and (
+                        actor_update_delay <= 1 or next_update % actor_update_delay == 0
+                    )
+                    last_metrics = trainer.train_step(
+                        replay.sample(args.batch_size, trainer.policy.device),
+                        update_actor=update_actor,
+                    )
                     updates_done += 1
                     row.update(last_metrics)
                     row["updates_done"] = updates_done
@@ -480,6 +511,15 @@ def build_arg_parser() -> argparse.ArgumentParser:
     parser.add_argument("--act-preservation-weight", type=float, default=1e-1)
     parser.add_argument("--adapter-delta-clip", type=float, default=0.05)
     parser.add_argument("--action-clip", type=float, default=0.05)
+    parser.add_argument("--critic-init", choices=["scratch", "checkpoint", "act"], default="scratch")
+    parser.add_argument("--critic-checkpoint", default=None)
+    parser.add_argument("--critic-only-steps", type=int, default=0)
+    parser.add_argument("--actor-update-delay", type=int, default=1)
+    parser.add_argument("--task-family", choices=["sfp_to_nic", "sc_to_sc"], default=None)
+    parser.add_argument("--target-port-index", type=int, default=None)
+    parser.add_argument("--target-card-index", type=int, default=None)
+    parser.add_argument("--target-card-valid", type=int, default=None)
+    parser.add_argument("--task-context-json", default=None)
     parser.add_argument("--include-images", action=argparse.BooleanOptionalAction, default=True)
     parser.add_argument("--allow-zero-images", action="store_true")
     parser.add_argument("--dry-run", action="store_true")

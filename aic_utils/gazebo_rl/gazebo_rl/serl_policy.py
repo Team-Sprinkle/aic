@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import base64
 from pathlib import Path
+import sys
 from typing import Any
 
 import numpy as np
@@ -10,11 +11,54 @@ from torch import nn
 from torch.nn import functional as F
 
 
+LEROBOT_AIC_PACKAGE_DIR = Path(__file__).resolve().parents[2] / "lerobot_robot_aic"
+if LEROBOT_AIC_PACKAGE_DIR.exists() and str(LEROBOT_AIC_PACKAGE_DIR) not in sys.path:
+    sys.path.insert(0, str(LEROBOT_AIC_PACKAGE_DIR))
+
 ACT_CAMERA_KEYS = [
     "observation.images.center_camera",
     "observation.images.left_camera",
     "observation.images.right_camera",
 ]
+
+
+def task_vector_from_context(
+    *,
+    task_family: str | None = None,
+    target_port_index: int | None = None,
+    target_card_index: int | None = None,
+    target_card_valid: int | None = None,
+    task_context_json: str | dict[str, Any] | None = None,
+) -> np.ndarray | None:
+    if task_context_json is None and task_family is None:
+        return None
+    try:
+        from lerobot_robot_aic.task_encoding import encode_task_vector, encode_task_vector_from_metadata
+    except ModuleNotFoundError:
+        from aic_utils.lerobot_robot_aic.lerobot_robot_aic.task_encoding import (
+            encode_task_vector,
+            encode_task_vector_from_metadata,
+        )
+
+    if task_context_json is not None:
+        import json
+
+        data = json.loads(task_context_json) if isinstance(task_context_json, str) else task_context_json
+        if not isinstance(data, dict):
+            raise ValueError("task_context_json must decode to an object")
+        if task_family is None:
+            return encode_task_vector_from_metadata(data)
+    if task_family is None or target_port_index is None or target_card_index is None:
+        raise ValueError(
+            "Task context requires task_family, target_port_index, and target_card_index "
+            "unless task_context_json supplies them."
+        )
+    return encode_task_vector(
+        task_family=task_family,
+        target_port_index=int(target_port_index),
+        target_card_index=int(target_card_index),
+        target_card_valid=target_card_valid,
+    )
 
 
 def lowdim_state_from_gazebo_observation(obs: dict[str, Any]) -> np.ndarray:
@@ -39,14 +83,29 @@ def lowdim_state_from_gazebo_observation(obs: dict[str, Any]) -> np.ndarray:
 
 
 class OfflineSERLGazeboPolicy:
-    def __init__(self, checkpoint: str | Path, *, device: str = "cpu"):
-        from lerobot_robot_aic.offline_serl import GaussianActor
+    def __init__(
+        self,
+        checkpoint: str | Path,
+        *,
+        device: str = "cpu",
+        task_vector: np.ndarray | None = None,
+    ):
+        try:
+            from lerobot_robot_aic.offline_serl import GaussianActor
+        except ModuleNotFoundError:
+            from aic_utils.lerobot_robot_aic.lerobot_robot_aic.offline_serl import GaussianActor
 
         self.device = torch.device(device)
         ckpt = torch.load(checkpoint, map_location=self.device)
         cfg = ckpt.get("offline_serl_config") or {}
-        if int(cfg.get("obs_dim", 0)) != 32:
-            raise ValueError(f"Gazebo SERL policy expects obs_dim=32, got {cfg.get('obs_dim')}")
+        self.task_vector = None if task_vector is None else torch.as_tensor(
+            task_vector, dtype=torch.float32, device=self.device
+        )
+        if int(cfg.get("obs_dim", 0)) != 32 and self.task_vector is None:
+            raise ValueError(
+                f"Gazebo SERL policy got obs_dim={cfg.get('obs_dim')}; pass task context "
+                "when loading a task-conditioned checkpoint."
+            )
         self.action_horizon = int(cfg.get("action_horizon", 1))
         self.single_action_dim = int((ckpt.get("dataset_schema") or {}).get("action_shape", [6])[0])
         hidden = tuple(int(cfg.get("hidden_dim", 256)) for _ in range(int(cfg.get("num_layers", 2))))
@@ -66,6 +125,10 @@ class OfflineSERLGazeboPolicy:
     def act(self, obs: dict[str, Any], *, explore: bool = False) -> list[float]:
         del explore
         lowdim = torch.as_tensor(lowdim_state_from_gazebo_observation(obs), device=self.device).unsqueeze(0)
+        if self.task_vector is not None:
+            lowdim = torch.cat([lowdim, self.task_vector.unsqueeze(0)], dim=-1)
+        if lowdim.shape[-1] != self.obs_mean.shape[-1]:
+            raise ValueError(f"Expected runtime state dim {self.obs_mean.shape[-1]}, got {lowdim.shape[-1]}")
         lowdim = (lowdim - self.obs_mean) / self.obs_std
         with torch.no_grad():
             normalized_action = self.actor.mean_action(lowdim).squeeze(0)
@@ -327,6 +390,7 @@ class ACTAdapterSERLGazeboPolicy:
         allow_zero_images: bool = False,
         adapter_delta_clip: float | None = 0.05,
         action_clip: float | None = 0.05,
+        task_vector: np.ndarray | None = None,
     ):
         self.device = torch.device(device)
         self.allow_zero_images = bool(allow_zero_images)
@@ -353,11 +417,19 @@ class ACTAdapterSERLGazeboPolicy:
             action_clip=action_clip,
         )
         self.last_action_components: dict[str, float] = {}
+        self.task_vector = None if task_vector is None else torch.as_tensor(
+            task_vector, dtype=torch.float32, device=self.device
+        ).reshape(1, -1)
 
     def _obs_to_actor(self, obs: dict[str, Any]) -> dict[str, Any]:
         lowdim = torch.as_tensor(lowdim_state_from_gazebo_observation(obs), device=self.device).unsqueeze(0)
+        if self.task_vector is not None:
+            lowdim = torch.cat([lowdim, self.task_vector], dim=-1)
         if lowdim.shape[1] < self.state_dim:
-            raise ValueError(f"Gazebo lowdim state has {lowdim.shape[1]} dims, checkpoint expects {self.state_dim}")
+            raise ValueError(
+                f"Gazebo lowdim state has {lowdim.shape[1]} dims, checkpoint expects {self.state_dim}. "
+                "If the checkpoint was trained with task vectors, pass task context."
+            )
         return {
             "state": lowdim[:, : self.state_dim],
             "images": _gazebo_images_from_observation(

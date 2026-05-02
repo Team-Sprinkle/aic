@@ -1,0 +1,17 @@
+dataset_root: outputs/hf_converted/sfp2nic_target_card0_port0_randomized_smoke/accepted_dataset_nominal_task_conditioned
+task_metadata: outputs/hf_converted/sfp2nic_target_card0_port0_randomized_smoke/manifests/accepted.csv
+dataset_tag: hf_sfp2nic_card0_port0_randomized
+task_family: sfp_to_nic
+fps: 20
+num_episodes: 366
+num_frames: 119965
+observation_state_dim: 42
+original_observation_state_dim: 32
+task_vector_dim: 10
+action_dim: 6
+camera_keys:
+  - observation.images.center_camera
+  - observation.images.left_camera
+  - observation.images.right_camera
+task_conditioning_materialized: true
+source_url: https://huggingface.co/datasets/brucekimrok/sfp2nic_target_card0_port0_randomized

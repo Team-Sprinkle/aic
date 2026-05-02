@@ -582,3 +582,538 @@ the Gazebo side of the hybrid loop:
 7. Implement failure classification and buffer writes.
 8. Implement offline refresh and the repeat Isaac <-> Gazebo loop.
 9. Run final official Gazebo eval and record the score/artifacts here.
+
+## 2026-05-01 Hybrid Training Pass
+
+### Architecture conclusions
+
+- ACT training is still a LeRobot CLI wrapper. Task conditioning is provided by
+  materializing a derived LeRobot dataset with the 10-D task vector appended to
+  `observation.state`; the native `raw_dataset/` and `accepted_dataset/` schemas
+  are unchanged.
+- Offline SERL is the branch-local low-dimensional actor/twin-Q path. Actions
+  are flattened over `action_horizon`; observations are normalized after optional
+  task-vector append.
+- ACT warm start is an actor/action prior only. Current offline transfer copies
+  ACT action-head bias into the SERL actor mean bias and explicitly does not
+  initialize critics.
+- Online Gazebo SERL uses a frozen TorchScript ACT base plus trainable delta
+  adapter. Critics are scratch by default; `critic_init=act` is invalid.
+- Isaac/RSL-RL remains a separate PPO actor-critic stack and does not consume the
+  canonical task vector by default.
+
+Full review: `docs/hybrid_model_architecture_review.md`.
+
+### Code and config changes
+
+- Added canonical task encoding module:
+  `aic_utils/lerobot_robot_aic/lerobot_robot_aic/task_encoding.py`.
+- Added hardware/CUDA selection helper:
+  `aic_utils/lerobot_robot_aic/lerobot_robot_aic/hardware.py`.
+- Added run metadata helper:
+  `aic_utils/lerobot_robot_aic/lerobot_robot_aic/run_metadata.py`.
+- Offline SERL now supports `--include-task-vector`, `--task-metadata`,
+  `--missing-task-vector`, `--critic-init scratch|checkpoint|act`, and
+  `--critic-checkpoint`. `critic_init=act` is rejected.
+- Online Gazebo SERL now supports explicit task context, scratch/checkpoint
+  critic init, critic-only warmup, and delayed actor updates.
+- Added Hydra config groups under `configs/` and launcher
+  `aic_utils/lerobot_robot_aic/scripts/hydra_train.py`.
+- Added architecture review doc:
+  `docs/hybrid_model_architecture_review.md`.
+
+### Commands run
+
+Compile:
+
+```bash
+pixi run python -m py_compile \
+  aic_utils/lerobot_robot_aic/lerobot_robot_aic/task_encoding.py \
+  aic_utils/lerobot_robot_aic/lerobot_robot_aic/hardware.py \
+  aic_utils/lerobot_robot_aic/lerobot_robot_aic/run_metadata.py \
+  aic_utils/lerobot_robot_aic/lerobot_robot_aic/offline_rl_dataset.py \
+  aic_utils/lerobot_robot_aic/lerobot_robot_aic/offline_serl.py \
+  aic_utils/lerobot_robot_aic/lerobot_robot_aic/task_metadata.py \
+  aic_utils/lerobot_robot_aic/scripts/train_offline_serl.py \
+  aic_utils/lerobot_robot_aic/scripts/hydra_train.py \
+  aic_utils/gazebo_rl/gazebo_rl/serl_policy.py \
+  aic_utils/gazebo_rl/gazebo_rl/serl_train.py
+```
+
+Tests:
+
+```bash
+PYTHONPATH=/data1/chmin/yj/ws_aic/src/aic pixi run pytest \
+  aic_utils/lerobot_robot_aic/test/test_task_encoding.py \
+  aic_utils/lerobot_robot_aic/test/test_hardware.py \
+  aic_utils/lerobot_robot_aic/test/test_offline_serl.py \
+  aic_utils/lerobot_robot_aic/test/test_hydra_configs.py \
+  aic_utils/gazebo_rl/test/test_serl_train.py -q
+
+PYTHONPATH=/data1/chmin/yj/ws_aic/src/aic pixi run pytest \
+  aic_utils/lerobot_robot_aic/test -q
+
+PYTHONPATH=/data1/chmin/yj/ws_aic/src/aic pixi run pytest \
+  aic_utils/gazebo_rl/test -q
+```
+
+Results:
+
+- Focused tests: `19 passed, 1 warning`.
+- LeRobot/AIC tests: `50 passed, 1 warning`.
+- Gazebo RL tests after adding task-context SERL runtime loading:
+  `33 passed, 1 warning`.
+
+### Real training smoke
+
+Dataset:
+
+```text
+outputs/trajectory_datasets_real_smoke/sfp_to_nic/cheatcode/nic_cards_1/n1__real1_20260501_205136/accepted_dataset
+```
+
+Task metadata:
+
+```text
+outputs/trajectory_datasets_real_smoke/sfp_to_nic/cheatcode/nic_cards_1/n1__real1_20260501_205136/manifests/accepted.csv
+```
+
+ACT smoke command:
+
+```bash
+pixi run python aic_utils/lerobot_robot_aic/scripts/train_act_policy.py \
+  --dataset-root outputs/trajectory_datasets_real_smoke/sfp_to_nic/cheatcode/nic_cards_1/n1__real1_20260501_205136/accepted_dataset \
+  --task-metadata outputs/trajectory_datasets_real_smoke/sfp_to_nic/cheatcode/nic_cards_1/n1__real1_20260501_205136/manifests/accepted.csv \
+  --task-conditioning append-state \
+  --output-dir outputs/train/sfp_to_nic/real_smoke_n1/act/bc/20260501_221609_act_taskvec_smoke \
+  --job-name act_taskvec_smoke \
+  --steps 1 \
+  --batch-size 1 \
+  --device cpu \
+  --num-workers 0 \
+  --chunk-size 16 \
+  --n-action-steps 8 \
+  --n-obs-steps 1
+```
+
+Result:
+
+- Completed one real LeRobot ACT training step.
+- Output:
+  `outputs/train/sfp_to_nic/real_smoke_n1/act/bc/20260501_221609_act_taskvec_smoke`.
+- Derived dataset:
+  `outputs/train/sfp_to_nic/real_smoke_n1/act/bc/20260501_221609_act_taskvec_smoke_task_conditioned_dataset`.
+- Derived `observation.state` shape: `[42]`.
+
+Offline SERL smoke command:
+
+```bash
+pixi run python aic_utils/lerobot_robot_aic/scripts/train_offline_serl.py \
+  --dataset-root outputs/trajectory_datasets_real_smoke/sfp_to_nic/cheatcode/nic_cards_1/n1__real1_20260501_205136/accepted_dataset \
+  --task-metadata outputs/trajectory_datasets_real_smoke/sfp_to_nic/cheatcode/nic_cards_1/n1__real1_20260501_205136/manifests/accepted.csv \
+  --include-task-vector \
+  --output-dir outputs/train/sfp_to_nic/real_smoke_n1/serl/offline_adapter/20260501_221716_offline_taskvec_smoke \
+  --job-name offline_taskvec_smoke \
+  --steps 2 \
+  --batch-size 2 \
+  --device cpu \
+  --action-horizon 2 \
+  --hidden-dim 32 \
+  --num-layers 2 \
+  --reward-mode final_success \
+  --critic-init scratch \
+  --save-every 0
+```
+
+Result:
+
+- Completed two real gradient steps.
+- Output:
+  `outputs/train/sfp_to_nic/real_smoke_n1/serl/offline_adapter/20260501_221716_offline_taskvec_smoke`.
+- Checkpoint:
+  `outputs/train/sfp_to_nic/real_smoke_n1/serl/offline_adapter/20260501_221716_offline_taskvec_smoke/checkpoint_latest.pt`.
+- `run_summary.json` reports `obs_dim=42`, `action_dim=12`,
+  `include_task_vector=true`, `critic_init=scratch`.
+- Checkpoint contains actor, critic1, and critic2.
+
+### Runtime-container evaluation
+
+Runtime commands attempted:
+
+```bash
+LC_USER_ID=yoonjung zsh -lc 'cd /data1/chmin/yj/ws_aic/src/aic && aic_eval'
+LC_USER_ID=yoonjung zsh -lc 'cd /data1/chmin/yj/ws_aic/src/aic && aic_policy'
+```
+
+Container/runtime result:
+
+- The official `aic_eval` container stack launched Gazebo/ROS and started
+  `aic_engine`.
+- Evaluation did not produce a successful rollout. The engine found an
+  `/aic_model` lifecycle node in `finalized` state before the policy reached a
+  valid `unconfigured` startup state. Score was `0` with `Model validation
+  failed`.
+- A previous attempt also reported another `aic_world` instance running.
+- After Ctrl-C cleanup, the Gazebo component container hit an Ogre thread
+  assertion during shutdown.
+
+Saved failure summary:
+
+```text
+outputs/train/sfp_to_nic/real_smoke_n1/serl/offline_adapter/20260501_221716_offline_taskvec_smoke/eval_summary.json
+```
+
+Checkpoint-specific eval can now pass task context to lowdim SERL via
+`serl_transfer_validate.py`:
+
+```bash
+pixi run python aic_utils/gazebo_rl/scripts/serl_transfer_validate.py \
+  --policy-kind lowdim_serl \
+  --checkpoint outputs/train/sfp_to_nic/real_smoke_n1/serl/offline_adapter/20260501_221716_offline_taskvec_smoke/checkpoint_latest.pt \
+  --task-family sfp_to_nic \
+  --target-port-index 1 \
+  --target-card-index 3 \
+  --target-card-valid 1 \
+  --max-steps 1
+```
+
+It still remains blocked at the runtime-environment level until the official
+`aic_eval`/`aic_policy` lifecycle startup issue above is cleared.
+
+## 2026-05-01 Follow-up: Runtime Eval and Real Training
+
+The runtime-eval startup issue was narrowed down to the helper order. Starting
+`aic_eval` with `start_aic_engine:=true` can make the engine inspect `/aic_model`
+while the policy process is still building/starting, or while a stale finalized
+node is visible. The working sequence is:
+
+1. Restart `aic_eval`.
+2. Start `/entrypoint.sh` with `start_aic_engine:=false`.
+3. Start the policy as `aic_model_smoke`.
+4. Start `aic_engine` directly with `model_node_name:=aic_model_smoke`.
+
+Runtime commands run:
+
+```bash
+docker --host unix:///run/user/$(id -u)/docker.sock restart aic_eval
+
+docker --host unix:///run/user/$(id -u)/docker.sock exec -i aic_eval bash -lc 'source /ws_aic/install/setup.bash && export RMW_IMPLEMENTATION=rmw_zenoh_cpp && cd /home/chmin/yj/ws_aic/src/aic && /entrypoint.sh ground_truth:=false start_aic_engine:=false gazebo_gui:=false launch_rviz:=false'
+
+docker --host unix:///run/user/$(id -u)/docker.sock exec -i aic_eval bash -lc 'source /ws_aic/install/setup.bash && export RMW_IMPLEMENTATION=rmw_zenoh_cpp && cd /home/chmin/yj/ws_aic/src/aic && pixi run ros2 run aic_model aic_model --ros-args -p use_sim_time:=true -p policy:=aic_example_policies.ros.WaveArm -r __node:=aic_model_smoke'
+
+docker --host unix:///run/user/$(id -u)/docker.sock exec -i aic_eval bash -lc 'source /ws_aic/install/setup.bash && export RMW_IMPLEMENTATION=rmw_zenoh_cpp && cd /home/chmin/yj/ws_aic/src/aic && export AIC_RESULTS_DIR=/home/chmin/yj/ws_aic/src/aic/outputs/runtime_eval_smoke/manual_engine_20260501_2305 && mkdir -p "$AIC_RESULTS_DIR" && ros2 run aic_engine aic_engine --ros-args -p use_sim_time:=true -p config_file_path:=/home/chmin/yj/ws_aic/src/aic/aic_engine/config/sample_config.yaml -p model_node_name:=aic_model_smoke -p model_discovery_timeout_seconds:=60 -p model_configure_timeout_seconds:=90'
+```
+
+Runtime result:
+
+- Model discovery/configure/activate succeeded.
+- Required endpoints were available.
+- Task board and cable spawned.
+- Scoring started and wrote:
+  `outputs/runtime_eval_smoke/manual_engine_20260501_2305/scoring.yaml`.
+- Score was `total: 1`; tier 1 passed with `Model validation succeeded`.
+- Tier 2/3 failed because `WaveArm` is not an insertion policy.
+- Summary written to:
+  `outputs/runtime_eval_smoke/manual_engine_20260501_2305/eval_summary.json`.
+
+Fresh ACT real training command:
+
+```bash
+pixi run python aic_utils/lerobot_robot_aic/scripts/train_act_policy.py \
+  --dataset-root outputs/trajectory_datasets_real_smoke/sfp_to_nic/cheatcode/nic_cards_1/n1__real1_20260501_205136/accepted_dataset \
+  --task-metadata outputs/trajectory_datasets_real_smoke/sfp_to_nic/cheatcode/nic_cards_1/n1__real1_20260501_205136/manifests/accepted.csv \
+  --task-conditioning append-state \
+  --output-dir outputs/train/sfp_to_nic/real_smoke_n1/act/bc/20260501_230657_act_taskvec_realtrain2 \
+  --job-name act_taskvec_realtrain2 \
+  --steps 2 \
+  --batch-size 1 \
+  --device cpu \
+  --num-workers 0 \
+  --chunk-size 16 \
+  --n-action-steps 8 \
+  --n-obs-steps 1
+```
+
+Fresh ACT result:
+
+- Completed 2 real optimizer steps.
+- Checkpoint:
+  `outputs/train/sfp_to_nic/real_smoke_n1/act/bc/20260501_230657_act_taskvec_realtrain2/checkpoints/000002/pretrained_model`.
+- Derived task-conditioned dataset:
+  `outputs/train/sfp_to_nic/real_smoke_n1/act/bc/20260501_230657_act_taskvec_realtrain2_task_conditioned_dataset`.
+- Derived `observation.state` shape is `[42]`.
+
+Fresh offline SERL real training command:
+
+```bash
+pixi run python aic_utils/lerobot_robot_aic/scripts/train_offline_serl.py \
+  --dataset-root outputs/trajectory_datasets_real_smoke/sfp_to_nic/cheatcode/nic_cards_1/n1__real1_20260501_205136/accepted_dataset \
+  --task-metadata outputs/trajectory_datasets_real_smoke/sfp_to_nic/cheatcode/nic_cards_1/n1__real1_20260501_205136/manifests/accepted.csv \
+  --include-task-vector \
+  --output-dir outputs/train/sfp_to_nic/real_smoke_n1/serl/offline_adapter/20260501_230835_offline_taskvec_realtrain50 \
+  --job-name offline_taskvec_realtrain50 \
+  --steps 50 \
+  --batch-size 4 \
+  --device cpu \
+  --action-horizon 2 \
+  --hidden-dim 64 \
+  --num-layers 2 \
+  --reward-mode final_success \
+  --critic-init scratch \
+  --save-every 25
+```
+
+Fresh offline SERL result:
+
+- Completed 50 real gradient steps.
+- Checkpoints:
+  `checkpoint_000025.pt`, `checkpoint_000050.pt`, and `checkpoint_latest.pt`
+  under `outputs/train/sfp_to_nic/real_smoke_n1/serl/offline_adapter/20260501_230835_offline_taskvec_realtrain50`.
+- `metrics.jsonl` has 50 rows.
+- `run_summary.json` reports `obs_dim=42`, `action_dim=12`,
+  `include_task_vector=true`, `critic_init=scratch`.
+- Checkpoint step is `50` and contains actor, critic1, and critic2.
+
+## 2026-05-01 Follow-up: CheatCode Runtime Retry
+
+Retried remaining runtime evaluation issues in the persistent rootless
+`aic_eval` container.
+
+Confirmed fix for the previous TF blocker:
+
+- `CheatCode` requires `ground_truth:=true`.
+- With `ground_truth:=false`, it waits for
+  `task_board/<target>/... -> base_link` transforms.
+- With `ground_truth:=true`, the policy reaches `CheatCode.insert_cable()` and
+  starts sending robot motion commands.
+
+Commands retried:
+
+```bash
+docker --host unix:///run/user/$(id -u)/docker.sock restart aic_eval
+
+docker --host unix:///run/user/$(id -u)/docker.sock exec -i aic_eval bash -lc 'source /ws_aic/install/setup.bash && export RMW_IMPLEMENTATION=rmw_zenoh_cpp && cd /home/chmin/yj/ws_aic/src/aic && /entrypoint.sh ground_truth:=true start_aic_engine:=false gazebo_gui:=false launch_rviz:=false'
+
+docker --host unix:///run/user/$(id -u)/docker.sock exec -i aic_eval bash -lc 'source /ws_aic/install/setup.bash && export RMW_IMPLEMENTATION=rmw_zenoh_cpp && cd /home/chmin/yj/ws_aic/src/aic && pixi run ros2 run aic_model aic_model --ros-args -p use_sim_time:=true -p policy:=aic_example_policies.ros.CheatCode -r __node:=aic_model_smoke'
+
+docker --host unix:///run/user/$(id -u)/docker.sock exec -i aic_eval bash -lc 'source /ws_aic/install/setup.bash && export RMW_IMPLEMENTATION=rmw_zenoh_cpp && cd /home/chmin/yj/ws_aic/src/aic && export AIC_RESULTS_DIR=/home/chmin/yj/ws_aic/src/aic/outputs/runtime_eval_smoke/cheatcode_gt_engine_20260501_235453 && mkdir -p "$AIC_RESULTS_DIR" && ros2 run aic_engine aic_engine --ros-args -p use_sim_time:=true -p config_file_path:=/home/chmin/yj/ws_aic/src/aic/aic_engine/config/sample_config.yaml -p model_node_name:=aic_model_smoke -p model_discovery_timeout_seconds:=60 -p model_configure_timeout_seconds:=90'
+```
+
+Result:
+
+- Model lifecycle configure/activate succeeded.
+- Endpoints were ready.
+- Task board and cable spawned.
+- Scoring started and wrote
+  `outputs/runtime_eval_smoke/cheatcode_gt_engine_20260501_235453/scoring.yaml`.
+- Policy log showed `Goal accepted`, entered `insert_cable_execute_callback`,
+  and began `CheatCode.insert_cable()`.
+- Engine still reported `InsertCable goal for task [task_1] was rejected` and
+  stopped with score `total: 1` / tier 1 passed / tier 2 and 3 failed.
+
+The same action-goal mismatch reproduced after manually configuring and
+activating the policy and running the engine with `skip_model_ready:=true`:
+
+```bash
+ros2 lifecycle set /aic_model_smoke configure
+ros2 lifecycle set /aic_model_smoke activate
+ros2 run aic_engine aic_engine --ros-args ... -p skip_model_ready:=true
+```
+
+Result directory:
+
+```text
+outputs/runtime_eval_smoke/cheatcode_gt_skipready_20260501_235713
+```
+
+The official helper path was also retried:
+
+```bash
+LC_USER_ID=yoonjung zsh -lc 'cd /data1/chmin/yj/ws_aic/src/aic && aic_eval ground_truth:=true'
+LC_USER_ID=yoonjung zsh -lc 'cd /data1/chmin/yj/ws_aic/src/aic && aic_policy aic_example_policies.ros.CheatCode'
+```
+
+That path failed earlier because the engine timed out before the policy finished
+Pixi startup/build and reached the expected lifecycle state; score was `0` with
+`Model validation failed`.
+
+Current runtime status:
+
+- Gazebo/container launch works.
+- Ground-truth TF works when enabled.
+- Lifecycle and scoring startup work in the direct-engine sequence.
+- Real policy execution starts.
+- Remaining blocker is a ROS action-client/runtime mismatch: the Python action
+  server accepts the task goal, but the C++ engine receives a null/rejected goal
+  handle and immediately tears the trial down.
+
+## 2026-05-02 Follow-up: Runtime Eval Fixed Without Engine Changes
+
+The remaining runtime failure was not a Gazebo issue and did not require
+modifying `aic_engine`.
+
+Root cause:
+
+- The installed `aic_engine` binary uses the hard-coded `/insert_cable` action
+  name.
+- Passing a new `insert_cable_action_name` parameter is ineffective unless the
+  C++ engine is rebuilt, and rebuilding/changing the engine is not needed.
+- In the reused rootless container, another `/insert_cable` endpoint can remain
+  visible. The policy lifecycle node was isolated, but the action endpoint was
+  not.
+- The correct fix is ROS remapping on both sides:
+  `-r /insert_cable:=/insert_cable_smoke`.
+- A follow-up run confirmed `skip_model_ready` is not required when the policy
+  is started and allowed to reach `unconfigured` before the engine starts.
+
+Verification commands:
+
+```bash
+docker --host unix:///run/user/$(id -u)/docker.sock restart aic_eval
+
+docker --host unix:///run/user/$(id -u)/docker.sock exec -i aic_eval bash -lc 'source /ws_aic/install/setup.bash && export RMW_IMPLEMENTATION=rmw_zenoh_cpp && cd /home/chmin/yj/ws_aic/src/aic && /entrypoint.sh ground_truth:=true start_aic_engine:=false gazebo_gui:=false launch_rviz:=false'
+
+docker --host unix:///run/user/$(id -u)/docker.sock exec -i aic_eval bash -lc 'source /ws_aic/install/setup.bash && export RMW_IMPLEMENTATION=rmw_zenoh_cpp && cd /home/chmin/yj/ws_aic/src/aic && pixi run ros2 run aic_model aic_model --ros-args -p use_sim_time:=true -p policy:=aic_example_policies.ros.CheatCode -r __node:=aic_model_smoke -r /insert_cable:=/insert_cable_smoke'
+
+docker --host unix:///run/user/$(id -u)/docker.sock exec aic_eval bash -lc 'source /ws_aic/install/setup.bash && export RMW_IMPLEMENTATION=rmw_zenoh_cpp; for i in {1..30}; do state=$(ros2 lifecycle get /aic_model_smoke 2>/dev/null || true); actions=$(ros2 action list 2>/dev/null || true); if printf "%s" "$state" | grep -q "unconfigured" && printf "%s" "$actions" | grep -q "^/insert_cable_smoke$"; then echo ready; exit 0; fi; sleep 1; done; echo not_ready; exit 1'
+
+docker --host unix:///run/user/$(id -u)/docker.sock exec -i aic_eval bash -lc 'source /ws_aic/install/setup.bash && export RMW_IMPLEMENTATION=rmw_zenoh_cpp && cd /home/chmin/yj/ws_aic/src/aic && export AIC_RESULTS_DIR=/home/chmin/yj/ws_aic/src/aic/outputs/runtime_eval_smoke/cheatcode_action_rosremap_lifecycle_20260502_003747 && mkdir -p "$AIC_RESULTS_DIR" && ros2 run aic_engine aic_engine --ros-args -r /insert_cable:=/insert_cable_smoke -p use_sim_time:=true -p config_file_path:=/home/chmin/yj/ws_aic/src/aic/aic_engine/config/sample_config.yaml -p model_node_name:=aic_model_smoke -p model_discovery_timeout_seconds:=60 -p model_configure_timeout_seconds:=90'
+```
+
+Result:
+
+- Engine entered `TasksExecuting`.
+- All three sample-config trials completed successfully.
+- Scores:
+  - trial 1: `96.232908`
+  - trial 2: `64.678849`
+  - trial 3: `93.336531`
+  - total: `254.24828765254941`
+- Result directory:
+  `outputs/runtime_eval_smoke/cheatcode_action_rosremap_lifecycle_20260502_003747`.
+
+The container was restarted after the run to clear long-running sim/policy
+processes.
+
+## 2026-05-02 Follow-up: Offline SERL DDP Torchrun
+
+Offline SERL now supports opt-in DDP when launched through `torchrun`.
+Single-GPU/single-process training remains the default.
+
+Hydra knobs:
+
+```bash
+hardware.distributed.enabled=true
+hardware.distributed.nproc_per_node=2
+hardware.cuda_devices=[2,3]
+```
+
+Hydra wraps `train_offline_serl.py` with:
+
+```bash
+python -m torch.distributed.run --standalone --nnodes 1 --nproc-per-node N ...
+```
+
+The trainer auto-detects `WORLD_SIZE`, `RANK`, and `LOCAL_RANK`, initializes
+NCCL for CUDA runs, uses `DistributedSampler`, wraps actor and critics with
+`DistributedDataParallel`, and writes checkpoints/metrics only from rank 0.
+Saved checkpoints strip DDP `module.` prefixes so they remain compatible with
+single-GPU loading.
+
+Verified real GPU smoke commands:
+
+```bash
+pixi run python aic_utils/lerobot_robot_aic/scripts/hydra_train.py hardware.cuda_devices=[2] hardware.distributed.enabled=true hardware.distributed.nproc_per_node=1 train.steps=3 train.batch_size=4 train.hidden_dim=32 train.num_layers=1 train.save_every=0 run.name=ddp_1gpu_smoke run.output_dir=outputs/train/ddp_smoke/serl_1gpu
+
+pixi run python aic_utils/lerobot_robot_aic/scripts/hydra_train.py hardware.cuda_devices=[2,3] hardware.distributed.enabled=true hardware.distributed.nproc_per_node=2 train.steps=3 train.batch_size=4 train.hidden_dim=32 train.num_layers=1 train.save_every=0 run.name=ddp_2gpu_smoke run.output_dir=outputs/train/ddp_smoke/serl_2gpu
+```
+
+Results:
+
+- `outputs/train/ddp_smoke/serl_1gpu/checkpoint_latest.pt`, 3 metric rows,
+  `CUDA_VISIBLE_DEVICES=2`.
+- `outputs/train/ddp_smoke/serl_2gpu/checkpoint_latest.pt`, 3 metric rows,
+  NCCL `world_size=2`, `CUDA_VISIBLE_DEVICES=2,3`.
+
+ACT remains on the single-process wrapper path because `train_act_policy.py`
+delegates to `lerobot-train`; wrapping that wrapper with `torchrun` would launch
+duplicate LeRobot jobs rather than one coordinated DDP job.
+
+## 2026-05-02 Follow-up: ACT DDP Through LeRobot Accelerate
+
+LeRobot's installed `lerobot-train` already uses Hugging Face Accelerate and
+wraps the policy, optimizer, dataloader, and scheduler with
+`accelerator.prepare(...)`. Hydra now uses that native path for ACT DDP by
+launching LeRobot directly:
+
+```bash
+python -m torch.distributed.run --standalone --nnodes 1 --nproc-per-node N --module lerobot.scripts.lerobot_train ...
+```
+
+This avoids wrapping `train_act_policy.py`, which would otherwise spawn one
+independent `lerobot-train` subprocess per rank.
+
+Current constraint:
+
+- Direct ACT DDP expects the dataset root to already be in the desired LeRobot
+  schema. For task conditioning, use a prebuilt task-conditioned dataset and
+  set `train.task_conditioning=off`.
+
+Verified real ACT GPU smoke commands:
+
+```bash
+pixi run python aic_utils/lerobot_robot_aic/scripts/hydra_train.py train=act model=act data.dataset_root=outputs/trajectory_datasets_real_smoke/sfp_to_nic/cheatcode/nic_cards_1/n1__real1_20260501_205136/train_smoke3_task_conditioned_dataset train.task_conditioning=off hardware.cuda_devices=[2] hardware.distributed.enabled=true hardware.distributed.nproc_per_node=1 train.steps=2 train.batch_size=1 train.num_workers=0 train.chunk_size=8 train.n_action_steps=4 run.name=act_1gpu_smoke run.output_dir=outputs/train/ddp_smoke/act_1gpu
+
+pixi run python aic_utils/lerobot_robot_aic/scripts/hydra_train.py train=act model=act data.dataset_root=outputs/trajectory_datasets_real_smoke/sfp_to_nic/cheatcode/nic_cards_1/n1__real1_20260501_205136/train_smoke3_task_conditioned_dataset train.task_conditioning=off hardware.cuda_devices=[2,3] hardware.distributed.enabled=true hardware.distributed.nproc_per_node=2 train.steps=2 train.batch_size=1 train.num_workers=0 train.chunk_size=8 train.n_action_steps=4 run.name=act_2gpu_smoke run.output_dir=outputs/train/ddp_smoke/act_2gpu
+```
+
+Results:
+
+- `outputs/train/ddp_smoke/act_1gpu/checkpoints/000002/pretrained_model/model.safetensors`,
+  effective batch size `1 x 1 = 1`, `CUDA_VISIBLE_DEVICES=2`.
+- `outputs/train/ddp_smoke/act_2gpu/checkpoints/000002/pretrained_model/model.safetensors`,
+  effective batch size `1 x 2 = 2`, `CUDA_VISIBLE_DEVICES=2,3`.
+
+Both runs completed real LeRobot ACT training and wrote normal LeRobot
+pretrained-model checkpoints plus Hydra metadata.
+
+## 2026-05-02 Follow-up: Explicit ACT Task-Conditioned Materialization
+
+Added standalone materialization so ACT DDP can train with task vectors without
+depending on `train_act_policy.py` side effects:
+
+```bash
+pixi run python aic_utils/lerobot_robot_aic/scripts/materialize_task_conditioned_dataset.py \
+  --dataset-root <accepted_dataset> \
+  --task-metadata <manifests/accepted.csv> \
+  --output-root <derived_task_conditioned_dataset>
+```
+
+This copies the LeRobot dataset, appends the 10D task vector to
+`observation.state`, updates `meta/info.json`, and recomputes
+`meta/stats.json`.
+
+Verified materialization:
+
+```bash
+pixi run python aic_utils/lerobot_robot_aic/scripts/materialize_task_conditioned_dataset.py --dataset-root outputs/trajectory_datasets_real_smoke/sfp_to_nic/cheatcode/nic_cards_1/n1__real1_20260501_205136/accepted_dataset --task-metadata outputs/trajectory_datasets_real_smoke/sfp_to_nic/cheatcode/nic_cards_1/n1__real1_20260501_205136/manifests/accepted.csv --output-root outputs/train/ddp_smoke/materialized_task_conditioned_dataset --missing-task-vector error
+```
+
+Inspection result:
+
+- `observation.state` shape changed from 32 to 42.
+- Last 10 feature names are the canonical task-vector fields.
+- First row task tail was `[1,0,0,1,1,0,0,0,0,1]`.
+
+Verified ACT training from the newly materialized dataset:
+
+```bash
+pixi run python aic_utils/lerobot_robot_aic/scripts/hydra_train.py train=act model=act data.dataset_root=outputs/train/ddp_smoke/materialized_task_conditioned_dataset train.task_conditioning=off hardware.cuda_devices=[2] hardware.distributed.enabled=true hardware.distributed.nproc_per_node=1 train.steps=1 train.batch_size=1 train.num_workers=0 train.chunk_size=8 train.n_action_steps=4 run.name=act_materialized_1gpu run.output_dir=outputs/train/ddp_smoke/act_materialized_1gpu
+
+pixi run python aic_utils/lerobot_robot_aic/scripts/hydra_train.py train=act model=act data.dataset_root=outputs/train/ddp_smoke/materialized_task_conditioned_dataset train.task_conditioning=off hardware.cuda_devices=[2,3] hardware.distributed.enabled=true hardware.distributed.nproc_per_node=2 train.steps=1 train.batch_size=1 train.num_workers=0 train.chunk_size=8 train.n_action_steps=4 run.name=act_materialized_2gpu run.output_dir=outputs/train/ddp_smoke/act_materialized_2gpu
+```
+
+Results:
+
+- `outputs/train/ddp_smoke/act_materialized_1gpu/checkpoints/000001/pretrained_model/model.safetensors`
+- `outputs/train/ddp_smoke/act_materialized_2gpu/checkpoints/000001/pretrained_model/model.safetensors`

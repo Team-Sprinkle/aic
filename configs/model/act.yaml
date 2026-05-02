@@ -1,0 +1,7 @@
+family: act
+input_source: lerobot_dataset_features
+state_conditioning: observation.state
+image_conditioning: observation.images.*
+task_conditioning_method: append_task_vector_to_observation.state
+task_vector_dim: 10
+architecture_owner: lerobot

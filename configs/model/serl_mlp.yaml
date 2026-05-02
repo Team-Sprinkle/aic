@@ -1,0 +1,9 @@
+family: serl
+architecture: lowdim_mlp_actor_twin_q
+state_dim: null
+action_dim: null
+action_horizon: 1
+hidden_dim: 256
+num_layers: 2
+task_vector_dim: 10
+critic_init: scratch

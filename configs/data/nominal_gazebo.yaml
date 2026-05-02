@@ -1,0 +1,5 @@
+dataset_root: outputs/trajectory_datasets_real_smoke/sfp_to_nic/cheatcode/nic_cards_1/n1__real1_20260501_205136/accepted_dataset
+task_metadata: outputs/trajectory_datasets_real_smoke/sfp_to_nic/cheatcode/nic_cards_1/n1__real1_20260501_205136/manifests/accepted.csv
+dataset_tag: real_smoke_n1
+task_family: sfp_to_nic
+generation_details_live_in_dataset_metadata: true
