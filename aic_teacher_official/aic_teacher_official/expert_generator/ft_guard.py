@@ -22,7 +22,7 @@ class RecoveryPhase(StrEnum):
 class FTGuardConfig:
     soft_threshold_n: float = 1.0
     hard_threshold_n: float = 3.0
-    backup_distance_m: float = 0.006
+    backup_distance_m: float = 0.002
     max_retries: int = 3
     probe_pattern: str = "small_cross"
 

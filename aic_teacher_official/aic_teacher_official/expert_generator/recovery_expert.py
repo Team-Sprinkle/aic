@@ -58,8 +58,8 @@ class RecoveryExpert:
         )
 
     def generate_candidate(self, snapshot: SceneSnapshot, strategy: VLMStrategy, *, candidate: Any) -> ExpertTrajectoryResult:
-        if strategy.mode != ExpertMode.RECOVERY:
-            raise ValueError("RecoveryExpert requires recovery VLMStrategy")
+        if strategy.mode not in {ExpertMode.RECOVERY, ExpertMode.NOMINAL_RECOVERY}:
+            raise ValueError("RecoveryExpert requires recovery or nominalrecovery VLMStrategy")
         planning_result = self.moveit_planner.plan_free_space_approach(snapshot, strategy, candidate)
         from aic_teacher_official.expert_generator.moveit_planner import PlanningFailure
 
@@ -73,14 +73,17 @@ class RecoveryExpert:
             )
         waypoints = append_cheatcode_insertion_segment(
             planning_result,
-            insertion_depth_m=0.045,
-            insertion_duration_sec=14.0,
+            insertion_depth_m=0.070,
+            insertion_speed_mps=0.0009,
+            pre_insert_settle_sec=1.0,
+            handoff_blend_sec=2.0,
         )
+        mode_value = strategy.mode.value
         trajectory = PiecewiseTrajectory(
             waypoints=waypoints,
             metadata=TrajectoryMetadata(
                 planning={
-                    "expert_mode": "recovery",
+                    "expert_mode": mode_value,
                     "vlm_strategy": strategy.to_dict(),
                     "candidate": candidate.to_dict(),
                     "moveit": planning_result.to_dict(),
@@ -100,5 +103,5 @@ class RecoveryExpert:
             trajectory=trajectory,
             candidate=candidate,
             planning_result=planning_result,
-            metadata={"mode": "recovery", "ft_correction_used": True, "vlm_waypoints_used": False},
+            metadata={"mode": mode_value, "ft_correction_used": True, "vlm_waypoints_used": False},
         )

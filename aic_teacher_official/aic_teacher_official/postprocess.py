@@ -217,6 +217,7 @@ def postprocess_piecewise_trajectory(
                 phase=sample_phase,
                 source=sample_source,
                 diagnostics={
+                    **end.diagnostics,
                     "postprocessor": "phase_aware_c1_cubic_hermite_v1",
                     "global_smoother": (
                         "disabled_for_cheatcode_insertion"

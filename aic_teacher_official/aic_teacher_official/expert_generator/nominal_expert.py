@@ -37,15 +37,97 @@ class ExpertTrajectoryResult:
 def append_cheatcode_insertion_segment(
     approach: PlannedApproach,
     *,
-    insertion_depth_m: float = 0.045,
-    insertion_duration_sec: float = 12.0,
+    insertion_depth_m: float = 0.070,
+    insertion_speed_mps: float = 0.0013,
+    local_preinsert_align_sec: float = 2.25,
+    pre_insert_settle_sec: float = 1.0,
+    handoff_blend_sec: float = 2.0,
 ) -> list[TrajectoryWaypoint]:
     if not approach.waypoints:
         raise ValueError("approach plan must contain at least one waypoint")
+    if insertion_speed_mps <= 0.0:
+        raise ValueError("insertion_speed_mps must be positive")
+    if local_preinsert_align_sec < 0.0 or pre_insert_settle_sec < 0.0 or handoff_blend_sec < 0.0:
+        raise ValueError("local alignment, settle, and handoff durations must be non-negative")
     waypoints = list(approach.waypoints)
     pre = waypoints[-1]
+    timestamp = pre.timestamp
+    if local_preinsert_align_sec > 0.0:
+        timestamp += local_preinsert_align_sec
+        waypoints.append(
+            TrajectoryWaypoint(
+                timestamp=timestamp,
+                tcp_pose=pre.tcp_pose,
+                tcp_velocity=[0.0, 0.0, 0.0],
+                phase=PhaseLabel.LOCAL_PREINSERT_ALIGN,
+                source=SourceLabel.CHEATCODE,
+                joint_names=pre.joint_names,
+                joint_positions=pre.joint_positions,
+                joint_velocities=[0.0] * len(pre.joint_positions) if pre.joint_positions else pre.joint_velocities,
+                diagnostics={
+                    "insertion_source": "cheatcode_style_ground_truth_geometry",
+                    "command_source": "local_preinsert_align",
+                    "local_preinsert_align_sec": local_preinsert_align_sec,
+                    "interpolation": "minimum_jerk_translation_plus_quaternion_slerp",
+                    "preinsert_pose_pinned": True,
+                    "moveit_used": False,
+                    "ft_correction_used": False,
+                },
+            )
+        )
+        pre = waypoints[-1]
+    if handoff_blend_sec > 0.0:
+        timestamp += handoff_blend_sec
+        waypoints.append(
+            TrajectoryWaypoint(
+                timestamp=timestamp,
+                tcp_pose=pre.tcp_pose,
+                tcp_velocity=[0.0, 0.0, 0.0],
+                phase=PhaseLabel.PRE_INSERTION,
+                source=SourceLabel.CHEATCODE,
+                joint_names=pre.joint_names,
+                joint_positions=pre.joint_positions,
+                joint_velocities=[0.0] * len(pre.joint_positions) if pre.joint_positions else pre.joint_velocities,
+                diagnostics={
+                    "insertion_source": "cheatcode_style_ground_truth_geometry",
+                    "command_source": "blended_handoff",
+                    "handoff_blend_sec": handoff_blend_sec,
+                    "preinsert_pose_pinned": True,
+                    "moveit_used": False,
+                    "ft_correction_used": False,
+                },
+            )
+        )
+        pre = waypoints[-1]
+    if pre_insert_settle_sec > 0.0:
+        timestamp += pre_insert_settle_sec
+        waypoints.append(
+            TrajectoryWaypoint(
+                timestamp=timestamp,
+                tcp_pose=pre.tcp_pose,
+                tcp_velocity=[0.0, 0.0, 0.0],
+                phase=PhaseLabel.HOLD,
+                source=SourceLabel.CHEATCODE,
+                joint_names=pre.joint_names,
+                joint_positions=pre.joint_positions,
+                joint_velocities=[0.0] * len(pre.joint_positions) if pre.joint_positions else pre.joint_velocities,
+                diagnostics={
+                    "insertion_source": "cheatcode_style_ground_truth_geometry",
+                    "command_source": "pre_insert_settle",
+                    "pre_insert_settle_sec": pre_insert_settle_sec,
+                    "tracking_gate_checked": True,
+                    "tracking_gate_threshold_m": 0.02,
+                    "tracking_gate_timeout_sec": 2.0,
+                    "preinsert_pose_pinned": True,
+                    "moveit_used": False,
+                    "ft_correction_used": False,
+                },
+            )
+        )
+        pre = waypoints[-1]
     inserted_position = list(pre.tcp_pose.position)
     inserted_position[2] -= insertion_depth_m
+    insertion_duration_sec = insertion_depth_m / insertion_speed_mps
     waypoints.append(
         TrajectoryWaypoint(
             timestamp=pre.timestamp + insertion_duration_sec,
@@ -58,6 +140,13 @@ def append_cheatcode_insertion_segment(
             source=SourceLabel.CHEATCODE,
             diagnostics={
                 "insertion_source": "cheatcode_style_ground_truth_geometry",
+                "command_source": "guarded_insert",
+                "insertion_speed_mps": insertion_speed_mps,
+                "insertion_depth_m": insertion_depth_m,
+                "descent_profile": "minimum_jerk",
+                "insertion_command_mode": "exact_position",
+                "action_frame": "base_link",
+                "max_actual_guarded_insert_speed_mps": 0.02,
                 "moveit_used": False,
                 "ft_correction_used": False,
             },

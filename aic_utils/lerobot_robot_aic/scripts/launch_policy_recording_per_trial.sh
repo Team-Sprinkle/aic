@@ -629,7 +629,7 @@ for TRIAL_ID in "${TRIAL_IDS[@]}"; do
   TRIAL_TOTAL_SCORE=""
   if [[ -f "${SCORING_FILE}" ]]; then
     TRIAL_TOTAL_SCORE="$(awk '/^total:/{print $2; exit}' "${SCORING_FILE}")"
-    echo "  scoring total: ${TRIAL_TOTAL_SCORE}"
+    echo "  official scoring total: ${TRIAL_TOTAL_SCORE}"
   else
     echo "  scoring file missing: ${SCORING_FILE}"
   fi

@@ -6,6 +6,7 @@ from dataclasses import dataclass
 import re
 import shlex
 import subprocess
+import os
 from pathlib import Path
 from typing import Any
 
@@ -30,6 +31,8 @@ class OfficialReplayConfig:
     sim_distrobox: str = ""
     require_recorder_save_log: bool = True
     remove_bag_data: bool = True
+    expert_mode: str = "nominal"
+    ft_threshold_n: float | None = None
 
 
 class OfficialRecordingReplayRunner:
@@ -42,8 +45,12 @@ class OfficialRecordingReplayRunner:
         *,
         attempt_index: int,
         candidate_index: int,
+        variant_label: str | None = None,
     ) -> dict[str, Any]:
-        attempt_dir = self.config.output_dir / f"attempt_{attempt_index:06d}_candidate_{candidate_index:02d}"
+        suffix = f"_candidate_{candidate_index:02d}"
+        if variant_label:
+            suffix += f"_{variant_label}"
+        attempt_dir = self.config.output_dir / f"attempt_{attempt_index:06d}{suffix}"
         attempt_dir.mkdir(parents=True, exist_ok=True)
         trajectory_path = attempt_dir / "smooth_trajectory.json"
         if hasattr(trajectory, "save_json"):
@@ -56,16 +63,38 @@ class OfficialRecordingReplayRunner:
             attempt_index=attempt_index,
             candidate_index=candidate_index,
         )
+        env = os.environ.copy()
+        source_paths = [
+            self.config.repo_root / "aic_teacher_official",
+            self.config.repo_root / "aic_example_policies",
+        ]
+        existing_pythonpath = env.get("PYTHONPATH", "")
+        env["PYTHONPATH"] = ":".join(
+            [str(path) for path in source_paths] + ([existing_pythonpath] if existing_pythonpath else [])
+        )
+        env["AIC_EXPERT_MODE"] = self.config.expert_mode
+        env["AIC_OFFICIAL_TEACHER_RUNTIME_TRACE"] = str(attempt_dir / "runtime_trace.jsonl")
+        if self.config.ft_threshold_n is not None:
+            env["AIC_OFFICIAL_TEACHER_FT_THRESHOLD_N"] = str(self.config.ft_threshold_n)
         with (attempt_dir / "replay_stdout.txt").open("w", encoding="utf-8") as stdout, (
             attempt_dir / "replay_stderr.txt"
         ).open("w", encoding="utf-8") as stderr:
-            result = subprocess.run(cmd, cwd=self.config.repo_root, text=True, stdout=stdout, stderr=stderr, check=False)
+            result = subprocess.run(
+                cmd,
+                cwd=self.config.repo_root,
+                env=env,
+                text=True,
+                stdout=stdout,
+                stderr=stderr,
+                check=False,
+            )
         metrics = metrics_from_scoring_yaml(attempt_dir / "results" / "trial_1_trial_000001" / "scoring.yaml")
         metrics.update(
             {
                 "replay_returncode": result.returncode,
                 "replay_command": " ".join(shlex.quote(part) for part in cmd),
                 "trajectory_path": str(trajectory_path),
+                "runtime_trace_path": str(attempt_dir / "runtime_trace.jsonl"),
             }
         )
         return metrics
@@ -133,11 +162,35 @@ def metrics_from_scoring_yaml(path: str | Path) -> dict[str, Any]:
         data = {}
     text = scoring_path.read_text(encoding="utf-8")
     max_force = _extract_float(r"Max detected force:\s*([0-9.]+)N", text)
+    if max_force is None and "No excessive force detected" in text:
+        max_force = 0.0
     contacts_ok = "No contact detected" in text
     insertion = "Cable insertion successful" in text
     duration = _extract_float(r"Task duration:\s*([0-9.]+)\s*seconds", text)
+    official_total = _coerce_float(data.get("total"))
+    task_score = _task_score_from_scoring(data, official_total=official_total)
+    trial = _first_trial_block(data) or {}
+    tier_1 = trial.get("tier_1") if isinstance(trial, dict) else {}
+    tier_2 = trial.get("tier_2") if isinstance(trial, dict) else {}
+    tier_3 = trial.get("tier_3") if isinstance(trial, dict) else {}
+    tier_1_score = _coerce_float(tier_1.get("score")) if isinstance(tier_1, dict) else None
+    tier_2_score = _coerce_float(tier_2.get("score")) if isinstance(tier_2, dict) else None
+    tier_3_score = _coerce_float(tier_3.get("score")) if isinstance(tier_3, dict) else None
+    tier_3_message = str(tier_3.get("message", "")) if isinstance(tier_3, dict) else ""
     return {
-        "score": float(data["total"]) if data.get("total") is not None else None,
+        # Keep `score` aligned with the official scorer. Partial insertion and
+        # proximity points are represented in the top-level total, and expert
+        # acceptance still relies on insertion/validation gates to reject
+        # model-validity-only runs where total=1.
+        "score": official_total,
+        "official_total_score": official_total,
+        "task_score_excluding_tier_1": task_score,
+        "score_source": "official_total",
+        "tier_1_score": tier_1_score,
+        "tier_2_score": tier_2_score,
+        "tier_3_score": tier_3_score,
+        "tier_3_message": tier_3_message,
+        "has_partial_or_full_task_progress": bool((tier_3_score or 0.0) > 0.0 or (tier_2_score or 0.0) > 0.0),
         "insertion_event_reached": insertion,
         "max_force_n": max_force,
         "ft_impulse_ns": None,
@@ -154,3 +207,58 @@ def _extract_float(pattern: str, text: str) -> float | None:
     if not match:
         return None
     return float(match.group(1))
+
+
+def _coerce_float(value: Any) -> float | None:
+    if value is None:
+        return None
+    try:
+        return float(value)
+    except (TypeError, ValueError):
+        return None
+
+
+def _task_score_from_scoring(data: dict[str, Any], *, official_total: float | None) -> float | None:
+    """Return task score excluding tier-1 model-validation credit.
+
+    The official YAML top-level `total` includes non-task bookkeeping such as
+    `tier_1.score: 1` for model validation. For expert trajectory acceptance and
+    debugging, that makes failed rollouts look like they scored 1 instead of 0.
+    Prefer explicit non-tier-1 score fields when present; otherwise subtract
+    tier-1 credit from the official total. If no tier information exists, fall
+    back to the raw total for older/minimal score fixtures.
+    """
+
+    trial = _first_trial_block(data)
+    if not isinstance(trial, dict):
+        return official_total
+
+    non_tier_1_scores: list[float] = []
+    tier_1_score = 0.0
+    saw_tier_score = False
+    for name, block in trial.items():
+        if not str(name).startswith("tier_") or not isinstance(block, dict):
+            continue
+        score = _coerce_float(block.get("score"))
+        if score is None:
+            continue
+        saw_tier_score = True
+        if str(name) == "tier_1":
+            tier_1_score += score
+        else:
+            non_tier_1_scores.append(score)
+
+    if non_tier_1_scores:
+        return float(sum(non_tier_1_scores))
+    if saw_tier_score:
+        return 0.0
+    if official_total is not None and tier_1_score:
+        return max(0.0, official_total - tier_1_score)
+    return official_total
+
+
+def _first_trial_block(data: dict[str, Any]) -> dict[str, Any] | None:
+    for key, value in data.items():
+        if str(key).startswith("trial_") and isinstance(value, dict):
+            return value
+    return None

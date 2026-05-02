@@ -15,6 +15,7 @@ from typing import Any
 
 class ExpertMode(StrEnum):
     NOMINAL = "nominal"
+    NOMINAL_RECOVERY = "nominalrecovery"
     RECOVERY = "recovery"
 
 
@@ -81,7 +82,7 @@ class VLMStrategy:
     insertion_strategy: str
     recovery_allowed: bool = False
     probe_pattern: str = "none"
-    backup_distance_m: float = 0.006
+    backup_distance_m: float = 0.002
     retry_count: int = 0
     raw: dict[str, Any] = field(default_factory=dict)
 
@@ -172,6 +173,23 @@ def _normalize_avoid_regions(value: Any) -> list[str]:
     raise ValueError("avoid_regions must be a string, object, or list")
 
 
+def _normalize_probe_pattern(value: Any) -> str:
+    if value is None:
+        return "none"
+    if isinstance(value, dict):
+        value = value.get("type", value.get("pattern", "none"))
+    normalized = str(value).strip().lower().replace("-", "_").replace(" ", "_")
+    if "spiral" in normalized:
+        normalized = "small_spiral"
+    if "cross" in normalized:
+        normalized = "small_cross"
+    if "touch" in normalized or "probe" in normalized:
+        normalized = "small_cross"
+    if normalized not in ALLOWED_PROBE_PATTERNS:
+        normalized = "small_cross"
+    return normalized
+
+
 def parse_vlm_strategy(text_or_data: str | dict[str, Any], *, expected_mode: str | None = None) -> VLMStrategy:
     data = _parse_json_object(text_or_data) if isinstance(text_or_data, str) else dict(text_or_data)
     missing = sorted(REQUIRED_FIELDS - set(data))
@@ -187,12 +205,10 @@ def parse_vlm_strategy(text_or_data: str | dict[str, Any], *, expected_mode: str
     if insertion_strategy not in ALLOWED_INSERTION_STRATEGIES:
         raise ValueError(f"Unsupported insertion_strategy {insertion_strategy!r}")
     avoid_regions = _normalize_avoid_regions(data["avoid_regions"])
-    probe_pattern = str(data.get("probe_pattern", "none"))
-    if probe_pattern not in ALLOWED_PROBE_PATTERNS:
-        raise ValueError(f"Unsupported probe_pattern {probe_pattern!r}")
+    probe_pattern = _normalize_probe_pattern(data.get("probe_pattern", "none"))
 
     preferred_clearance_m = _clamp(data["preferred_clearance_m"], 0.04, 0.25, "preferred_clearance_m")
-    backup_distance_m = _clamp(data.get("backup_distance_m", 0.006), 0.001, 0.03, "backup_distance_m")
+    backup_distance_m = _clamp(data.get("backup_distance_m", 0.002), 0.001, 0.03, "backup_distance_m")
     retry_count = int(_clamp(data.get("retry_count", 0), 0, 10, "retry_count"))
 
     if mode == ExpertMode.NOMINAL:
@@ -201,6 +217,8 @@ def parse_vlm_strategy(text_or_data: str | dict[str, Any], *, expected_mode: str
         probe_pattern = "none"
         if insertion_strategy != "straight_slow_descent":
             raise ValueError("nominal mode must use straight_slow_descent")
+    elif mode == ExpertMode.NOMINAL_RECOVERY:
+        recovery_allowed = bool(data.get("recovery_allowed", True))
     else:
         recovery_allowed = bool(data.get("recovery_allowed", True))
 

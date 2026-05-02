@@ -56,7 +56,7 @@ class OfficialExpertGeneratorPlanner(Policy):
         self._ft_config = FTGuardConfig(
             soft_threshold_n=float(os.environ.get("AIC_EXPERT_FT_SOFT_THRESHOLD_N", "1.0")),
             hard_threshold_n=float(os.environ.get("AIC_EXPERT_FT_HARD_THRESHOLD_N", "3.0")),
-            backup_distance_m=float(os.environ.get("AIC_EXPERT_BACKUP_DISTANCE_M", "0.006")),
+            backup_distance_m=float(os.environ.get("AIC_EXPERT_BACKUP_DISTANCE_M", "0.002")),
             max_retries=int(os.environ.get("AIC_EXPERT_MAX_RETRIES", "3")),
             probe_pattern=os.environ.get("AIC_EXPERT_PROBE_PATTERN", "small_cross"),
         )

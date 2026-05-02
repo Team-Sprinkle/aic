@@ -30,6 +30,7 @@ class ExpertPlannerRunConfig:
     remove_bag_data: bool = True
     launch_moveit: bool = True
     moveit_launch_file: str = "aic_moveit_config moveit.launch.py"
+    ft_threshold_n: float | None = None
 
 
 class ExpertPlannerRecordingRunner:
@@ -63,6 +64,10 @@ class ExpertPlannerRecordingRunner:
             "AIC_EXPERT_IMAGE_CAPTURE_DURATION_SEC": str(self.config.image_capture_duration_sec),
             "AIC_EXPERT_MAX_IMAGES": str(self.config.max_images),
         }
+        if self.config.ft_threshold_n is not None:
+            env["AIC_EXPERT_FT_THRESHOLD_N"] = str(self.config.ft_threshold_n)
+            env["AIC_EXPERT_FT_SOFT_THRESHOLD_N"] = str(self.config.ft_threshold_n)
+            env["AIC_EXPERT_FT_HARD_THRESHOLD_N"] = str(self.config.ft_threshold_n * 3.0)
         with (attempt_dir / "planner_stdout.txt").open("w", encoding="utf-8") as stdout, (
             attempt_dir / "planner_stderr.txt"
         ).open("w", encoding="utf-8") as stderr:

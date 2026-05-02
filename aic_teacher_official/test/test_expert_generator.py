@@ -2,13 +2,28 @@ import json
 from pathlib import Path
 import sys
 from types import SimpleNamespace
+import importlib.util
 
 import pytest
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+REPO_ROOT = Path(__file__).resolve().parents[2]
+SCRIPT = REPO_ROOT / "scripts" / "generate_expert_trajectories.py"
+spec = importlib.util.spec_from_file_location("generate_expert_trajectories", SCRIPT)
+generate_expert_trajectories = importlib.util.module_from_spec(spec)
+assert spec.loader is not None
+spec.loader.exec_module(generate_expert_trajectories)
 
 from aic_teacher_official.expert_generator.candidate_generation import generate_approach_candidates
 from aic_teacher_official.expert_generator.dataset_writer import DatasetMetadataWriter, ExpertEpisodeMetadata
+from aic_teacher_official.expert_generator.debug_artifacts import (
+    aggregate_ft_windows,
+    build_gpt5_failure_payload,
+    compute_phase_speed_metrics,
+    compact_payload_with_retry,
+    compute_transition_metrics,
+    write_debug_artifacts,
+)
 from aic_teacher_official.expert_generator.ft_guard import FTGuard, FTGuardConfig, RecoveryPhase
 from aic_teacher_official.expert_generator.generation_loop import ExpertGenerationLoop, GenerationConfig
 from aic_teacher_official.expert_generator.collision_scene import object_geometries_from_engine_config
@@ -32,6 +47,7 @@ from aic_teacher_official.expert_generator.replay_runner import (
 from aic_teacher_official.expert_generator.nominal_expert import NominalExpert
 from aic_teacher_official.expert_generator.recovery_expert import RecoveryExpert
 from aic_teacher_official.expert_generator.scene_snapshot import SceneSnapshot, SerializablePose
+from aic_teacher_official.expert_generator.trajectory_repair import repair_precontact_approach
 from aic_teacher_official.expert_generator.trajectory_validator import TrajectoryValidator, ValidationCriteria
 from aic_teacher_official.expert_generator.vlm_strategy import ExpertMode, parse_vlm_strategy
 from aic_teacher_official.expert_generator.vlm_strategy_client import OpenAIVLMStrategyProvider
@@ -63,7 +79,7 @@ def _strategy(mode="nominal", **overrides):
         "insertion_strategy": "straight_slow_descent" if mode == "nominal" else "guarded_descent_with_backoff",
         "recovery_allowed": mode == "recovery",
         "probe_pattern": "small_cross",
-        "backup_distance_m": 0.006,
+        "backup_distance_m": 0.002,
         "retry_count": 3,
     }
     payload.update(overrides)
@@ -146,6 +162,44 @@ def test_vlm_strategy_schema_parsing_and_validation():
     assert strategy.retry_count == 0
 
 
+def test_cli_mode_flags_are_mutually_exclusive(monkeypatch):
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        [
+            "generate_expert_trajectories.py",
+            "--nominal",
+            "--recovery",
+            "--config",
+            "config.yaml",
+            "--output-dir",
+            "out",
+        ],
+    )
+
+    with pytest.raises(SystemExit):
+        generate_expert_trajectories.parse_args()
+
+
+def test_cli_selects_new_nominal_mode_flag(monkeypatch):
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        [
+            "generate_expert_trajectories.py",
+            "--nominal",
+            "--config",
+            "config.yaml",
+            "--output-dir",
+            "out",
+        ],
+    )
+
+    args = generate_expert_trajectories.parse_args()
+
+    assert generate_expert_trajectories._selected_mode(args) == ExpertMode.NOMINAL
+
+
 def test_vlm_strategy_rejects_malformed_json():
     with pytest.raises(ValueError, match="Malformed"):
         parse_vlm_strategy("{not json", expected_mode="nominal")
@@ -185,6 +239,17 @@ def test_vlm_strategy_normalizes_avoid_region_variants():
     strategy = _strategy(avoid_regions={"front_of_nic": True, "rear": False, "note": "left sweep"})
 
     assert strategy.avoid_regions == ["front_of_nic", "left sweep"]
+
+
+def test_recovery_probe_pattern_aliases_are_normalized():
+    strategy = _strategy(
+        mode="nominalrecovery",
+        insertion_strategy="guarded_descent_with_backoff",
+        recovery_allowed=True,
+        probe_pattern={"type": "small_z_probe_then_spiral_xy"},
+    )
+
+    assert strategy.probe_pattern == "small_spiral"
 
 
 def test_candidate_pose_generation_uses_strategy_and_port_orientation():
@@ -311,6 +376,63 @@ def test_nominal_mode_does_not_use_ft_correction():
     )
 
 
+def test_final_insertion_defaults_are_slow_with_settle_and_handoff():
+    snapshot = _snapshot()
+    strategy = _strategy()
+    candidate = generate_approach_candidates(snapshot, strategy, count=1)[0]
+    expert = NominalExpert(moveit_planner=MoveItPlanner(backend=FakeMoveItBackend()))
+
+    result = expert.generate_candidate(snapshot, strategy, candidate=candidate)
+    waypoints = result.trajectory.waypoints
+    final = waypoints[-1]
+
+    assert any(w.diagnostics.get("command_source") == "blended_handoff" for w in waypoints)
+    assert any(w.phase == PhaseLabel.LOCAL_PREINSERT_ALIGN for w in waypoints)
+    assert any(w.phase == PhaseLabel.HOLD for w in waypoints)
+    assert final.diagnostics["insertion_speed_mps"] == pytest.approx(0.0013)
+    assert final.timestamp - waypoints[-2].timestamp == pytest.approx(0.070 / 0.0013)
+
+
+def test_precontact_repair_recomputes_actions_and_pins_preinsert_pose():
+    trajectory = _debug_trajectory()
+
+    repaired, metrics = repair_precontact_approach(trajectory, sample_dt=0.1)
+
+    original_preinsert = trajectory.waypoints[-2]
+    repaired_preinsert = repaired.waypoints[-2]
+    assert metrics["action_recomputed"] is True
+    assert metrics["preinsert_pose_pinned"] is True
+    assert repaired_preinsert.tcp_pose.position == pytest.approx(original_preinsert.tcp_pose.position)
+    assert repaired_preinsert.tcp_pose.orientation_xyzw == pytest.approx(original_preinsert.tcp_pose.orientation_xyzw)
+    assert repaired.waypoints[-1].phase == PhaseLabel.FINAL_INSERTION
+    assert repaired.waypoints[-1].tcp_pose.position == pytest.approx(trajectory.waypoints[-1].tcp_pose.position)
+
+
+def test_phase_speed_metrics_reports_guarded_insert_speed():
+    metrics = compute_phase_speed_metrics(
+        [
+            {
+                "observation": {
+                    "phase": "final_insertion",
+                    "command_source": "guarded_insert",
+                    "elapsed": 1.0,
+                    "actual_tcp_velocity": {"linear": [0.0, 0.0, -0.01]},
+                }
+            },
+            {
+                "observation": {
+                    "phase": "final_insertion",
+                    "command_source": "guarded_insert",
+                    "elapsed": 1.5,
+                    "actual_tcp_velocity": {"linear": [0.0, 0.0, -0.03]},
+                }
+            },
+        ]
+    )
+
+    assert metrics["max_guarded_insert_speed_mps"] == pytest.approx(0.03)
+
+
 def test_recovery_state_machine_transitions():
     guard = FTGuard(FTGuardConfig(soft_threshold_n=1.0, hard_threshold_n=3.0, max_retries=1))
 
@@ -334,6 +456,23 @@ def test_recovery_expert_online_api_returns_recovery_action():
     assert action.command == "stop_descent"
 
 
+def test_nominalrecovery_strategy_and_recovery_expert_are_supported():
+    snapshot = _snapshot(mode="nominalrecovery")
+    strategy = _strategy(
+        mode="nominalrecovery",
+        insertion_strategy="guarded_descent_with_backoff",
+        recovery_allowed=True,
+    )
+    candidate = generate_approach_candidates(snapshot, strategy, count=1)[0]
+    expert = RecoveryExpert(moveit_planner=MoveItPlanner(backend=FakeMoveItBackend()))
+
+    result = expert.generate_candidate(snapshot, strategy, candidate=candidate)
+
+    assert result.trajectory is not None
+    assert result.metadata["mode"] == "nominalrecovery"
+    assert result.trajectory.metadata.planning["ft_correction_used"] is True
+
+
 def test_dataset_metadata_writer_outputs_sidecars(tmp_path):
     writer = DatasetMetadataWriter(tmp_path)
     writer.append_episode(
@@ -354,6 +493,102 @@ def test_dataset_metadata_writer_outputs_sidecars(tmp_path):
     assert (tmp_path / "meta" / "expert_trajectory_metadata.jsonl").exists()
     assert (tmp_path / "meta" / "validation_results.jsonl").exists()
     assert json.loads((tmp_path / "meta" / "vlm_strategy.jsonl").read_text().splitlines()[0])["cable_risk"] == "low"
+
+
+def test_ft_window_aggregation_min_max_median():
+    windows = aggregate_ft_windows(
+        [
+            {"timestamp": 0.0, "force": [1.0, 2.0, 3.0], "torque": [0.1, 0.2, 0.3]},
+            {"timestamp": 0.2, "force": [3.0, 4.0, 5.0], "torque": [0.3, 0.4, 0.5]},
+            {"timestamp": 0.7, "fx": 10.0, "fy": 0.0, "fz": 0.0, "tx": 1.0, "ty": 0.0, "tz": 0.0},
+        ],
+        window_sec=0.5,
+    )
+
+    assert len(windows) == 2
+    assert windows[0]["fx"]["min"] == pytest.approx(1.0)
+    assert windows[0]["fx"]["max"] == pytest.approx(3.0)
+    assert windows[0]["fx"]["median"] == pytest.approx(2.0)
+    assert windows[1]["force_norm"]["median"] == pytest.approx(10.0)
+
+
+def _debug_trajectory():
+    return SmoothTrajectory(
+        waypoints=[
+            TrajectoryWaypoint(
+                timestamp=0.0,
+                tcp_pose=TCPPose([0.0, 0.0, 0.10], [0.0, 0.0, 0.0, 1.0]),
+                phase=PhaseLabel.APPROACH,
+                source=SourceLabel.OPTIMIZER,
+                joint_names=["j0"],
+                joint_positions=[0.0],
+                joint_velocities=[0.0],
+            ),
+            TrajectoryWaypoint(
+                timestamp=1.0,
+                tcp_pose=TCPPose([0.0, 0.0, 0.08], [0.0, 0.0, 0.0, 1.0]),
+                phase=PhaseLabel.PRE_INSERTION,
+                source=SourceLabel.OPTIMIZER,
+                joint_names=["j0"],
+                joint_positions=[0.1],
+                joint_velocities=[0.0],
+            ),
+            TrajectoryWaypoint(
+                timestamp=1.75,
+                tcp_pose=TCPPose([0.0, 0.0, 0.08], [0.0, 0.0, 0.0, 1.0]),
+                phase=PhaseLabel.HOLD,
+                source=SourceLabel.CHEATCODE,
+                joint_names=["j0"],
+                joint_positions=[0.1],
+                joint_velocities=[0.0],
+            ),
+            TrajectoryWaypoint(
+                timestamp=16.75,
+                tcp_pose=TCPPose([0.0, 0.0, 0.035], [0.0, 0.0, 0.0, 1.0]),
+                tcp_velocity=[0.0, 0.0, -0.002],
+                phase=PhaseLabel.FINAL_INSERTION,
+                source=SourceLabel.CHEATCODE,
+            ),
+        ]
+    )
+
+
+def test_debug_artifact_writer_outputs_expected_files(tmp_path):
+    paths = write_debug_artifacts(tmp_path, trajectory=_debug_trajectory())
+
+    assert paths.observations.exists()
+    assert paths.actions.exists()
+    assert paths.transition_metrics.exists()
+    assert (tmp_path / "debug" / "sampled_images" / "center").is_dir()
+    assert json.loads(paths.transition_metrics.read_text())["boundary_count"] >= 2
+
+
+def test_transition_metrics_marks_large_phase_boundary_suspicious():
+    metrics = compute_transition_metrics(_debug_trajectory())
+
+    assert metrics["boundary_count"] >= 2
+    assert any(boundary["phase_after"] == "pre_insertion" for boundary in metrics["boundaries"])
+
+
+def test_gpt5_payload_fails_fast_when_required_artifacts_missing(tmp_path):
+    (tmp_path / "debug").mkdir()
+
+    with pytest.raises(FileNotFoundError):
+        build_gpt5_failure_payload(tmp_path / "debug")
+
+
+def test_gpt5_payload_downsamples_to_one_second(tmp_path, monkeypatch):
+    paths = write_debug_artifacts(tmp_path, trajectory=_debug_trajectory())
+    with paths.ft_windows.open("w", encoding="utf-8") as f:
+        for i in range(8):
+            f.write(json.dumps({"window_start": i * 0.5, "force_norm": {"max": i}}) + "\n")
+    monkeypatch.setattr(
+        "aic_teacher_official.expert_generator.debug_artifacts.MAX_PROMPT_BYTES",
+        1,
+    )
+
+    with pytest.raises(ValueError, match="1.0 second sampling"):
+        compact_payload_with_retry(paths.debug_dir)
 
 
 def test_collision_scene_extracts_rigid_objects_from_engine_config(tmp_path):
@@ -469,10 +704,109 @@ trial_000001:
     metrics = metrics_from_scoring_yaml(scoring)
 
     assert metrics["score"] == pytest.approx(96.5)
+    assert metrics["official_total_score"] == pytest.approx(96.5)
     assert metrics["insertion_event_reached"] is True
     assert metrics["max_force_n"] == pytest.approx(2.5)
     assert metrics["offlimit_contact_count"] == 0
     assert metrics["trajectory_duration_s"] == pytest.approx(12.34)
+
+
+def test_scoring_yaml_metrics_parser_preserves_official_total_and_task_score(tmp_path):
+    scoring = tmp_path / "scoring.yaml"
+    scoring.write_text(
+        """
+total: 1
+trial_000001:
+  tier_1:
+    score: 1
+    message: Model validation succeeded.
+  tier_2:
+    score: 0
+    message: Scoring succeeded.
+    categories:
+      contacts:
+        score: 0
+        message: No contact detected.
+      duration:
+        score: 0
+        message: Task not completed.
+      insertion force:
+        score: 0
+        message: No excessive force detected
+      trajectory efficiency:
+        score: 0
+        message: Task not completed.
+      trajectory smoothness:
+        score: 0
+        message: Task not completed.
+  tier_3:
+    score: 0
+    message: Task not completed.
+""",
+        encoding="utf-8",
+    )
+
+    metrics = metrics_from_scoring_yaml(scoring)
+
+    assert metrics["official_total_score"] == pytest.approx(1.0)
+    assert metrics["score"] == pytest.approx(1.0)
+    assert metrics["task_score_excluding_tier_1"] == pytest.approx(0.0)
+    assert metrics["score_source"] == "official_total"
+    assert metrics["tier_1_score"] == pytest.approx(1.0)
+    assert metrics["tier_2_score"] == pytest.approx(0.0)
+    assert metrics["tier_3_score"] == pytest.approx(0.0)
+    assert metrics["tier_3_message"] == "Task not completed."
+    assert metrics["has_partial_or_full_task_progress"] is False
+    assert metrics["insertion_event_reached"] is False
+    assert metrics["max_force_n"] == pytest.approx(0.0)
+
+
+def test_scoring_yaml_metrics_parser_preserves_partial_success_points(tmp_path):
+    scoring = tmp_path / "scoring.yaml"
+    scoring.write_text(
+        """
+total: 59
+trial_000001:
+  tier_1:
+    score: 1
+    message: Model validation succeeded.
+  tier_2:
+    score: 18
+    message: Scoring succeeded.
+    categories:
+      contacts:
+        score: 0
+        message: No contact detected.
+      duration:
+        score: 8
+        message: "Task duration: 20.0 seconds."
+      insertion force:
+        score: 0
+        message: No excessive force detected
+      trajectory efficiency:
+        score: 5
+        message: "Total end-effector path length: 0.40 m"
+      trajectory smoothness:
+        score: 5
+        message: "Average linear jerk magnitude of the end effector: 10.0 m/s^3"
+  tier_3:
+    score: 40
+    message: Partial insertion detected with distance of 0.01m.
+""",
+        encoding="utf-8",
+    )
+
+    metrics = metrics_from_scoring_yaml(scoring)
+
+    assert metrics["score"] == pytest.approx(59.0)
+    assert metrics["official_total_score"] == pytest.approx(59.0)
+    assert metrics["task_score_excluding_tier_1"] == pytest.approx(58.0)
+    assert metrics["tier_1_score"] == pytest.approx(1.0)
+    assert metrics["tier_2_score"] == pytest.approx(18.0)
+    assert metrics["tier_3_score"] == pytest.approx(40.0)
+    assert metrics["tier_3_message"] == "Partial insertion detected with distance of 0.01m."
+    assert metrics["has_partial_or_full_task_progress"] is True
+    assert metrics["insertion_event_reached"] is False
 
 
 class OneSceneProvider:

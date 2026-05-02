@@ -19,6 +19,7 @@ class PhaseLabel(StrEnum):
     ALIGNMENT = "alignment"
     OBSTACLE_AVOIDANCE = "obstacle_avoidance"
     PRE_INSERTION = "pre_insertion"
+    LOCAL_PREINSERT_ALIGN = "local_preinsert_align"
     FINAL_INSERTION = "final_insertion"
     HOLD = "hold"
 
