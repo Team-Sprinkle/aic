@@ -939,11 +939,37 @@ class OfficialTeacherReplay(Policy):
         final_speed = None
         final_force_delta = None
         final_lateral_error = None
+        final_commanded_lateral_error = None
+        servo_command_bias_base = np.zeros(3, dtype=np.float64)
         gate_threshold = threshold
         gate_source = "unavailable"
+        servo_compensation_enabled = os.environ.get(
+            "AIC_OFFICIAL_TEACHER_PREINSERT_SERVO_COMPENSATION",
+            "false",
+        ).lower() in {"1", "true", "yes", "on"}
+        servo_gain = float(os.environ.get("AIC_OFFICIAL_TEACHER_PREINSERT_SERVO_GAIN", "0.5"))
+        servo_step_limit_m = float(
+            os.environ.get("AIC_OFFICIAL_TEACHER_PREINSERT_SERVO_STEP_LIMIT_M", "0.0005")
+        )
+        servo_max_bias_m = float(os.environ.get("AIC_OFFICIAL_TEACHER_PREINSERT_SERVO_MAX_BIAS_M", "0.004"))
+        servo_deadband_m = float(
+            os.environ.get("AIC_OFFICIAL_TEACHER_PREINSERT_SERVO_DEADBAND_M", "0.00025")
+        )
+        servo_update_speed_mps = float(
+            os.environ.get(
+                "AIC_OFFICIAL_TEACHER_PREINSERT_SERVO_UPDATE_SPEED_MPS",
+                str(speed_threshold),
+            )
+        )
+        desired_lateral_offset_base = (
+            np.asarray(lateral_offset_base, dtype=np.float64)
+            if lateral_offset_base is not None
+            else np.zeros(3, dtype=np.float64)
+        )
+        desired_target_pose = None
         while (self.time_now() - started) < Duration(seconds=timeout_sec):
             try:
-                target_pose = self._calc_cheatcode_gripper_pose(
+                desired_target_pose = self._calc_cheatcode_gripper_pose(
                     task,
                     port_transform,
                     slerp_fraction=1.0,
@@ -951,10 +977,43 @@ class OfficialTeacherReplay(Policy):
                     z_offset=z_offset,
                     reset_xy_integrator=True,
                     preserve_current_z=preserve_current_z,
-                    lateral_offset_base=lateral_offset_base,
+                    lateral_offset_base=desired_lateral_offset_base,
                 )
                 if target_z_m is not None:
-                    target_pose.position.z = float(target_z_m)
+                    desired_target_pose.position.z = float(target_z_m)
+                target_pose = desired_target_pose
+                if servo_compensation_enabled:
+                    try:
+                        current_pose_for_servo = self._current_tcp_pose()
+                        current_xyz_for_servo = self._pose_position_array(current_pose_for_servo)
+                        desired_xyz_for_servo = self._pose_position_array(desired_target_pose)
+                        lateral_error_for_servo = current_xyz_for_servo - desired_xyz_for_servo
+                        speed_for_servo = self._tcp_speed_norm(get_observation)
+                        update_ok = speed_for_servo is None or speed_for_servo <= servo_update_speed_mps
+                        if update_ok and float(np.linalg.norm(lateral_error_for_servo[:2])) > servo_deadband_m:
+                            step = -servo_gain * lateral_error_for_servo
+                            step[2] = 0.0
+                            step_norm = float(np.linalg.norm(step[:2]))
+                            if step_norm > servo_step_limit_m > 0.0:
+                                step *= servo_step_limit_m / step_norm
+                            servo_command_bias_base += step
+                            bias_norm = float(np.linalg.norm(servo_command_bias_base[:2]))
+                            if bias_norm > servo_max_bias_m > 0.0:
+                                servo_command_bias_base *= servo_max_bias_m / bias_norm
+                    except TransformException:
+                        pass
+                    target_pose = self._calc_cheatcode_gripper_pose(
+                        task,
+                        port_transform,
+                        slerp_fraction=1.0,
+                        position_fraction=1.0,
+                        z_offset=z_offset,
+                        reset_xy_integrator=True,
+                        preserve_current_z=preserve_current_z,
+                        lateral_offset_base=desired_lateral_offset_base + servo_command_bias_base,
+                    )
+                    if target_z_m is not None:
+                        target_pose.position.z = float(target_z_m)
                 hold_command_mode = os.environ.get(
                     "AIC_OFFICIAL_TEACHER_PREINSERT_HOLD_COMMAND_MODE",
                     "absolute",
@@ -966,8 +1025,14 @@ class OfficialTeacherReplay(Policy):
             except TransformException as ex:
                 self.get_logger().warn(f"Pre-insertion tracking-gate TF lookup failed: {ex}")
                 target_pose = None
-            final_error = self._tracking_error_norm(get_observation)
-            gate_source = "controller_tcp_error"
+                desired_target_pose = None
+            final_error = None
+            if servo_compensation_enabled and desired_target_pose is not None:
+                final_error = self._pose_position_error_norm(desired_target_pose)
+                gate_source = "tf_desired_pose_error_servo"
+            if final_error is None:
+                final_error = self._tracking_error_norm(get_observation)
+                gate_source = "controller_tcp_error"
             if final_error is None and target_pose is not None:
                 final_error = self._pose_position_error_norm(target_pose)
                 gate_threshold = float(
@@ -981,12 +1046,18 @@ class OfficialTeacherReplay(Policy):
                 try:
                     current_pose_for_gate = self._current_tcp_pose()
                     current_xyz_for_gate = self._pose_position_array(current_pose_for_gate)
-                    target_xyz_for_gate = self._pose_position_array(target_pose)
+                    desired_pose_for_gate = desired_target_pose if desired_target_pose is not None else target_pose
+                    target_xyz_for_gate = self._pose_position_array(desired_pose_for_gate)
                     final_lateral_error = float(
                         np.linalg.norm((current_xyz_for_gate - target_xyz_for_gate)[:2])
                     )
+                    commanded_xyz_for_gate = self._pose_position_array(target_pose)
+                    final_commanded_lateral_error = float(
+                        np.linalg.norm((current_xyz_for_gate - commanded_xyz_for_gate)[:2])
+                    )
                 except TransformException:
                     final_lateral_error = None
+                    final_commanded_lateral_error = None
             speed_ok = final_speed is None or final_speed <= speed_threshold
             force_ok = final_force_delta < force_threshold
             lateral_ok = (
@@ -1022,8 +1093,11 @@ class OfficialTeacherReplay(Policy):
             plug_transform = None
         if current_pose is not None and target_pose is not None:
             current_xyz = self._pose_position_array(current_pose)
-            target_xyz = self._pose_position_array(target_pose)
+            desired_pose_for_gate = desired_target_pose if desired_target_pose is not None else target_pose
+            target_xyz = self._pose_position_array(desired_pose_for_gate)
             final_lateral_error = float(np.linalg.norm((current_xyz - target_xyz)[:2]))
+            commanded_xyz = self._pose_position_array(target_pose)
+            final_commanded_lateral_error = float(np.linalg.norm((current_xyz - commanded_xyz)[:2]))
         self._trace_event(
             "tracking_gate_checked",
             tracking_gate_passed=passed,
@@ -1040,8 +1114,14 @@ class OfficialTeacherReplay(Policy):
             ft_threshold_n=self._ft_threshold_n,
             force_gate_threshold_n=force_threshold,
             force_gate_fraction=force_fraction,
+            servo_compensation_enabled=servo_compensation_enabled,
+            servo_command_bias_base_m=servo_command_bias_base.tolist()
+            if servo_compensation_enabled
+            else None,
+            final_commanded_lateral_error_m=final_commanded_lateral_error,
             current_tcp_pose=self._pose_to_trace_dict(current_pose),
             target_tcp_pose=self._pose_to_trace_dict(target_pose),
+            desired_target_tcp_pose=self._pose_to_trace_dict(desired_target_pose),
             pinned_target_z_m=target_z_m,
             lateral_offset_base=(
                 np.asarray(lateral_offset_base, dtype=np.float64).tolist()

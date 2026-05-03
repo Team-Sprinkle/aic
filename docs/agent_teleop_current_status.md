@@ -1481,6 +1481,150 @@ outputs/expert_debug/nominal_z45_ft25_lateral1mm_batch3_v1_20260502T213217Z
 
 Strict nominal batch with `AIC_OFFICIAL_TEACHER_TRACKING_GATE_MAX_LATERAL_ERROR_M=0.001` rejected all three candidates before descent. Final lateral residuals were about `3.70 mm`, `1.78 mm`, and `1.55 mm`. This supports the video diagnosis: high-scoring nominal is possible only when the final pose happens to be accurate, but the current transport/handoff cannot reliably hit a sub-millimeter lateral target. The next nominal improvement should be deterministic final-pose refinement or a near-preinsert target computed from plug/port pose, not force-threshold tuning.
 
+## 2026-05-02 Late Iteration: Servo Gate and Reliability Results
+
+Code changes:
+
+- Added optional preinsert servo compensation in `OfficialTeacherReplay._hold_preinsert_until_tracking_gate`.
+- The gate now can compare actual TCP against the desired port-centered target while commanding a bounded biased target. This mitigates the inherent controller residual where the robot settles `1.5-3.7 mm` away from the desired lateral pose even while repeatedly receiving the same target.
+- New env knobs:
+
+```text
+AIC_OFFICIAL_TEACHER_PREINSERT_SERVO_COMPENSATION=true
+AIC_OFFICIAL_TEACHER_PREINSERT_SERVO_GAIN=<float>
+AIC_OFFICIAL_TEACHER_PREINSERT_SERVO_STEP_LIMIT_M=<meters>
+AIC_OFFICIAL_TEACHER_PREINSERT_SERVO_MAX_BIAS_M=<meters>
+AIC_OFFICIAL_TEACHER_PREINSERT_SERVO_DEADBAND_M=<meters>
+AIC_OFFICIAL_TEACHER_PREINSERT_SERVO_UPDATE_SPEED_MPS=<m/s>
+```
+
+This is opt-in and defaults off.
+
+Nominalrecovery reliability:
+
+```text
+outputs/expert_debug/nominalrecovery_z45_ft25_fastbackoff2x_release25_confirm10_reliability3_v1_20260502T225652Z
+```
+
+This is the best current nominalrecovery setting. It accepted `3/3` with scores:
+
+```text
+attempt 1: 92.2167, insertion=true, contact=false, force_penalty=false
+attempt 2: 92.2313, insertion=true, contact=false, force_penalty=false
+attempt 3: 87.5147, insertion=true, contact=true, backoff=true, backoff_distance=0.030 m, force_release=true, force_penalty=false
+```
+
+The key change versus the failed `ft=2.0/release=1.5` reliability batch was using `ft-threshold=2.5`, `recovery-release-force-threshold=2.5`, and `force-confirm-sec=0.10`. The stricter release threshold at `1.5 N` made recovery wait fail even after a full `60 mm` backoff. Matching release to `2.5 N` allowed recovery attempt 3 to back off `30 mm`, release, retry, and insert.
+
+Central videos:
+
+```text
+/home/ubuntu/ws_aic/src/aic/outputs/expert_debug/nominalrecovery_z45_ft25_fastbackoff2x_release25_confirm10_reliability3_v1_20260502T225652Z/replay_attempts/attempt_000001_candidate_00/dataset/videos/observation.images.center_camera/chunk-000/file-000.mp4
+/home/ubuntu/ws_aic/src/aic/outputs/expert_debug/nominalrecovery_z45_ft25_fastbackoff2x_release25_confirm10_reliability3_v1_20260502T225652Z/replay_attempts/attempt_000002_candidate_01/dataset/videos/observation.images.center_camera/chunk-000/file-000.mp4
+/home/ubuntu/ws_aic/src/aic/outputs/expert_debug/nominalrecovery_z45_ft25_fastbackoff2x_release25_confirm10_reliability3_v1_20260502T225652Z/replay_attempts/attempt_000003_candidate_02/dataset/videos/observation.images.center_camera/chunk-000/file-000.mp4
+```
+
+Compacted state/action datasets:
+
+```text
+/home/ubuntu/ws_aic/src/aic/outputs/expert_debug/nominalrecovery_z45_ft25_fastbackoff2x_release25_confirm10_reliability3_v1_20260502T225652Z/replay_attempts/attempt_000001_candidate_00/dataset_compacted_stalls_cadence15_v1
+/home/ubuntu/ws_aic/src/aic/outputs/expert_debug/nominalrecovery_z45_ft25_fastbackoff2x_release25_confirm10_reliability3_v1_20260502T225652Z/replay_attempts/attempt_000002_candidate_01/dataset_compacted_stalls_cadence15_v1
+/home/ubuntu/ws_aic/src/aic/outputs/expert_debug/nominalrecovery_z45_ft25_fastbackoff2x_release25_confirm10_reliability3_v1_20260502T225652Z/replay_attempts/attempt_000003_candidate_02/dataset_compacted_stalls_cadence15_v1
+```
+
+Compaction results:
+
+```text
+attempt 1: 1209 -> 778 frames, 13 cadence windows removed
+attempt 2: 1226 -> 806 frames, 12 cadence windows removed
+attempt 3: 1993 -> 925 frames, 33 cadence windows removed
+```
+
+Nominal servo findings:
+
+```text
+outputs/expert_debug/nominal_z45_ft25_servo_gate1mm_probe_v2_20260502T232259Z
+```
+
+This single-run probe succeeded with score `92.038`, insertion reached, no contact, and no force penalty. The servo gate reduced desired lateral error to about `0.58-0.62 mm` before descent. The command target had to be biased by about `3.6-3.8 mm`, confirming that the inherent controller makes precise final positioning difficult without active compensation.
+
+However, the same settings failed the 3-run reliability check:
+
+```text
+outputs/expert_debug/nominal_z45_ft25_servo_gate1mm_reliability3_v1_20260502T232712Z
+```
+
+Results: `0/3` accepted. Attempt 1 passed the gate then contacted at `2.61 N` around `z_offset=0.0373`; attempts 2 and 3 were rejected by strict lateral/speed gates around `1.12-1.21 mm`.
+
+GPT-5 central-camera analysis for attempt 1:
+
+```text
+/home/ubuntu/ws_aic/src/aic/outputs/expert_debug/nominal_z45_ft25_servo_gate1mm_reliability3_v1_20260502T232712Z/replay_attempts/attempt_000001_candidate_00/gpt5_replay_analysis/analysis.md
+```
+
+GPT-5 concluded that the plug reached the cage entrance but was slightly high and with small attitude mismatch; postprocessing cannot create success from this because the trial never achieved insertion or a useful recovery cycle. It recommended gating live-Z/guarded descent more strictly and using a better aligned transport target.
+
+Vertical-bias nominal follow-up:
+
+```text
+outputs/expert_debug/nominal_z45_ft25_servo_lowbias_cap4_probe_v1_20260502T233838Z
+```
+
+`AIC_OFFICIAL_TEACHER_PREINSERT_VERTICAL_BIAS_M=-0.0015` made nominal worse: it contacted earlier at about `z_offset=0.0422`.
+
+```text
+outputs/expert_debug/nominal_z45_ft25_servo_upbias_cap4_probe_v1_20260502T234221Z
+```
+
+`AIC_OFFICIAL_TEACHER_PREINSERT_VERTICAL_BIAS_M=0.0015` improved the single-run case: score `90.882`, insertion reached, no contact, no force penalty.
+
+```text
+outputs/expert_debug/nominal_z45_ft25_servo_upbias_cap4_reliability3_v1_20260502T234656Z
+```
+
+The 3-run reliability batch still accepted only `1/3`:
+
+```text
+attempt 1: rejected before descent, gate speed/lateral marginal
+attempt 2: accepted, score 91.316, insertion=true, force_penalty=false
+attempt 3: gate passed, then teacher contact at 2.56 N around z_offset=0.0446
+```
+
+Accepted nominal central video:
+
+```text
+/home/ubuntu/ws_aic/src/aic/outputs/expert_debug/nominal_z45_ft25_servo_upbias_cap4_reliability3_v1_20260502T234656Z/replay_attempts/attempt_000002_candidate_01/dataset/videos/observation.images.center_camera/chunk-000/file-000.mp4
+```
+
+Compacted accepted nominal dataset:
+
+```text
+/home/ubuntu/ws_aic/src/aic/outputs/expert_debug/nominal_z45_ft25_servo_upbias_cap4_reliability3_v1_20260502T234656Z/replay_attempts/attempt_000002_candidate_01/dataset_compacted_stalls_cadence15_v1
+```
+
+Compaction reduced `1396 -> 1068` frames and removed `7` cadence windows.
+
+Relaxed nominal threshold follow-up:
+
+```text
+outputs/expert_debug/nominal_z45_ft30_servo_upbias_cap4_reliability3_v1_20260502T235740Z
+```
+
+This accepted `0/3`. Raising the teacher contact threshold to `3.0 N` did not solve nominal; it allowed deeper contacts but still did not produce insertion reliably. This supports the current conclusion: nominal cannot be made reliably 3/3 by threshold tuning alone.
+
+Current mode assessment:
+
+- `nominalrecovery`: reliable enough for high-score generation with the `ft=2.5/release=2.5/confirm=0.10`, fast-backoff, retry-gate setting above. It produced `3/3`, including one real recovery.
+- `nominal`: can generate high-score single runs, but is not reliable `3/3`. The remaining failures are slight face/chamfer contacts or marginal settle gates. Because nominal has no recovery path, these cannot be repaired online once contact happens.
+
+Recommended next engineering step:
+
+1. Keep the servo compensation; it is useful and directly mitigates controller residual.
+2. Add a pose/attitude gate, not only lateral XYZ: compare plug and port orientation before descent and reject/regenerate if pitch/roll error is above about `1.0-1.5 deg`.
+3. Implement the smoother aligned transport target from plug/port TFs: stop at a port-normal preinsert pose with positive vertical bias and near-zero speed, then descend. This should replace the current coarse handoff as the nominal path.
+4. For nominalrecovery, keep the successful settings and use compacted datasets for policy conversion/replay. Recovery is where robust high-score data can be generated now.
+5. For nominal, accept that `3/3` is not achieved yet; use the successful nominal folders for examples, but do not claim reliability until the pose/attitude gate and aligned transport target are implemented.
+
 ## Tests Last Run
 
 After the latest code changes:

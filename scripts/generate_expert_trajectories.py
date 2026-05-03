@@ -467,12 +467,15 @@ def _live_debug_assessment(smooth, replay_metrics: dict) -> dict:
     ]
     runtime_trace_path = Path(str(replay_metrics.get("runtime_trace_path", "")))
     runtime_events = []
+    malformed_runtime_event_lines = 0
     if runtime_trace_path.exists():
-        runtime_events = [
-            json.loads(line)
-            for line in runtime_trace_path.read_text(encoding="utf-8").splitlines()
-            if line.strip()
-        ]
+        for line in runtime_trace_path.read_text(encoding="utf-8").splitlines():
+            if not line.strip():
+                continue
+            try:
+                runtime_events.append(json.loads(line))
+            except json.JSONDecodeError:
+                malformed_runtime_event_lines += 1
     max_guarded_speed = phase_speed.get("max_guarded_insert_speed_mps")
     gate_events = [event for event in runtime_events if event.get("event") == "tracking_gate_checked"]
     gate_repair_events = [
@@ -500,6 +503,7 @@ def _live_debug_assessment(smooth, replay_metrics: dict) -> dict:
         "schema_version": "aic_expert_live_debug_assessment/v1",
         "phase_speed_metrics": phase_speed,
         "runtime_event_count": len(runtime_events),
+        "malformed_runtime_event_lines": malformed_runtime_event_lines,
         "tracking_gate_checked": bool(gate_events),
         "tracking_gate_passed": tracking_gate_passed,
         "tracking_gate_repaired_with_live_z_offset": bool(gate_repair_events),
