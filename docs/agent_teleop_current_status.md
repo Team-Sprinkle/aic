@@ -1617,6 +1617,59 @@ Current mode assessment:
 - `nominalrecovery`: reliable enough for high-score generation with the `ft=2.5/release=2.5/confirm=0.10`, fast-backoff, retry-gate setting above. It produced `3/3`, including one real recovery.
 - `nominal`: can generate high-score single runs, but is not reliable `3/3`. The remaining failures are slight face/chamfer contacts or marginal settle gates. Because nominal has no recovery path, these cannot be repaired online once contact happens.
 
+User inspection of the three nominalrecovery videos:
+
+- The nominalrecovery trajectories still need a real physical backoff after gate collision. In the recovery video, after collision with the gate, the force Z component releases only after about `1 s`, which is too slow.
+- Visually, the Z position does not appear to actually back off enough even though the runtime trace records commanded backoff stages. Treat this as a trace-vs-video discrepancy: the next session should verify actual per-frame TCP Z and wrist force Z around contact/backoff, not only `recovery_backoff_completed` events.
+- Insertion is too slow once the plug starts inserting. The successful videos are safe, but the guarded insertion phase is visibly slower than desired and is losing score through duration.
+- The next session should focus on making recovery reaction immediate and physically visible: stop on threshold, command an actual Z/port-normal retreat that can be observed in TCP state and central video, verify force-Z release quickly, then retry insertion at a slightly faster but still force-safe speed.
+
+Where points are lost in the three nominalrecovery trajectories:
+
+```text
+attempt 1 total: 92.2167
+  tier_1 model validation: 1 / 1
+  tier_3 insertion: 75 / 75
+  tier_2 subtotal: 16.2167
+  duration: 5.4017, task duration 35.24 s
+  trajectory efficiency: 5.8153, path length 0.17 m
+  trajectory smoothness: 4.9996, average linear jerk 8.34 m/s^3
+  contacts/insertion force: no penalty
+
+attempt 2 total: 92.2313
+  tier_1 model validation: 1 / 1
+  tier_3 insertion: 75 / 75
+  tier_2 subtotal: 16.2313
+  duration: 5.4148, task duration 35.18 s
+  trajectory efficiency: 5.8050, path length 0.17 m
+  trajectory smoothness: 5.0115, average linear jerk 8.24 m/s^3
+  contacts/insertion force: no penalty
+
+attempt 3 total: 87.5147
+  tier_1 model validation: 1 / 1
+  tier_3 insertion: 75 / 75
+  tier_2 subtotal: 11.5147
+  duration: 0.7911, task duration 56.37 s
+  trajectory efficiency: 5.6685, path length 0.19 m
+  trajectory smoothness: 5.0551, average linear jerk 7.87 m/s^3
+  contacts/insertion force: no penalty
+```
+
+Interpretation: all three get full insertion credit and no contact/force penalty. The main point loss is duration. Attempt 3 loses much more because recovery/backoff/retry adds about `21 s` versus attempts 1 and 2. Efficiency is slightly worse for attempt 3 because the path is longer (`0.19 m` vs `0.17 m`). Smoothness is similar across all three and is not the dominant loss.
+
+Handoff notes for the next Codex session:
+
+1. Start from the documented successful nominalrecovery folder:
+
+```text
+/home/ubuntu/ws_aic/src/aic/outputs/expert_debug/nominalrecovery_z45_ft25_fastbackoff2x_release25_confirm10_reliability3_v1_20260502T225652Z
+```
+
+2. Do not assume the existing backoff is physically sufficient just because trace events say `backoff_distance_achieved_m=0.03`. Inspect actual dataset state around attempt 3 contact at `time_sec=27.418`, then compare TCP Z, force Z, and commanded target Z until force release.
+3. Make backoff reaction faster and more explicit. Candidate changes: shorten the response latency, increase backoff velocity, log measured TCP Z at each backoff stage completion, and gate release on measured force-Z decay plus measured retreat distance.
+4. Make insertion modestly faster after alignment. The latest safe runs have max guarded insertion speeds around `0.0080-0.0085 m/s`; try a controlled increase and re-evaluate official duration/force/smoothness.
+5. Keep stall compaction for policy conversion, but do not rely on compaction to fix missing physical backoff. The first-trial recovery must show observable retreat and quick force release.
+
 Recommended next engineering step:
 
 1. Keep the servo compensation; it is useful and directly mitigates controller residual.
