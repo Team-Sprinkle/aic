@@ -1655,7 +1655,7 @@ attempt 3 total: 87.5147
   contacts/insertion force: no penalty
 ```
 
-Interpretation: all three get full insertion credit and no contact/force penalty. The main point loss is duration. Attempt 3 loses much more because recovery/backoff/retry adds about `21 s` versus attempts 1 and 2. Efficiency is slightly worse for attempt 3 because the path is longer (`0.19 m` vs `0.17 m`). Smoothness is similar across all three and is not the dominant loss.
+Interpretation: all three get full insertion credit and no contact/force penalty. The main point loss is duration. Attempt 3 loses much more because recovery/backoff/retry adds about `21 s` versus attempts 1 and 2. Efficiency is slightly worse for attempt 3 because the path is longer (`0.19 m` vs `0.17 m`). Smoothness is similar across all three and is not the dominant loss. Duration should be improved in two places: online recovery should react and retry faster, and the postprocessor should more aggressively find stall intervals, remove them, retime the retained trajectory, and smooth across the removed intervals before policy replay.
 
 Handoff notes for the next Codex session:
 
@@ -1668,7 +1668,8 @@ Handoff notes for the next Codex session:
 2. Do not assume the existing backoff is physically sufficient just because trace events say `backoff_distance_achieved_m=0.03`. Inspect actual dataset state around attempt 3 contact at `time_sec=27.418`, then compare TCP Z, force Z, and commanded target Z until force release.
 3. Make backoff reaction faster and more explicit. Candidate changes: shorten the response latency, increase backoff velocity, log measured TCP Z at each backoff stage completion, and gate release on measured force-Z decay plus measured retreat distance.
 4. Make insertion modestly faster after alignment. The latest safe runs have max guarded insertion speeds around `0.0080-0.0085 m/s`; try a controlled increase and re-evaluate official duration/force/smoothness.
-5. Keep stall compaction for policy conversion, but do not rely on compaction to fix missing physical backoff. The first-trial recovery must show observable retreat and quick force release.
+5. Improve the postprocessor for duration reduction. It should be more effective at detecting stall intervals in cadence-sized chunks, deleting those intervals, retiming actions from the retained state sequence, and smoothing globally across the deletion boundaries while preserving the final insertion segment. The long duration in these successful nominalrecovery runs is exactly the kind of score loss the postprocessor should reduce.
+6. Keep stall compaction for policy conversion, but do not rely on compaction to fix missing physical backoff. The first-trial recovery must show observable retreat and quick force release.
 
 Recommended next engineering step:
 
