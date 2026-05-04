@@ -17,7 +17,7 @@ Usage:
 
 Options:
   --episode-index, -e   Accepted dataset episode index (0-indexed, required)
-  --all, -a             Print full mapping table for all accepted episodes
+  --all, -a             Print episode-to-trial mapping table for all accepted episodes
   --dataset-root, -d    Dataset root directory (default: n170__first_batch_resume)
   --manifest-csv, -m    accepted.csv path (default: <dataset-root>/manifests/accepted.csv)
   --help, -h            Show help
@@ -29,6 +29,8 @@ Output:
   Prints key-value lines:
     accepted_episode_index
     trial_id
+    target_module_name
+    port_name
     trial_yaml_path
     source_episode_index
     run_index
@@ -86,23 +88,25 @@ NR==1 {
   for (i=1; i<=NF; i++) h[$i]=i
   required[1]="accepted_episode_index"
   required[2]="trial_id"
-  required[3]="trial_yaml_path"
-  required[4]="source_episode_index"
-  required[5]="run_index"
-  required[6]="status"
-  required[7]="total_score"
+  required[3]="target_module_name"
+  required[4]="port_name"
+  required[5]="trial_yaml_path"
+  required[6]="source_episode_index"
+  required[7]="run_index"
+  required[8]="status"
+  required[9]="total_score"
   for (i in required) {
     if (!(required[i] in h)) {
       printf("Error: missing required column: %s\n", required[i]) > "/dev/stderr"
       exit 3
     }
   }
-  print "accepted_episode_index,trial_id,trial_yaml_path,source_episode_index,run_index,status,total_score"
+  print "accepted_episode_index,trial_id,target_module_name,port_name"
   next
 }
 {
   found=1
-  printf("%s,%s,%s,%s,%s,%s,%s\n", $h["accepted_episode_index"], $h["trial_id"], $h["trial_yaml_path"], $h["source_episode_index"], $h["run_index"], $h["status"], $h["total_score"])
+  printf("%s,%s,%s,%s\n", $h["accepted_episode_index"], $h["trial_id"], $h["target_module_name"], $h["port_name"])
 }
 END {
   if (!found) {
@@ -120,11 +124,13 @@ NR==1 {
   for (i=1; i<=NF; i++) h[$i]=i
   required[1]="accepted_episode_index"
   required[2]="trial_id"
-  required[3]="trial_yaml_path"
-  required[4]="source_episode_index"
-  required[5]="run_index"
-  required[6]="status"
-  required[7]="total_score"
+  required[3]="target_module_name"
+  required[4]="port_name"
+  required[5]="trial_yaml_path"
+  required[6]="source_episode_index"
+  required[7]="run_index"
+  required[8]="status"
+  required[9]="total_score"
   for (i in required) {
     if (!(required[i] in h)) {
       printf("Error: missing required column: %s\n", required[i]) > "/dev/stderr"
@@ -137,6 +143,8 @@ $h["accepted_episode_index"] == e {
   found=1
   printf("accepted_episode_index=%s\n", $h["accepted_episode_index"])
   printf("trial_id=%s\n", $h["trial_id"])
+  printf("target_module_name=%s\n", $h["target_module_name"])
+  printf("port_name=%s\n", $h["port_name"])
   printf("trial_yaml_path=%s\n", $h["trial_yaml_path"])
   printf("source_episode_index=%s\n", $h["source_episode_index"])
   printf("run_index=%s\n", $h["run_index"])
