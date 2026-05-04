@@ -26,11 +26,148 @@ the official ROS/Gazebo environment with no VLM calls. The LeRobot recorder
 records this deterministic replay through the same path used for CheatCode and
 teleop data.
 
+## Current working pipeline
+
+As of the May 4, 2026 reliability pass, the working expert-data pipeline is:
+
+1. Launch a live planner recording pass with
+   `aic_teacher_official.OfficialExpertGeneratorPlanner`.
+2. Capture live task context from the official ROS/Gazebo stack: TFs, current
+   TCP pose, plug/port transforms, wrist force baseline, camera observations,
+   and task config.
+3. Ask GPT-5-mini only for high-level scene strategy and cable-risk reasoning.
+   The VLM does not output executable Cartesian waypoints, joint targets, or
+   final insertion motions.
+4. Generate deterministic candidate staging/pre-insertion targets from the live
+   task context.
+5. Use MoveItPy for required free-space transport planning to the staging pose.
+   If MoveIt is unavailable or cannot plan, the candidate is rejected; there is
+   no geometric fallback for free-space transport.
+6. Write the planner result as `piecewise_trajectory.json`, then postprocess it
+   to `smooth_trajectory.json`.
+7. Replay with `aic_teacher_official.OfficialTeacherReplay` in
+   `joint_position_then_cheatcode` mode: MoveIt transport is replayed in joint
+   space, then the final approach/insertion switches to online
+   CheatCode-style Cartesian geometry.
+8. Before descent, run local preinsert alignment, precontact port alignment,
+   and tracking gates using live TF, TCP speed, and force deltas.
+9. During guarded insertion, use F/T trend and threshold checks to decide
+   whether to continue, hold/re-align, back off, retry, or reject.
+10. Record the official replay with the existing LeRobot recorder and parse the
+    official scoring YAML. GPT-5 failure analysis is run only after the episode,
+    using sampled images and runtime traces.
+
+The current stable command shape is:
+
+```bash
+env AIC_OFFICIAL_TEACHER_ENABLE_LIVE_Z_REPAIR=false \
+    AIC_OFFICIAL_TEACHER_RECOVERY_BACKOFF_MODE=tcp_away_from_port \
+    pixi run python scripts/generate_expert_trajectories.py \
+      --nominalrecovery \
+      --target-accepted-trajectories 3 \
+      --max-total-attempts 6 \
+      --candidates-per-scene 2 \
+      --score-threshold 96 \
+      --ft-threshold 2.0 \
+      --config outputs/trajectory_datasets/sfp_to_nic/cheatcode/nic_cards_1/n1__test_n3/engine_config.yaml \
+      --output-dir outputs/expert_debug/<run_name> \
+      --strategy-model gpt-5-mini \
+      --analysis-model gpt-5 \
+      --debug \
+      --moveit-required true \
+      --backup-distance-m 0.02 \
+      --backoff-increment-m 0.006 \
+      --backoff-stage-sec 0.5 \
+      --min-backoff-distance-m 0.002 \
+      --max-retries 2 \
+      --recovery-release-force-threshold 2.0 \
+      --force-confirm-sec 0.10 \
+      --gazebo-gui false \
+      --launch-rviz false \
+      --startup-delay-sec 12 \
+      --recorder-drain-sec 120 \
+      --planner-recorder-drain-sec 45 \
+      --per-trial-timeout-sec 0 \
+      --launch-moveit true
+```
+
+The latest verified reliability run was:
+
+```text
+outputs/expert_debug/vlm_backoff_reliability_cycle10
+```
+
+It produced three successful official replays:
+
+```text
+attempt_000001_candidate_00: 97.035335987039559
+attempt_000002_candidate_01: 97.038856798717887
+attempt_000003_candidate_00: 97.056801265524768
+```
+
+All three reached insertion, had no official force penalty, and did not need a
+runtime backoff. The center-camera videos are:
+
+```text
+outputs/expert_debug/vlm_backoff_reliability_cycle10/replay_attempts/attempt_000001_candidate_00/dataset/videos/observation.images.center_camera/chunk-000/file-000.mp4
+outputs/expert_debug/vlm_backoff_reliability_cycle10/replay_attempts/attempt_000002_candidate_01/dataset/videos/observation.images.center_camera/chunk-000/file-000.mp4
+outputs/expert_debug/vlm_backoff_reliability_cycle10/replay_attempts/attempt_000003_candidate_00/dataset/videos/observation.images.center_camera/chunk-000/file-000.mp4
+```
+
+GPT-5 post-run feedback for the best run is saved at:
+
+```text
+outputs/expert_debug/vlm_backoff_reliability_cycle10/replay_attempts/attempt_000003_candidate_00/gpt5_replay_analysis_center/analysis.md
+```
+
+## What worked and what did not
+
+What worked:
+
+- Keeping the VLM at the strategy/critique level and leaving executable motion
+  to MoveIt, deterministic geometry, and guarded replay.
+- Replaying MoveIt transport in joint space and switching to online
+  CheatCode-style Cartesian insertion near the port.
+- Disabling live-Z repair by default for the stable runs. Live-Z repair can be
+  useful only if strongly gated by lateral error and force context.
+- A 5-sample force median window with centers separated by 5 control samples
+  (`250 ms`) for trend checks. This reduces false positives from single noisy
+  force samples.
+- Preinsert servo compensation with a small cap (`1.5 mm`) and a slightly
+  relaxed lateral tracking gate (`2.2 mm`) before final insertion.
+- Treating precontact force aborts as recovery/retry opportunities instead of
+  immediate terminal failures in nominalrecovery.
+- Requiring measured physical backoff, not just commanded backoff. The current
+  minimum measured retreat is `2 mm`; this catches cases where the controller is
+  pinned against the face and the commanded target is not actually reached.
+- Stopping above-contact descent when force is already meaningful but below the
+  hard contact threshold. The default soft realign threshold is now `2.0 N`,
+  preventing long pushes at `2-5 N` before a harder collision.
+
+What did not work:
+
+- Letting the VLM or planner own fine insertion motion. The successful path uses
+  deterministic port/plug geometry for final insertion.
+- Assuming command traces prove recovery. Several failed runs logged commanded
+  backoff but measured less than `1 mm` of TCP retreat.
+- A strict `4 mm` required measured-backoff threshold. One run measured about
+  `2.38 mm` of actual retreat and released force; rejecting that was too strict
+  for the current controller and task geometry.
+- Ignoring above-contact force until the early-contact threshold (`5 N`). Runs
+  that sat at `2-4.8 N` above the port eventually pinned hard enough that
+  recovery could not retreat.
+- Treating precontact port-align force abort as terminal. It should trigger
+  the same backoff/realign/retry machinery in nominalrecovery.
+- Threshold tuning alone. Raising F/T thresholds may hide early contact but does
+  not fix bad lateral alignment or pinned recovery.
+- Running with stale `aic_model`/recorder processes. Orphaned policy processes
+  caused repeated model-validation failures unrelated to the replay policy.
+
 ## Piecewise vs continuous trajectory
 
-The oracle can emit coarse or piecewise-continuous waypoints:
+Legacy oracle/debug paths can emit coarse or piecewise-continuous waypoints:
 
-- VLM-derived approach waypoints for scene understanding and obstacle avoidance.
+- symbolic VLM strategy metadata for scene understanding and cable-risk notes.
 - Optimizer-derived alignment waypoints where local constraints matter.
 - CheatCode-derived final insertion waypoints once port and plug geometry are
   known.
@@ -42,7 +179,9 @@ minimum-jerk helper available for future time scaling. This avoids the
 stop-and-go behavior of independent local segments while still giving strictly
 increasing timestamps, continuous position, continuous velocity at piece
 boundaries, explicit phase labels, and TODOs for a future constrained
-spline/trajectory optimizer.
+spline/trajectory optimizer. The current high-scoring generator does not use
+VLM-emitted executable waypoints; it uses MoveIt joint-space transport plus
+online geometric alignment, guarded insertion, and recovery.
 
 ## Hybrid VLM and CheatCode insertion
 
@@ -90,20 +229,20 @@ state during execution.
 documented `Policy.set_pose_target()` path and the `WaveArm` example.
 
 For nominalrecovery/recovery backoff, the command-frame rule is more specific:
-compute the desired retreat as a TCP/tool-frame delta from force history, then
-convert it once to an absolute `base_link` target and resend that same target
-for the latch window. Do not stream a one-shot delta and then resume insertion
-immediately. The LeRobot recorder should still store delta-pose labels; when it
-sees a `base_link` absolute target, it converts that target into the current
-TCP-frame remaining delta before writing `action`.
+the retreat direction is computed relative to the TCP/tool and port geometry,
+but success is judged in measured `base_link` TCP motion. The current
+nominalrecovery default commands staged `gripper/tcp` deltas along
+`tcp_away_from_port`, tracks actual TCP displacement, and requires at least
+`2 mm` measured retreat before retry. Commanded backoff distance is not enough:
+if measured retreat is too small, the replay policy tries a measured-backoff
+fallback lift and rejects if the TCP remains pinned. The LeRobot recorder should
+still store delta-pose labels for learned-policy compatibility.
 
-The May 3 isolated debug run `outputs/debug_cheatcode_modified/run20` is the
-current reference. It used a `1.7 N` force-vector-drop trigger and the original
-backoff gains `[90,90,90,50,50,50]` / `[50,50,50,20,20,20]`. The successful
-trigger commanded `delta_base.z=+0.01135 m` and measured about `+3.3 mm` actual
-base-z retreat. Earlier failed attempts sent a transformed backoff with negative
-base z, so the arm did not visibly back away even though a backoff command was
-logged.
+The May 3 isolated debug run `outputs/debug_cheatcode_modified/run20` remains a
+useful frame-direction reference. It used a `1.7 N` force-vector-drop trigger
+and measured about `+3.3 mm` actual base-z retreat. Later reliability work
+showed the more general lesson: video, recorded TCP state, and force release
+must agree before a recovery is considered correct.
 
 ## Commands
 
@@ -117,10 +256,11 @@ pixi run python scripts/official_teacher_generate_piecewise.py \
   --orientation-xyzw=1,0,0,0
 ```
 
-Generate with GPT-5 mini VLM planning. The prompt asks for Cartesian delta
-waypoints in `base_link`, not joints and not final insertion. Up to 20 planner
-calls are allowed by the CLI budget, but the current implementation uses one
-call per generated trajectory:
+Legacy standalone piecewise generation can still be exercised for debugging.
+Do not use this as the current expert-generator contract: the current
+`generate_expert_trajectories.py` path uses GPT-5-mini for symbolic strategy
+only and lets deterministic candidate generation plus MoveIt produce executable
+motion.
 
 ```bash
 pixi run python scripts/official_teacher_generate_piecewise.py \
@@ -141,11 +281,10 @@ pixi run python scripts/official_teacher_generate_piecewise.py \
   --use-vlm
 ```
 
-Without `--use-vlm`, the approach and alignment phases are `placeholder_vlm`
-and `placeholder_optimizer`. With `--use-vlm`, approach/alignment waypoints are
-`source: vlm`; the pre-insertion staging pose is optimizer-labelled; the final
-insertion waypoint remains deterministic geometry, `source: cheatcode`, and has
-diagnostics referencing `aic_example_policies/aic_example_policies/ros/CheatCode.py`.
+In the legacy standalone artifact format, the pre-insertion staging pose is
+optimizer-labelled; the final insertion waypoint remains deterministic
+geometry, `source: cheatcode`, and has diagnostics referencing
+`aic_example_policies/aic_example_policies/ros/CheatCode.py`.
 
 Postprocess the piecewise artifact:
 
@@ -344,13 +483,12 @@ pixi run python scripts/official_teacher_collect_review_context.py \
 
 - Automatic context extraction currently reads TF in a running official sim; it
   does not yet subscribe to full observations or task messages.
-- The VLM planner emits Cartesian delta waypoints, but the optimizer is still a
-  conservative pre-insertion staging adapter rather than a full constrained
-  trajectory optimizer.
-- Final insertion is CheatCode-style geometry with slow timing. The replay
-  policy also has an opt-in live final insertion mode via
-  `AIC_OFFICIAL_TEACHER_ONLINE_CHEATCODE_INSERTION=true`, but the best observed
-  official-teacher score so far came from the smooth slow-final replay path.
+- The current expert generator does not let the VLM emit executable waypoints.
+  Older standalone piecewise scripts still exist for debugging historical
+  artifacts and should not be treated as the production contract.
+- Final insertion is CheatCode-style geometry with guarded timing. The current
+  best VLM/MoveIt nominalrecovery path uses online CheatCode-style final
+  alignment/insertion after joint-space MoveIt transport.
 - Replay defaults to relative TCP deltas and falls back to absolute pose for a
   tick if TF lookup fails. Velocity-mode replay is not implemented yet.
 - Gazebo scene images and LeRobot action/force summaries are only referenced in

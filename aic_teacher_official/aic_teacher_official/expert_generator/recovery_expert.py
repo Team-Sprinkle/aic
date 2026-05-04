@@ -75,8 +75,9 @@ class RecoveryExpert:
             planning_result,
             insertion_depth_m=0.070,
             insertion_speed_mps=0.0009,
-            pre_insert_settle_sec=1.0,
-            handoff_blend_sec=2.0,
+            local_preinsert_align_sec=0.8,
+            pre_insert_settle_sec=0.35,
+            handoff_blend_sec=0.5,
         )
         mode_value = strategy.mode.value
         trajectory = PiecewiseTrajectory(

@@ -39,9 +39,9 @@ def append_cheatcode_insertion_segment(
     *,
     insertion_depth_m: float = 0.070,
     insertion_speed_mps: float = 0.0013,
-    local_preinsert_align_sec: float = 2.25,
-    pre_insert_settle_sec: float = 1.0,
-    handoff_blend_sec: float = 2.0,
+    local_preinsert_align_sec: float = 0.8,
+    pre_insert_settle_sec: float = 0.35,
+    handoff_blend_sec: float = 0.5,
 ) -> list[TrajectoryWaypoint]:
     if not approach.waypoints:
         raise ValueError("approach plan must contain at least one waypoint")

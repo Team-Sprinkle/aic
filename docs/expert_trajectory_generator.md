@@ -10,11 +10,11 @@ The expert generator has three explicit modes:
 - `nominalrecovery`: nominal-first demonstrations that may include labeled backoff, realign, and retry segments after slight contact or near-failure.
 - `recovery`: guarded recovery demonstrations for later HIL-SERL or online RL guidance.
 
-The VLM is not allowed to generate Cartesian waypoints, joint targets, velocities, or executable trajectories. GPT-5-mini is used only for scene understanding, cable sweep/collision risk assessment, and symbolic approach strategy. GPT-5 is reserved for offline critique/debug analysis.
+The VLM is not allowed to generate Cartesian waypoints, joint targets, velocities, or executable trajectories. GPT-5-mini is used only for scene understanding, cable sweep/collision risk assessment, and symbolic approach strategy. GPT-5 is reserved for offline critique/debug analysis after a full episode has been recorded.
 
 Free-space approach planning requires MoveIt. There is no geometric fallback. If MoveIt is unavailable or planning fails, the candidate is rejected and the generator records a structured failure.
 
-Final alignment and insertion use CheatCode-style ground-truth geometry. MoveIt is used only for obstacle-aware free-space motion to staging/pre-insertion poses. The handoff now has an explicit `local_preinsert_align` phase before settle and guarded insertion.
+Final alignment and insertion use CheatCode-style ground-truth geometry. MoveIt is used only for obstacle-aware free-space motion to staging/pre-insertion poses. The handoff now has explicit `local_preinsert_align`, precontact port-align, tracking-gate, and guarded-insertion phases before the final insertion event is expected.
 
 MoveIt approach plans are replayed in joint space. The MoveItPy backend extracts the planned joint trajectory, computes TCP poses for metadata/sampling, stores joint names/positions/velocities in the trajectory JSON, and the replay policy sends `JointMotionUpdate` commands until the final-insertion phase. Final insertion then switches to the existing online CheatCode-style Cartesian insertion.
 
@@ -94,16 +94,28 @@ Nominal mode does not use post-contact F/T correction, intentional probing, back
 Recovery generation starts like nominal mode through free-space approach. If the pre-insertion tracking gate fails, nominalrecovery/recovery performs one local realign and re-checks the gate; if the gate still fails, it rejects before descent. Once contact matters, it uses F/T data:
 
 1. Guarded insertion.
-2. If the short-horizon F/T delta trigger fires, stop descent immediately.
-3. Compute a TCP/tool-frame recovery delta from recent force history.
-4. Transform that delta once into `base_link`, require the axial component to retreat from the port, and build an absolute `base_link` target from the current TCP pose.
-5. Latch and resend the same absolute `base_link` target for `0.5-0.8 s`.
-6. Wait for force release before lateral realignment.
-7. Realign using CheatCode-style geometry.
-8. Retry insertion up to `max_retries`.
-9. If off-limit contact or validation failure remains, reject unless a later retry succeeds cleanly.
+2. If the 5-sample force median windows show a meaningful rise over a 250 ms
+   center gap, or the force threshold is exceeded in the contact zone, stop
+   descent immediately.
+3. If force is meaningful but still above the nominal contact zone, stop and
+   realign instead of continuing to push. The default soft realign threshold is
+   `2.0 N`; this prevents long `2-5 N` pushes that can pin the plug before
+   recovery starts.
+4. Command backoff in `gripper/tcp` using the `tcp_away_from_port` direction by
+   default, while measuring the actual TCP displacement in `base_link`.
+5. Require at least `2 mm` of measured physical retreat before accepting the
+   backoff. Commanded backoff alone is not sufficient.
+6. Require stable force release before lateral realignment. The strict release
+   check defaults to `1.0 N` for `0.25 s`, even if the CLI release threshold is
+   higher.
+7. If the first backoff command does not produce enough measured retreat, try a
+   measured-backoff fallback lift before giving up.
+8. Realign using CheatCode-style geometry and recovery gains.
+9. Retry insertion up to `max_retries`.
+10. If off-limit contact or validation failure remains, reject unless a later
+    retry succeeds cleanly.
 
-The May 3 `CheatCodeModified` debug runs clarified the required frame semantics. The force-derived correction should be computed as a delta in the TCP/tool-aligned frame, but execution backoff should not be streamed as a changing relative delta. It should be converted to one absolute `base_link` target and resent for the latch duration so the controller keeps trying to reach the same physical retreat point. For LeRobot/ACT data, the recorded action must still be a delta pose. The recorder therefore converts absolute `base_link` motion commands back into the current TCP-frame remaining delta at each frame.
+The May 3 `CheatCodeModified` debug runs clarified the required frame semantics. The force-derived correction should be interpreted relative to the tool/port, but recovery must be verified in the world frame by measured TCP motion. Trace events such as `backoff_distance_achieved_m` are command progress, not proof of physical retreat. A recovery is correct only when the recorded TCP state and force history show actual unloading.
 
 The successful isolated run is:
 
@@ -122,12 +134,36 @@ force L2 drop trigger: 1.7 N
 
 It triggered on `delta_force=[-0.328, -1.408, 1.560]`, produced `delta_base=[-0.00078, -0.00103, 0.01135]`, and measured about `+3.3 mm` actual base-z retreat over the backoff window. A stronger-gain diagnostic run reached a larger retreat, but the original gains were sufficient once the direction was corrected. This means nominalrecovery should first port the trigger/frame/latch behavior before changing controller gains.
 
-The previous implementation failed for four reasons:
+The earlier implementations failed for several reasons:
 
 - It overemphasized absolute force values even though the wrist force baseline is nonzero while holding the cable.
 - It allowed the transformed force-derived delta to point in negative `base_link.z`, which can command deeper insertion for this TCP orientation.
 - It did not always guarantee a latched fixed target; one-shot deltas are easy to erase or overwhelm with the surrounding insertion stream.
 - Trace events alone were misleading. The video and recorded TCP state must both show physical retreat before calling recovery correct.
+- It ignored above-contact force until too high a threshold. Runs that held
+  `2-4.8 N` above the port often became pinned before backoff could unload.
+- It treated precontact port-align force aborts and low-force lateral gate
+  misses as terminal failures. In nominalrecovery these now feed recovery
+  backoff/re-align/recheck logic.
+- It used a `4 mm` measured-backoff requirement during one reliability pass.
+  That rejected a valid case with about `2.38 mm` measured retreat and force
+  release; the current default is `2 mm`.
+
+Latest stable nominalrecovery verification:
+
+```text
+outputs/expert_debug/vlm_backoff_reliability_cycle10
+attempt_000001_candidate_00: 97.035335987039559
+attempt_000002_candidate_01: 97.038856798717887
+attempt_000003_candidate_00: 97.056801265524768
+```
+
+All three accepted runs reached insertion without official force penalty. The
+best run's GPT-5 critique is at:
+
+```text
+outputs/expert_debug/vlm_backoff_reliability_cycle10/replay_attempts/attempt_000003_candidate_00/gpt5_replay_analysis_center/analysis.md
+```
 
 The recovery expert exposes:
 
@@ -273,7 +309,15 @@ pixi run python scripts/generate_expert_trajectories.py \
 
 `--expert-mode nominal|nominalrecovery|recovery` is kept only for backward compatibility. Prefer the mutually exclusive flags `--nominal`, `--nominalrecovery`, and `--recovery`.
 
-Final insertion remains CheatCode-style geometry, not MoveIt. The default online replay now keeps guarded insertion in explicit base-link targets: `AIC_OFFICIAL_TEACHER_CHEATCODE_Z_MODE=cheatcode_offsets` and `AIC_OFFICIAL_TEACHER_INSERTION_COMMAND_MODE=exact_position`. The port and plug TFs are read in `base_link`, CheatCode geometry computes each exact TCP target, and descent streams absolute base-link positions on a minimum-jerk depth profile. This avoids switching from a base-link local pre-insert align into gripper/tcp relative deltas, which live debug showed could produce actual guarded TCP speeds far above the commanded value. The default commanded insertion speed is 1.3 mm/s, down from 2.0 mm/s, and exact-position targets are bounded by the configured step size. Exact-position guarded insertion now also has a measured TCP speed gate: `AIC_OFFICIAL_TEACHER_GUARDED_INSERT_SPEED_GATE_MPS` defaults to `0.012`, and `AIC_OFFICIAL_TEACHER_GUARDED_INSERT_SPEED_GATE_MAX_HOLD_SEC` defaults to `1.20`. If measured TCP speed is above the gate, replay holds the previous absolute target and does not advance depth while still checking F/T. Preinsert alignment and preinsert tracking gates preserve measured TCP Z by default through `AIC_OFFICIAL_TEACHER_PREINSERT_ALIGN_PRESERVE_CURRENT_Z=true` and `AIC_OFFICIAL_TEACHER_PREINSERT_GATE_PRESERVE_CURRENT_Z=true`; guarded insertion then owns the axial descent and can repair a failed nominal Z handoff with the measured live Z offset. With a strict 5 mm preinsert gate, a 0.010 m/s measured speed gate, and `AIC_OFFICIAL_TEACHER_CHEATCODE_INSERTION_SPEED_MPS=0.0018`, the current best live nominalrecovery run accepted at score `91.7406`, reached insertion, had no contact, and kept max guarded-insert speed to `0.00513 m/s`. A fully pinned XY/orientation insertion experiment is available behind `AIC_OFFICIAL_TEACHER_PIN_INSERTION_TARGET=true`, but it is not the default because live testing reduced speed while missing insertion. Relative gripper/tcp insertion remains available behind `AIC_OFFICIAL_TEACHER_INSERTION_COMMAND_MODE=relative_delta` for comparison only. The local pre-insertion alignment uses minimum-jerk interpolation and is distance-rate-limited by `AIC_OFFICIAL_TEACHER_LOCAL_PREINSERT_ALIGN_SPEED_MPS` (default 80 mm/s), so large near-port moves are not compressed into a fixed duration. A conservative force-gated pre-contact port alignment loop is available behind `AIC_OFFICIAL_TEACHER_PRECONTACT_PORT_ALIGN_SEC`; it is disabled by default because live tests showed sub-threshold force buildup before descent and inconsistent contact timing. A TF-based relative TCP-frame preinsert micro-align experiment exists behind `AIC_OFFICIAL_TEACHER_PREINSERT_MICRO_ALIGN_SEC`, preserves z, and fails closed if F/T rises near the threshold; it is disabled by default because live tests showed both absolute and relative x/y correction worsened contact timing. The gate uses controller TCP error when available; its TF fallback threshold defaults to 15 mm, also requiring low TCP speed and force delta below `AIC_OFFICIAL_TEACHER_TRACKING_GATE_FORCE_FRACTION` times the F/T threshold (default 1.0). Recovery uses smooth staged absolute TCP backoff: 5 mm increments up to `AIC_OFFICIAL_TEACHER_RECOVERY_MAX_BACKOFF_DISTANCE_M` (default 30 mm), with 0.45 s minimum-jerk stages and 0.10 s force-release checks so nominalrecovery/recovery backs off promptly after contact instead of waiting for a new VLM decision. After force release, recovery returns smoothly to the original pre-insertion height captured before the first insertion attempt, then holds that exact z target until measured TCP z is within `AIC_OFFICIAL_TEACHER_RECOVERY_RETURN_Z_THRESHOLD_M` (default 4 mm). The same measured z gate is repeated after recovery realignment, and retry tracking gates pin the original pre-insertion z only for TF-depth experiments; default CheatCode-offset retries use the same relative z-offset semantics as plain CheatCode. A bounded TF-derived retry x/y bias is available for experiments behind `AIC_OFFICIAL_TEACHER_RECOVERY_RETRY_XY_BIAS=true`, but it is disabled by default because the first live smoke with that bias contacted earlier and then failed a tracking gate. The online replay path exposes environment overrides for experiments, including relative delta clamps, but the CLI keeps only one F/T threshold flag and one debug flag.
+Final insertion remains CheatCode-style geometry, not MoveIt or VLM waypoint execution. The current reliable online replay path uses MoveIt for free-space joint-space transport, then switches to local preinsert alignment, precontact port alignment, tracking gates, and guarded geometric insertion near the port. The port and plug TFs are read in `base_link`; local corrections and recovery directions are reasoned about relative to TCP/tool and port geometry, then verified against measured TCP motion in `base_link`.
+
+The current defaults intentionally keep live-Z repair disabled unless explicitly enabled. Earlier live-Z repair runs could begin guarded insertion after a failed handoff gate and a large pose-tracking error, producing high speed or early contact. The stable path instead preserves measured TCP Z during preinsert alignment/gates, lets guarded insertion own axial descent, and uses low-force tracking gates to stop before a small contact becomes a pinned insertion.
+
+The local pre-insertion alignment uses minimum-jerk interpolation and is distance-rate-limited by `AIC_OFFICIAL_TEACHER_LOCAL_PREINSERT_ALIGN_SPEED_MPS` (default 80 mm/s), so large near-port moves are not compressed into a fixed duration. Preinsert servo compensation is capped tightly enough to improve alignment without creating a large lateral sweep near the port. The precontact port-align phase is no longer treated as a terminal failure when force appears; it routes into the same recovery/realign/retry machinery as guarded insertion contact.
+
+Recovery uses measured TCP retreat rather than trusting commanded backoff traces. The default recovery direction is `tcp_away_from_port`, commanded as `gripper/tcp` deltas, while success is judged by measured TCP displacement in `base_link`. The minimum accepted measured retreat is `AIC_OFFICIAL_TEACHER_MIN_BACKOFF_DISTANCE_M=0.002`; a larger commanded retreat is still allowed when the policy elects to return to a higher preinsert pose before realigning. If measured retreat is too small, the replay falls back to a small upward lift and retries only while retry budget remains. Force-release checks use the stricter stable release threshold by default so retries do not start while the plug is still loaded.
+
+A historical exact-position guarded insertion path remains available behind environment overrides (`AIC_OFFICIAL_TEACHER_INSERTION_COMMAND_MODE=exact_position`, speed gates, pinned insertion targets, and TF-derived retry biases), but it is not the current recommended path. The best stable May 4 run set is `outputs/expert_debug/vlm_backoff_reliability_cycle10`: three accepted nominalrecovery trials scored `97.0353`, `97.0389`, and `97.0568`.
 
 The generator now forwards recovery controls into online replay instead of only recording them in metadata: `--backup-distance-m` maps to `AIC_OFFICIAL_TEACHER_RECOVERY_MAX_BACKOFF_DISTANCE_M`, `--max-retries` maps to `AIC_OFFICIAL_TEACHER_RECOVERY_MAX_RETRIES`, and `--recovery-release-force-threshold` maps to `AIC_OFFICIAL_TEACHER_RECOVERY_RELEASE_FORCE_THRESHOLD_N`. The release threshold is intentionally separate from `--ft-threshold` so strict contact-trigger stress runs can still declare force released after small residual noise. Recovery realign preserves current TCP Z by default (`AIC_OFFICIAL_TEACHER_RECOVERY_REALIGN_PRESERVE_CURRENT_Z=true`) and uses its own slower speed cap (`AIC_OFFICIAL_TEACHER_RECOVERY_REALIGN_SPEED_MPS=0.02`). Live forced-backoff testing showed 5 mm backoff plus Z-preserving realign can pass release, return, and retry gates with guarded insertion speed below 5 mm/s, but repeated strict-threshold contacts still prevent accepted recovery trajectories. GPT-5 analysis of the best failed recovery run identified live-Z repair after a failed handoff gate as the remaining risky path: speed is acceptable, but guarded insertion can begin after a large pose-tracking error. The next recovery experiment should make live-Z repair conditional on XY/yaw being in spec, use body/port-frame micro-align when the handoff gate fails laterally, and then use adaptive staged backoff, increasing the second retreat to 10-15 mm when the retry contacts before meaningful insertion depth.
 

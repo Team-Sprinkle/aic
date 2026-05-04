@@ -1802,8 +1802,96 @@ After the latest code changes:
 
 ```text
 .pixi/envs/default/bin/python -m pytest aic_teacher_official/test/test_official_teacher_pipeline.py aic_teacher_official/test/test_expert_generator.py -q
-65 passed
+66 passed
 ```
+
+## May 4 2026 Update: VLM/MoveIt Nominalrecovery Above 97
+
+Current pipeline:
+
+1. `OfficialExpertGeneratorPlanner` runs in the live official stack and captures
+   TF, observations, camera frames, F/T baseline, task config, and scene context.
+2. GPT-5-mini provides only high-level strategy/cable-risk JSON. It does not
+   generate executable waypoints, joint targets, velocities, or insertion
+   motions.
+3. Deterministic candidate generation plus MoveItPy produce free-space transport
+   to staging/preinsert. MoveIt is required; failed plans are rejected.
+4. `OfficialTeacherReplay` replays MoveIt transport in joint space, then switches
+   to online CheatCode-style Cartesian final alignment and insertion.
+5. Final approach uses local preinsert alignment, precontact port alignment,
+   tracking gates, guarded insertion, F/T trend detection, measured backoff,
+   realign, and retry.
+6. GPT-5 failure analysis is run after the replay using sampled images and
+   runtime traces, not during control.
+
+Latest reliable run:
+
+```text
+outputs/expert_debug/vlm_backoff_reliability_cycle10
+```
+
+Scores:
+
+```text
+attempt_000001_candidate_00: 97.035335987039559
+attempt_000002_candidate_01: 97.038856798717887
+attempt_000003_candidate_00: 97.056801265524768
+```
+
+Center videos:
+
+```text
+outputs/expert_debug/vlm_backoff_reliability_cycle10/replay_attempts/attempt_000001_candidate_00/dataset/videos/observation.images.center_camera/chunk-000/file-000.mp4
+outputs/expert_debug/vlm_backoff_reliability_cycle10/replay_attempts/attempt_000002_candidate_01/dataset/videos/observation.images.center_camera/chunk-000/file-000.mp4
+outputs/expert_debug/vlm_backoff_reliability_cycle10/replay_attempts/attempt_000003_candidate_00/dataset/videos/observation.images.center_camera/chunk-000/file-000.mp4
+```
+
+GPT-5 post-run analysis:
+
+```text
+outputs/expert_debug/vlm_backoff_reliability_cycle10/replay_attempts/attempt_000003_candidate_00/gpt5_replay_analysis_center/analysis.md
+```
+
+What worked:
+
+- `--nominalrecovery` with `ft-threshold=2.0`, `backoff-increment=6 mm`,
+  `min-backoff-distance=2 mm`, `max-retries=2`, and live-Z repair disabled.
+- Preinsert servo compensation with a small cap (`1.5 mm`) and a lateral gate
+  around `2.2 mm`.
+- Force trend comparison using 5-sample median windows whose centers are 5
+  control samples apart (`250 ms`).
+- Above-contact soft stop at `2.0 N`. This implements the "force below hard
+  threshold but still meaningful" idea and prevents long pushes before recovery.
+- Measured-backoff validation. Recovery now checks actual TCP retreat instead
+  of trusting commanded backoff distance.
+- Routing precontact force aborts and low-force lateral gate misses into
+  recovery realign/recheck instead of failing immediately.
+
+What did not work:
+
+- Ignoring above-contact forces until `5 N`; several runs pushed at `2-4.8 N`
+  and became pinned before recovery could unload.
+- Requiring `4 mm` measured retreat; this rejected a real `2.38 mm` retreat
+  with force release. The working default is `2 mm`.
+- Treating precontact port-align force abort as terminal.
+- Trusting command traces without measured TCP movement. Some failed runs
+  logged full commanded backoff while measured TCP retreat was less than `1 mm`.
+- Threshold tuning alone. Raising F/T thresholds hides symptoms but does not fix
+  lateral/attitude errors or pinned recovery.
+- Leaving stale `aic_model` or recorder processes alive between interrupted
+  runs. This caused model-validation failures unrelated to policy quality.
+
+Remaining improvement opportunities:
+
+- GPT-5 feedback on the successful run says the remaining inefficiency is
+  mostly minor speed-gate holds during minimum-jerk insertion. These can be
+  handled by postprocessing/stall compaction or by a small guarded-insert speed
+  gate adjustment.
+- A future improvement should compute force in the port frame
+  (`F_port = R_port^T * F_base`) and separate axial/lateral contact thresholds.
+- Live-Z repair should stay disabled unless gated by lateral error and
+  port-frame force. It was a recurring source of early contact when enabled too
+  freely.
 
 ## Important Constraint Reminder
 
