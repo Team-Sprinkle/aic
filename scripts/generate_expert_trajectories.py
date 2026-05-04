@@ -516,7 +516,7 @@ def _images_from_planner_debug(planner_result: dict) -> list[Path]:
 def _live_debug_assessment(smooth, replay_metrics: dict) -> dict:
     dataset_root = Path(replay_metrics["trajectory_path"]).parent / "dataset"
     rows = load_lerobot_debug_rows(dataset_root)
-    samples = sample_lerobot_rows(rows, trajectory=smooth, sample_period_sec=0.5)
+    samples = sample_lerobot_rows(rows, trajectory=smooth, sample_period_sec=0.25)
     phase_speed = compute_phase_speed_metrics(samples)
     tracking_values = [
         sample["tracking_error"].get("position_error_m")

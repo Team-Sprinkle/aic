@@ -306,6 +306,29 @@ def test_replay_delta_action_shape_is_relative_pose():
     assert delta.position.z < 0.0
 
 
+def test_replay_force_trend_compares_five_sample_windows_250ms_apart(monkeypatch):
+    from collections import deque
+
+    from aic_teacher_official.OfficialTeacherReplay import OfficialTeacherReplay
+
+    policy = OfficialTeacherReplay.__new__(OfficialTeacherReplay)
+    policy._force_delta_history = deque(maxlen=200)
+    policy._force_trend_window_samples = 5
+    policy._force_trend_center_gap_samples = 5
+    monkeypatch.setenv("AIC_OFFICIAL_TEACHER_CHEATCODE_DT", "0.05")
+
+    for idx, value in enumerate([0.1, 0.2, 0.2, 0.2, 0.2, 0.2, 0.2, 1.9, 2.1, 2.2, 2.3, 2.4]):
+        policy._force_delta_history.append({"time_sec": idx * 0.05, "force_delta_n": value})
+
+    snapshot = policy._force_trend_snapshot()
+
+    assert snapshot["window_samples"] == 5
+    assert snapshot["center_gap_samples"] == 5
+    assert snapshot["center_gap_sec"] == pytest.approx(0.25)
+    assert snapshot["previous_median_force_delta_n"] == pytest.approx(0.2)
+    assert snapshot["current_median_force_delta_n"] == pytest.approx(2.2)
+
+
 def test_vlm_delta_plan_generates_vlm_waypoints_and_cheatcode_insertion():
     context = OfficialTeacherContext(
         start_position=[0.0, 0.0, 0.3],

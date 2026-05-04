@@ -9,6 +9,7 @@ from __future__ import annotations
 import os
 import json
 import math
+from collections import deque
 from pathlib import Path
 
 import numpy as np
@@ -73,6 +74,12 @@ class OfficialTeacherReplay(Policy):
         self._max_integrator_windup = 0.05
         self._expert_mode = os.environ.get("AIC_EXPERT_MODE", "nominal")
         self._ft_threshold_n = float(os.environ.get("AIC_OFFICIAL_TEACHER_FT_THRESHOLD_N", "1.0"))
+        self._post_insert_force_threshold_n = float(
+            os.environ.get(
+                "AIC_OFFICIAL_TEACHER_POST_INSERT_FORCE_THRESHOLD_N",
+                str(max(6.0, self._ft_threshold_n)),
+            )
+        )
         self._tracking_gate_threshold_m = float(
             os.environ.get("AIC_OFFICIAL_TEACHER_TRACKING_GATE_THRESHOLD_M", "0.02")
         )
@@ -87,6 +94,21 @@ class OfficialTeacherReplay(Policy):
         self._last_tracking_gate_lateral_error_m = None
         self._last_tracking_gate_speed_mps = None
         self._last_precontact_lateral_offset_base = np.zeros(3, dtype=np.float64)
+        self._active_task = None
+        self._active_port_transform = None
+        self._last_commanded_target_pose = None
+        self._force_delta_history = deque(maxlen=200)
+        self._recovery_context_history = deque(maxlen=240)
+        self._last_recovery_context_sample_time_sec = -1e9
+        self._force_trend_window_samples = int(
+            os.environ.get("AIC_OFFICIAL_TEACHER_FORCE_TREND_WINDOW_SAMPLES", "5")
+        )
+        self._force_trend_center_gap_samples = int(
+            os.environ.get("AIC_OFFICIAL_TEACHER_FORCE_TREND_CENTER_GAP_SAMPLES", "5")
+        )
+        self._recovery_context_sample_period_sec = float(
+            os.environ.get("AIC_OFFICIAL_TEACHER_RECOVERY_CONTEXT_SAMPLE_PERIOD_SEC", "0.25")
+        )
         self._cartesian_stiffness = self._env_vector(
             "AIC_OFFICIAL_TEACHER_CARTESIAN_STIFFNESS",
             DEFAULT_CARTESIAN_STIFFNESS,
@@ -208,6 +230,14 @@ class OfficialTeacherReplay(Policy):
         if self._runtime_trace_path is None:
             return
         try:
+            if event in {"contact_detected", "recovery_force_release_failed", "recovery_max_retries_exhausted"}:
+                payload = {
+                    **payload,
+                    "force_trend": self._force_trend_snapshot(),
+                    "recent_recovery_context": list(self._recovery_context_history)[
+                        -int(os.environ.get("AIC_OFFICIAL_TEACHER_RECOVERY_CONTEXT_MAX_TRACE_SAMPLES", "80")) :
+                    ],
+                }
             self._runtime_trace_path.parent.mkdir(parents=True, exist_ok=True)
             with self._runtime_trace_path.open("a", encoding="utf-8") as f:
                 f.write(
@@ -222,6 +252,12 @@ class OfficialTeacherReplay(Policy):
                 )
         except Exception as ex:
             self.get_logger().warn(f"Unable to write runtime trace event {event!r}: {ex}")
+
+    @staticmethod
+    def _vector_to_trace_list(values: np.ndarray | list[float] | tuple[float, ...] | None) -> list[float] | None:
+        if values is None:
+            return None
+        return [float(v) for v in np.asarray(values, dtype=np.float64).tolist()]
 
     def _insertion_event_callback(self, msg: String) -> None:
         self._latest_insertion_event_namespace = msg.data.strip().strip("/")
@@ -371,6 +407,7 @@ class OfficialTeacherReplay(Policy):
         max_translation_step_m: float | None = None,
         gain_profile: str = "default",
     ) -> None:
+        self._last_commanded_target_pose = target_pose
         delta_pose = compute_delta_pose(self._current_tcp_pose(), target_pose)
         if max_translation_step_m is None:
             max_translation_step_m = float(
@@ -407,6 +444,7 @@ class OfficialTeacherReplay(Policy):
         *,
         gain_profile: str = "default",
     ) -> None:
+        self._last_commanded_target_pose = target_pose
         stiffness, damping = self._cartesian_gains(gain_profile)
         wrench_feedback_gains = self._cartesian_wrench_feedback_gains(gain_profile)
         motion_update = MotionUpdate(
@@ -468,6 +506,323 @@ class OfficialTeacherReplay(Policy):
                 float(transform.rotation.w),
             ],
         }
+
+    def _transform_translation_array(self, transform: Transform | None) -> np.ndarray | None:
+        if transform is None:
+            return None
+        return np.asarray(
+            [
+                float(transform.translation.x),
+                float(transform.translation.y),
+                float(transform.translation.z),
+            ],
+            dtype=np.float64,
+        )
+
+    def _pose_orientation_rotation_tcp_to_base(self, pose: Pose) -> np.ndarray:
+        return quaternion_xyzw_to_rotation_matrix(
+            np.asarray(
+                [
+                    float(pose.orientation.x),
+                    float(pose.orientation.y),
+                    float(pose.orientation.z),
+                    float(pose.orientation.w),
+                ],
+                dtype=np.float64,
+            )
+        )
+
+    def _lookup_active_plug_transform(self) -> Transform | None:
+        task = self._active_task
+        if task is None:
+            return None
+        try:
+            return self._parent_node._tf_buffer.lookup_transform(
+                "base_link",
+                f"{task.cable_name}/{task.plug_name}_link",
+                Time(),
+            ).transform
+        except TransformException:
+            return None
+
+    def _append_force_delta_sample(self, force_delta_n: float) -> None:
+        self._force_delta_history.append(
+            {
+                "time_sec": self.time_now().nanoseconds * 1e-9,
+                "force_delta_n": float(force_delta_n),
+            }
+        )
+
+    def _force_trend_snapshot(self) -> dict:
+        window = max(1, int(self._force_trend_window_samples))
+        center_gap = max(1, int(self._force_trend_center_gap_samples))
+        # Two odd-sized windows whose centers are separated by center_gap samples.
+        # With dt=0.05, window=5 and center_gap=5 compares medians centered 250 ms apart.
+        previous_end = -center_gap
+        previous_start = previous_end - window
+        current_values = [float(row["force_delta_n"]) for row in list(self._force_delta_history)[-window:]]
+        history = list(self._force_delta_history)
+        previous_values = (
+            [float(row["force_delta_n"]) for row in history[previous_start:previous_end]]
+            if len(history) >= center_gap + window
+            else []
+        )
+        current_median = float(np.median(current_values)) if len(current_values) == window else None
+        previous_median = float(np.median(previous_values)) if len(previous_values) == window else None
+        rising_delta = (
+            float(current_median - previous_median)
+            if current_median is not None and previous_median is not None
+            else None
+        )
+        return {
+            "schema_version": "aic_force_trend/v1",
+            "window_samples": window,
+            "center_gap_samples": center_gap,
+            "center_gap_sec": center_gap * float(os.environ.get("AIC_OFFICIAL_TEACHER_CHEATCODE_DT", "0.05")),
+            "current_median_force_delta_n": current_median,
+            "previous_median_force_delta_n": previous_median,
+            "median_delta_n": rising_delta,
+            "sample_count": len(history),
+        }
+
+    def _force_trigger_decision(
+        self,
+        force_delta_n: float,
+    ) -> tuple[bool, dict]:
+        self._append_force_delta_sample(force_delta_n)
+        trend = self._force_trend_snapshot()
+        median_threshold = float(
+            os.environ.get("AIC_OFFICIAL_TEACHER_FORCE_MEDIAN_THRESHOLD_N", str(self._ft_threshold_n))
+        )
+        rise_threshold = float(
+            os.environ.get("AIC_OFFICIAL_TEACHER_FORCE_MEDIAN_RISE_THRESHOLD_N", "0.35")
+        )
+        sustained_threshold = float(
+            os.environ.get("AIC_OFFICIAL_TEACHER_FORCE_SUSTAINED_THRESHOLD_N", str(self._ft_threshold_n))
+        )
+        current_median = trend.get("current_median_force_delta_n")
+        median_delta = trend.get("median_delta_n")
+        median_trigger = (
+            current_median is not None
+            and current_median >= median_threshold
+            and (median_delta is None or median_delta >= rise_threshold)
+        )
+        sustained_trigger = current_median is not None and current_median >= sustained_threshold
+        instant_trigger_enabled = os.environ.get(
+            "AIC_OFFICIAL_TEACHER_FORCE_SINGLE_SAMPLE_TRIGGER_ENABLED",
+            "false",
+        ).lower() in {"1", "true", "yes", "on"}
+        instant_trigger = bool(
+            instant_trigger_enabled
+            and force_delta_n >= self._ft_threshold_n
+            and current_median is None
+        )
+        confirmed = bool(median_trigger or sustained_trigger or instant_trigger)
+        return confirmed, {
+            **trend,
+            "instant_force_delta_n": float(force_delta_n),
+            "instant_threshold_n": self._ft_threshold_n,
+            "median_threshold_n": median_threshold,
+            "median_rise_threshold_n": rise_threshold,
+            "sustained_threshold_n": sustained_threshold,
+            "instant_trigger_enabled": instant_trigger_enabled,
+            "median_trigger": bool(median_trigger),
+            "sustained_trigger": bool(sustained_trigger),
+            "instant_trigger": instant_trigger,
+            "confirmed": confirmed,
+        }
+
+    def _record_recovery_context_sample(
+        self,
+        get_observation: GetObservationCallback,
+        *,
+        force_base_or_tcp: np.ndarray,
+        baseline_force: np.ndarray | None,
+        phase: str,
+        target_pose: Pose | None = None,
+        force_delta_n: float | None = None,
+        z_offset: float | None = None,
+        retry_count: int | None = None,
+    ) -> None:
+        now_sec = self.time_now().nanoseconds * 1e-9
+        if now_sec - self._last_recovery_context_sample_time_sec < self._recovery_context_sample_period_sec - 1e-9:
+            return
+        self._last_recovery_context_sample_time_sec = now_sec
+        tcp_pose = None
+        plug_transform = None
+        try:
+            tcp_pose = self._current_tcp_pose()
+            plug_transform = self._lookup_active_plug_transform()
+        except TransformException:
+            tcp_pose = None
+        port_transform = self._active_port_transform
+        obs = {}
+        try:
+            obs = self._observation_dict(get_observation())
+        except Exception:
+            obs = {}
+        if not obs and self._latest_observation is not None:
+            obs = self._observation_dict(self._latest_observation)
+        force_tcp_assumed = np.asarray(force_base_or_tcp, dtype=np.float64)
+        force_base_assumed = None
+        vectors = {}
+        if tcp_pose is not None:
+            tcp_xyz = self._pose_position_array(tcp_pose)
+            rot_tcp_to_base = self._pose_orientation_rotation_tcp_to_base(tcp_pose)
+            force_base_assumed = rot_tcp_to_base @ force_tcp_assumed
+            for name, xyz in {
+                "port_minus_tcp": self._transform_translation_array(port_transform),
+                "plug_minus_tcp": self._transform_translation_array(plug_transform),
+            }.items():
+                if xyz is None:
+                    continue
+                vector_base = xyz - tcp_xyz
+                vectors[name] = {
+                    "base_link": self._vector_to_trace_list(vector_base),
+                    "gripper_tcp": self._vector_to_trace_list(rot_tcp_to_base.T @ vector_base),
+                }
+        sample = {
+            "schema_version": "aic_recovery_context_sample/v1",
+            "time_sec": now_sec,
+            "phase": phase,
+            "retry_count": retry_count,
+            "z_offset": z_offset,
+            "frames": {
+                "world_frame": "base_link",
+                "tcp_frame": "gripper/tcp",
+                "force_frame_note": (
+                    "Raw wrist wrench is treated as TCP-local for tcp values and rotated by current "
+                    "TCP orientation to estimate base_link values."
+                ),
+                "action_frame": "base_link",
+                "action_representation": "absolute_cartesian_pose",
+            },
+            "tcp_pose_base_link": self._pose_to_trace_dict(tcp_pose),
+            "target_tcp_pose_base_link": self._pose_to_trace_dict(target_pose or self._last_commanded_target_pose),
+            "port_transform_base_link": self._transform_to_trace_dict(port_transform),
+            "plug_transform_base_link": self._transform_to_trace_dict(plug_transform),
+            "vectors_from_tcp": vectors,
+            "wrist_force_tcp_assumed_n": self._vector_to_trace_list(force_tcp_assumed),
+            "wrist_force_base_link_estimated_n": self._vector_to_trace_list(force_base_assumed),
+            "baseline_force_tcp_assumed_n": self._vector_to_trace_list(baseline_force),
+            "force_delta_n": (
+                float(force_delta_n)
+                if force_delta_n is not None
+                else (
+                    float(np.linalg.norm(force_tcp_assumed - np.asarray(baseline_force, dtype=np.float64)))
+                    if baseline_force is not None
+                    else None
+                )
+            ),
+            "tcp_speed_mps": self._tcp_speed_norm(get_observation),
+            "tracking_error_m": self._tracking_error_norm(get_observation),
+            "observation_tcp_velocity": {
+                "linear": [
+                    obs.get("tcp_velocity.linear.x"),
+                    obs.get("tcp_velocity.linear.y"),
+                    obs.get("tcp_velocity.linear.z"),
+                ],
+                "angular": [
+                    obs.get("tcp_velocity.angular.x"),
+                    obs.get("tcp_velocity.angular.y"),
+                    obs.get("tcp_velocity.angular.z"),
+                ],
+            },
+        }
+        self._recovery_context_history.append(sample)
+
+    def _trace_recent_recovery_context(self, event: str, **payload) -> None:
+        max_samples = int(os.environ.get("AIC_OFFICIAL_TEACHER_RECOVERY_CONTEXT_MAX_TRACE_SAMPLES", "80"))
+        samples = list(self._recovery_context_history)[-max_samples:]
+        self._trace_event(
+            event,
+            recovery_context_sample_period_sec=self._recovery_context_sample_period_sec,
+            recovery_context_samples=samples,
+            force_trend=self._force_trend_snapshot(),
+            **payload,
+        )
+
+    def _tcp_away_from_port_direction(self, port_transform: Transform) -> np.ndarray:
+        current_pose = self._current_tcp_pose()
+        tcp_xyz = self._pose_position_array(current_pose)
+        port_xyz = self._transform_translation_array(port_transform)
+        if port_xyz is None:
+            return np.asarray([0.0, 0.0, -1.0], dtype=np.float64)
+        rot_tcp_to_base = self._pose_orientation_rotation_tcp_to_base(current_pose)
+        port_from_tcp_base = port_xyz - tcp_xyz
+        port_from_tcp_tcp = rot_tcp_to_base.T @ port_from_tcp_base
+        norm = float(np.linalg.norm(port_from_tcp_tcp))
+        if norm <= 1e-9:
+            return np.asarray([0.0, 0.0, -1.0], dtype=np.float64)
+        direction = -port_from_tcp_tcp / norm
+        # The port is usually close to the TCP +Z axis near insertion. Keep the
+        # retreat dominated by axial separation but allow the small lateral
+        # component needed to unload a side rub.
+        lateral_norm = float(np.linalg.norm(direction[:2]))
+        max_lateral = float(os.environ.get("AIC_OFFICIAL_TEACHER_RECOVERY_BACKOFF_MAX_LATERAL_FRACTION", "0.35"))
+        if lateral_norm > max_lateral > 0.0:
+            direction[:2] *= max_lateral / lateral_norm
+            direction /= max(float(np.linalg.norm(direction)), 1e-9)
+        return direction
+
+    def _should_ignore_shallow_contact(
+        self,
+        *,
+        z_offset: float,
+        force_delta_n: float,
+        retry_count: int,
+        sample_source: str,
+    ) -> bool:
+        min_contact_z_offset = float(
+            os.environ.get("AIC_OFFICIAL_TEACHER_CONTACT_MIN_Z_OFFSET", "0.02")
+        )
+        early_force_threshold = float(
+            os.environ.get("AIC_OFFICIAL_TEACHER_EARLY_CONTACT_FORCE_THRESHOLD_N", "4.0")
+        )
+        near_insert_min_z_offset = float(
+            os.environ.get("AIC_OFFICIAL_TEACHER_LOW_FORCE_INSERTION_IGNORE_MIN_Z_OFFSET", "-0.008")
+        )
+        near_insert_max_z_offset = float(
+            os.environ.get("AIC_OFFICIAL_TEACHER_LOW_FORCE_INSERTION_IGNORE_MAX_Z_OFFSET", "0.0")
+        )
+        near_insert_force_threshold = float(
+            os.environ.get(
+                "AIC_OFFICIAL_TEACHER_LOW_FORCE_INSERTION_IGNORE_THRESHOLD_N",
+                str(early_force_threshold),
+            )
+        )
+        ignore = bool(z_offset > min_contact_z_offset and force_delta_n < early_force_threshold)
+        if ignore:
+            self._trace_event(
+                "contact_trigger_ignored_above_contact_zone",
+                retry_count=retry_count,
+                force_delta_n=force_delta_n,
+                threshold_n=self._ft_threshold_n,
+                early_force_threshold_n=early_force_threshold,
+                z_offset=z_offset,
+                min_contact_z_offset=min_contact_z_offset,
+                sample_source=sample_source,
+            )
+            return True
+        ignore_near_insert = bool(
+            z_offset > near_insert_min_z_offset
+            and z_offset <= near_insert_max_z_offset
+            and force_delta_n < near_insert_force_threshold
+        )
+        if ignore_near_insert:
+            self._trace_event(
+                "contact_trigger_ignored_low_force_near_insertion",
+                retry_count=retry_count,
+                force_delta_n=force_delta_n,
+                threshold_n=self._ft_threshold_n,
+                near_insert_force_threshold_n=near_insert_force_threshold,
+                z_offset=z_offset,
+                near_insert_min_z_offset=near_insert_min_z_offset,
+                near_insert_max_z_offset=near_insert_max_z_offset,
+                sample_source=sample_source,
+            )
+            return True
+        return ignore
 
     @staticmethod
     def _pose_quat_wxyz(pose: Pose) -> QuaternionTuple:
@@ -618,7 +973,17 @@ class OfficialTeacherReplay(Policy):
         get_observation: GetObservationCallback,
         baseline_force: np.ndarray,
     ) -> float:
-        return float(np.linalg.norm(self._force_vector(get_observation) - baseline_force))
+        force = self._force_vector(get_observation)
+        force_delta = float(np.linalg.norm(force - baseline_force))
+        self._record_recovery_context_sample(
+            get_observation,
+            force_base_or_tcp=force,
+            baseline_force=baseline_force,
+            phase="force_monitor",
+            target_pose=self._last_commanded_target_pose,
+            force_delta_n=force_delta,
+        )
+        return force_delta
 
     def _force_trigger_confirmed(
         self,
@@ -628,10 +993,59 @@ class OfficialTeacherReplay(Policy):
         dt: float,
     ) -> tuple[bool, float]:
         confirm_sec = float(os.environ.get("AIC_OFFICIAL_TEACHER_FORCE_CONFIRM_SEC", str(dt)))
+        trend_enabled = os.environ.get(
+            "AIC_OFFICIAL_TEACHER_FORCE_TREND_CONFIRM_ENABLED",
+            "true",
+        ).lower() in {"1", "true", "yes", "on"}
+        if trend_enabled:
+            self._force_delta_history.clear()
+            started = self.time_now()
+            max_delta = 0.0
+            decision = {}
+            # Collect enough samples for two 5-point median windows whose centers
+            # are separated by 5 controller ticks. This keeps the contact response
+            # bounded while avoiding single-sample force spikes.
+            required_samples = max(
+                self._force_trend_window_samples + self._force_trend_center_gap_samples,
+                self._force_trend_window_samples,
+            )
+            while (
+                len(self._force_delta_history) < required_samples
+                or (confirm_sec > 0.0 and (self.time_now() - started) < Duration(seconds=confirm_sec))
+            ):
+                delta = self._force_delta_norm(get_observation, baseline_force)
+                max_delta = max(max_delta, delta)
+                confirmed, decision = self._force_trigger_decision(delta)
+                if confirmed:
+                    break
+                self.sleep_for(dt)
+                if (self.time_now() - started) >= Duration(seconds=max(confirm_sec, required_samples * dt)):
+                    break
+            if not decision:
+                delta = self._force_delta_norm(get_observation, baseline_force)
+                max_delta = max(max_delta, delta)
+                confirmed, decision = self._force_trigger_decision(delta)
+            else:
+                confirmed = bool(decision.get("confirmed"))
+            self._trace_event(
+                "force_trigger_confirmed_checked",
+                force_trigger_confirmed=confirmed,
+                confirmed_force_delta_n=max_delta,
+                **decision,
+            )
+            return confirmed, max_delta
         if confirm_sec > 0.0:
             self.sleep_for(confirm_sec)
         confirmed_delta = self._force_delta_norm(get_observation, baseline_force)
-        return confirmed_delta >= self._ft_threshold_n, confirmed_delta
+        confirmed = confirmed_delta >= self._ft_threshold_n
+        self._trace_event(
+            "force_trigger_confirmed_checked",
+            confirmed=confirmed,
+            confirmed_force_delta_n=confirmed_delta,
+            instant_threshold_n=self._ft_threshold_n,
+            trend_enabled=False,
+        )
+        return confirmed, confirmed_delta
 
     def _post_insert_force_check(
         self,
@@ -651,13 +1065,14 @@ class OfficialTeacherReplay(Policy):
         while (self.time_now() - started) < Duration(seconds=check_sec):
             force_delta = self._force_delta_norm(get_observation, baseline_force)
             max_force_delta = max(max_force_delta, force_delta)
-            if force_delta >= self._ft_threshold_n:
+            if force_delta >= self._post_insert_force_threshold_n:
                 self._trace_event(
                     "post_insert_force_check_failed",
                     retry_count=retry_count,
                     force_delta_n=force_delta,
                     max_force_delta_n=max_force_delta,
-                    threshold_n=self._ft_threshold_n,
+                    threshold_n=self._post_insert_force_threshold_n,
+                    approach_contact_threshold_n=self._ft_threshold_n,
                     check_sec=check_sec,
                 )
                 return False, max_force_delta
@@ -666,7 +1081,8 @@ class OfficialTeacherReplay(Policy):
             "post_insert_force_check_passed",
             retry_count=retry_count,
             max_force_delta_n=max_force_delta,
-            threshold_n=self._ft_threshold_n,
+            threshold_n=self._post_insert_force_threshold_n,
+            approach_contact_threshold_n=self._ft_threshold_n,
             check_sec=check_sec,
         )
         return True, max_force_delta
@@ -1505,13 +1921,14 @@ class OfficialTeacherReplay(Policy):
         dt: float,
         release_baseline_force: np.ndarray | None = None,
         retry_start_z_m: float | None = None,
+        retry_count: int | None = None,
     ) -> bool:
         backoff_increment = float(os.environ.get("AIC_OFFICIAL_TEACHER_RECOVERY_BACKOFF_DISTANCE_M", "0.005"))
         max_backoff_distance = float(
             os.environ.get("AIC_OFFICIAL_TEACHER_RECOVERY_MAX_BACKOFF_DISTANCE_M", "0.03")
         )
         min_backoff_distance = float(
-            os.environ.get("AIC_OFFICIAL_TEACHER_RECOVERY_MIN_BACKOFF_DISTANCE_M", "0.0")
+            os.environ.get("AIC_OFFICIAL_TEACHER_RECOVERY_MIN_BACKOFF_DISTANCE_M", "0.002")
         )
         min_backoff_distance = min(max_backoff_distance, max(0.0, min_backoff_distance))
         backoff_duration = float(os.environ.get("AIC_OFFICIAL_TEACHER_RECOVERY_BACKOFF_SEC", "0.45"))
@@ -1543,6 +1960,10 @@ class OfficialTeacherReplay(Policy):
         max_measured_backoff = 0.0
         backoff_pose = start_pose
         stage_index = 0
+        backoff_mode = os.environ.get(
+            "AIC_OFFICIAL_TEACHER_RECOVERY_BACKOFF_MODE",
+            "tcp_away_from_port",
+        )
         while total_backoff < max_backoff_distance and (self.time_now() - release_started) < Duration(seconds=release_timeout):
             stage_index += 1
             next_backoff = min(max_backoff_distance, total_backoff + backoff_increment)
@@ -1555,25 +1976,48 @@ class OfficialTeacherReplay(Policy):
                 "recovery_backoff_stage_started",
                 stage_index=stage_index,
                 target_total_backoff_m=next_backoff,
+                backoff_mode=backoff_mode,
                 target_tcp_pose=self._pose_to_trace_dict(backoff_pose),
             )
             for step in range(steps + 1):
-                fraction = self._minimum_jerk_fraction(step / steps)
-                pose = self._make_pose(
-                    stage_start_xyz + fraction * (stage_target_xyz - stage_start_xyz),
-                    start_quat,
-                )
-                self._send_absolute_target(move_robot, pose, gain_profile="recovery")
+                if backoff_mode == "tcp_away_from_port":
+                    direction_tcp = self._tcp_away_from_port_direction(port_transform)
+                    step_distance = max(0.0, next_backoff - total_backoff) / float(steps + 1)
+                    self.set_delta_pose_target_from_components(
+                        move_robot=move_robot,
+                        delta_position_xyz=direction_tcp * step_distance,
+                        delta_rotation_xyz=np.zeros(3, dtype=np.float64),
+                        frame_id="gripper/tcp",
+                        stiffness=self._recovery_cartesian_stiffness,
+                        damping=self._recovery_cartesian_damping,
+                        max_translation=max(step_distance, 1e-6),
+                    )
+                    backoff_pose = self._current_tcp_pose()
+                else:
+                    fraction = self._minimum_jerk_fraction(step / steps)
+                    pose = self._make_pose(
+                        stage_start_xyz + fraction * (stage_target_xyz - stage_start_xyz),
+                        start_quat,
+                    )
+                    self._send_absolute_target(move_robot, pose, gain_profile="recovery")
+                    backoff_pose = pose
                 self.sleep_for(dt)
-                current_z = float(self._pose_position_array(self._current_tcp_pose())[2])
-                max_measured_backoff = max(max_measured_backoff, current_z - float(start_xyz[2]))
+                current_xyz = self._pose_position_array(self._current_tcp_pose())
+                measured_distance = float(np.linalg.norm(current_xyz - start_xyz))
+                if backoff_mode == "base_z_absolute":
+                    measured_distance = current_xyz[2] - float(start_xyz[2])
+                max_measured_backoff = max(max_measured_backoff, measured_distance)
             total_backoff = next_backoff
             current_pose = self._current_tcp_pose()
-            current_z = float(self._pose_position_array(current_pose)[2])
-            max_measured_backoff = max(max_measured_backoff, current_z - float(start_xyz[2]))
+            current_xyz = self._pose_position_array(current_pose)
+            measured_distance = float(np.linalg.norm(current_xyz - start_xyz))
+            if backoff_mode == "base_z_absolute":
+                measured_distance = current_xyz[2] - float(start_xyz[2])
+            max_measured_backoff = max(max_measured_backoff, measured_distance)
             self._trace_event(
                 "recovery_backoff_stage_completed",
                 stage_index=stage_index,
+                backoff_mode=backoff_mode,
                 backoff_distance_achieved_m=total_backoff,
                 measured_backoff_distance_m=max_measured_backoff,
                 current_tcp_pose=self._pose_to_trace_dict(current_pose),
@@ -1588,9 +2032,22 @@ class OfficialTeacherReplay(Policy):
                 and (self.time_now() - release_started) < Duration(seconds=release_timeout)
             ):
                 force_delta = float(np.linalg.norm(self._force_vector(get_observation) - baseline))
+                self._record_recovery_context_sample(
+                    get_observation,
+                    force_base_or_tcp=self._force_vector(get_observation),
+                    baseline_force=baseline,
+                    phase="recovery_backoff_release_check",
+                    target_pose=backoff_pose,
+                    force_delta_n=force_delta,
+                    z_offset=current_z_offset,
+                    retry_count=retry_count,
+                )
                 self._send_absolute_target(move_robot, backoff_pose, gain_profile="recovery")
-                current_z = float(self._pose_position_array(self._current_tcp_pose())[2])
-                max_measured_backoff = max(max_measured_backoff, current_z - float(start_xyz[2]))
+                current_xyz = self._pose_position_array(self._current_tcp_pose())
+                measured_distance = float(np.linalg.norm(current_xyz - start_xyz))
+                if backoff_mode == "base_z_absolute":
+                    measured_distance = current_xyz[2] - float(start_xyz[2])
+                max_measured_backoff = max(max_measured_backoff, measured_distance)
                 if force_delta < release_threshold:
                     force_released = True
                     break
@@ -1598,10 +2055,14 @@ class OfficialTeacherReplay(Policy):
             if force_released:
                 break
         current_pose = self._current_tcp_pose()
-        current_z = float(self._pose_position_array(current_pose)[2])
-        max_measured_backoff = max(max_measured_backoff, current_z - float(start_xyz[2]))
+        current_xyz = self._pose_position_array(current_pose)
+        measured_distance = float(np.linalg.norm(current_xyz - start_xyz))
+        if backoff_mode == "base_z_absolute":
+            measured_distance = current_xyz[2] - float(start_xyz[2])
+        max_measured_backoff = max(max_measured_backoff, measured_distance)
         self._trace_event(
             "recovery_backoff_completed",
+            backoff_mode=backoff_mode,
             backoff_distance_achieved_m=total_backoff,
             measured_backoff_distance_m=max_measured_backoff,
             measured_backoff_occurred=max_measured_backoff >= max(0.001, min_backoff_distance),
@@ -1618,6 +2079,20 @@ class OfficialTeacherReplay(Policy):
             min_backoff_distance_m=min_backoff_distance,
             max_backoff_distance_m=max_backoff_distance,
         )
+        measured_backoff_occurred = max_measured_backoff >= max(0.001, min_backoff_distance)
+        require_measured_backoff = os.environ.get(
+            "AIC_OFFICIAL_TEACHER_REQUIRE_MEASURED_BACKOFF",
+            "true",
+        ).lower() in {"1", "true", "yes", "on"}
+        if require_measured_backoff and not measured_backoff_occurred:
+            self._trace_recent_recovery_context(
+                "recovery_measured_backoff_failed",
+                retry_count=retry_count,
+                measured_backoff_distance_m=max_measured_backoff,
+                min_backoff_distance_m=min_backoff_distance,
+                force_released=force_released,
+            )
+            return False
         if not force_released:
             return False
         if retry_start_z_m is not None:
@@ -1776,6 +2251,8 @@ class OfficialTeacherReplay(Policy):
             port_frame,
             Time(),
         ).transform
+        self._active_task = task
+        self._active_port_transform = port_transform
         send_feedback("official_teacher_replay_online_cheatcode_final_insertion")
         dt = float(os.environ.get("AIC_OFFICIAL_TEACHER_CHEATCODE_DT", "0.05"))
         z_offset = float(os.environ.get("AIC_OFFICIAL_TEACHER_CHEATCODE_START_Z_OFFSET", "0.03"))
@@ -1844,6 +2321,7 @@ class OfficialTeacherReplay(Policy):
                         dt=dt,
                         release_baseline_force=self._last_tracking_gate_baseline_force,
                         retry_start_z_m=float(self._current_tcp_pose().position.z),
+                        retry_count=0,
                     ):
                         send_feedback("official_teacher_replay_recovery_force_release_failed")
                         self._trace_event("recovery_force_release_failed", retry_count=0)
@@ -1882,7 +2360,7 @@ class OfficialTeacherReplay(Policy):
                     send_feedback("official_teacher_replay_tracking_gate_failed")
                     return False
 
-        insertion_speed_mps = float(os.environ.get("AIC_OFFICIAL_TEACHER_CHEATCODE_INSERTION_SPEED_MPS", "0.0013"))
+        insertion_speed_mps = float(os.environ.get("AIC_OFFICIAL_TEACHER_CHEATCODE_INSERTION_SPEED_MPS", "0.006"))
         if "AIC_OFFICIAL_TEACHER_CHEATCODE_HANDOFF_START_Z_OFFSET" in os.environ:
             handoff_start_z_offset = float(os.environ["AIC_OFFICIAL_TEACHER_CHEATCODE_HANDOFF_START_Z_OFFSET"])
         else:
@@ -2101,6 +2579,7 @@ class OfficialTeacherReplay(Policy):
                             dt=dt,
                             release_baseline_force=baseline_force,
                             retry_start_z_m=original_preinsert_z,
+                            retry_count=retry_count,
                         ):
                             self._trace_event("recovery_force_release_failed", retry_count=retry_count)
                             return False
@@ -2272,6 +2751,7 @@ class OfficialTeacherReplay(Policy):
                     dt=dt,
                     release_baseline_force=baseline_force,
                     retry_start_z_m=original_preinsert_z,
+                    retry_count=retry_count,
                 ):
                     send_feedback("official_teacher_replay_recovery_force_release_failed")
                     self._trace_event("recovery_force_release_failed", retry_count=retry_count)
@@ -2396,10 +2876,19 @@ class OfficialTeacherReplay(Policy):
                             dt=dt,
                         )
                         if confirmed:
+                            confirmed_force = max(force_delta, confirmed_delta)
+                            if self._should_ignore_shallow_contact(
+                                z_offset=current_z,
+                                force_delta_n=confirmed_force,
+                                retry_count=retry_count,
+                                sample_source="during_speed_gate_hold",
+                            ):
+                                self.sleep_for(dt)
+                                continue
                             self._trace_event(
                                 "contact_detected",
                                 retry_count=retry_count,
-                                force_delta_n=max(force_delta, confirmed_delta),
+                                force_delta_n=confirmed_force,
                                 threshold_n=self._ft_threshold_n,
                                 z_offset=current_z,
                                 sample_source="during_speed_gate_hold",
@@ -2466,6 +2955,14 @@ class OfficialTeacherReplay(Policy):
                         dt=dt,
                     )
                     if confirmed:
+                        confirmed_force = max(force_delta, confirmed_delta)
+                        if self._should_ignore_shallow_contact(
+                            z_offset=current_z,
+                            force_delta_n=confirmed_force,
+                            retry_count=retry_count,
+                            sample_source=sample_source,
+                        ):
+                            continue
                         contact_confirmed = True
                         break
                     self._trace_event(
@@ -2564,6 +3061,10 @@ class OfficialTeacherReplay(Policy):
         self.get_logger().info(f"OfficialTeacherReplay.insert_cable() task: {task}")
         send_feedback("official_teacher_replay_started")
         self._latest_insertion_event_namespace = ""
+        self._active_task = task
+        self._active_port_transform = None
+        self._recovery_context_history.clear()
+        self._force_delta_history.clear()
 
         start_time = self.time_now()
         command_dt_sec = float(
@@ -2591,6 +3092,8 @@ class OfficialTeacherReplay(Policy):
                         port_frame,
                         Time(),
                     ).transform
+                    self._active_task = task
+                    self._active_port_transform = port_transform
                     self._run_local_preinsert_align(
                         task,
                         port_transform,
@@ -2718,6 +3221,7 @@ class OfficialTeacherReplay(Policy):
                                 dt=command_dt_sec,
                                 release_baseline_force=self._last_tracking_gate_baseline_force,
                                 retry_start_z_m=float(self._current_tcp_pose().position.z),
+                                retry_count=0,
                             ):
                                 send_feedback("official_teacher_replay_recovery_force_release_failed")
                                 self._trace_event("recovery_force_release_failed", retry_count=0)

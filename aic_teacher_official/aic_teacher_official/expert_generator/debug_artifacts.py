@@ -20,7 +20,7 @@ from aic_teacher_official.replay import SmoothTrajectoryReplayPolicy
 from aic_teacher_official.trajectory import SmoothTrajectory, TrajectoryWaypoint
 
 
-DEBUG_SAMPLE_PERIOD_SEC = 0.5
+DEBUG_SAMPLE_PERIOD_SEC = 0.25
 DEBUG_DOWNSAMPLED_PERIOD_SEC = 1.0
 MAX_PROMPT_BYTES = 300_000
 MAX_GPT5_IMAGES = 8
@@ -645,8 +645,18 @@ def build_gpt5_failure_payload(
     if not allow_missing and image_manifest and not any(row.get("exists") for row in image_manifest):
         raise ValueError("images were expected but none exist")
     payload = {
-        "schema_version": "aic_expert_gpt5_failure_payload/v1",
+        "schema_version": "aic_expert_gpt5_failure_payload/v2",
         "debug_dir": str(root),
+        "coordinate_frame_contract": {
+            "tcp_pose_frame": "base_link",
+            "absolute_cartesian_actions_frame": "base_link",
+            "relative_delta_actions_frame": "gripper/tcp",
+            "force_frame_note": (
+                "Runtime recovery_context rows include force in raw TCP-assumed form and a "
+                "base_link estimate from current TCP orientation. LeRobot state force rows are raw wrist wrench."
+            ),
+            "sampling_period_sec": sample_period_sec,
+        },
         "sample_period_sec": sample_period_sec,
         "observations_sampled": _compact_observation_rows(
             _limit_rows(_filter_by_period(observations, sample_period_sec), MAX_GPT5_SERIES_ROWS)
@@ -737,6 +747,7 @@ def _compact_observation_rows(rows: list[dict[str, Any]]) -> list[dict[str, Any]
                 "actual_tcp_pose": row.get("actual_tcp_pose"),
                 "target_tcp_pose": row.get("target_tcp_pose"),
                 "actual_tcp_velocity": row.get("actual_tcp_velocity"),
+                "wrist_force_raw": (wrench.get("force") if isinstance(wrench, dict) else None),
                 "force_norm": wrench.get("force_norm"),
                 "torque_norm": wrench.get("torque_norm"),
             }
@@ -847,7 +858,7 @@ def build_gpt5_failure_prompt(payload: dict[str, Any]) -> str:
         "Did local_preinsert_align improve near-port behavior without making it too slow?",
         "Did the tracking gate prevent rough insertion starts?",
         "Was guarded_insert actual TCP speed bounded by validation?",
-        "For nominalrecovery/recovery, did F/T-gated recovery stop descent, back off, wait for force release, realign, and retry before any lateral correction?",
+        "For nominalrecovery/recovery, did F/T-gated recovery stop descent, physically back off by the measured minimum distance, wait for force release, realign, and retry before any lateral correction?",
         "Why is motion disconnected between segments?",
         "Are MoveIt segment plans globally smoothed/retimed properly?",
         "Is final insertion too fast?",
@@ -855,7 +866,7 @@ def build_gpt5_failure_prompt(payload: dict[str, Any]) -> str:
         "Were insertions smooth or rough/colliding?",
         "Which trajectory-generation stage is problematic: VLM strategy, candidate generation, MoveIt planning, segment concatenation, global smoother, replay conversion, CheatCode handoff, or insertion speed?",
         "Does GPT-5-mini need TF lookup, MoveIt feasibility checking, candidate scoring, F/T summaries, visual validation, or collision-check summaries?",
-        "Which phases should use body frame versus base frame?",
+        "Use the coordinate_frame_contract and runtime recovery_context rows to check body/TCP frame versus base_link frame usage. Which phases should use body frame versus base frame?",
         "Which phases should use absolute pose versus delta pose?",
         "Is replanning/global smoothing implemented correctly for smoothness, obstacle preservation, VLM cable-risk hints, jerk avoidance, and abrupt insertion avoidance?",
     ]

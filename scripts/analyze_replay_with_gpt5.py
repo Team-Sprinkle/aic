@@ -54,12 +54,30 @@ STATE_KEYS = [
 ]
 
 
+def quaternion_xyzw_to_rotation_matrix(quat_xyzw: np.ndarray) -> np.ndarray:
+    quat = np.asarray(quat_xyzw, dtype=np.float64)
+    norm = float(np.linalg.norm(quat))
+    if norm <= 1e-12:
+        quat = np.asarray([0.0, 0.0, 0.0, 1.0], dtype=np.float64)
+    else:
+        quat = quat / norm
+    x, y, z, w = quat
+    return np.array(
+        [
+            [1.0 - 2.0 * (y * y + z * z), 2.0 * (x * y - w * z), 2.0 * (x * z + w * y)],
+            [2.0 * (x * y + w * z), 1.0 - 2.0 * (x * x + z * z), 2.0 * (y * z - w * x)],
+            [2.0 * (x * z - w * y), 2.0 * (y * z + w * x), 1.0 - 2.0 * (x * x + y * y)],
+        ],
+        dtype=np.float64,
+    )
+
+
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--attempt-dir", required=True, help="Replay attempt directory.")
     parser.add_argument("--output-dir", help="Output analysis directory. Defaults to attempt_dir/gpt5_replay_analysis.")
-    parser.add_argument("--sample-period-sec", type=float, default=1.5)
-    parser.add_argument("--camera", default="center_camera", choices=["center_camera"])
+    parser.add_argument("--sample-period-sec", type=float, default=0.25)
+    parser.add_argument("--camera", default="all", choices=["all", "center_camera", "left_camera", "right_camera"])
     parser.add_argument("--model", default="gpt-5")
     parser.add_argument("--use-gpt5", action="store_true")
     parser.add_argument("--max-images", type=int, default=80)
@@ -75,32 +93,54 @@ def main() -> int:
 
     dataset_root = attempt_dir / "dataset"
     data_path = dataset_root / "data" / "chunk-000" / "file-000.parquet"
-    video_path = dataset_root / "videos" / f"observation.images.{args.camera}" / "chunk-000" / "file-000.mp4"
+    cameras = ["center_camera", "left_camera", "right_camera"] if args.camera == "all" else [args.camera]
     runtime_trace_path = attempt_dir / "runtime_trace.jsonl"
     scoring_path = attempt_dir / "results" / "trial_1_trial_000001" / "scoring.yaml"
     summary_path = attempt_dir.parents[1] / "generation_summary.json"
 
     if not data_path.exists():
         raise SystemExit(f"missing LeRobot data parquet: {data_path}")
-    if not video_path.exists():
-        raise SystemExit(f"missing central camera video: {video_path}")
+    video_paths = {
+        camera: dataset_root / "videos" / f"observation.images.{camera}" / "chunk-000" / "file-000.mp4"
+        for camera in cameras
+    }
+    missing_videos = [str(path) for path in video_paths.values() if not path.exists()]
+    if missing_videos:
+        raise SystemExit(f"missing replay camera video(s): {missing_videos}")
 
-    frame_rows = extract_central_frames(
-        video_path,
-        output_dir / "center_frames",
-        sample_period_sec=args.sample_period_sec,
-        max_images=args.max_images,
-    )
+    per_camera_max = max(1, args.max_images // max(1, len(video_paths)))
+    frame_rows = []
+    for camera, video_path in video_paths.items():
+        frame_rows.extend(
+            extract_camera_frames(
+                video_path,
+                output_dir / f"{camera}_frames",
+                camera=camera,
+                sample_period_sec=args.sample_period_sec,
+                max_images=per_camera_max,
+            )
+        )
+    frame_rows.sort(key=lambda row: (float(row["timestamp"]), str(row["camera"])))
     observations = sample_observations(data_path, [float(row["timestamp"]) for row in frame_rows])
     payload = {
-        "schema_version": "aic_replay_gpt5_central_camera_failure_bundle/v1",
+        "schema_version": "aic_replay_gpt5_failure_bundle/v2",
         "attempt_dir": str(attempt_dir),
         "dataset_root": str(dataset_root),
         "analysis_sampling": {
             "camera": args.camera,
+            "cameras": cameras,
             "sample_period_sec": args.sample_period_sec,
             "image_count": len(frame_rows),
-            "note": "Only central-camera frames are included. Each image timestamp is aligned to the nearest LeRobot observation row.",
+            "note": "Frames are aligned to the nearest LeRobot observation row. Time history is sampled at 0.25 seconds by default and may be truncated by --max-images.",
+        },
+        "coordinate_frame_contract": {
+            "tcp_pose_frame": "base_link",
+            "absolute_cartesian_action_frame": "base_link",
+            "relative_delta_action_frame": "gripper/tcp",
+            "force_frame_note": (
+                "Dataset wrist force is raw wrist wrench. The sampled observation includes the raw "
+                "TCP-assumed force and a base_link estimate obtained by rotating through actual TCP orientation."
+            ),
         },
         "pipeline_strategy": pipeline_strategy_description(),
         "ranked_directions_context": ranked_directions_context(),
@@ -131,10 +171,11 @@ def main() -> int:
     return 0
 
 
-def extract_central_frames(
+def extract_camera_frames(
     video_path: Path,
     output_dir: Path,
     *,
+    camera: str,
     sample_period_sec: float,
     max_images: int,
 ) -> list[dict[str, Any]]:
@@ -160,12 +201,12 @@ def extract_central_frames(
         ok, frame = cap.read()
         if not ok:
             break
-        out = output_dir / f"center_t{timestamp:07.3f}_f{frame_index:06d}.jpg"
+        out = output_dir / f"{camera}_t{timestamp:07.3f}_f{frame_index:06d}.jpg"
         cv2.imwrite(str(out), frame)
         rows.append(
             {
                 "timestamp": round(timestamp, 3),
-                "camera": "center_camera",
+                "camera": camera,
                 "frame_index": frame_index,
                 "path": str(out),
             }
@@ -211,6 +252,16 @@ def sample_observations(data_path: Path, timestamps: list[float]) -> dict[float,
             ],
             dtype=np.float64,
         )
+        tcp_quat = np.asarray(
+            [
+                state_dict.get("tcp_pose.orientation.x", 0.0),
+                state_dict.get("tcp_pose.orientation.y", 0.0),
+                state_dict.get("tcp_pose.orientation.z", 0.0),
+                state_dict.get("tcp_pose.orientation.w", 1.0),
+            ],
+            dtype=np.float64,
+        )
+        force_base_estimated = quaternion_xyzw_to_rotation_matrix(tcp_quat) @ force
         out[round(float(timestamp), 3)] = {
             "nearest_dataset_timestamp": float(row["timestamp"]),
             "row_index": int(row["index"]),
@@ -228,7 +279,8 @@ def sample_observations(data_path: Path, timestamps: list[float]) -> dict[float,
             ],
             "tcp_speed_mps": float(np.linalg.norm(velocity)),
             "tracking_error_m": float(np.linalg.norm(tracking)),
-            "wrist_force": force.tolist(),
+            "wrist_force_tcp_assumed": force.tolist(),
+            "wrist_force_base_link_estimated": force_base_estimated.tolist(),
             "wrist_force_norm": float(np.linalg.norm(force)),
             "action": action,
         }
@@ -326,14 +378,14 @@ def select_runtime_events(path: Path) -> list[dict[str, Any]]:
 
 def build_prompt(payload: dict[str, Any]) -> str:
     return (
-        "# GPT-5 Central-Camera Replay Failure Analysis\n\n"
-        "You are analyzing an AIC cable-insertion replay. Use ONLY the attached central-camera images for visual evidence; "
-        "do not assume left/right camera views. Images are sampled every 1.5 seconds and each has an aligned observation/action row.\n\n"
+        "# GPT-5 Replay Failure Analysis\n\n"
+        "You are analyzing an AIC cable-insertion replay. Use the attached camera images and the aligned observation/action rows. "
+        "Images are sampled every 0.25 seconds by default, with truncation if the bundle becomes too large.\n\n"
         "The pipeline is explicitly two-step: first, a segment-wise trial is planned/executed, where stalls are acceptable; "
         "second, postprocessing deletes stall intervals in image-retrieval cadence units, globally smooths the retained motion except near the last insertion, "
         "converts it to a policy/action dataset, and reruns that policy to save the final trajectory.\n\n"
         "Focus on ranking next changes for both nominal and nominalrecovery. Explain whether the first-trial failure should be fixed online, left for postprocessing, "
-        "or rejected/regenerated. Be concrete about live-Z repair, recovery backoff, aligned transport target ideas, and policy conversion.\n\n"
+        "or rejected/regenerated. Be concrete about coordinate frames, live-Z repair, measured recovery backoff, aligned transport target ideas, and policy conversion.\n\n"
         "Return concise Markdown with: Findings, Root Cause, Ranked Next Directions, and Next Trial Settings.\n\n"
         "## Payload\n```json\n"
         + json.dumps(payload, indent=2)
