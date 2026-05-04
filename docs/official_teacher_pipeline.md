@@ -89,6 +89,22 @@ state during execution.
 `AIC_OFFICIAL_TEACHER_ACTION_MODE` or `--teacher-action-mode`; it matches the
 documented `Policy.set_pose_target()` path and the `WaveArm` example.
 
+For nominalrecovery/recovery backoff, the command-frame rule is more specific:
+compute the desired retreat as a TCP/tool-frame delta from force history, then
+convert it once to an absolute `base_link` target and resend that same target
+for the latch window. Do not stream a one-shot delta and then resume insertion
+immediately. The LeRobot recorder should still store delta-pose labels; when it
+sees a `base_link` absolute target, it converts that target into the current
+TCP-frame remaining delta before writing `action`.
+
+The May 3 isolated debug run `outputs/debug_cheatcode_modified/run20` is the
+current reference. It used a `1.7 N` force-vector-drop trigger and the original
+backoff gains `[90,90,90,50,50,50]` / `[50,50,50,20,20,20]`. The successful
+trigger commanded `delta_base.z=+0.01135 m` and measured about `+3.3 mm` actual
+base-z retreat. Earlier failed attempts sent a transformed backoff with negative
+base z, so the arm did not visibly back away even though a backoff command was
+logged.
+
 ## Commands
 
 Generate a first piecewise oracle artifact using explicit geometry:

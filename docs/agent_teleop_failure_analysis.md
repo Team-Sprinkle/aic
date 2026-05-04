@@ -108,4 +108,22 @@ Use the three attempts to separate planner variance from deterministic pipeline 
 - If smooth trajectories are plausible but actual reached poses diverge, focus on action mode, timing, velocity limits, controller behavior, and replay rate.
 - If CheatCode works alone but fails after handoff, verify the pre-insertion pose, plug-tip/gripper offset, orientation frame, and online CheatCode TF state at the handoff.
 
+For contact/recovery failures, do not rely on command traces alone. Sample the narrow interval around the first large F/T change at higher temporal resolution, include center-camera frames, and compare:
+
+- median-filtered force now versus about `150 ms` earlier;
+- commanded TCP-frame recovery delta;
+- transformed absolute `base_link` target;
+- measured TCP/base z during the next `0.5-0.8 s`;
+- whether force release coincides with a measured physical retreat.
+
+The May 3 `CheatCodeModified` run20 is the reference behavior for this check:
+
+```text
+outputs/debug_cheatcode_modified/run20
+center video:
+/home/ubuntu/ws_aic/src/aic/outputs/debug_cheatcode_modified/run20/dataset/videos/observation.images.center_camera/chunk-000/file-000.mp4
+```
+
+Run20 showed that the earlier apparent non-backoff was a frame-direction bug, not mainly a stiffness/damping issue. The policy detected a force-vector drop, computed a TCP-frame delta, converted it to a fixed absolute `base_link` target with positive base z, resent that target for the latch duration, and the recorded TCP state moved upward about `3.3 mm` with default gains. If future GPT-5 failure analysis sees a backoff command but no measured z retreat, first check whether the transformed base-frame axial component points deeper into insertion.
+
 GPT-5-mini should remain in the control loop only if it has enough scene context, produces stable and physically executable subgoals, and deterministic robotics tools can verify or repair its output. If it cannot produce metric waypoints reliably, prefer using it for scene interpretation, high-level strategy, subgoal selection, or review while IK, MoveIt, cuRobo, FCL/collision checking, visual servoing, and trajectory optimization generate executable motion.

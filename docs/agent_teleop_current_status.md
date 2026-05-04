@@ -1,8 +1,65 @@
 # Agent Teleop Expert Generator Current Status
 
-Last updated: 2026-05-02
+Last updated: 2026-05-03
 
 This document summarizes the current state of the VLM/MoveIt/CheatCode expert trajectory generator on `feat/agent-teleop`. It is intended as a handoff for continuing development after the first successful real nominal run.
+
+## Latest Backoff Debug Result: 2026-05-03
+
+The newest isolated backoff test is `CheatCodeModified` run20:
+
+```text
+outputs/debug_cheatcode_modified/run20
+```
+
+Inspection video:
+
+```text
+/home/ubuntu/ws_aic/src/aic/outputs/debug_cheatcode_modified/run20/dataset/videos/observation.images.center_camera/chunk-000/file-000.mp4
+```
+
+Run20 intentionally misaligned the CheatCode target by `25 mm` in x, used the new force-difference trigger, and overrode backoff stiffness/damping to the original/default values:
+
+```text
+backoff stiffness: [90, 90, 90, 50, 50, 50]
+backoff damping:   [50, 50, 50, 20, 20, 20]
+force L2 drop trigger: 1.7 N
+median force window: 3 samples
+force comparison horizon: 150 ms
+backoff latch: 0.7 s, 35 cycles at 20 ms
+```
+
+Result:
+
+```text
+Episode saved: success=True
+official scoring total: 42.980377409834546
+Force trigger:
+  fz=16.59648212407158
+  delta_force=[-0.32822602007866986, -1.408043732444714, 1.5599104117460563]
+  delta_tcp=[-0.0006944505083379636, -0.0029790955803075886, 0.011001368083077712]
+  delta_base=[-0.000775439453794967, -0.0010327601080222981, 0.011345460409224298]
+```
+
+The recorded TCP/base state confirms physical retreat with the default gains. In the `19.35-20.80 s` window, base z moved from about `0.2374 m` to `0.2407 m`, or `+3.3 mm`. This is less than the stronger-gain diagnostic run19, which reached about `+10.2 mm`, but it is visibly and numerically a backoff. Therefore the root cause was not primarily stiffness/damping.
+
+Why earlier implementations failed:
+
+- Triggering on absolute force z was unreliable because the wrist F/T sensor has a nonzero baseline while holding/supporting the cable. The useful signal in this contact case was the short-horizon force vector change, not the absolute force.
+- Sending a single relative delta was not enough. Backoff must be latched and resent for `0.5-0.8 s`; otherwise the controller may receive one target update and then continue the surrounding insertion behavior.
+- The force-derived vector is in the tool/TCP-related frame. For the tested insertion pose, converting the raw TCP delta into base coordinates produced negative `base_link.z` in earlier runs, which visually looked like no backup because it was still commanding along insertion. Run19/run20 fixed this by making the latched base-frame backoff target require positive base z while preserving the force-derived lateral component.
+- Stiffness/damping tuning was diagnostic. Higher backoff gains made the robot approach the commanded target faster, but run20 showed the original gains are sufficient after the base-z direction fix.
+
+Current correct command semantics:
+
+1. Compute the recovery delta from recent F/T history in the TCP/tool-aligned frame.
+2. Scale/clip that delta, with lateral x/y scaled down.
+3. Transform the delta once into `base_link` using the current `gripper/tcp` transform.
+4. Construct an absolute `base_link` target from the current TCP pose plus the transformed delta.
+5. Latch and resend that same absolute target for the backoff window.
+6. Record dataset actions as delta poses, not absolute poses. The recorder converts each absolute `base_link` target back to the current TCP-frame remaining delta, so ACT labels remain delta-pose labels.
+
+Important caveat: run20 is an isolated `CheatCodeModified` debug policy, not yet the VLM/MoveIt expert generator. Porting the fix into nominalrecovery should preserve the same frame semantics: force-history trigger and target construction online, fixed absolute base target during the latch, and delta-pose labels in recorded LeRobot data.
 
 ## Current Status
 
@@ -422,7 +479,60 @@ Recovery mode has a modular state machine, but nominal live validation is curren
 
 ## Recommended Next Steps
 
-1. Add stricter force acceptance for nominal datasets.
+1. Tune stiffness/damping for nominalrecovery backoff before changing recovery logic.
+
+   Do not modify `aic_controller` logic. The replay policy now exposes command-level
+   gains so recovery/backoff can be tested with lower Cartesian stiffness and higher
+   damping while keeping the controller implementation fixed. Start with recovery-only
+   Cartesian gains, inspect runtime traces for `recovery_backoff_started`,
+   `recovery_backoff_completed`, `recovery_force_release_wait`, and guarded-insert
+   contact timing, then run GPT-5 failure analysis with sampled center-camera images.
+
+   Suggested first smoke:
+
+   ```bash
+   pixi run python scripts/generate_expert_trajectories.py \
+     --nominalrecovery \
+     --config outputs/trajectory_datasets/sfp_to_nic/cheatcode/nic_cards_1/n1__test_n3/engine_config.yaml \
+     --target-accepted-trajectories 1 \
+     --max-total-attempts 3 \
+     --candidates-per-scene 1 \
+     --score-threshold 90 \
+     --ft-threshold 1.0 \
+     --backup-distance-m 0.015 \
+     --max-retries 3 \
+     --recovery-release-force-threshold 2.0 \
+     --recovery-cartesian-stiffness 45,45,55,35,35,35 \
+     --recovery-cartesian-damping 70,70,80,30,30,30 \
+     --strategy-model gpt-5-mini \
+     --debug \
+     --output-dir outputs/expert_debug/nominalrecovery_gain_tune_v1
+   ```
+
+   If the arm still does not lift away promptly after the F/T trigger, try lower
+   recovery translational stiffness, for example `30,30,45,30,30,30`, before changing
+   recovery sequencing. If it backs off but oscillates or misses the return gate,
+   increase recovery damping first.
+
+   Live result on 2026-05-03:
+
+   ```text
+   outputs/expert_debug/nominalrecovery_gain_tune_v1_20260503
+   ```
+
+   This run used `--recovery-cartesian-stiffness 45,45,55,35,35,35` and
+   `--recovery-cartesian-damping 70,70,80,30,30,30`. It was rejected, but it did
+   not reproduce the no-backoff failure. Runtime trace showed contact triggers
+   at guarded insertion starts, 15 mm staged recovery backoff, `force_released:
+   true`, return-to-preinsert gates passing, and repeated retry contact until
+   `recovery_max_retries_exhausted`. GPT-5 analysis of the rejected debug bundle
+   concluded the remaining dominant failure is lateral/yaw alignment and
+   base-link exact-position handoff semantics, not insertion speed or inability
+   to back off. Next experiment should enforce a stricter port-frame preinsert
+   XY/yaw gate and enable port-frame micro-align before descent; keep the tuned
+   recovery gains as the current baseline.
+
+2. Add stricter force acceptance for nominal datasets.
 
    The nominal expert should probably reject the accepted smoke trajectory if the dataset target is "highest-scoring minimal-contact experts", despite the official score passing.
 
@@ -434,7 +544,7 @@ Recovery mode has a modular state machine, but nominal live validation is curren
 
    If this rejects too much, implement a duration-aware force threshold instead of using only max force.
 
-2. Generate a small nominal batch.
+3. Generate a small nominal batch.
 
    Run 10 accepted trajectories with a reasonable attempt budget:
 
@@ -460,11 +570,11 @@ Recovery mode has a modular state machine, but nominal live validation is curren
      --launch-moveit true
    ```
 
-3. Add score-margin reporting.
+4. Add score-margin reporting.
 
    `generation_summary.json` should include category-level scoring values extracted from `scoring.yaml`, not just total score and basic metrics. This will make it obvious whether failures are from duration, path length, jerk, force, or contacts.
 
-4. Improve smoothness before large dataset generation.
+5. Improve smoothness before large dataset generation.
 
    The default direct MoveIt plan passes but still has high jerk. Next options:
 
@@ -473,11 +583,11 @@ Recovery mode has a modular state machine, but nominal live validation is curren
    - add a jerk-aware postprocess for joint trajectories,
    - evaluate Servo/Cartesian constrained approach after MoveIt reaches a safe staging pose.
 
-5. Make MoveIt collision scene more complete.
+6. Make MoveIt collision scene more complete.
 
    Build collision objects from task-board/asset config and TF, then add inflated keep-out zones from VLM `avoid_regions`. This should reduce reliance on luck while preserving the rule that MoveIt is required.
 
-6. Run a real recovery-mode smoke.
+7. Run a real recovery-mode smoke.
 
    Recovery should be tested separately from nominal:
 
@@ -503,7 +613,7 @@ Recovery mode has a modular state machine, but nominal live validation is curren
      --launch-moveit true
    ```
 
-7. Add integration tests behind explicit marks.
+8. Add integration tests behind explicit marks.
 
    Unit tests currently cover parser, MoveIt failure behavior, replay interpolation, dataset metadata, and recovery state transitions. Add opt-in integration tests for:
 
@@ -512,7 +622,7 @@ Recovery mode has a modular state machine, but nominal live validation is curren
    - replay reaches official scoring output,
    - cleanup leaves no stale `aic_engine`, `component_container`, or `static_transform_publisher` process.
 
-8. Keep GPT-5-mini out of the low-level control loop.
+9. Keep GPT-5-mini out of the low-level control loop.
 
    The current working design supports the key architectural decision: GPT-5-mini is useful for scene/cable-risk interpretation, but executable robot motion should come from deterministic robotics components and be filtered by Gazebo replay.
 
@@ -1118,12 +1228,19 @@ Do not keep blindly changing insertion speed. The preserve-Z run shows the nomin
 
 Try these in order, one variation at a time:
 
-1. Re-run `nominalrecovery_preserve_z_fast_insert` for multiple seeds/candidates to check repeatability at score threshold 90.
-2. Try the same preserve-Z/speed-gated settings in strict `--nominal`; nominal should still reject rather than recover on confirmed contact.
-3. Tighten live-Z repair: only allow it when XY/orientation tracking is already within spec. If the handoff gate fails from a large pose error, run body/port-frame micro-align or reject instead of beginning Z descent.
-4. For recovery data, do not keep increasing retries blindly. The forced runs show stable 5 mm recovery mechanics but repeated shallow contacts under strict thresholds. Next try an adaptive backoff distance: start at 5 mm, but if release is not observed or the next retry contacts before meaningful depth progress, increase to 10-15 mm before realign.
-5. Add high-rate F/T debug around the handoff and start-of-insertion window so the short official force spikes can be localized instead of inferred from scoring YAML.
-6. Longer-term, implement executable joint retiming/cross-fade for the MoveIt-to-Cartesian handoff and consider a port-frame delta-Z insertion formulation so the final descent starts from the measured live preinsert pose rather than from an assumed geometric pose.
+1. Keep the 2026-05-03 recovery gain tuning baseline:
+   `--recovery-cartesian-stiffness 45,45,55,35,35,35 --recovery-cartesian-damping 70,70,80,30,30,30`.
+   The live run `outputs/expert_debug/nominalrecovery_gain_tune_v1_20260503`
+   showed prompt 15 mm staged backoff and `force_released: true` on repeated
+   contacts. Do not change `aic_controller` logic; continue varying only the
+   commanded stiffness/damping profile if backoff regressions reappear.
+2. Tighten live-Z repair and retry entry: only allow descent when XY/orientation tracking is already within spec. If the handoff gate fails from a large pose error, run body/port-frame micro-align or reject instead of beginning Z descent.
+3. Enable and tune port-frame preinsert micro-align before guarded insertion. The latest GPT-5 analysis points to lateral/yaw misalignment and absolute base-link handoff semantics, not insertion speed or lack of physical backoff.
+4. Re-run `nominalrecovery_preserve_z_fast_insert` for multiple seeds/candidates to check repeatability at score threshold 90.
+5. Try the same preserve-Z/speed-gated settings in strict `--nominal`; nominal should still reject rather than recover on confirmed contact.
+6. For recovery data, do not keep increasing retries blindly. The forced runs show stable recovery mechanics but repeated shallow contacts under strict thresholds. Next try an adaptive backoff distance: start at 5 mm, but if release is not observed or the next retry contacts before meaningful depth progress, increase to 10-15 mm before realign.
+7. Add high-rate F/T debug around the handoff and start-of-insertion window so the short official force spikes can be localized instead of inferred from scoring YAML.
+8. Longer-term, implement executable joint retiming/cross-fade for the MoveIt-to-Cartesian handoff and consider a port-frame delta-Z insertion formulation so the final descent starts from the measured live preinsert pose rather than from an assumed geometric pose.
 
 ## What Works Consistently So Far
 

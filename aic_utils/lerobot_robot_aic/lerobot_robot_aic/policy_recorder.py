@@ -57,7 +57,13 @@ from rclpy.node import Node
 from rclpy.qos import qos_profile_sensor_data
 from sensor_msgs.msg import Image
 
-from aic_model.policy import quaternion_xyzw_to_rotation_vector
+from aic_model.policy import (
+    normalize_quaternion_xyzw,
+    quaternion_inverse_xyzw,
+    quaternion_multiply_xyzw,
+    quaternion_xyzw_to_rotation_matrix,
+    quaternion_xyzw_to_rotation_vector,
+)
 from .types import JointMotionUpdateActionDict, MotionUpdateActionDict
 
 
@@ -394,7 +400,10 @@ class PolicyRecorder(Node):
 
         return values
 
-    def _cartesian_action_from_motion(self) -> dict[str, float]:
+    def _cartesian_action_from_motion(
+        self,
+        obs_values: dict[str, Any] | None = None,
+    ) -> dict[str, float]:
         now = time.monotonic()
         zero_action = {
             "delta_position.x": 0.0,
@@ -427,16 +436,76 @@ class PolicyRecorder(Node):
             return zero_action
 
         frame_id = str(getattr(msg.header, "frame_id", "") or "")
-        if frame_id != "gripper/tcp":
+        if frame_id not in {"gripper/tcp", "base_link"}:
             mode_key = f"frame:{frame_id}"
             if mode_key not in self._unsupported_action_modes_logged:
                 self.get_logger().warn(
                     "Recorder expected Cartesian pose commands in frame_id='gripper/tcp' "
+                    "or frame_id='base_link' "
                     f"for delta-pose datasets, received frame_id='{frame_id}'. "
                     "Recording zero action for this frame."
                 )
                 self._unsupported_action_modes_logged.add(mode_key)
             return zero_action
+
+        if frame_id == "base_link":
+            if obs_values is None:
+                return zero_action
+            current_position = np.array(
+                [
+                    float(obs_values["tcp_pose.position.x"]),
+                    float(obs_values["tcp_pose.position.y"]),
+                    float(obs_values["tcp_pose.position.z"]),
+                ],
+                dtype=np.float64,
+            )
+            current_quat = normalize_quaternion_xyzw(
+                np.array(
+                    [
+                        float(obs_values["tcp_pose.orientation.x"]),
+                        float(obs_values["tcp_pose.orientation.y"]),
+                        float(obs_values["tcp_pose.orientation.z"]),
+                        float(obs_values["tcp_pose.orientation.w"]),
+                    ],
+                    dtype=np.float64,
+                )
+            )
+            target_position = np.array(
+                [
+                    float(msg.pose.position.x),
+                    float(msg.pose.position.y),
+                    float(msg.pose.position.z),
+                ],
+                dtype=np.float64,
+            )
+            target_quat = normalize_quaternion_xyzw(
+                np.array(
+                    [
+                        float(msg.pose.orientation.x),
+                        float(msg.pose.orientation.y),
+                        float(msg.pose.orientation.z),
+                        float(msg.pose.orientation.w),
+                    ],
+                    dtype=np.float64,
+                )
+            )
+            base_to_tcp = quaternion_xyzw_to_rotation_matrix(
+                quaternion_inverse_xyzw(current_quat)
+            )
+            delta_position = base_to_tcp @ (target_position - current_position)
+            delta_quat = quaternion_multiply_xyzw(
+                quaternion_inverse_xyzw(current_quat),
+                target_quat,
+            )
+            rotvec = quaternion_xyzw_to_rotation_vector(delta_quat)
+            return {
+                "delta_position.x": float(delta_position[0]),
+                "delta_position.y": float(delta_position[1]),
+                "delta_position.z": float(delta_position[2]),
+                "delta_rotation.x": float(rotvec[0]),
+                "delta_rotation.y": float(rotvec[1]),
+                "delta_rotation.z": float(rotvec[2]),
+            }
 
         rotvec = quaternion_xyzw_to_rotation_vector(
             np.array(
@@ -484,10 +553,10 @@ class PolicyRecorder(Node):
             "wrist_3_joint": v[5],
         }
 
-    def _action_values(self) -> dict[str, float]:
+    def _action_values(self, obs_values: dict[str, Any] | None = None) -> dict[str, float]:
         if self.action_mode == "joint":
             return self._joint_action_from_joint_cmd()
-        return self._cartesian_action_from_motion()
+        return self._cartesian_action_from_motion(obs_values)
 
     def _init_dataset(self, obs_values: dict[str, Any]) -> None:
         image_shape = tuple(int(x) for x in obs_values["left_camera"].shape)
@@ -661,7 +730,7 @@ class PolicyRecorder(Node):
             return
 
         obs_values_processed = self._robot_observation_processor(obs_values)
-        action_values_raw = self._action_values()
+        action_values_raw = self._action_values(obs_values)
         action_values_processed = self._teleop_action_processor((action_values_raw, obs_values))
 
         observation_frame = build_dataset_frame(

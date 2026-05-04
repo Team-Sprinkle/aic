@@ -658,10 +658,18 @@ def test_replay_runner_passes_recovery_env(monkeypatch, tmp_path):
             output_dir=tmp_path,
             ft_threshold_n=1.0,
             recovery_backoff_distance_m=0.005,
+            recovery_backoff_increment_m=0.015,
+            recovery_backoff_sec=0.5,
             recovery_min_backoff_distance_m=0.015,
             recovery_max_retries=2,
             recovery_release_force_threshold_n=2.0,
             force_confirm_sec=0.0,
+            cartesian_stiffness="70,70,70,40,40,40",
+            cartesian_damping="55",
+            recovery_cartesian_stiffness="45,45,55,35,35,35",
+            recovery_cartesian_damping="70,70,80,30,30,30",
+            joint_stiffness="80",
+            joint_damping="30",
         )
     )
 
@@ -670,10 +678,18 @@ def test_replay_runner_passes_recovery_env(monkeypatch, tmp_path):
     env = captured["env"]
     assert env["AIC_OFFICIAL_TEACHER_FT_THRESHOLD_N"] == "1.0"
     assert env["AIC_OFFICIAL_TEACHER_RECOVERY_MAX_BACKOFF_DISTANCE_M"] == "0.005"
+    assert env["AIC_OFFICIAL_TEACHER_RECOVERY_BACKOFF_DISTANCE_M"] == "0.015"
+    assert env["AIC_OFFICIAL_TEACHER_RECOVERY_BACKOFF_SEC"] == "0.5"
     assert env["AIC_OFFICIAL_TEACHER_RECOVERY_MIN_BACKOFF_DISTANCE_M"] == "0.015"
     assert env["AIC_OFFICIAL_TEACHER_RECOVERY_MAX_RETRIES"] == "2"
     assert env["AIC_OFFICIAL_TEACHER_RECOVERY_RELEASE_FORCE_THRESHOLD_N"] == "2.0"
     assert env["AIC_OFFICIAL_TEACHER_FORCE_CONFIRM_SEC"] == "0.0"
+    assert env["AIC_OFFICIAL_TEACHER_CARTESIAN_STIFFNESS"] == "70,70,70,40,40,40"
+    assert env["AIC_OFFICIAL_TEACHER_CARTESIAN_DAMPING"] == "55"
+    assert env["AIC_OFFICIAL_TEACHER_RECOVERY_CARTESIAN_STIFFNESS"] == "45,45,55,35,35,35"
+    assert env["AIC_OFFICIAL_TEACHER_RECOVERY_CARTESIAN_DAMPING"] == "70,70,80,30,30,30"
+    assert env["AIC_OFFICIAL_TEACHER_JOINT_STIFFNESS"] == "80"
+    assert env["AIC_OFFICIAL_TEACHER_JOINT_DAMPING"] == "30"
 
 
 def test_expert_planner_runner_builds_live_policy_command(tmp_path):

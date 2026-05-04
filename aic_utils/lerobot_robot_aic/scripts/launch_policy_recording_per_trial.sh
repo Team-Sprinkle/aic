@@ -510,7 +510,7 @@ for TRIAL_ID in "${TRIAL_IDS[@]}"; do
       export AIC_OFFICIAL_TEACHER_TRAJECTORY
       export AIC_OFFICIAL_TEACHER_ACTION_MODE
     fi
-    pixi run env "PYTHONPATH=${WORKSPACE_DIR}/aic_teacher_official:${PYTHONPATH:-}" \
+    pixi run env "PYTHONPATH=${WORKSPACE_DIR}/aic_teacher_official:${WORKSPACE_DIR}/aic_example_policies:${PYTHONPATH:-}" \
       ros2 run aic_model aic_model --ros-args -p use_sim_time:=true -p "policy:=${POLICY_CLASS}"
   ) >"${POLICY_LOG}" 2>&1 &
   POLICY_PID=$!
@@ -521,7 +521,8 @@ for TRIAL_ID in "${TRIAL_IDS[@]}"; do
   sleep 1
 
   RECORDER_CMD=(
-    pixi run aic-policy-recorder
+    pixi run env "PYTHONPATH=${WORKSPACE_DIR}/aic_utils/lerobot_robot_aic:${PYTHONPATH:-}"
+    aic-policy-recorder
     "--dataset.repo_id=${DATASET_REPO_ID}"
     "--dataset.single_task=${DATASET_SINGLE_TASK}"
     "--dataset.root=${DATASET_ROOT}"

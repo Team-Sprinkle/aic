@@ -34,10 +34,18 @@ class OfficialReplayConfig:
     expert_mode: str = "nominal"
     ft_threshold_n: float | None = None
     recovery_backoff_distance_m: float | None = None
+    recovery_backoff_increment_m: float | None = None
+    recovery_backoff_sec: float | None = None
     recovery_min_backoff_distance_m: float | None = None
     recovery_max_retries: int | None = None
     recovery_release_force_threshold_n: float | None = None
     force_confirm_sec: float | None = None
+    cartesian_stiffness: str | None = None
+    cartesian_damping: str | None = None
+    recovery_cartesian_stiffness: str | None = None
+    recovery_cartesian_damping: str | None = None
+    joint_stiffness: str | None = None
+    joint_damping: str | None = None
 
 
 class OfficialRecordingReplayRunner:
@@ -85,6 +93,12 @@ class OfficialRecordingReplayRunner:
             env["AIC_OFFICIAL_TEACHER_RECOVERY_MAX_BACKOFF_DISTANCE_M"] = str(
                 self.config.recovery_backoff_distance_m
             )
+        if self.config.recovery_backoff_increment_m is not None:
+            env["AIC_OFFICIAL_TEACHER_RECOVERY_BACKOFF_DISTANCE_M"] = str(
+                self.config.recovery_backoff_increment_m
+            )
+        if self.config.recovery_backoff_sec is not None:
+            env["AIC_OFFICIAL_TEACHER_RECOVERY_BACKOFF_SEC"] = str(self.config.recovery_backoff_sec)
         if self.config.recovery_min_backoff_distance_m is not None:
             env["AIC_OFFICIAL_TEACHER_RECOVERY_MIN_BACKOFF_DISTANCE_M"] = str(
                 self.config.recovery_min_backoff_distance_m
@@ -97,6 +111,22 @@ class OfficialRecordingReplayRunner:
             )
         if self.config.force_confirm_sec is not None:
             env["AIC_OFFICIAL_TEACHER_FORCE_CONFIRM_SEC"] = str(self.config.force_confirm_sec)
+        if self.config.cartesian_stiffness:
+            env["AIC_OFFICIAL_TEACHER_CARTESIAN_STIFFNESS"] = self.config.cartesian_stiffness
+        if self.config.cartesian_damping:
+            env["AIC_OFFICIAL_TEACHER_CARTESIAN_DAMPING"] = self.config.cartesian_damping
+        if self.config.recovery_cartesian_stiffness:
+            env["AIC_OFFICIAL_TEACHER_RECOVERY_CARTESIAN_STIFFNESS"] = (
+                self.config.recovery_cartesian_stiffness
+            )
+        if self.config.recovery_cartesian_damping:
+            env["AIC_OFFICIAL_TEACHER_RECOVERY_CARTESIAN_DAMPING"] = (
+                self.config.recovery_cartesian_damping
+            )
+        if self.config.joint_stiffness:
+            env["AIC_OFFICIAL_TEACHER_JOINT_STIFFNESS"] = self.config.joint_stiffness
+        if self.config.joint_damping:
+            env["AIC_OFFICIAL_TEACHER_JOINT_DAMPING"] = self.config.joint_damping
         with (attempt_dir / "replay_stdout.txt").open("w", encoding="utf-8") as stdout, (
             attempt_dir / "replay_stderr.txt"
         ).open("w", encoding="utf-8") as stderr:

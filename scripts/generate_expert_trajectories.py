@@ -77,6 +77,18 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--ft-soft-threshold", type=float, default=None, help=argparse.SUPPRESS)
     parser.add_argument("--ft-hard-threshold", type=float, default=None, help=argparse.SUPPRESS)
     parser.add_argument("--backup-distance-m", type=float, default=0.015)
+    parser.add_argument(
+        "--backoff-increment-m",
+        type=float,
+        default=None,
+        help="Optional per-stage recovery backoff increment. Set equal to backup distance for single-step backoff.",
+    )
+    parser.add_argument(
+        "--backoff-stage-sec",
+        type=float,
+        default=None,
+        help="Optional duration for each recovery backoff stage.",
+    )
     parser.add_argument("--min-backoff-distance-m", type=float, default=None)
     parser.add_argument("--max-retries", type=int, default=3)
     parser.add_argument("--force-confirm-sec", type=float, default=0.0)
@@ -85,6 +97,36 @@ def parse_args() -> argparse.Namespace:
         type=float,
         default=None,
         help="Optional force-delta threshold used only to decide that recovery backoff released contact.",
+    )
+    parser.add_argument(
+        "--cartesian-stiffness",
+        default=None,
+        help="Optional scalar or 6-value comma/space list for replay Cartesian stiffness.",
+    )
+    parser.add_argument(
+        "--cartesian-damping",
+        default=None,
+        help="Optional scalar or 6-value comma/space list for replay Cartesian damping.",
+    )
+    parser.add_argument(
+        "--recovery-cartesian-stiffness",
+        default=None,
+        help="Optional scalar or 6-value comma/space list used for recovery/backoff Cartesian commands.",
+    )
+    parser.add_argument(
+        "--recovery-cartesian-damping",
+        default=None,
+        help="Optional scalar or 6-value comma/space list used for recovery/backoff Cartesian commands.",
+    )
+    parser.add_argument(
+        "--joint-stiffness",
+        default=None,
+        help="Optional scalar or joint-count-value list for replay joint stiffness.",
+    )
+    parser.add_argument(
+        "--joint-damping",
+        default=None,
+        help="Optional scalar or joint-count-value list for replay joint damping.",
     )
     parser.add_argument("--probe-pattern", choices=["small_cross", "small_spiral", "none"], default="small_cross")
     parser.add_argument("--gazebo-gui", type=str_bool, default=False)
@@ -144,12 +186,20 @@ def main() -> int:
         per_trial_timeout_sec=args.per_trial_timeout_sec,
         sim_distrobox=args.sim_distrobox,
         recovery_backoff_distance_m=args.backup_distance_m,
+        recovery_backoff_increment_m=args.backoff_increment_m,
+        recovery_backoff_sec=args.backoff_stage_sec,
         recovery_min_backoff_distance_m=(
             args.backup_distance_m if args.min_backoff_distance_m is None else args.min_backoff_distance_m
         ),
         recovery_max_retries=args.max_retries,
         recovery_release_force_threshold_n=args.recovery_release_force_threshold,
         force_confirm_sec=args.force_confirm_sec,
+        cartesian_stiffness=args.cartesian_stiffness,
+        cartesian_damping=args.cartesian_damping,
+        recovery_cartesian_stiffness=args.recovery_cartesian_stiffness,
+        recovery_cartesian_damping=args.recovery_cartesian_damping,
+        joint_stiffness=args.joint_stiffness,
+        joint_damping=args.joint_damping,
     )
     planner_config = ExpertPlannerRunConfig(
         repo_root=REPO_ROOT,
@@ -190,6 +240,14 @@ def main() -> int:
             "launch_rviz": replay_config.launch_rviz,
             "require_recorder_save_log": replay_config.require_recorder_save_log,
             "remove_bag_data": replay_config.remove_bag_data,
+            "cartesian_stiffness": replay_config.cartesian_stiffness,
+            "cartesian_damping": replay_config.cartesian_damping,
+            "recovery_backoff_increment_m": replay_config.recovery_backoff_increment_m,
+            "recovery_backoff_sec": replay_config.recovery_backoff_sec,
+            "recovery_cartesian_stiffness": replay_config.recovery_cartesian_stiffness,
+            "recovery_cartesian_damping": replay_config.recovery_cartesian_damping,
+            "joint_stiffness": replay_config.joint_stiffness,
+            "joint_damping": replay_config.joint_damping,
         },
         "planner_recording": {
             "engine_config": str(planner_config.engine_config),
@@ -498,6 +556,9 @@ def _live_debug_assessment(smooth, replay_metrics: dict) -> dict:
     ]
     backoff_events = [event for event in runtime_events if event.get("event") == "recovery_backoff_completed"]
     release_events = [event for event in runtime_events if event.get("event") == "recovery_force_release_wait"]
+    latest_backoff = backoff_events[-1] if backoff_events else {}
+    measured_backoff_distance = latest_backoff.get("measured_backoff_distance_m")
+    measured_backoff_occurred = latest_backoff.get("measured_backoff_occurred")
     max_tracking = max(tracking_values) if tracking_values else None
     return {
         "schema_version": "aic_expert_live_debug_assessment/v1",
@@ -510,7 +571,9 @@ def _live_debug_assessment(smooth, replay_metrics: dict) -> dict:
         "tracking_gate_final_error_m": gate_events[-1].get("final_tracking_error_m") if gate_events else None,
         "contact_detected": bool(contact_events),
         "backoff_occurred": bool(backoff_events),
-        "backoff_distance_achieved_m": backoff_events[-1].get("backoff_distance_achieved_m") if backoff_events else None,
+        "backoff_distance_achieved_m": latest_backoff.get("backoff_distance_achieved_m") if backoff_events else None,
+        "measured_backoff_occurred": measured_backoff_occurred,
+        "measured_backoff_distance_m": measured_backoff_distance,
         "force_release_before_realign": release_events[-1].get("force_released") if release_events else None,
         "metrics": {
             "max_tracking_error_m": max_tracking,
@@ -519,7 +582,9 @@ def _live_debug_assessment(smooth, replay_metrics: dict) -> dict:
             "tracking_gate_repaired_with_live_z_offset": bool(gate_repair_events),
             "contact_detected": bool(contact_events),
             "backoff_occurred": bool(backoff_events),
-            "backoff_distance_achieved_m": backoff_events[-1].get("backoff_distance_achieved_m") if backoff_events else None,
+            "backoff_distance_achieved_m": latest_backoff.get("backoff_distance_achieved_m") if backoff_events else None,
+            "measured_backoff_occurred": measured_backoff_occurred,
+            "measured_backoff_distance_m": measured_backoff_distance,
             "force_release_before_realign": release_events[-1].get("force_released") if release_events else None,
         },
     }

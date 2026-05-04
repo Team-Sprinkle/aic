@@ -12,9 +12,11 @@ import math
 from pathlib import Path
 
 import numpy as np
-from aic_control_interfaces.msg import JointMotionUpdate, TrajectoryGenerationMode
+from aic_control_interfaces.msg import JointMotionUpdate, MotionUpdate, TrajectoryGenerationMode
 from aic_model_interfaces.msg import Observation
 from aic_model.policy import (
+    DEFAULT_CARTESIAN_DAMPING,
+    DEFAULT_CARTESIAN_STIFFNESS,
     compute_delta_pose,
     GetObservationCallback,
     MoveRobotCallback,
@@ -23,10 +25,11 @@ from aic_model.policy import (
     SendFeedbackCallback,
 )
 from aic_task_interfaces.msg import Task
-from geometry_msgs.msg import Point, Pose, Quaternion, Transform, WrenchStamped
+from geometry_msgs.msg import Point, Pose, Quaternion, Transform, Wrench, WrenchStamped
+from geometry_msgs.msg import Vector3
 from rclpy.duration import Duration
 from rclpy.time import Time
-from std_msgs.msg import String
+from std_msgs.msg import Header, String
 from tf2_ros import TransformException
 from transforms3d._gohlketransforms import quaternion_multiply, quaternion_slerp
 from trajectory_msgs.msg import JointTrajectoryPoint
@@ -79,10 +82,51 @@ class OfficialTeacherReplay(Policy):
         self._local_preinsert_align_done = False
         self._preinsert_settle_done = False
         self._last_tracking_gate_force_delta_n = None
+        self._last_tracking_gate_baseline_force = None
         self._last_tracking_gate_error_m = None
         self._last_tracking_gate_lateral_error_m = None
         self._last_tracking_gate_speed_mps = None
         self._last_precontact_lateral_offset_base = np.zeros(3, dtype=np.float64)
+        self._cartesian_stiffness = self._env_vector(
+            "AIC_OFFICIAL_TEACHER_CARTESIAN_STIFFNESS",
+            DEFAULT_CARTESIAN_STIFFNESS,
+            expected_len=6,
+        )
+        self._cartesian_damping = self._env_vector(
+            "AIC_OFFICIAL_TEACHER_CARTESIAN_DAMPING",
+            DEFAULT_CARTESIAN_DAMPING,
+            expected_len=6,
+        )
+        self._recovery_cartesian_stiffness = self._env_vector(
+            "AIC_OFFICIAL_TEACHER_RECOVERY_CARTESIAN_STIFFNESS",
+            self._cartesian_stiffness,
+            expected_len=6,
+        )
+        self._recovery_cartesian_damping = self._env_vector(
+            "AIC_OFFICIAL_TEACHER_RECOVERY_CARTESIAN_DAMPING",
+            self._cartesian_damping,
+            expected_len=6,
+        )
+        self._cartesian_wrench_feedback_gains_default = self._env_vector(
+            "AIC_OFFICIAL_TEACHER_CARTESIAN_WRENCH_FEEDBACK_GAINS",
+            [0.5, 0.5, 0.5, 0.0, 0.0, 0.0],
+            expected_len=6,
+        )
+        self._recovery_cartesian_wrench_feedback_gains_default = self._env_vector(
+            "AIC_OFFICIAL_TEACHER_RECOVERY_CARTESIAN_WRENCH_FEEDBACK_GAINS",
+            [0.0, 0.0, 0.0, 0.0, 0.0, 0.0],
+            expected_len=6,
+        )
+        self._joint_stiffness_default = self._env_vector(
+            "AIC_OFFICIAL_TEACHER_JOINT_STIFFNESS",
+            [100.0],
+            expected_len=None,
+        )
+        self._joint_damping_default = self._env_vector(
+            "AIC_OFFICIAL_TEACHER_JOINT_DAMPING",
+            [20.0],
+            expected_len=None,
+        )
         runtime_trace = os.environ.get("AIC_OFFICIAL_TEACHER_RUNTIME_TRACE", "")
         self._runtime_trace_path = Path(runtime_trace) if runtime_trace else None
         if self._action_mode not in {
@@ -124,6 +168,41 @@ class OfficialTeacherReplay(Policy):
                 self._wrench_callback,
                 10,
             )
+
+    @staticmethod
+    def _env_vector(name: str, default: list[float], *, expected_len: int | None) -> list[float]:
+        raw = os.environ.get(name, "").strip()
+        if not raw:
+            return [float(v) for v in default]
+        try:
+            values = [float(token) for token in raw.replace(",", " ").split()]
+        except ValueError as ex:
+            raise RuntimeError(f"{name} must contain numeric values") from ex
+        if expected_len is not None and len(values) == 1:
+            values = values * expected_len
+        if expected_len is not None and len(values) != expected_len:
+            raise RuntimeError(f"{name} must contain either 1 or {expected_len} values")
+        if not values:
+            raise RuntimeError(f"{name} must not be empty")
+        return values
+
+    @staticmethod
+    def _expand_gain_vector(values: list[float], length: int, name: str) -> list[float]:
+        if len(values) == 1:
+            return [float(values[0])] * length
+        if len(values) != length:
+            raise RuntimeError(f"{name} must contain either 1 or {length} values")
+        return [float(v) for v in values]
+
+    def _cartesian_gains(self, profile: str = "default") -> tuple[list[float], list[float]]:
+        if profile == "recovery":
+            return self._recovery_cartesian_stiffness, self._recovery_cartesian_damping
+        return self._cartesian_stiffness, self._cartesian_damping
+
+    def _cartesian_wrench_feedback_gains(self, profile: str = "default") -> list[float]:
+        if profile == "recovery":
+            return list(self._recovery_cartesian_wrench_feedback_gains_default)
+        return list(self._cartesian_wrench_feedback_gains_default)
 
     def _trace_event(self, event: str, **payload) -> None:
         if self._runtime_trace_path is None:
@@ -290,6 +369,7 @@ class OfficialTeacherReplay(Policy):
         target_pose: Pose,
         *,
         max_translation_step_m: float | None = None,
+        gain_profile: str = "default",
     ) -> None:
         delta_pose = compute_delta_pose(self._current_tcp_pose(), target_pose)
         if max_translation_step_m is None:
@@ -311,14 +391,42 @@ class OfficialTeacherReplay(Policy):
                 delta_pose.position.x = float(delta[0])
                 delta_pose.position.y = float(delta[1])
                 delta_pose.position.z = float(delta[2])
+        stiffness, damping = self._cartesian_gains(gain_profile)
         self.set_delta_pose_target(
             move_robot=move_robot,
             delta_pose=delta_pose,
             frame_id="gripper/tcp",
+            stiffness=stiffness,
+            damping=damping,
         )
 
-    def _send_absolute_target(self, move_robot: MoveRobotCallback, target_pose: Pose) -> None:
-        self.set_pose_target(move_robot=move_robot, pose=target_pose, frame_id="base_link")
+    def _send_absolute_target(
+        self,
+        move_robot: MoveRobotCallback,
+        target_pose: Pose,
+        *,
+        gain_profile: str = "default",
+    ) -> None:
+        stiffness, damping = self._cartesian_gains(gain_profile)
+        wrench_feedback_gains = self._cartesian_wrench_feedback_gains(gain_profile)
+        motion_update = MotionUpdate(
+            header=Header(frame_id="base_link", stamp=self._parent_node.get_clock().now().to_msg()),
+            pose=target_pose,
+            target_stiffness=np.diag(stiffness).flatten().tolist(),
+            target_damping=np.diag(damping).flatten().tolist(),
+            feedforward_wrench_at_tip=Wrench(
+                force=Vector3(x=0.0, y=0.0, z=0.0),
+                torque=Vector3(x=0.0, y=0.0, z=0.0),
+            ),
+            wrench_feedback_gains_at_tip=wrench_feedback_gains,
+            trajectory_generation_mode=TrajectoryGenerationMode(
+                mode=TrajectoryGenerationMode.MODE_POSITION,
+            ),
+        )
+        try:
+            move_robot(motion_update=motion_update)
+        except Exception as ex:
+            self.get_logger().info(f"move_robot exception: {ex}")
 
     @staticmethod
     def _minimum_jerk_fraction(progress: float) -> float:
@@ -634,6 +742,7 @@ class OfficialTeacherReplay(Policy):
         lateral_offset_base: np.ndarray | None = None,
         preserve_current_z: bool = True,
         max_speed_mps: float | None = None,
+        gain_profile: str = "default",
     ) -> None:
         start_pose = self._current_tcp_pose()
         target_pose = self._calc_cheatcode_gripper_pose(
@@ -679,7 +788,7 @@ class OfficialTeacherReplay(Policy):
                 start_xyz + fraction * (target_xyz - start_xyz),
                 quaternion_slerp(start_quat, target_quat, fraction),
             )
-            self._send_absolute_target(move_robot, pose)
+            self._send_absolute_target(move_robot, pose, gain_profile=gain_profile)
             self.sleep_for(dt)
         self._trace_event("local_preinsert_align_completed")
 
@@ -934,6 +1043,7 @@ class OfficialTeacherReplay(Policy):
         timeout_sec = max(settle_sec, self._tracking_gate_timeout_sec)
         started = self.time_now()
         baseline_force = self._force_vector(get_observation)
+        self._last_tracking_gate_baseline_force = baseline_force.copy()
         passed = False
         final_error = None
         final_speed = None
@@ -1133,6 +1243,7 @@ class OfficialTeacherReplay(Policy):
             time_waited_sec=waited,
         )
         self._last_tracking_gate_force_delta_n = final_force_delta
+        self._last_tracking_gate_baseline_force = baseline_force.copy()
         self._last_tracking_gate_error_m = final_error
         self._last_tracking_gate_lateral_error_m = final_lateral_error
         self._last_tracking_gate_speed_mps = final_speed
@@ -1147,6 +1258,32 @@ class OfficialTeacherReplay(Policy):
     ) -> np.ndarray:
         if retry_count <= 0:
             return np.zeros(3, dtype=np.float64)
+        pattern = os.environ.get(
+            "AIC_OFFICIAL_TEACHER_RECOVERY_RETRY_PATTERN",
+            "error_bias",
+        ).lower()
+        if pattern in {"cross", "spiral"}:
+            step = float(os.environ.get("AIC_OFFICIAL_TEACHER_RECOVERY_RETRY_PATTERN_STEP_M", "0.003"))
+            radius_index = (retry_count - 1) // 4 + 1
+            direction_index = (retry_count - 1) % 4
+            directions = [
+                np.asarray([1.0, 0.0, 0.0], dtype=np.float64),
+                np.asarray([-1.0, 0.0, 0.0], dtype=np.float64),
+                np.asarray([0.0, 1.0, 0.0], dtype=np.float64),
+                np.asarray([0.0, -1.0, 0.0], dtype=np.float64),
+            ]
+            if pattern == "cross":
+                radius_index = 1
+            offset = directions[direction_index] * step * radius_index
+            self._trace_event(
+                "recovery_retry_xy_pattern_computed",
+                retry_count=retry_count,
+                pattern=pattern,
+                lateral_offset_base_m=offset.tolist(),
+                step_m=step,
+                radius_index=radius_index,
+            )
+            return offset
         if os.environ.get("AIC_OFFICIAL_TEACHER_RECOVERY_RETRY_XY_BIAS", "false").lower() != "true":
             return np.zeros(3, dtype=np.float64)
         try:
@@ -1403,6 +1540,7 @@ class OfficialTeacherReplay(Policy):
         force_released = False
         release_started = self.time_now()
         total_backoff = 0.0
+        max_measured_backoff = 0.0
         backoff_pose = start_pose
         stage_index = 0
         while total_backoff < max_backoff_distance and (self.time_now() - release_started) < Duration(seconds=release_timeout):
@@ -1425,13 +1563,20 @@ class OfficialTeacherReplay(Policy):
                     stage_start_xyz + fraction * (stage_target_xyz - stage_start_xyz),
                     start_quat,
                 )
-                self._send_absolute_target(move_robot, pose)
+                self._send_absolute_target(move_robot, pose, gain_profile="recovery")
                 self.sleep_for(dt)
+                current_z = float(self._pose_position_array(self._current_tcp_pose())[2])
+                max_measured_backoff = max(max_measured_backoff, current_z - float(start_xyz[2]))
             total_backoff = next_backoff
+            current_pose = self._current_tcp_pose()
+            current_z = float(self._pose_position_array(current_pose)[2])
+            max_measured_backoff = max(max_measured_backoff, current_z - float(start_xyz[2]))
             self._trace_event(
                 "recovery_backoff_stage_completed",
                 stage_index=stage_index,
                 backoff_distance_achieved_m=total_backoff,
+                measured_backoff_distance_m=max_measured_backoff,
+                current_tcp_pose=self._pose_to_trace_dict(current_pose),
             )
 
             if total_backoff < min_backoff_distance:
@@ -1443,20 +1588,33 @@ class OfficialTeacherReplay(Policy):
                 and (self.time_now() - release_started) < Duration(seconds=release_timeout)
             ):
                 force_delta = float(np.linalg.norm(self._force_vector(get_observation) - baseline))
-                self._send_absolute_target(move_robot, backoff_pose)
+                self._send_absolute_target(move_robot, backoff_pose, gain_profile="recovery")
+                current_z = float(self._pose_position_array(self._current_tcp_pose())[2])
+                max_measured_backoff = max(max_measured_backoff, current_z - float(start_xyz[2]))
                 if force_delta < release_threshold:
                     force_released = True
                     break
                 self.sleep_for(dt)
             if force_released:
                 break
-        self._trace_event("recovery_backoff_completed", backoff_distance_achieved_m=total_backoff)
+        current_pose = self._current_tcp_pose()
+        current_z = float(self._pose_position_array(current_pose)[2])
+        max_measured_backoff = max(max_measured_backoff, current_z - float(start_xyz[2]))
+        self._trace_event(
+            "recovery_backoff_completed",
+            backoff_distance_achieved_m=total_backoff,
+            measured_backoff_distance_m=max_measured_backoff,
+            measured_backoff_occurred=max_measured_backoff >= max(0.001, min_backoff_distance),
+            current_tcp_pose=self._pose_to_trace_dict(current_pose),
+        )
         self._trace_event(
             "recovery_force_release_wait",
             force_released=force_released,
             threshold_n=release_threshold,
             contact_threshold_n=self._ft_threshold_n,
             backoff_distance_achieved_m=total_backoff,
+            measured_backoff_distance_m=max_measured_backoff,
+            measured_backoff_occurred=max_measured_backoff >= max(0.001, min_backoff_distance),
             min_backoff_distance_m=min_backoff_distance,
             max_backoff_distance_m=max_backoff_distance,
         )
@@ -1483,7 +1641,7 @@ class OfficialTeacherReplay(Policy):
                     lift_start_xyz + fraction * (lift_target_xyz - lift_start_xyz),
                     start_quat,
                 )
-                self._send_absolute_target(move_robot, pose)
+                self._send_absolute_target(move_robot, pose, gain_profile="recovery")
                 self.sleep_for(dt)
             self._trace_event(
                 "recovery_return_to_preinsert_completed",
@@ -1518,6 +1676,7 @@ class OfficialTeacherReplay(Policy):
             z_offset=float(os.environ.get("AIC_OFFICIAL_TEACHER_CHEATCODE_START_Z_OFFSET", "0.03")),
             preserve_current_z=recovery_realign_preserve_current_z,
             max_speed_mps=recovery_realign_speed_mps,
+            gain_profile="recovery",
         )
         self._trace_event("recovery_realign_completed")
         if retry_start_z_m is not None:
@@ -1542,7 +1701,7 @@ class OfficialTeacherReplay(Policy):
                     post_align_start_xyz + fraction * (post_align_xyz - post_align_start_xyz),
                     self._pose_quat_wxyz(post_align_pose),
                 )
-                self._send_absolute_target(move_robot, pose)
+                self._send_absolute_target(move_robot, pose, gain_profile="recovery")
                 self.sleep_for(dt)
             self._trace_event(
                 "recovery_post_realign_return_completed",
@@ -1567,6 +1726,8 @@ class OfficialTeacherReplay(Policy):
                 move_robot=move_robot,
                 pose=self.target_to_pose(target),
                 frame_id="base_link",
+                stiffness=self._cartesian_stiffness,
+                damping=self._cartesian_damping,
             )
             return
         n_joints = len(target.joint_positions)
@@ -1581,8 +1742,16 @@ class OfficialTeacherReplay(Policy):
                     positions=[float(v) for v in target.joint_positions],
                     velocities=[float(v) for v in velocities],
                 ),
-                target_stiffness=[100.0] * n_joints,
-                target_damping=[20.0] * n_joints,
+                target_stiffness=self._expand_gain_vector(
+                    self._joint_stiffness_default,
+                    n_joints,
+                    "AIC_OFFICIAL_TEACHER_JOINT_STIFFNESS",
+                ),
+                target_damping=self._expand_gain_vector(
+                    self._joint_damping_default,
+                    n_joints,
+                    "AIC_OFFICIAL_TEACHER_JOINT_DAMPING",
+                ),
                 trajectory_generation_mode=TrajectoryGenerationMode(
                     mode=TrajectoryGenerationMode.MODE_POSITION,
                 ),
@@ -1650,6 +1819,37 @@ class OfficialTeacherReplay(Policy):
                 send_feedback("official_teacher_replay_tracking_gate_failed")
                 self._trace_event("nominal_rejected_tracking_gate")
                 return False
+            if not gate_passed:
+                last_gate_force_delta = (
+                    float(self._last_tracking_gate_force_delta_n)
+                    if self._last_tracking_gate_force_delta_n is not None
+                    else 0.0
+                )
+                if last_gate_force_delta >= self._ft_threshold_n:
+                    self._trace_event(
+                        "contact_detected",
+                        retry_count=0,
+                        force_delta_n=last_gate_force_delta,
+                        threshold_n=self._ft_threshold_n,
+                        z_offset=z_offset,
+                        sample_source="initial_preinsert_tracking_gate",
+                    )
+                    send_feedback("official_teacher_replay_recovery_backoff")
+                    if not self._backoff_and_realign(
+                        task,
+                        port_transform,
+                        get_observation,
+                        move_robot,
+                        current_z_offset=z_offset,
+                        dt=dt,
+                        release_baseline_force=self._last_tracking_gate_baseline_force,
+                        retry_start_z_m=float(self._current_tcp_pose().position.z),
+                    ):
+                        send_feedback("official_teacher_replay_recovery_force_release_failed")
+                        self._trace_event("recovery_force_release_failed", retry_count=0)
+                        return False
+                    self._trace_event("recovery_initial_tracking_gate_backoff_completed")
+                    gate_passed = True
             if not gate_passed:
                 send_feedback("official_teacher_replay_tracking_gate_realign")
                 self._trace_event("recovery_tracking_gate_realign_started")
@@ -2491,6 +2691,40 @@ class OfficialTeacherReplay(Policy):
                         self._trace_event("nominal_rejected_tracking_gate")
                         return False
                     if not gate_passed:
+                        last_gate_force_delta = (
+                            float(self._last_tracking_gate_force_delta_n)
+                            if self._last_tracking_gate_force_delta_n is not None
+                            else 0.0
+                        )
+                        if last_gate_force_delta >= self._ft_threshold_n:
+                            start_z_offset = float(
+                                os.environ.get("AIC_OFFICIAL_TEACHER_CHEATCODE_START_Z_OFFSET", "0.03")
+                            )
+                            self._trace_event(
+                                "contact_detected",
+                                retry_count=0,
+                                force_delta_n=last_gate_force_delta,
+                                threshold_n=self._ft_threshold_n,
+                                z_offset=start_z_offset,
+                                sample_source="trajectory_preinsert_tracking_gate",
+                            )
+                            send_feedback("official_teacher_replay_recovery_backoff")
+                            if not self._backoff_and_realign(
+                                task,
+                                port_transform,
+                                get_observation,
+                                move_robot,
+                                current_z_offset=start_z_offset,
+                                dt=command_dt_sec,
+                                release_baseline_force=self._last_tracking_gate_baseline_force,
+                                retry_start_z_m=float(self._current_tcp_pose().position.z),
+                            ):
+                                send_feedback("official_teacher_replay_recovery_force_release_failed")
+                                self._trace_event("recovery_force_release_failed", retry_count=0)
+                                return False
+                            self._trace_event("recovery_initial_tracking_gate_backoff_completed")
+                            gate_passed = True
+                    if not gate_passed:
                         send_feedback("official_teacher_replay_tracking_gate_realign")
                         self._trace_event("recovery_tracking_gate_realign_started")
                         self._run_local_preinsert_align(
@@ -2546,18 +2780,20 @@ class OfficialTeacherReplay(Policy):
                         move_robot=move_robot,
                         delta_pose=delta_pose,
                         frame_id="gripper/tcp",
+                        stiffness=self._cartesian_stiffness,
+                        damping=self._cartesian_damping,
                     )
                 except TransformException as ex:
                     self.get_logger().warn(
                         "TF lookup failed for relative replay; falling back to "
                         f"absolute base_link pose for this tick: {ex}"
                     )
-                    self.set_pose_target(move_robot=move_robot, pose=pose, frame_id="base_link")
+                    self._send_absolute_target(move_robot, pose)
             else:
                 if self._action_mode == "joint_position_then_cheatcode":
                     self._send_joint_target(move_robot, target)
                 else:
-                    self.set_pose_target(move_robot=move_robot, pose=pose, frame_id="base_link")
+                    self._send_absolute_target(move_robot, pose)
 
             if self._task_completed_in_simulation(task):
                 send_feedback("official_teacher_replay_insertion_event")
@@ -2586,18 +2822,16 @@ class OfficialTeacherReplay(Policy):
                                     self._current_tcp_pose(),
                                 ),
                                 frame_id="gripper/tcp",
+                                stiffness=self._cartesian_stiffness,
+                                damping=self._cartesian_damping,
                             )
                         except TransformException:
-                            self.set_pose_target(
-                                move_robot=move_robot,
-                                pose=pose,
-                                frame_id="base_link",
-                            )
+                            self._send_absolute_target(move_robot, pose)
                     else:
                         if self._action_mode == "joint_position_then_cheatcode":
                             self._send_joint_target(move_robot, target)
                         else:
-                            self.set_pose_target(move_robot=move_robot, pose=pose, frame_id="base_link")
+                            self._send_absolute_target(move_robot, pose)
                     self.sleep_for(command_dt_sec)
                 send_feedback("official_teacher_replay_finished")
                 return True
