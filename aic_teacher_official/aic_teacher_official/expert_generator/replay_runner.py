@@ -22,7 +22,10 @@ class OfficialReplayConfig:
     output_dir: Path
     dataset_repo_id_prefix: str = "local/aic_expert"
     policy_class: str = "aic_teacher_official.OfficialTeacherReplay"
-    action_mode: str = "relative_delta_gripper_tcp"
+    # The VLM/MoveIt expert generator records free-space transport as MoveIt
+    # joint states, then hands off to online CheatCode geometry. Keeping this
+    # default avoids replaying base-link trajectory poses as TCP-frame deltas.
+    action_mode: str = "joint_position_then_cheatcode"
     gazebo_gui: bool = False
     launch_rviz: bool = False
     startup_delay_sec: int = 8

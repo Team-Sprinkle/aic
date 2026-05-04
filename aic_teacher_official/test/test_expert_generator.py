@@ -637,6 +637,7 @@ def test_replay_runner_builds_official_recording_command(tmp_path):
     assert "aic_teacher_official.OfficialTeacherReplay" in cmd
     assert "--teacher-trajectory" in cmd
     assert "--teacher-action-mode" in cmd
+    assert cmd[cmd.index("--teacher-action-mode") + 1] == "joint_position_then_cheatcode"
 
 
 def test_replay_runner_passes_recovery_env(monkeypatch, tmp_path):
