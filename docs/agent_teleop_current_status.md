@@ -1732,7 +1732,10 @@ This accepted `0/3`. Raising the teacher contact threshold to `3.0 N` did not so
 Current mode assessment:
 
 - `nominalrecovery`: reliable enough for high-score generation with the `ft=2.5/release=2.5/confirm=0.10`, fast-backoff, retry-gate setting above. It produced `3/3`, including one real recovery.
-- `nominal`: can generate high-score single runs, but is not reliable `3/3`. The remaining failures are slight face/chamfer contacts or marginal settle gates. Because nominal has no recovery path, these cannot be repaired online once contact happens.
+- Historical nominal status before the May 4 Idea 3 pass: nominal could
+  generate high-score single runs, but was not reliable `3/3`. That is
+  superseded by `outputs/expert_debug/nominal_clean_align_v4_20260504T192000Z`,
+  which accepted `3/3` without recovery/backoff.
 
 User inspection of the three nominalrecovery videos:
 
@@ -1792,9 +1795,14 @@ Recommended next engineering step:
 
 1. Keep the servo compensation; it is useful and directly mitigates controller residual.
 2. Add a pose/attitude gate, not only lateral XYZ: compare plug and port orientation before descent and reject/regenerate if pitch/roll error is above about `1.0-1.5 deg`.
-3. Implement the smoother aligned transport target from plug/port TFs: stop at a port-normal preinsert pose with positive vertical bias and near-zero speed, then descend. This should replace the current coarse handoff as the nominal path.
+3. The May 4 nominal reliability pass implemented the near-port version of this
+   idea: MoveIt transport, local preinsert align, port-frame precontact/final
+   align, minimum-jerk handoff, and guarded descent. Full obstacle-aware
+   aligned transport remains useful for `sc2sc`.
 4. For nominalrecovery, keep the successful settings and use compacted datasets for policy conversion/replay. Recovery is where robust high-score data can be generated now.
-5. For nominal, accept that `3/3` is not achieved yet; use the successful nominal folders for examples, but do not claim reliability until the pose/attitude gate and aligned transport target are implemented.
+5. For nominal, the current reliable `sfp2nic` setting is
+   `outputs/expert_debug/nominal_clean_align_v4_20260504T192000Z`, with `3/3`
+   accepted clean insertions above score 96.8 and no recovery/backoff.
 
 ## Tests Last Run
 
@@ -1904,3 +1912,97 @@ Remaining improvement opportunities:
 - Keep one `--ft-threshold`.
 - Keep `--nominal`, `--nominalrecovery`, and `--recovery`.
 - For `--nominal`, pre-contact repair is allowed, but post-contact backoff/recovery is not.
+
+## May 4 2026 Update: Nominal Idea 3 Above 96
+
+Current nominal pipeline:
+
+1. `OfficialExpertGeneratorPlanner` captures live TF, images, task config, and
+   force baseline.
+2. GPT-5-mini provides only symbolic strategy/cable-risk JSON.
+3. Deterministic candidates plus MoveItPy produce free-space joint-space
+   transport to staging/preinsert.
+4. `OfficialTeacherReplay` switches near the port to online CheatCode-style
+   Cartesian geometry.
+5. Nominal borrows the clean pre-contact phases from nominalrecovery:
+   local preinsert align, preinsert tracking gate, optional low-force realign,
+   precontact port-frame align, minimum-jerk handoff, handoff gate, and final
+   slow port-frame align before descent.
+6. Guarded exact-position CheatCode insertion descends with speed-gate holds.
+7. Nominal rejects on confirmed contact or force abort. It never calls backoff,
+   retry, or recovery.
+
+Best idea:
+
+- Idea 3 worked best. The reliable design is the nominalrecovery transport and
+  near-port alignment pipeline, but with recovery disabled.
+- Idea 1 helped as a component: pre-contact realign/recheck was borrowed from
+  nominalrecovery.
+- Idea 2 helped as a component: minimum-jerk handoff smoothed the sharp
+  direction change before descent.
+
+Reliable run:
+
+```text
+outputs/expert_debug/nominal_clean_align_v4_20260504T192000Z
+```
+
+Scores:
+
+```text
+attempt_000001_candidate_00: 96.83110630045765
+attempt_000002_candidate_01: 96.82091717491022
+attempt_000003_candidate_00: 96.80927941955909
+```
+
+All three runs reached insertion, had no official contact, had no excessive
+force, and had no runtime backoff/recovery events. Center videos:
+
+```text
+outputs/expert_debug/nominal_clean_align_v4_20260504T192000Z/replay_attempts/attempt_000001_candidate_00/dataset/videos/observation.images.center_camera/chunk-000/file-000.mp4
+outputs/expert_debug/nominal_clean_align_v4_20260504T192000Z/replay_attempts/attempt_000002_candidate_01/dataset/videos/observation.images.center_camera/chunk-000/file-000.mp4
+outputs/expert_debug/nominal_clean_align_v4_20260504T192000Z/replay_attempts/attempt_000003_candidate_00/dataset/videos/observation.images.center_camera/chunk-000/file-000.mp4
+```
+
+GPT-5 post-run analysis:
+
+```text
+outputs/expert_debug/nominal_clean_align_v4_20260504T192000Z/replay_attempts/attempt_000002_candidate_01/gpt5_replay_analysis_center/analysis.md
+```
+
+What worked:
+
+- `ft-threshold=2.5` plus
+  `AIC_OFFICIAL_TEACHER_ABOVE_CONTACT_SOFT_REALIGN_FORCE_THRESHOLD_N=2.5`.
+  This avoided rejecting harmless `~2.1 N` transients above the true insertion
+  zone while preserving contact rejection.
+- `AIC_OFFICIAL_TEACHER_ENABLE_LIVE_Z_REPAIR=false`.
+- Minimum-jerk CheatCode handoff via
+  `AIC_OFFICIAL_TEACHER_CHEATCODE_HANDOFF_PROFILE=minimum_jerk`.
+- Nominal pre-contact realign/recheck on low-force tracking-gate failure.
+- Allowing small low-force gate misses up to `3 mm` to proceed to final
+  port-frame alignment instead of rejecting before the fine aligner runs.
+- Precontact/final port-frame alignment with `0.5 mm` correction cap,
+  slow speed (`0.0035 m/s`), and force gating.
+- Runtime-trace speed validation. The static sampled phase labels overstated
+  guarded-insert speed in earlier batches.
+
+What did not work:
+
+- Strict nominal with no pre-contact realign was not reliable; it missed on
+  small lateral/attitude residuals.
+- Pure threshold tuning did not fix misalignment.
+- Treating every tracking-gate miss as terminal rejected candidates that were
+  low-force, low-speed, and still correctable.
+- Leaving live-Z repair enabled was risky because it could start descent with
+  lateral error still present.
+- A `0.25 mm` port-align cap was too weak for observed `2-3 mm` residuals.
+
+Next sc2sc-facing ideas:
+
+- Keep this nominal Idea 3 near-port stack, but add obstacle-aware aligned
+  transport targets before the near-port phase.
+- Use MoveIt for free-space obstacle clearance, then pin the final preinsert
+  pose and preserve the same port-frame fine alignment logic.
+- Keep live-Z repair disabled unless lateral error, force delta, and TCP speed
+  are all tightly gated.

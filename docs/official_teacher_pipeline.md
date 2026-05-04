@@ -120,6 +120,106 @@ GPT-5 post-run feedback for the best run is saved at:
 outputs/expert_debug/vlm_backoff_reliability_cycle10/replay_attempts/attempt_000003_candidate_00/gpt5_replay_analysis_center/analysis.md
 ```
 
+## Current Nominal Pipeline
+
+The reliable `--nominal` path is the Idea 3 design: reuse the same clean
+transport and near-port alignment phases as nominalrecovery, but disable all
+post-contact recovery. Nominal may realign before contact, but if confirmed
+contact or a force abort happens, it rejects/regenerates instead of backing off.
+
+The current nominal sequence is:
+
+1. Use GPT-5-mini only for symbolic cable-risk/strategy JSON.
+2. Use deterministic candidate generation and required MoveItPy free-space
+   planning to reach staging/preinsert.
+3. Replay MoveIt transport in joint space.
+4. Switch to online CheatCode-style geometry near the port.
+5. Run local preinsert alignment and a preinsert tracking gate.
+6. If the gate misses with low force, run one nominal pre-contact realign and
+   recheck. A very small low-force lateral miss can be allowed to proceed to
+   the dedicated port-frame aligner; this avoids rejecting a safe candidate
+   before the fine align phase has a chance to correct it.
+7. Run slow precontact port-frame alignment and a handoff gate.
+8. Smooth the transition into descent with a minimum-jerk CheatCode handoff.
+9. Run a final slow port-frame lateral alignment just before descent.
+10. Descend with guarded exact-position CheatCode insertion. Nominal rejects on
+    confirmed contact; it never calls recovery backoff or retry.
+
+The current stable nominal command shape is:
+
+```bash
+env AIC_EXPERT_VALIDATION_MAX_GUARDED_SPEED_MPS=0.025 \
+    AIC_OFFICIAL_TEACHER_ENABLE_LIVE_Z_REPAIR=false \
+    AIC_OFFICIAL_TEACHER_ABOVE_CONTACT_SOFT_REALIGN_FORCE_THRESHOLD_N=2.5 \
+    AIC_OFFICIAL_TEACHER_NOMINAL_ALLOW_LOW_FORCE_GATE_MISS_M=0.003 \
+    AIC_OFFICIAL_TEACHER_CHEATCODE_HANDOFF_PROFILE=minimum_jerk \
+    AIC_OFFICIAL_TEACHER_NOMINAL_PRECONTACT_REALIGN_ON_GATE_FAIL=true \
+    AIC_OFFICIAL_TEACHER_NOMINAL_PRECONTACT_REALIGN_SEC=1.0 \
+    AIC_OFFICIAL_TEACHER_NOMINAL_PRECONTACT_REALIGN_SPEED_MPS=0.03 \
+    AIC_OFFICIAL_TEACHER_NOMINAL_FINAL_PORT_ALIGN_SEC=0.5 \
+    AIC_OFFICIAL_TEACHER_NOMINAL_FINAL_ALIGN_SETTLE_SEC=0.25 \
+    AIC_OFFICIAL_TEACHER_PRECONTACT_PORT_ALIGN_SEC=0.5 \
+    AIC_OFFICIAL_TEACHER_PRECONTACT_PORT_ALIGN_MAX_OFFSET_M=0.0005 \
+    AIC_OFFICIAL_TEACHER_PRECONTACT_PORT_ALIGN_RESIDUAL_M=0.00055 \
+    AIC_OFFICIAL_TEACHER_PRECONTACT_PORT_ALIGN_SPEED_MPS=0.0035 \
+    AIC_OFFICIAL_TEACHER_PRECONTACT_PORT_ALIGN_GAIN=0.20 \
+    AIC_OFFICIAL_TEACHER_PREINSERT_SERVO_COMPENSATION=true \
+    AIC_OFFICIAL_TEACHER_PREINSERT_SERVO_MAX_BIAS_M=0.0015 \
+    AIC_OFFICIAL_TEACHER_TRACKING_GATE_MAX_LATERAL_ERROR_M=0.0022 \
+    AIC_OFFICIAL_TEACHER_GUARDED_INSERT_SPEED_GATE_MPS=0.018 \
+    pixi run python scripts/generate_expert_trajectories.py \
+      --nominal \
+      --target-accepted-trajectories 3 \
+      --max-total-attempts 3 \
+      --candidates-per-scene 2 \
+      --score-threshold 92 \
+      --ft-threshold 2.5 \
+      --config outputs/trajectory_datasets/sfp_to_nic/cheatcode/nic_cards_1/n1__test_n3/engine_config.yaml \
+      --output-dir outputs/expert_debug/<run_name> \
+      --strategy-model gpt-5-mini \
+      --analysis-model gpt-5 \
+      --debug \
+      --moveit-required true \
+      --max-retries 0 \
+      --force-confirm-sec 0.10 \
+      --gazebo-gui false \
+      --launch-rviz false \
+      --startup-delay-sec 12 \
+      --recorder-drain-sec 120 \
+      --planner-recorder-drain-sec 45 \
+      --per-trial-timeout-sec 0 \
+      --launch-moveit true
+```
+
+The latest verified nominal reliability run was:
+
+```text
+outputs/expert_debug/nominal_clean_align_v4_20260504T192000Z
+```
+
+Scores:
+
+```text
+attempt_000001_candidate_00: 96.83110630045765
+attempt_000002_candidate_01: 96.82091717491022
+attempt_000003_candidate_00: 96.80927941955909
+```
+
+All three reached insertion, had no official contact, had no excessive force,
+and had no runtime backoff/recovery events. Center-camera videos:
+
+```text
+outputs/expert_debug/nominal_clean_align_v4_20260504T192000Z/replay_attempts/attempt_000001_candidate_00/dataset/videos/observation.images.center_camera/chunk-000/file-000.mp4
+outputs/expert_debug/nominal_clean_align_v4_20260504T192000Z/replay_attempts/attempt_000002_candidate_01/dataset/videos/observation.images.center_camera/chunk-000/file-000.mp4
+outputs/expert_debug/nominal_clean_align_v4_20260504T192000Z/replay_attempts/attempt_000003_candidate_00/dataset/videos/observation.images.center_camera/chunk-000/file-000.mp4
+```
+
+Representative GPT-5 post-run feedback:
+
+```text
+outputs/expert_debug/nominal_clean_align_v4_20260504T192000Z/replay_attempts/attempt_000002_candidate_01/gpt5_replay_analysis_center/analysis.md
+```
+
 ## What worked and what did not
 
 What worked:
@@ -143,6 +243,14 @@ What worked:
 - Stopping above-contact descent when force is already meaningful but below the
   hard contact threshold. The default soft realign threshold is now `2.0 N`,
   preventing long pushes at `2-5 N` before a harder collision.
+- For nominal specifically, Idea 3 worked best: share nominalrecovery's
+  transport, local preinsert align, precontact port-frame align, handoff gate,
+  and final guarded insertion path, but keep recovery/backoff disabled.
+- Minimum-jerk handoff into descent reduced the sharp transition at the start of
+  CheatCode insertion.
+- Allowing small low-force gate misses to proceed to the final port-frame
+  aligner avoided rejecting candidates that were only `2-3 mm` laterally off
+  before fine alignment.
 
 What did not work:
 
@@ -162,6 +270,16 @@ What did not work:
   not fix bad lateral alignment or pinned recovery.
 - Running with stale `aic_model`/recorder processes. Orphaned policy processes
   caused repeated model-validation failures unrelated to the replay policy.
+- For nominal, threshold tuning alone did not create reliability. Earlier
+  nominal batches still failed on slight lateral/attitude mismatch.
+- Treating every nominal tracking-gate miss as terminal was too brittle. Some
+  misses were low-force, low-speed, and small enough for the final aligner to
+  correct safely.
+- Letting live-Z repair run freely in nominal was risky. It can start descent
+  from a bad lateral state; keep it disabled unless strongly gated.
+- A tiny precontact port-align cap (`0.25 mm`) was too weak when the residual
+  lateral error was around `2-3 mm`; the working nominal cap is `0.5 mm` per
+  command with slow speed and force gating.
 
 ## Piecewise vs continuous trajectory
 

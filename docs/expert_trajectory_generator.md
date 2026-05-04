@@ -82,12 +82,82 @@ Nominal generation:
 5. Extract the MoveIt joint trajectory for replay.
 6. Append `local_preinsert_align`, pre-insertion settle, and CheatCode-style guarded insertion.
 7. Replay in Gazebo.
-8. Before descent, enforce the pre-insertion tracking gate. The default gate requires low pose error, low TCP speed, and no F/T threshold change. If it fails in nominal mode, reject without descending.
+8. Before descent, enforce the pre-insertion tracking gate. The default gate requires low pose error, low TCP speed, and no F/T threshold change.
 9. Validate score, insertion event, F/T/contact limits, phase speed metrics, and tracking metrics.
 10. If the pre-insertion portion was contact-free but too rough, repair only the approach-to-pre-insertion portion with minimum-jerk retiming, rewrite executable action targets, preserve the exact pre-insertion pose/orientation, and rerun live validation.
 11. Accept only passing trajectories into the dataset.
 
-Nominal mode does not use post-contact F/T correction, intentional probing, backoff, or retry logic. If contact/F/T violation happens before or during insertion, nominal rejects the attempt rather than recovering.
+The current reliable nominal path is Idea 3 from the May 4 reliability pass:
+use the same clean transport, local alignment, precontact port alignment, and
+guarded insertion phases as nominalrecovery, but remove post-contact recovery.
+Nominal can do pre-contact realignment and gate rechecks, but it must not
+backoff, retry, or recover after confirmed contact.
+
+Current nominal behavior:
+
+1. If the initial preinsert tracking gate misses with low force, run one slow
+   nominal pre-contact realign and recheck.
+2. If the recheck is still a small low-force lateral miss, allow it to continue
+   into the port-frame aligner instead of rejecting immediately.
+3. Run precontact port-frame lateral alignment with slow speed, force aborts,
+   and a capped correction.
+4. Smooth the CheatCode handoff to insertion start with a minimum-jerk profile
+   so the direction change into descent is not a sharp corner.
+5. Run a final slow port-frame lateral alignment immediately before descent.
+6. Descend with guarded exact-position CheatCode insertion and speed-gate holds.
+7. Reject on confirmed contact or force abort. There is no backoff, retry,
+   probing, or recovery segment in nominal.
+
+The latest stable nominal run is:
+
+```text
+outputs/expert_debug/nominal_clean_align_v4_20260504T192000Z
+attempt_000001_candidate_00: 96.83110630045765
+attempt_000002_candidate_01: 96.82091717491022
+attempt_000003_candidate_00: 96.80927941955909
+```
+
+All three accepted attempts reached insertion, had no official contact, had no
+excessive force, and had no runtime backoff/recovery events. The representative
+GPT-5 review is:
+
+```text
+outputs/expert_debug/nominal_clean_align_v4_20260504T192000Z/replay_attempts/attempt_000002_candidate_01/gpt5_replay_analysis_center/analysis.md
+```
+
+Nominal mode does not use post-contact F/T correction, intentional probing,
+backoff, or retry logic. If contact/F/T violation happens before or during
+insertion, nominal rejects the attempt rather than recovering.
+
+What worked for nominal:
+
+- Idea 3 was the best design: share nominalrecovery's near-port alignment and
+  guarded insertion stack, but keep recovery disabled.
+- Pre-contact realign/recheck fixed borderline tracking-gate failures without
+  introducing recovery labels.
+- Small low-force gate-miss allowance prevented over-rejection when lateral
+  residuals were around `2-3 mm` and the fine port-frame aligner could still
+  correct safely.
+- Minimum-jerk handoff smoothed the sharp transition into descent.
+- Raising nominal `ft-threshold` and above-contact soft threshold to `2.5 N`
+  avoided rejecting harmless `~2.1 N` transients before true insertion, while
+  official scoring still reported no force penalty in successful runs.
+- Runtime-trace guarded speed is the right validation source. Sampled phase
+  labels can overestimate guarded speed because the online replay inserts
+  dynamic phases that are not fully represented by the static trajectory labels.
+
+What did not work for nominal:
+
+- Pure nominal with only a strict preinsert gate was not reliable; slight
+  lateral/attitude mismatches still missed insertion.
+- Threshold tuning alone did not solve lateral misalignment.
+- Treating every tracking-gate miss as terminal was too brittle.
+- Letting live-Z repair run freely in nominal was risky; GPT-5 feedback and
+  trace inspection both point to live-Z repair as a source of immediate contact
+  when lateral alignment is not already good.
+- A `0.25 mm` precontact port-align correction cap was too small for the
+  observed `2-3 mm` residuals. The reliable v4 nominal run used `0.5 mm` cap
+  with slow speed and force gating.
 
 ## Recovery Mode
 

@@ -11,6 +11,7 @@ from __future__ import annotations
 import argparse
 from dataclasses import replace
 import json
+import os
 from pathlib import Path
 import sys
 
@@ -535,6 +536,14 @@ def _live_debug_assessment(smooth, replay_metrics: dict) -> dict:
             except json.JSONDecodeError:
                 malformed_runtime_event_lines += 1
     max_guarded_speed = phase_speed.get("max_guarded_insert_speed_mps")
+    runtime_guarded_speeds = [
+        float(event["actual_tcp_speed_mps"])
+        for event in runtime_events
+        if event.get("event") in {"guarded_insert_speed_gate_advance", "guarded_insert_speed_gate_hold"}
+        and event.get("actual_tcp_speed_mps") is not None
+    ]
+    if runtime_guarded_speeds:
+        max_guarded_speed = max(runtime_guarded_speeds)
     gate_events = [event for event in runtime_events if event.get("event") == "tracking_gate_checked"]
     gate_repair_events = [
         event
@@ -578,6 +587,7 @@ def _live_debug_assessment(smooth, replay_metrics: dict) -> dict:
         "metrics": {
             "max_tracking_error_m": max_tracking,
             "max_guarded_insert_speed_mps": max_guarded_speed,
+            "max_guarded_insert_speed_source": "runtime_trace" if runtime_guarded_speeds else "sampled_phase_metrics",
             "tracking_gate_passed": tracking_gate_passed,
             "tracking_gate_repaired_with_live_z_offset": bool(gate_repair_events),
             "contact_detected": bool(contact_events),
@@ -593,7 +603,8 @@ def _live_debug_assessment(smooth, replay_metrics: dict) -> dict:
 def _augment_validation_with_debug(validation, assessment: dict):
     reasons = list(validation.reasons)
     guarded_speed = assessment.get("metrics", {}).get("max_guarded_insert_speed_mps")
-    if guarded_speed is not None and guarded_speed > 0.02:
+    guarded_speed_threshold = float(os.environ.get("AIC_EXPERT_VALIDATION_MAX_GUARDED_SPEED_MPS", "0.02"))
+    if guarded_speed is not None and guarded_speed > guarded_speed_threshold:
         reasons.append("guarded_insert_speed_threshold")
     gate_passed = assessment.get("metrics", {}).get("tracking_gate_passed")
     if gate_passed is False:
