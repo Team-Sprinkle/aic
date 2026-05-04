@@ -41,6 +41,12 @@ parser.add_argument("--adapter_delta_clip", type=float, default=0.05)
 parser.add_argument("--action_clip", type=float, default=0.05)
 parser.add_argument("--bc_weight", type=float, default=0.0)
 parser.add_argument("--cql_weight", type=float, default=0.0)
+parser.add_argument("--state_source", choices=["lerobot_compatible", "policy_prefix"], default="lerobot_compatible")
+parser.add_argument("--task_family", choices=["sfp_to_nic", "sc_to_sc"], default="sfp_to_nic")
+parser.add_argument("--target_port_index", type=int, default=0)
+parser.add_argument("--target_card_index", type=int, default=0)
+parser.add_argument("--target_card_valid", type=int, default=1)
+parser.add_argument("--gripper_joint_position", type=float, default=0.0035405)
 parser.add_argument("--disable_fabric", action="store_true", default=False)
 AppLauncher.add_app_launcher_args(parser)
 args_cli = parser.parse_args()
@@ -68,6 +74,42 @@ CAMERA_KEYS = [
     "observation.images.left_camera",
     "observation.images.right_camera",
 ]
+
+ARM_JOINT_NAMES = [
+    "shoulder_pan_joint",
+    "shoulder_lift_joint",
+    "elbow_joint",
+    "wrist_1_joint",
+    "wrist_2_joint",
+    "wrist_3_joint",
+]
+
+
+def _canonical_task_vector(args: argparse.Namespace, *, device: torch.device, batch_size: int) -> torch.Tensor:
+    if args.task_family == "sfp_to_nic":
+        family = [1.0, 0.0]
+        if args.target_card_valid != 1:
+            raise ValueError("sfp_to_nic Isaac task context requires target_card_valid=1")
+        if args.target_card_index < 0 or args.target_card_index >= 5:
+            raise ValueError("sfp_to_nic target_card_index must be in 0..4")
+    elif args.task_family == "sc_to_sc":
+        family = [0.0, 1.0]
+        if args.target_card_valid != 0 or args.target_card_index != -1:
+            raise ValueError("sc_to_sc Isaac task context requires target_card_index=-1 and target_card_valid=0")
+    else:
+        raise ValueError(f"Unsupported task_family: {args.task_family}")
+    if args.target_port_index not in {0, 1}:
+        raise ValueError("target_port_index must be 0 or 1")
+    port = [1.0, 0.0] if args.target_port_index == 0 else [0.0, 1.0]
+    card = [0.0] * 5
+    if args.target_card_valid:
+        card[args.target_card_index] = 1.0
+    vector = torch.tensor(
+        family + port + card + [float(args.target_card_valid)],
+        dtype=torch.float32,
+        device=device,
+    )
+    return vector.unsqueeze(0).expand(batch_size, -1)
 
 
 class ReplayBuffer:
@@ -148,6 +190,69 @@ def _raw_camera_images(env, *, device: torch.device) -> dict[str, torch.Tensor]:
 def _to_act_obs(policy_obs: torch.Tensor, images: dict[str, torch.Tensor], *, state_dim: int) -> dict[str, Any]:
     state = policy_obs[:, :state_dim]
     return {"state": state, "images": images}
+
+
+def _named_index(names: list[str], target: str) -> int:
+    try:
+        return names.index(target)
+    except ValueError as exc:
+        raise RuntimeError(f"Isaac robot does not expose {target!r}; available names: {names}") from exc
+
+
+def _isaac_lerobot_state(env, args: argparse.Namespace, *, device: torch.device, state_dim: int) -> torch.Tensor:
+    robot = env.unwrapped.scene["robot"]
+    body_names = list(getattr(robot, "body_names", []))
+    joint_names = list(getattr(robot, "joint_names", []))
+    wrist_index = _named_index(body_names, "wrist_3_link")
+    joint_indices = [_named_index(joint_names, name) for name in ARM_JOINT_NAMES]
+    data = robot.data
+    batch_size = int(data.body_pos_w.shape[0])
+
+    tcp_pos = data.body_pos_w[:, wrist_index]
+    # Isaac Lab stores quaternions in wxyz order. The LeRobot dataset feature
+    # names say xyzw, but the recorded identity rows are numerically wxyz, so
+    # keep the numeric order used by ACT training.
+    tcp_quat = data.body_quat_w[:, wrist_index]
+    tcp_lin_vel = getattr(data, "body_lin_vel_w", torch.zeros(batch_size, len(body_names), 3, device=device))[
+        :, wrist_index
+    ]
+    tcp_ang_vel = getattr(data, "body_ang_vel_w", torch.zeros(batch_size, len(body_names), 3, device=device))[
+        :, wrist_index
+    ]
+    tcp_error = torch.zeros(batch_size, 6, dtype=torch.float32, device=device)
+    joint_pos = data.joint_pos[:, joint_indices]
+    gripper = torch.full(
+        (batch_size, 1),
+        float(args.gripper_joint_position),
+        dtype=torch.float32,
+        device=device,
+    )
+    wrench = torch.zeros(batch_size, 6, dtype=torch.float32, device=device)
+    base_state = torch.cat(
+        [tcp_pos, tcp_quat, tcp_lin_vel, tcp_ang_vel, tcp_error, joint_pos, gripper, wrench],
+        dim=-1,
+    )
+    if base_state.shape[1] != 32:
+        raise RuntimeError(f"Expected Isaac LeRobot-compatible base state dim 32, got {base_state.shape[1]}")
+    task_vector = _canonical_task_vector(args, device=device, batch_size=batch_size)
+    state = torch.cat([base_state, task_vector], dim=-1)
+    if state.shape[1] < state_dim:
+        raise RuntimeError(f"Isaac LeRobot-compatible state has {state.shape[1]} dims, checkpoint expects {state_dim}")
+    return state[:, :state_dim]
+
+
+def _act_obs_from_env(
+    env,
+    policy_obs: torch.Tensor,
+    images: dict[str, torch.Tensor],
+    args: argparse.Namespace,
+    *,
+    device: torch.device,
+    state_dim: int,
+) -> dict[str, Any]:
+    if args.state_source == "policy_prefix":
+        return _to_act_obs(policy_obs, images, state_dim=state_dim)
+    return {"state": _isaac_lerobot_state(env, args, device=device, state_dim=state_dim), "images": images}
 
 
 def _repeat_first_action(action: torch.Tensor, *, action_horizon: int, single_action_dim: int) -> torch.Tensor:
@@ -490,7 +595,12 @@ def main() -> None:
             "warmstart_report": warmstart,
         },
         "isaac_adapter": {
-            "policy_obs_to_state": f"first_{state_dim}_dims",
+            "state_source": args_cli.state_source,
+            "state_contract": (
+                "LeRobot-compatible 32D state plus canonical 10D task vector"
+                if args_cli.state_source == "lerobot_compatible"
+                else f"first_{state_dim}_dims"
+            ),
             "image_source": "raw_isaac_camera_sensor_rgb_resized_to_3x256x288",
             "act_torchscript": str(args_cli.act_torchscript),
             "action_executed": "first_action_from_flattened_chunk",
@@ -498,6 +608,13 @@ def main() -> None:
             "action_clip": args_cli.action_clip,
             "ppo_resnet_observation_terms_disabled": True,
             "camera_sensors_enabled": True,
+            "task_context": {
+                "task_family": args_cli.task_family,
+                "target_port_index": args_cli.target_port_index,
+                "target_card_index": args_cli.target_card_index,
+                "target_card_valid": args_cli.target_card_valid,
+            },
+            "gripper_joint_position": args_cli.gripper_joint_position,
         },
         "args": vars(args_cli),
     }
@@ -524,14 +641,28 @@ def main() -> None:
                     flush=True,
                 )
                 break
-        act_obs = _to_act_obs(policy_obs, current_images, state_dim=state_dim)
+        act_obs = _act_obs_from_env(
+            env,
+            policy_obs,
+            current_images,
+            args_cli,
+            device=device,
+            state_dim=state_dim,
+        )
         with torch.no_grad():
             action_chunk = trainer.actor.mean_action(act_obs)
         env_action = action_chunk[:, :single_action_dim]
         next_obs, reward, terminated, truncated, _ = env.step(env_action)
         next_policy_obs = _policy_tensor(next_obs).to(device)
         next_images = _raw_camera_images(env, device=device)
-        next_act_obs = _to_act_obs(next_policy_obs, next_images, state_dim=state_dim)
+        next_act_obs = _act_obs_from_env(
+            env,
+            next_policy_obs,
+            next_images,
+            args_cli,
+            device=device,
+            state_dim=state_dim,
+        )
         done = torch.logical_or(terminated, truncated).float().reshape(-1, 1).to(device)
         reward = reward.reshape(-1, 1).to(device)
         action_for_critic = _repeat_first_action(env_action, action_horizon=action_horizon, single_action_dim=single_action_dim)

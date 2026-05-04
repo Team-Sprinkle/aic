@@ -186,7 +186,6 @@ pixi run python scripts/evaluate_act_checkpoints_runtime.py \
   --workspace-container /home/chmin/yj/ws_aic/src/aic \
   --engine-config /home/chmin/yj/ws_aic/src/aic/outputs/runtime_eval_configs/sample_config_trial1.yaml \
   --poll-seconds 1 \
-  --max-checkpoints 1 \
   --command-mode none \
   --start-delay-sec 1 \
   --max-runtime-sec 1 \
@@ -228,6 +227,60 @@ motion or measure insertion quality. Commanding motion with this early/untrained
 ACT checkpoint has previously crashed `ros_gz_container`, so use `none` for
 reliable checkpoint health checks during training and run motion eval only when
 debugging the controller/runtime path.
+
+For actual ACT motion evaluation, prefer the TorchScript runtime wrapper instead
+of loading the full LeRobot ACT object inside the ROS lifecycle node. Export the
+checkpoint first:
+
+```bash
+RUN_DIR=/data1/chmin/yj/ws_aic/src/aic/outputs/train/sfp_to_nic/hf_sfp2nic_card0_port0_randomized/act/bc/20260502_act_20hz_chunk8_nact2_4gpu_eval_all_v1
+pixi run python aic_utils/lerobot_robot_aic/scripts/export_act_torchscript.py \
+  --act-checkpoint "$RUN_DIR/checkpoints/165000/pretrained_model" \
+  --output "$RUN_DIR/act_policy_ts_165000_cpu.pt" \
+  --device cpu
+```
+
+Then run the official evaluator through the rootless runtime container:
+
+```bash
+RUN_DIR=/data1/chmin/yj/ws_aic/src/aic/outputs/train/sfp_to_nic/hf_sfp2nic_card0_port0_randomized/act/bc/20260502_act_20hz_chunk8_nact2_4gpu_eval_all_v1
+TS=$RUN_DIR/act_policy_ts_165000_cpu.pt
+pixi run python scripts/evaluate_act_checkpoints_runtime.py \
+  --run-dir "$RUN_DIR" \
+  --eval-subdir runtime_eval_trial1_act_ts_delta_pose \
+  --workspace-host /data1/chmin/yj/ws_aic/src/aic \
+  --workspace-container /home/chmin/yj/ws_aic/src/aic \
+  --engine-config /home/chmin/yj/ws_aic/src/aic/outputs/runtime_eval_configs/sample_config_trial1.yaml \
+  --checkpoint-glob "checkpoints/165000/pretrained_model" \
+  --once-existing \
+  --eval-attempts 2 \
+  --policy-module aic_example_policies.ros.RunACTTorchScript \
+  --act-torchscript "$TS" \
+  --policy-device cpu \
+  --command-mode delta_pose \
+  --command-frame gripper/tcp \
+  --max-runtime-sec 20 \
+  --start-delay-sec 1 \
+  --control-hz 10 \
+  --max-translation-delta 0.01 \
+  --max-rotation-delta 0.1 \
+  --sim-wait-sec 45 \
+  --readiness-timeout-sec 240 \
+  --engine-timeout-sec 240
+```
+
+For full official three-trial scoring, replace `--engine-config` with
+`/home/chmin/yj/ws_aic/src/aic/aic_engine/config/sample_config.yaml` and use a
+longer `--max-runtime-sec` / `--engine-timeout-sec`.
+
+Task-conditioned single-task datasets can have constant task-vector dimensions,
+which means the saved LeRobot normalizer may contain zero
+`observation.state.std` entries. Runtime policies must clamp zero or near-zero
+normalizer std values to `1.0`; otherwise normalized state contains inf/NaN and
+ACT can output NaN actions. `RunACT` and `RunACTTorchScript` do this. If policy
+logs show `ACT produced non-finite action`, the command is skipped so Gazebo does
+not receive NaN controller targets, but that checkpoint should be treated as
+failed for motion quality.
 
 For package/dependency setup, prefer reproducible Pixi changes from the host
 checkout:
@@ -372,3 +425,77 @@ The task metadata lives in `<output_dir>/manifests/`. The native LeRobot
 `raw_dataset/` and `accepted_dataset/` remain schema-compatible; task vectors
 are joined during training by creating a derived task-conditioned dataset next
 to the training output.
+
+## Rootless IsaacLab Setup
+
+The repo's Isaac instructions assume a normal Docker host. On this server, use
+the yoonjung rootless Docker shell and keep the AIC checkout mounted into the
+IsaacLab container.
+
+Expected host paths:
+
+```text
+/data1/chmin/IsaacLab
+/data1/chmin/yj/ws_aic/src/aic
+```
+
+Create or verify the bind overlay:
+
+```bash
+cat >/data1/chmin/IsaacLab/docker/aic-bind.yaml <<'YAML'
+services:
+  isaac-lab-base:
+    volumes:
+      - type: bind
+        source: /data1/chmin/yj/ws_aic/src/aic
+        target: /workspace/isaaclab/aic
+  isaac-lab-ros2:
+    volumes:
+      - type: bind
+        source: /data1/chmin/yj/ws_aic/src/aic
+        target: /workspace/isaaclab/aic
+YAML
+```
+
+Disable interactive X11 prompts for headless/rootless work:
+
+```bash
+printf '[X11]\nX11_FORWARDING_ENABLED = 0\n' >/data1/chmin/IsaacLab/docker/.container.cfg
+```
+
+Start the container through the rootless shell:
+
+```bash
+cd /data1/chmin/IsaacLab
+LC_USER_ID=yoonjung zsh -lc './docker/container.py start base --files aic-bind.yaml'
+```
+
+Install and smoke-test the AIC Isaac task inside the container:
+
+```bash
+LC_USER_ID=yoonjung zsh -lc 'docker exec isaac-lab-base bash -lc "cd /workspace/isaaclab && aic/aic_utils/aic_isaac/aic_isaaclab/scripts/install_aic_task.sh"'
+
+LC_USER_ID=yoonjung zsh -lc 'docker exec isaac-lab-base bash -lc "cd /workspace/isaaclab && aic/aic_utils/aic_isaac/aic_isaaclab/scripts/smoke_import_aic_task.sh"'
+```
+
+On this host, Isaac Sim 5.1 blocks RTX rendering because the host driver is
+`535.104.05`, below Isaac's Linux RTX guard of `535.129.03`. If the host driver
+cannot be upgraded from the current user session, explicitly patch the guard in
+the container and immediately validate camera tensors:
+
+```bash
+LC_USER_ID=yoonjung zsh -lc 'docker exec -e AIC_ISAAC_ALLOW_UNSUPPORTED_RTX_DRIVER=1 isaac-lab-base bash -lc "cd /workspace/isaaclab && aic/aic_utils/aic_isaac/aic_isaaclab/scripts/patch_isaac_rtx_driver_check.sh"'
+```
+
+Run the camera-enabled environment smoke before any Isaac ACT/SERL training.
+This must materialize RGB tensors from all three cameras; a low-dimensional or
+no-camera smoke is not a valid substitute for training readiness:
+
+```bash
+LC_USER_ID=yoonjung zsh -lc 'docker exec -e DEVICE=cuda:0 -e NUM_ENVS=1 -e RENDERING_MODE=performance -e AIC_ISAAC_RANDOMIZATION_PROFILE=none -e AIC_ISAAC_DISABLE_CAMERAS=0 isaac-lab-base bash -lc "cd /workspace/isaaclab && aic/aic_utils/aic_isaac/aic_isaaclab/scripts/smoke_aic_isaaclab_env.sh"'
+```
+
+For ACT-backed Isaac SERL, the trainer requires cameras. After the driver guard
+patch above, this host was verified on 2026-05-03 to read all three camera RGB
+tensors and run an ACT-backed Isaac SERL update smoke. Keep using
+`RENDERING_MODE=performance` for smoke/training unless debugging image quality.

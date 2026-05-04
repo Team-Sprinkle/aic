@@ -61,6 +61,10 @@ def run_validation(args: argparse.Namespace) -> dict:
         workspace_dir=args.workspace_dir,
         engine_config=args.engine_config,
         sim_distrobox=args.sim_distrobox,
+        sim_docker_container=args.sim_docker_container,
+        docker_host=args.docker_host,
+        workspace_container=args.workspace_container,
+        host=args.host,
         ground_truth=args.ground_truth,
         gazebo_gui=args.gazebo_gui,
         launch_rviz=args.launch_rviz,
@@ -158,6 +162,10 @@ def build_arg_parser() -> argparse.ArgumentParser:
     parser.add_argument("--workspace-dir", default=".")
     parser.add_argument("--engine-config", default=None)
     parser.add_argument("--sim-distrobox", default=None)
+    parser.add_argument("--sim-docker-container", default=None)
+    parser.add_argument("--docker-host", default=None)
+    parser.add_argument("--workspace-container", default="/home/chmin/yj/ws_aic/src/aic")
+    parser.add_argument("--host", default="127.0.0.1", help="Host/IP reachable from the runtime container.")
     parser.add_argument("--ground-truth", type=_bool, default=True)
     parser.add_argument("--gazebo-gui", type=_bool, default=False)
     parser.add_argument("--launch-rviz", type=_bool, default=False)

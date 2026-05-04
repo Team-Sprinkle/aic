@@ -6,6 +6,10 @@ output_dir: ${run.output_dir}
 workspace_dir: .
 engine_config: null
 sim_distrobox: null
+sim_docker_container: null
+docker_host: null
+workspace_container: /home/chmin/yj/ws_aic/src/aic
+host: 127.0.0.1
 ground_truth: true
 gazebo_gui: false
 launch_rviz: false
@@ -29,6 +33,10 @@ critic_init: scratch
 critic_checkpoint: null
 critic_only_steps: 100
 actor_update_delay: 2
+save_every_updates: 5000
+eval_every_updates: 5000
+eval_max_steps: 600
+eval_timeout_sec: 900.0
 task_family: ${data.task_family}
 target_port_index: null
 target_card_index: null

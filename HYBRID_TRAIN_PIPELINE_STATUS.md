@@ -1117,3 +1117,164 @@ Results:
 
 - `outputs/train/ddp_smoke/act_materialized_1gpu/checkpoints/000001/pretrained_model/model.safetensors`
 - `outputs/train/ddp_smoke/act_materialized_2gpu/checkpoints/000001/pretrained_model/model.safetensors`
+
+## 2026-05-03 Follow-up: Gazebo Online ACT-Backed SERL
+
+Stopped and checked for stale data-collection processes before starting online
+SERL. No host-side `generate_trajectory_dataset`, `aic-policy-recorder`, or
+training collection process was running. The `aic_eval` container was restarted
+before the long online run to clear stale runtime nodes.
+
+Verified the official runtime eval hook with a short checkpoint cadence:
+
+```bash
+LC_USER_ID=yoonjung zsh -lc 'docker restart aic_eval && sleep 12 && cd /data1/chmin/yj/ws_aic/src/aic && CUDA_VISIBLE_DEVICES=0 noglob .pixi/envs/default/bin/python aic_utils/lerobot_robot_aic/scripts/hydra_train.py train=online_serl_gazebo model=act_adapter_serl data=hf_sfp2nic_card0_port0_randomized hardware.cuda_devices=[0] train.checkpoint=outputs/train/sfp_to_nic/hf_sfp2nic_card0_port0_randomized/serl/offline_adapter/20260503_from_act040k_valstop_gpu0_1500/checkpoint_best_val.pt train.act_torchscript=outputs/train/sfp_to_nic/hf_sfp2nic_card0_port0_randomized/act/bc/20260502_act_20hz_chunk8_nact2_4gpu_eval_all_v1/act_policy_ts_040000_cuda.pt train.output_dir=outputs/gazebo_rl/online_serl/hydra_evalhook_smoke_20260503 train.engine_config=outputs/trajectory_datasets_real_smoke/sfp_helper_n2_20260501_203426/engine_config.yaml train.sim_docker_container=aic_eval train.docker_host=$DOCKER_HOST train.workspace_container=/home/chmin/yj/ws_aic/src/aic train.host=147.47.206.241 train.device=cuda:0 train.max_episodes=1 train.max_steps=3 train.updates=2 train.batch_size=1 train.replay_capacity=64 train.max_minutes=20 train.per_trial_timeout_sec=420 train.adapter_lr=5e-6 train.critic_lr=5e-5 train.adapter_penalty_weight=0.2 train.act_preservation_weight=2.0 train.adapter_delta_clip=0.02 train.action_clip=0.05 train.critic_only_steps=2 train.actor_update_delay=2 train.target_port_index=0 train.target_card_index=0 train.target_card_valid=1 train.save_every_updates=2 train.eval_every_updates=2 train.eval_max_steps=1 train.eval_timeout_sec=420 run.name=gazebo_serl_evalhook_smoke run.output_dir=outputs/gazebo_rl/online_serl/hydra_evalhook_smoke_20260503'
+```
+
+Result:
+
+- Saved `outputs/gazebo_rl/online_serl/hydra_evalhook_smoke_20260503/checkpoint_update_000002.pt`.
+- Ran official container-backed eval into
+  `outputs/gazebo_rl/online_serl/hydra_evalhook_smoke_20260503/runtime_eval/update_000002`.
+- Eval command returned `0`; it was intentionally limited to one step, so the
+  score classification was `no_score`.
+
+Started a long detached Gazebo online SERL run:
+
+```bash
+outputs/gazebo_rl/online_serl/sfp2nic_card0_port0_from_offline1500_best_gazebo_long_20260503_1302/launch_command.sh
+```
+
+Run settings and provenance are documented in:
+
+`outputs/gazebo_rl/online_serl/sfp2nic_card0_port0_from_offline1500_best_gazebo_long_20260503_1302/RUN_NOTES.md`
+
+Key settings:
+
+- Fixed task: `sfp_to_nic`, card count 1, card 0, port 0.
+- ACT TorchScript:
+  `outputs/train/sfp_to_nic/hf_sfp2nic_card0_port0_randomized/act/bc/20260502_act_20hz_chunk8_nact2_4gpu_eval_all_v1/act_policy_ts_040000_cuda.pt`
+- Offline SERL warm start:
+  `outputs/train/sfp_to_nic/hf_sfp2nic_card0_port0_randomized/serl/offline_adapter/20260503_from_act040k_valstop_gpu0_1500/checkpoint_best_val.pt`
+- `save_every_updates=5000`
+- `eval_every_updates=5000`
+- `critic_only_steps=5000`
+- `actor_update_delay=4`
+- `CUDA_VISIBLE_DEVICES=0`
+
+Initial online metrics were written successfully; the run reached 18
+critic-only updates in the first episode with critic loss around `2e-4` or
+lower.
+
+Isaac Lab rootless setup was completed on this host on 2026-05-03. The old
+blocker was missing setup, but that is no longer true.
+
+Setup performed:
+
+```bash
+git clone --branch v2.3.2 --depth 1 https://github.com/isaac-sim/IsaacLab.git /data1/chmin/IsaacLab
+cat >/data1/chmin/IsaacLab/docker/aic-bind.yaml <<'YAML'
+services:
+  isaac-lab-base:
+    volumes:
+      - type: bind
+        source: /data1/chmin/yj/ws_aic/src/aic
+        target: /workspace/isaaclab/aic
+  isaac-lab-ros2:
+    volumes:
+      - type: bind
+        source: /data1/chmin/yj/ws_aic/src/aic
+        target: /workspace/isaaclab/aic
+YAML
+printf '[X11]\nX11_FORWARDING_ENABLED = 0\n' >/data1/chmin/IsaacLab/docker/.container.cfg
+cd /data1/chmin/IsaacLab
+LC_USER_ID=yoonjung zsh -lc './docker/container.py start base --files aic-bind.yaml'
+```
+
+Assets were downloaded from NVIDIA and extracted to:
+
+```text
+aic_utils/aic_isaac/aic_isaaclab/source/aic_task/aic_task/tasks/manager_based/aic_task/Intrinsic_assets
+```
+
+The AIC task package was installed inside the rootless IsaacLab container:
+
+```bash
+LC_USER_ID=yoonjung zsh -lc 'docker exec isaac-lab-base bash -lc "cd /workspace/isaaclab && aic/aic_utils/aic_isaac/aic_isaaclab/scripts/install_aic_task.sh"'
+```
+
+Verified commands:
+
+```bash
+LC_USER_ID=yoonjung zsh -lc 'docker exec isaac-lab-base bash -lc "cd /workspace/isaaclab && aic/aic_utils/aic_isaac/aic_isaaclab/scripts/smoke_import_aic_task.sh"'
+
+LC_USER_ID=yoonjung zsh -lc 'docker exec -e DEVICE=cuda:0 -e NUM_ENVS=1 -e AIC_ISAAC_RANDOMIZATION_PROFILE=none -e AIC_ISAAC_DISABLE_CAMERAS=1 isaac-lab-base bash -lc "cd /workspace/isaaclab && aic/aic_utils/aic_isaac/aic_isaaclab/scripts/smoke_aic_isaaclab_env.sh"'
+```
+
+Results:
+
+- `isaac-lab-base` is running in the rootless Docker daemon.
+- `AIC-Task-v0` import smoke passed.
+- No-camera environment smoke passed with policy observation shape `(154,)`,
+  action dimension `6`, and `AIC IsaacLab env smoke OK`.
+- The fixed-task ACT-backed Stage 5 wrapper dry-run passed with
+  `sfp_to_nic`, card 0, port 0, the ACT TorchScript checkpoint, and the offline
+  SERL checkpoint. It validated checkpoint metadata and generated the concrete
+  IsaacLab training command.
+- Follow-up fix: `smoke_aic_isaaclab_env.sh` now reads `center_camera`,
+  `left_camera`, and `right_camera` RGB tensors when cameras are enabled. Scene
+  creation alone is no longer considered a camera/training smoke pass.
+- The host Stage 5 SERL wrapper now forwards `--rendering-mode` and
+  `--kit-args` so camera/runtime debugging settings can be specified without
+  editing the trainer.
+- Strict camera smoke command rerun:
+
+  ```bash
+  LC_USER_ID=yoonjung zsh -lc 'docker restart isaac-lab-base >/dev/null && sleep 5 && docker exec -e DEVICE=cuda:0 -e NUM_ENVS=1 -e RENDERING_MODE=performance -e AIC_ISAAC_RANDOMIZATION_PROFILE=none -e AIC_ISAAC_DISABLE_CAMERAS=0 isaac-lab-base bash -lc "cd /workspace/isaaclab && timeout 150 aic/aic_utils/aic_isaac/aic_isaaclab/scripts/smoke_aic_isaaclab_env.sh"'
+  ```
+
+  Result: failed before a valid RGB tensor read. The log first reports RTX
+  driver verification failure for installed driver `535.104`, then aborts with
+  PhysX/Warp CUDA illegal memory access. This confirms the no-camera smoke was
+  not sufficient and that camera-backed training cannot run on the current host
+  driver.
+
+Isaac driver-check fix:
+
+- The host driver is still `535.104.05`, below Isaac Sim 5.1's Linux RTX guard
+  of `535.129.03`, and this user session cannot upgrade the host driver because
+  `sudo` requires a password.
+- Added
+  `aic_utils/aic_isaac/aic_isaaclab/scripts/patch_isaac_rtx_driver_check.sh`
+  as an explicit rootless-container patch. It requires
+  `AIC_ISAAC_ALLOW_UNSUPPORTED_RTX_DRIVER=1`, backs up
+  `/isaac-sim/kit/driver-requirements.json`, and disables only the Linux RTX
+  blocked-driver entry.
+- Patch command run:
+
+  ```bash
+  LC_USER_ID=yoonjung zsh -lc 'docker exec -e AIC_ISAAC_ALLOW_UNSUPPORTED_RTX_DRIVER=1 isaac-lab-base bash -lc "cd /workspace/isaaclab && aic/aic_utils/aic_isaac/aic_isaaclab/scripts/patch_isaac_rtx_driver_check.sh"'
+  ```
+
+- After the patch, strict camera smoke passed on the same host:
+
+  ```text
+  center_camera_rgb_shape=(1, 224, 224, 3) dtype=torch.uint8
+  left_camera_rgb_shape=(1, 224, 224, 3) dtype=torch.uint8
+  right_camera_rgb_shape=(1, 224, 224, 3) dtype=torch.uint8
+  AIC IsaacLab camera tensor smoke OK
+  AIC IsaacLab env smoke OK
+  ```
+
+- ACT-backed Isaac SERL camera-required smoke also passed and wrote real
+  checkpoints:
+
+  ```text
+  outputs/train/isaac_stage5_serl/camera_required_train_smoke/2026-05-03_14-21-08_camera_required_train_smoke/checkpoint_latest.pt
+  outputs/train/isaac_stage5_serl/camera_required_update_smoke/2026-05-03_14-21-55_camera_required_update_smoke/checkpoint_latest.pt
+  ```
+
+The update smoke command used the fixed task context `sfp_to_nic`, card 0, port
+0, `state_source=lerobot_compatible`, cameras enabled, the ACT TorchScript from
+the 40k ACT run, and the offline SERL best checkpoint. It completed with
+`[AIC SERL] step=1 updates=1 replay=1 reward=-0.020401`.

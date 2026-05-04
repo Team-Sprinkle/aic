@@ -3,7 +3,16 @@ from __future__ import annotations
 import os
 from typing import Any
 
-from aic_model.policy import GetObservationCallback, MoveRobotCallback, Policy, SendFeedbackCallback
+from aic_model.policy import (
+    DEFAULT_CARTESIAN_DAMPING,
+    DEFAULT_CARTESIAN_STIFFNESS,
+    GetObservationCallback,
+    MoveRobotCallback,
+    Policy,
+    SendFeedbackCallback,
+    build_pose_from_vectors,
+    pose_to_position_motion_update,
+)
 from aic_task_interfaces.msg import Task
 from std_msgs.msg import String
 
@@ -97,14 +106,16 @@ class GazeboRLBridgePolicy(Policy):
 
     def _send_delta_action(self, move_robot: MoveRobotCallback, raw_action: Any) -> None:
         delta = delta_tcp_action_from_array(raw_action)
-        self.set_delta_pose_target_from_components(
-            move_robot=move_robot,
-            delta_position_xyz=delta.delta_position_xyz,
-            delta_rotation_xyz=delta.delta_rotation_xyz,
+        motion_update = pose_to_position_motion_update(
+            build_pose_from_vectors(delta.delta_position_xyz, delta.delta_quaternion_xyzw),
+            stamp=self._parent_node.get_clock().now().to_msg(),
             frame_id="gripper/tcp",
-            max_translation=DEFAULT_MAX_TRANSLATION_M,
-            max_rotation=DEFAULT_MAX_ROTATION_RAD,
+            stiffness=DEFAULT_CARTESIAN_STIFFNESS,
+            damping=DEFAULT_CARTESIAN_DAMPING,
         )
+        result = move_robot(motion_update=motion_update)
+        if result is False:
+            raise RuntimeError("move_robot rejected the Gazebo RL motion update")
 
     def insert_cable(
         self,

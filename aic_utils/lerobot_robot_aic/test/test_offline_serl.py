@@ -350,3 +350,64 @@ def test_materialize_task_conditioned_dataset_script(tmp_path: Path) -> None:
     assert summary["materialized_dataset_root"] == str(out.resolve())
     arrays, _ = load_lerobot_transitions(out, reward_mode="final_success")
     assert arrays.obs.shape == (6, 3 + TASK_VECTOR_DIM)
+
+
+def test_materialized_task_conditioned_stats_use_safe_std_for_constant_task_bits(tmp_path: Path) -> None:
+    root = tmp_path / "dataset"
+    manifest = tmp_path / "manifests" / "accepted.csv"
+    out = tmp_path / "task_conditioned"
+    write_fake_lerobot_dataset(root)
+    (root / "meta" / "stats.json").write_text(
+        json.dumps(
+            {
+                "observation.state": {
+                    "min": [0.0, 1.0, 0.0],
+                    "max": [2.0, 3.0, 1.0],
+                    "mean": [1.0, 2.0, 0.5],
+                    "std": [0.816, 0.816, 0.5],
+                    "count": [6],
+                    "q01": [0.0, 1.0, 0.0],
+                    "q10": [0.0, 1.0, 0.0],
+                    "q50": [1.0, 2.0, 0.5],
+                    "q90": [2.0, 3.0, 1.0],
+                    "q99": [2.0, 3.0, 1.0],
+                }
+            }
+        ),
+        encoding="utf-8",
+    )
+    manifest.parent.mkdir(parents=True, exist_ok=True)
+    vector = encode_task_vector(
+        task_family="sfp_to_nic",
+        target_port_index=0,
+        target_card_index=0,
+    ).astype(int).tolist()
+    pd.DataFrame(
+        [
+            {
+                "accepted_episode_index": episode,
+                "source_episode_index": episode,
+                "task_family": "sfp_to_nic",
+                "target_port_index": 0,
+                "target_card_index": 0,
+                "target_card_valid": 1,
+                "task_vector": json.dumps(vector),
+                "total_score": 1.0,
+            }
+            for episode in range(2)
+        ]
+    ).to_csv(manifest, index=False)
+
+    from lerobot_robot_aic.task_metadata import append_task_vectors_to_observation_state_dataset
+
+    append_task_vectors_to_observation_state_dataset(root, manifest, out)
+    stats = json.loads((out / "meta" / "stats.json").read_text())
+    state_mean = stats["observation.state"]["mean"]
+    state_std = stats["observation.state"]["std"]
+
+    assert state_mean[3:] == pytest.approx([0.0] * TASK_VECTOR_DIM)
+    assert state_std[3:] == pytest.approx([1.0] * TASK_VECTOR_DIM)
+    assert [
+        (value - mean) / std
+        for value, mean, std in zip(vector, state_mean[3:], state_std[3:], strict=True)
+    ] == pytest.approx(vector)

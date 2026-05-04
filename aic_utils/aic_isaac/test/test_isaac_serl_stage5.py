@@ -35,6 +35,8 @@ def test_isaac_serl_plan_inspects_adapter_checkpoint(tmp_path: Path) -> None:
         seed=3,
         device="cpu",
         headless=True,
+        rendering_mode="performance",
+        kit_args=None,
         checkpoint=checkpoint,
         act_torchscript=tmp_path / "act_ts.pt",
         output_dir=tmp_path / "out",
@@ -55,6 +57,16 @@ def test_isaac_serl_plan_inspects_adapter_checkpoint(tmp_path: Path) -> None:
         adapter_delta_clip=0.05,
         action_clip=0.05,
         freeze_act=True,
+        randomization_profile="none",
+        insertion_distance_weight=0.2,
+        insertion_lateral_weight=-0.1,
+        state_source="lerobot_compatible",
+        task_family="sfp_to_nic",
+        target_port_index=0,
+        target_card_index=0,
+        target_card_valid=1,
+        gripper_joint_position=0.0035405,
+        initial_arm_joint_pos="-0.37,-1.62,-1.75,-1.43,1.93,1.31",
         isaaclab="isaaclab",
         run_name="test_serl",
         dry_run=True,
@@ -76,6 +88,8 @@ def test_isaac_serl_plan_inspects_adapter_checkpoint(tmp_path: Path) -> None:
     assert str(tmp_path / "act_ts.pt") in cmd
     assert "--updates" in cmd
     assert "2" in cmd
+    assert "--rendering_mode" in cmd
+    assert "performance" in cmd
     assert "--max_wall_time_minutes" in cmd
     assert "30.0" in cmd
     assert "--adapter_penalty_weight" in cmd
@@ -85,4 +99,12 @@ def test_isaac_serl_plan_inspects_adapter_checkpoint(tmp_path: Path) -> None:
     assert "--adapter_delta_clip" in cmd
     assert "0.05" in cmd
     assert "--action_clip" in cmd
+    assert "--state_source" in cmd
+    assert "lerobot_compatible" in cmd
+    assert "--task_family" in cmd
+    assert "sfp_to_nic" in cmd
     assert env["AIC_ISAAC_DISABLE_CAMERAS"] == "0"
+    assert env["AIC_ISAAC_RANDOMIZATION_PROFILE"] == "none"
+    assert env["AIC_ISAAC_INSERTION_DISTANCE_WEIGHT"] == "0.2"
+    assert env["AIC_ISAAC_INSERTION_LATERAL_WEIGHT"] == "-0.1"
+    assert env["AIC_ISAAC_INITIAL_ARM_JOINT_POS"] == "-0.37,-1.62,-1.75,-1.43,1.93,1.31"

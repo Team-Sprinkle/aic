@@ -2,6 +2,8 @@ from __future__ import annotations
 
 import argparse
 import json
+import subprocess
+import sys
 import time
 from collections import deque
 from pathlib import Path
@@ -369,7 +371,111 @@ def run_training(args: argparse.Namespace) -> dict[str, Any]:
     total_steps = 0
     episodes: list[dict[str, Any]] = []
     last_metrics: dict[str, float] = {}
+    saved_checkpoints: list[dict[str, Any]] = []
+    saved_update_counts: set[int] = set()
+    pending_eval_checkpoints: list[dict[str, Any]] = []
+    eval_results: list[dict[str, Any]] = []
     max_seconds = float(args.max_minutes) * 60.0 if args.max_minutes > 0 else None
+
+    def save_update_checkpoint() -> None:
+        if args.save_every_updates <= 0 or updates_done <= 0 or updates_done in saved_update_counts:
+            return
+        if updates_done % args.save_every_updates != 0:
+            return
+        path = output_dir / f"checkpoint_update_{updates_done:06d}.pt"
+        trainer.save_checkpoint(path, train_config=train_config, step=total_steps)
+        saved_update_counts.add(updates_done)
+        saved_checkpoints.append(
+            {
+                "updates_done": updates_done,
+                "steps_completed": total_steps,
+                "checkpoint_path": str(path),
+            }
+        )
+        if args.eval_every_updates > 0 and updates_done % args.eval_every_updates == 0:
+            pending_eval_checkpoints.append(saved_checkpoints[-1])
+
+    def run_checkpoint_evals() -> None:
+        while pending_eval_checkpoints:
+            item = pending_eval_checkpoints.pop(0)
+            checkpoint = Path(item["checkpoint_path"])
+            update_count = int(item["updates_done"])
+            eval_dir = output_dir / "runtime_eval" / f"update_{update_count:06d}"
+            cmd = [
+                sys.executable,
+                str(Path(__file__).resolve().parents[1] / "scripts" / "serl_transfer_validate.py"),
+                "--policy-kind",
+                "act_adapter_serl",
+                "--checkpoint",
+                str(checkpoint),
+                "--act-torchscript",
+                str(args.act_torchscript),
+                "--output-dir",
+                str(eval_dir),
+                "--workspace-dir",
+                str(args.workspace_dir),
+                "--engine-config",
+                str(args.engine_config),
+                "--max-steps",
+                str(args.eval_max_steps),
+                "--per-trial-timeout-sec",
+                str(args.eval_timeout_sec),
+                "--device",
+                str(args.device),
+                "--adapter-delta-clip",
+                str(args.adapter_delta_clip),
+                "--action-clip",
+                str(args.action_clip),
+                "--task-family",
+                str(args.task_family),
+                "--target-port-index",
+                str(args.target_port_index),
+                "--target-card-index",
+                str(args.target_card_index),
+                "--target-card-valid",
+                str(args.target_card_valid),
+            ]
+            if args.sim_docker_container:
+                cmd.extend(["--sim-docker-container", str(args.sim_docker_container)])
+            if args.docker_host:
+                cmd.extend(["--docker-host", str(args.docker_host)])
+            if args.workspace_container:
+                cmd.extend(["--workspace-container", str(args.workspace_container)])
+            if args.host:
+                cmd.extend(["--host", str(args.host)])
+            if args.ground_truth:
+                cmd.extend(["--ground-truth", "true"])
+            else:
+                cmd.extend(["--ground-truth", "false"])
+            if args.gazebo_gui:
+                cmd.extend(["--gazebo-gui", "true"])
+            else:
+                cmd.extend(["--gazebo-gui", "false"])
+            if args.launch_rviz:
+                cmd.extend(["--launch-rviz", "true"])
+            else:
+                cmd.extend(["--launch-rviz", "false"])
+            if args.include_images:
+                cmd.append("--include-images")
+            else:
+                cmd.append("--no-include-images")
+            if args.allow_zero_images:
+                cmd.append("--allow-zero-images")
+
+            log_path = eval_dir / "eval_command.log"
+            eval_dir.mkdir(parents=True, exist_ok=True)
+            result = subprocess.run(cmd, cwd=args.workspace_dir, text=True, capture_output=True)
+            log_path.write_text(result.stdout + result.stderr, encoding="utf-8")
+            row = {
+                "updates_done": update_count,
+                "checkpoint_path": str(checkpoint),
+                "eval_dir": str(eval_dir),
+                "returncode": result.returncode,
+                "command": cmd,
+            }
+            eval_results.append(row)
+            with (output_dir / "eval_metrics.jsonl").open("a", encoding="utf-8") as eval_file:
+                eval_file.write(json.dumps(row, sort_keys=True) + "\n")
 
     for episode in range(args.max_episodes):
         if max_seconds is not None and time.monotonic() - started >= max_seconds:
@@ -379,6 +485,10 @@ def run_training(args: argparse.Namespace) -> dict[str, Any]:
             workspace_dir=args.workspace_dir,
             engine_config=args.engine_config,
             sim_distrobox=args.sim_distrobox,
+            sim_docker_container=args.sim_docker_container,
+            docker_host=args.docker_host,
+            workspace_container=args.workspace_container,
+            host=args.host,
             ground_truth=args.ground_truth,
             gazebo_gui=args.gazebo_gui,
             launch_rviz=args.launch_rviz,
@@ -441,6 +551,7 @@ def run_training(args: argparse.Namespace) -> dict[str, Any]:
                         update_actor=update_actor,
                     )
                     updates_done += 1
+                    save_update_checkpoint()
                     row.update(last_metrics)
                     row["updates_done"] = updates_done
                 with metrics_path.open("a", encoding="utf-8") as metrics_file:
@@ -458,6 +569,7 @@ def run_training(args: argparse.Namespace) -> dict[str, Any]:
             )
         finally:
             env.close()
+        run_checkpoint_evals()
         if updates_done >= args.updates:
             break
 
@@ -466,6 +578,8 @@ def run_training(args: argparse.Namespace) -> dict[str, Any]:
         "steps_completed": total_steps,
         "updates_done": updates_done,
         "elapsed_sec": time.monotonic() - started,
+        "saved_checkpoints": saved_checkpoints,
+        "eval_results": eval_results,
     }
     (output_dir / "train_config.json").write_text(json.dumps(train_config, indent=2, sort_keys=True), encoding="utf-8")
     trainer.save_checkpoint(checkpoint_path, train_config=train_config, step=total_steps)
@@ -492,6 +606,10 @@ def build_arg_parser() -> argparse.ArgumentParser:
     parser.add_argument("--workspace-dir", default=".")
     parser.add_argument("--engine-config", default=None)
     parser.add_argument("--sim-distrobox", default=None)
+    parser.add_argument("--sim-docker-container", default=None)
+    parser.add_argument("--docker-host", default=None)
+    parser.add_argument("--workspace-container", default="/home/chmin/yj/ws_aic/src/aic")
+    parser.add_argument("--host", default="127.0.0.1", help="Host/IP reachable from the runtime container.")
     parser.add_argument("--ground-truth", type=_bool, default=True)
     parser.add_argument("--gazebo-gui", type=_bool, default=False)
     parser.add_argument("--launch-rviz", type=_bool, default=False)
@@ -515,6 +633,10 @@ def build_arg_parser() -> argparse.ArgumentParser:
     parser.add_argument("--critic-checkpoint", default=None)
     parser.add_argument("--critic-only-steps", type=int, default=0)
     parser.add_argument("--actor-update-delay", type=int, default=1)
+    parser.add_argument("--save-every-updates", type=int, default=0)
+    parser.add_argument("--eval-every-updates", type=int, default=0)
+    parser.add_argument("--eval-max-steps", type=int, default=600)
+    parser.add_argument("--eval-timeout-sec", type=float, default=900.0)
     parser.add_argument("--task-family", choices=["sfp_to_nic", "sc_to_sc"], default=None)
     parser.add_argument("--target-port-index", type=int, default=None)
     parser.add_argument("--target-card-index", type=int, default=None)

@@ -14,17 +14,7 @@
 #  limitations under the License.
 #
 
-"""ACT policy runner for current AIC LeRobot datasets.
-
-This runner is intentionally matched to the current 20 Hz AIC observation stream
-and the 6D delta-pose action schema used by the converted/expert datasets:
-
-  action = [delta_position.xyz, delta_rotation.xyz]
-  action frame = gripper/tcp
-
-Set AIC_ACT_POLICY_PATH to a local LeRobot pretrained_model directory. If it is
-unset, AIC_ACT_POLICY_REPO_ID is downloaded from Hugging Face.
-"""
+"""TorchScript ACT policy runner for the official AIC runtime."""
 
 from __future__ import annotations
 
@@ -34,15 +24,11 @@ import time
 from pathlib import Path
 from typing import Any
 
-os.environ["HF_HUB_ENABLE_HF_TRANSFER"] = "1"
-
 import cv2
-import draccus
 import numpy as np
 import torch
 from aic_control_interfaces.msg import MotionUpdate, TargetMode, TrajectoryGenerationMode
 from geometry_msgs.msg import Twist, Vector3, Wrench
-from huggingface_hub import snapshot_download
 from rclpy.node import Node
 from safetensors.torch import load_file
 
@@ -54,55 +40,37 @@ from aic_model.policy import (
 )
 from aic_model_interfaces.msg import Observation
 from aic_task_interfaces.msg import Task
-from lerobot.policies.act.configuration_act import ACTConfig
-from lerobot.policies.act.modeling_act import ACTPolicy
 
 
-DEFAULT_POLICY_REPO_ID = "grkw/aic_act_policy"
-DEFAULT_CONTROL_HZ = 20.0
-DEFAULT_MAX_RUNTIME_SEC = 30.0
-
-
-class RunACT(Policy):
+class RunACTTorchScript(Policy):
     def __init__(self, parent_node: Node):
         super().__init__(parent_node)
         requested_device = os.environ.get("AIC_ACT_DEVICE")
-        self.device = torch.device(
-            requested_device or ("cuda" if torch.cuda.is_available() else "cpu")
-        )
-        self.control_hz = float(os.environ.get("AIC_ACT_CONTROL_HZ", DEFAULT_CONTROL_HZ))
-        self.max_runtime_sec = float(
-            os.environ.get("AIC_ACT_MAX_RUNTIME_SEC", DEFAULT_MAX_RUNTIME_SEC)
-        )
+        self.device = torch.device(requested_device or ("cuda" if torch.cuda.is_available() else "cpu"))
+        self.control_hz = float(os.environ.get("AIC_ACT_CONTROL_HZ", 20.0))
+        self.max_runtime_sec = float(os.environ.get("AIC_ACT_MAX_RUNTIME_SEC", 30.0))
         self.start_delay_sec = float(os.environ.get("AIC_ACT_START_DELAY_SEC", 0.0))
-        self.command_mode = os.environ.get("AIC_ACT_COMMAND_MODE", "delta_pose")
+        self.command_mode = os.environ.get("AIC_ACT_RUNTIME_COMMAND_MODE", os.environ.get("AIC_ACT_COMMAND_MODE", "delta_pose"))
         self.command_frame = os.environ.get("AIC_ACT_COMMAND_FRAME", "gripper/tcp")
         self.max_translation_delta = float(os.environ.get("AIC_ACT_MAX_TRANSLATION_DELTA", 0.02))
         self.max_rotation_delta = float(os.environ.get("AIC_ACT_MAX_ROTATION_DELTA", 0.2))
         self.translation_deadband = float(os.environ.get("AIC_ACT_TRANSLATION_DEADBAND", 5e-4))
         self.rotation_deadband = float(os.environ.get("AIC_ACT_ROTATION_DEADBAND", 1e-3))
+        self.log_every_n_commands = max(1, int(os.environ.get("AIC_ACT_LOG_EVERY_N_COMMANDS", 20)))
 
-        self.policy_path = self._resolve_policy_path()
-        config_dict = self._load_config_dict(self.policy_path)
-        config = draccus.decode(ACTConfig, config_dict)
-        config.device = str(self.device)
+        self.torchscript_path = self._required_path("AIC_ACT_TORCHSCRIPT")
+        self.metadata = self._load_metadata(self.torchscript_path)
+        self.model = torch.jit.load(str(self.torchscript_path), map_location=self.device).eval()
+        self.state_dim = int((self.metadata.get("state_shape") or [42])[0])
+        self.action_dim = int((self.metadata.get("action_shape") or [6])[0])
+        self.camera_shapes = {
+            "observation.images.center_camera": (3, 256, 288),
+            "observation.images.left_camera": (3, 256, 288),
+            "observation.images.right_camera": (3, 256, 288),
+        }
 
-        self.policy = ACTPolicy(config)
-        self.policy.load_state_dict(load_file(self.policy_path / "model.safetensors"))
-        self.policy.eval()
-        self.policy.to(self.device)
-
-        self.input_features = dict(config.input_features)
-        self.output_features = dict(config.output_features)
-        self.camera_shapes = self._camera_shapes(config_dict)
-        self.state_dim = int(config_dict["input_features"]["observation.state"]["shape"][0])
-        self.action_dim = int(config_dict["output_features"]["action"]["shape"][0])
-        if self.action_dim < 6:
-            raise ValueError(f"RunACT requires at least 6 action dimensions, got {self.action_dim}")
-
-        stats = load_file(
-            self.policy_path / "policy_preprocessor_step_3_normalizer_processor.safetensors"
-        )
+        stats_path = self._stats_path()
+        stats = load_file(stats_path)
         self.img_stats = {
             key: {
                 "mean": self._stat(stats, f"{key}.mean", (1, 3, 1, 1)),
@@ -118,46 +86,38 @@ class RunACT(Policy):
         self._current_task: Task | None = None
 
         self.get_logger().info(
-            "ACT policy loaded from "
-            f"{self.policy_path} on {self.device}; "
-            f"state_dim={self.state_dim}, action_dim={self.action_dim}, "
-            f"control_hz={self.control_hz}, "
-            f"start_delay_sec={self.start_delay_sec}, "
-            f"chunk_size={self.policy.config.chunk_size}, "
-            f"n_action_steps={self.policy.config.n_action_steps}, "
-            f"action_mode=delta_pose, command_mode={self.command_mode}, "
-            f"action_frame=gripper/tcp, command_frame={self.command_frame}"
-        )
-
-    def _active_command_mode(self) -> str:
-        return os.environ.get("AIC_ACT_RUNTIME_COMMAND_MODE", self.command_mode)
-
-    def _resolve_policy_path(self) -> Path:
-        policy_path = os.environ.get("AIC_ACT_POLICY_PATH")
-        if policy_path:
-            path = Path(policy_path).expanduser()
-            if not path.exists():
-                raise FileNotFoundError(f"AIC_ACT_POLICY_PATH does not exist: {path}")
-            return path
-
-        repo_id = os.environ.get("AIC_ACT_POLICY_REPO_ID", DEFAULT_POLICY_REPO_ID)
-        return Path(
-            snapshot_download(
-                repo_id=repo_id,
-                allow_patterns=[
-                    "config.json",
-                    "model.safetensors",
-                    "policy_preprocessor_step_3_normalizer_processor.safetensors",
-                ],
-            )
+            "TorchScript ACT policy loaded from "
+            f"{self.torchscript_path} on {self.device}; state_dim={self.state_dim}, "
+            f"action_dim={self.action_dim}, control_hz={self.control_hz}, "
+            f"start_delay_sec={self.start_delay_sec}, command_mode={self.command_mode}, "
+            f"command_frame={self.command_frame}"
         )
 
     @staticmethod
-    def _load_config_dict(policy_path: Path) -> dict[str, Any]:
-        with (policy_path / "config.json").open("r", encoding="utf-8") as f:
-            config_dict = json.load(f)
-        config_dict.pop("type", None)
-        return config_dict
+    def _required_path(env_name: str) -> Path:
+        value = os.environ.get(env_name)
+        if not value:
+            raise ValueError(f"{env_name} is required")
+        path = Path(value).expanduser()
+        if not path.exists():
+            raise FileNotFoundError(f"{env_name} does not exist: {path}")
+        return path
+
+    @staticmethod
+    def _load_metadata(torchscript_path: Path) -> dict[str, Any]:
+        meta_path = torchscript_path.with_suffix(".json")
+        if not meta_path.exists():
+            return {}
+        return json.loads(meta_path.read_text(encoding="utf-8"))
+
+    def _stats_path(self) -> Path:
+        checkpoint_dir = self.metadata.get("checkpoint_dir")
+        if not checkpoint_dir:
+            raise ValueError("TorchScript metadata must include checkpoint_dir to load normalizer stats")
+        stats_path = Path(checkpoint_dir) / "policy_preprocessor_step_3_normalizer_processor.safetensors"
+        if not stats_path.exists():
+            raise FileNotFoundError(f"ACT normalizer stats not found: {stats_path}")
+        return stats_path
 
     def _stat(self, stats: dict[str, torch.Tensor], key: str, shape: tuple[int, ...]) -> torch.Tensor:
         if key not in stats:
@@ -174,25 +134,9 @@ class RunACT(Policy):
         self.state_std[:, -10:] = 1.0
 
     @staticmethod
-    def _camera_shapes(config_dict: dict[str, Any]) -> dict[str, tuple[int, int, int]]:
-        shapes = {}
-        for key, feature in config_dict["input_features"].items():
-            if not key.startswith("observation.images."):
-                continue
-            shape = tuple(int(v) for v in feature["shape"])
-            if len(shape) != 3 or shape[0] != 3:
-                raise ValueError(f"expected CHW RGB camera feature for {key}, got {shape}")
-            shapes[key] = shape
-        return shapes
-
-    @staticmethod
     def _image_msg_to_chw_float(raw_img: Any, shape: tuple[int, int, int]) -> torch.Tensor:
         channels, height, width = shape
-        img_np = np.frombuffer(raw_img.data, dtype=np.uint8).reshape(
-            raw_img.height,
-            raw_img.width,
-            channels,
-        )
+        img_np = np.frombuffer(raw_img.data, dtype=np.uint8).reshape(raw_img.height, raw_img.width, channels)
         if raw_img.height != height or raw_img.width != width:
             img_np = cv2.resize(img_np, (width, height), interpolation=cv2.INTER_AREA)
         return torch.from_numpy(img_np).permute(2, 0, 1).float().div(255.0).unsqueeze(0)
@@ -208,45 +152,16 @@ class RunACT(Policy):
         return int(value.removeprefix(prefix))
 
     def _task_vector(self, task: Task) -> list[float]:
-        """Return the canonical 10D task vector for the active AIC task."""
         if task.target_module_name.startswith("nic_card_mount_"):
             card_index = self._parse_index_from_suffix(task.target_module_name, "nic_card_mount_")
             port_index = self._parse_index_from_suffix(task.port_name, "sfp_port_")
-            if not 0 <= card_index <= 4:
-                raise ValueError(f"target card index must be in [0, 4], got {card_index}")
-            if port_index not in (0, 1):
-                raise ValueError(f"target port index must be 0 or 1, got {port_index}")
             card = [0.0] * 5
             card[card_index] = 1.0
             return [1.0, 0.0, float(port_index == 0), float(port_index == 1), *card, 1.0]
-
         if task.target_module_name.startswith("sc_port_"):
             port_index = self._parse_index_from_suffix(task.target_module_name, "sc_port_")
-            if port_index not in (0, 1):
-                raise ValueError(f"target SC port index must be 0 or 1, got {port_index}")
             return [0.0, 1.0, float(port_index == 0), float(port_index == 1), 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
-
         raise ValueError(f"Cannot infer task vector from target_module_name={task.target_module_name!r}")
-
-    def prepare_observations(self, obs_msg: Observation) -> dict[str, torch.Tensor]:
-        obs = {}
-        camera_msg_by_key = {
-            "observation.images.left_camera": obs_msg.left_image,
-            "observation.images.center_camera": obs_msg.center_image,
-            "observation.images.right_camera": obs_msg.right_image,
-        }
-        for key in self.camera_shapes:
-            obs[key] = self._normalized_image(key, camera_msg_by_key[key])
-
-        state_np = self._state_vector(obs_msg)
-        if state_np.shape[0] != self.state_dim:
-            raise ValueError(
-                f"checkpoint expects observation.state dim {self.state_dim}, "
-                f"but RunACT built {state_np.shape[0]}"
-            )
-        raw_state = torch.from_numpy(state_np).float().unsqueeze(0).to(self.device)
-        obs["observation.state"] = (raw_state - self.state_mean) / self.state_std
-        return obs
 
     def _state_vector(self, obs_msg: Observation) -> np.ndarray:
         tcp_pose = obs_msg.controller_state.tcp_pose
@@ -283,33 +198,62 @@ class RunACT(Policy):
             if self._current_task is None:
                 raise ValueError("checkpoint expects task-conditioned 42D state, but no active task is set")
             values.extend(self._task_vector(self._current_task))
-        return np.array(values, dtype=np.float32)
+        return np.asarray(values, dtype=np.float32)
+
+    def prepare_observations(self, obs_msg: Observation) -> dict[str, torch.Tensor]:
+        camera_msg_by_key = {
+            "observation.images.center_camera": obs_msg.center_image,
+            "observation.images.left_camera": obs_msg.left_image,
+            "observation.images.right_camera": obs_msg.right_image,
+        }
+        raw_state = torch.from_numpy(self._state_vector(obs_msg)).float().unsqueeze(0).to(self.device)
+        if raw_state.shape[-1] != self.state_dim:
+            raise ValueError(f"checkpoint expects observation.state dim {self.state_dim}, got {raw_state.shape[-1]}")
+        return {
+            "state": (raw_state - self.state_mean) / self.state_std,
+            "observation.images.center_camera": self._normalized_image(
+                "observation.images.center_camera", camera_msg_by_key["observation.images.center_camera"]
+            ),
+            "observation.images.left_camera": self._normalized_image(
+                "observation.images.left_camera", camera_msg_by_key["observation.images.left_camera"]
+            ),
+            "observation.images.right_camera": self._normalized_image(
+                "observation.images.right_camera", camera_msg_by_key["observation.images.right_camera"]
+            ),
+        }
 
     def select_delta_action(self, obs_msg: Observation) -> np.ndarray:
-        obs_tensors = self.prepare_observations(obs_msg)
-        with torch.inference_mode():
-            normalized_action = self.policy.select_action(obs_tensors)
-        raw_action = (normalized_action * self.action_std) + self.action_mean
+        obs = self.prepare_observations(obs_msg)
+        with torch.no_grad():
+            chunk = self.model(
+                obs["state"],
+                obs["observation.images.center_camera"],
+                obs["observation.images.left_camera"],
+                obs["observation.images.right_camera"],
+            )
+        normalized_action = chunk[:, 0, : self.action_dim]
+        raw_action = normalized_action * self.action_std[:, : self.action_dim] + self.action_mean[:, : self.action_dim]
         return raw_action[0, :6].detach().cpu().numpy()
 
-    def _set_velocity_target(
+    def _finite_action_or_none(self, action: np.ndarray, command_count: int) -> np.ndarray | None:
+        if np.all(np.isfinite(action[:6])):
+            return action
+        self.get_logger().error(
+            "ACT produced non-finite action; skipping robot command "
+            f"at command_index={command_count + 1}: {np.array2string(action[:6], precision=5)}"
+        )
+        return None
+
+    def _send_velocity_target(
         self,
         move_robot: MoveRobotCallback,
         delta_position_xyz: np.ndarray,
         delta_rotation_xyz: np.ndarray,
-    ) -> None:
+    ) -> tuple[np.ndarray, np.ndarray]:
         position, rotation = self._clamp_action(delta_position_xyz, delta_rotation_xyz)
         twist = Twist(
-            linear=Vector3(
-                x=float(position[0] * self.control_hz),
-                y=float(position[1] * self.control_hz),
-                z=float(position[2] * self.control_hz),
-            ),
-            angular=Vector3(
-                x=float(rotation[0] * self.control_hz),
-                y=float(rotation[1] * self.control_hz),
-                z=float(rotation[2] * self.control_hz),
-            ),
+            linear=Vector3(x=float(position[0] * self.control_hz), y=float(position[1] * self.control_hz), z=float(position[2] * self.control_hz)),
+            angular=Vector3(x=float(rotation[0] * self.control_hz), y=float(rotation[1] * self.control_hz), z=float(rotation[2] * self.control_hz)),
         )
         motion_update = MotionUpdate()
         motion_update.velocity = twist
@@ -317,13 +261,11 @@ class RunACT(Policy):
         motion_update.header.stamp = self.get_clock().now().to_msg()
         motion_update.target_stiffness = np.diag([100.0, 100.0, 100.0, 50.0, 50.0, 50.0]).flatten()
         motion_update.target_damping = np.diag([40.0, 40.0, 40.0, 15.0, 15.0, 15.0]).flatten()
-        motion_update.feedforward_wrench_at_tip = Wrench(
-            force=Vector3(x=0.0, y=0.0, z=0.0),
-            torque=Vector3(x=0.0, y=0.0, z=0.0),
-        )
+        motion_update.feedforward_wrench_at_tip = Wrench(force=Vector3(x=0.0, y=0.0, z=0.0), torque=Vector3(x=0.0, y=0.0, z=0.0))
         motion_update.wrench_feedback_gains_at_tip = [0.5, 0.5, 0.5, 0.0, 0.0, 0.0]
         motion_update.trajectory_generation_mode.mode = TrajectoryGenerationMode.MODE_VELOCITY
         move_robot(motion_update=motion_update)
+        return position, rotation
 
     def _clamp_action(
         self,
@@ -349,13 +291,10 @@ class RunACT(Policy):
         send_feedback: SendFeedbackCallback,
         **kwargs,
     ) -> bool:
-        self.policy.reset()
         self._current_task = task
-        command_mode = self._active_command_mode()
-        self.get_logger().info(f"RunACT.insert_cable() enter. Task: {task}")
-        self.get_logger().info(f"RunACT active command_mode={command_mode}")
+        self.get_logger().info(f"RunACTTorchScript.insert_cable() enter. Task: {task}")
         if self.start_delay_sec > 0.0:
-            self.get_logger().info(f"Waiting {self.start_delay_sec:.2f}s before first ACT command.")
+            self.get_logger().info(f"Waiting {self.start_delay_sec:.2f}s before first ACT TorchScript command.")
             time.sleep(self.start_delay_sec)
 
         period_sec = 1.0 / self.control_hz
@@ -370,30 +309,40 @@ class RunACT(Policy):
                 continue
 
             action = self.select_delta_action(observation_msg)
+            action = self._finite_action_or_none(action, command_count)
+            if action is None:
+                time.sleep(period_sec)
+                continue
             if hasattr(self._parent_node, "_target_mode"):
                 self._parent_node._target_mode = TargetMode.MODE_CARTESIAN
-            if command_mode == "none":
-                pass
-            elif command_mode == "velocity":
-                self._set_velocity_target(move_robot, action[:3], action[3:6])
-            elif command_mode == "delta_pose":
+            if self.command_mode == "none":
+                position, rotation = self._clamp_action(action[:3], action[3:6])
+            elif self.command_mode == "velocity":
+                position, rotation = self._send_velocity_target(move_robot, action[:3], action[3:6])
+            elif self.command_mode == "delta_pose":
+                position, rotation = self._clamp_action(action[:3], action[3:6])
                 self.set_delta_pose_target_from_components(
                     move_robot=move_robot,
-                    delta_position_xyz=action[:3],
-                    delta_rotation_xyz=action[3:6],
+                    delta_position_xyz=position,
+                    delta_rotation_xyz=rotation,
                     max_translation=self.max_translation_delta,
                     max_rotation=self.max_rotation_delta,
-                    deadband_translation=self.translation_deadband,
-                    deadband_rotation=self.rotation_deadband,
                 )
             else:
-                raise ValueError(f"Unsupported AIC_ACT_COMMAND_MODE={command_mode!r}")
+                raise ValueError(f"Unsupported AIC_ACT_RUNTIME_COMMAND_MODE={self.command_mode!r}")
             command_count += 1
+            if command_count == 1 or command_count % self.log_every_n_commands == 0:
+                self.get_logger().info(
+                    "ACT command "
+                    f"{command_count}: mode={self.command_mode}, raw={np.array2string(action[:6], precision=5)}, "
+                    f"clamped_position={np.array2string(position, precision=5)}, "
+                    f"clamped_rotation={np.array2string(rotation, precision=5)}"
+                )
             if command_count % max(1, int(self.control_hz)) == 0:
                 send_feedback(f"in progress; commands={command_count}")
 
             elapsed = time.monotonic() - loop_start
             time.sleep(max(0.0, period_sec - elapsed))
 
-        self.get_logger().info("RunACT.insert_cable() exiting...")
+        self.get_logger().info("RunACTTorchScript.insert_cable() exiting...")
         return True

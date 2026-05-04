@@ -35,6 +35,17 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--device", default="cuda")
     parser.add_argument("--headless", action="store_true", default=True)
     parser.add_argument("--no-headless", dest="headless", action="store_false")
+    parser.add_argument(
+        "--rendering-mode",
+        choices=["quality", "balanced", "performance"],
+        default="performance",
+        help="Isaac/RTX rendering preset. ACT-backed SERL requires cameras; performance is the default smoke/training preset.",
+    )
+    parser.add_argument(
+        "--kit-args",
+        default=None,
+        help="Optional raw Omniverse Kit args forwarded to IsaacLab, for driver/runtime debugging.",
+    )
     parser.add_argument("--checkpoint", type=Path, required=True)
     parser.add_argument("--act-torchscript", type=Path, required=True)
     parser.add_argument("--output-dir", type=Path, default=Path("outputs/train/isaac_stage5_serl"))
@@ -55,6 +66,31 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--adapter-delta-clip", type=float, default=0.05)
     parser.add_argument("--action-clip", type=float, default=0.05)
     parser.add_argument("--freeze-act", action=argparse.BooleanOptionalAction, default=True)
+    parser.add_argument(
+        "--randomization-profile",
+        choices=["none", "light", "heavy"],
+        default="none",
+        help=(
+            "Isaac scene/randomization profile. Use 'none' to match fixed Gazebo "
+            "card0/port0 smoke data as closely as the current Isaac scene allows."
+        ),
+    )
+    parser.add_argument("--insertion-distance-weight", type=float, default=0.0)
+    parser.add_argument("--insertion-lateral-weight", type=float, default=0.0)
+    parser.add_argument("--state-source", choices=["lerobot_compatible", "policy_prefix"], default="lerobot_compatible")
+    parser.add_argument("--task-family", choices=["sfp_to_nic", "sc_to_sc"], default="sfp_to_nic")
+    parser.add_argument("--target-port-index", type=int, default=0)
+    parser.add_argument("--target-card-index", type=int, default=0)
+    parser.add_argument("--target-card-valid", type=int, default=1)
+    parser.add_argument("--gripper-joint-position", type=float, default=0.0035405)
+    parser.add_argument(
+        "--initial-arm-joint-pos",
+        default=None,
+        help=(
+            "Optional comma-separated six-joint Isaac arm reset pose. Use this for "
+            "near-port curriculum starts; omit it to keep the task default."
+        ),
+    )
     parser.add_argument(
         "--isaaclab",
         default=os.environ.get("ISAACLAB_LAUNCHER", "isaaclab"),
@@ -98,6 +134,8 @@ def build_plan(args: argparse.Namespace) -> dict[str, Any]:
         "seed": args.seed,
         "device": args.device,
         "headless": args.headless,
+        "rendering_mode": args.rendering_mode,
+        "kit_args": args.kit_args,
         "output_dir": str(args.output_dir),
         "steps": args.steps,
         "updates": args.updates,
@@ -113,6 +151,18 @@ def build_plan(args: argparse.Namespace) -> dict[str, Any]:
         "act_preservation_weight": args.act_preservation_weight,
         "adapter_delta_clip": args.adapter_delta_clip,
         "action_clip": args.action_clip,
+        "randomization_profile": args.randomization_profile,
+        "insertion_distance_weight": args.insertion_distance_weight,
+        "insertion_lateral_weight": args.insertion_lateral_weight,
+        "initial_arm_joint_pos": args.initial_arm_joint_pos,
+        "state_source": args.state_source,
+        "task_context": {
+            "task_family": args.task_family,
+            "target_port_index": args.target_port_index,
+            "target_card_index": args.target_card_index,
+            "target_card_valid": args.target_card_valid,
+        },
+        "gripper_joint_position": args.gripper_joint_position,
         "replay_buffer": asdict(replay),
         "checkpoint": checkpoint,
         "implemented": [
@@ -178,15 +228,36 @@ def build_command(args: argparse.Namespace) -> tuple[list[str], dict[str, str]]:
         str(args.adapter_delta_clip),
         "--action_clip",
         str(args.action_clip),
+        "--state_source",
+        args.state_source,
+        "--task_family",
+        args.task_family,
+        "--target_port_index",
+        str(args.target_port_index),
+        "--target_card_index",
+        str(args.target_card_index),
+        "--target_card_valid",
+        str(args.target_card_valid),
+        "--gripper_joint_position",
+        str(args.gripper_joint_position),
     ]
     cmd.append("--freeze_act" if args.freeze_act else "--no-freeze_act")
     if args.headless:
         cmd.append("--headless")
     if args.device:
         cmd.extend(["--device", args.device])
+    if args.rendering_mode:
+        cmd.extend(["--rendering_mode", args.rendering_mode])
+    if args.kit_args:
+        cmd.extend(["--kit_args", args.kit_args])
     cmd.extend(args.extra_arg)
     env = os.environ.copy()
     env["AIC_ISAAC_DISABLE_CAMERAS"] = "0"
+    env["AIC_ISAAC_RANDOMIZATION_PROFILE"] = args.randomization_profile
+    env["AIC_ISAAC_INSERTION_DISTANCE_WEIGHT"] = str(args.insertion_distance_weight)
+    env["AIC_ISAAC_INSERTION_LATERAL_WEIGHT"] = str(args.insertion_lateral_weight)
+    if args.initial_arm_joint_pos:
+        env["AIC_ISAAC_INITIAL_ARM_JOINT_POS"] = args.initial_arm_joint_pos
     return cmd, env
 
 

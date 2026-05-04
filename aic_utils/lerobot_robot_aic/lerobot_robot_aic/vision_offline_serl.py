@@ -518,6 +518,79 @@ class VisionOfflineSERLTrainer:
             "log_std_mean": float(_unwrap_module(self.actor).log_std.mean().detach().cpu()),
         }
 
+    @torch.no_grad()
+    def eval_step(self, batch: dict[str, Any]) -> dict[str, float]:
+        batch = self._batch_to_device(batch)
+        obs = batch["obs"]
+        next_obs = batch["next_obs"]
+        action = batch["action"]
+        reward = batch["reward"]
+        done = batch["done"]
+
+        next_action = self.actor_mean_action(next_obs)
+        target_q = torch.minimum(
+            self.target_critic1(next_obs, next_action),
+            self.target_critic2(next_obs, next_action),
+        )
+        td_target = reward + self.config.gamma * (1.0 - done) * target_q
+
+        q1 = self.critic1(obs, action)
+        q2 = self.critic2(obs, action)
+        td_loss = F.mse_loss(q1, td_target) + F.mse_loss(q2, td_target)
+        conservative_loss = torch.zeros((), device=self.device)
+        if self.config.cql_weight > 0.0:
+            random_action = torch.randn_like(action)
+            conservative_loss = (
+                self.critic1(obs, random_action).mean()
+                + self.critic2(obs, random_action).mean()
+                - q1.detach().mean()
+                - q2.detach().mean()
+            )
+        critic_loss = td_loss + self.config.cql_weight * conservative_loss
+
+        components = self.actor_components(obs)
+        delta_action = components["delta_action"]
+        base_action = components["base_action"]
+        actor_action = components["final_action"]
+        actor_q = torch.minimum(self.critic1(obs, actor_action), self.critic2(obs, actor_action))
+        bc_loss = F.mse_loss(actor_action, action)
+        adapter_penalty = delta_action.square().mean()
+        act_preservation_loss = F.mse_loss(actor_action, base_action.detach())
+        smoothness_loss = self._smoothness_loss(actor_action)
+        actor_loss = (
+            -actor_q.mean()
+            + self.config.bc_weight * bc_loss
+            + self.config.adapter_penalty_weight * adapter_penalty
+            + self.config.act_preservation_weight * act_preservation_loss
+            + self.config.smoothness_weight * smoothness_loss
+        )
+
+        return {
+            "actor_loss": float(actor_loss.detach().cpu()),
+            "bc_loss": float(bc_loss.detach().cpu()),
+            "critic_loss": float(critic_loss.detach().cpu()),
+            "td_loss": float(td_loss.detach().cpu()),
+            "conservative_loss": float(conservative_loss.detach().cpu()),
+            "q_mean": float(torch.minimum(q1, q2).mean().detach().cpu()),
+            "reward_mean": float(reward.mean().detach().cpu()),
+            "adapter_delta_norm": float(delta_action.norm(dim=-1).mean().detach().cpu()),
+            "raw_adapter_delta_norm": float(
+                components.get("raw_delta_action", delta_action).norm(dim=-1).mean().detach().cpu()
+            ),
+            "adapter_penalty": float(adapter_penalty.detach().cpu()),
+            "act_preservation_loss": float(act_preservation_loss.detach().cpu()),
+            "final_minus_act_norm": float((actor_action - base_action.detach()).norm(dim=-1).mean().detach().cpu()),
+            "unclipped_final_minus_act_norm": float(
+                (components.get("unclipped_final_action", actor_action) - base_action.detach())
+                .norm(dim=-1)
+                .mean()
+                .detach()
+                .cpu()
+            ),
+            "smoothness_loss": float(smoothness_loss.detach().cpu()),
+            "log_std_mean": float(_unwrap_module(self.actor).log_std.mean().detach().cpu()),
+        }
+
     def _smoothness_loss(self, action: torch.Tensor) -> torch.Tensor:
         single_action_dim = max(self.config.action_dim // max(self.config.action_horizon, 1), 1)
         if self.config.action_horizon <= 1 or self.config.action_dim % single_action_dim != 0:

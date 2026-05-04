@@ -124,15 +124,14 @@ class GazeboRLRunner:
 
     def _runtime_env_exports(self) -> str:
         env = self._env()
+        pythonpath_prefix = os.pathsep.join(
+            [
+                str(self.config.workspace_container / "aic_utils" / "gazebo_rl"),
+                str(self.config.workspace_container / "aic_example_policies"),
+            ]
+        )
         runtime_env = {
             "RMW_IMPLEMENTATION": "rmw_zenoh_cpp",
-            "PYTHONPATH": os.pathsep.join(
-                [
-                    str(self.config.workspace_container / "aic_utils" / "gazebo_rl"),
-                    str(self.config.workspace_container / "aic_example_policies"),
-                    env.get("PYTHONPATH", ""),
-                ]
-            ).rstrip(os.pathsep),
             "AIC_GAZEBO_RL_HOST": env["AIC_GAZEBO_RL_HOST"],
             "AIC_GAZEBO_RL_PORT": env["AIC_GAZEBO_RL_PORT"],
             "AIC_GAZEBO_RL_COMMAND_DT_SEC": env["AIC_GAZEBO_RL_COMMAND_DT_SEC"],
@@ -141,7 +140,9 @@ class GazeboRLRunner:
             "AIC_GAZEBO_RL_INCLUDE_IMAGES": env["AIC_GAZEBO_RL_INCLUDE_IMAGES"],
             "AIC_RESULTS_DIR": self._container_path(self.config.results_dir),
         }
-        return "\n".join(f"export {key}={shlex_quote(value)}" for key, value in runtime_env.items())
+        exports = [f"export {key}={shlex_quote(value)}" for key, value in runtime_env.items()]
+        exports.append(f"export PYTHONPATH={shlex_quote(pythonpath_prefix)}:${{PYTHONPATH:-}}")
+        return "\n".join(exports)
 
     def _container_path(self, path: str | Path | None) -> str | None:
         if path is None:
@@ -489,6 +490,8 @@ class GazeboRLRunner:
             "aic_gz_bringup",
             "rmw_zenohd",
             "/aic_engine/aic_engine",
+            "aic_model",
+            "aic_model_gazebo_rl",
             "aic_adapter",
             "robot_state_publisher",
             "component_container",

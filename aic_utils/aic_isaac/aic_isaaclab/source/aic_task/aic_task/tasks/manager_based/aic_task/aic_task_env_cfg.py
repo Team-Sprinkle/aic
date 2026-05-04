@@ -599,6 +599,7 @@ class AICTaskEnvCfg(ManagerBasedRLEnvCfg):
 
     def __post_init__(self) -> None:
         super().__post_init__()
+        self._apply_initial_arm_joint_override()
 
         # General settings
         self.decimation = 4
@@ -807,3 +808,22 @@ class AICTaskEnvCfg(ManagerBasedRLEnvCfg):
         )
         self.rewards.target_distance_tanh.weight = distance_weight
         self.rewards.target_lateral_error.weight = lateral_weight
+
+    def _apply_initial_arm_joint_override(self) -> None:
+        raw = os.environ.get("AIC_ISAAC_INITIAL_ARM_JOINT_POS")
+        if not raw:
+            return
+        values = [float(item.strip()) for item in raw.split(",") if item.strip()]
+        if len(values) != 6:
+            raise ValueError(
+                "AIC_ISAAC_INITIAL_ARM_JOINT_POS must contain exactly 6 comma-separated joint positions"
+            )
+        joint_names = [
+            "shoulder_pan_joint",
+            "shoulder_lift_joint",
+            "elbow_joint",
+            "wrist_1_joint",
+            "wrist_2_joint",
+            "wrist_3_joint",
+        ]
+        self.scene.robot.init_state.joint_pos.update(dict(zip(joint_names, values, strict=True)))

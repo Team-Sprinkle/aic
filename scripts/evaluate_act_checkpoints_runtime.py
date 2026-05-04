@@ -29,16 +29,36 @@ def parse_args() -> argparse.Namespace:
         help="Rootless Docker socket.",
     )
     parser.add_argument("--checkpoint-glob", default="checkpoints/[0-9]*/pretrained_model")
+    parser.add_argument(
+        "--eval-subdir",
+        default="runtime_eval",
+        help="Subdirectory under --run-dir where per-checkpoint eval outputs are written.",
+    )
     parser.add_argument("--poll-seconds", type=float, default=30.0)
     parser.add_argument("--once-existing", action="store_true")
     parser.add_argument("--max-runtime-sec", type=float, default=12.0)
     parser.add_argument("--start-delay-sec", type=float, default=0.0)
     parser.add_argument("--control-hz", type=float, default=20.0)
+    parser.add_argument("--policy-device", default="cuda", help="Device passed to RunACT, e.g. cuda or cpu.")
+    parser.add_argument("--policy-module", default="aic_example_policies.ros.RunACT")
+    parser.add_argument("--act-torchscript", type=Path, default=None)
     parser.add_argument("--command-mode", default="none", choices=["none", "velocity", "delta_pose"])
     parser.add_argument("--command-frame", default="base_link")
     parser.add_argument("--max-translation-delta", type=float, default=0.02)
     parser.add_argument("--max-rotation-delta", type=float, default=0.2)
     parser.add_argument("--sim-wait-sec", type=float, default=25.0)
+    parser.add_argument(
+        "--eval-attempts",
+        type=int,
+        default=1,
+        help="Number of clean container attempts per checkpoint before giving up.",
+    )
+    parser.add_argument(
+        "--retry-delay-sec",
+        type=float,
+        default=10.0,
+        help="Wall-clock delay between retry attempts after runtime failure.",
+    )
     parser.add_argument("--readiness-timeout-sec", type=int, default=120)
     parser.add_argument("--engine-timeout-sec", type=float, default=300.0)
     parser.add_argument(
@@ -90,6 +110,61 @@ def restart_container(args: argparse.Namespace, log_path: Path) -> int:
     return result.returncode
 
 
+def stop_process(proc: subprocess.Popen[str], timeout: float = 10.0) -> None:
+    if proc.poll() is not None:
+        return
+    proc.terminate()
+    try:
+        proc.wait(timeout=timeout)
+    except subprocess.TimeoutExpired:
+        proc.kill()
+        proc.wait(timeout=timeout)
+
+
+def run_engine_monitoring_sim(
+    args: argparse.Namespace,
+    engine_script: str,
+    engine_log_path: Path,
+    sim_proc: subprocess.Popen[str],
+    sim_log_path: Path,
+) -> tuple[int | None, str | None]:
+    """Run aic_engine while failing fast if the simulator process exits."""
+    engine_log_path.parent.mkdir(parents=True, exist_ok=True)
+    with engine_log_path.open("w", encoding="utf-8") as log_file:
+        engine_proc = subprocess.Popen(
+            container_bash(args, engine_script),
+            text=True,
+            stdout=log_file,
+            stderr=subprocess.STDOUT,
+        )
+        start = time.monotonic()
+        while True:
+            engine_returncode = engine_proc.poll()
+            if engine_returncode is not None:
+                return engine_returncode, None
+
+            sim_returncode = sim_proc.poll()
+            if sim_returncode is not None:
+                stop_process(engine_proc)
+                return None, f"simulator exited while engine was running (returncode={sim_returncode})"
+
+            if sim_log_path.exists():
+                try:
+                    sim_log = sim_log_path.read_text(encoding="utf-8", errors="replace")
+                except OSError:
+                    sim_log = ""
+                if "ros_gz_container" in sim_log and "process has died" in sim_log:
+                    stop_process(engine_proc)
+                    return None, "ros_gz_container died while engine was running"
+
+            elapsed = time.monotonic() - start
+            if elapsed > args.engine_timeout_sec:
+                stop_process(engine_proc)
+                return None, f"aic_engine timed out after {args.engine_timeout_sec} seconds"
+
+            time.sleep(1.0)
+
+
 def wait_for_policy_ready(args: argparse.Namespace, node_name: str, action_name: str, log_path: Path) -> bool:
     script = f"""
 source /ws_aic/install/setup.bash
@@ -114,10 +189,14 @@ exit 1
     return result.returncode == 0
 
 
-def evaluate_checkpoint(checkpoint_path: Path, args: argparse.Namespace) -> dict[str, object]:
+def evaluate_checkpoint_once(
+    checkpoint_path: Path,
+    args: argparse.Namespace,
+    eval_dir: Path,
+    logs_dir: Path,
+    attempt: int,
+) -> dict[str, object]:
     step = checkpoint_path.parent.name
-    eval_dir = args.run_dir.resolve() / "runtime_eval" / step
-    logs_dir = eval_dir / "logs"
     eval_dir.mkdir(parents=True, exist_ok=True)
 
     checkpoint_container = host_to_container(checkpoint_path, args)
@@ -132,6 +211,7 @@ def evaluate_checkpoint(checkpoint_path: Path, args: argparse.Namespace) -> dict
         "eval_dir_container": eval_container,
         "node_name": node_name,
         "action_name": action_name,
+        "attempt": attempt,
         "started_at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
     }
 
@@ -149,20 +229,22 @@ cd {args.workspace_container}
 source /ws_aic/install/setup.bash
 export RMW_IMPLEMENTATION=rmw_zenoh_cpp
 cd {args.workspace_container}
-export PYTHONPATH={args.workspace_container}/scripts/pythonpath_bootstrap:$PYTHONPATH
+export PYTHONPATH={args.workspace_container}/aic_model:{args.workspace_container}/scripts/pythonpath_bootstrap:$PYTHONPATH
 export AIC_CHECKOUT_PYTHONPATH={args.workspace_container}/aic_example_policies
 export AIC_ACT_POLICY_PATH={checkpoint_container}
-export AIC_ACT_DEVICE=cuda
+export AIC_ACT_TORCHSCRIPT={host_to_container(args.act_torchscript, args) if args.act_torchscript else ""}
+export AIC_ACT_DEVICE={args.policy_device}
 export AIC_ACT_MAX_RUNTIME_SEC={args.max_runtime_sec}
 export AIC_ACT_START_DELAY_SEC={args.start_delay_sec}
 export AIC_ACT_CONTROL_HZ={args.control_hz}
-export AIC_ACT_COMMAND_MODE={args.command_mode}
+export AIC_ACT_COMMAND_MODE=none
+export AIC_ACT_RUNTIME_COMMAND_MODE={args.command_mode}
 export AIC_ACT_COMMAND_FRAME={args.command_frame}
 export AIC_ACT_MAX_TRANSLATION_DELTA={args.max_translation_delta}
 export AIC_ACT_MAX_ROTATION_DELTA={args.max_rotation_delta}
 pixi run ros2 run aic_model aic_model --ros-args \\
   -p use_sim_time:=true \\
-  -p policy:=aic_example_policies.ros.RunACT \\
+  -p policy:={args.policy_module} \\
   -r __node:={node_name} \\
   -r /insert_cable:=/{action_name}
 """
@@ -185,35 +267,62 @@ ros2 run aic_engine aic_engine --ros-args \\
   -p model_configure_timeout_seconds:=120
 """
         try:
-            engine = run_capture(
-                container_bash(args, engine_script),
-                log_path=logs_dir / "engine.log",
-                timeout=args.engine_timeout_sec,
+            engine_returncode, failure_reason = run_engine_monitoring_sim(
+                args, engine_script, logs_dir / "engine.log", sim_proc, logs_dir / "sim.log"
             )
-            summary["engine_returncode"] = engine.returncode
-        except subprocess.TimeoutExpired as exc:
-            stdout = exc.stdout or ""
-            if isinstance(stdout, bytes):
-                stdout = stdout.decode(errors="replace")
-            (logs_dir / "engine.log").write_text(stdout, encoding="utf-8")
+            summary["engine_returncode"] = engine_returncode
+            if failure_reason is not None:
+                summary["failure_reason"] = failure_reason
+        except Exception as exc:
             summary["engine_returncode"] = None
-            summary["failure_reason"] = f"aic_engine timed out after {args.engine_timeout_sec} seconds"
+            summary["failure_reason"] = f"engine launch failed: {exc}"
     else:
         summary["engine_returncode"] = None
 
     for proc in (policy_proc, sim_proc):
-        if proc.poll() is None:
-            proc.terminate()
-            try:
-                proc.wait(timeout=10)
-            except subprocess.TimeoutExpired:
-                proc.kill()
+        stop_process(proc)
     restart_container(args, logs_dir / "container_restart_after.log")
 
     scoring = eval_dir / "scoring.yaml"
     summary["scoring_yaml"] = str(scoring) if scoring.exists() else None
     summary["finished_at"] = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
     (eval_dir / "eval_summary.json").write_text(json.dumps(summary, indent=2, sort_keys=True), encoding="utf-8")
+    return summary
+
+
+def evaluate_checkpoint(checkpoint_path: Path, args: argparse.Namespace) -> dict[str, object]:
+    step = checkpoint_path.parent.name
+    final_eval_dir = args.run_dir.resolve() / args.eval_subdir / step
+    final_eval_dir.mkdir(parents=True, exist_ok=True)
+
+    attempts: list[dict[str, object]] = []
+    max_attempts = max(1, args.eval_attempts)
+    for attempt in range(1, max_attempts + 1):
+        eval_dir = final_eval_dir if attempt == max_attempts else final_eval_dir / f"attempt_{attempt:02d}"
+        logs_dir = eval_dir / "logs"
+        summary = evaluate_checkpoint_once(checkpoint_path, args, eval_dir, logs_dir, attempt)
+        attempts.append(summary)
+        scoring_yaml = summary.get("scoring_yaml")
+        if scoring_yaml:
+            if eval_dir != final_eval_dir:
+                (final_eval_dir / "eval_summary.json").write_text(
+                    json.dumps(summary, indent=2, sort_keys=True), encoding="utf-8"
+                )
+            (final_eval_dir / "attempts.json").write_text(
+                json.dumps(attempts, indent=2, sort_keys=True), encoding="utf-8"
+            )
+            return summary
+        if attempt < max_attempts:
+            time.sleep(args.retry_delay_sec)
+
+    summary = dict(attempts[-1])
+    summary["attempts"] = attempts
+    (final_eval_dir / "eval_summary.json").write_text(
+        json.dumps(summary, indent=2, sort_keys=True), encoding="utf-8"
+    )
+    (final_eval_dir / "attempts.json").write_text(
+        json.dumps(attempts, indent=2, sort_keys=True), encoding="utf-8"
+    )
     return summary
 
 
@@ -230,7 +339,7 @@ def main() -> int:
         for checkpoint in iter_checkpoints(args):
             if checkpoint in evaluated:
                 continue
-            marker = args.run_dir / "runtime_eval" / checkpoint.parent.name / "eval_summary.json"
+            marker = args.run_dir / args.eval_subdir / checkpoint.parent.name / "eval_summary.json"
             if marker.exists():
                 evaluated.add(checkpoint)
                 continue

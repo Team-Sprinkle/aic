@@ -6,10 +6,12 @@ cd "${ISAACLAB_ROOT:-/workspace/isaaclab}"
 TASK_ID="${TASK_ID:-AIC-Task-v0}"
 NUM_ENVS="${NUM_ENVS:-1}"
 DEVICE="${DEVICE:-cuda:0}"
+RENDERING_MODE="${RENDERING_MODE:-performance}"
 export AIC_ISAAC_RANDOMIZATION_PROFILE="${AIC_ISAAC_RANDOMIZATION_PROFILE:-none}"
 export AIC_ISAAC_DISABLE_CAMERAS="${AIC_ISAAC_DISABLE_CAMERAS:-0}"
 
-PYTHONUNBUFFERED=1 ./isaaclab.sh -p - "$TASK_ID" "$NUM_ENVS" "$DEVICE" <<'PY'
+PYTHONUNBUFFERED=1 ./isaaclab.sh -p - "$TASK_ID" "$NUM_ENVS" "$DEVICE" "$RENDERING_MODE" <<'PY'
+import os
 import sys
 
 from isaaclab.app import AppLauncher
@@ -17,8 +19,9 @@ from isaaclab.app import AppLauncher
 task_id = sys.argv[1]
 num_envs = int(sys.argv[2])
 device = sys.argv[3]
+rendering_mode = sys.argv[4]
 
-app_launcher = AppLauncher(headless=True, enable_cameras=True)
+app_launcher = AppLauncher(headless=True, enable_cameras=True, rendering_mode=rendering_mode)
 simulation_app = app_launcher.app
 status = 1
 try:
@@ -37,6 +40,26 @@ try:
     result = env.step(action)
     print(f"obs_type={type(obs).__name__} info_keys={list(info.keys()) if isinstance(info, dict) else type(info)}")
     print(f"action_dim={action_dim} step_result_len={len(result)}")
+    if os.environ.get("AIC_ISAAC_DISABLE_CAMERAS", "0").lower() not in {"1", "true", "yes"}:
+        missing = [
+            name
+            for name in ("center_camera", "left_camera", "right_camera")
+            if name not in env.unwrapped.scene.sensors
+        ]
+        if missing:
+            raise RuntimeError(f"Camera sensors are required but missing: {missing}")
+        # Force the RTX camera pipeline to render and materialize tensors. Scene
+        # creation alone is not enough to validate ACT/SERL training readiness.
+        env.unwrapped.sim.render()
+        for name in ("center_camera", "left_camera", "right_camera"):
+            output = env.unwrapped.scene.sensors[name].data.output
+            if "rgb" not in output:
+                raise RuntimeError(f"Camera sensor {name!r} did not expose an rgb output")
+            rgb = output["rgb"]
+            if rgb.ndim != 4 or rgb.shape[-1] not in (3, 4):
+                raise RuntimeError(f"Camera sensor {name!r} rgb output has unexpected shape {tuple(rgb.shape)}")
+            print(f"{name}_rgb_shape={tuple(rgb.shape)} dtype={rgb.dtype}")
+        print("AIC IsaacLab camera tensor smoke OK")
     env.close()
     print("AIC IsaacLab env smoke OK")
     status = 0
