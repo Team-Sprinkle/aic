@@ -379,7 +379,7 @@ def run_live_generation(
                 "phase_labels": [wp.phase.value for wp in smooth.waypoints],
             }
         )
-        validation = _augment_validation_with_debug(validation, debug_assessment)
+        validation = _augment_validation_with_debug(validation, debug_assessment, mode=mode)
         record["replay_metrics"] = replay_metrics
         record["validation"] = validation.to_dict()
         record["debug_assessment"] = debug_assessment
@@ -407,7 +407,7 @@ def run_live_generation(
                     "phase_labels": [wp.phase.value for wp in repaired.waypoints],
                 }
             )
-            repaired_validation = _augment_validation_with_debug(repaired_validation, repaired_assessment)
+            repaired_validation = _augment_validation_with_debug(repaired_validation, repaired_assessment, mode=mode)
             if args.debug:
                 repaired_debug_root = (
                     output_dir / f"accepted_dataset_{mode.value}"
@@ -556,6 +556,8 @@ def _live_debug_assessment(smooth, replay_metrics: dict) -> dict:
     ]
     guarded_insert_success = any(event.get("event") == "guarded_insert_success" for event in runtime_events)
     tracking_gate_passed = all(bool(event.get("tracking_gate_passed")) for event in gate_events) if gate_events else None
+    if guarded_insert_success and gate_events and bool(gate_events[-1].get("tracking_gate_passed")):
+        tracking_gate_passed = True
     if tracking_gate_passed is False and gate_repair_events and guarded_insert_success:
         tracking_gate_passed = True
     contact_events = [
@@ -564,10 +566,29 @@ def _live_debug_assessment(smooth, replay_metrics: dict) -> dict:
         if event.get("event") in {"contact_detected", "precontact_port_align_aborted_force"}
     ]
     backoff_events = [event for event in runtime_events if event.get("event") == "recovery_backoff_completed"]
+    backoff_stage_events = [
+        event for event in runtime_events if event.get("event") == "recovery_backoff_stage_completed"
+    ]
     release_events = [event for event in runtime_events if event.get("event") == "recovery_force_release_wait"]
+    return_gate_events = [
+        event
+        for event in runtime_events
+        if event.get("event") == "recovery_return_to_preinsert_gate_checked"
+    ]
     latest_backoff = backoff_events[-1] if backoff_events else {}
+    latest_backoff_stage = backoff_stage_events[-1] if backoff_stage_events else {}
     measured_backoff_distance = latest_backoff.get("measured_backoff_distance_m")
+    if measured_backoff_distance is None:
+        measured_backoff_distance = latest_backoff_stage.get("measured_backoff_distance_m")
     measured_backoff_occurred = latest_backoff.get("measured_backoff_occurred")
+    if measured_backoff_occurred is None and measured_backoff_distance is not None:
+        required_measured_backoff = float(
+            os.environ.get("AIC_OFFICIAL_TEACHER_RECOVERY_REQUIRED_MEASURED_BACKOFF_M", "0.002")
+        )
+        measured_backoff_occurred = float(measured_backoff_distance) >= required_measured_backoff
+    force_release_before_realign = release_events[-1].get("force_released") if release_events else None
+    if force_release_before_realign is None and return_gate_events:
+        force_release_before_realign = any(bool(event.get("tracking_gate_passed")) for event in return_gate_events)
     max_tracking = max(tracking_values) if tracking_values else None
     return {
         "schema_version": "aic_expert_live_debug_assessment/v1",
@@ -579,11 +600,11 @@ def _live_debug_assessment(smooth, replay_metrics: dict) -> dict:
         "tracking_gate_repaired_with_live_z_offset": bool(gate_repair_events),
         "tracking_gate_final_error_m": gate_events[-1].get("final_tracking_error_m") if gate_events else None,
         "contact_detected": bool(contact_events),
-        "backoff_occurred": bool(backoff_events),
+        "backoff_occurred": bool(backoff_events or backoff_stage_events),
         "backoff_distance_achieved_m": latest_backoff.get("backoff_distance_achieved_m") if backoff_events else None,
         "measured_backoff_occurred": measured_backoff_occurred,
         "measured_backoff_distance_m": measured_backoff_distance,
-        "force_release_before_realign": release_events[-1].get("force_released") if release_events else None,
+        "force_release_before_realign": force_release_before_realign,
         "metrics": {
             "max_tracking_error_m": max_tracking,
             "max_guarded_insert_speed_mps": max_guarded_speed,
@@ -591,24 +612,49 @@ def _live_debug_assessment(smooth, replay_metrics: dict) -> dict:
             "tracking_gate_passed": tracking_gate_passed,
             "tracking_gate_repaired_with_live_z_offset": bool(gate_repair_events),
             "contact_detected": bool(contact_events),
-            "backoff_occurred": bool(backoff_events),
+            "backoff_occurred": bool(backoff_events or backoff_stage_events),
             "backoff_distance_achieved_m": latest_backoff.get("backoff_distance_achieved_m") if backoff_events else None,
             "measured_backoff_occurred": measured_backoff_occurred,
             "measured_backoff_distance_m": measured_backoff_distance,
-            "force_release_before_realign": release_events[-1].get("force_released") if release_events else None,
+            "force_release_before_realign": force_release_before_realign,
         },
     }
 
 
-def _augment_validation_with_debug(validation, assessment: dict):
+def _augment_validation_with_debug(validation, assessment: dict, *, mode: ExpertMode):
     reasons = list(validation.reasons)
-    guarded_speed = assessment.get("metrics", {}).get("max_guarded_insert_speed_mps")
+    metrics = assessment.get("metrics", {})
+    guarded_speed = metrics.get("max_guarded_insert_speed_mps")
     guarded_speed_threshold = float(os.environ.get("AIC_EXPERT_VALIDATION_MAX_GUARDED_SPEED_MPS", "0.02"))
     if guarded_speed is not None and guarded_speed > guarded_speed_threshold:
         reasons.append("guarded_insert_speed_threshold")
-    gate_passed = assessment.get("metrics", {}).get("tracking_gate_passed")
+    gate_passed = metrics.get("tracking_gate_passed")
     if gate_passed is False:
-        reasons.append("tracking_gate_failed")
+        nominal_gate_allowance_m = float(
+            os.environ.get("AIC_EXPERT_VALIDATION_NOMINAL_GATE_MISS_ALLOWANCE_M", "0.004")
+        )
+        nominal_gate_min_score = float(
+            os.environ.get("AIC_EXPERT_VALIDATION_NOMINAL_GATE_MISS_MIN_SCORE", "92.0")
+        )
+        gate_error = assessment.get("tracking_gate_final_error_m")
+        score = validation.score
+        if not (
+            mode == ExpertMode.NOMINAL
+            and score is not None
+            and score >= nominal_gate_min_score
+            and gate_error is not None
+            and float(gate_error) <= nominal_gate_allowance_m
+        ):
+            reasons.append("tracking_gate_failed")
+    if mode == ExpertMode.RECOVERY:
+        if not metrics.get("contact_detected"):
+            reasons.append("recovery_contact_trigger_missing")
+        if not metrics.get("backoff_occurred"):
+            reasons.append("recovery_backoff_missing")
+        if metrics.get("measured_backoff_occurred") is not True:
+            reasons.append("recovery_measured_backoff_missing")
+        if metrics.get("force_release_before_realign") is not True:
+            reasons.append("recovery_force_release_missing")
     if reasons == validation.reasons:
         return validation
     return replace(validation, accepted=False, reasons=reasons)

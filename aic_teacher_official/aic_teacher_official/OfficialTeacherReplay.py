@@ -374,10 +374,19 @@ class OfficialTeacherReplay(Policy):
             )
 
         i_gain = 0.15
+        use_plug_xy_offset_setting = os.environ.get("AIC_OFFICIAL_TEACHER_USE_PLUG_XY_OFFSET", "auto").lower()
+        use_plug_xy_offset = (
+            use_plug_xy_offset_setting in {"1", "true", "yes", "on"}
+            or (
+                use_plug_xy_offset_setting == "auto"
+                and str(getattr(task, "plug_name", "")).startswith("sc")
+            )
+        )
+        target_xy_offset = plug_tip_gripper_offset[:2] if use_plug_xy_offset else np.zeros(2, dtype=np.float64)
         target_xyz = np.array(
             [
-                port_transform.translation.x + i_gain * self._tip_x_error_integrator,
-                port_transform.translation.y + i_gain * self._tip_y_error_integrator,
+                port_transform.translation.x + target_xy_offset[0] + i_gain * self._tip_x_error_integrator,
+                port_transform.translation.y + target_xy_offset[1] + i_gain * self._tip_y_error_integrator,
                 port_transform.translation.z + z_offset + plug_tip_gripper_offset[2],
             ],
             dtype=np.float64,
@@ -1358,10 +1367,26 @@ class OfficialTeacherReplay(Policy):
         z_offset: float,
         target_z_m: float | None,
     ) -> bool:
+        is_sc_plug = str(getattr(task, "plug_name", "")).startswith("sc")
+        if is_sc_plug:
+            duration_sec = max(
+                duration_sec,
+                float(os.environ.get("AIC_OFFICIAL_TEACHER_SC_PRECONTACT_PORT_ALIGN_SEC", "0.35")),
+            )
         if duration_sec <= 0.0:
             self._trace_event("precontact_port_align_skipped", reason="duration_disabled")
             return True
-        max_offset = float(os.environ.get("AIC_OFFICIAL_TEACHER_PRECONTACT_PORT_ALIGN_MAX_OFFSET_M", "0.00025"))
+        max_offset_default = "0.0030" if is_sc_plug else "0.00025"
+        gain_default = "0.50" if is_sc_plug else "0.15"
+        generic_max_offset = float(
+            os.environ.get("AIC_OFFICIAL_TEACHER_PRECONTACT_PORT_ALIGN_MAX_OFFSET_M", max_offset_default)
+        )
+        max_offset = float(
+            os.environ.get(
+                "AIC_OFFICIAL_TEACHER_SC_PRECONTACT_PORT_ALIGN_MAX_OFFSET_M",
+                str(max(generic_max_offset, float(max_offset_default)) if is_sc_plug else generic_max_offset),
+            )
+        )
         residual_threshold = float(
             os.environ.get("AIC_OFFICIAL_TEACHER_PRECONTACT_PORT_ALIGN_RESIDUAL_M", "0.0007")
         )
@@ -1371,7 +1396,13 @@ class OfficialTeacherReplay(Policy):
         force_abort_fraction = float(
             os.environ.get("AIC_OFFICIAL_TEACHER_PRECONTACT_PORT_ALIGN_FORCE_ABORT_FRACTION", "0.60")
         )
-        gain = float(os.environ.get("AIC_OFFICIAL_TEACHER_PRECONTACT_PORT_ALIGN_GAIN", "0.15"))
+        generic_gain = float(os.environ.get("AIC_OFFICIAL_TEACHER_PRECONTACT_PORT_ALIGN_GAIN", gain_default))
+        gain = float(
+            os.environ.get(
+                "AIC_OFFICIAL_TEACHER_SC_PRECONTACT_PORT_ALIGN_GAIN",
+                str(max(generic_gain, float(gain_default)) if is_sc_plug else generic_gain),
+            )
+        )
         baseline_force = self._force_vector(get_observation)
         self._last_precontact_align_baseline_force = baseline_force.copy()
         self._last_precontact_align_force_delta_n = None
@@ -1480,15 +1511,30 @@ class OfficialTeacherReplay(Policy):
         preserve_current_z: bool = True,
         target_z_m: float | None = None,
         lateral_offset_base: np.ndarray | None = None,
+        max_lateral_error_m: float | None = None,
     ) -> bool:
         threshold = self._tracking_gate_threshold_m
         speed_threshold = float(os.environ.get("AIC_OFFICIAL_TEACHER_TRACKING_GATE_SPEED_MPS", "0.006"))
-        max_lateral_error_m = float(
-            os.environ.get("AIC_OFFICIAL_TEACHER_TRACKING_GATE_MAX_LATERAL_ERROR_M", "0.0022")
-        )
+        if max_lateral_error_m is None:
+            max_lateral_error_m = float(
+                os.environ.get("AIC_OFFICIAL_TEACHER_TRACKING_GATE_MAX_LATERAL_ERROR_M", "0.0022")
+            )
+        is_sc_plug = str(getattr(task, "plug_name", "")).startswith("sc")
+        if is_sc_plug:
+            max_lateral_error_m = float(
+                os.environ.get(
+                    "AIC_OFFICIAL_TEACHER_SC_TRACKING_GATE_MAX_LATERAL_ERROR_M",
+                    str(max_lateral_error_m),
+                )
+            )
         force_fraction = float(os.environ.get("AIC_OFFICIAL_TEACHER_TRACKING_GATE_FORCE_FRACTION", "1.0"))
         force_threshold = self._ft_threshold_n * force_fraction
         timeout_sec = max(settle_sec, self._tracking_gate_timeout_sec)
+        if is_sc_plug:
+            timeout_sec = max(
+                timeout_sec,
+                float(os.environ.get("AIC_OFFICIAL_TEACHER_SC_TRACKING_GATE_TIMEOUT_SEC", "4.0")),
+            )
         started = self.time_now()
         baseline_force = self._force_vector(get_observation)
         self._last_tracking_gate_baseline_force = baseline_force.copy()
@@ -1510,6 +1556,11 @@ class OfficialTeacherReplay(Policy):
             os.environ.get("AIC_OFFICIAL_TEACHER_PREINSERT_SERVO_STEP_LIMIT_M", "0.0005")
         )
         servo_max_bias_m = float(os.environ.get("AIC_OFFICIAL_TEACHER_PREINSERT_SERVO_MAX_BIAS_M", "0.0015"))
+        if is_sc_plug:
+            servo_max_bias_m = max(
+                servo_max_bias_m,
+                float(os.environ.get("AIC_OFFICIAL_TEACHER_SC_PREINSERT_SERVO_MAX_BIAS_M", "0.012")),
+            )
         servo_deadband_m = float(
             os.environ.get("AIC_OFFICIAL_TEACHER_PREINSERT_SERVO_DEADBAND_M", "0.00025")
         )
@@ -1542,10 +1593,25 @@ class OfficialTeacherReplay(Policy):
                 target_pose = desired_target_pose
                 if servo_compensation_enabled:
                     try:
-                        current_pose_for_servo = self._current_tcp_pose()
-                        current_xyz_for_servo = self._pose_position_array(current_pose_for_servo)
-                        desired_xyz_for_servo = self._pose_position_array(desired_target_pose)
-                        lateral_error_for_servo = current_xyz_for_servo - desired_xyz_for_servo
+                        if is_sc_plug:
+                            plug_transform_for_servo = self._parent_node._tf_buffer.lookup_transform(
+                                "base_link",
+                                f"{task.cable_name}/{task.plug_name}_link",
+                                Time(),
+                            ).transform
+                            lateral_error_for_servo = -np.asarray(
+                                [
+                                    port_transform.translation.x - plug_transform_for_servo.translation.x,
+                                    port_transform.translation.y - plug_transform_for_servo.translation.y,
+                                    0.0,
+                                ],
+                                dtype=np.float64,
+                            )
+                        else:
+                            current_pose_for_servo = self._current_tcp_pose()
+                            current_xyz_for_servo = self._pose_position_array(current_pose_for_servo)
+                            desired_xyz_for_servo = self._pose_position_array(desired_target_pose)
+                            lateral_error_for_servo = current_xyz_for_servo - desired_xyz_for_servo
                         speed_for_servo = self._tcp_speed_norm(get_observation)
                         update_ok = speed_for_servo is None or speed_for_servo <= servo_update_speed_mps
                         if update_ok and float(np.linalg.norm(lateral_error_for_servo[:2])) > servo_deadband_m:
@@ -1602,17 +1668,33 @@ class OfficialTeacherReplay(Policy):
             final_lateral_error = None
             if target_pose is not None:
                 try:
-                    current_pose_for_gate = self._current_tcp_pose()
-                    current_xyz_for_gate = self._pose_position_array(current_pose_for_gate)
-                    desired_pose_for_gate = desired_target_pose if desired_target_pose is not None else target_pose
-                    target_xyz_for_gate = self._pose_position_array(desired_pose_for_gate)
-                    final_lateral_error = float(
-                        np.linalg.norm((current_xyz_for_gate - target_xyz_for_gate)[:2])
-                    )
-                    commanded_xyz_for_gate = self._pose_position_array(target_pose)
-                    final_commanded_lateral_error = float(
-                        np.linalg.norm((current_xyz_for_gate - commanded_xyz_for_gate)[:2])
-                    )
+                    if is_sc_plug:
+                        plug_transform_for_gate = self._parent_node._tf_buffer.lookup_transform(
+                            "base_link",
+                            f"{task.cable_name}/{task.plug_name}_link",
+                            Time(),
+                        ).transform
+                        final_lateral_error = float(
+                            np.linalg.norm(
+                                [
+                                    port_transform.translation.x - plug_transform_for_gate.translation.x,
+                                    port_transform.translation.y - plug_transform_for_gate.translation.y,
+                                ]
+                            )
+                        )
+                        final_commanded_lateral_error = final_lateral_error
+                    else:
+                        current_pose_for_gate = self._current_tcp_pose()
+                        current_xyz_for_gate = self._pose_position_array(current_pose_for_gate)
+                        desired_pose_for_gate = desired_target_pose if desired_target_pose is not None else target_pose
+                        target_xyz_for_gate = self._pose_position_array(desired_pose_for_gate)
+                        final_lateral_error = float(
+                            np.linalg.norm((current_xyz_for_gate - target_xyz_for_gate)[:2])
+                        )
+                        commanded_xyz_for_gate = self._pose_position_array(target_pose)
+                        final_commanded_lateral_error = float(
+                            np.linalg.norm((current_xyz_for_gate - commanded_xyz_for_gate)[:2])
+                        )
                 except TransformException:
                     final_lateral_error = None
                     final_commanded_lateral_error = None
@@ -1650,12 +1732,23 @@ class OfficialTeacherReplay(Policy):
         except TransformException:
             plug_transform = None
         if current_pose is not None and target_pose is not None:
-            current_xyz = self._pose_position_array(current_pose)
-            desired_pose_for_gate = desired_target_pose if desired_target_pose is not None else target_pose
-            target_xyz = self._pose_position_array(desired_pose_for_gate)
-            final_lateral_error = float(np.linalg.norm((current_xyz - target_xyz)[:2]))
-            commanded_xyz = self._pose_position_array(target_pose)
-            final_commanded_lateral_error = float(np.linalg.norm((current_xyz - commanded_xyz)[:2]))
+            if is_sc_plug and plug_transform is not None:
+                final_lateral_error = float(
+                    np.linalg.norm(
+                        [
+                            port_transform.translation.x - plug_transform.translation.x,
+                            port_transform.translation.y - plug_transform.translation.y,
+                        ]
+                    )
+                )
+                final_commanded_lateral_error = final_lateral_error
+            else:
+                current_xyz = self._pose_position_array(current_pose)
+                desired_pose_for_gate = desired_target_pose if desired_target_pose is not None else target_pose
+                target_xyz = self._pose_position_array(desired_pose_for_gate)
+                final_lateral_error = float(np.linalg.norm((current_xyz - target_xyz)[:2]))
+                commanded_xyz = self._pose_position_array(target_pose)
+                final_commanded_lateral_error = float(np.linalg.norm((current_xyz - commanded_xyz)[:2]))
         self._trace_event(
             "tracking_gate_checked",
             tracking_gate_passed=passed,
@@ -1784,8 +1877,9 @@ class OfficialTeacherReplay(Policy):
         dt: float,
         gate_context: str,
     ) -> bool:
-        threshold = float(os.environ.get("AIC_OFFICIAL_TEACHER_RECOVERY_RETURN_Z_THRESHOLD_M", "0.004"))
-        timeout_sec = float(os.environ.get("AIC_OFFICIAL_TEACHER_RECOVERY_RETURN_Z_TIMEOUT_SEC", "2.0"))
+        default_threshold = "0.008" if self._expert_mode == "recovery" else "0.004"
+        threshold = float(os.environ.get("AIC_OFFICIAL_TEACHER_RECOVERY_RETURN_Z_THRESHOLD_M", default_threshold))
+        timeout_sec = float(os.environ.get("AIC_OFFICIAL_TEACHER_RECOVERY_RETURN_Z_TIMEOUT_SEC", "2.5"))
         speed_threshold = float(os.environ.get("AIC_OFFICIAL_TEACHER_RECOVERY_RETURN_SPEED_MPS", "0.010"))
         baseline_force = self._force_vector(get_observation)
         started = self.time_now()
@@ -2074,6 +2168,127 @@ class OfficialTeacherReplay(Policy):
         )
         return gate_passed
 
+    def _recovery_induced_lateral_offset_base(self, task: Task, port_transform: Transform) -> np.ndarray:
+        enabled_default = "true" if self._expert_mode == "recovery" else "false"
+        enabled = os.environ.get(
+            "AIC_OFFICIAL_TEACHER_RECOVERY_INDUCE_FAILURE",
+            enabled_default,
+        ).lower() in {"1", "true", "yes", "on"}
+        if not enabled:
+            return np.zeros(3, dtype=np.float64)
+
+        offset_m = float(os.environ.get("AIC_OFFICIAL_TEACHER_RECOVERY_INDUCE_LATERAL_OFFSET_M", "0.003"))
+        if offset_m <= 0.0:
+            return np.zeros(3, dtype=np.float64)
+
+        port_xyz = self._transform_translation_array(port_transform)
+        plug_transform = self._lookup_active_plug_transform()
+        plug_xyz = self._transform_translation_array(plug_transform)
+        direction = None
+        direction_source = "port_x_axis"
+        if port_xyz is not None and plug_xyz is not None:
+            plug_error_xy = np.asarray(
+                [plug_xyz[0] - port_xyz[0], plug_xyz[1] - port_xyz[1], 0.0],
+                dtype=np.float64,
+            )
+            error_norm = float(np.linalg.norm(plug_error_xy[:2]))
+            if error_norm > 1e-6:
+                direction = plug_error_xy / error_norm
+                direction_source = "plug_port_error"
+
+        if direction is None:
+            port_rotation = quaternion_xyzw_to_rotation_matrix(
+                np.asarray(
+                    [
+                        float(port_transform.rotation.x),
+                        float(port_transform.rotation.y),
+                        float(port_transform.rotation.z),
+                        float(port_transform.rotation.w),
+                    ],
+                    dtype=np.float64,
+                )
+            )
+            direction = np.asarray([port_rotation[0, 0], port_rotation[1, 0], 0.0], dtype=np.float64)
+            direction_norm = float(np.linalg.norm(direction[:2]))
+            if direction_norm <= 1e-6:
+                direction = np.asarray([1.0, 0.0, 0.0], dtype=np.float64)
+            else:
+                direction = direction / direction_norm
+
+        induced_offset = direction * offset_m
+        self._trace_event(
+            "recovery_induced_lateral_offset",
+            lateral_offset_base_m=induced_offset.tolist(),
+            requested_offset_m=offset_m,
+            direction_source=direction_source,
+        )
+        return induced_offset
+
+    def _plug_port_lateral_error_base(self, port_transform: Transform) -> np.ndarray | None:
+        port_xyz = self._transform_translation_array(port_transform)
+        plug_transform = self._lookup_active_plug_transform()
+        plug_xyz = self._transform_translation_array(plug_transform)
+        if port_xyz is None or plug_xyz is None:
+            return None
+        return np.asarray([plug_xyz[0] - port_xyz[0], plug_xyz[1] - port_xyz[1], 0.0], dtype=np.float64)
+
+    def _run_recovery_lateral_unwedge(
+        self,
+        port_transform: Transform,
+        move_robot: MoveRobotCallback,
+        *,
+        dt: float,
+        stage_index: int,
+        retry_count: int | None,
+    ) -> bool:
+        enabled = os.environ.get(
+            "AIC_OFFICIAL_TEACHER_RECOVERY_ENABLE_LATERAL_UNWEDGE",
+            "true" if self._expert_mode == "recovery" else "false",
+        ).lower() in {"1", "true", "yes", "on"}
+        if not enabled:
+            return False
+        lateral_error = self._plug_port_lateral_error_base(port_transform)
+        if lateral_error is None:
+            return False
+        lateral_norm = float(np.linalg.norm(lateral_error[:2]))
+        min_error = float(os.environ.get("AIC_OFFICIAL_TEACHER_RECOVERY_UNWEDGE_MIN_ERROR_M", "0.0007"))
+        if lateral_norm < min_error:
+            return False
+        distance = float(os.environ.get("AIC_OFFICIAL_TEACHER_RECOVERY_UNWEDGE_DISTANCE_M", "0.002"))
+        max_distance = float(os.environ.get("AIC_OFFICIAL_TEACHER_RECOVERY_UNWEDGE_MAX_DISTANCE_M", "0.003"))
+        distance = min(max_distance, max(0.0, distance))
+        if distance <= 0.0:
+            return False
+        duration = float(os.environ.get("AIC_OFFICIAL_TEACHER_RECOVERY_UNWEDGE_SEC", "0.35"))
+        steps = max(1, int(math.ceil(duration / dt)))
+        start_pose = self._current_tcp_pose()
+        start_xyz = self._pose_position_array(start_pose)
+        start_quat = self._pose_quat_wxyz(start_pose)
+        direction = -lateral_error / lateral_norm
+        target_xyz = start_xyz + direction * distance
+        target_pose = self._make_pose(target_xyz, start_quat)
+        self._trace_event(
+            "recovery_lateral_unwedge_started",
+            retry_count=retry_count,
+            stage_index=stage_index,
+            lateral_error_base_m=lateral_error.tolist(),
+            lateral_error_norm_m=lateral_norm,
+            unwedge_delta_base_m=(direction * distance).tolist(),
+            target_tcp_pose=self._pose_to_trace_dict(target_pose),
+        )
+        for step in range(steps + 1):
+            fraction = self._minimum_jerk_fraction(step / steps)
+            pose = self._make_pose(start_xyz + fraction * (target_xyz - start_xyz), start_quat)
+            self._send_absolute_target(move_robot, pose, gain_profile="recovery")
+            self.sleep_for(dt)
+        self._trace_event(
+            "recovery_lateral_unwedge_completed",
+            retry_count=retry_count,
+            stage_index=stage_index,
+            current_tcp_pose=self._pose_to_trace_dict(self._current_tcp_pose()),
+        )
+        return True
+
     def _backoff_and_realign(
         self,
         task: Task,
@@ -2105,9 +2320,15 @@ class OfficialTeacherReplay(Policy):
         configured_release_threshold = float(
             os.environ.get("AIC_OFFICIAL_TEACHER_RECOVERY_RELEASE_FORCE_THRESHOLD_N", str(self._ft_threshold_n))
         )
+        strict_release_default = str(configured_release_threshold) if self._expert_mode == "recovery" else "1.0"
         release_threshold = min(
             configured_release_threshold,
-            float(os.environ.get("AIC_OFFICIAL_TEACHER_RECOVERY_STRICT_RELEASE_FORCE_THRESHOLD_N", "1.0")),
+            float(
+                os.environ.get(
+                    "AIC_OFFICIAL_TEACHER_RECOVERY_STRICT_RELEASE_FORCE_THRESHOLD_N",
+                    strict_release_default,
+                )
+            ),
         )
         required_measured_backoff = min(
             max_backoff_distance,
@@ -2241,6 +2462,19 @@ class OfficialTeacherReplay(Policy):
             measured_backoff_occurred = max_measured_backoff >= required_measured_backoff
             if force_released and measured_backoff_occurred:
                 break
+            if (
+                not force_released
+                and total_backoff >= min_backoff_distance
+                and stage_index
+                <= int(os.environ.get("AIC_OFFICIAL_TEACHER_RECOVERY_MAX_UNWEDGE_STAGES", "2"))
+            ):
+                self._run_recovery_lateral_unwedge(
+                    port_transform,
+                    move_robot,
+                    dt=dt,
+                    stage_index=stage_index,
+                    retry_count=retry_count,
+                )
         current_pose = self._current_tcp_pose()
         current_xyz = self._pose_position_array(current_pose)
         measured_distance = float(np.linalg.norm(current_xyz - start_xyz))
@@ -2252,7 +2486,7 @@ class OfficialTeacherReplay(Policy):
             backoff_mode=backoff_mode,
             backoff_distance_achieved_m=total_backoff,
             measured_backoff_distance_m=max_measured_backoff,
-            measured_backoff_occurred=max_measured_backoff >= required_measured_backoff,
+            measured_backoff_occurred=bool(max_measured_backoff >= required_measured_backoff),
             required_measured_backoff_m=required_measured_backoff,
             current_tcp_pose=self._pose_to_trace_dict(current_pose),
         )
@@ -2263,7 +2497,7 @@ class OfficialTeacherReplay(Policy):
             contact_threshold_n=self._ft_threshold_n,
             backoff_distance_achieved_m=total_backoff,
             measured_backoff_distance_m=max_measured_backoff,
-            measured_backoff_occurred=max_measured_backoff >= required_measured_backoff,
+            measured_backoff_occurred=bool(max_measured_backoff >= required_measured_backoff),
             min_backoff_distance_m=min_backoff_distance,
             required_measured_backoff_m=required_measured_backoff,
             max_backoff_distance_m=max_backoff_distance,
@@ -2349,7 +2583,7 @@ class OfficialTeacherReplay(Policy):
                     "recovery_measured_backoff_fallback_completed",
                     force_released=force_released,
                     measured_backoff_distance_m=max_measured_backoff,
-                    measured_backoff_occurred=measured_backoff_occurred,
+                    measured_backoff_occurred=bool(measured_backoff_occurred),
                     required_measured_backoff_m=required_measured_backoff,
                     current_tcp_pose=self._pose_to_trace_dict(current_pose),
                 )
@@ -2543,6 +2777,14 @@ class OfficialTeacherReplay(Policy):
             "AIC_OFFICIAL_TEACHER_PREINSERT_GATE_PRESERVE_CURRENT_Z",
             "true",
         ).lower() in {"1", "true", "yes", "on"}
+        initial_recovery_gate_max_lateral_m = None
+        if self._expert_mode == "recovery":
+            initial_recovery_gate_max_lateral_m = float(
+                os.environ.get(
+                    "AIC_OFFICIAL_TEACHER_RECOVERY_INITIAL_TRACKING_GATE_MAX_LATERAL_ERROR_M",
+                    os.environ.get("AIC_OFFICIAL_TEACHER_TRACKING_GATE_MAX_LATERAL_ERROR_M", "0.0022"),
+                )
+            )
         if not self._local_preinsert_align_done:
             self._run_local_preinsert_align(
                 task,
@@ -2564,6 +2806,7 @@ class OfficialTeacherReplay(Policy):
                 dt=dt,
                 z_offset=z_offset,
                 preserve_current_z=preinsert_gate_preserve_current_z,
+                max_lateral_error_m=initial_recovery_gate_max_lateral_m,
             )
             self._preinsert_settle_done = True
             if not gate_passed and self._expert_mode == "nominal":
@@ -2641,11 +2884,53 @@ class OfficialTeacherReplay(Policy):
                     dt=dt,
                     z_offset=z_offset,
                     preserve_current_z=preinsert_gate_preserve_current_z,
+                    max_lateral_error_m=initial_recovery_gate_max_lateral_m,
                 )
                 self._trace_event(
                     "recovery_tracking_gate_realign_completed",
                     tracking_gate_passed=gate_passed,
                 )
+                if not gate_passed:
+                    allowed_lateral_m = float(
+                        os.environ.get("AIC_OFFICIAL_TEACHER_RECOVERY_ALLOW_INITIAL_LOW_FORCE_GATE_MISS_M", "0.003")
+                    )
+                    last_lateral_error = (
+                        float(self._last_tracking_gate_lateral_error_m)
+                        if self._last_tracking_gate_lateral_error_m is not None
+                        else None
+                    )
+                    last_gate_force_delta = (
+                        float(self._last_tracking_gate_force_delta_n)
+                        if self._last_tracking_gate_force_delta_n is not None
+                        else 0.0
+                    )
+                    last_speed = (
+                        float(self._last_tracking_gate_speed_mps)
+                        if self._last_tracking_gate_speed_mps is not None
+                        else None
+                    )
+                    speed_threshold = float(
+                        os.environ.get("AIC_OFFICIAL_TEACHER_TRACKING_GATE_SPEED_MPS", "0.006")
+                    )
+                    allow_small_low_force_miss = (
+                        self._expert_mode == "recovery"
+                        and allowed_lateral_m > 0.0
+                        and last_lateral_error is not None
+                        and last_lateral_error <= allowed_lateral_m
+                        and last_gate_force_delta < self._ft_threshold_n
+                        and (last_speed is None or last_speed <= speed_threshold)
+                    )
+                    if allow_small_low_force_miss:
+                        self._trace_event(
+                            "recovery_initial_low_force_gate_miss_allowed",
+                            lateral_error_m=last_lateral_error,
+                            allowed_lateral_m=allowed_lateral_m,
+                            force_delta_n=last_gate_force_delta,
+                            ft_threshold_n=self._ft_threshold_n,
+                            tcp_speed_mps=last_speed,
+                            speed_threshold_mps=speed_threshold,
+                        )
+                        gate_passed = True
                 if not gate_passed:
                     send_feedback("official_teacher_replay_tracking_gate_failed")
                     return False
@@ -2781,6 +3066,10 @@ class OfficialTeacherReplay(Policy):
                 retry_count += 1
                 continue
             active_lateral_offset = retry_lateral_offset + self._last_precontact_lateral_offset_base
+            recovery_induced_offset = np.zeros(3, dtype=np.float64)
+            if self._expert_mode == "recovery" and retry_count == 0:
+                recovery_induced_offset = self._recovery_induced_lateral_offset_base(task, port_transform)
+                active_lateral_offset = active_lateral_offset + recovery_induced_offset
             skip_retry_preinsert_gate = os.environ.get(
                 "AIC_OFFICIAL_TEACHER_SKIP_PREINSERT_GATE_ON_RECOVERY_RETRY",
                 "true",
@@ -2809,6 +3098,73 @@ class OfficialTeacherReplay(Policy):
                     retry_count=retry_count,
                     tracking_gate_passed=gate_passed,
                 )
+                if (
+                    not gate_passed
+                    and self._expert_mode == "recovery"
+                    and retry_count == 0
+                    and float(np.linalg.norm(recovery_induced_offset[:2])) > 1e-6
+                    and os.environ.get(
+                        "AIC_OFFICIAL_TEACHER_RECOVERY_ALLOW_INDUCED_GATE_MISS",
+                        "true",
+                    ).lower() in {"1", "true", "yes", "on"}
+                ):
+                    self._trace_event(
+                        "recovery_induced_preinsert_gate_miss_allowed",
+                        retry_count=retry_count,
+                        lateral_offset_base_m=active_lateral_offset.tolist(),
+                        force_delta_n=(
+                            float(self._last_tracking_gate_force_delta_n)
+                            if self._last_tracking_gate_force_delta_n is not None
+                            else None
+                        ),
+                        lateral_error_m=(
+                            float(self._last_tracking_gate_lateral_error_m)
+                            if self._last_tracking_gate_lateral_error_m is not None
+                            else None
+                        ),
+                    )
+                    gate_passed = True
+                if self._expert_mode == "recovery" and retry_count > 0 and not gate_passed:
+                    allowed_lateral_m = float(
+                        os.environ.get("AIC_OFFICIAL_TEACHER_RECOVERY_ALLOW_LOW_FORCE_GATE_MISS_M", "0.003")
+                    )
+                    last_lateral_error = (
+                        float(self._last_tracking_gate_lateral_error_m)
+                        if self._last_tracking_gate_lateral_error_m is not None
+                        else None
+                    )
+                    last_gate_force_delta = (
+                        float(self._last_tracking_gate_force_delta_n)
+                        if self._last_tracking_gate_force_delta_n is not None
+                        else 0.0
+                    )
+                    last_speed = (
+                        float(self._last_tracking_gate_speed_mps)
+                        if self._last_tracking_gate_speed_mps is not None
+                        else None
+                    )
+                    speed_threshold = float(
+                        os.environ.get("AIC_OFFICIAL_TEACHER_TRACKING_GATE_SPEED_MPS", "0.006")
+                    )
+                    allow_low_force_retry_miss = (
+                        allowed_lateral_m > 0.0
+                        and last_lateral_error is not None
+                        and last_lateral_error <= allowed_lateral_m
+                        and last_gate_force_delta < self._ft_threshold_n
+                        and (last_speed is None or last_speed <= speed_threshold)
+                    )
+                    if allow_low_force_retry_miss:
+                        self._trace_event(
+                            "recovery_retry_preinsert_gate_miss_allowed",
+                            retry_count=retry_count,
+                            lateral_error_m=last_lateral_error,
+                            allowed_lateral_m=allowed_lateral_m,
+                            force_delta_n=last_gate_force_delta,
+                            ft_threshold_n=self._ft_threshold_n,
+                            tcp_speed_mps=last_speed,
+                            speed_threshold_mps=speed_threshold,
+                        )
+                        gate_passed = True
                 if not gate_passed:
                     send_feedback("official_teacher_replay_tracking_gate_realign")
                     self._trace_event(
@@ -2920,7 +3276,30 @@ class OfficialTeacherReplay(Policy):
                         if self._last_tracking_gate_force_delta_n is not None
                         else 0.0
                     )
-                    if self._expert_mode == "nominal":
+                    if (
+                        self._expert_mode == "recovery"
+                        and retry_count == 0
+                        and float(np.linalg.norm(recovery_induced_offset[:2])) > 1e-6
+                        and last_gate_force_delta < self._ft_threshold_n
+                        and os.environ.get(
+                            "AIC_OFFICIAL_TEACHER_RECOVERY_ALLOW_INDUCED_GATE_MISS",
+                            "true",
+                        ).lower() in {"1", "true", "yes", "on"}
+                    ):
+                        self._trace_event(
+                            "recovery_induced_handoff_gate_miss_allowed",
+                            retry_count=retry_count,
+                            lateral_offset_base_m=active_lateral_offset.tolist(),
+                            force_delta_n=last_gate_force_delta,
+                            ft_threshold_n=self._ft_threshold_n,
+                            lateral_error_m=(
+                                float(self._last_tracking_gate_lateral_error_m)
+                                if self._last_tracking_gate_lateral_error_m is not None
+                                else None
+                            ),
+                        )
+                        gate_passed = True
+                    if self._expert_mode in {"nominal", "nominalrecovery"}:
                         allowed_lateral_m = float(
                             os.environ.get("AIC_OFFICIAL_TEACHER_NOMINAL_ALLOW_LOW_FORCE_GATE_MISS_M", "0.0")
                         )
@@ -2947,6 +3326,43 @@ class OfficialTeacherReplay(Policy):
                         if allow_small_low_force_miss:
                             self._trace_event(
                                 "nominal_handoff_gate_miss_allowed",
+                                expert_mode=self._expert_mode,
+                                retry_count=retry_count,
+                                lateral_error_m=last_lateral_error,
+                                allowed_lateral_m=allowed_lateral_m,
+                                force_delta_n=last_gate_force_delta,
+                                ft_threshold_n=self._ft_threshold_n,
+                                tcp_speed_mps=last_speed,
+                                speed_threshold_mps=speed_threshold,
+                            )
+                            gate_passed = True
+                    if self._expert_mode == "recovery" and retry_count > 0 and not gate_passed:
+                        allowed_lateral_m = float(
+                            os.environ.get("AIC_OFFICIAL_TEACHER_RECOVERY_ALLOW_LOW_FORCE_GATE_MISS_M", "0.003")
+                        )
+                        last_lateral_error = (
+                            float(self._last_tracking_gate_lateral_error_m)
+                            if self._last_tracking_gate_lateral_error_m is not None
+                            else None
+                        )
+                        last_speed = (
+                            float(self._last_tracking_gate_speed_mps)
+                            if self._last_tracking_gate_speed_mps is not None
+                            else None
+                        )
+                        speed_threshold = float(
+                            os.environ.get("AIC_OFFICIAL_TEACHER_TRACKING_GATE_SPEED_MPS", "0.006")
+                        )
+                        allow_low_force_retry_miss = (
+                            allowed_lateral_m > 0.0
+                            and last_lateral_error is not None
+                            and last_lateral_error <= allowed_lateral_m
+                            and last_gate_force_delta < self._ft_threshold_n
+                            and (last_speed is None or last_speed <= speed_threshold)
+                        )
+                        if allow_low_force_retry_miss:
+                            self._trace_event(
+                                "recovery_retry_handoff_gate_miss_allowed",
                                 retry_count=retry_count,
                                 lateral_error_m=last_lateral_error,
                                 allowed_lateral_m=allowed_lateral_m,
@@ -3171,6 +3587,7 @@ class OfficialTeacherReplay(Policy):
                 insertion_reference_pose = insertion_start_pose
             current_z = guarded_start_z_offset
             retry_requested = False
+            planned_recovery_intervention_used = False
             self._trace_event(
                 "guarded_insert_started",
                 retry_count=retry_count,
@@ -3499,6 +3916,43 @@ class OfficialTeacherReplay(Policy):
                         threshold_n=self._ft_threshold_n,
                         z_offset=current_z,
                         sample_source=sample_source,
+                    )
+                    if not recover_after_contact():
+                        return False
+                    break
+                planned_intervention_z_offset = float(
+                    os.environ.get("AIC_OFFICIAL_TEACHER_RECOVERY_PLANNED_INTERVENTION_Z_OFFSET", "0.043")
+                )
+                should_force_recovery_intervention = (
+                    self._expert_mode == "recovery"
+                    and retry_count == 0
+                    and not planned_recovery_intervention_used
+                    and float(np.linalg.norm(recovery_induced_offset[:2])) > 1e-6
+                    and current_z <= planned_intervention_z_offset
+                    and os.environ.get(
+                        "AIC_OFFICIAL_TEACHER_RECOVERY_ENABLE_PLANNED_INTERVENTION",
+                        "true",
+                    ).lower() in {"1", "true", "yes", "on"}
+                )
+                if should_force_recovery_intervention:
+                    planned_recovery_intervention_used = True
+                    force_delta = self._force_delta_norm(get_observation, baseline_force)
+                    self._trace_event(
+                        "recovery_planned_intervention_started",
+                        retry_count=retry_count,
+                        force_delta_n=force_delta,
+                        threshold_n=self._ft_threshold_n,
+                        z_offset=current_z,
+                        planned_intervention_z_offset=planned_intervention_z_offset,
+                        lateral_offset_base_m=active_lateral_offset.tolist(),
+                    )
+                    self._trace_event(
+                        "contact_detected",
+                        retry_count=retry_count,
+                        force_delta_n=force_delta,
+                        threshold_n=self._ft_threshold_n,
+                        z_offset=current_z,
+                        sample_source="planned_recovery_intervention",
                     )
                     if not recover_after_contact():
                         return False

@@ -319,6 +319,8 @@ cleanup_host_sim_processes() {
     "/opt/ros/kilted/lib/topic_tools/relay"
     "/opt/ros/kilted/lib/tf2_ros/static_transform_publisher"
     "/opt/ros/kilted/lib/moveit_ros_move_group/move_group"
+    "ros2 run aic_model aic_model"
+    "/aic_model/aic_model"
     "gz sim"
     "gzserver"
     "ruby.*gz sim"
