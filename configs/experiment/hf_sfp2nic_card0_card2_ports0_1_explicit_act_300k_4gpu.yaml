@@ -1,0 +1,54 @@
+# @package _global_
+
+defaults:
+  - /train: act
+  - /model: act
+  - /data: hf_sfp2nic_card0_card2_ports0_1_explicit
+  - /hardware: default
+  - _self_
+
+run:
+  task_family: ${data.task_family}
+  dataset_tag: ${data.dataset_tag}
+  model_family: ${model.family}
+  stage: ${train.stage}
+  name: act_multidata_taskvec_300k_bs8_4gpu
+  output_root: outputs/train
+  output_dir: ${run.output_root}/${run.task_family}/${run.dataset_tag}/${run.model_family}/${run.stage}/20260505_act_multidata_taskvec_300k_bs8_4gpu_v2
+
+train:
+  # The 10D task vector is already materialized into observation.state.
+  # ACT sees a normal 42D LeRobot state tensor and does not branch by task.
+  task_conditioning: "off"
+  steps: 300000
+  batch_size: 8
+  num_workers: 4
+  lr: 0.0001
+  dataset_video_backend: pyav
+  save_freq: 10000
+  log_freq: 200
+  eval_freq: 0
+  # Dataset is 20 Hz. Predict 0.4 s chunks and execute 0.1 s before replanning.
+  chunk_size: 8
+  n_action_steps: 2
+  n_obs_steps: 1
+  dry_run: false
+
+hardware:
+  cuda_devices:
+    - 0
+    - 1
+    - 2
+    - 3
+  num_devices: 4
+  effective_device: cuda:0
+  distributed:
+    enabled: true
+    launcher: torchrun
+    standalone: true
+    nnodes: 1
+    nproc_per_node: 4
+
+logging:
+  save_resolved_config: true
+  save_git_info: true

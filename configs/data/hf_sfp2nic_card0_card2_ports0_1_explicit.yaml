@@ -1,0 +1,29 @@
+dataset_root: outputs/hf_combined/sfp2nic_card0_2_ports0_1_explicit_task_conditioned
+task_metadata: outputs/hf_combined/sfp2nic_card0_2_ports0_1_explicit_raw/manifests/accepted.csv
+dataset_tag: hf_sfp2nic_card0_card2_ports0_1_explicit
+task_family: sfp_to_nic
+fps: 20
+num_episodes: 935
+num_frames: 442265
+observation_state_dim: 42
+original_observation_state_dim: 32
+task_vector_dim: 10
+action_dim: 6
+camera_keys:
+  - observation.images.center_camera
+  - observation.images.left_camera
+  - observation.images.right_camera
+task_conditioning_materialized: true
+included_sources:
+  - https://huggingface.co/datasets/brucekimrok/sfp2nic_target_card0_port0_randomized
+  - https://huggingface.co/datasets/brucekimrok/sfp2nic_target_card0_port1_randomized
+  - https://huggingface.co/datasets/brucekimrok/sfp2nic_target_card2_port0_randomized
+  - https://huggingface.co/datasets/jskim/sft2nic_target_card2_port1_randomized
+excluded_sources_due_to_missing_port_metadata:
+  - https://huggingface.co/datasets/brucekimrok/sfp2nic_target_card1_randomized
+  - https://huggingface.co/datasets/brucekimrok/sfp2nic_target_card1_port01_randomized
+  - https://huggingface.co/datasets/brucekimrok/sfp2nic_target_card3_randomized
+  - https://huggingface.co/datasets/brucekimrok/sfp2nic_target_card3_port01_randomized
+  - https://huggingface.co/datasets/brucekimrok/sfp2nic_target_card4_randomized
+  - https://huggingface.co/datasets/brucekimrok/sfp2nic_target_card4_port01_randomized
+validity_report: outputs/hf_datasets/task_port_validity_report.json

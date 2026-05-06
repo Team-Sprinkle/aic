@@ -30,4 +30,10 @@ reward_mode: dataset
 camera_keys: null
 dataset_video_backend: pyav
 save_every: 500
+val_fraction: 0.0
+val_every: 0
+val_max_batches: 16
+early_stopping_metric: bc_loss
+early_stopping_patience: 0
+early_stopping_min_delta: 0.0
 dry_run: false

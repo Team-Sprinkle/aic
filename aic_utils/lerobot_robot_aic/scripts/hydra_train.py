@@ -174,6 +174,12 @@ def _vision_offline_serl_cmd(cfg: DictConfig) -> list[str]:
         "reward_mode",
         "dataset_video_backend",
         "save_every",
+        "val_fraction",
+        "val_every",
+        "val_max_batches",
+        "early_stopping_metric",
+        "early_stopping_patience",
+        "early_stopping_min_delta",
     ):
         value = train[key]
         if key in {"dataset_root", "act_checkpoint", "output_dir"}:
