@@ -140,7 +140,7 @@ class RunSmolVLA(Policy):
     def _resolve_policy_path(self) -> Path:
         policy_path = os.environ.get(
             "AIC_SMOLVLA_POLICY_PATH",
-            "/home/jk/ws_aic/src/aic/outputs/train/smolvla-sfp2nic_card2_port1/checkpoints/040000/pretrained_model"
+            "/home/jk/ws_aic/src/aic/outputs/train/smolvla-sfp2nic_card2_port1/checkpoints/050000/pretrained_model"
         )
         if policy_path:
             path = Path(policy_path).expanduser()
