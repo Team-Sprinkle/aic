@@ -23,7 +23,9 @@ import time
 from pathlib import Path
 from typing import Any
 
-os.environ["HF_HUB_ENABLE_HF_TRANSFER"] = "1"
+os.environ.setdefault("HF_HUB_OFFLINE", "1")
+os.environ.setdefault("TRANSFORMERS_OFFLINE", "1")
+os.environ.setdefault("HF_HUB_ENABLE_HF_TRANSFER", "0")
 
 import cv2
 import numpy as np
@@ -52,6 +54,13 @@ from lerobot.policies.smolvla.processor_smolvla import (  # noqa: F401
 
 DEFAULT_CONTROL_HZ = 4.0
 DEFAULT_MAX_RUNTIME_SEC = 120.0
+DEFAULT_POLICY_PATH = Path(
+    "/home/jk/ws_aic/src/aic/outputs/train/"
+    "smolvla-sfp2nic_card2_port1/checkpoints/050000/pretrained_model"
+)
+DEFAULT_VLM_PATH = Path(
+    "/home/jk/ws_aic/src/aic/outputs/models/SmolVLM2-500M-Video-Instruct"
+)
 TRAINING_DATASET_TASK = "Insert cable into target port"
 ACTION_NAMES = (
     "delta_position.x",
@@ -101,20 +110,34 @@ class RunSmolVLA(Policy):
         )
 
         self.policy_path = self._resolve_policy_path()
-        config = PreTrainedConfig.from_pretrained(self.policy_path)
+        self.vlm_path = self._resolve_vlm_path()
+        config = PreTrainedConfig.from_pretrained(
+            self.policy_path,
+            local_files_only=True,
+        )
         if not isinstance(config, SmolVLAConfig):
             raise TypeError(
                 f"Expected a SmolVLA checkpoint config, got {type(config).__name__}"
             )
         config.device = str(self.device)
+        config.pretrained_path = str(self.vlm_path)
+        config.vlm_model_name = str(self.vlm_path)
 
-        self.policy = SmolVLAPolicy.from_pretrained(self.policy_path, config=config)
+        self.policy = SmolVLAPolicy.from_pretrained(
+            self.policy_path,
+            config=config,
+            local_files_only=True,
+        )
         self.policy.eval()
         self.policy.to(self.device)
+        preprocessor_overrides = {
+            "device_processor": {"device": str(self.device)},
+            "tokenizer_processor": {"tokenizer_name": str(self.vlm_path)},
+        }
         self.preprocess, self.postprocess = make_pre_post_processors(
             self.policy.config,
             str(self.policy_path),
-            preprocessor_overrides={"device_processor": {"device": str(self.device)}},
+            preprocessor_overrides=preprocessor_overrides,
             postprocessor_overrides={"device_processor": {"device": "cpu"}},
         )
 
@@ -129,7 +152,7 @@ class RunSmolVLA(Policy):
 
         self.get_logger().info(
             "SmolVLA policy loaded from "
-            f"{self.policy_path} on {self.device}; "
+            f"{self.policy_path} with local VLM {self.vlm_path} on {self.device}; "
             f"state_dim={self.state_dim}, action_dim={self.action_dim}, "
             f"control_hz={self.control_hz}, start_delay_sec={self.start_delay_sec}, "
             f"n_action_steps={self.policy.config.n_action_steps}, "
@@ -140,7 +163,7 @@ class RunSmolVLA(Policy):
     def _resolve_policy_path(self) -> Path:
         policy_path = os.environ.get(
             "AIC_SMOLVLA_POLICY_PATH",
-            "/home/jk/ws_aic/src/aic/outputs/train/smolvla-sfp2nic_card2_port1/checkpoints/050000/pretrained_model"
+            str(DEFAULT_POLICY_PATH),
         )
         if policy_path:
             path = Path(policy_path).expanduser()
@@ -164,8 +187,17 @@ class RunSmolVLA(Policy):
                     "policy_postprocessor.json",
                     "*.safetensors",
                 ],
+                local_files_only=True,
             )
         )
+
+    def _resolve_vlm_path(self) -> Path:
+        path = Path(
+            os.environ.get("AIC_SMOLVLA_VLM_PATH", str(DEFAULT_VLM_PATH))
+        ).expanduser()
+        if not path.exists():
+            raise FileNotFoundError(f"AIC_SMOLVLA_VLM_PATH does not exist: {path}")
+        return path
 
     def _camera_shapes(self) -> dict[str, tuple[int, int, int]]:
         rename_map = self._observation_rename_map()
