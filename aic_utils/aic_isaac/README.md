@@ -191,6 +191,21 @@ isaaclab -p aic/aic_utils/aic_isaac/aic_isaaclab/scripts/replay_demos.py \
     --dataset_file ./datasets/dataset.hdf5
 ```
 
+### Force-Parity Evaluation (CheatCodeModified Profile)
+Run a deterministic `CheatCodeModified`-style misalignment/insertion profile and
+save force + trajectory logs into a single `output.csv`:
+```bash
+isaaclab -p aic/aic_utils/aic_isaac/aic_isaaclab/scripts/cheatcode_modified_eval.py \
+    --task AIC-Task-v0 \
+    --gazebo_config aic/outputs/configs/fixed_1_trials_sfp2nic.yaml \
+    --trial_name trial_1 \
+    --task_name task_1 \
+    --out aic/outputs/force_parity/output.csv \
+    --headless
+```
+The script reads the same Gazebo trial YAML and passes overrides into
+`aic_task_env_cfg.py` via environment variables for board/joint initialization.
+
 
 > [!NOTE]
 > Users will have to connect the external environment with Isaac Lab for recording teleoperated data.
@@ -222,6 +237,7 @@ aic_isaac/
 └── aic_isaaclab
     ├── pyproject.toml
     ├── scripts
+    │   ├── cheatcode_modified_eval.py
     │   ├── list_envs.py
     │   ├── random_agent.py
     │   ├── record_demos.py

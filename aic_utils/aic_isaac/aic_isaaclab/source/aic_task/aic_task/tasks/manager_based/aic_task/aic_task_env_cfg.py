@@ -6,6 +6,8 @@
 import math
 import os
 from dataclasses import MISSING
+from pathlib import Path
+from typing import Any
 
 import isaaclab.sim as sim_utils
 from isaaclab.actuators import ImplicitActuatorCfg
@@ -41,6 +43,190 @@ AIC_SCENE_DIR = AIC_ASSET_DIR
 AIC_PARTS_DIR = os.path.join(AIC_ASSET_DIR, "assets")
 
 EXTENSION_PATH = os.path.dirname(os.path.abspath(__file__))
+
+_GAZEBO_BOARD_REF_POS = (0.17742, -0.22962, 1.14)
+_ISAAC_BOARD_REF_POS = (0.2837, 0.229, 0.0)
+_GAZEBO_NIC_RAIL_REF_TRANSLATION = -0.01682
+
+
+def _env_text(name: str) -> str | None:
+    value = os.environ.get(name)
+    if value is None:
+        return None
+    value = value.strip()
+    return value if value else None
+
+
+def _quat_from_rpy(roll: float, pitch: float, yaw: float) -> tuple[float, float, float, float]:
+    cr = math.cos(0.5 * roll)
+    sr = math.sin(0.5 * roll)
+    cp = math.cos(0.5 * pitch)
+    sp = math.sin(0.5 * pitch)
+    cy = math.cos(0.5 * yaw)
+    sy = math.sin(0.5 * yaw)
+    w = cr * cp * cy + sr * sp * sy
+    x = sr * cp * cy - cr * sp * sy
+    y = cr * sp * cy + sr * cp * sy
+    z = cr * cp * sy - sr * sp * cy
+    return (w, x, y, z)
+
+
+def _resolve_gazebo_trial_path(raw_path: str) -> str:
+    return str(Path(raw_path).expanduser().resolve())
+
+
+def _extract_nic_rail_translation(task_board_cfg: dict[str, Any]) -> float | None:
+    for rail_idx in range(5):
+        rail_cfg = task_board_cfg.get(f"nic_rail_{rail_idx}")
+        if not isinstance(rail_cfg, dict):
+            continue
+        if not rail_cfg.get("entity_present", False):
+            continue
+        entity_name = str(rail_cfg.get("entity_name", ""))
+        if not entity_name.startswith("nic_card"):
+            continue
+        entity_pose = rail_cfg.get("entity_pose")
+        if not isinstance(entity_pose, dict) or "translation" not in entity_pose:
+            continue
+        try:
+            return float(entity_pose["translation"])
+        except (TypeError, ValueError):
+            return None
+    return None
+
+
+def _apply_gazebo_trial_overrides(env_cfg: "AICTaskEnvCfg") -> None:
+    cfg_path_raw = _env_text("AIC_GAZEBO_TRIAL_CONFIG_PATH") or _env_text(
+        "AIC_GAZEBO_TRIAL_CONFIG"
+    )
+    if cfg_path_raw is None:
+        return
+
+    cfg_path = _resolve_gazebo_trial_path(cfg_path_raw)
+    trial_name = _env_text("AIC_GAZEBO_TRIAL_NAME") or "trial_1"
+    apply_board_rpy = (_env_text("AIC_GAZEBO_APPLY_BOARD_RPY") or "").lower() in {
+        "1",
+        "true",
+        "yes",
+        "on",
+    }
+
+    try:
+        import yaml
+    except ImportError:
+        print(
+            "[aic_task_env_cfg] PyYAML is unavailable. Skipping Gazebo trial override "
+            f"requested via {cfg_path}."
+        )
+        return
+
+    try:
+        with open(cfg_path, "r", encoding="utf-8") as f:
+            full_cfg = yaml.safe_load(f) or {}
+    except (OSError, yaml.YAMLError) as ex:
+        print(
+            "[aic_task_env_cfg] Failed to parse Gazebo trial config "
+            f"{cfg_path}: {ex}. Skipping override."
+        )
+        return
+
+    trials_cfg = full_cfg.get("trials", {})
+    if not isinstance(trials_cfg, dict) or trial_name not in trials_cfg:
+        print(
+            "[aic_task_env_cfg] Trial "
+            f"{trial_name!r} not found in {cfg_path}. Skipping override."
+        )
+        return
+    trial_cfg = trials_cfg[trial_name]
+    scene_cfg = trial_cfg.get("scene", {}) if isinstance(trial_cfg, dict) else {}
+    task_board_cfg = scene_cfg.get("task_board", {}) if isinstance(scene_cfg, dict) else {}
+
+    if isinstance(task_board_cfg, dict):
+        board_pose_cfg = task_board_cfg.get("pose", {})
+    else:
+        board_pose_cfg = {}
+
+    if isinstance(board_pose_cfg, dict):
+        try:
+            gazebo_x = float(board_pose_cfg.get("x", _GAZEBO_BOARD_REF_POS[0]))
+            gazebo_y = float(board_pose_cfg.get("y", _GAZEBO_BOARD_REF_POS[1]))
+            gazebo_z = float(board_pose_cfg.get("z", _GAZEBO_BOARD_REF_POS[2]))
+        except (TypeError, ValueError):
+            gazebo_x, gazebo_y, gazebo_z = _GAZEBO_BOARD_REF_POS
+
+        # Map Gazebo pose deltas into Isaac scene coordinates using the known
+        # baseline pose pair from the nominal sfp->nic setup.
+        mapped_board_pos = (
+            _ISAAC_BOARD_REF_POS[0] + (gazebo_x - _GAZEBO_BOARD_REF_POS[0]),
+            _ISAAC_BOARD_REF_POS[1] - (gazebo_y - _GAZEBO_BOARD_REF_POS[1]),
+            _ISAAC_BOARD_REF_POS[2] + (gazebo_z - _GAZEBO_BOARD_REF_POS[2]),
+        )
+        env_cfg.scene.task_board.init_state.pos = mapped_board_pos
+
+        if apply_board_rpy:
+            try:
+                roll = float(board_pose_cfg.get("roll", 0.0))
+                pitch = float(board_pose_cfg.get("pitch", 0.0))
+                yaw = float(board_pose_cfg.get("yaw", math.pi))
+                env_cfg.scene.task_board.init_state.rot = _quat_from_rpy(roll, pitch, yaw)
+            except (TypeError, ValueError):
+                pass
+
+    robot_cfg = full_cfg.get("robot", {})
+    home_joint_cfg = (
+        robot_cfg.get("home_joint_positions", {})
+        if isinstance(robot_cfg, dict)
+        else {}
+    )
+    if isinstance(home_joint_cfg, dict):
+        for joint_name, value in home_joint_cfg.items():
+            if joint_name not in env_cfg.scene.robot.init_state.joint_pos:
+                continue
+            try:
+                env_cfg.scene.robot.init_state.joint_pos[joint_name] = float(value)
+            except (TypeError, ValueError):
+                continue
+
+    if hasattr(env_cfg.events, "randomize_board_and_parts"):
+        randomization_params = env_cfg.events.randomize_board_and_parts.params
+        randomization_params["board_default_pos"] = tuple(
+            env_cfg.scene.task_board.init_state.pos
+        )
+        randomization_params["board_range"] = {"x": (0.0, 0.0), "y": (0.0, 0.0)}
+
+        parts = randomization_params.get("parts", [])
+        for part_cfg in parts:
+            if not isinstance(part_cfg, dict):
+                continue
+            part_cfg["pose_range"] = {}
+            if "snap_step" in part_cfg:
+                part_cfg.pop("snap_step")
+
+        if isinstance(task_board_cfg, dict):
+            nic_translation = _extract_nic_rail_translation(task_board_cfg)
+        else:
+            nic_translation = None
+        if nic_translation is not None:
+            delta = nic_translation - _GAZEBO_NIC_RAIL_REF_TRANSLATION
+            nic_x, nic_y, nic_z = env_cfg.scene.nic_card.init_state.pos
+            env_cfg.scene.nic_card.init_state.pos = (
+                float(nic_x),
+                float(nic_y + delta),
+                float(nic_z),
+            )
+            for part_cfg in parts:
+                if not isinstance(part_cfg, dict):
+                    continue
+                if part_cfg.get("scene_name") != "nic_card":
+                    continue
+                ox, oy, oz = part_cfg.get("offset", (0.0, 0.0, 0.0))
+                part_cfg["offset"] = (float(ox), float(oy + delta), float(oz))
+                break
+
+    print(
+        "[aic_task_env_cfg] Applied Gazebo trial override "
+        f"from {cfg_path} (trial: {trial_name})."
+    )
 
 ##
 # Scene definition
@@ -682,128 +868,4 @@ class AICTaskEnvCfg(ManagerBasedRLEnvCfg):
             },
         )
 
-    def _apply_randomization_profile(self) -> None:
-        profile = os.environ.get("AIC_ISAAC_RANDOMIZATION_PROFILE", "light").lower()
-        if profile not in {"none", "light", "heavy"}:
-            raise ValueError(
-                "AIC_ISAAC_RANDOMIZATION_PROFILE must be one of: none, light, heavy"
-            )
-
-        if profile == "none":
-            self.events.reset_robot_joints.params["position_range"] = (0.0, 0.0)
-            self.events.randomize_light.params["intensity_range"] = (2500.0, 2500.0)
-            self.events.randomize_light.params["color_range"] = (
-                (0.75, 0.75, 0.75),
-                (0.75, 0.75, 0.75),
-            )
-            self.events.randomize_board_and_parts.params["board_range"] = {
-                "x": (0.0, 0.0),
-                "y": (0.0, 0.0),
-                "z": (0.0, 0.0),
-                "yaw": (0.0, 0.0),
-            }
-            for part in self.events.randomize_board_and_parts.params["parts"]:
-                part["pose_range"] = {}
-            self.actions.arm_action.scale = 0.05
-            self.observations.policy.joint_pos.noise = Unoise(n_min=0.0, n_max=0.0)
-            self.observations.policy.joint_vel.noise = Unoise(n_min=0.0, n_max=0.0)
-            self.observations.policy.eef_pose.noise = Unoise(n_min=0.0, n_max=0.0)
-            return
-
-        if profile == "light":
-            self.events.reset_robot_joints.params["position_range"] = (-0.05, 0.05)
-            self.events.randomize_light.params["intensity_range"] = (1500.0, 3500.0)
-            self.events.randomize_light.params["color_range"] = (
-                (0.5, 0.5, 0.5),
-                (1.0, 1.0, 1.0),
-            )
-            self.events.randomize_board_and_parts.params["board_range"] = {
-                "x": (-0.005, 0.005),
-                "y": (-0.005, 0.005),
-                "z": (0.0, 0.0),
-                "yaw": (0.0, 0.0),
-            }
-            self.events.randomize_board_and_parts.params["parts"] = [
-                {
-                    "scene_name": "sc_port",
-                    "offset": (0.0067, -0.0362, 0.005),
-                    "pose_range": {"x": (-0.005, 0.02)},
-                },
-                {
-                    "scene_name": "sc_port_2",
-                    "offset": (0.0076, -0.0783, 0.005),
-                    "pose_range": {"x": (-0.005, 0.02)},
-                },
-                {
-                    "scene_name": "nic_card",
-                    "offset": (-0.03235, 0.02329, 0.0743),
-                    "pose_range": {"y": (0.0, 0.12)},
-                    "snap_step": {"y": 0.04},
-                },
-            ]
-            self.actions.arm_action.scale = 0.05
-            return
-
-        # Heavy profile: still conservative enough for smoke PPO runs, but
-        # covers geometry, visual, robot reset, action scale, and lowdim sensor
-        # variation. Physics/material randomization is documented as future work
-        # because the current assets do not expose stable semantic handles for it.
-        self.events.reset_robot_joints.params["position_range"] = (-0.12, 0.12)
-        self.events.randomize_light.params["intensity_range"] = (800.0, 5000.0)
-        self.events.randomize_light.params["color_range"] = (
-            (0.35, 0.35, 0.4),
-            (1.0, 0.95, 0.9),
-        )
-        self.events.randomize_board_and_parts.params["board_range"] = {
-            "x": (-0.02, 0.02),
-            "y": (-0.02, 0.02),
-            "z": (-0.003, 0.003),
-            "yaw": (-0.08, 0.08),
-        }
-        self.events.randomize_board_and_parts.params["parts"] = [
-            {
-                "scene_name": "sc_port",
-                "offset": (0.0067, -0.0362, 0.005),
-                "pose_range": {
-                    "x": (-0.015, 0.03),
-                    "y": (-0.004, 0.004),
-                    "z": (-0.002, 0.002),
-                    "yaw": (-0.04, 0.04),
-                },
-            },
-            {
-                "scene_name": "sc_port_2",
-                "offset": (0.0076, -0.0783, 0.005),
-                "pose_range": {
-                    "x": (-0.015, 0.03),
-                    "y": (-0.004, 0.004),
-                    "z": (-0.002, 0.002),
-                    "yaw": (-0.04, 0.04),
-                },
-            },
-            {
-                "scene_name": "nic_card",
-                "offset": (-0.03235, 0.02329, 0.0743),
-                "pose_range": {
-                    "x": (-0.005, 0.005),
-                    "y": (0.0, 0.12),
-                    "z": (-0.003, 0.003),
-                    "yaw": (-0.04, 0.04),
-                },
-                "snap_step": {"y": 0.04},
-            },
-        ]
-        self.actions.arm_action.scale = 0.06
-        self.observations.policy.joint_pos.noise = Unoise(n_min=-0.025, n_max=0.025)
-        self.observations.policy.joint_vel.noise = Unoise(n_min=-0.025, n_max=0.025)
-        self.observations.policy.eef_pose.noise = Unoise(n_min=-0.003, n_max=0.003)
-
-    def _apply_optional_insertion_reward_weights(self) -> None:
-        distance_weight = float(
-            os.environ.get("AIC_ISAAC_INSERTION_DISTANCE_WEIGHT", "0.0")
-        )
-        lateral_weight = float(
-            os.environ.get("AIC_ISAAC_INSERTION_LATERAL_WEIGHT", "0.0")
-        )
-        self.rewards.target_distance_tanh.weight = distance_weight
-        self.rewards.target_lateral_error.weight = lateral_weight
+        _apply_gazebo_trial_overrides(self)
