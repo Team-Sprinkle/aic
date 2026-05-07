@@ -366,9 +366,11 @@ Templates are provided for:
 - `sc_to_sc_maximal.yaml`
 
 The minimal templates require only the task family, generation budget,
-acceptance threshold, and exact target component count. Missing scene fields use
-the team default randomization from
-`aic_engine/scripts/generate_random_trials_config.py`.
+acceptance threshold, and the core component counts. They still include the
+small task-defining choices needed for useful coverage: missing SFP target port
+defaults to `auto` in the generator, and SC-to-SC includes 1-5 NIC distractor
+cards to match the official rail capacity. Missing pose/randomization fields use
+the team default randomization from `aic_engine/scripts/generate_random_trials_config.py`.
 
 Request YAML semantics:
 
@@ -391,6 +393,9 @@ Example outputs:
 outputs/trajectory_datasets/sfp_to_nic/cheatcode/nic_cards_1/n200__first_batch/
 outputs/trajectory_datasets/sc_to_sc/cheatcode/sc_ports_2/n200__first_batch/
 ```
+
+For `sc_to_sc`, the count label is based on SC ports; NIC cards in that task are
+distractors and are still recorded in `request.yaml` and `engine_config.yaml`.
 
 Each dataset directory contains:
 
@@ -432,7 +437,52 @@ python aic_utils/lerobot_robot_aic/scripts/generate_trajectory_dataset.py \
   --request-yaml aic_utils/lerobot_robot_aic/config/data_generation_templates/sfp_to_nic_minimal.yaml
 ```
 
-The script invokes the per-trial recorder with:
+For `policy: agent`, the script invokes `scripts/generate_expert_trajectories.py`
+and writes:
+
+- `agent_generation/`
+- `accepted_dataset/`
+- `generation_summary.json`
+
+The packaged minimal and maximal templates default to agent mode. They also set
+`auto_improve_on_failure: true`, which enables debug artifacts and GPT-5 failure
+analysis for rejected expert attempts when `OPENAI_API_KEY` is available. GPT-5
+analysis failures are recorded under the attempt debug directory and do not stop
+dataset generation.
+
+Choose the expert behavior in YAML with:
+
+```yaml
+generation:
+  policy: agent
+  expert_mode: nominal  # nominal, nominalrecovery, or recovery
+```
+
+`nominal` is the default clean-trajectory mode for BC data. `nominalrecovery`
+allows recovery segments around otherwise nominal insertions, and `recovery` is
+the robust recovery-focused expert mode.
+
+Agent mode reads the tracked base registry:
+
+```text
+aic_utils/lerobot_robot_aic/config/expert_setting_registry.json
+```
+
+and then merges append-only overlay files from:
+
+```text
+aic_utils/lerobot_robot_aic/config/expert_setting_registry_overlays/*.jsonl
+```
+
+Each accepted or failed agent generation appends a compact registry entry to the
+overlay file named by `AIC_EXPERT_REGISTRY_OVERLAY_ID`, or by the hostname if the
+environment variable is unset. This is the preferred EC2 workflow: keep the base
+registry stable, let each instance write its own overlay JSONL, then merge those
+overlay files back into the branch so later runs reuse the discovered per-setting
+expert parameters. For randomized minimal requests, the script infers the exact
+matrix setting from the generated trial config before consulting the registry.
+
+For `policy: cheatcode`, the script invokes the per-trial recorder with:
 
 - `--dataset-root <output_dir>/raw_dataset`
 - `--results-root <output_dir>/scores`

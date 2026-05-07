@@ -131,3 +131,21 @@ Status: implemented in the matrix `recovery` preset in `scripts/run_expert_setti
 - Transport obstacle template: if MoveIt fails or path collides in sc2sc, add richer obstacle/context reporting to VLM strategy and prefer higher-clearance approach candidates.
 - Port-family template: if sc2sc fails consistently, confirm plug/port frame assumptions and add SC-specific preinsert clearance, descent depth, and lateral gate defaults.
 - Recovery scoring template: if recovery succeeds physically but is rejected for missing labeled contact/backoff/release metadata, inspect runtime trace and adjust validation only when official score and required recovery events agree.
+
+## SC Live-Z Handoff Repair Template
+
+Symptom: SC crowded settings can pass the final nominal preinsert gate, then fail the post-handoff gate because the controller remains several centimeters above the nominal `45 mm` insertion start. The failure is low-speed and moderate-force, so rejecting before guarded insertion prevents the SC guarded-insert servo from helping.
+
+Fix: for SC plugs only, allow live-Z repair up to `80 mm` start offset and up to `10 mm` lateral gate error, but do not preserve the failed handoff's live lateral offset. The repaired guarded insert starts from the measured z height and recomputes XY from the port/plug cheatcode target plus the existing planned precontact offset. This is controlled by `AIC_OFFICIAL_TEACHER_SC_ENABLE_LIVE_Z_REPAIR=true`, `AIC_OFFICIAL_TEACHER_SC_LIVE_Z_REPAIR_MAX_START_Z_OFFSET_M=0.080`, `AIC_OFFICIAL_TEACHER_SC_LIVE_Z_REPAIR_MAX_LATERAL_ERROR_M=0.0100`, `AIC_OFFICIAL_TEACHER_SC_LIVE_Z_REPAIR_MAX_FORCE_DELTA_N=6.0`, and `AIC_OFFICIAL_TEACHER_SC_PRESERVE_LIVE_LATERAL_ON_Z_REPAIR=false`.
+
+Status: implemented after `matrix_sc2sc_sc1_present0_target0_nic1` repeatedly failed before guarded insertion. Preserving live lateral was explicitly bad: it carried about `8 mm` of failed handoff bias into insertion and saturated the SC lateral servo. Disabling lateral preservation allowed guarded insertion with about `1 mm` final lateral error, but the setting still did not seat, even with a deeper final seating probe. This suggests a remaining SC keying/orientation or geometry issue, not just z-depth or lateral residual.
+
+Tried and not kept: stronger final seating (`6 mm` extra depth, `1.2 mm` dither, `12 N` limit) reached about `-21 mm` z offset with `8-9 N` force and still produced no insertion event. The matrix defaults remain conservative (`3 mm` extra depth, `0.8 mm` dither, `8 N` limit) to avoid increasing force risk on passing settings.
+
+## SC Final-Start Alignment And Shallow-Contact Template
+
+Symptom: `matrix_sc2sc_sc1_present0_target0_nic1` `nominalrecovery` repeatedly got stuck in retry/backoff loops. GPT-5 and trace inspection showed frames were consistent, but the handoff from the higher precontact pose to the guarded insertion start reintroduced about `5 mm` lateral error. Once no-event recovery was added, recovery itself worked, but retries were consumed by shallow force triggers before the plug could seat.
+
+Fix: for SC `nominalrecovery` and `recovery`, add a final port-frame alignment at the actual guarded insertion start, after handoff/live-Z repair and before descent. In that SC final-start path, replace the active lateral offset with the measured final correction instead of accumulating it on top of stale precontact/retry offsets. Keep SC recovery backoff in `base_z_absolute`, but use SC-specific relaxed measured-backoff and release thresholds. Finally, ignore shallow near-insertion SC contact up to `18 N` in the `[-12 mm, 0 mm]` z-offset band so a brief seating preload does not force an unnecessary retry; deeper sustained no-event force still uses the no-event recovery trigger.
+
+Status: implemented in `OfficialTeacherReplay.py` and the matrix presets. On setting `82` (`matrix_sc2sc_sc1_present0_target0_nic1`) `nominalrecovery`, the sequence improved from repeated score `1.0` failures to `86.97` after offset replacement, then to `92.27` after the SC shallow-contact threshold. The accepted trajectory completed insertion with no recovery/backoff and duration `30.20 s`; it passed the `92` sweep threshold, though there is still room to improve duration/path/smoothness.

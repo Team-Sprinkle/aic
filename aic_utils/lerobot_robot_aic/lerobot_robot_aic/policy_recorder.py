@@ -355,7 +355,6 @@ class PolicyRecorder(Node):
 
     def _obs_message_to_values(self, obs: Observation) -> dict[str, Any]:
         ctrl = obs.controller_state
-
         values: dict[str, Any] = {
             "tcp_pose.position.x": float(ctrl.tcp_pose.position.x),
             "tcp_pose.position.y": float(ctrl.tcp_pose.position.y),

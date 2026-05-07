@@ -8,10 +8,13 @@ import copy
 import csv
 import json
 import math
+import os
 import random
 import shutil
+import socket
 import subprocess
 import sys
+import time
 from pathlib import Path
 from typing import Any
 
@@ -19,16 +22,23 @@ import yaml
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
 ENGINE_SCRIPT_DIR = REPO_ROOT / "aic_engine" / "scripts"
+SCRIPTS_DIR = REPO_ROOT / "scripts"
 sys.path.insert(0, str(ENGINE_SCRIPT_DIR))
+sys.path.insert(0, str(SCRIPTS_DIR))
 
 from generate_random_trials_config import (  # noqa: E402
     PROFILE_QUALIFICATION_EVAL_LIKE,
     _build_trial,
     _profile_defaults,
 )
+from run_expert_setting_matrix import MODE_ENV as EXPERT_MODE_ENV  # noqa: E402
 
 TASK_FAMILIES = {"sfp_to_nic", "sc_to_sc"}
-POLICY_CLASS = {"cheatcode": "aic_example_policies.ros.CheatCode"}
+POLICY_CLASS = {
+    "cheatcode": "aic_example_policies.ros.CheatCode",
+    "agent": "aic_teacher_official expert generator",
+}
+AGENT_EXPERT_MODES = {"nominal", "nominalrecovery", "recovery"}
 NIC_RAILS = [f"nic_rail_{i}" for i in range(5)]
 SC_RAILS = [f"sc_rail_{i}" for i in range(2)]
 MOUNT_RAILS = [
@@ -55,6 +65,10 @@ LIMITS = {
     "fixture_yaw_deg": (-60.0, 60.0),
 }
 DEFAULT_TEMPLATE = REPO_ROOT / "aic_engine" / "config" / "sample_config.yaml"
+DEFAULT_EXPERT_SETTING_REGISTRY = REPO_ROOT / "aic_utils" / "lerobot_robot_aic" / "config" / "expert_setting_registry.json"
+DEFAULT_EXPERT_REGISTRY_OVERLAY_DIR = (
+    REPO_ROOT / "aic_utils" / "lerobot_robot_aic" / "config" / "expert_setting_registry_overlays"
+)
 
 
 def parse_args() -> argparse.Namespace:
@@ -101,6 +115,11 @@ def validate_request(request: dict[str, Any]) -> None:
     policy = require_path(request, "generation.policy")
     if policy not in POLICY_CLASS:
         raise ValueError(f"Unsupported generation.policy '{policy}'. Supported: {sorted(POLICY_CLASS)}")
+    expert_mode = effective_expert_mode(request)
+    if policy == "agent" and expert_mode not in AGENT_EXPERT_MODES:
+        raise ValueError(
+            f"generation.expert_mode must be one of {sorted(AGENT_EXPERT_MODES)} for policy='agent'"
+        )
     require_path(request, "acceptance.min_score")
     if task_family == "sfp_to_nic":
         require_path(request, "scene.nic_cards.count")
@@ -347,7 +366,7 @@ def _apply_family_task_and_cable(
             raise ValueError("sfp_to_nic requires at least one present NIC card")
         cable_name = "cable_0"
         cable_type = str(sample_value(cable_section.get("cable_type"), "sfp_sc_cable", rng))
-        port_name = str(sample_value(scene.get("nic_cards", {}).get("target_port"), "sfp_port_0", rng))
+        port_name = str(sample_value(scene.get("nic_cards", {}).get("target_port"), "auto", rng))
         if port_name == "auto":
             port_name = rng.choice(["sfp_port_0", "sfp_port_1"])
         task = {
@@ -407,6 +426,12 @@ def generate_trials(request: dict[str, Any], num_trials: int) -> dict[str, Any]:
     scene = request.get("scene", {})
     generated: dict[str, Any] = {}
     for idx in range(1, num_trials + 1):
+        nic_section = scene.get("nic_cards", {})
+        sc_section = scene.get("sc_ports", {})
+        if request["task_family"] == "sfp_to_nic" and "sc_ports" not in scene:
+            sc_section = {"count": 0}
+        if request["task_family"] == "sc_to_sc" and "nic_cards" not in scene:
+            nic_section = {"count": 0}
         raw = _build_trial(
             rng,
             idx,
@@ -418,14 +443,14 @@ def generate_trials(request: dict[str, Any], num_trials: int) -> dict[str, Any]:
         _apply_board_overrides(raw, scene.get("board", {}), rng)
         target_nic = _apply_nic_overrides(
             raw,
-            scene.get("nic_cards", {}),
+            nic_section,
             request["task_family"] == "sfp_to_nic",
             profile_cfg,
             rng,
         )
         target_sc = _apply_sc_overrides(
             raw,
-            scene.get("sc_ports", {}),
+            sc_section,
             request["task_family"] == "sc_to_sc",
             profile_cfg,
             rng,
@@ -466,14 +491,31 @@ def write_engine_configs(request: dict[str, Any], output_dir: Path, num_trials: 
     return out_path
 
 
-def run_command(cmd: list[str], dry_run: bool) -> dict[str, Any]:
+def run_command(cmd: list[str], dry_run: bool, env: dict[str, str] | None = None) -> dict[str, Any]:
     rendered = " ".join(str(c) for c in cmd)
     if dry_run:
         print(f"[dry-run] {rendered}")
         return {"cmd": cmd, "skipped": True, "returncode": None}
     print(f"[run] {rendered}")
-    result = subprocess.run(cmd, cwd=REPO_ROOT, check=False)
+    result = subprocess.run(cmd, cwd=REPO_ROOT, check=False, env=env)
     if result.returncode != 0:
+        raise RuntimeError(f"Command failed with exit code {result.returncode}: {rendered}")
+    return {"cmd": cmd, "skipped": False, "returncode": result.returncode}
+
+
+def run_command_allowing_codes(
+    cmd: list[str],
+    dry_run: bool,
+    allowed: set[int],
+    env: dict[str, str] | None = None,
+) -> dict[str, Any]:
+    rendered = " ".join(str(c) for c in cmd)
+    if dry_run:
+        print(f"[dry-run] {rendered}")
+        return {"cmd": cmd, "skipped": True, "returncode": None}
+    print(f"[run] {rendered}")
+    result = subprocess.run(cmd, cwd=REPO_ROOT, check=False, env=env)
+    if result.returncode not in allowed:
         raise RuntimeError(f"Command failed with exit code {result.returncode}: {rendered}")
     return {"cmd": cmd, "skipped": False, "returncode": result.returncode}
 
@@ -507,6 +549,382 @@ def compare_reference(local_dataset: Path, reference_repo_id: str) -> dict[str, 
     }
 
 
+def _bool_string(value: Any) -> str:
+    return str(bool(value)).lower()
+
+
+def _agent_score_csv_for_dataset(
+    *,
+    output_dir: Path,
+    dataset_root: Path,
+    record: dict[str, Any],
+    index: int,
+) -> Path:
+    score_dir = output_dir / "scores"
+    score_dir.mkdir(parents=True, exist_ok=True)
+    path = score_dir / f"agent_attempt_{index:06d}_score_summary.csv"
+    validation = record.get("validation") or {}
+    replay_metrics = record.get("replay_metrics") or {}
+    score = validation.get("score", replay_metrics.get("score"))
+    if score is None:
+        score = 0.0
+    with path.open("w", encoding="utf-8", newline="") as f:
+        writer = csv.DictWriter(f, fieldnames=["trial_id", "run_index", "status", "total_score"])
+        writer.writeheader()
+        writer.writerow(
+            {
+                "trial_id": dataset_root.parent.name,
+                "run_index": 1,
+                "status": "OK",
+                "total_score": float(score),
+            }
+        )
+    return path
+
+
+def _accepted_agent_datasets(agent_output_dir: Path, output_dir: Path) -> tuple[list[Path], list[Path], int]:
+    summary_path = agent_output_dir / "generation_summary.json"
+    if not summary_path.exists():
+        return [], [], 0
+    summary = json.loads(summary_path.read_text(encoding="utf-8"))
+    datasets: list[Path] = []
+    score_csvs: list[Path] = []
+    for record in summary.get("records", []):
+        if not record.get("accepted"):
+            continue
+        replay_metrics = record.get("replay_metrics") or {}
+        trajectory_path = replay_metrics.get("trajectory_path")
+        if not trajectory_path:
+            continue
+        dataset_root = Path(trajectory_path).parent / "dataset"
+        if not (dataset_root / "meta" / "info.json").exists():
+            continue
+        datasets.append(dataset_root)
+        score_csvs.append(
+            _agent_score_csv_for_dataset(
+                output_dir=output_dir,
+                dataset_root=dataset_root,
+                record=record,
+                index=len(datasets),
+            )
+        )
+    return datasets, score_csvs, int(summary.get("accepted", len(datasets)))
+
+
+def _rail_indices(task_board: dict[str, Any], rails: list[str]) -> list[int]:
+    indices: list[int] = []
+    for rail in rails:
+        if task_board.get(rail, {}).get("entity_present"):
+            indices.append(int(rail.rsplit("_", 1)[1]))
+    return indices
+
+
+def _parse_index_from_suffix(text: str, prefix: str) -> int:
+    if not text.startswith(prefix):
+        raise ValueError(f"Expected {text!r} to start with {prefix!r}")
+    return int(text[len(prefix) :])
+
+
+def infer_registry_suffix_from_trial(task_family: str, trial: dict[str, Any]) -> str | None:
+    task = trial.get("tasks", {}).get("task_1", {})
+    task_board = trial.get("scene", {}).get("task_board", {})
+    if task_family == "sfp_to_nic":
+        present = _rail_indices(task_board, NIC_RAILS)
+        if not present:
+            return None
+        target = _parse_index_from_suffix(str(task.get("target_module_name", "")), "nic_card_mount_")
+        port = _parse_index_from_suffix(str(task.get("port_name", "")), "sfp_port_")
+        present_label = "".join(str(idx) for idx in present)
+        return f"matrix_sfp2nic_cards{len(present)}_present{present_label}_target{target}_port{port}"
+    if task_family == "sc_to_sc":
+        present = _rail_indices(task_board, SC_RAILS)
+        if not present:
+            return None
+        target = _parse_index_from_suffix(str(task.get("target_module_name", "")), "sc_port_")
+        nic_count = len(_rail_indices(task_board, NIC_RAILS))
+        present_label = "".join(str(idx) for idx in present)
+        return f"matrix_sc2sc_sc{len(present)}_present{present_label}_target{target}_nic{nic_count}"
+    return None
+
+
+def infer_registry_suffixes_from_engine_config(engine_config_path: Path, task_family: str) -> list[str]:
+    config = yaml.safe_load(engine_config_path.read_text(encoding="utf-8"))
+    trials = config.get("trials") if isinstance(config, dict) else None
+    if not isinstance(trials, dict):
+        return []
+    suffixes: list[str] = []
+    for trial in trials.values():
+        if not isinstance(trial, dict):
+            continue
+        suffix = infer_registry_suffix_from_trial(task_family, trial)
+        if suffix:
+            suffixes.append(suffix)
+    return suffixes
+
+
+def effective_registry_suffix(request: dict[str, Any]) -> str:
+    generation = request.get("generation", {})
+    inferred = generation.get("_inferred_expert_registry_suffix")
+    if inferred:
+        return str(inferred)
+    explicit = generation.get("expert_registry_suffix")
+    if explicit:
+        return str(explicit)
+    return str(request.get("suffix", ""))
+
+
+def effective_expert_mode(request: dict[str, Any]) -> str:
+    return str(request.get("generation", {}).get("expert_mode", "nominal"))
+
+
+def build_agent_generation_cmd(
+    *,
+    request: dict[str, Any],
+    engine_config_path: Path,
+    output_dir: Path,
+    target: int,
+    max_attempts: int,
+) -> list[str]:
+    generation = request.get("generation", {})
+    expert_mode = effective_expert_mode(request)
+    cmd = [
+        "pixi",
+        "run",
+        "python",
+        str(REPO_ROOT / "scripts/generate_expert_trajectories.py"),
+        f"--{expert_mode}",
+        "--target-accepted-trajectories",
+        str(target),
+        "--max-total-attempts",
+        str(max_attempts),
+        "--candidates-per-scene",
+        str(int(generation.get("candidates_per_scene", min(max_attempts, 5)))),
+        "--score-threshold",
+        str(float(request["acceptance"]["min_score"])),
+        "--config",
+        str(engine_config_path),
+        "--output-dir",
+        str(output_dir / "agent_generation"),
+        "--seed",
+        str(int(generation.get("seed", 0) or 0)),
+        "--use-gpt5-analysis",
+        _bool_string(generation.get("use_gpt5_analysis", generation.get("auto_improve_on_failure", False))),
+        "--per-trial-timeout-sec",
+        str(int(generation.get("per_trial_timeout_sec", 360))),
+        "--ft-threshold",
+        str(float(generation.get("ft_threshold", 15.0))),
+    ]
+    if bool(generation.get("debug", False)) or bool(generation.get("auto_improve_on_failure", False)):
+        cmd.append("--debug")
+    if "strategy_model" in generation:
+        cmd.extend(["--strategy-model", str(generation["strategy_model"])])
+    if "analysis_model" in generation:
+        cmd.extend(["--analysis-model", str(generation["analysis_model"])])
+    if "max_retries" in generation:
+        cmd.extend(["--max-retries", str(int(generation["max_retries"]))])
+    if "backup_distance_m" in generation:
+        cmd.extend(["--backup-distance-m", str(float(generation["backup_distance_m"]))])
+    recorder_drain_sec = int(generation.get("recorder_drain_sec", 120))
+    planner_recorder_drain_sec = int(generation.get("planner_recorder_drain_sec", 45))
+    if not bool(generation.get("allow_short_agent_drain", False)):
+        recorder_drain_sec = max(recorder_drain_sec, 45)
+        planner_recorder_drain_sec = max(planner_recorder_drain_sec, 45)
+    cmd.extend(["--recorder-drain-sec", str(recorder_drain_sec)])
+    cmd.extend(["--planner-recorder-drain-sec", str(planner_recorder_drain_sec)])
+    if "startup_delay_sec" in generation:
+        cmd.extend(["--startup-delay-sec", str(int(generation["startup_delay_sec"]))])
+    return cmd
+
+
+def _overlay_paths(generation: dict[str, Any]) -> list[Path]:
+    overlay_dir = Path(generation.get("expert_registry_overlay_dir", DEFAULT_EXPERT_REGISTRY_OVERLAY_DIR))
+    if not overlay_dir.exists():
+        return []
+    return sorted(overlay_dir.glob("*.jsonl"))
+
+
+def _merge_registry_overlay_entry(registry: dict[str, Any], entry: dict[str, Any]) -> None:
+    suffix = str(entry.get("suffix") or "")
+    mode = str(entry.get("mode") or "")
+    if not suffix or mode not in AGENT_EXPERT_MODES:
+        return
+    setting = (registry.get("settings") or {}).get(suffix)
+    if not isinstance(setting, dict):
+        return
+    modes = setting.setdefault("modes", {})
+    mode_entry = modes.setdefault(mode, {})
+    score = entry.get("score")
+    status = str(entry.get("status") or mode_entry.get("status") or "attempted_not_passing")
+    mode_entry["status"] = "passed" if status == "passed" else status
+    mode_entry["last_summary"] = entry.get("summary") or mode_entry.get("last_summary")
+    mode_entry["last_reason"] = entry.get("reason") or mode_entry.get("last_reason")
+    if isinstance(entry.get("mode_env"), dict):
+        mode_entry["last_mode_env"] = {str(key): str(value) for key, value in entry["mode_env"].items()}
+    if score is not None:
+        score_f = float(score)
+        if mode_entry.get("best_score") is None or score_f > float(mode_entry.get("best_score")):
+            mode_entry["best_score"] = score_f
+            mode_entry["best_summary"] = entry.get("summary")
+            if isinstance(entry.get("mode_env"), dict):
+                mode_entry["best_mode_env"] = {str(key): str(value) for key, value in entry["mode_env"].items()}
+    if status == "passed" and isinstance(entry.get("mode_env"), dict):
+        mode_entry["best_mode_env"] = {str(key): str(value) for key, value in entry["mode_env"].items()}
+    mode_entry.setdefault("history", []).append(entry)
+
+
+def load_expert_registry(generation: dict[str, Any]) -> dict[str, Any] | None:
+    registry_path = Path(generation.get("expert_setting_registry", DEFAULT_EXPERT_SETTING_REGISTRY))
+    if not registry_path.exists():
+        return None
+    try:
+        registry = json.loads(registry_path.read_text(encoding="utf-8"))
+    except json.JSONDecodeError:
+        return None
+    if not isinstance(registry, dict):
+        return None
+    for overlay_path in _overlay_paths(generation):
+        for line in overlay_path.read_text(encoding="utf-8", errors="replace").splitlines():
+            if not line.strip():
+                continue
+            try:
+                entry = json.loads(line)
+            except json.JSONDecodeError:
+                continue
+            if isinstance(entry, dict):
+                _merge_registry_overlay_entry(registry, entry)
+    return registry
+
+
+def expert_registry_mode_entry(request: dict[str, Any]) -> dict[str, Any] | None:
+    generation = request.get("generation", {})
+    if request.get("generation", {}).get("policy") != "agent":
+        return None
+    registry = load_expert_registry(generation)
+    if registry is None:
+        return None
+    suffix = effective_registry_suffix(request)
+    mode = effective_expert_mode(request)
+    setting = (registry.get("settings") or {}).get(suffix)
+    if not isinstance(setting, dict):
+        return None
+    mode_entry = (setting.get("modes") or {}).get(mode)
+    return mode_entry if isinstance(mode_entry, dict) else None
+
+
+def expert_registry_mode_env(request: dict[str, Any]) -> dict[str, str]:
+    generation = request.get("generation", {})
+    if bool(generation.get("ignore_expert_setting_registry", False)):
+        return {}
+    if not bool(generation.get("use_expert_registry_env", True)):
+        return {}
+    mode_entry = expert_registry_mode_entry(request)
+    if not isinstance(mode_entry, dict) or mode_entry.get("status") != "passed":
+        return {}
+    env = mode_entry.get("best_mode_env")
+    if not isinstance(env, dict):
+        return {}
+    return {str(key): str(value) for key, value in env.items()}
+
+
+def build_agent_generation_env(request: dict[str, Any]) -> tuple[dict[str, str], dict[str, str]]:
+    generation = request.get("generation", {})
+    expert_mode = effective_expert_mode(request)
+    if expert_mode not in EXPERT_MODE_ENV:
+        raise ValueError(f"No expert generation environment preset exists for mode '{expert_mode}'")
+    mode_env = dict(EXPERT_MODE_ENV[expert_mode])
+    mode_env.update(expert_registry_mode_env(request))
+    yaml_env = generation.get("env", {})
+    if yaml_env is not None and not isinstance(yaml_env, dict):
+        raise ValueError("generation.env must be a map of environment variable names to values")
+    if isinstance(yaml_env, dict):
+        mode_env.update({str(key): str(value) for key, value in yaml_env.items()})
+    env = os.environ.copy()
+    env.update(mode_env)
+    return env, mode_env
+
+
+def expert_registry_skip_reason(request: dict[str, Any]) -> str | None:
+    generation = request.get("generation", {})
+    if bool(generation.get("ignore_expert_setting_registry", False)):
+        return None
+    mode_entry = expert_registry_mode_entry(request)
+    if not isinstance(mode_entry, dict):
+        return None
+    suffix = effective_registry_suffix(request)
+    mode = effective_expert_mode(request)
+    status = str(mode_entry.get("status", "unresolved"))
+    if status.startswith("skipped"):
+        reason = mode_entry.get("last_reason") or "marked skipped in expert setting registry"
+        return f"{suffix}/{mode} is {status}: {reason}"
+    return None
+
+
+def _overlay_id() -> str:
+    raw = os.environ.get("AIC_EXPERT_REGISTRY_OVERLAY_ID") or socket.gethostname() or "local"
+    return "".join(ch if ch.isalnum() or ch in {"-", "_", "."} else "_" for ch in raw)
+
+
+def write_expert_registry_overlay(
+    *,
+    request: dict[str, Any],
+    output_dir: Path,
+    agent_mode_env: dict[str, str] | None,
+) -> Path | None:
+    generation = request.get("generation", {})
+    if request.get("generation", {}).get("policy") != "agent":
+        return None
+    if not bool(generation.get("write_expert_registry_overlay", True)):
+        return None
+    summary_path = output_dir / "agent_generation" / "generation_summary.json"
+    if not summary_path.exists():
+        return None
+    try:
+        summary = json.loads(summary_path.read_text(encoding="utf-8"))
+    except json.JSONDecodeError:
+        return None
+    suffix = effective_registry_suffix(request)
+    if not suffix:
+        return None
+    mode = effective_expert_mode(request)
+    overlay_dir = Path(generation.get("expert_registry_overlay_dir", DEFAULT_EXPERT_REGISTRY_OVERLAY_DIR))
+    overlay_dir.mkdir(parents=True, exist_ok=True)
+    path = overlay_dir / f"{_overlay_id()}.jsonl"
+    best_score = None
+    accepted = int(summary.get("accepted", 0) or 0)
+    reasons: list[str] = []
+    gpt5_paths: list[str] = []
+    for record in summary.get("records", []) or []:
+        validation = record.get("validation") or {}
+        replay_metrics = record.get("replay_metrics") or {}
+        score = validation.get("score", replay_metrics.get("score"))
+        if score is not None:
+            best_score = float(score) if best_score is None else max(best_score, float(score))
+        reasons.extend(str(reason) for reason in validation.get("reasons", []) or [])
+        gpt5 = record.get("gpt5_failure_analysis") or {}
+        for item in gpt5.values() if isinstance(gpt5, dict) else []:
+            if isinstance(item, dict) and item.get("analysis"):
+                gpt5_paths.append(str(item["analysis"]))
+    entry = {
+        "schema_version": "aic_expert_registry_overlay/v1",
+        "timestamp_unix": time.time(),
+        "overlay_id": _overlay_id(),
+        "suffix": suffix,
+        "request_suffix": request.get("suffix"),
+        "mode": mode,
+        "task_family": request.get("task_family"),
+        "status": "passed" if accepted >= int(request["generation"]["target_accepted_trajectories"]) else "attempted_not_passing",
+        "score": best_score,
+        "summary": str(summary_path),
+        "output_dir": str(output_dir),
+        "mode_env": agent_mode_env or {},
+        "reason": "; ".join(sorted(set(reasons)))[:500] if reasons else summary.get("stopped_reason"),
+        "gpt5_analysis_paths": gpt5_paths,
+    }
+    with path.open("a", encoding="utf-8") as f:
+        f.write(json.dumps(entry, sort_keys=True) + "\n")
+    return path
+
+
 def main() -> int:
     args = parse_args()
     request = load_request(args.request_yaml)
@@ -538,6 +956,32 @@ def main() -> int:
             (output_dir / child).mkdir(parents=True, exist_ok=True)
     shutil.copy2(args.request_yaml, output_dir / "request.yaml")
     engine_config_path = write_engine_configs(request, output_dir, num_trials)
+    inferred_suffixes = infer_registry_suffixes_from_engine_config(engine_config_path, request["task_family"])
+    if len(set(inferred_suffixes)) == 1:
+        request.setdefault("generation", {})["_inferred_expert_registry_suffix"] = inferred_suffixes[0]
+    skip_reason = expert_registry_skip_reason(request)
+    if skip_reason is not None:
+        summary = {
+            "request_yaml": str(args.request_yaml),
+            "output_dir": str(output_dir),
+            "task_family": request["task_family"],
+            "policy": request["generation"]["policy"],
+            "expert_mode": effective_expert_mode(request),
+            "target_accepted_trajectories": target,
+            "max_attempts": max_attempts,
+            "min_score": float(request["acceptance"]["min_score"]),
+            "number_attempted": 0,
+            "number_accepted": 0,
+            "status": "skipped",
+            "skip_reason": skip_reason,
+            "expert_registry_suffix": effective_registry_suffix(request),
+        }
+        (output_dir / "generation_summary.json").write_text(
+            json.dumps(summary, indent=2, sort_keys=True), encoding="utf-8"
+        )
+        print(f"Skipped expert dataset generation: {skip_reason}")
+        print(f"Wrote trajectory dataset request artifacts under: {output_dir}")
+        return 0
 
     commands: list[dict[str, Any]] = []
     dataset_repo_id = f"local/{derived_dataset_name(output_dir)}"
@@ -565,8 +1009,42 @@ def main() -> int:
         "--tmp-dir",
         str(output_dir / "logs" / "per_trial_tmp"),
     ]
-    if not args.skip_recording:
-        commands.append(run_command(recording_cmd, args.dry_run))
+    generation = request.get("generation", {})
+    if "per_trial_timeout_sec" in generation:
+        recording_cmd.extend(["--per-trial-timeout-sec", str(int(generation["per_trial_timeout_sec"]))])
+    if "recorder_drain_sec" in generation:
+        recording_cmd.extend(["--recorder-drain-sec", str(int(generation["recorder_drain_sec"]))])
+    if "startup_delay_sec" in generation:
+        recording_cmd.extend(["--startup-delay-sec", str(int(generation["startup_delay_sec"]))])
+    policy = request["generation"]["policy"]
+    agent_mode_env: dict[str, str] | None = None
+    if policy == "agent":
+        agent_cmd = build_agent_generation_cmd(
+            request=request,
+            engine_config_path=engine_config_path,
+            output_dir=output_dir,
+            target=target,
+            max_attempts=max_attempts,
+        )
+        agent_env, agent_mode_env = build_agent_generation_env(request)
+        if not args.skip_recording:
+            commands.append(run_command_allowing_codes(agent_cmd, args.dry_run, {0, 2}, env=agent_env))
+            write_expert_registry_overlay(
+                request=request,
+                output_dir=output_dir,
+                agent_mode_env=agent_mode_env,
+            )
+        agent_datasets, agent_score_csvs, agent_accepted = (
+            ([], [], None)
+            if args.dry_run or args.skip_recording
+            else (*_accepted_agent_datasets(output_dir / "agent_generation", output_dir),)
+        )
+    else:
+        agent_datasets = []
+        agent_score_csvs = []
+        agent_accepted = None
+        if not args.skip_recording:
+            commands.append(run_command(recording_cmd, args.dry_run))
 
     filter_cmd = [
         "pixi",
@@ -584,17 +1062,41 @@ def main() -> int:
         "--include-videos",
         "--overwrite",
     ]
+    if policy == "agent" and agent_datasets:
+        filter_cmd = [
+            "pixi",
+            "run",
+            "python",
+            str(REPO_ROOT / "aic_utils/lerobot_robot_aic/scripts/filter_merge_lerobot_by_score.py"),
+            "--datasets",
+            *[str(path) for path in agent_datasets],
+            "--score-csvs",
+            *[str(path) for path in agent_score_csvs],
+            "--min-score",
+            str(float(request["acceptance"]["min_score"])),
+            "--output",
+            str(output_dir / "accepted_dataset"),
+            "--include-videos",
+            "--overwrite",
+        ]
     can_filter_existing = (
         (output_dir / "raw_dataset" / "meta" / "info.json").exists()
         and (output_dir / "scores" / "score_summary.csv").exists()
     )
-    if not args.skip_filter and (not args.skip_recording or can_filter_existing):
+    can_filter_agent = policy == "agent" and bool(agent_datasets)
+    if policy == "agent":
+        should_filter = can_filter_agent
+    else:
+        should_filter = (not args.skip_recording or can_filter_existing) and can_filter_existing
+    if not args.skip_filter and should_filter:
         commands.append(run_command(filter_cmd, args.dry_run))
 
     report_src = output_dir / "accepted_dataset" / "selection_report.csv"
     if report_src.exists():
         shutil.copy2(report_src, output_dir / "selection_report.csv")
     accepted = count_selected(report_src)
+    if accepted is None and policy == "agent":
+        accepted = agent_accepted
     schema_comparison = None
     if args.inspect_reference_dataset:
         schema_comparison = compare_reference(output_dir / "accepted_dataset", args.inspect_reference_dataset)
@@ -604,6 +1106,7 @@ def main() -> int:
         "output_dir": str(output_dir),
         "task_family": request["task_family"],
         "policy": request["generation"]["policy"],
+        "expert_mode": effective_expert_mode(request) if policy == "agent" else None,
         "count_label": _count_label(request["task_family"], request),
         "target_accepted_trajectories": target,
         "max_attempts": max_attempts,
@@ -611,6 +1114,15 @@ def main() -> int:
         "seed": request.get("generation", {}).get("seed"),
         "raw_dataset": str(output_dir / "raw_dataset"),
         "accepted_dataset": str(output_dir / "accepted_dataset"),
+        "agent_generation": str(output_dir / "agent_generation") if policy == "agent" else None,
+        "agent_mode_env": agent_mode_env,
+        "expert_registry_suffix": effective_registry_suffix(request) if policy == "agent" else None,
+        "expert_registry_overlay_dir": (
+            str(Path(request.get("generation", {}).get("expert_registry_overlay_dir", DEFAULT_EXPERT_REGISTRY_OVERLAY_DIR)))
+            if policy == "agent"
+            else None
+        ),
+        "agent_replay_datasets": [str(path) for path in agent_datasets],
         "scores": str(output_dir / "scores"),
         "number_attempted": num_trials,
         "number_accepted": accepted,
@@ -624,6 +1136,16 @@ def main() -> int:
                 "internal cable jitter. Explicit cable fields in request YAML override it."
             ),
             "attempt_strategy": "This first implementation generates max_attempts upfront unless --num-trials-override is used.",
+            "opposite_family_defaults": (
+                "Minimal sfp_to_nic requests default sc_ports.count to 0, and minimal sc_to_sc "
+                "requests default nic_cards.count to 0. Explicit opposite-family scene sections "
+                "are preserved for obstacle-heavy data generation."
+            ),
+            "agent_recorder_drain": (
+                "Agent generation clamps recorder_drain_sec and planner_recorder_drain_sec to at "
+                "least 45s unless generation.allow_short_agent_drain is true; shorter drains can "
+                "drop otherwise valid planner/replay outputs during process teardown."
+            ),
         },
     }
     (output_dir / "generation_summary.json").write_text(

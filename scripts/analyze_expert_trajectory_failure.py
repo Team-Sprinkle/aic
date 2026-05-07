@@ -18,11 +18,17 @@ from aic_teacher_official.expert_generator.debug_artifacts import (  # noqa: E40
 )
 
 
-def run_analysis(*, debug_dir: str | Path, model: str = "gpt-5", dry_run: bool = False) -> dict[str, Path]:
+def run_analysis(
+    *,
+    debug_dir: str | Path,
+    model: str = "gpt-5",
+    dry_run: bool = False,
+    allow_missing: bool = False,
+) -> dict[str, Path]:
     root = Path(debug_dir)
     if root.name != "debug" and (root / "debug").is_dir():
         root = root / "debug"
-    payload, period = compact_payload_with_retry(root)
+    payload, period = compact_payload_with_retry(root, allow_missing=allow_missing)
     payload["effective_sample_period_sec"] = period
     prompt = build_gpt5_failure_prompt(payload)
     payload_path = root / "gpt5_failure_payload.json"
@@ -48,12 +54,22 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--debug-dir", required=True, help="Path to dataset/debug or dataset root containing debug/.")
     parser.add_argument("--model", default="gpt-5")
     parser.add_argument("--dry-run", action="store_true")
+    parser.add_argument(
+        "--allow-missing",
+        action="store_true",
+        help="Build a best-effort payload for timed-out or interrupted attempts with partial debug artifacts.",
+    )
     return parser.parse_args()
 
 
 def main() -> None:
     args = parse_args()
-    paths = run_analysis(debug_dir=args.debug_dir, model=args.model, dry_run=args.dry_run)
+    paths = run_analysis(
+        debug_dir=args.debug_dir,
+        model=args.model,
+        dry_run=args.dry_run,
+        allow_missing=args.allow_missing,
+    )
     for label, path in paths.items():
         print(f"{label}: {path}")
 

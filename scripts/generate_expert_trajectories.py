@@ -14,12 +14,15 @@ import json
 import os
 from pathlib import Path
 import sys
+from typing import Any
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(REPO_ROOT / "aic_teacher_official"))
 
 from aic_teacher_official.expert_generator.dataset_writer import DatasetMetadataWriter, ExpertEpisodeMetadata  # noqa: E402
 from aic_teacher_official.expert_generator.debug_artifacts import (  # noqa: E402
+    DebugArtifactPaths,
+    call_gpt5_failure_analysis,
     compute_phase_speed_metrics,
     load_lerobot_debug_rows,
     sample_lerobot_rows,
@@ -271,6 +274,8 @@ def main() -> int:
         },
     }
     (output_dir / "generation_config.json").write_text(json.dumps(payload, indent=2) + "\n", encoding="utf-8")
+    if args.use_gpt5_analysis:
+        args.debug = True
     if args.dry_run_config:
         return 0
     try:
@@ -430,6 +435,13 @@ def run_live_generation(
                     lerobot_dataset_root=Path(repaired_replay_metrics["trajectory_path"]).parent / "dataset",
                 )
                 record["repaired_debug_dir"] = str(repaired_debug_paths.debug_dir)
+                _maybe_run_gpt5_failure_analysis(
+                    paths=repaired_debug_paths,
+                    args=args,
+                    record=record,
+                    label="repaired_candidate",
+                    should_run=not repaired_validation.accepted,
+                )
             record["repair_attempted"] = True
             record["repair_metrics"] = repair_metrics
             record["repaired_replay_metrics"] = repaired_replay_metrics
@@ -463,6 +475,13 @@ def run_live_generation(
                 lerobot_dataset_root=Path(replay_metrics["trajectory_path"]).parent / "dataset",
             )
             record["debug_dir"] = str(debug_paths.debug_dir)
+            _maybe_run_gpt5_failure_analysis(
+                paths=debug_paths,
+                args=args,
+                record=record,
+                label="candidate",
+                should_run=not validation.accepted,
+            )
         if validation.accepted:
             record["accepted"] = True
             metadata_writer.append_episode(
@@ -505,6 +524,50 @@ def run_live_generation(
         ),
         "records": records,
     }
+
+
+def _maybe_run_gpt5_failure_analysis(
+    *,
+    paths: DebugArtifactPaths,
+    args: argparse.Namespace,
+    record: dict[str, Any],
+    label: str,
+    should_run: bool,
+) -> None:
+    if not args.use_gpt5_analysis or not should_run:
+        return
+    try:
+        analysis = call_gpt5_failure_analysis(
+            paths.gpt5_prompt.read_text(encoding="utf-8"),
+            model=args.analysis_model,
+        )
+        paths.gpt5_analysis.write_text(analysis, encoding="utf-8")
+        record.setdefault("gpt5_failure_analysis", {})[label] = {
+            "status": "ok",
+            "analysis": str(paths.gpt5_analysis),
+            "prompt": str(paths.gpt5_prompt),
+            "payload": str(paths.gpt5_payload),
+        }
+    except Exception as ex:
+        error_path = paths.debug_dir / "gpt5_failure_analysis_error.json"
+        error_path.write_text(
+            json.dumps(
+                {
+                    "status": "error",
+                    "error": f"{type(ex).__name__}: {ex}",
+                    "analysis_model": args.analysis_model,
+                },
+                indent=2,
+                sort_keys=True,
+            )
+            + "\n",
+            encoding="utf-8",
+        )
+        record.setdefault("gpt5_failure_analysis", {})[label] = {
+            "status": "error",
+            "error": f"{type(ex).__name__}: {ex}",
+            "error_path": str(error_path),
+        }
 
 
 def _images_from_planner_debug(planner_result: dict) -> list[Path]:

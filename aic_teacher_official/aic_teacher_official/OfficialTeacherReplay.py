@@ -779,11 +779,13 @@ class OfficialTeacherReplay(Policy):
     def _should_ignore_shallow_contact(
         self,
         *,
+        task: Task | None = None,
         z_offset: float,
         force_delta_n: float,
         retry_count: int,
         sample_source: str,
     ) -> bool:
+        is_sc_plug = bool(task is not None and str(getattr(task, "plug_name", "")).startswith("sc"))
         min_contact_z_offset = float(
             os.environ.get("AIC_OFFICIAL_TEACHER_CONTACT_MIN_Z_OFFSET", "0.02")
         )
@@ -808,6 +810,13 @@ class OfficialTeacherReplay(Policy):
                 "6.0",
             )
         )
+        if is_sc_plug:
+            near_insert_force_threshold = float(
+                os.environ.get(
+                    "AIC_OFFICIAL_TEACHER_SC_LOW_FORCE_INSERTION_IGNORE_THRESHOLD_N",
+                    str(near_insert_force_threshold),
+                )
+            )
         ignore_above_contact = bool(
             z_offset > min_contact_z_offset
             and force_delta_n < early_force_threshold
@@ -1381,12 +1390,15 @@ class OfficialTeacherReplay(Policy):
         generic_max_offset = float(
             os.environ.get("AIC_OFFICIAL_TEACHER_PRECONTACT_PORT_ALIGN_MAX_OFFSET_M", max_offset_default)
         )
-        max_offset = float(
-            os.environ.get(
-                "AIC_OFFICIAL_TEACHER_SC_PRECONTACT_PORT_ALIGN_MAX_OFFSET_M",
-                str(max(generic_max_offset, float(max_offset_default)) if is_sc_plug else generic_max_offset),
+        if is_sc_plug:
+            max_offset = float(
+                os.environ.get(
+                    "AIC_OFFICIAL_TEACHER_SC_PRECONTACT_PORT_ALIGN_MAX_OFFSET_M",
+                    str(max(generic_max_offset, float(max_offset_default))),
+                )
             )
-        )
+        else:
+            max_offset = generic_max_offset
         residual_threshold = float(
             os.environ.get("AIC_OFFICIAL_TEACHER_PRECONTACT_PORT_ALIGN_RESIDUAL_M", "0.0007")
         )
@@ -1397,12 +1409,15 @@ class OfficialTeacherReplay(Policy):
             os.environ.get("AIC_OFFICIAL_TEACHER_PRECONTACT_PORT_ALIGN_FORCE_ABORT_FRACTION", "0.60")
         )
         generic_gain = float(os.environ.get("AIC_OFFICIAL_TEACHER_PRECONTACT_PORT_ALIGN_GAIN", gain_default))
-        gain = float(
-            os.environ.get(
-                "AIC_OFFICIAL_TEACHER_SC_PRECONTACT_PORT_ALIGN_GAIN",
-                str(max(generic_gain, float(gain_default)) if is_sc_plug else generic_gain),
+        if is_sc_plug:
+            gain = float(
+                os.environ.get(
+                    "AIC_OFFICIAL_TEACHER_SC_PRECONTACT_PORT_ALIGN_GAIN",
+                    str(max(generic_gain, float(gain_default))),
+                )
             )
-        )
+        else:
+            gain = generic_gain
         baseline_force = self._force_vector(get_observation)
         self._last_precontact_align_baseline_force = baseline_force.copy()
         self._last_precontact_align_force_delta_n = None
@@ -1493,9 +1508,14 @@ class OfficialTeacherReplay(Policy):
             final_offset_base_m=final_offset.tolist(),
             final_tcp_speed_mps=final_speed,
         )
-        self._last_precontact_lateral_offset_base = (
-            np.zeros(3, dtype=np.float64) if aborted else final_offset.copy()
-        )
+        preserve_unconverged = os.environ.get(
+            "AIC_OFFICIAL_TEACHER_PRECONTACT_PORT_ALIGN_PRESERVE_UNCONVERGED_OFFSET",
+            "true" if is_sc_plug else "false",
+        ).lower() in {"1", "true", "yes", "on"}
+        if aborted or (not converged and not preserve_unconverged):
+            self._last_precontact_lateral_offset_base = np.zeros(3, dtype=np.float64)
+        else:
+            self._last_precontact_lateral_offset_base = final_offset.copy()
         return not aborted
 
     def _hold_preinsert_until_tracking_gate(
@@ -2302,6 +2322,7 @@ class OfficialTeacherReplay(Policy):
         retry_start_z_m: float | None = None,
         retry_count: int | None = None,
     ) -> bool:
+        is_sc_plug = str(getattr(task, "plug_name", "")).startswith("sc")
         backoff_increment = float(os.environ.get("AIC_OFFICIAL_TEACHER_RECOVERY_BACKOFF_DISTANCE_M", "0.005"))
         max_backoff_distance = float(
             os.environ.get("AIC_OFFICIAL_TEACHER_RECOVERY_MAX_BACKOFF_DISTANCE_M", "0.03")
@@ -2309,7 +2330,6 @@ class OfficialTeacherReplay(Policy):
         min_backoff_distance = float(
             os.environ.get("AIC_OFFICIAL_TEACHER_RECOVERY_MIN_BACKOFF_DISTANCE_M", "0.002")
         )
-        min_backoff_distance = min(max_backoff_distance, max(0.0, min_backoff_distance))
         backoff_duration = float(os.environ.get("AIC_OFFICIAL_TEACHER_RECOVERY_BACKOFF_SEC", "0.45"))
         release_timeout = float(os.environ.get("AIC_OFFICIAL_TEACHER_FORCE_RELEASE_TIMEOUT_SEC", "5.0"))
         release_check_sec = float(os.environ.get("AIC_OFFICIAL_TEACHER_FORCE_RELEASE_STAGE_CHECK_SEC", "0.10"))
@@ -2320,21 +2340,67 @@ class OfficialTeacherReplay(Policy):
         configured_release_threshold = float(
             os.environ.get("AIC_OFFICIAL_TEACHER_RECOVERY_RELEASE_FORCE_THRESHOLD_N", str(self._ft_threshold_n))
         )
+        if is_sc_plug:
+            backoff_increment = float(
+                os.environ.get("AIC_OFFICIAL_TEACHER_SC_RECOVERY_BACKOFF_DISTANCE_M", str(backoff_increment))
+            )
+            max_backoff_distance = float(
+                os.environ.get("AIC_OFFICIAL_TEACHER_SC_RECOVERY_MAX_BACKOFF_DISTANCE_M", str(max_backoff_distance))
+            )
+            min_backoff_distance = float(
+                os.environ.get("AIC_OFFICIAL_TEACHER_SC_RECOVERY_MIN_BACKOFF_DISTANCE_M", str(min_backoff_distance))
+            )
+            backoff_duration = float(
+                os.environ.get("AIC_OFFICIAL_TEACHER_SC_RECOVERY_BACKOFF_SEC", str(backoff_duration))
+            )
+            release_timeout = float(
+                os.environ.get("AIC_OFFICIAL_TEACHER_SC_FORCE_RELEASE_TIMEOUT_SEC", str(release_timeout))
+            )
+            release_check_sec = max(
+                release_check_sec,
+                float(
+                    os.environ.get(
+                        "AIC_OFFICIAL_TEACHER_SC_RECOVERY_RELEASE_STABLE_SEC",
+                        str(release_check_sec),
+                    )
+                ),
+            )
+            configured_release_threshold = float(
+                os.environ.get(
+                    "AIC_OFFICIAL_TEACHER_SC_RECOVERY_RELEASE_FORCE_THRESHOLD_N",
+                    str(configured_release_threshold),
+                )
+            )
+        min_backoff_distance = min(max_backoff_distance, max(0.0, min_backoff_distance))
         strict_release_default = str(configured_release_threshold) if self._expert_mode == "recovery" else "1.0"
+        strict_release_value = os.environ.get(
+            "AIC_OFFICIAL_TEACHER_RECOVERY_STRICT_RELEASE_FORCE_THRESHOLD_N",
+            strict_release_default,
+        )
+        if is_sc_plug:
+            strict_release_value = os.environ.get(
+                "AIC_OFFICIAL_TEACHER_SC_RECOVERY_STRICT_RELEASE_FORCE_THRESHOLD_N",
+                strict_release_value,
+            )
         release_threshold = min(
             configured_release_threshold,
-            float(
-                os.environ.get(
-                    "AIC_OFFICIAL_TEACHER_RECOVERY_STRICT_RELEASE_FORCE_THRESHOLD_N",
-                    strict_release_default,
-                )
-            ),
+            float(strict_release_value),
         )
+        required_measured_backoff_value = float(
+            os.environ.get("AIC_OFFICIAL_TEACHER_RECOVERY_REQUIRED_MEASURED_BACKOFF_M", "0.002")
+        )
+        if is_sc_plug:
+            required_measured_backoff_value = float(
+                os.environ.get(
+                    "AIC_OFFICIAL_TEACHER_SC_RECOVERY_REQUIRED_MEASURED_BACKOFF_M",
+                    str(required_measured_backoff_value),
+                )
+            )
         required_measured_backoff = min(
             max_backoff_distance,
             max(
                 min_backoff_distance,
-                float(os.environ.get("AIC_OFFICIAL_TEACHER_RECOVERY_REQUIRED_MEASURED_BACKOFF_M", "0.002")),
+                required_measured_backoff_value,
             ),
         )
         baseline = (
@@ -2367,6 +2433,8 @@ class OfficialTeacherReplay(Policy):
             "AIC_OFFICIAL_TEACHER_RECOVERY_BACKOFF_MODE",
             "tcp_away_from_port",
         )
+        if is_sc_plug:
+            backoff_mode = os.environ.get("AIC_OFFICIAL_TEACHER_SC_RECOVERY_BACKOFF_MODE", backoff_mode)
         while total_backoff < max_backoff_distance and (self.time_now() - release_started) < Duration(seconds=release_timeout):
             stage_index += 1
             next_backoff = min(max_backoff_distance, total_backoff + backoff_increment)
@@ -3417,6 +3485,29 @@ class OfficialTeacherReplay(Policy):
                         live_z_repair_force_threshold = float(
                             os.environ.get("AIC_OFFICIAL_TEACHER_LIVE_Z_REPAIR_MAX_FORCE_DELTA_N", "0.7")
                         )
+                        if str(getattr(task, "plug_name", "")).startswith("sc"):
+                            live_z_repair_enabled = os.environ.get(
+                                "AIC_OFFICIAL_TEACHER_SC_ENABLE_LIVE_Z_REPAIR",
+                                "true" if live_z_repair_enabled else "false",
+                            ).lower() in {"1", "true", "yes", "on"}
+                            live_z_repair_max_start = float(
+                                os.environ.get(
+                                    "AIC_OFFICIAL_TEACHER_SC_LIVE_Z_REPAIR_MAX_START_Z_OFFSET_M",
+                                    str(live_z_repair_max_start),
+                                )
+                            )
+                            live_z_repair_lateral_threshold = float(
+                                os.environ.get(
+                                    "AIC_OFFICIAL_TEACHER_SC_LIVE_Z_REPAIR_MAX_LATERAL_ERROR_M",
+                                    str(live_z_repair_lateral_threshold),
+                                )
+                            )
+                            live_z_repair_force_threshold = float(
+                                os.environ.get(
+                                    "AIC_OFFICIAL_TEACHER_SC_LIVE_Z_REPAIR_MAX_FORCE_DELTA_N",
+                                    str(live_z_repair_force_threshold),
+                                )
+                            )
                         last_lateral_error = (
                             float(self._last_tracking_gate_lateral_error_m)
                             if self._last_tracking_gate_lateral_error_m is not None
@@ -3449,6 +3540,11 @@ class OfficialTeacherReplay(Policy):
                                 "AIC_OFFICIAL_TEACHER_PRESERVE_LIVE_LATERAL_ON_Z_REPAIR",
                                 "true",
                             ).lower() in {"1", "true", "yes", "on"}
+                            if str(getattr(task, "plug_name", "")).startswith("sc"):
+                                preserve_live_lateral = os.environ.get(
+                                    "AIC_OFFICIAL_TEACHER_SC_PRESERVE_LIVE_LATERAL_ON_Z_REPAIR",
+                                    "false",
+                                ).lower() in {"1", "true", "yes", "on"}
                             if preserve_live_lateral:
                                 try:
                                     nominal_live_pose = self._calc_cheatcode_gripper_pose(
@@ -3491,26 +3587,32 @@ class OfficialTeacherReplay(Policy):
                         else:
                             send_feedback("official_teacher_replay_tracking_gate_failed")
                             return False
-                nominal_final_align_sec = (
+                is_sc_plug = str(getattr(task, "plug_name", "")).startswith("sc")
+                final_align_sec = (
                     float(os.environ.get("AIC_OFFICIAL_TEACHER_NOMINAL_FINAL_PORT_ALIGN_SEC", "0.0"))
                     if self._expert_mode == "nominal"
                     else 0.0
                 )
-                if nominal_final_align_sec > 0.0:
+                if is_sc_plug and self._expert_mode != "nominal":
+                    final_align_sec = max(
+                        final_align_sec,
+                        float(os.environ.get("AIC_OFFICIAL_TEACHER_SC_FINAL_PORT_ALIGN_SEC", "0.0")),
+                    )
+                if final_align_sec > 0.0:
                     final_align_ok = self._run_port_frame_precontact_align(
                         task,
                         port_transform,
                         get_observation,
                         move_robot,
-                        duration_sec=nominal_final_align_sec,
+                        duration_sec=final_align_sec,
                         dt=dt,
                         z_offset=guarded_start_z_offset,
                         target_z_m=None,
                     )
                     if not final_align_ok:
-                        send_feedback("official_teacher_replay_nominal_final_align_force_abort")
+                        send_feedback("official_teacher_replay_final_align_force_abort")
                         self._trace_event(
-                            "nominal_final_port_align_force_abort",
+                            "final_port_align_force_abort",
                             retry_count=retry_count,
                             force_delta_n=(
                                 float(self._last_precontact_align_force_delta_n)
@@ -3519,20 +3621,30 @@ class OfficialTeacherReplay(Policy):
                             ),
                         )
                         return False
-                    active_lateral_offset = active_lateral_offset + self._last_precontact_lateral_offset_base
+                    if is_sc_plug and self._expert_mode != "nominal":
+                        active_lateral_offset = self._last_precontact_lateral_offset_base.copy()
+                    else:
+                        active_lateral_offset = active_lateral_offset + self._last_precontact_lateral_offset_base
                     final_gate_passed = self._hold_preinsert_until_tracking_gate(
                         task,
                         port_transform,
                         get_observation,
                         move_robot,
-                        settle_sec=float(os.environ.get("AIC_OFFICIAL_TEACHER_NOMINAL_FINAL_ALIGN_SETTLE_SEC", "0.2")),
+                        settle_sec=float(
+                            os.environ.get(
+                                "AIC_OFFICIAL_TEACHER_SC_FINAL_ALIGN_SETTLE_SEC"
+                                if is_sc_plug and self._expert_mode != "nominal"
+                                else "AIC_OFFICIAL_TEACHER_NOMINAL_FINAL_ALIGN_SETTLE_SEC",
+                                "0.2",
+                            )
+                        ),
                         dt=dt,
                         z_offset=guarded_start_z_offset,
                         preserve_current_z=False,
                         lateral_offset_base=active_lateral_offset,
                     )
                     self._trace_event(
-                        "nominal_final_port_align_gate_checked",
+                        "final_port_align_gate_checked",
                         retry_count=retry_count,
                         tracking_gate_passed=final_gate_passed,
                         lateral_offset_base_m=active_lateral_offset.tolist(),
@@ -3543,16 +3655,23 @@ class OfficialTeacherReplay(Policy):
                             port_transform,
                             get_observation,
                             move_robot,
-                            settle_sec=float(os.environ.get("AIC_OFFICIAL_TEACHER_NOMINAL_FINAL_ALIGN_SETTLE_SEC", "0.2")),
+                            settle_sec=float(
+                                os.environ.get(
+                                    "AIC_OFFICIAL_TEACHER_SC_FINAL_ALIGN_SETTLE_SEC"
+                                    if is_sc_plug and self._expert_mode != "nominal"
+                                    else "AIC_OFFICIAL_TEACHER_NOMINAL_FINAL_ALIGN_SETTLE_SEC",
+                                    "0.2",
+                                )
+                            ),
                             dt=dt,
                             z_offset=guarded_start_z_offset,
                             preserve_current_z=False,
                             lateral_offset_base=active_lateral_offset,
-                            reason="nominal_final_port_align_gate",
+                            reason="final_port_align_gate",
                         )
                     if not final_gate_passed:
                         send_feedback("official_teacher_replay_tracking_gate_failed")
-                        self._trace_event("nominal_rejected_final_port_align_gate")
+                        self._trace_event("rejected_final_port_align_gate")
                         return False
             else:
                 guarded_start_z_offset = z_offset
@@ -3722,6 +3841,127 @@ class OfficialTeacherReplay(Policy):
             speed_gate_hold_count = 0
             last_target_pose = None
             descent_step = 1
+            is_sc_plug = str(getattr(task, "plug_name", "")).startswith("sc")
+            sc_guarded_servo_enabled = (
+                is_sc_plug
+                and os.environ.get(
+                    "AIC_OFFICIAL_TEACHER_SC_GUARDED_INSERT_LATERAL_SERVO",
+                    "false",
+                ).lower()
+                in {"1", "true", "yes", "on"}
+                and insertion_command_mode == "exact_position"
+            )
+            sc_guarded_servo_gain = float(
+                os.environ.get("AIC_OFFICIAL_TEACHER_SC_GUARDED_INSERT_LATERAL_SERVO_GAIN", "0.35")
+            )
+            sc_guarded_servo_step_limit_m = float(
+                os.environ.get("AIC_OFFICIAL_TEACHER_SC_GUARDED_INSERT_LATERAL_SERVO_STEP_LIMIT_M", "0.0004")
+            )
+            sc_guarded_servo_max_bias_m = float(
+                os.environ.get("AIC_OFFICIAL_TEACHER_SC_GUARDED_INSERT_LATERAL_SERVO_MAX_BIAS_M", "0.004")
+            )
+            sc_guarded_servo_deadband_m = float(
+                os.environ.get("AIC_OFFICIAL_TEACHER_SC_GUARDED_INSERT_LATERAL_SERVO_DEADBAND_M", "0.0004")
+            )
+            sc_guarded_servo_force_limit_n = float(
+                os.environ.get("AIC_OFFICIAL_TEACHER_SC_GUARDED_INSERT_LATERAL_SERVO_FORCE_LIMIT_N", "5.0")
+            )
+            sc_guarded_servo_bias = np.zeros(3, dtype=np.float64)
+
+            def sc_final_seating_probe() -> bool | None:
+                if (
+                    not is_sc_plug
+                    or insertion_command_mode != "exact_position"
+                    or os.environ.get(
+                        "AIC_OFFICIAL_TEACHER_SC_FINAL_SEAT_ENABLED",
+                        "false",
+                    ).lower()
+                    not in {"1", "true", "yes", "on"}
+                ):
+                    return None
+                duration_sec = float(os.environ.get("AIC_OFFICIAL_TEACHER_SC_FINAL_SEAT_SEC", "2.5"))
+                if duration_sec <= 0.0:
+                    return None
+                radius_m = max(0.0, float(os.environ.get("AIC_OFFICIAL_TEACHER_SC_FINAL_SEAT_RADIUS_M", "0.0008")))
+                extra_depth_m = max(
+                    0.0,
+                    float(os.environ.get("AIC_OFFICIAL_TEACHER_SC_FINAL_SEAT_EXTRA_DEPTH_M", "0.003")),
+                )
+                cycles = float(os.environ.get("AIC_OFFICIAL_TEACHER_SC_FINAL_SEAT_CYCLES", "2.0"))
+                force_limit_n = float(
+                    os.environ.get("AIC_OFFICIAL_TEACHER_SC_FINAL_SEAT_FORCE_LIMIT_N", "8.0")
+                )
+                steps = max(1, int(math.ceil(duration_sec / dt)))
+                self._trace_event(
+                    "sc_final_seating_probe_started",
+                    retry_count=retry_count,
+                    duration_sec=duration_sec,
+                    steps=steps,
+                    radius_m=radius_m,
+                    extra_depth_m=extra_depth_m,
+                    cycles=cycles,
+                    force_limit_n=force_limit_n,
+                    start_z_offset=current_z,
+                    servo_bias_base_m=sc_guarded_servo_bias.tolist(),
+                )
+                for step in range(1, steps + 1):
+                    if self._task_completed_in_simulation(task):
+                        self._trace_event("sc_final_seating_probe_success", retry_count=retry_count)
+                        return True
+                    force_delta = self._force_delta_norm(get_observation, baseline_force)
+                    if force_delta >= force_limit_n:
+                        self._trace_event(
+                            "sc_final_seating_probe_stopped_force",
+                            retry_count=retry_count,
+                            force_delta_n=force_delta,
+                            force_limit_n=force_limit_n,
+                        )
+                        return None
+                    fraction = self._minimum_jerk_fraction(step / steps)
+                    theta = 2.0 * math.pi * cycles * step / steps
+                    dither_bias = np.asarray(
+                        [radius_m * math.cos(theta), radius_m * math.sin(theta), 0.0],
+                        dtype=np.float64,
+                    )
+                    probe_z = current_z - fraction * extra_depth_m
+                    try:
+                        if pin_insertion_target:
+                            target_xyz = self._pose_position_array(insertion_reference_pose)
+                            target_xyz[:2] = target_xyz[:2] + sc_guarded_servo_bias[:2] + dither_bias[:2]
+                            target_xyz[2] = float(insertion_reference_pose.position.z) - (
+                                guarded_start_z_offset - probe_z
+                            )
+                            target_pose = self._make_pose(
+                                target_xyz,
+                                self._pose_quat_wxyz(insertion_reference_pose),
+                            )
+                        else:
+                            target_pose = self._calc_cheatcode_gripper_pose(
+                                task,
+                                port_transform,
+                                z_offset=probe_z,
+                                preserve_current_z=(cheatcode_z_mode == "tf_depth"),
+                                lateral_offset_base=active_lateral_offset + sc_guarded_servo_bias + dither_bias,
+                            )
+                        if cheatcode_z_mode == "tf_depth":
+                            target_pose.position.z = insertion_start_z - (guarded_start_z_offset - probe_z)
+                        self._send_absolute_target(move_robot, target_pose)
+                        self._trace_event(
+                            "sc_final_seating_probe_step",
+                            retry_count=retry_count,
+                            step=step,
+                            z_offset=probe_z,
+                            dither_bias_base_m=dither_bias.tolist(),
+                            force_delta_n=force_delta,
+                        )
+                    except TransformException as ex:
+                        self.get_logger().warn(f"SC final seating TF lookup failed: {ex}")
+                    self.sleep_for(dt)
+                if self._task_completed_in_simulation(task):
+                    self._trace_event("sc_final_seating_probe_success", retry_count=retry_count)
+                    return True
+                self._trace_event("sc_final_seating_probe_completed_no_event", retry_count=retry_count)
+                return None
 
             def hold_low_force_near_insert(
                 *,
@@ -3832,8 +4072,55 @@ class OfficialTeacherReplay(Policy):
                 current_z = guarded_start_z_offset - fraction * guarded_insertion_distance
                 contact_confirmed = False
                 try:
+                    if sc_guarded_servo_enabled:
+                        plug_transform = self._lookup_active_plug_transform()
+                        if plug_transform is not None:
+                            force_delta_for_servo = self._force_delta_norm(get_observation, baseline_force)
+                            plug_error_base = np.asarray(
+                                [
+                                    float(port_transform.translation.x - plug_transform.translation.x),
+                                    float(port_transform.translation.y - plug_transform.translation.y),
+                                    0.0,
+                                ],
+                                dtype=np.float64,
+                            )
+                            plug_error_norm = float(np.linalg.norm(plug_error_base[:2]))
+                            if (
+                                plug_error_norm > sc_guarded_servo_deadband_m
+                                and force_delta_for_servo <= sc_guarded_servo_force_limit_n
+                            ):
+                                correction = sc_guarded_servo_gain * plug_error_base
+                                correction_norm = float(np.linalg.norm(correction[:2]))
+                                if correction_norm > sc_guarded_servo_step_limit_m:
+                                    correction *= sc_guarded_servo_step_limit_m / correction_norm
+                                proposed_bias = sc_guarded_servo_bias + correction
+                                proposed_norm = float(np.linalg.norm(proposed_bias[:2]))
+                                if proposed_norm > sc_guarded_servo_max_bias_m:
+                                    proposed_bias *= sc_guarded_servo_max_bias_m / proposed_norm
+                                sc_guarded_servo_bias = proposed_bias
+                                self._trace_event(
+                                    "sc_guarded_insert_lateral_servo_updated",
+                                    retry_count=retry_count,
+                                    z_offset=current_z,
+                                    plug_tip_lateral_error_m=plug_error_norm,
+                                    correction_base_m=correction.tolist(),
+                                    servo_bias_base_m=sc_guarded_servo_bias.tolist(),
+                                    force_delta_n=force_delta_for_servo,
+                                    force_limit_n=sc_guarded_servo_force_limit_n,
+                                )
+                            elif plug_error_norm > sc_guarded_servo_deadband_m:
+                                self._trace_event(
+                                    "sc_guarded_insert_lateral_servo_skipped_force",
+                                    retry_count=retry_count,
+                                    z_offset=current_z,
+                                    plug_tip_lateral_error_m=plug_error_norm,
+                                    force_delta_n=force_delta_for_servo,
+                                    force_limit_n=sc_guarded_servo_force_limit_n,
+                                )
                     if pin_insertion_target:
                         target_xyz = self._pose_position_array(insertion_reference_pose)
+                        if sc_guarded_servo_enabled:
+                            target_xyz[:2] = target_xyz[:2] + sc_guarded_servo_bias[:2]
                         target_xyz[2] = float(insertion_reference_pose.position.z) - fraction * guarded_insertion_distance
                         target_pose = self._make_pose(
                             target_xyz,
@@ -3845,7 +4132,7 @@ class OfficialTeacherReplay(Policy):
                             port_transform,
                             z_offset=current_z,
                             preserve_current_z=(cheatcode_z_mode == "tf_depth"),
-                            lateral_offset_base=active_lateral_offset,
+                            lateral_offset_base=active_lateral_offset + sc_guarded_servo_bias,
                         )
                     if cheatcode_z_mode == "tf_depth":
                         target_pose.position.z = insertion_start_z - fraction * guarded_insertion_distance
@@ -3886,6 +4173,7 @@ class OfficialTeacherReplay(Policy):
                     if confirmed:
                         confirmed_force = max(force_delta, confirmed_delta)
                         if self._should_ignore_shallow_contact(
+                            task=task,
                             z_offset=current_z,
                             force_delta_n=confirmed_force,
                             retry_count=retry_count,
@@ -3967,7 +4255,42 @@ class OfficialTeacherReplay(Policy):
                     break
             if retry_requested:
                 continue
+            sc_no_event_recovery_enabled = (
+                is_sc_plug
+                and self._expert_mode != "nominal"
+                and os.environ.get(
+                    "AIC_OFFICIAL_TEACHER_SC_NO_EVENT_RECOVERY",
+                    "false",
+                ).lower()
+                in {"1", "true", "yes", "on"}
+            )
+            if sc_no_event_recovery_enabled:
+                no_event_force_delta = self._force_delta_norm(get_observation, baseline_force)
+                no_event_force_threshold = float(
+                    os.environ.get("AIC_OFFICIAL_TEACHER_SC_NO_EVENT_RECOVERY_FORCE_THRESHOLD_N", "5.0")
+                )
+                no_event_z_threshold = float(
+                    os.environ.get("AIC_OFFICIAL_TEACHER_SC_NO_EVENT_RECOVERY_Z_OFFSET_M", "-0.010")
+                )
+                if no_event_force_delta >= no_event_force_threshold and current_z <= no_event_z_threshold:
+                    self._trace_event(
+                        "sc_no_event_recovery_triggered",
+                        retry_count=retry_count,
+                        force_delta_n=no_event_force_delta,
+                        force_threshold_n=no_event_force_threshold,
+                        z_offset=current_z,
+                        z_threshold_m=no_event_z_threshold,
+                    )
+                    if not recover_after_contact():
+                        return False
+                    if retry_requested:
+                        continue
             break
+        final_seating_result = sc_final_seating_probe()
+        if final_seating_result is True:
+            return True
+        if final_seating_result is False:
+            return False
         wait_started = self.time_now()
         wait_timeout = Duration(
             seconds=float(os.environ.get("AIC_OFFICIAL_TEACHER_FINAL_HOLD_SEC", "5.0"))

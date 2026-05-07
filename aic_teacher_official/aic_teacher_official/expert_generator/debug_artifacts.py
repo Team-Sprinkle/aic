@@ -64,6 +64,13 @@ OBSERVATION_STATE_KEYS = [
 ]
 
 
+def _env_int(name: str, default: int, *, minimum: int = 0) -> int:
+    try:
+        return max(minimum, int(os.environ.get(name, str(default))))
+    except ValueError:
+        return max(minimum, default)
+
+
 @dataclass(frozen=True)
 class DebugArtifactPaths:
     debug_dir: Path
@@ -644,6 +651,13 @@ def build_gpt5_failure_payload(
     image_manifest = ensure_sampled_image_frames(root, sample_period_sec=sample_period_sec)
     if not allow_missing and image_manifest and not any(row.get("exists") for row in image_manifest):
         raise ValueError("images were expected but none exist")
+    max_series_rows = _env_int("AIC_GPT5_FAILURE_ANALYSIS_MAX_SERIES_ROWS", MAX_GPT5_SERIES_ROWS, minimum=1)
+    max_runtime_events = _env_int(
+        "AIC_GPT5_FAILURE_ANALYSIS_MAX_RUNTIME_EVENTS",
+        MAX_GPT5_RUNTIME_EVENTS,
+        minimum=1,
+    )
+    max_images = _env_int("AIC_GPT5_FAILURE_ANALYSIS_MAX_IMAGES", MAX_GPT5_IMAGES, minimum=0)
     payload = {
         "schema_version": "aic_expert_gpt5_failure_payload/v2",
         "debug_dir": str(root),
@@ -659,16 +673,16 @@ def build_gpt5_failure_payload(
         },
         "sample_period_sec": sample_period_sec,
         "observations_sampled": _compact_observation_rows(
-            _limit_rows(_filter_by_period(observations, sample_period_sec), MAX_GPT5_SERIES_ROWS)
+            _limit_rows(_filter_by_period(observations, sample_period_sec), max_series_rows)
         ),
         "actions_sampled": _compact_action_rows(
-            _limit_rows(_filter_by_period(actions, sample_period_sec), MAX_GPT5_SERIES_ROWS)
+            _limit_rows(_filter_by_period(actions, sample_period_sec), max_series_rows)
         ),
-        "ft_windows": _limit_rows(_filter_by_period(ft_windows, sample_period_sec), MAX_GPT5_SERIES_ROWS),
+        "ft_windows": _limit_rows(_filter_by_period(ft_windows, sample_period_sec), max_series_rows),
         "tracking_error_sampled": _compact_tracking_rows(
             _limit_rows(
                 _filter_by_period(_load_jsonl(root / "tracking_error_sampled.jsonl"), sample_period_sec),
-                MAX_GPT5_SERIES_ROWS,
+                max_series_rows,
             )
         ),
         "image_manifest": _compact_image_manifest(image_manifest),
@@ -681,20 +695,20 @@ def build_gpt5_failure_payload(
             }
             for row in image_manifest
             if row.get("exists") and row.get("media_type") == "image"
-        ][:MAX_GPT5_IMAGES],
+        ][:max_images],
         "trajectory_segments": _load_json(root / "trajectory_segments.json"),
         "moveit_plan_summary": _compact_moveit_summary(_load_json(root / "moveit_plan_summary.json")),
         "replay_command_trace": _compact_replay_rows(
             _limit_rows(
                 _filter_by_period(_load_jsonl(root / "replay_command_trace.jsonl"), sample_period_sec),
-                MAX_GPT5_SERIES_ROWS,
+                max_series_rows,
             )
         ),
         "transition_metrics": _load_json(root / "transition_metrics.json"),
         "phase_speed_metrics": _load_json(root / "phase_speed_metrics.json"),
         "runtime_trace": _limit_rows(
             _filter_by_period(_load_jsonl(root / "runtime_trace.jsonl"), sample_period_sec),
-            MAX_GPT5_RUNTIME_EVENTS,
+            max_runtime_events,
         ),
         "validation_metrics": _compact_metrics_for_gpt(_load_json(root / "validation_metrics.json")),
         "score_failure_info": _load_json(root / "score_failure_info.json"),
@@ -840,12 +854,25 @@ def _compact_moveit_summary(summary: dict[str, Any] | None) -> dict[str, Any] | 
     }
 
 
-def compact_payload_with_retry(debug_dir: str | Path) -> tuple[dict[str, Any], float]:
-    first = build_gpt5_failure_payload(debug_dir, sample_period_sec=DEBUG_SAMPLE_PERIOD_SEC)
-    if _payload_size(first) <= MAX_PROMPT_BYTES:
+def compact_payload_with_retry(
+    debug_dir: str | Path,
+    *,
+    allow_missing: bool = False,
+) -> tuple[dict[str, Any], float]:
+    max_prompt_bytes = _env_int("AIC_GPT5_FAILURE_ANALYSIS_MAX_PROMPT_BYTES", MAX_PROMPT_BYTES, minimum=10_000)
+    first = build_gpt5_failure_payload(
+        debug_dir,
+        sample_period_sec=DEBUG_SAMPLE_PERIOD_SEC,
+        allow_missing=allow_missing,
+    )
+    if _payload_size(first) <= max_prompt_bytes:
         return first, DEBUG_SAMPLE_PERIOD_SEC
-    second = build_gpt5_failure_payload(debug_dir, sample_period_sec=DEBUG_DOWNSAMPLED_PERIOD_SEC)
-    if _payload_size(second) <= MAX_PROMPT_BYTES:
+    second = build_gpt5_failure_payload(
+        debug_dir,
+        sample_period_sec=DEBUG_DOWNSAMPLED_PERIOD_SEC,
+        allow_missing=allow_missing,
+    )
+    if _payload_size(second) <= max_prompt_bytes:
         return second, DEBUG_DOWNSAMPLED_PERIOD_SEC
     raise ValueError("GPT-5 payload remains too large after 1.0 second sampling")
 
@@ -890,10 +917,19 @@ def call_gpt5_failure_analysis(prompt: str, *, model: str = "gpt-5") -> str:
     content: list[dict[str, Any]] = [{"type": "input_text", "text": prompt}]
     for image in _image_content_from_prompt(prompt):
         content.append(image)
+    request: dict[str, Any] = {
+        "model": model,
+        "instructions": "You are a senior robotics trajectory and contact-debugging engineer.",
+        "input": [{"role": "user", "content": content}],
+    }
+    reasoning_effort = os.environ.get("AIC_GPT5_FAILURE_ANALYSIS_REASONING_EFFORT", "minimal").strip()
+    if reasoning_effort:
+        request["reasoning"] = {"effort": reasoning_effort}
+    max_output_tokens = _env_int("AIC_GPT5_FAILURE_ANALYSIS_MAX_OUTPUT_TOKENS", 4000, minimum=0)
+    if max_output_tokens > 0:
+        request["max_output_tokens"] = max_output_tokens
     response = OpenAI(api_key=api_key, timeout=timeout_sec).responses.create(
-        model=model,
-        instructions="You are a senior robotics trajectory and contact-debugging engineer.",
-        input=[{"role": "user", "content": content}],
+        **request,
     )
     text = getattr(response, "output_text", None)
     if not text:
@@ -911,8 +947,9 @@ def call_gpt5_failure_analysis(prompt: str, *, model: str = "gpt-5") -> str:
 def _image_content_from_prompt(prompt: str) -> list[dict[str, Any]]:
     payload = _payload_from_prompt(prompt)
     images = (payload or {}).get("image_inputs") or []
+    max_images = _env_int("AIC_GPT5_FAILURE_ANALYSIS_MAX_IMAGES", MAX_GPT5_IMAGES, minimum=0)
     content: list[dict[str, Any]] = []
-    for image in images[:MAX_GPT5_IMAGES]:
+    for image in images[:max_images]:
         path = Path(str(image.get("debug_path", "")))
         if not path.exists() or path.suffix.lower() not in IMAGE_SUFFIXES:
             continue
@@ -972,7 +1009,33 @@ def _load_json(path: Path) -> Any:
 def _load_jsonl(path: Path) -> list[dict[str, Any]]:
     if not path.exists() or path.stat().st_size == 0:
         return []
-    return [json.loads(line) for line in path.read_text(encoding="utf-8").splitlines() if line.strip()]
+    rows: list[dict[str, Any]] = []
+    skipped = 0
+    for line_number, line in enumerate(path.read_text(encoding="utf-8", errors="replace").splitlines(), start=1):
+        if not line.strip():
+            continue
+        try:
+            rows.append(json.loads(line))
+        except json.JSONDecodeError as exc:
+            skipped += 1
+            rows.append(
+                {
+                    "event": "debug_artifact_jsonl_decode_skipped",
+                    "source_path": str(path),
+                    "line_number": line_number,
+                    "error": str(exc),
+                    "line_prefix": line[:240],
+                }
+            )
+    if skipped:
+        rows.append(
+            {
+                "event": "debug_artifact_jsonl_decode_summary",
+                "source_path": str(path),
+                "skipped_lines": skipped,
+            }
+        )
+    return rows
 
 
 def _write_image_manifest(paths: DebugArtifactPaths, camera_images: list[str | Path]) -> None:
