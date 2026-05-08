@@ -15,7 +15,7 @@ generation:
   seed: 51105
   append_if_exists: true
   allow_short_agent_drain: true
-  recorder_drain_sec: 45
+  recorder_drain_sec: 120
   planner_recorder_drain_sec: 15
   env:
     AIC_OFFICIAL_TEACHER_LOCAL_PREINSERT_ALIGN_SEC: "1.0"
