@@ -18,6 +18,7 @@ generation:
   recorder_drain_sec: 120
   planner_recorder_drain_sec: 15
   record_planner_dataset: false
+  enable_nominal_repair: false
   env:
     AIC_OFFICIAL_TEACHER_LOCAL_PREINSERT_ALIGN_SEC: "1.0"
     AIC_OFFICIAL_TEACHER_TRACKING_GATE_REALIGN_SEC: "1.5"

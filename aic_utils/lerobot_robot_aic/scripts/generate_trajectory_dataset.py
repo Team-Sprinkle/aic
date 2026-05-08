@@ -1112,6 +1112,8 @@ def build_agent_generation_cmd(
     cmd.extend(["--planner-recorder-drain-sec", str(planner_recorder_drain_sec)])
     if "record_planner_dataset" in generation:
         cmd.extend(["--record-planner-dataset", str(bool(generation["record_planner_dataset"])).lower()])
+    if "enable_nominal_repair" in generation:
+        cmd.extend(["--enable-nominal-repair", str(bool(generation["enable_nominal_repair"])).lower()])
     if "startup_delay_sec" in generation:
         cmd.extend(["--startup-delay-sec", str(int(generation["startup_delay_sec"]))])
     return cmd
@@ -1630,6 +1632,9 @@ def main() -> int:
         ),
         "agent_replay_datasets": [str(path) for path in agent_datasets],
         "record_planner_dataset": request.get("generation", {}).get("record_planner_dataset", True)
+        if policy == "agent"
+        else None,
+        "enable_nominal_repair": request.get("generation", {}).get("enable_nominal_repair", True)
         if policy == "agent"
         else None,
         "scores": str(output_dir / "scores"),

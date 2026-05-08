@@ -160,6 +160,12 @@ def parse_args() -> argparse.Namespace:
         help="Record LeRobot datasets for planner attempts. Disable for faster planner-only debug artifacts.",
     )
     parser.add_argument(
+        "--enable-nominal-repair",
+        type=str_bool,
+        default=True,
+        help="Allow failed nominal candidates to run the extra pre-contact repair/replay stage.",
+    )
+    parser.add_argument(
         "--dry-run-config",
         action="store_true",
         help="Validate CLI/config and write generation_config.json without running Gazebo.",
@@ -287,6 +293,7 @@ def main() -> int:
             "normal_generation_uses_gpt5_analysis": False,
             "gpt5_analysis_requested": args.use_gpt5_analysis,
             "debug_enabled": args.debug,
+            "nominal_repair_enabled": args.enable_nominal_repair,
         },
     }
     (output_dir / "generation_config.json").write_text(json.dumps(payload, indent=2) + "\n", encoding="utf-8")
@@ -410,7 +417,11 @@ def run_live_generation(
         record["validation"] = {**validation.to_dict(), **near_gate_metadata}
         record["debug_assessment"] = debug_assessment
         repair_metrics = None
-        if mode == ExpertMode.NOMINAL and _should_attempt_nominal_repair(validation, debug_assessment):
+        if (
+            args.enable_nominal_repair
+            and mode == ExpertMode.NOMINAL
+            and _should_attempt_nominal_repair(validation, debug_assessment)
+        ):
             repaired, repair_metrics = repair_precontact_approach(smooth, sample_dt=args.sample_dt)
             repaired_path = smooth_path.with_name("smooth_trajectory_repaired.json")
             repaired.save_json(repaired_path)
