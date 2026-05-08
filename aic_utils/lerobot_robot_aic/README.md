@@ -482,6 +482,31 @@ overlay files back into the branch so later runs reuse the discovered per-settin
 expert parameters. For randomized minimal requests, the script infers the exact
 matrix setting from the generated trial config before consulting the registry.
 
+Near-gate accepted runs are stored as `near_gate_passed` overlay entries. Those
+entries are reusable for later `stop_near_gate` requests just like full
+insertion successes: a minimal request can omit the long `generation.env` block,
+and the generator will load `best_mode_env` from the base registry plus overlays
+when the inferred matrix suffix matches.
+
+The difficult SC-to-SC-with-NIC-cards setting uses an explicit left-lane route
+when registry env is present for the matching suffix:
+
+```text
+camera_left_clearance -> left_lane_descent -> outside_lane_forward_past_cards
+-> right_sweep_toward_port -> port_standoff -> pre_insert
+```
+
+This keeps the cable outside the NIC-card stack before any approach to the SC
+port. Reproduce that behavior from a small request by using
+`sc_to_sc_4cards_near_gate_registry_minimal.yaml`, or by adding the same
+`acceptance.stop_near_gate` and `scene.nic_cards.count: 4` fields to a copy of
+`sc_to_sc_minimal.yaml`. Keep `generation.use_expert_registry_env` at its
+default `true`, and make sure the relevant overlay JSONL is present under:
+
+```text
+aic_utils/lerobot_robot_aic/config/expert_setting_registry_overlays/
+```
+
 For `policy: cheatcode`, the script invokes the per-trial recorder with:
 
 - `--dataset-root <output_dir>/raw_dataset`

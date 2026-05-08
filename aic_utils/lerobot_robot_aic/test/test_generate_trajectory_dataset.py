@@ -370,6 +370,50 @@ def test_near_gate_overlay_does_not_demote_passed_registry_entry() -> None:
     assert mode_entry["best_mode_env"] == {"KEEP": "true"}
 
 
+def test_near_gate_overlay_supplies_registry_env_without_full_insertion() -> None:
+    suffix = "matrix_sc2sc_sc1_present0_target0_nic4"
+    registry = {
+        "settings": {
+            suffix: {
+                "modes": {
+                    "nominal": {
+                        "status": "unknown_not_logged",
+                        "best_mode_env": None,
+                    }
+                }
+            }
+        }
+    }
+
+    gtd._merge_registry_overlay_entry(
+        registry,
+        {
+            "suffix": suffix,
+            "mode": "nominal",
+            "status": "near_gate_passed",
+            "mode_env": {"AIC_EXPERT_SC_NIC_BYPASS_LEFT_OFFSET_M": "0.08"},
+            "score": 53.0,
+            "summary": "summary.json",
+        },
+    )
+    gtd._merge_registry_overlay_entry(
+        registry,
+        {
+            "suffix": suffix,
+            "mode": "nominal",
+            "status": "attempted_not_passing",
+            "mode_env": {"AIC_EXPERT_SC_NIC_BYPASS_LEFT_OFFSET_M": "0.12"},
+            "score": None,
+        },
+    )
+
+    mode_entry = registry["settings"][suffix]["modes"]["nominal"]
+    assert mode_entry["status"] == "near_gate_passed"
+    assert gtd._expert_registry_mode_env_from_entry(mode_entry) == {
+        "AIC_EXPERT_SC_NIC_BYPASS_LEFT_OFFSET_M": "0.08"
+    }
+
+
 def test_infers_exact_registry_suffix_from_generated_sfp_trial(tmp_path: Path) -> None:
     request = base_request(tmp_path)
     request["suffix"] = "batch"
