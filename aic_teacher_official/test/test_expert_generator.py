@@ -100,6 +100,28 @@ def _sc_snapshot_with_nics(mode="nominal"):
     )
 
 
+def test_planner_result_quota_failure_is_detected():
+    result = {
+        "success": False,
+        "reason": "exception",
+        "type": "RateLimitError",
+        "error": "Error code: 429 - {'error': {'code': 'insufficient_quota'}}",
+    }
+
+    assert generate_expert_trajectories._planner_result_is_quota_failure(result)
+
+
+def test_planner_result_non_quota_failure_is_not_detected():
+    result = {
+        "success": False,
+        "reason": "planner_did_not_write_piecewise",
+        "type": "MoveItError",
+        "error": "No valid plan found",
+    }
+
+    assert not generate_expert_trajectories._planner_result_is_quota_failure(result)
+
+
 def _strategy(mode="nominal", **overrides):
     payload = {
         "mode": mode,

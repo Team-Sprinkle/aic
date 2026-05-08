@@ -368,6 +368,12 @@ def run_live_generation(
             "planner": planner_result,
             "accepted": False,
         }
+        if _planner_result_is_quota_failure(planner_result):
+            record["reason"] = "planner_openai_quota_exhausted"
+            records.append(record)
+            raise RuntimeError(
+                "Planner OpenAI quota exhausted; stopping generation instead of consuming more attempts."
+            )
         piecewise_path = Path(planner_result["piecewise_path"])
         if not piecewise_path.exists():
             record["reason"] = "planner_did_not_write_piecewise"
@@ -564,6 +570,16 @@ def run_live_generation(
         ),
         "records": records,
     }
+
+
+def _planner_result_is_quota_failure(planner_result: dict[str, Any]) -> bool:
+    error = str(planner_result.get("error") or "").lower()
+    error_type = str(planner_result.get("type") or "").lower()
+    return (
+        "insufficient_quota" in error
+        or "exceeded your current quota" in error
+        or (error_type == "ratelimiterror" and "quota" in error)
+    )
 
 
 def _count_existing_accepted(output_dir: Path) -> int:
