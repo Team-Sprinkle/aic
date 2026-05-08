@@ -1024,6 +1024,12 @@ def effective_max_replay_attempts(request: dict[str, Any], max_attempts: int) ->
     return effective_max_agent_attempts(request, max_attempts)
 
 
+def configured_max_planner_attempts_per_target(request: dict[str, Any]) -> int | None:
+    generation = request.get("generation", {})
+    configured = generation.get("max_planner_attempts", generation.get("max_replay_attempts"))
+    return int(configured) if configured is not None else None
+
+
 def build_agent_generation_cmd(
     *,
     request: dict[str, Any],
@@ -1601,7 +1607,13 @@ def main() -> int:
         "count_label": _count_label(request["task_family"], request),
         "target_accepted_trajectories": target,
         "max_attempts": max_attempts,
-        "max_planner_attempts": agent_attempts if policy == "agent" else None,
+        "max_planner_attempts": configured_max_planner_attempts_per_target(request)
+        if policy == "agent"
+        else None,
+        "max_planner_attempts_per_target": configured_max_planner_attempts_per_target(request)
+        if policy == "agent"
+        else None,
+        "max_agent_attempt_budget": agent_attempts if policy == "agent" else None,
         "min_score": float(request["acceptance"]["min_score"]),
         "seed": request.get("generation", {}).get("seed"),
         "raw_dataset": str(output_dir / "raw_dataset"),

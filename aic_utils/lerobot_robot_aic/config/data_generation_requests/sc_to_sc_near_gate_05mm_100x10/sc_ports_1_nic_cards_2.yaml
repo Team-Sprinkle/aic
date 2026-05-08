@@ -9,12 +9,14 @@ generation:
   candidates_per_scene: 1
   policy: agent
   expert_mode: nominal
-  auto_improve_on_failure: true
+  auto_improve_on_failure: false
+  use_gpt5_analysis: false
   write_expert_registry_overlay: true
   seed: 51102
   append_if_exists: true
   allow_short_agent_drain: true
   recorder_drain_sec: 15
+  planner_recorder_drain_sec: 15
   env:
     AIC_OFFICIAL_TEACHER_LOCAL_PREINSERT_ALIGN_SEC: "1.0"
     AIC_OFFICIAL_TEACHER_TRACKING_GATE_REALIGN_SEC: "1.5"
