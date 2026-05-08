@@ -6,8 +6,6 @@
 import math
 import os
 from dataclasses import MISSING
-from pathlib import Path
-from typing import Any
 
 import isaaclab.sim as sim_utils
 from isaaclab.actuators import ImplicitActuatorCfg
@@ -44,189 +42,39 @@ AIC_PARTS_DIR = os.path.join(AIC_ASSET_DIR, "assets")
 
 EXTENSION_PATH = os.path.dirname(os.path.abspath(__file__))
 
-_GAZEBO_BOARD_REF_POS = (0.17742, -0.22962, 1.14)
-_ISAAC_BOARD_REF_POS = (0.2837, 0.229, 0.0)
-_GAZEBO_NIC_RAIL_REF_TRANSLATION = -0.01682
+_FIXED_SFP2NIC_SCENE_PROFILE = {
+    # Isaac-native baseline profile. Gazebo trial values should be converted
+    # through an explicit frame/parity mapping (see eval script), not copied
+    # directly into these world-frame coordinates.
+    "robot_base_pos": (-0.18, -0.122, 0.0),
+    "robot_base_rot": (0.0, 0.0, 0.0, 1.0),
+    "robot_home_joint_pos": {
+        "shoulder_pan_joint": 0.1597,
+        "shoulder_lift_joint": -1.3542,
+        "elbow_joint": -1.6648,
+        "wrist_1_joint": -1.6933,
+        "wrist_2_joint": 1.5710,
+        "wrist_3_joint": 1.4110,
+    },
+    "task_board_pos": (0.2837, 0.229, 0.0),
+    "task_board_rot_wxyz": (1.0, 0.0, 0.0, 0.0),
+    "nic_card_pos": (0.25135, 0.25229, 0.0743),
+    "nic_card_rot_wxyz": (0.0, 0.0, -0.7068252, 0.7073883),
+    "sc_port_pos": (0.2904, 0.1928, 0.005),
+    "sc_port_2_pos": (0.2913, 0.1507, 0.005),
+}
 
 
-def _env_text(name: str) -> str | None:
-    value = os.environ.get(name)
-    if value is None:
-        return None
-    value = value.strip()
-    return value if value else None
-
-
-def _quat_from_rpy(roll: float, pitch: float, yaw: float) -> tuple[float, float, float, float]:
-    cr = math.cos(0.5 * roll)
-    sr = math.sin(0.5 * roll)
-    cp = math.cos(0.5 * pitch)
-    sp = math.sin(0.5 * pitch)
-    cy = math.cos(0.5 * yaw)
-    sy = math.sin(0.5 * yaw)
-    w = cr * cp * cy + sr * sp * sy
-    x = sr * cp * cy - cr * sp * sy
-    y = cr * sp * cy + sr * cp * sy
-    z = cr * cp * sy - sr * sp * cy
-    return (w, x, y, z)
-
-
-def _resolve_gazebo_trial_path(raw_path: str) -> str:
-    return str(Path(raw_path).expanduser().resolve())
-
-
-def _extract_nic_rail_translation(task_board_cfg: dict[str, Any]) -> float | None:
-    for rail_idx in range(5):
-        rail_cfg = task_board_cfg.get(f"nic_rail_{rail_idx}")
-        if not isinstance(rail_cfg, dict):
-            continue
-        if not rail_cfg.get("entity_present", False):
-            continue
-        entity_name = str(rail_cfg.get("entity_name", ""))
-        if not entity_name.startswith("nic_card"):
-            continue
-        entity_pose = rail_cfg.get("entity_pose")
-        if not isinstance(entity_pose, dict) or "translation" not in entity_pose:
-            continue
-        try:
-            return float(entity_pose["translation"])
-        except (TypeError, ValueError):
-            return None
-    return None
-
-
-def _apply_gazebo_trial_overrides(env_cfg: "AICTaskEnvCfg") -> None:
-    cfg_path_raw = _env_text("AIC_GAZEBO_TRIAL_CONFIG_PATH") or _env_text(
-        "AIC_GAZEBO_TRIAL_CONFIG"
-    )
-    if cfg_path_raw is None:
-        return
-
-    cfg_path = _resolve_gazebo_trial_path(cfg_path_raw)
-    trial_name = _env_text("AIC_GAZEBO_TRIAL_NAME") or "trial_1"
-    apply_board_rpy = (_env_text("AIC_GAZEBO_APPLY_BOARD_RPY") or "").lower() in {
-        "1",
-        "true",
-        "yes",
-        "on",
-    }
-
-    try:
-        import yaml
-    except ImportError:
-        print(
-            "[aic_task_env_cfg] PyYAML is unavailable. Skipping Gazebo trial override "
-            f"requested via {cfg_path}."
-        )
-        return
-
-    try:
-        with open(cfg_path, "r", encoding="utf-8") as f:
-            full_cfg = yaml.safe_load(f) or {}
-    except (OSError, yaml.YAMLError) as ex:
-        print(
-            "[aic_task_env_cfg] Failed to parse Gazebo trial config "
-            f"{cfg_path}: {ex}. Skipping override."
-        )
-        return
-
-    trials_cfg = full_cfg.get("trials", {})
-    if not isinstance(trials_cfg, dict) or trial_name not in trials_cfg:
-        print(
-            "[aic_task_env_cfg] Trial "
-            f"{trial_name!r} not found in {cfg_path}. Skipping override."
-        )
-        return
-    trial_cfg = trials_cfg[trial_name]
-    scene_cfg = trial_cfg.get("scene", {}) if isinstance(trial_cfg, dict) else {}
-    task_board_cfg = scene_cfg.get("task_board", {}) if isinstance(scene_cfg, dict) else {}
-
-    if isinstance(task_board_cfg, dict):
-        board_pose_cfg = task_board_cfg.get("pose", {})
-    else:
-        board_pose_cfg = {}
-
-    if isinstance(board_pose_cfg, dict):
-        try:
-            gazebo_x = float(board_pose_cfg.get("x", _GAZEBO_BOARD_REF_POS[0]))
-            gazebo_y = float(board_pose_cfg.get("y", _GAZEBO_BOARD_REF_POS[1]))
-            gazebo_z = float(board_pose_cfg.get("z", _GAZEBO_BOARD_REF_POS[2]))
-        except (TypeError, ValueError):
-            gazebo_x, gazebo_y, gazebo_z = _GAZEBO_BOARD_REF_POS
-
-        # Map Gazebo pose deltas into Isaac scene coordinates using the known
-        # baseline pose pair from the nominal sfp->nic setup.
-        mapped_board_pos = (
-            _ISAAC_BOARD_REF_POS[0] + (gazebo_x - _GAZEBO_BOARD_REF_POS[0]),
-            _ISAAC_BOARD_REF_POS[1] - (gazebo_y - _GAZEBO_BOARD_REF_POS[1]),
-            _ISAAC_BOARD_REF_POS[2] + (gazebo_z - _GAZEBO_BOARD_REF_POS[2]),
-        )
-        env_cfg.scene.task_board.init_state.pos = mapped_board_pos
-
-        if apply_board_rpy:
-            try:
-                roll = float(board_pose_cfg.get("roll", 0.0))
-                pitch = float(board_pose_cfg.get("pitch", 0.0))
-                yaw = float(board_pose_cfg.get("yaw", math.pi))
-                env_cfg.scene.task_board.init_state.rot = _quat_from_rpy(roll, pitch, yaw)
-            except (TypeError, ValueError):
-                pass
-
-    robot_cfg = full_cfg.get("robot", {})
-    home_joint_cfg = (
-        robot_cfg.get("home_joint_positions", {})
-        if isinstance(robot_cfg, dict)
-        else {}
-    )
-    if isinstance(home_joint_cfg, dict):
-        for joint_name, value in home_joint_cfg.items():
-            if joint_name not in env_cfg.scene.robot.init_state.joint_pos:
-                continue
-            try:
-                env_cfg.scene.robot.init_state.joint_pos[joint_name] = float(value)
-            except (TypeError, ValueError):
-                continue
-
-    if hasattr(env_cfg.events, "randomize_board_and_parts"):
-        randomization_params = env_cfg.events.randomize_board_and_parts.params
-        randomization_params["board_default_pos"] = tuple(
-            env_cfg.scene.task_board.init_state.pos
-        )
-        randomization_params["board_range"] = {"x": (0.0, 0.0), "y": (0.0, 0.0)}
-
-        parts = randomization_params.get("parts", [])
-        for part_cfg in parts:
-            if not isinstance(part_cfg, dict):
-                continue
-            part_cfg["pose_range"] = {}
-            if "snap_step" in part_cfg:
-                part_cfg.pop("snap_step")
-
-        if isinstance(task_board_cfg, dict):
-            nic_translation = _extract_nic_rail_translation(task_board_cfg)
-        else:
-            nic_translation = None
-        if nic_translation is not None:
-            delta = nic_translation - _GAZEBO_NIC_RAIL_REF_TRANSLATION
-            nic_x, nic_y, nic_z = env_cfg.scene.nic_card.init_state.pos
-            env_cfg.scene.nic_card.init_state.pos = (
-                float(nic_x),
-                float(nic_y + delta),
-                float(nic_z),
-            )
-            for part_cfg in parts:
-                if not isinstance(part_cfg, dict):
-                    continue
-                if part_cfg.get("scene_name") != "nic_card":
-                    continue
-                ox, oy, oz = part_cfg.get("offset", (0.0, 0.0, 0.0))
-                part_cfg["offset"] = (float(ox), float(oy + delta), float(oz))
-                break
-
-    print(
-        "[aic_task_env_cfg] Applied Gazebo trial override "
-        f"from {cfg_path} (trial: {trial_name})."
-    )
+def _apply_fixed_scene_profile(env_cfg: "AICTaskEnvCfg") -> None:
+    env_cfg.scene.robot.init_state.pos = _FIXED_SFP2NIC_SCENE_PROFILE["robot_base_pos"]
+    env_cfg.scene.robot.init_state.rot = _FIXED_SFP2NIC_SCENE_PROFILE["robot_base_rot"]
+    env_cfg.scene.robot.init_state.joint_pos = _FIXED_SFP2NIC_SCENE_PROFILE["robot_home_joint_pos"]
+    env_cfg.scene.task_board.init_state.pos = _FIXED_SFP2NIC_SCENE_PROFILE["task_board_pos"]
+    env_cfg.scene.task_board.init_state.rot = _FIXED_SFP2NIC_SCENE_PROFILE["task_board_rot_wxyz"]
+    env_cfg.scene.sc_port.init_state.pos = _FIXED_SFP2NIC_SCENE_PROFILE["sc_port_pos"]
+    env_cfg.scene.sc_port_2.init_state.pos = _FIXED_SFP2NIC_SCENE_PROFILE["sc_port_2_pos"]
+    env_cfg.scene.nic_card.init_state.pos = _FIXED_SFP2NIC_SCENE_PROFILE["nic_card_pos"]
+    env_cfg.scene.nic_card.init_state.rot = _FIXED_SFP2NIC_SCENE_PROFILE["nic_card_rot_wxyz"]
 
 ##
 # Scene definition
@@ -254,16 +102,9 @@ class AICTaskSceneCfg(InteractiveSceneCfg):
             activate_contact_sensors=False,
         ),
         init_state=ArticulationCfg.InitialStateCfg(
-            pos=(-0.18, -0.122, 0),
-            rot=(0.0, 0.0, 0.0, 1.0),
-            joint_pos={
-                "shoulder_pan_joint": 0.1597,
-                "shoulder_lift_joint": -1.3542,
-                "elbow_joint": -1.6648,
-                "wrist_1_joint": -1.6933,
-                "wrist_2_joint": 1.5710,
-                "wrist_3_joint": 1.4110,
-            },
+            pos=_FIXED_SFP2NIC_SCENE_PROFILE["robot_base_pos"],
+            rot=_FIXED_SFP2NIC_SCENE_PROFILE["robot_base_rot"],
+            joint_pos=_FIXED_SFP2NIC_SCENE_PROFILE["robot_home_joint_pos"],
         ),
         actuators={
             "arm": ImplicitActuatorCfg(
@@ -338,8 +179,8 @@ class AICTaskSceneCfg(InteractiveSceneCfg):
             ),
         ),
         init_state=RigidObjectCfg.InitialStateCfg(
-            pos=(0.2837, 0.229, 0.0),
-            # rot=(0.70686, -0.01851, 0.70686, 0.01851),
+            pos=_FIXED_SFP2NIC_SCENE_PROFILE["task_board_pos"],
+            rot=_FIXED_SFP2NIC_SCENE_PROFILE["task_board_rot_wxyz"],
         ),
     )
 
@@ -352,7 +193,7 @@ class AICTaskSceneCfg(InteractiveSceneCfg):
             ),
         ),
         init_state=RigidObjectCfg.InitialStateCfg(
-            pos=(0.2904, 0.1928, 0.005),
+            pos=_FIXED_SFP2NIC_SCENE_PROFILE["sc_port_pos"],
             rot=(0.73136, 0.0, 0.0, -0.682),
         ),
     )
@@ -366,7 +207,7 @@ class AICTaskSceneCfg(InteractiveSceneCfg):
             ),
         ),
         init_state=RigidObjectCfg.InitialStateCfg(
-            pos=(0.2913, 0.1507, 0.005),
+            pos=_FIXED_SFP2NIC_SCENE_PROFILE["sc_port_2_pos"],
             rot=(0.73136, 0.0, 0.0, -0.682),
         ),
     )
@@ -381,8 +222,8 @@ class AICTaskSceneCfg(InteractiveSceneCfg):
             ),
         ),
         init_state=RigidObjectCfg.InitialStateCfg(
-            pos=(0.25135, 0.25229, 0.0743),
-            rot=(0.0, 0.0, -0.7068252, 0.7073883),
+            pos=_FIXED_SFP2NIC_SCENE_PROFILE["nic_card_pos"],
+            rot=_FIXED_SFP2NIC_SCENE_PROFILE["nic_card_rot_wxyz"],
         ),
     )
 
@@ -868,4 +709,6 @@ class AICTaskEnvCfg(ManagerBasedRLEnvCfg):
             },
         )
 
-        _apply_gazebo_trial_overrides(self)
+        _apply_fixed_scene_profile(self)
+        self.events.randomize_light = None
+        self.events.randomize_board_and_parts = None
