@@ -819,7 +819,9 @@ def _maybe_accept_near_gate(validation, assessment: dict, *, args: argparse.Name
         "offlimit_contact_count_ok": validation.offlimit_contact_count == 0,
         "moveit_success": validation.moveit_success,
     }
-    accepted = all(checks.values())
+    acceptance_checks = dict(checks)
+    acceptance_checks.pop("preinsert_tracking_gate_passed")
+    accepted = all(acceptance_checks.values())
     original_reasons = list(validation.reasons)
     if validation.accepted:
         original_reasons.append("standard_validation_would_accept")

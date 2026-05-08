@@ -1323,6 +1323,52 @@ def test_near_gate_acceptance_accepts_when_lateral_and_axial_error_pass():
     assert metadata["near_gate_acceptance"]["accepted"] is True
 
 
+def test_near_gate_acceptance_uses_configured_errors_over_legacy_gate_bool():
+    validation = TrajectoryValidator(
+        ValidationCriteria(score_threshold=90.0, require_insertion_event=False)
+    ).evaluate(
+        {
+            "score": 1.0,
+            "max_force_n": 0.0,
+            "offlimit_contact_count": 0,
+            "moveit_success": True,
+            "mode": "nominal",
+        }
+    )
+    args = SimpleNamespace(
+        allow_near_gate_acceptance=True,
+        near_gate_max_lateral_error_m=0.005,
+        near_gate_max_axial_error_m=0.005,
+        near_gate_max_tcp_speed_mps=None,
+        near_gate_max_force_delta_n=5.0,
+        near_gate_max_force_n=60.0,
+        score_threshold=10.0,
+    )
+    assessment = {
+        "metrics": {
+            "preinsert_tracking_gate_checked": True,
+            "preinsert_tracking_gate_passed": False,
+            "preinsert_tracking_gate_final_lateral_error_m": 0.0016,
+            "preinsert_tracking_gate_final_axial_error_m": 0.0007,
+            "preinsert_tracking_gate_final_tcp_speed_mps": 0.008,
+            "preinsert_tracking_gate_force_delta_n": 1.7,
+            "offlimit_contact_count": 0,
+            "moveit_success": True,
+        }
+    }
+
+    updated, metadata = generate_expert_trajectories._maybe_accept_near_gate(
+        validation,
+        assessment,
+        args=args,
+    )
+
+    assert updated.accepted is True
+    assert metadata["acceptance_type"] == "near_gate"
+    assert metadata["near_gate_acceptance"]["checks"]["preinsert_tracking_gate_passed"] is False
+    assert metadata["near_gate_acceptance"]["accepted"] is True
+
+
 def test_nominal_repair_is_skipped_after_near_gate_acceptance():
     validation = TrajectoryValidator(
         ValidationCriteria(score_threshold=90.0, require_insertion_event=False)
