@@ -52,6 +52,7 @@ from aic_teacher_official.expert_generator.trajectory_repair import repair_preco
 from aic_teacher_official.expert_generator.trajectory_validator import TrajectoryValidator, ValidationCriteria
 from aic_teacher_official.expert_generator.vlm_strategy import ExpertMode, build_strategy_prompt, parse_vlm_strategy
 from aic_teacher_official.expert_generator.vlm_strategy_client import OpenAIVLMStrategyProvider
+from aic_teacher_official.OfficialExpertGeneratorPlanner import _allow_fallback_strategy, _fallback_strategy
 from aic_teacher_official.replay import SmoothTrajectoryReplayPolicy
 from aic_teacher_official.trajectory import SmoothTrajectory, PhaseLabel, SourceLabel, TCPPose, TrajectoryWaypoint
 
@@ -253,6 +254,78 @@ def test_cli_selects_new_nominal_mode_flag(monkeypatch):
     args = generate_expert_trajectories.parse_args()
 
     assert generate_expert_trajectories._selected_mode(args) == ExpertMode.NOMINAL
+
+
+def test_planner_runner_writes_single_trial_attempt_config(tmp_path):
+    engine_config = tmp_path / "engine.yaml"
+    engine_config.write_text(
+        yaml.safe_dump(
+            {
+                "number_of_trials": 3,
+                "trials": {
+                    "trial_000001": {"scene": {"target": 1}},
+                    "trial_000002": {"scene": {"target": 2}},
+                    "trial_000003": {"scene": {"target": 3}},
+                },
+            },
+            sort_keys=False,
+        ),
+        encoding="utf-8",
+    )
+    runner = ExpertPlannerRecordingRunner(
+        ExpertPlannerRunConfig(
+            repo_root=tmp_path,
+            engine_config=engine_config,
+            output_dir=tmp_path / "planner_attempts",
+            expert_mode="nominal",
+        )
+    )
+
+    attempt_config = runner._write_attempt_engine_config(
+        attempt_dir=tmp_path / "attempt_000002_candidate_01",
+        attempt_index=2,
+    )
+    written = yaml.safe_load(attempt_config.read_text(encoding="utf-8"))
+
+    assert written["number_of_trials"] == 1
+    assert list(written["trials"]) == ["trial_000002"]
+    assert written["trials"]["trial_000002"]["scene"]["target"] == 2
+
+
+def test_replay_runner_writes_single_trial_attempt_config(tmp_path):
+    engine_config = tmp_path / "engine.yaml"
+    engine_config.write_text(
+        yaml.safe_dump(
+            {
+                "number_of_trials": 3,
+                "trials": {
+                    "trial_000001": {"scene": {"target": 1}},
+                    "trial_000002": {"scene": {"target": 2}},
+                    "trial_000003": {"scene": {"target": 3}},
+                },
+            },
+            sort_keys=False,
+        ),
+        encoding="utf-8",
+    )
+    runner = OfficialRecordingReplayRunner(
+        OfficialReplayConfig(
+            repo_root=tmp_path,
+            engine_config=engine_config,
+            output_dir=tmp_path / "replay_attempts",
+        )
+    )
+
+    attempt_config, trial_id = runner._write_attempt_engine_config(
+        attempt_dir=tmp_path / "attempt_000003_candidate_02",
+        attempt_index=3,
+    )
+    written = yaml.safe_load(attempt_config.read_text(encoding="utf-8"))
+
+    assert trial_id == "trial_000003"
+    assert written["number_of_trials"] == 1
+    assert list(written["trials"]) == ["trial_000003"]
+    assert written["trials"]["trial_000003"]["scene"]["target"] == 3
 
 
 def test_vlm_strategy_rejects_malformed_json():
@@ -723,6 +796,56 @@ def test_live_debug_guarded_speed_threshold_accepts_legacy_env_name(monkeypatch)
         mode=ExpertMode.NOMINAL,
     )
     assert relaxed_result is validation
+
+
+def test_expert_generator_strategy_fallback_is_nominal_safe(monkeypatch):
+    strategy = _fallback_strategy(ExpertMode.NOMINAL)
+
+    assert strategy.mode == ExpertMode.NOMINAL
+    assert strategy.insertion_strategy == "straight_slow_descent"
+    assert strategy.recovery_allowed is False
+    assert not _allow_fallback_strategy("RateLimitError: insufficient_quota")
+    monkeypatch.setenv("AIC_EXPERT_ENABLE_STRATEGY_FALLBACK", "true")
+    assert _allow_fallback_strategy("RateLimitError: insufficient_quota")
+    assert not _allow_fallback_strategy("ValueError: malformed response")
+
+
+def test_live_generation_resume_progress_and_integrity_check(tmp_path):
+    output_dir = tmp_path / "agent_generation"
+    metadata_writer = DatasetMetadataWriter(output_dir / "accepted_metadata")
+    replay_dataset = output_dir / "replay_attempts" / "attempt_000007_candidate_01" / "dataset"
+    (replay_dataset / "meta").mkdir(parents=True)
+    (replay_dataset / "data" / "chunk-000").mkdir(parents=True)
+    (replay_dataset / "videos").mkdir()
+    (replay_dataset / "meta" / "info.json").write_text("{}", encoding="utf-8")
+    (replay_dataset / "meta" / "stats.json").write_text("{}", encoding="utf-8")
+    (replay_dataset / "data" / "chunk-000" / "file-000.parquet").write_bytes(b"parquet")
+    planner_dir = output_dir / "planner_attempts" / "attempt_000007_candidate_01"
+    planner_dir.mkdir(parents=True)
+    trajectory_path = planner_dir / "smooth_trajectory.json"
+    trajectory_path.write_text("{}", encoding="utf-8")
+    (output_dir / "planner_attempts" / "attempt_000012_candidate_01").mkdir(parents=True)
+    (output_dir / "rejected_attempts" / "attempt_000009").mkdir(parents=True)
+    metadata_writer.append_episode(
+        ExpertEpisodeMetadata(
+            episode_index=0,
+            mode="nominal",
+            scene_id="attempt_000007",
+            candidate_index=1,
+            trajectory_path=str(trajectory_path),
+            validation={"accepted": True},
+            vlm_strategy={},
+            moveit={},
+            phase_labels=[],
+            extra={},
+        )
+    )
+
+    assert generate_expert_trajectories._load_existing_generation_progress(output_dir) == {
+        "accepted": 1,
+        "attempts": 12,
+    }
+    assert generate_expert_trajectories._accepted_dataset_integrity_issues(output_dir / "accepted_metadata") == []
 
 
 def test_ft_window_aggregation_min_max_median():

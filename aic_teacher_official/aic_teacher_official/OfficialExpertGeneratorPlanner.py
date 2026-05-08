@@ -22,7 +22,7 @@ from aic_teacher_official.expert_generator.moveit_py_backend import MoveItPyBack
 from aic_teacher_official.expert_generator.nominal_expert import NominalExpert
 from aic_teacher_official.expert_generator.recovery_expert import RecoveryExpert
 from aic_teacher_official.expert_generator.ros_scene_snapshot import LiveSceneSnapshotProvider
-from aic_teacher_official.expert_generator.vlm_strategy import ExpertMode
+from aic_teacher_official.expert_generator.vlm_strategy import ExpertMode, parse_vlm_strategy
 from aic_teacher_official.expert_generator.vlm_strategy_client import OpenAIVLMStrategyProvider
 
 
@@ -109,11 +109,7 @@ class OfficialExpertGeneratorPlanner(Policy):
                 mode=self._mode.value,
                 scene_id=str(getattr(task, "id", "task")),
             )
-            strategy = OpenAIVLMStrategyProvider(model=self._strategy_model).strategy_for_scene(
-                snapshot,
-                mode=self._mode,
-                output_dir=self._debug_dir,
-            )
+            strategy = self._strategy_for_snapshot(snapshot)
             candidates = generate_approach_candidates(
                 snapshot,
                 strategy,
@@ -153,3 +149,65 @@ class OfficialExpertGeneratorPlanner(Policy):
     def _write_result(self, payload: dict) -> None:
         path = self._debug_dir / "expert_generation_result.json"
         path.write_text(json.dumps(payload, indent=2) + "\n", encoding="utf-8")
+
+    def _strategy_for_snapshot(self, snapshot):
+        try:
+            return OpenAIVLMStrategyProvider(model=self._strategy_model).strategy_for_scene(
+                snapshot,
+                mode=self._mode,
+                output_dir=self._debug_dir,
+            )
+        except Exception as ex:
+            error_text = f"{type(ex).__name__}: {ex}"
+            if not _allow_fallback_strategy(error_text):
+                raise
+            strategy = _fallback_strategy(self._mode)
+            payload = {
+                "strategy": strategy.to_dict(),
+                "fallback": True,
+                "fallback_reason": error_text,
+            }
+            (self._debug_dir / "vlm_strategy_fallback.json").write_text(
+                json.dumps(payload, indent=2) + "\n",
+                encoding="utf-8",
+            )
+            self._parent_node.get_logger().warning(
+                "Using deterministic expert-generator strategy fallback after VLM strategy failure: "
+                f"{error_text}"
+            )
+            return strategy
+
+
+def _allow_fallback_strategy(error_text: str) -> bool:
+    if os.environ.get("AIC_EXPERT_DISABLE_STRATEGY_FALLBACK", "").lower() in {"1", "true", "yes"}:
+        return False
+    if os.environ.get("AIC_EXPERT_ENABLE_STRATEGY_FALLBACK", "").lower() not in {"1", "true", "yes"}:
+        return False
+    lowered = error_text.lower()
+    return (
+        "ratelimiterror" in lowered
+        or "insufficient_quota" in lowered
+        or "quota" in lowered
+        or "openai_api_key" in lowered
+    )
+
+
+def _fallback_strategy(mode: ExpertMode):
+    insertion_strategy = "straight_slow_descent" if mode == ExpertMode.NOMINAL else "guarded_descent_with_backoff"
+    return parse_vlm_strategy(
+        {
+            "mode": mode.value,
+            "approach_side": "high_clearance_vertical",
+            "cable_risk": "medium",
+            "reason": "Deterministic fallback used because VLM strategy generation was unavailable.",
+            "mitigation": "Use high-clearance vertical approach and avoid lateral cable sweep.",
+            "preferred_clearance_m": 0.12,
+            "avoid_regions": ["front_of_nic", "cable_sweep_zone"],
+            "insertion_strategy": insertion_strategy,
+            "recovery_allowed": mode != ExpertMode.NOMINAL,
+            "probe_pattern": "small_cross" if mode != ExpertMode.NOMINAL else "none",
+            "backup_distance_m": 0.002,
+            "retry_count": 2 if mode != ExpertMode.NOMINAL else 0,
+        },
+        expected_mode=mode.value,
+    )

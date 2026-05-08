@@ -5,6 +5,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 import json
 import re
+import shutil
 import shlex
 import subprocess
 import os
@@ -75,18 +76,27 @@ class OfficialRecordingReplayRunner:
             suffix += f"_{variant_label}"
         attempt_dir = self.config.output_dir / f"attempt_{attempt_index:06d}{suffix}"
         attempt_dir.mkdir(parents=True, exist_ok=True)
+        runtime_dir = self._runtime_attempt_dir(attempt_dir)
+        runtime_dir.mkdir(parents=True, exist_ok=True)
         trajectory_path = attempt_dir / "smooth_trajectory.json"
         if hasattr(trajectory, "save_json"):
             trajectory.save_json(trajectory_path)
         else:
             raise TypeError("OfficialRecordingReplayRunner requires a SmoothTrajectory-like object with save_json")
-        engine_config = self.engine_config_for_attempt(attempt_index)
+        engine_config, trial_id = self._write_attempt_engine_config(
+            attempt_dir=runtime_dir,
+            attempt_index=attempt_index,
+        )
+        runtime_results = runtime_dir / "results"
+        runtime_tmp = runtime_dir / "tmp"
         cmd = self.build_command(
             trajectory_path=trajectory_path,
             attempt_dir=attempt_dir,
             attempt_index=attempt_index,
             candidate_index=candidate_index,
             engine_config=engine_config,
+            results_root=runtime_results,
+            tmp_dir=runtime_tmp,
         )
         env = os.environ.copy()
         source_paths = [
@@ -152,7 +162,9 @@ class OfficialRecordingReplayRunner:
                 stderr=stderr,
                 check=False,
             )
-        metrics = metrics_from_scoring_yaml(_scoring_yaml_for_attempt(attempt_dir))
+        self._copy_runtime_artifacts(runtime_results, attempt_dir / "results")
+        self._copy_runtime_artifacts(runtime_tmp, attempt_dir / "tmp")
+        metrics = metrics_from_scoring_yaml(runtime_results / f"trial_1_{trial_id}" / "scoring.yaml")
         metrics.update(
             {
                 "replay_returncode": result.returncode,
@@ -164,6 +176,35 @@ class OfficialRecordingReplayRunner:
         )
         return metrics
 
+    def _runtime_attempt_dir(self, attempt_dir: Path) -> Path:
+        try:
+            relative = attempt_dir.relative_to(self.config.repo_root)
+        except ValueError:
+            relative = Path(self.config.output_dir.name) / attempt_dir.name
+        return self.config.repo_root / "outputs" / "trajectory_runtime" / relative
+
+    @staticmethod
+    def _copy_runtime_artifacts(src: Path, dst: Path) -> None:
+        if src.exists():
+            shutil.copytree(src, dst, dirs_exist_ok=True)
+
+    def _write_attempt_engine_config(self, *, attempt_dir: Path, attempt_index: int) -> tuple[Path, str]:
+        attempt_dir.mkdir(parents=True, exist_ok=True)
+        data = yaml.safe_load(self.config.engine_config.read_text(encoding="utf-8"))
+        if not isinstance(data, dict):
+            raise ValueError(f"Engine config must be a map: {self.config.engine_config}")
+        trials = data.get("trials")
+        if not isinstance(trials, dict) or not trials:
+            raise ValueError(f"Engine config must contain non-empty trials: {self.config.engine_config}")
+        trial_ids = list(trials)
+        trial_id = trial_ids[(attempt_index - 1) % len(trial_ids)]
+        single = dict(data)
+        single["trials"] = {trial_id: trials[trial_id]}
+        single["number_of_trials"] = 1
+        out_path = attempt_dir / f"engine_{attempt_index:06d}_{trial_id}.yaml"
+        out_path.write_text(yaml.safe_dump(single, sort_keys=False), encoding="utf-8")
+        return out_path, trial_id
+
     def build_command(
         self,
         *,
@@ -172,8 +213,12 @@ class OfficialRecordingReplayRunner:
         attempt_index: int,
         candidate_index: int,
         engine_config: Path | None = None,
+        results_root: Path | None = None,
+        tmp_dir: Path | None = None,
     ) -> list[str]:
         engine_config = engine_config or self.config.engine_config
+        results_root = results_root or attempt_dir / "results"
+        tmp_dir = tmp_dir or attempt_dir / "tmp"
         cmd = [
             "bash",
             "./aic_utils/lerobot_robot_aic/scripts/launch_policy_recording_per_trial.sh",
@@ -190,9 +235,9 @@ class OfficialRecordingReplayRunner:
             "--dataset-root",
             str(attempt_dir / "dataset"),
             "--results-root",
-            str(attempt_dir / "results"),
+            str(results_root),
             "--tmp-dir",
-            str(attempt_dir / "tmp"),
+            str(tmp_dir),
             "--gazebo-gui",
             str(self.config.gazebo_gui).lower(),
             "--launch-rviz",

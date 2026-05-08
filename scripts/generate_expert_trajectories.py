@@ -367,8 +367,9 @@ def run_live_generation(
         )
     )
     metadata_writer = DatasetMetadataWriter(output_dir / "accepted_metadata")
-    accepted = _count_existing_accepted(output_dir)
-    attempts = _max_existing_attempt_index(output_dir)
+    resume = _load_existing_generation_progress(output_dir)
+    accepted = resume["accepted"]
+    attempts = resume["attempts"]
     records = []
     while accepted < args.target_accepted_trajectories and attempts < args.max_total_attempts:
         candidate_index = attempts % args.candidates_per_scene
@@ -578,6 +579,7 @@ def run_live_generation(
             )
             accepted += 1
         records.append(record)
+    accepted_integrity_issues = _accepted_dataset_integrity_issues(output_dir / "accepted_metadata")
     return {
         "schema_version": "aic_expert_live_generation_summary/v1",
         "mode": mode.value,
@@ -585,7 +587,12 @@ def run_live_generation(
         "max_total_attempts": args.max_total_attempts,
         "accepted": accepted,
         "attempts": attempts,
+        "resumed_from": resume,
+        "accepted_dataset_integrity_issues": accepted_integrity_issues,
         "stopped_reason": (
+            "accepted_dataset_integrity_failed"
+            if accepted_integrity_issues
+            else
             "target_reached"
             if accepted >= args.target_accepted_trajectories
             else "max_attempts_exhausted"
@@ -630,12 +637,24 @@ def _planner_failure_payload_from_attempt_dir(attempt_dir: Path) -> dict[str, An
     return payload if isinstance(payload, dict) else None
 
 
-def _count_existing_accepted(output_dir: Path) -> int:
-    path = output_dir / "accepted_metadata" / "meta" / "validation_results.jsonl"
+def _load_existing_generation_progress(output_dir: Path) -> dict[str, Any]:
+    accepted = _count_existing_accepted(output_dir)
+    attempts = _max_existing_attempt_index(output_dir)
+    return {
+        "accepted": accepted,
+        "attempts": attempts,
+    }
+
+
+def _count_jsonl_rows(path: Path) -> int:
     if not path.exists():
         return 0
     with path.open("r", encoding="utf-8") as f:
         return sum(1 for line in f if line.strip())
+
+
+def _count_existing_accepted(output_dir: Path) -> int:
+    return _count_jsonl_rows(output_dir / "accepted_metadata" / "meta" / "validation_results.jsonl")
 
 
 def _max_existing_attempt_index(output_dir: Path) -> int:
@@ -661,6 +680,93 @@ def _planner_attempt_is_transient_without_piecewise(path: Path) -> bool:
         return False
     payload = _planner_failure_payload_from_attempt_dir(path)
     return _planner_result_is_transient_external_failure(payload or {})
+
+
+def _max_attempt_index(path: Path) -> int:
+    if not path.exists():
+        return 0
+    max_index = 0
+    pattern = re.compile(r"^attempt_(\d{6})(?:_|$)")
+    for child in path.iterdir():
+        if not child.is_dir():
+            continue
+        match = pattern.match(child.name)
+        if match:
+            max_index = max(max_index, int(match.group(1)))
+    return max_index
+
+
+def _accepted_dataset_integrity_issues(metadata_root: Path) -> list[dict[str, Any]]:
+    metadata_path = metadata_root / "meta" / "expert_trajectory_metadata.jsonl"
+    if not metadata_path.exists():
+        return []
+    issues: list[dict[str, Any]] = []
+    with metadata_path.open("r", encoding="utf-8") as f:
+        for line_number, line in enumerate(f, start=1):
+            if not line.strip():
+                continue
+            try:
+                row = json.loads(line)
+            except json.JSONDecodeError as ex:
+                issues.append({"line": line_number, "reason": f"invalid_json: {ex}"})
+                continue
+            episode_index = row.get("episode_index")
+            trajectory_path_raw = row.get("trajectory_path")
+            if not trajectory_path_raw:
+                issues.append({"episode_index": episode_index, "reason": "missing_trajectory_path"})
+                continue
+            trajectory_path = Path(trajectory_path_raw)
+            if not trajectory_path.exists():
+                issues.append(
+                    {
+                        "episode_index": episode_index,
+                        "trajectory_path": str(trajectory_path),
+                        "reason": "missing_trajectory_file",
+                    }
+                )
+                continue
+            dataset_root = _accepted_lerobot_dataset_root(
+                metadata_root=metadata_root,
+                metadata_row=row,
+                trajectory_path=trajectory_path,
+            )
+            required_files = [
+                dataset_root / "meta" / "info.json",
+                dataset_root / "meta" / "stats.json",
+                dataset_root / "data" / "chunk-000" / "file-000.parquet",
+            ]
+            missing = [str(path) for path in required_files if not path.exists() or path.stat().st_size == 0]
+            video_root = dataset_root / "videos"
+            image_root = dataset_root / "images"
+            if not video_root.exists() and not image_root.exists():
+                missing.append(str(video_root))
+            if missing:
+                issues.append(
+                    {
+                        "episode_index": episode_index,
+                        "trajectory_path": str(trajectory_path),
+                        "dataset_root": str(dataset_root),
+                        "reason": "incomplete_dataset_bundle",
+                        "missing": missing,
+                    }
+                )
+    return issues
+
+
+def _accepted_lerobot_dataset_root(
+    *,
+    metadata_root: Path,
+    metadata_row: dict[str, Any],
+    trajectory_path: Path,
+) -> Path:
+    scene_id = metadata_row.get("scene_id")
+    candidate_index = metadata_row.get("candidate_index")
+    output_dir = metadata_root.parent
+    if isinstance(scene_id, str) and isinstance(candidate_index, int):
+        replay_root = output_dir / "replay_attempts" / f"{scene_id}_candidate_{candidate_index:02d}" / "dataset"
+        if replay_root.exists():
+            return replay_root
+    return trajectory_path.parent / "dataset"
 
 
 def _maybe_run_gpt5_failure_analysis(
