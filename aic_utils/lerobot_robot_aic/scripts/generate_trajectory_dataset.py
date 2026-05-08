@@ -912,6 +912,22 @@ def _accepted_agent_datasets(agent_output_dir: Path, output_dir: Path) -> tuple[
     return datasets, score_csvs, int(summary.get("accepted", len(datasets)))
 
 
+def agent_generation_output_dir(output_dir: Path, request: dict[str, Any]) -> Path:
+    generation = request.get("generation", {})
+    configured = generation.get("agent_output_dir", generation.get("agent_generation_output_dir"))
+    if configured:
+        path = Path(str(configured))
+        return path if path.is_absolute() else output_dir / path
+    legacy_markers = (
+        output_dir / "accepted_metadata" / "meta" / "validation_results.jsonl",
+        output_dir / "planner_attempts",
+        output_dir / "replay_attempts",
+    )
+    if any(path.exists() for path in legacy_markers):
+        return output_dir
+    return output_dir / "agent_generation"
+
+
 def agent_filter_min_score(request: dict[str, Any]) -> float:
     return float(request["acceptance"]["min_score"])
 
@@ -1040,6 +1056,7 @@ def build_agent_generation_cmd(
 ) -> list[str]:
     generation = request.get("generation", {})
     expert_mode = effective_expert_mode(request)
+    agent_output_dir = agent_generation_output_dir(output_dir, request)
     cmd = [
         "pixi",
         "run",
@@ -1059,7 +1076,7 @@ def build_agent_generation_cmd(
         "--config",
         str(engine_config_path),
         "--output-dir",
-        str(output_dir / "agent_generation"),
+        str(agent_output_dir),
         "--seed",
         str(int(generation.get("seed", 0) or 0)),
         "--use-gpt5-analysis",
@@ -1331,7 +1348,8 @@ def write_expert_registry_overlay(
         return None
     if not bool(generation.get("write_expert_registry_overlay", True)):
         return None
-    summary_path = output_dir / "agent_generation" / "generation_summary.json"
+    agent_output_dir = agent_generation_output_dir(output_dir, request)
+    summary_path = agent_output_dir / "generation_summary.json"
     if not summary_path.exists():
         return None
     try:
@@ -1513,6 +1531,7 @@ def main() -> int:
         recording_cmd.extend(["--startup-delay-sec", str(int(generation["startup_delay_sec"]))])
     agent_mode_env: dict[str, str] | None = None
     if policy == "agent":
+        agent_output_dir = agent_generation_output_dir(output_dir, request)
         agent_cmd = build_agent_generation_cmd(
             request=request,
             engine_config_path=engine_config_path,
@@ -1534,7 +1553,7 @@ def main() -> int:
         agent_datasets, agent_score_csvs, agent_accepted = (
             ([], [], None)
             if args.dry_run or args.skip_recording
-            else (*_accepted_agent_datasets(output_dir / "agent_generation", output_dir),)
+            else (*_accepted_agent_datasets(agent_output_dir, output_dir),)
         )
     else:
         agent_datasets = []
@@ -1597,7 +1616,7 @@ def main() -> int:
         accepted = agent_accepted
     actual_attempted = num_trials
     if policy == "agent":
-        agent_summary_path = output_dir / "agent_generation" / "generation_summary.json"
+        agent_summary_path = agent_generation_output_dir(output_dir, request) / "generation_summary.json"
         if agent_summary_path.exists():
             try:
                 agent_summary = json.loads(agent_summary_path.read_text(encoding="utf-8"))
@@ -1629,7 +1648,7 @@ def main() -> int:
         "seed": request.get("generation", {}).get("seed"),
         "raw_dataset": str(output_dir / "raw_dataset"),
         "accepted_dataset": str(output_dir / "accepted_dataset"),
-        "agent_generation": str(output_dir / "agent_generation") if policy == "agent" else None,
+        "agent_generation": str(agent_generation_output_dir(output_dir, request)) if policy == "agent" else None,
         "agent_mode_env": agent_mode_env,
         "expert_registry_suffix": effective_registry_suffix(request) if policy == "agent" else None,
         "expert_registry_overlay_dir": (
