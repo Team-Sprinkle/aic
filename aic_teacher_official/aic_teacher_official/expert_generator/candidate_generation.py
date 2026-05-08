@@ -67,6 +67,7 @@ DIAGONAL_BYPASS_PROGRESS_FRACTION = 0.20
 SC_NIC_BYPASS_LEFT_OFFSET_M = 0.08
 SC_NIC_APPROACH_LEFT_OFFSET_M = 0.05
 SC_NIC_BYPASS_Y_MARGIN_M = 0.14
+SC_NIC_TARGET_Y_OVERSHOOT_M = 0.04
 
 
 def _unique_candidate_names(preferred: str, count: int) -> list[str]:
@@ -155,18 +156,15 @@ def generate_approach_candidates(
         if route_around_nics:
             lift_z = max(lift_z, staging_z + clearance + extra_clearance)
             bypass_y = _nic_bypass_y(nic_obstacles, target.position[1])
-            wide_left_x = min(
-                float(current.position[0]),
-                float(cheatcode_pre_insert.position[0]),
-            ) - sc_bypass_left_offset
+            wide_left_x = float(current.position[0]) - sc_bypass_left_offset
             if name == "high_clearance_vertical":
-                dx = -0.5 * sc_bypass_left_offset
+                dx = max(-0.5 * sc_bypass_left_offset, wide_left_x - cheatcode_pre_insert.position[0])
                 dy = bypass_y - cheatcode_pre_insert.position[1]
             elif name == "back":
-                dx = -0.75 * sc_approach_left_offset
+                dx = max(-0.75 * sc_approach_left_offset, wide_left_x - cheatcode_pre_insert.position[0])
                 dy = bypass_y - cheatcode_pre_insert.position[1]
             elif name == "above_left":
-                dx = -sc_approach_left_offset
+                dx = max(-sc_approach_left_offset, wide_left_x - cheatcode_pre_insert.position[0])
                 dy = bypass_y - cheatcode_pre_insert.position[1]
             elif name == "above_right":
                 dx = 0.05
@@ -278,10 +276,11 @@ def _sc_to_sc_with_nic_obstacles(snapshot: SceneSnapshot) -> bool:
 
 def _nic_bypass_y(nic_obstacles: list[object], target_y: float) -> float:
     if not nic_obstacles:
-        return target_y + 0.08
+        return target_y + _env_float("AIC_EXPERT_SC_NIC_TARGET_Y_OVERSHOOT_M", SC_NIC_TARGET_Y_OVERSHOOT_M)
     max_y = max(float(obj.pose.position[1]) + 0.5 * float(obj.dimensions[1]) for obj in nic_obstacles)
     margin = _env_float("AIC_EXPERT_SC_NIC_BYPASS_Y_MARGIN_M", SC_NIC_BYPASS_Y_MARGIN_M)
-    return max(float(target_y) + 0.08, max_y + margin)
+    target_overshoot = _env_float("AIC_EXPERT_SC_NIC_TARGET_Y_OVERSHOOT_M", SC_NIC_TARGET_Y_OVERSHOOT_M)
+    return max(float(target_y) + target_overshoot, max_y + margin)
 
 
 def _distance(a: Iterable[float], b: Iterable[float]) -> float:

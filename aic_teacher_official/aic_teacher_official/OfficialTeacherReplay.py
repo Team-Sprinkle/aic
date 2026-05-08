@@ -1973,6 +1973,37 @@ class OfficialTeacherReplay(Policy):
                 final_axial_error = float(abs(np.dot(plug_minus_entrance, port_axis_base)))
             except TransformException:
                 final_axial_error = None
+        if passed:
+            speed_ok = final_speed is None or final_speed <= speed_threshold
+            force_ok = final_force_delta is not None and final_force_delta < force_threshold
+            lateral_ok = (
+                max_lateral_error_m <= 0.0
+                or final_lateral_error is None
+                or final_lateral_error <= max_lateral_error_m
+            )
+            axial_ok = True
+            near_gate_max_axial_m = None
+            if near_gate_axial_target_m is not None:
+                near_gate_max_axial_text = os.environ.get("AIC_OFFICIAL_TEACHER_NEAR_GATE_MAX_AXIAL_ERROR_M")
+                near_gate_max_axial_m = (
+                    float(near_gate_max_axial_text) if near_gate_max_axial_text not in (None, "") else 0.003
+                )
+                axial_ok = final_axial_error is not None and final_axial_error <= near_gate_max_axial_m
+            passed = bool(
+                final_error is not None
+                and final_error <= gate_threshold
+                and speed_ok
+                and force_ok
+                and lateral_ok
+                and axial_ok
+            )
+        else:
+            near_gate_max_axial_text = os.environ.get("AIC_OFFICIAL_TEACHER_NEAR_GATE_MAX_AXIAL_ERROR_M")
+            near_gate_max_axial_m = (
+                float(near_gate_max_axial_text)
+                if near_gate_axial_target_m is not None and near_gate_max_axial_text not in (None, "")
+                else (0.003 if near_gate_axial_target_m is not None else None)
+            )
         self._trace_event(
             "tracking_gate_checked",
             tracking_gate_passed=passed,
@@ -1985,6 +2016,7 @@ class OfficialTeacherReplay(Policy):
             final_axial_error_m=final_axial_error,
             speed_threshold_mps=speed_threshold,
             max_lateral_error_m=max_lateral_error_m if max_lateral_error_m > 0.0 else None,
+            max_axial_error_m=near_gate_max_axial_m,
             final_tcp_speed_mps=final_speed,
             force_delta_n=final_force_delta,
             ft_threshold_n=self._ft_threshold_n,
@@ -4878,6 +4910,15 @@ class OfficialTeacherReplay(Policy):
                         "AIC_OFFICIAL_TEACHER_PREINSERT_GATE_PRESERVE_CURRENT_Z",
                         "true",
                     ).lower() in {"1", "true", "yes", "on"}
+                    stop_at_near_gate = (
+                        os.environ.get("AIC_OFFICIAL_TEACHER_STOP_AT_NEAR_GATE", "false").lower()
+                        in {"1", "true", "yes", "on"}
+                    )
+                    stop_near_gate_axial_target_m = (
+                        float(os.environ.get("AIC_OFFICIAL_TEACHER_STOP_NEAR_GATE_TARGET_AXIAL_OFFSET_M", "0.0"))
+                        if stop_at_near_gate
+                        else None
+                    )
                     gate_passed = self._hold_preinsert_until_tracking_gate(
                         task,
                         port_transform,
@@ -4891,7 +4932,8 @@ class OfficialTeacherReplay(Policy):
                         ),
                         dt=command_dt_sec,
                         z_offset=float(os.environ.get("AIC_OFFICIAL_TEACHER_CHEATCODE_START_Z_OFFSET", "0.045")),
-                        preserve_current_z=preinsert_gate_preserve_current_z,
+                        preserve_current_z=preinsert_gate_preserve_current_z and not stop_at_near_gate,
+                        near_gate_axial_target_m=stop_near_gate_axial_target_m,
                     )
                     self._preinsert_settle_done = True
                     if not gate_passed and self._expert_mode == "nominal":
@@ -4908,7 +4950,8 @@ class OfficialTeacherReplay(Policy):
                             ),
                             dt=command_dt_sec,
                             z_offset=float(os.environ.get("AIC_OFFICIAL_TEACHER_CHEATCODE_START_Z_OFFSET", "0.045")),
-                            preserve_current_z=preinsert_align_preserve_current_z,
+                            preserve_current_z=preinsert_align_preserve_current_z and not stop_at_near_gate,
+                            near_gate_axial_target_m=stop_near_gate_axial_target_m,
                             reason="trajectory_preinsert_tracking_gate",
                         )
                         if not gate_passed:
@@ -4967,7 +5010,7 @@ class OfficialTeacherReplay(Policy):
                             z_offset=float(
                                 os.environ.get("AIC_OFFICIAL_TEACHER_CHEATCODE_START_Z_OFFSET", "0.045")
                             ),
-                            preserve_current_z=preinsert_align_preserve_current_z,
+                            preserve_current_z=preinsert_align_preserve_current_z and not stop_at_near_gate,
                             gain_profile="recovery",
                         )
                         gate_passed = self._hold_preinsert_until_tracking_gate(
@@ -4985,7 +5028,8 @@ class OfficialTeacherReplay(Policy):
                             z_offset=float(
                                 os.environ.get("AIC_OFFICIAL_TEACHER_CHEATCODE_START_Z_OFFSET", "0.045")
                             ),
-                            preserve_current_z=preinsert_gate_preserve_current_z,
+                            preserve_current_z=preinsert_gate_preserve_current_z and not stop_at_near_gate,
+                            near_gate_axial_target_m=stop_near_gate_axial_target_m,
                         )
                         self._trace_event(
                             "recovery_tracking_gate_realign_completed",
@@ -4994,6 +5038,28 @@ class OfficialTeacherReplay(Policy):
                         if not gate_passed:
                             send_feedback("official_teacher_replay_tracking_gate_failed")
                             return False
+                    if stop_at_near_gate:
+                        if gate_passed and self._near_gate_stop_satisfied_from_last_gate(
+                            retry_count=0,
+                            z_offset=stop_near_gate_axial_target_m,
+                            send_feedback=send_feedback,
+                        ):
+                            return True
+                        send_feedback("official_teacher_replay_tracking_gate_failed")
+                        self._trace_event(
+                            "near_gate_stop_not_satisfied_before_handoff",
+                            lateral_error_m=(
+                                float(self._last_tracking_gate_lateral_error_m)
+                                if self._last_tracking_gate_lateral_error_m is not None
+                                else None
+                            ),
+                            axial_error_m=(
+                                float(self._last_tracking_gate_axial_error_m)
+                                if self._last_tracking_gate_axial_error_m is not None
+                                else None
+                            ),
+                        )
+                        return False
                 self.sleep_for(command_dt_sec)
                 continue
             if self._online_cheatcode_final_insertion and phase == "final_insertion":
