@@ -619,6 +619,39 @@ def test_dataset_metadata_writer_outputs_sidecars(tmp_path):
     assert json.loads((tmp_path / "meta" / "vlm_strategy.jsonl").read_text().splitlines()[0])["cable_risk"] == "low"
 
 
+def test_live_generation_resume_counts_existing_accepted(tmp_path):
+    writer = DatasetMetadataWriter(tmp_path / "accepted_metadata")
+    for episode_index in range(3):
+        writer.append_episode(
+            ExpertEpisodeMetadata(
+                episode_index=episode_index,
+                mode="nominal",
+                scene_id=f"attempt_{episode_index + 1:06d}",
+                candidate_index=0,
+                trajectory_path=None,
+                validation={"accepted": True},
+                vlm_strategy={},
+                moveit={},
+                phase_labels=[],
+                extra={},
+            )
+        )
+
+    assert generate_expert_trajectories._count_existing_accepted(tmp_path) == 3
+
+
+def test_live_generation_resume_uses_next_unused_attempt_index(tmp_path):
+    for relative in [
+        "planner_attempts/attempt_000007_candidate_00",
+        "replay_attempts/attempt_000009_candidate_00",
+        "rejected_attempts/attempt_000006",
+        "rejected_attempts/attempt_000008_repair_00",
+    ]:
+        (tmp_path / relative).mkdir(parents=True)
+
+    assert generate_expert_trajectories._max_existing_attempt_index(tmp_path) == 9
+
+
 def test_ft_window_aggregation_min_max_median():
     windows = aggregate_ft_windows(
         [

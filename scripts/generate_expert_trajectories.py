@@ -13,6 +13,7 @@ from dataclasses import replace
 import json
 import os
 from pathlib import Path
+import re
 import sys
 from typing import Any
 
@@ -50,6 +51,7 @@ def str_bool(value: str) -> bool:
 
 
 IMAGE_SUFFIXES = {".png", ".jpg", ".jpeg", ".webp", ".bmp"}
+ATTEMPT_DIR_RE = re.compile(r"attempt_(\d{6})")
 
 
 def parse_args() -> argparse.Namespace:
@@ -334,8 +336,8 @@ def run_live_generation(
         )
     )
     metadata_writer = DatasetMetadataWriter(output_dir / "accepted_metadata")
-    accepted = 0
-    attempts = 0
+    accepted = _count_existing_accepted(output_dir)
+    attempts = _max_existing_attempt_index(output_dir)
     records = []
     while accepted < args.target_accepted_trajectories and attempts < args.max_total_attempts:
         candidate_index = attempts % args.candidates_per_scene
@@ -543,6 +545,30 @@ def run_live_generation(
         ),
         "records": records,
     }
+
+
+def _count_existing_accepted(output_dir: Path) -> int:
+    path = output_dir / "accepted_metadata" / "meta" / "validation_results.jsonl"
+    if not path.exists():
+        return 0
+    with path.open("r", encoding="utf-8") as f:
+        return sum(1 for line in f if line.strip())
+
+
+def _max_existing_attempt_index(output_dir: Path) -> int:
+    max_index = 0
+    for root in (
+        output_dir / "planner_attempts",
+        output_dir / "replay_attempts",
+        output_dir / "rejected_attempts",
+    ):
+        if not root.exists():
+            continue
+        for path in root.iterdir():
+            match = ATTEMPT_DIR_RE.search(path.name)
+            if match:
+                max_index = max(max_index, int(match.group(1)))
+    return max_index
 
 
 def _maybe_run_gpt5_failure_analysis(
