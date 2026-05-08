@@ -551,10 +551,14 @@ def resample_precontact_joint_minimum_jerk(
     steps = max(2, int(math.ceil(duration / sample_dt)))
     resampled: list[TrajectoryWaypoint] = []
     max_observed_joint_speed = 0.0
+    use_phase_scaled_timing = (
+        approach_speedup > 1.0
+        or preinsertion_speedup > 1.0
+    )
     for sample_index in range(steps + 1):
         time_fraction = sample_index / steps
         timestamp = precontact[0].timestamp + duration * time_fraction
-        if approach_speedup > 1.0:
+        if use_phase_scaled_timing:
             segment_index = _time_segment_index(phase_scaled_times, duration * time_fraction)
             left_time = phase_scaled_times[segment_index]
             right_time = phase_scaled_times[min(segment_index + 1, len(phase_scaled_times) - 1)]
@@ -571,7 +575,7 @@ def resample_precontact_joint_minimum_jerk(
         left_arc = cumulative[segment_index]
         right_arc = cumulative[min(segment_index + 1, len(cumulative) - 1)]
         segment_distance = max(min_joint_distance_rad, right_arc - left_arc)
-        if approach_speedup <= 1.0:
+        if not use_phase_scaled_timing:
             raw = float(np.clip((arc - left_arc) / segment_distance, 0.0, 1.0))
 
         left_joints = joint_positions[segment_index]
@@ -581,7 +585,7 @@ def resample_precontact_joint_minimum_jerk(
         joint_delta_norm = float(np.linalg.norm(joint_delta))
         if joint_delta_norm > 1e-12:
             joint_direction = joint_delta / joint_delta_norm
-        if approach_speedup > 1.0:
+        if use_phase_scaled_timing:
             left_time = phase_scaled_times[segment_index]
             right_time = phase_scaled_times[min(segment_index + 1, len(phase_scaled_times) - 1)]
             segment_time = max(sample_dt, right_time - left_time)
