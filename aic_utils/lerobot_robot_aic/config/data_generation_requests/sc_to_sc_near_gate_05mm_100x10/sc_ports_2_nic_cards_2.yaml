@@ -1,0 +1,57 @@
+root_dir: outputs/trajectory_datasets_sc_to_sc_near_gate_05mm_100x10
+task_family: sc_to_sc
+suffix: sc_ports2_nic2_stop_near_gate_05mm_n100
+
+generation:
+  target_accepted_trajectories: 100
+  max_attempts: 200
+  max_planner_attempts: 2
+  policy: agent
+  expert_mode: nominal
+  auto_improve_on_failure: true
+  write_expert_registry_overlay: true
+  seed: 51202
+  append_if_exists: true
+  allow_short_agent_drain: true
+  recorder_drain_sec: 15
+  env:
+    AIC_OFFICIAL_TEACHER_LOCAL_PREINSERT_ALIGN_SEC: "1.0"
+    AIC_OFFICIAL_TEACHER_TRACKING_GATE_REALIGN_SEC: "1.5"
+    AIC_OFFICIAL_TEACHER_TRACKING_GATE_TIMEOUT_SEC: "2.5"
+    AIC_OFFICIAL_TEACHER_SC_TRACKING_GATE_TIMEOUT_SEC: "3.0"
+    AIC_OFFICIAL_TEACHER_CHEATCODE_INSERTION_SPEED_MPS: "0.020"
+    AIC_OFFICIAL_TEACHER_PREINSERT_SERVO_GAIN: "1.0"
+    AIC_OFFICIAL_TEACHER_PREINSERT_SERVO_STEP_LIMIT_M: "0.0015"
+    AIC_OFFICIAL_TEACHER_SC_PREINSERT_SERVO_MAX_BIAS_M: "0.016"
+    AIC_EXPERT_MOVEIT_APPROACH_SEGMENT_MODE: "three_stage"
+    AIC_EXPERT_POSTPROCESS_MAX_TCP_SPEED_MPS: "0.025"
+    AIC_EXPERT_POSTPROCESS_MAX_TCP_ACCEL_MPS2: "0.08"
+    AIC_EXPERT_POSTPROCESS_APPROACH_MAX_TCP_SPEED_MPS: "0.080"
+    AIC_EXPERT_POSTPROCESS_APPROACH_MAX_TCP_ACCEL_MPS2: "0.20"
+    AIC_EXPERT_POSTPROCESS_APPROACH_STALL_TRANSLATION_M: "0.00025"
+    AIC_EXPERT_POSTPROCESS_MIN_JERK_TRANSPORT: "true"
+    AIC_EXPERT_POSTPROCESS_RETIME_JOINTS: "true"
+    AIC_EXPERT_POSTPROCESS_MAX_JOINT_SPEED_RAD_S: "0.45"
+    AIC_EXPERT_POSTPROCESS_JOINT_APPROACH_SPEEDUP: "3.0"
+    AIC_EXPERT_POSTPROCESS_JOINT_PREINSERTION_SPEEDUP: "1.65"
+    AIC_EXPERT_MOVEIT_MAX_VEL_SCALE: "0.35"
+    AIC_EXPERT_MOVEIT_MAX_ACCEL_SCALE: "0.20"
+    AIC_EXPERT_SC_NIC_BYPASS_LEFT_OFFSET_M: "0.08"
+    AIC_EXPERT_SC_NIC_APPROACH_LEFT_OFFSET_M: "0.05"
+    AIC_EXPERT_SC_NIC_BYPASS_Y_MARGIN_M: "0.14"
+    AIC_EXPERT_SC_NIC_LEFT_CLEARANCE_EXTRA_Z_M: "0.04"
+
+acceptance:
+  success_only: false
+  min_score: 10.0
+  stop_near_gate:
+    max_lateral_error_m: 0.005
+    max_axial_error_m: 0.005
+    max_force_delta_n: 5.0
+    max_force_n: 60.0
+
+scene:
+  sc_ports:
+    count: 2
+  nic_cards:
+    count: 2

@@ -1003,9 +1003,9 @@ def effective_max_agent_attempts(request: dict[str, Any], max_attempts: int) -> 
     """Return the planner/replay attempt budget for agent generation.
 
     generation.max_attempts remains the historical overall attempt budget. The
-    optional generation.max_planner_attempts field is a stricter retry budget
-    for full planner+replay attempts. generation.max_replay_attempts is kept as
-    a backwards-compatible alias for older request files.
+    optional generation.max_planner_attempts field limits full planner+replay
+    attempts per requested accepted trajectory. generation.max_replay_attempts
+    is kept as a backwards-compatible alias for older request files.
     """
     generation = request.get("generation", {})
     configured = generation.get("max_planner_attempts", generation.get("max_replay_attempts"))
@@ -1014,7 +1014,10 @@ def effective_max_agent_attempts(request: dict[str, Any], max_attempts: int) -> 
     agent_attempts = int(configured)
     if agent_attempts <= 0:
         raise ValueError("generation.max_planner_attempts must be > 0")
-    return min(max_attempts, agent_attempts)
+    target = int(generation.get("target_accepted_trajectories", 1) or 1)
+    if target <= 0:
+        raise ValueError("generation.target_accepted_trajectories must be > 0")
+    return min(max_attempts, target * agent_attempts)
 
 
 def effective_max_replay_attempts(request: dict[str, Any], max_attempts: int) -> int:
@@ -1626,7 +1629,8 @@ def main() -> int:
             ),
             "attempt_strategy": (
                 "Agent generation creates at most generation.max_planner_attempts full planner+replay attempts "
-                "when set, otherwise generation.max_attempts, unless --num-trials-override is lower."
+                "per requested accepted trajectory when set, otherwise generation.max_attempts, unless "
+                "--num-trials-override is lower."
             ),
             "opposite_family_defaults": (
                 "Minimal sfp_to_nic requests default sc_ports.count to 0, and minimal sc_to_sc "

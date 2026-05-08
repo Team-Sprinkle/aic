@@ -299,7 +299,7 @@ def test_start_near_gate_requires_distance(tmp_path: Path) -> None:
         gtd.validate_request(request)
 
 
-def test_agent_max_planner_attempts_caps_expert_generator_attempts(tmp_path: Path) -> None:
+def test_agent_max_planner_attempts_caps_expert_generator_attempts_per_target(tmp_path: Path) -> None:
     request = base_request(tmp_path)
     request["generation"]["policy"] = "agent"
     request["generation"]["expert_mode"] = "nominal"
@@ -315,8 +315,8 @@ def test_agent_max_planner_attempts_caps_expert_generator_attempts(tmp_path: Pat
         max_attempts=gtd.effective_max_replay_attempts(request, 12),
     )
 
-    assert gtd.effective_max_replay_attempts(request, 12) == 2
-    assert cmd[cmd.index("--max-total-attempts") + 1] == "2"
+    assert gtd.effective_max_replay_attempts(request, 12) == 4
+    assert cmd[cmd.index("--max-total-attempts") + 1] == "4"
 
 
 def test_agent_score_csv_uses_validation_score(tmp_path: Path) -> None:
