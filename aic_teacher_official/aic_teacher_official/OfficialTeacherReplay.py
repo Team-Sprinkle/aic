@@ -1881,12 +1881,20 @@ class OfficialTeacherReplay(Policy):
                 or final_lateral_error is None
                 or final_lateral_error <= max_lateral_error_m
             )
+            axial_ok = True
+            if near_gate_axial_target_m is not None:
+                near_gate_max_axial_text = os.environ.get("AIC_OFFICIAL_TEACHER_NEAR_GATE_MAX_AXIAL_ERROR_M")
+                near_gate_max_axial_m = (
+                    float(near_gate_max_axial_text) if near_gate_max_axial_text not in (None, "") else 0.003
+                )
+                axial_ok = final_axial_error is not None and final_axial_error <= near_gate_max_axial_m
             passed = bool(
                 final_error is not None
                 and final_error <= gate_threshold
                 and speed_ok
                 and force_ok
                 and lateral_ok
+                and axial_ok
             )
             if passed:
                 if (self.time_now() - started) >= Duration(seconds=settle_sec):
