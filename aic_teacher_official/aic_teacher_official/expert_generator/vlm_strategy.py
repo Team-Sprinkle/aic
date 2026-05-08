@@ -240,6 +240,26 @@ def parse_vlm_strategy(text_or_data: str | dict[str, Any], *, expected_mode: str
 
 
 def build_strategy_prompt(scene_summary: dict[str, Any], *, mode: ExpertMode) -> str:
+    nic_obstacles = _present_nic_obstacles(scene_summary)
+    sc_to_sc_with_nics = (
+        str((scene_summary.get("task_config") or {}).get("plug_type", "")).lower() == "sc"
+        and str((scene_summary.get("task_config") or {}).get("port_type", "")).lower() == "sc"
+        and bool(nic_obstacles)
+    )
+    obstacle_guidance = ""
+    if sc_to_sc_with_nics:
+        obstacle_guidance = (
+            "\nSC-to-SC obstacle guidance:\n"
+            "- Present NIC cards are rigid obstacles between the robot/cable and the SC target. "
+            "Do not sweep the cable through or between these cards.\n"
+            "- Prefer approach_side above_left for a wide outside-left/back lane. Use back or "
+            "high_clearance_vertical only if the left lane is blocked; avoid front/straight-in "
+            "approaches that cross the NIC-card field.\n"
+            "- Include every present NIC card rail/name in avoid_regions, and state that the cable must route "
+            "around a wide outside lane behind the whole card stack before slowly arcing back toward "
+            "the SC entrance.\n"
+            f"- Present NIC obstacles: {json.dumps(nic_obstacles, sort_keys=True)}\n"
+        )
     return (
         "You are choosing a high-level strategy for the AIC cable insertion task.\n"
         "Do not output executable Cartesian waypoints, joint targets, velocities, or trajectory points.\n"
@@ -252,8 +272,27 @@ def build_strategy_prompt(scene_summary: dict[str, Any], *, mode: ExpertMode) ->
         "high_clearance_vertical, front, back.\n"
         "Use exactly one of these cable_risk values: low, medium, high.\n"
         "Use straight_slow_descent for nominal insertion_strategy.\n"
+        f"{obstacle_guidance}"
         f"Scene summary JSON:\n{json.dumps(scene_summary, indent=2, sort_keys=True)}"
     )
+
+
+def _present_nic_obstacles(scene_summary: dict[str, Any]) -> list[dict[str, Any]]:
+    obstacles: list[dict[str, Any]] = []
+    for obj in scene_summary.get("collision_objects", []) or []:
+        if not isinstance(obj, dict) or obj.get("role") != "nic_card":
+            continue
+        pose = obj.get("pose", {}) if isinstance(obj.get("pose"), dict) else {}
+        metadata = obj.get("metadata", {}) if isinstance(obj.get("metadata"), dict) else {}
+        obstacles.append(
+            {
+                "name": obj.get("name"),
+                "rail": metadata.get("rail"),
+                "position": pose.get("position"),
+                "dimensions": obj.get("dimensions"),
+            }
+        )
+    return obstacles
 
 
 def save_strategy_debug(

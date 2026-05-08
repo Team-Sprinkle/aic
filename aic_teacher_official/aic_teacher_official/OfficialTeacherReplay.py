@@ -92,6 +92,7 @@ class OfficialTeacherReplay(Policy):
         self._last_tracking_gate_baseline_force = None
         self._last_tracking_gate_error_m = None
         self._last_tracking_gate_lateral_error_m = None
+        self._last_tracking_gate_axial_error_m = None
         self._last_tracking_gate_speed_mps = None
         self._last_precontact_lateral_offset_base = np.zeros(3, dtype=np.float64)
         self._last_precontact_align_baseline_force = None
@@ -399,6 +400,103 @@ class OfficialTeacherReplay(Policy):
             target_xyz[:2] += lateral_offset[:2]
         if preserve_current_z:
             target_xyz[2] = gripper_xyz[2]
+        blend_xyz = position_fraction * target_xyz + (1.0 - position_fraction) * gripper_xyz
+        return Pose(
+            position=Point(x=float(blend_xyz[0]), y=float(blend_xyz[1]), z=float(blend_xyz[2])),
+            orientation=Quaternion(
+                w=float(q_gripper_slerp[0]),
+                x=float(q_gripper_slerp[1]),
+                y=float(q_gripper_slerp[2]),
+                z=float(q_gripper_slerp[3]),
+            ),
+        )
+
+    def _calc_near_gate_gripper_pose(
+        self,
+        task: Task,
+        *,
+        axial_offset_m: float,
+        slerp_fraction: float = 1.0,
+        position_fraction: float = 1.0,
+        lateral_offset_base: np.ndarray | None = None,
+    ) -> Pose:
+        entrance_tf_stamped = self._parent_node._tf_buffer.lookup_transform(
+            "base_link",
+            f"task_board/{task.target_module_name}/{task.port_name}_link_entrance",
+            Time(),
+        )
+        entrance_transform = entrance_tf_stamped.transform
+        q_port = (
+            entrance_transform.rotation.w,
+            entrance_transform.rotation.x,
+            entrance_transform.rotation.y,
+            entrance_transform.rotation.z,
+        )
+        plug_tf_stamped = self._parent_node._tf_buffer.lookup_transform(
+            "base_link",
+            f"{task.cable_name}/{task.plug_name}_link",
+            Time(),
+        )
+        q_plug = (
+            plug_tf_stamped.transform.rotation.w,
+            plug_tf_stamped.transform.rotation.x,
+            plug_tf_stamped.transform.rotation.y,
+            plug_tf_stamped.transform.rotation.z,
+        )
+        q_plug_inv = (-q_plug[0], q_plug[1], q_plug[2], q_plug[3])
+        gripper_tf_stamped = self._parent_node._tf_buffer.lookup_transform(
+            "base_link",
+            "gripper/tcp",
+            Time(),
+        )
+        q_gripper = (
+            gripper_tf_stamped.transform.rotation.w,
+            gripper_tf_stamped.transform.rotation.x,
+            gripper_tf_stamped.transform.rotation.y,
+            gripper_tf_stamped.transform.rotation.z,
+        )
+        q_gripper_target = quaternion_multiply(quaternion_multiply(q_port, q_plug_inv), q_gripper)
+        q_gripper_slerp = quaternion_slerp(q_gripper, q_gripper_target, slerp_fraction)
+        port_rotation = quaternion_xyzw_to_rotation_matrix(
+            np.asarray(
+                [
+                    float(entrance_transform.rotation.x),
+                    float(entrance_transform.rotation.y),
+                    float(entrance_transform.rotation.z),
+                    float(entrance_transform.rotation.w),
+                ],
+                dtype=np.float64,
+            )
+        )
+        port_axis_base = port_rotation @ np.asarray([0.0, 0.0, 1.0], dtype=np.float64)
+        entrance_xyz = np.asarray(
+            [
+                float(entrance_transform.translation.x),
+                float(entrance_transform.translation.y),
+                float(entrance_transform.translation.z),
+            ],
+            dtype=np.float64,
+        )
+        gripper_xyz = np.asarray(
+            [
+                gripper_tf_stamped.transform.translation.x,
+                gripper_tf_stamped.transform.translation.y,
+                gripper_tf_stamped.transform.translation.z,
+            ],
+            dtype=np.float64,
+        )
+        plug_xyz = np.asarray(
+            [
+                plug_tf_stamped.transform.translation.x,
+                plug_tf_stamped.transform.translation.y,
+                plug_tf_stamped.transform.translation.z,
+            ],
+            dtype=np.float64,
+        )
+        target_xyz = entrance_xyz + port_axis_base * float(axial_offset_m) + (gripper_xyz - plug_xyz)
+        if lateral_offset_base is not None:
+            lateral_offset = np.asarray(lateral_offset_base, dtype=np.float64)
+            target_xyz[:2] += lateral_offset[:2]
         blend_xyz = position_fraction * target_xyz + (1.0 - position_fraction) * gripper_xyz
         return Pose(
             position=Point(x=float(blend_xyz[0]), y=float(blend_xyz[1]), z=float(blend_xyz[2])),
@@ -1532,6 +1630,7 @@ class OfficialTeacherReplay(Policy):
         target_z_m: float | None = None,
         lateral_offset_base: np.ndarray | None = None,
         max_lateral_error_m: float | None = None,
+        near_gate_axial_target_m: float | None = None,
     ) -> bool:
         threshold = self._tracking_gate_threshold_m
         speed_threshold = float(os.environ.get("AIC_OFFICIAL_TEACHER_TRACKING_GATE_SPEED_MPS", "0.006"))
@@ -1563,6 +1662,7 @@ class OfficialTeacherReplay(Policy):
         final_speed = None
         final_force_delta = None
         final_lateral_error = None
+        final_axial_error = None
         final_commanded_lateral_error = None
         servo_command_bias_base = np.zeros(3, dtype=np.float64)
         gate_threshold = threshold
@@ -1598,16 +1698,25 @@ class OfficialTeacherReplay(Policy):
         desired_target_pose = None
         while (self.time_now() - started) < Duration(seconds=timeout_sec):
             try:
-                desired_target_pose = self._calc_cheatcode_gripper_pose(
-                    task,
-                    port_transform,
-                    slerp_fraction=1.0,
-                    position_fraction=1.0,
-                    z_offset=z_offset,
-                    reset_xy_integrator=True,
-                    preserve_current_z=preserve_current_z,
-                    lateral_offset_base=desired_lateral_offset_base,
-                )
+                if near_gate_axial_target_m is None:
+                    desired_target_pose = self._calc_cheatcode_gripper_pose(
+                        task,
+                        port_transform,
+                        slerp_fraction=1.0,
+                        position_fraction=1.0,
+                        z_offset=z_offset,
+                        reset_xy_integrator=True,
+                        preserve_current_z=preserve_current_z,
+                        lateral_offset_base=desired_lateral_offset_base,
+                    )
+                else:
+                    desired_target_pose = self._calc_near_gate_gripper_pose(
+                        task,
+                        axial_offset_m=near_gate_axial_target_m,
+                        slerp_fraction=1.0,
+                        position_fraction=1.0,
+                        lateral_offset_base=desired_lateral_offset_base,
+                    )
                 if target_z_m is not None:
                     desired_target_pose.position.z = float(target_z_m)
                 target_pose = desired_target_pose
@@ -1646,16 +1755,25 @@ class OfficialTeacherReplay(Policy):
                                 servo_command_bias_base *= servo_max_bias_m / bias_norm
                     except TransformException:
                         pass
-                    target_pose = self._calc_cheatcode_gripper_pose(
-                        task,
-                        port_transform,
-                        slerp_fraction=1.0,
-                        position_fraction=1.0,
-                        z_offset=z_offset,
-                        reset_xy_integrator=True,
-                        preserve_current_z=preserve_current_z,
-                        lateral_offset_base=desired_lateral_offset_base + servo_command_bias_base,
-                    )
+                    if near_gate_axial_target_m is None:
+                        target_pose = self._calc_cheatcode_gripper_pose(
+                            task,
+                            port_transform,
+                            slerp_fraction=1.0,
+                            position_fraction=1.0,
+                            z_offset=z_offset,
+                            reset_xy_integrator=True,
+                            preserve_current_z=preserve_current_z,
+                            lateral_offset_base=desired_lateral_offset_base + servo_command_bias_base,
+                        )
+                    else:
+                        target_pose = self._calc_near_gate_gripper_pose(
+                            task,
+                            axial_offset_m=near_gate_axial_target_m,
+                            slerp_fraction=1.0,
+                            position_fraction=1.0,
+                            lateral_offset_base=desired_lateral_offset_base + servo_command_bias_base,
+                        )
                     if target_z_m is not None:
                         target_pose.position.z = float(target_z_m)
                 hold_command_mode = os.environ.get(
@@ -1686,23 +1804,61 @@ class OfficialTeacherReplay(Policy):
             final_speed = self._tcp_speed_norm(get_observation)
             final_force_delta = self._force_delta_norm(get_observation, baseline_force)
             final_lateral_error = None
+            final_axial_error = None
             if target_pose is not None:
                 try:
-                    if is_sc_plug:
+                    plug_transform_for_gate = None
+                    entrance_transform_for_gate = None
+                    try:
                         plug_transform_for_gate = self._parent_node._tf_buffer.lookup_transform(
                             "base_link",
                             f"{task.cable_name}/{task.plug_name}_link",
                             Time(),
                         ).transform
-                        final_lateral_error = float(
-                            np.linalg.norm(
+                    except TransformException:
+                        plug_transform_for_gate = None
+                    try:
+                        entrance_transform_for_gate = self._parent_node._tf_buffer.lookup_transform(
+                            "base_link",
+                            f"task_board/{task.target_module_name}/{task.port_name}_link_entrance",
+                            Time(),
+                        ).transform
+                    except TransformException:
+                        entrance_transform_for_gate = None
+                    if plug_transform_for_gate is not None and entrance_transform_for_gate is not None:
+                        port_rotation = quaternion_xyzw_to_rotation_matrix(
+                            np.asarray(
                                 [
-                                    port_transform.translation.x - plug_transform_for_gate.translation.x,
-                                    port_transform.translation.y - plug_transform_for_gate.translation.y,
-                                ]
+                                    float(entrance_transform_for_gate.rotation.x),
+                                    float(entrance_transform_for_gate.rotation.y),
+                                    float(entrance_transform_for_gate.rotation.z),
+                                    float(entrance_transform_for_gate.rotation.w),
+                                ],
+                                dtype=np.float64,
                             )
                         )
-                        final_commanded_lateral_error = final_lateral_error
+                        port_axis_base = port_rotation @ np.asarray([0.0, 0.0, 1.0], dtype=np.float64)
+                        plug_minus_entrance = np.asarray(
+                            [
+                                float(plug_transform_for_gate.translation.x - entrance_transform_for_gate.translation.x),
+                                float(plug_transform_for_gate.translation.y - entrance_transform_for_gate.translation.y),
+                                float(plug_transform_for_gate.translation.z - entrance_transform_for_gate.translation.z),
+                            ],
+                            dtype=np.float64,
+                        )
+                        final_axial_error = float(abs(np.dot(plug_minus_entrance, port_axis_base)))
+                    if is_sc_plug:
+                        if plug_transform_for_gate is not None:
+                            lateral_reference_transform = entrance_transform_for_gate or port_transform
+                            final_lateral_error = float(
+                                np.linalg.norm(
+                                    [
+                                        lateral_reference_transform.translation.x - plug_transform_for_gate.translation.x,
+                                        lateral_reference_transform.translation.y - plug_transform_for_gate.translation.y,
+                                    ]
+                                )
+                            )
+                            final_commanded_lateral_error = final_lateral_error
                     else:
                         current_pose_for_gate = self._current_tcp_pose()
                         current_xyz_for_gate = self._pose_position_array(current_pose_for_gate)
@@ -1751,13 +1907,23 @@ class OfficialTeacherReplay(Policy):
             ).transform
         except TransformException:
             plug_transform = None
+        final_axial_error = None
         if current_pose is not None and target_pose is not None:
             if is_sc_plug and plug_transform is not None:
+                lateral_reference_transform = port_transform
+                try:
+                    lateral_reference_transform = self._parent_node._tf_buffer.lookup_transform(
+                        "base_link",
+                        f"task_board/{task.target_module_name}/{task.port_name}_link_entrance",
+                        Time(),
+                    ).transform
+                except TransformException:
+                    lateral_reference_transform = port_transform
                 final_lateral_error = float(
                     np.linalg.norm(
                         [
-                            port_transform.translation.x - plug_transform.translation.x,
-                            port_transform.translation.y - plug_transform.translation.y,
+                            lateral_reference_transform.translation.x - plug_transform.translation.x,
+                            lateral_reference_transform.translation.y - plug_transform.translation.y,
                         ]
                     )
                 )
@@ -1769,6 +1935,36 @@ class OfficialTeacherReplay(Policy):
                 final_lateral_error = float(np.linalg.norm((current_xyz - target_xyz)[:2]))
                 commanded_xyz = self._pose_position_array(target_pose)
                 final_commanded_lateral_error = float(np.linalg.norm((current_xyz - commanded_xyz)[:2]))
+        if plug_transform is not None:
+            try:
+                entrance_transform = self._parent_node._tf_buffer.lookup_transform(
+                    "base_link",
+                    f"task_board/{task.target_module_name}/{task.port_name}_link_entrance",
+                    Time(),
+                ).transform
+                port_rotation = quaternion_xyzw_to_rotation_matrix(
+                    np.asarray(
+                        [
+                            float(entrance_transform.rotation.x),
+                            float(entrance_transform.rotation.y),
+                            float(entrance_transform.rotation.z),
+                            float(entrance_transform.rotation.w),
+                        ],
+                        dtype=np.float64,
+                    )
+                )
+                port_axis_base = port_rotation @ np.asarray([0.0, 0.0, 1.0], dtype=np.float64)
+                plug_minus_entrance = np.asarray(
+                    [
+                        float(plug_transform.translation.x - entrance_transform.translation.x),
+                        float(plug_transform.translation.y - entrance_transform.translation.y),
+                        float(plug_transform.translation.z - entrance_transform.translation.z),
+                    ],
+                    dtype=np.float64,
+                )
+                final_axial_error = float(abs(np.dot(plug_minus_entrance, port_axis_base)))
+            except TransformException:
+                final_axial_error = None
         self._trace_event(
             "tracking_gate_checked",
             tracking_gate_passed=passed,
@@ -1778,6 +1974,7 @@ class OfficialTeacherReplay(Policy):
             timeout_sec=timeout_sec,
             final_tracking_error_m=final_error,
             final_lateral_error_m=final_lateral_error,
+            final_axial_error_m=final_axial_error,
             speed_threshold_mps=speed_threshold,
             max_lateral_error_m=max_lateral_error_m if max_lateral_error_m > 0.0 else None,
             final_tcp_speed_mps=final_speed,
@@ -1807,6 +2004,7 @@ class OfficialTeacherReplay(Policy):
         self._last_tracking_gate_baseline_force = baseline_force.copy()
         self._last_tracking_gate_error_m = final_error
         self._last_tracking_gate_lateral_error_m = final_lateral_error
+        self._last_tracking_gate_axial_error_m = final_axial_error
         self._last_tracking_gate_speed_mps = final_speed
         return passed
 
@@ -3286,6 +3484,15 @@ class OfficialTeacherReplay(Policy):
                     ),
                 )
             baseline_force = self._force_vector(get_observation)
+            stop_at_near_gate = (
+                os.environ.get("AIC_OFFICIAL_TEACHER_STOP_AT_NEAR_GATE", "false").lower()
+                in {"1", "true", "yes", "on"}
+            )
+            stop_near_gate_axial_target_m = (
+                float(os.environ.get("AIC_OFFICIAL_TEACHER_STOP_NEAR_GATE_TARGET_AXIAL_OFFSET_M", "0.0"))
+                if stop_at_near_gate
+                else None
+            )
             if cheatcode_z_mode == "cheatcode_offsets":
                 live_z_offset = self._current_cheatcode_z_offset(task, port_transform)
                 max_live_start_z_offset = float(
@@ -3330,6 +3537,7 @@ class OfficialTeacherReplay(Policy):
                         z_offset=z_offset,
                         preserve_current_z=False,
                         lateral_offset_base=active_lateral_offset,
+                        near_gate_axial_target_m=stop_near_gate_axial_target_m,
                     )
                     guarded_start_z_offset = z_offset
                     guarded_insertion_distance = planned_insertion_distance
@@ -3588,6 +3796,54 @@ class OfficialTeacherReplay(Policy):
                             send_feedback("official_teacher_replay_tracking_gate_failed")
                             return False
                 is_sc_plug = str(getattr(task, "plug_name", "")).startswith("sc")
+                if gate_passed and stop_at_near_gate:
+                    near_gate_max_lateral_m = float(
+                        os.environ.get("AIC_OFFICIAL_TEACHER_NEAR_GATE_MAX_LATERAL_ERROR_M", "0.003")
+                    )
+                    near_gate_max_axial_text = os.environ.get("AIC_OFFICIAL_TEACHER_NEAR_GATE_MAX_AXIAL_ERROR_M")
+                    near_gate_max_axial_m = (
+                        float(near_gate_max_axial_text) if near_gate_max_axial_text not in (None, "") else None
+                    )
+                    near_gate_lateral_error = (
+                        float(self._last_tracking_gate_lateral_error_m)
+                        if self._last_tracking_gate_lateral_error_m is not None
+                        else None
+                    )
+                    near_gate_axial_error = (
+                        float(self._last_tracking_gate_axial_error_m)
+                        if self._last_tracking_gate_axial_error_m is not None
+                        else None
+                    )
+                    axial_ok = (
+                        near_gate_max_axial_m is None
+                        or (near_gate_axial_error is not None and near_gate_axial_error <= near_gate_max_axial_m)
+                    )
+                    if (
+                        near_gate_lateral_error is not None
+                        and near_gate_lateral_error <= near_gate_max_lateral_m
+                        and axial_ok
+                    ):
+                        self._trace_event(
+                            "near_gate_stop_satisfied",
+                            retry_count=retry_count,
+                            lateral_error_m=near_gate_lateral_error,
+                            max_lateral_error_m=near_gate_max_lateral_m,
+                            axial_error_m=near_gate_axial_error,
+                            max_axial_error_m=near_gate_max_axial_m,
+                            tcp_speed_mps=(
+                                float(self._last_tracking_gate_speed_mps)
+                                if self._last_tracking_gate_speed_mps is not None
+                                else None
+                            ),
+                            force_delta_n=(
+                                float(self._last_tracking_gate_force_delta_n)
+                                if self._last_tracking_gate_force_delta_n is not None
+                                else None
+                            ),
+                            z_offset=guarded_start_z_offset,
+                        )
+                        send_feedback("official_teacher_replay_near_gate_stop")
+                        return True
                 final_align_sec = (
                     float(os.environ.get("AIC_OFFICIAL_TEACHER_NOMINAL_FINAL_PORT_ALIGN_SEC", "0.0"))
                     if self._expert_mode == "nominal"
@@ -3736,7 +3992,15 @@ class OfficialTeacherReplay(Policy):
             )
             def recover_after_contact() -> bool:
                 nonlocal retry_count, retry_requested
-                if self._expert_mode == "nominal":
+                nominal_sc_recovery_enabled = (
+                    str(getattr(task, "plug_name", "")).startswith("sc")
+                    and os.environ.get(
+                        "AIC_OFFICIAL_TEACHER_SC_NO_EVENT_RECOVERY",
+                        "false",
+                    ).lower()
+                    in {"1", "true", "yes", "on"}
+                )
+                if self._expert_mode == "nominal" and not nominal_sc_recovery_enabled:
                     send_feedback("official_teacher_replay_nominal_contact_rejected")
                     return False
                 send_feedback("official_teacher_replay_recovery_backoff")
@@ -3865,6 +4129,23 @@ class OfficialTeacherReplay(Policy):
             )
             sc_guarded_servo_force_limit_n = float(
                 os.environ.get("AIC_OFFICIAL_TEACHER_SC_GUARDED_INSERT_LATERAL_SERVO_FORCE_LIMIT_N", "5.0")
+            )
+            sc_guarded_servo_allow_force_relief = (
+                os.environ.get(
+                    "AIC_OFFICIAL_TEACHER_SC_GUARDED_INSERT_LATERAL_SERVO_ALLOW_FORCE_RELIEF",
+                    "false",
+                ).lower()
+                in {"1", "true", "yes", "on"}
+            )
+            sc_guarded_servo_force_relief_gain = float(
+                os.environ.get("AIC_OFFICIAL_TEACHER_SC_GUARDED_INSERT_LATERAL_SERVO_FORCE_RELIEF_GAIN", "0.5")
+            )
+            sc_guarded_servo_force_relief_hold_z = (
+                os.environ.get(
+                    "AIC_OFFICIAL_TEACHER_SC_GUARDED_INSERT_LATERAL_SERVO_FORCE_RELIEF_HOLD_Z",
+                    "true",
+                ).lower()
+                in {"1", "true", "yes", "on"}
             )
             sc_guarded_servo_bias = np.zeros(3, dtype=np.float64)
 
@@ -4070,6 +4351,7 @@ class OfficialTeacherReplay(Policy):
                 speed_gate_hold_count = 0
                 fraction = self._minimum_jerk_fraction(descent_step / insertion_steps)
                 current_z = guarded_start_z_offset - fraction * guarded_insertion_distance
+                commanded_z = current_z
                 contact_confirmed = False
                 try:
                     if sc_guarded_servo_enabled:
@@ -4085,11 +4367,21 @@ class OfficialTeacherReplay(Policy):
                                 dtype=np.float64,
                             )
                             plug_error_norm = float(np.linalg.norm(plug_error_base[:2]))
-                            if (
-                                plug_error_norm > sc_guarded_servo_deadband_m
-                                and force_delta_for_servo <= sc_guarded_servo_force_limit_n
+                            over_servo_force_limit = force_delta_for_servo > sc_guarded_servo_force_limit_n
+                            can_force_relieve = (
+                                sc_guarded_servo_allow_force_relief
+                                and over_servo_force_limit
+                                and plug_error_norm > sc_guarded_servo_deadband_m
+                            )
+                            if plug_error_norm > sc_guarded_servo_deadband_m and (
+                                not over_servo_force_limit or can_force_relieve
                             ):
-                                correction = sc_guarded_servo_gain * plug_error_base
+                                correction_gain = (
+                                    sc_guarded_servo_gain * sc_guarded_servo_force_relief_gain
+                                    if can_force_relieve
+                                    else sc_guarded_servo_gain
+                                )
+                                correction = correction_gain * plug_error_base
                                 correction_norm = float(np.linalg.norm(correction[:2]))
                                 if correction_norm > sc_guarded_servo_step_limit_m:
                                     correction *= sc_guarded_servo_step_limit_m / correction_norm
@@ -4099,20 +4391,36 @@ class OfficialTeacherReplay(Policy):
                                     proposed_bias *= sc_guarded_servo_max_bias_m / proposed_norm
                                 sc_guarded_servo_bias = proposed_bias
                                 self._trace_event(
-                                    "sc_guarded_insert_lateral_servo_updated",
+                                    (
+                                        "sc_guarded_insert_lateral_servo_force_relief_updated"
+                                        if can_force_relieve
+                                        else "sc_guarded_insert_lateral_servo_updated"
+                                    ),
                                     retry_count=retry_count,
-                                    z_offset=current_z,
+                                    z_offset=commanded_z,
                                     plug_tip_lateral_error_m=plug_error_norm,
                                     correction_base_m=correction.tolist(),
                                     servo_bias_base_m=sc_guarded_servo_bias.tolist(),
                                     force_delta_n=force_delta_for_servo,
                                     force_limit_n=sc_guarded_servo_force_limit_n,
                                 )
+                                if can_force_relieve and sc_guarded_servo_force_relief_hold_z:
+                                    commanded_z = guarded_start_z_offset - self._minimum_jerk_fraction(
+                                        max(0, descent_step - 1) / insertion_steps
+                                    ) * guarded_insertion_distance
+                                    self._trace_event(
+                                        "sc_guarded_insert_force_relief_z_hold",
+                                        retry_count=retry_count,
+                                        requested_z_offset=current_z,
+                                        held_z_offset=commanded_z,
+                                        force_delta_n=force_delta_for_servo,
+                                        force_limit_n=sc_guarded_servo_force_limit_n,
+                                    )
                             elif plug_error_norm > sc_guarded_servo_deadband_m:
                                 self._trace_event(
                                     "sc_guarded_insert_lateral_servo_skipped_force",
                                     retry_count=retry_count,
-                                    z_offset=current_z,
+                                    z_offset=commanded_z,
                                     plug_tip_lateral_error_m=plug_error_norm,
                                     force_delta_n=force_delta_for_servo,
                                     force_limit_n=sc_guarded_servo_force_limit_n,
@@ -4121,7 +4429,9 @@ class OfficialTeacherReplay(Policy):
                         target_xyz = self._pose_position_array(insertion_reference_pose)
                         if sc_guarded_servo_enabled:
                             target_xyz[:2] = target_xyz[:2] + sc_guarded_servo_bias[:2]
-                        target_xyz[2] = float(insertion_reference_pose.position.z) - fraction * guarded_insertion_distance
+                        target_xyz[2] = float(insertion_reference_pose.position.z) - (
+                            guarded_start_z_offset - commanded_z
+                        )
                         target_pose = self._make_pose(
                             target_xyz,
                             self._pose_quat_wxyz(insertion_reference_pose),
@@ -4130,12 +4440,12 @@ class OfficialTeacherReplay(Policy):
                         target_pose = self._calc_cheatcode_gripper_pose(
                             task,
                             port_transform,
-                            z_offset=current_z,
+                            z_offset=commanded_z,
                             preserve_current_z=(cheatcode_z_mode == "tf_depth"),
                             lateral_offset_base=active_lateral_offset + sc_guarded_servo_bias,
                         )
                     if cheatcode_z_mode == "tf_depth":
-                        target_pose.position.z = insertion_start_z - fraction * guarded_insertion_distance
+                        target_pose.position.z = insertion_start_z - (guarded_start_z_offset - commanded_z)
                     if insertion_command_mode == "exact_position":
                         self._send_absolute_target(move_robot, target_pose)
                         last_target_pose = target_pose
@@ -4146,7 +4456,7 @@ class OfficialTeacherReplay(Policy):
                             guarded_insert_speed_gate_held=False,
                             actual_tcp_speed_mps=actual_tcp_speed,
                             speed_threshold_mps=speed_gate_mps,
-                            target_z_offset=current_z,
+                            target_z_offset=commanded_z,
                         )
                     else:
                         self._send_relative_target(
@@ -4257,7 +4567,6 @@ class OfficialTeacherReplay(Policy):
                 continue
             sc_no_event_recovery_enabled = (
                 is_sc_plug
-                and self._expert_mode != "nominal"
                 and os.environ.get(
                     "AIC_OFFICIAL_TEACHER_SC_NO_EVENT_RECOVERY",
                     "false",

@@ -63,6 +63,12 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--max-total-attempts", type=int, default=300)
     parser.add_argument("--candidates-per-scene", type=int, default=5)
     parser.add_argument("--score-threshold", type=float, default=95.0)
+    parser.add_argument("--allow-near-gate-acceptance", type=str_bool, default=False)
+    parser.add_argument("--near-gate-max-lateral-error-m", type=float, default=0.003)
+    parser.add_argument("--near-gate-max-axial-error-m", type=float, default=None)
+    parser.add_argument("--near-gate-max-tcp-speed-mps", type=float, default=None)
+    parser.add_argument("--near-gate-max-force-delta-n", type=float, default=None)
+    parser.add_argument("--near-gate-max-force-n", type=float, default=None)
     parser.add_argument("--ft-threshold", type=float, default=None)
     parser.add_argument("--max-force-threshold", type=float, default=None, help=argparse.SUPPRESS)
     parser.add_argument("--max-offlimit-contacts", type=int, default=0)
@@ -385,8 +391,13 @@ def run_live_generation(
             }
         )
         validation = _augment_validation_with_debug(validation, debug_assessment, mode=mode)
+        validation, near_gate_metadata = _maybe_accept_near_gate(
+            validation,
+            debug_assessment,
+            args=args,
+        )
         record["replay_metrics"] = replay_metrics
-        record["validation"] = validation.to_dict()
+        record["validation"] = {**validation.to_dict(), **near_gate_metadata}
         record["debug_assessment"] = debug_assessment
         repair_metrics = None
         if mode == ExpertMode.NOMINAL and _should_attempt_nominal_repair(validation, debug_assessment):
@@ -413,6 +424,11 @@ def run_live_generation(
                 }
             )
             repaired_validation = _augment_validation_with_debug(repaired_validation, repaired_assessment, mode=mode)
+            repaired_validation, repaired_near_gate_metadata = _maybe_accept_near_gate(
+                repaired_validation,
+                repaired_assessment,
+                args=args,
+            )
             if args.debug:
                 repaired_debug_root = (
                     output_dir / f"accepted_dataset_{mode.value}"
@@ -428,6 +444,7 @@ def run_live_generation(
                     },
                     validation={
                         **repaired_validation.to_dict(),
+                        **repaired_near_gate_metadata,
                         "precontact_repair": repair_metrics,
                         "debug_assessment": repaired_assessment,
                     },
@@ -445,13 +462,14 @@ def run_live_generation(
             record["repair_attempted"] = True
             record["repair_metrics"] = repair_metrics
             record["repaired_replay_metrics"] = repaired_replay_metrics
-            record["repaired_validation"] = repaired_validation.to_dict()
+            record["repaired_validation"] = {**repaired_validation.to_dict(), **repaired_near_gate_metadata}
             record["repaired_debug_assessment"] = repaired_assessment
             smooth = repaired
             smooth_path = repaired_path
             replay_metrics = repaired_replay_metrics
             validation = repaired_validation
             debug_assessment = repaired_assessment
+            near_gate_metadata = repaired_near_gate_metadata
         else:
             record["repair_attempted"] = False
             if repair_metrics:
@@ -468,6 +486,7 @@ def run_live_generation(
                 replay_metrics=replay_metrics,
                 validation={
                     **validation.to_dict(),
+                    **near_gate_metadata,
                     "debug_assessment": debug_assessment,
                     "precontact_repair": repair_metrics,
                 },
@@ -491,7 +510,7 @@ def run_live_generation(
                     scene_id=f"attempt_{attempts:06d}",
                     candidate_index=candidate_index,
                     trajectory_path=str(smooth_path),
-                    validation=validation.to_dict(),
+                    validation={**validation.to_dict(), **near_gate_metadata},
                     vlm_strategy=strategy,
                     moveit=planning.get("moveit", {}),
                     phase_labels=[
@@ -608,6 +627,19 @@ def _live_debug_assessment(smooth, replay_metrics: dict) -> dict:
     if runtime_guarded_speeds:
         max_guarded_speed = max(runtime_guarded_speeds)
     gate_events = [event for event in runtime_events if event.get("event") == "tracking_gate_checked"]
+    guarded_start_time = None
+    for event in runtime_events:
+        if event.get("event") == "guarded_insert_started":
+            guarded_start_time = event.get("time_sec")
+            break
+    preinsert_gate_events = [
+        event
+        for event in gate_events
+        if guarded_start_time is None
+        or event.get("time_sec") is None
+        or float(event.get("time_sec")) <= float(guarded_start_time)
+    ]
+    preinsert_gate = preinsert_gate_events[-1] if preinsert_gate_events else (gate_events[-1] if gate_events else {})
     gate_repair_events = [
         event
         for event in runtime_events
@@ -662,6 +694,21 @@ def _live_debug_assessment(smooth, replay_metrics: dict) -> dict:
         "tracking_gate_passed": tracking_gate_passed,
         "tracking_gate_repaired_with_live_z_offset": bool(gate_repair_events),
         "tracking_gate_final_error_m": gate_events[-1].get("final_tracking_error_m") if gate_events else None,
+        "preinsert_tracking_gate_checked": bool(preinsert_gate),
+        "preinsert_tracking_gate_passed": preinsert_gate.get("tracking_gate_passed") if preinsert_gate else None,
+        "preinsert_tracking_gate_final_error_m": (
+            preinsert_gate.get("final_tracking_error_m") if preinsert_gate else None
+        ),
+        "preinsert_tracking_gate_final_lateral_error_m": (
+            preinsert_gate.get("final_lateral_error_m") if preinsert_gate else None
+        ),
+        "preinsert_tracking_gate_final_axial_error_m": (
+            preinsert_gate.get("final_axial_error_m") if preinsert_gate else None
+        ),
+        "preinsert_tracking_gate_final_tcp_speed_mps": (
+            preinsert_gate.get("final_tcp_speed_mps") if preinsert_gate else None
+        ),
+        "preinsert_tracking_gate_force_delta_n": preinsert_gate.get("force_delta_n") if preinsert_gate else None,
         "contact_detected": bool(contact_events),
         "backoff_occurred": bool(backoff_events or backoff_stage_events),
         "backoff_distance_achieved_m": latest_backoff.get("backoff_distance_achieved_m") if backoff_events else None,
@@ -674,6 +721,21 @@ def _live_debug_assessment(smooth, replay_metrics: dict) -> dict:
             "max_guarded_insert_speed_source": "runtime_trace" if runtime_guarded_speeds else "sampled_phase_metrics",
             "tracking_gate_passed": tracking_gate_passed,
             "tracking_gate_repaired_with_live_z_offset": bool(gate_repair_events),
+            "preinsert_tracking_gate_checked": bool(preinsert_gate),
+            "preinsert_tracking_gate_passed": preinsert_gate.get("tracking_gate_passed") if preinsert_gate else None,
+            "preinsert_tracking_gate_final_error_m": (
+                preinsert_gate.get("final_tracking_error_m") if preinsert_gate else None
+            ),
+            "preinsert_tracking_gate_final_lateral_error_m": (
+                preinsert_gate.get("final_lateral_error_m") if preinsert_gate else None
+            ),
+            "preinsert_tracking_gate_final_axial_error_m": (
+                preinsert_gate.get("final_axial_error_m") if preinsert_gate else None
+            ),
+            "preinsert_tracking_gate_final_tcp_speed_mps": (
+                preinsert_gate.get("final_tcp_speed_mps") if preinsert_gate else None
+            ),
+            "preinsert_tracking_gate_force_delta_n": preinsert_gate.get("force_delta_n") if preinsert_gate else None,
             "contact_detected": bool(contact_events),
             "backoff_occurred": bool(backoff_events or backoff_stage_events),
             "backoff_distance_achieved_m": latest_backoff.get("backoff_distance_achieved_m") if backoff_events else None,
@@ -723,7 +785,79 @@ def _augment_validation_with_debug(validation, assessment: dict, *, mode: Expert
     return replace(validation, accepted=False, reasons=reasons)
 
 
+def _maybe_accept_near_gate(validation, assessment: dict, *, args: argparse.Namespace):
+    if not args.allow_near_gate_acceptance:
+        return validation, {}
+    metrics = assessment.get("metrics", {})
+    lateral_error = metrics.get("preinsert_tracking_gate_final_lateral_error_m")
+    axial_error = metrics.get("preinsert_tracking_gate_final_axial_error_m")
+    tcp_speed = metrics.get("preinsert_tracking_gate_final_tcp_speed_mps")
+    force_delta = metrics.get("preinsert_tracking_gate_force_delta_n")
+    max_force_n = validation.max_force_n
+    checks = {
+        "preinsert_tracking_gate_checked": bool(metrics.get("preinsert_tracking_gate_checked")),
+        "preinsert_tracking_gate_passed": metrics.get("preinsert_tracking_gate_passed") is True,
+        "lateral_error_within_threshold": (
+            lateral_error is not None and float(lateral_error) <= args.near_gate_max_lateral_error_m
+        ),
+        "axial_error_within_threshold": (
+            args.near_gate_max_axial_error_m is None
+            or (axial_error is not None and float(axial_error) <= args.near_gate_max_axial_error_m)
+        ),
+        "tcp_speed_within_threshold": (
+            args.near_gate_max_tcp_speed_mps is None
+            or (tcp_speed is not None and float(tcp_speed) <= args.near_gate_max_tcp_speed_mps)
+        ),
+        "force_delta_within_threshold": (
+            args.near_gate_max_force_delta_n is None
+            or (force_delta is not None and float(force_delta) <= args.near_gate_max_force_delta_n)
+        ),
+        "max_force_within_threshold": (
+            args.near_gate_max_force_n is None
+            or (max_force_n is not None and float(max_force_n) <= args.near_gate_max_force_n)
+        ),
+        "offlimit_contact_count_ok": validation.offlimit_contact_count == 0,
+        "moveit_success": validation.moveit_success,
+    }
+    accepted = all(checks.values())
+    original_reasons = list(validation.reasons)
+    if validation.accepted:
+        original_reasons.append("standard_validation_would_accept")
+    metadata = {
+        "near_gate_acceptance": {
+            "enabled": True,
+            "accepted": accepted,
+            "checks": checks,
+            "thresholds": {
+                "max_lateral_error_m": args.near_gate_max_lateral_error_m,
+                "max_axial_error_m": args.near_gate_max_axial_error_m,
+                "max_tcp_speed_mps": args.near_gate_max_tcp_speed_mps,
+                "max_force_delta_n": args.near_gate_max_force_delta_n,
+                "max_force_n": args.near_gate_max_force_n,
+            },
+            "metrics": {
+                "preinsert_tracking_gate_final_lateral_error_m": lateral_error,
+                "preinsert_tracking_gate_final_axial_error_m": axial_error,
+                "preinsert_tracking_gate_final_tcp_speed_mps": tcp_speed,
+                "preinsert_tracking_gate_force_delta_n": force_delta,
+                "max_force_n": max_force_n,
+                "preinsert_tracking_gate_final_error_m": metrics.get("preinsert_tracking_gate_final_error_m"),
+            },
+            "original_reasons": original_reasons,
+            "original_score": validation.score,
+        }
+    }
+    if not accepted:
+        reasons = list(dict.fromkeys([*validation.reasons, "near_gate_acceptance_failed"]))
+        return replace(validation, accepted=False, reasons=reasons), metadata
+    metadata["acceptance_type"] = "near_gate"
+    metadata["score"] = float(args.score_threshold)
+    return replace(validation, accepted=True, reasons=[]), metadata
+
+
 def _should_attempt_nominal_repair(validation, assessment: dict) -> bool:
+    if validation.accepted:
+        return False
     if assessment.get("contact_detected"):
         return False
     if "force_above_threshold_or_missing" in validation.reasons:

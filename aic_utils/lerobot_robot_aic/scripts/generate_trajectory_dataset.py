@@ -57,6 +57,21 @@ MOUNT_ENTITY_NAMES = {
     "sfp_mount_rail_1": "sfp_mount_1",
     "sc_mount_rail_1": "sc_mount_1",
 }
+DEFAULT_START_NEAR_GATE_REFERENCE_TCP = (-0.4, 0.2, 0.3)
+DEFAULT_ROBOT_WORLD_POSITION = (-0.2, 0.2, 1.14)
+DEFAULT_ROBOT_WORLD_YAW = -3.141
+NIC_RAIL_Y = {
+    0: -0.1745,
+    1: -0.1345,
+    2: -0.0945,
+    3: -0.0545,
+    4: -0.0145,
+}
+SC_RAIL_Y = {0: 0.0295, 1: 0.0705}
+SFP_PORT_LOCAL = {
+    "sfp_port_0": (0.01295, -0.031572, 0.00501),
+    "sfp_port_1": (-0.01025, -0.031572, 0.00501),
+}
 LIMITS = {
     "nic_translation": (-0.0215, 0.0234),
     "nic_yaw_deg": (-10.0, 10.0),
@@ -121,6 +136,30 @@ def validate_request(request: dict[str, Any]) -> None:
             f"generation.expert_mode must be one of {sorted(AGENT_EXPERT_MODES)} for policy='agent'"
         )
     require_path(request, "acceptance.min_score")
+    stop_near_gate = (request.get("acceptance") or {}).get("stop_near_gate")
+    legacy_near_gate = (request.get("acceptance") or {}).get("near_gate")
+    if stop_near_gate is not None and legacy_near_gate is not None:
+        raise ValueError("Use acceptance.stop_near_gate or deprecated acceptance.near_gate, not both")
+    start_near_gate = (request.get("scene") or {}).get("start_near_gate")
+    if start_near_gate is not None:
+        if not isinstance(start_near_gate, dict):
+            raise ValueError("scene.start_near_gate must be a map")
+        if "distance" in start_near_gate:
+            distance = float(start_near_gate["distance"])
+            if distance <= 0.0:
+                raise ValueError("scene.start_near_gate.distance must be > 0")
+        else:
+            if "axial_distance_m" not in start_near_gate or "lateral_distance_m" not in start_near_gate:
+                raise ValueError(
+                    "scene.start_near_gate requires axial_distance_m and lateral_distance_m "
+                    "when legacy distance is omitted"
+                )
+            axial_distance = float(start_near_gate["axial_distance_m"])
+            lateral_distance = float(start_near_gate["lateral_distance_m"])
+            if axial_distance < 0.0:
+                raise ValueError("scene.start_near_gate.axial_distance_m must be >= 0")
+            if lateral_distance < 0.0:
+                raise ValueError("scene.start_near_gate.lateral_distance_m must be >= 0")
     if task_family == "sfp_to_nic":
         require_path(request, "scene.nic_cards.count")
     else:
@@ -221,6 +260,107 @@ def _range_or_fixed(value: Any) -> tuple[float, float] | float:
             return float(value[0])
         return (float(value[0]), float(value[1]))
     return float(value)
+
+
+def _rot_x(angle: float) -> list[list[float]]:
+    c = math.cos(angle)
+    s = math.sin(angle)
+    return [[1.0, 0.0, 0.0], [0.0, c, -s], [0.0, s, c]]
+
+
+def _rot_y(angle: float) -> list[list[float]]:
+    c = math.cos(angle)
+    s = math.sin(angle)
+    return [[c, 0.0, s], [0.0, 1.0, 0.0], [-s, 0.0, c]]
+
+
+def _rot_z(angle: float) -> list[list[float]]:
+    c = math.cos(angle)
+    s = math.sin(angle)
+    return [[c, -s, 0.0], [s, c, 0.0], [0.0, 0.0, 1.0]]
+
+
+def _matmul(a: list[list[float]], b: list[list[float]]) -> list[list[float]]:
+    return [[sum(a[i][k] * b[k][j] for k in range(3)) for j in range(3)] for i in range(3)]
+
+
+def _rpy_matrix(roll: float, pitch: float, yaw: float) -> list[list[float]]:
+    return _matmul(_matmul(_rot_z(yaw), _rot_y(pitch)), _rot_x(roll))
+
+
+def _matvec(m: list[list[float]], v: tuple[float, float, float] | list[float]) -> tuple[float, float, float]:
+    return tuple(sum(m[i][j] * float(v[j]) for j in range(3)) for i in range(3))
+
+
+def _vadd(a: tuple[float, float, float], b: tuple[float, float, float]) -> tuple[float, float, float]:
+    return (a[0] + b[0], a[1] + b[1], a[2] + b[2])
+
+
+def _vsub(a: tuple[float, float, float], b: tuple[float, float, float]) -> tuple[float, float, float]:
+    return (a[0] - b[0], a[1] - b[1], a[2] - b[2])
+
+
+def _vscale(a: tuple[float, float, float], s: float) -> tuple[float, float, float]:
+    return (a[0] * s, a[1] * s, a[2] * s)
+
+
+def _vnorm(a: tuple[float, float, float]) -> float:
+    return math.sqrt(a[0] * a[0] + a[1] * a[1] + a[2] * a[2])
+
+
+def _transform_point(
+    translation: tuple[float, float, float],
+    rpy: tuple[float, float, float],
+    point: tuple[float, float, float],
+) -> tuple[float, float, float]:
+    return _vadd(translation, _matvec(_rpy_matrix(*rpy), point))
+
+
+def _normalize(v: tuple[float, float, float]) -> tuple[float, float, float]:
+    norm = _vnorm(v)
+    if norm < 1e-9:
+        raise ValueError("Cannot normalize near-zero vector")
+    return _vscale(v, 1.0 / norm)
+
+
+def _world_to_base_point(point_world: tuple[float, float, float]) -> tuple[float, float, float]:
+    return _matvec(
+        _rot_z(-DEFAULT_ROBOT_WORLD_YAW),
+        _vsub(point_world, DEFAULT_ROBOT_WORLD_POSITION),
+    )
+
+
+def _world_to_base_vector(vector_world: tuple[float, float, float]) -> tuple[float, float, float]:
+    return _matvec(_rot_z(-DEFAULT_ROBOT_WORLD_YAW), vector_world)
+
+
+def _base_to_world_vector(vector_base: tuple[float, float, float]) -> tuple[float, float, float]:
+    return _matvec(_rot_z(DEFAULT_ROBOT_WORLD_YAW), vector_base)
+
+
+def _cross(
+    a: tuple[float, float, float],
+    b: tuple[float, float, float],
+) -> tuple[float, float, float]:
+    return (
+        a[1] * b[2] - a[2] * b[1],
+        a[2] * b[0] - a[0] * b[2],
+        a[0] * b[1] - a[1] * b[0],
+    )
+
+
+def _random_perpendicular_unit(
+    axis: tuple[float, float, float],
+    rng: random.Random,
+) -> tuple[float, float, float]:
+    axis = _normalize(axis)
+    seed = (0.0, 0.0, 1.0)
+    if abs(axis[2]) > 0.9:
+        seed = (1.0, 0.0, 0.0)
+    basis_a = _normalize(_cross(axis, seed))
+    basis_b = _cross(axis, basis_a)
+    angle = rng.uniform(0.0, 2.0 * math.pi)
+    return _vadd(_vscale(basis_a, math.cos(angle)), _vscale(basis_b, math.sin(angle)))
 
 
 def _sample_pose_on_rail(
@@ -418,6 +558,165 @@ def _apply_family_task_and_cable(
     trial["tasks"] = {"task_1": task}
 
 
+def _target_gate_position_in_board_frame(trial: dict[str, Any]) -> tuple[float, float, float]:
+    return _target_gate_frame_in_board_frame(trial)[0]
+
+
+def _target_gate_frame_in_board_frame(
+    trial: dict[str, Any],
+) -> tuple[tuple[float, float, float], tuple[float, float, float]]:
+    task = trial["tasks"]["task_1"]
+    board = trial["scene"]["task_board"]
+    if task["port_type"] == "sfp":
+        target_idx = int(str(task["target_module_name"]).rsplit("_", 1)[1])
+        rail = board[f"nic_rail_{target_idx}"]
+        pose = rail["entity_pose"]
+        mount_translation = (
+            -0.081418 + float(pose["translation"]),
+            NIC_RAIL_Y[target_idx],
+            0.012,
+        )
+        port_translation = SFP_PORT_LOCAL[str(task["port_name"])]
+        entrance_translation = (0.0, 0.0, -0.0458)
+        mount_rpy = (float(pose["roll"]), float(pose["pitch"]), float(pose["yaw"]))
+        port_rpy = (4.69895, 0.0, 0.0)
+        point = _transform_point(port_translation, port_rpy, entrance_translation)
+        position = _transform_point(mount_translation, mount_rpy, point)
+        rotation = _matmul(_rpy_matrix(*mount_rpy), _rpy_matrix(*port_rpy))
+        axis = _matvec(rotation, (0.0, 0.0, 1.0))
+        return position, _normalize(axis)
+
+    target_idx = int(str(task["target_module_name"]).rsplit("_", 1)[1])
+    rail = board[f"sc_rail_{target_idx}"]
+    pose = rail["entity_pose"]
+    sc_translation = (
+        -0.075 + float(pose["translation"]),
+        SC_RAIL_Y[target_idx],
+        0.0165,
+    )
+    sc_rpy = (
+        1.57 + float(pose["roll"]),
+        float(pose["pitch"]),
+        1.57 + float(pose["yaw"]),
+    )
+    base_translation = (0.0, -0.002, 0.0)
+    base_rpy = (1.5708, 3.14159, 0.0)
+    entrance_translation = (0.0, 0.0, -0.01564)
+    point = _transform_point(base_translation, base_rpy, entrance_translation)
+    position = _transform_point(sc_translation, sc_rpy, point)
+    rotation = _matmul(_rpy_matrix(*sc_rpy), _rpy_matrix(*base_rpy))
+    axis = _matvec(rotation, (0.0, 0.0, 1.0))
+    return position, _normalize(axis)
+
+
+def _target_gate_position_world(trial: dict[str, Any]) -> tuple[float, float, float]:
+    return _target_gate_frame_world(trial)[0]
+
+
+def _target_gate_frame_world(
+    trial: dict[str, Any],
+) -> tuple[tuple[float, float, float], tuple[float, float, float]]:
+    board_pose = trial["scene"]["task_board"]["pose"]
+    board_translation = (
+        float(board_pose["x"]),
+        float(board_pose["y"]),
+        float(board_pose["z"]),
+    )
+    board_rpy = (
+        float(board_pose["roll"]),
+        float(board_pose["pitch"]),
+        float(board_pose["yaw"]),
+    )
+    position_board, axis_board = _target_gate_frame_in_board_frame(trial)
+    board_rotation = _rpy_matrix(*board_rpy)
+    position_world = _vadd(board_translation, _matvec(board_rotation, position_board))
+    axis_world = _normalize(_matvec(board_rotation, axis_board))
+    return _world_to_base_point(position_world), _normalize(_world_to_base_vector(axis_world))
+
+
+def _apply_start_near_gate(
+    trial: dict[str, Any],
+    section: dict[str, Any] | None,
+    rng: random.Random,
+) -> None:
+    if not section:
+        return
+    min_clearance = float(section.get("min_clearance_m", 0.02))
+    reference = section.get("reference_tcp_position", DEFAULT_START_NEAR_GATE_REFERENCE_TCP)
+    if not isinstance(reference, (list, tuple)) or len(reference) != 3:
+        raise ValueError("scene.start_near_gate.reference_tcp_position must be a 3-value list when provided")
+    reference_tcp = (float(reference[0]), float(reference[1]), float(reference[2]))
+    current_target, gate_axis_world = _target_gate_frame_world(trial)
+    metadata: dict[str, Any]
+    if "distance" in section:
+        distance = float(section["distance"])
+        if distance < min_clearance:
+            raise ValueError(
+                "scene.start_near_gate.distance must be at least min_clearance_m "
+                f"({distance} < {min_clearance})"
+            )
+        direction = _vsub(current_target, reference_tcp)
+        norm = _vnorm(direction)
+        if norm < 1e-6:
+            direction = _random_perpendicular_unit(gate_axis_world, rng)
+            norm = 1.0
+        desired_target = _vadd(reference_tcp, _vscale(direction, distance / norm))
+        metadata = {
+            "distance": distance,
+            "achieved_distance": None,
+        }
+    else:
+        axial_distance = float(section["axial_distance_m"])
+        lateral_distance = float(section["lateral_distance_m"])
+        total_distance = math.sqrt(axial_distance * axial_distance + lateral_distance * lateral_distance)
+        if total_distance < min_clearance:
+            raise ValueError(
+                "scene.start_near_gate combined axial/lateral distance must be at least min_clearance_m "
+                f"({total_distance} < {min_clearance})"
+            )
+        lateral_direction = _random_perpendicular_unit(gate_axis_world, rng)
+        reference_offset = _vadd(
+            _vscale(gate_axis_world, axial_distance),
+            _vscale(lateral_direction, lateral_distance),
+        )
+        desired_target = _vsub(reference_tcp, reference_offset)
+        metadata = {
+            "axial_distance_m": axial_distance,
+            "lateral_distance_m": lateral_distance,
+            "lateral_direction_world": [round(v, 6) for v in lateral_direction],
+        }
+    delta = _base_to_world_vector(_vsub(desired_target, current_target))
+    board_pose = trial["scene"]["task_board"]["pose"]
+    axes = str(section.get("axes", "xyz")).lower()
+    if axes not in {"xyz", "xy"}:
+        raise ValueError("scene.start_near_gate.axes must be 'xyz' or 'xy'")
+    board_pose["x"] = round(float(board_pose["x"]) + delta[0], 5)
+    board_pose["y"] = round(float(board_pose["y"]) + delta[1], 5)
+    if axes == "xyz":
+        board_pose["z"] = round(float(board_pose["z"]) + delta[2], 5)
+    achieved, achieved_axis = _target_gate_frame_world(trial)
+    reference_delta = _vsub(reference_tcp, achieved)
+    axial_component = abs(sum(reference_delta[i] * achieved_axis[i] for i in range(3)))
+    lateral_component = math.sqrt(max(0.0, _vnorm(reference_delta) ** 2 - axial_component * axial_component))
+    metadata.update(
+        {
+            "reference_tcp_position": [round(v, 6) for v in reference_tcp],
+            "target_gate_position": [round(v, 6) for v in achieved],
+            "target_gate_axis_world": [round(v, 6) for v in achieved_axis],
+            "achieved_distance": round(_vnorm(reference_delta), 6),
+            "achieved_axial_distance_m": round(axial_component, 6),
+            "achieved_lateral_distance_m": round(lateral_component, 6),
+            "axes": axes,
+            "min_clearance_m": min_clearance,
+            "overlap_check": (
+                "rigid task-board transform preserves board component clearances; "
+                "distance must exceed min_clearance_m"
+            ),
+        }
+    )
+    trial.setdefault("generated_metadata", {})["start_near_gate"] = metadata
+
+
 def generate_trials(request: dict[str, Any], num_trials: int) -> dict[str, Any]:
     base = yaml.safe_load(DEFAULT_TEMPLATE.read_text(encoding="utf-8"))
     limits = copy.deepcopy(base.get("task_board_limits", {}))
@@ -457,6 +756,8 @@ def generate_trials(request: dict[str, Any], num_trials: int) -> dict[str, Any]:
         )
         _apply_fixture_mount_overrides(raw, scene.get("fixture_mounts", {}), profile_cfg, rng)
         _apply_family_task_and_cable(raw, request["task_family"], target_nic, target_sc, scene, rng)
+        start_near_gate = scene.get("start_near_gate") if isinstance(scene, dict) else None
+        _apply_start_near_gate(raw, start_near_gate if isinstance(start_near_gate, dict) else None, rng)
         generated[f"trial_{idx:06d}"] = raw
     return generated
 
@@ -611,6 +912,27 @@ def _accepted_agent_datasets(agent_output_dir: Path, output_dir: Path) -> tuple[
     return datasets, score_csvs, int(summary.get("accepted", len(datasets)))
 
 
+def agent_filter_min_score(request: dict[str, Any]) -> float:
+    return float(request["acceptance"]["min_score"])
+
+
+def stop_near_gate_config(request: dict[str, Any]) -> dict[str, Any]:
+    acceptance = request.get("acceptance") or {}
+    config = acceptance.get("stop_near_gate")
+    if config is None:
+        config = acceptance.get("near_gate", {})
+    if config is None:
+        return {}
+    if not isinstance(config, dict):
+        raise ValueError("acceptance.stop_near_gate must be a map")
+    return config
+
+
+def has_stop_near_gate_config(request: dict[str, Any]) -> bool:
+    acceptance = request.get("acceptance") or {}
+    return acceptance.get("stop_near_gate") is not None or acceptance.get("near_gate") is not None
+
+
 def _rail_indices(task_board: dict[str, Any], rails: list[str]) -> list[int]:
     indices: list[int] = []
     for rail in rails:
@@ -677,6 +999,28 @@ def effective_expert_mode(request: dict[str, Any]) -> str:
     return str(request.get("generation", {}).get("expert_mode", "nominal"))
 
 
+def effective_max_agent_attempts(request: dict[str, Any], max_attempts: int) -> int:
+    """Return the planner/replay attempt budget for agent generation.
+
+    generation.max_attempts remains the historical overall attempt budget. The
+    optional generation.max_planner_attempts field is a stricter retry budget
+    for full planner+replay attempts. generation.max_replay_attempts is kept as
+    a backwards-compatible alias for older request files.
+    """
+    generation = request.get("generation", {})
+    configured = generation.get("max_planner_attempts", generation.get("max_replay_attempts"))
+    if configured is None:
+        return max_attempts
+    agent_attempts = int(configured)
+    if agent_attempts <= 0:
+        raise ValueError("generation.max_planner_attempts must be > 0")
+    return min(max_attempts, agent_attempts)
+
+
+def effective_max_replay_attempts(request: dict[str, Any], max_attempts: int) -> int:
+    return effective_max_agent_attempts(request, max_attempts)
+
+
 def build_agent_generation_cmd(
     *,
     request: dict[str, Any],
@@ -701,6 +1045,8 @@ def build_agent_generation_cmd(
         str(int(generation.get("candidates_per_scene", min(max_attempts, 5)))),
         "--score-threshold",
         str(float(request["acceptance"]["min_score"])),
+        "--require-insertion-event",
+        _bool_string(request.get("acceptance", {}).get("success_only", True)),
         "--config",
         str(engine_config_path),
         "--output-dir",
@@ -724,6 +1070,30 @@ def build_agent_generation_cmd(
         cmd.extend(["--max-retries", str(int(generation["max_retries"]))])
     if "backup_distance_m" in generation:
         cmd.extend(["--backup-distance-m", str(float(generation["backup_distance_m"]))])
+    near_gate = stop_near_gate_config(request)
+    if has_stop_near_gate_config(request):
+        cmd.extend(["--allow-near-gate-acceptance", "true"])
+        generation.setdefault("env", {})
+        if not isinstance(generation["env"], dict):
+            raise ValueError("generation.env must be a map of environment variable names to values")
+        generation["env"].setdefault("AIC_OFFICIAL_TEACHER_STOP_AT_NEAR_GATE", "true")
+        if "max_lateral_error_m" in near_gate:
+            cmd.extend(["--near-gate-max-lateral-error-m", str(float(near_gate["max_lateral_error_m"]))])
+            max_lateral_error = str(float(near_gate["max_lateral_error_m"]))
+            generation["env"]["AIC_OFFICIAL_TEACHER_NEAR_GATE_MAX_LATERAL_ERROR_M"] = max_lateral_error
+            generation["env"]["AIC_OFFICIAL_TEACHER_TRACKING_GATE_MAX_LATERAL_ERROR_M"] = max_lateral_error
+            if request.get("task_family") == "sc_to_sc":
+                generation["env"]["AIC_OFFICIAL_TEACHER_SC_TRACKING_GATE_MAX_LATERAL_ERROR_M"] = max_lateral_error
+        if "max_axial_error_m" in near_gate:
+            max_axial_error = str(float(near_gate["max_axial_error_m"]))
+            cmd.extend(["--near-gate-max-axial-error-m", max_axial_error])
+            generation["env"]["AIC_OFFICIAL_TEACHER_NEAR_GATE_MAX_AXIAL_ERROR_M"] = max_axial_error
+        if "max_tcp_speed_mps" in near_gate:
+            cmd.extend(["--near-gate-max-tcp-speed-mps", str(float(near_gate["max_tcp_speed_mps"]))])
+        if "max_force_delta_n" in near_gate:
+            cmd.extend(["--near-gate-max-force-delta-n", str(float(near_gate["max_force_delta_n"]))])
+        if "max_force_n" in near_gate:
+            cmd.extend(["--near-gate-max-force-n", str(float(near_gate["max_force_n"]))])
     recorder_drain_sec = int(generation.get("recorder_drain_sec", 120))
     planner_recorder_drain_sec = int(generation.get("planner_recorder_drain_sec", 45))
     if not bool(generation.get("allow_short_agent_drain", False)):
@@ -755,12 +1125,19 @@ def _merge_registry_overlay_entry(registry: dict[str, Any], entry: dict[str, Any
     mode_entry = modes.setdefault(mode, {})
     score = entry.get("score")
     status = str(entry.get("status") or mode_entry.get("status") or "attempted_not_passing")
-    mode_entry["status"] = "passed" if status == "passed" else status
+    previous_status = str(mode_entry.get("status") or "")
+    if status == "passed":
+        mode_entry["status"] = "passed"
+    elif status == "near_gate_passed":
+        if previous_status != "passed":
+            mode_entry["status"] = "near_gate_passed"
+    elif previous_status not in {"passed", "near_gate_passed"}:
+        mode_entry["status"] = status
     mode_entry["last_summary"] = entry.get("summary") or mode_entry.get("last_summary")
     mode_entry["last_reason"] = entry.get("reason") or mode_entry.get("last_reason")
     if isinstance(entry.get("mode_env"), dict):
         mode_entry["last_mode_env"] = {str(key): str(value) for key, value in entry["mode_env"].items()}
-    if score is not None:
+    if score is not None and status != "near_gate_passed":
         score_f = float(score)
         if mode_entry.get("best_score") is None or score_f > float(mode_entry.get("best_score")):
             mode_entry["best_score"] = score_f
@@ -769,6 +1146,9 @@ def _merge_registry_overlay_entry(registry: dict[str, Any], entry: dict[str, Any
                 mode_entry["best_mode_env"] = {str(key): str(value) for key, value in entry["mode_env"].items()}
     if status == "passed" and isinstance(entry.get("mode_env"), dict):
         mode_entry["best_mode_env"] = {str(key): str(value) for key, value in entry["mode_env"].items()}
+    if status == "near_gate_passed" and previous_status != "passed" and isinstance(entry.get("mode_env"), dict):
+        mode_entry["best_mode_env"] = {str(key): str(value) for key, value in entry["mode_env"].items()}
+        mode_entry["best_summary"] = entry.get("summary") or mode_entry.get("best_summary")
     mode_entry.setdefault("history", []).append(entry)
 
 
@@ -811,14 +1191,8 @@ def expert_registry_mode_entry(request: dict[str, Any]) -> dict[str, Any] | None
     return mode_entry if isinstance(mode_entry, dict) else None
 
 
-def expert_registry_mode_env(request: dict[str, Any]) -> dict[str, str]:
-    generation = request.get("generation", {})
-    if bool(generation.get("ignore_expert_setting_registry", False)):
-        return {}
-    if not bool(generation.get("use_expert_registry_env", True)):
-        return {}
-    mode_entry = expert_registry_mode_entry(request)
-    if not isinstance(mode_entry, dict) or mode_entry.get("status") != "passed":
+def _expert_registry_mode_env_from_entry(mode_entry: dict[str, Any] | None) -> dict[str, str]:
+    if not isinstance(mode_entry, dict) or mode_entry.get("status") not in {"passed", "near_gate_passed"}:
         return {}
     env = mode_entry.get("best_mode_env")
     if not isinstance(env, dict):
@@ -826,20 +1200,82 @@ def expert_registry_mode_env(request: dict[str, Any]) -> dict[str, str]:
     return {str(key): str(value) for key, value in env.items()}
 
 
-def build_agent_generation_env(request: dict[str, Any]) -> tuple[dict[str, str], dict[str, str]]:
+def expert_registry_mode_env_for_suffix(request: dict[str, Any], suffix: str) -> dict[str, str]:
+    generation = request.get("generation", {})
+    if bool(generation.get("ignore_expert_setting_registry", False)):
+        return {}
+    if not bool(generation.get("use_expert_registry_env", True)):
+        return {}
+    if request.get("generation", {}).get("policy") != "agent":
+        return {}
+    registry = load_expert_registry(generation)
+    if registry is None:
+        return {}
+    setting = (registry.get("settings") or {}).get(suffix)
+    if not isinstance(setting, dict):
+        return {}
+    mode_entry = (setting.get("modes") or {}).get(effective_expert_mode(request))
+    return _expert_registry_mode_env_from_entry(mode_entry if isinstance(mode_entry, dict) else None)
+
+
+def expert_registry_mode_env(request: dict[str, Any]) -> dict[str, str]:
+    generation = request.get("generation", {})
+    if bool(generation.get("ignore_expert_setting_registry", False)):
+        return {}
+    if not bool(generation.get("use_expert_registry_env", True)):
+        return {}
+    return _expert_registry_mode_env_from_entry(expert_registry_mode_entry(request))
+
+
+def expert_registry_mode_env_by_suffix(request: dict[str, Any], suffixes: list[str]) -> dict[str, dict[str, str]]:
+    yaml_env = request.get("generation", {}).get("env", {})
+    if yaml_env is not None and not isinstance(yaml_env, dict):
+        raise ValueError("generation.env must be a map of environment variable names to values")
+    yaml_env_str = {str(key): str(value) for key, value in yaml_env.items()} if isinstance(yaml_env, dict) else {}
+    env_by_suffix: dict[str, dict[str, str]] = {}
+    for suffix in sorted(set(suffixes)):
+        suffix_env = expert_registry_mode_env_for_suffix(request, suffix)
+        if suffix_env:
+            suffix_env.update(yaml_env_str)
+            env_by_suffix[suffix] = suffix_env
+    return env_by_suffix
+
+
+def agent_mode_env_for_registry_suffix(request: dict[str, Any], suffix: str | None = None) -> dict[str, str]:
     generation = request.get("generation", {})
     expert_mode = effective_expert_mode(request)
     if expert_mode not in EXPERT_MODE_ENV:
         raise ValueError(f"No expert generation environment preset exists for mode '{expert_mode}'")
     mode_env = dict(EXPERT_MODE_ENV[expert_mode])
-    mode_env.update(expert_registry_mode_env(request))
+    if suffix:
+        mode_env.update(expert_registry_mode_env_for_suffix(request, suffix))
+    else:
+        mode_env.update(expert_registry_mode_env(request))
     yaml_env = generation.get("env", {})
     if yaml_env is not None and not isinstance(yaml_env, dict):
         raise ValueError("generation.env must be a map of environment variable names to values")
     if isinstance(yaml_env, dict):
         mode_env.update({str(key): str(value) for key, value in yaml_env.items()})
+    return mode_env
+
+
+def build_agent_generation_env(
+    request: dict[str, Any],
+    *,
+    registry_suffixes: list[str] | None = None,
+) -> tuple[dict[str, str], dict[str, str]]:
+    generation = request.get("generation", {})
+    expert_mode = effective_expert_mode(request)
+    if expert_mode not in EXPERT_MODE_ENV:
+        raise ValueError(f"No expert generation environment preset exists for mode '{expert_mode}'")
+    mode_env = agent_mode_env_for_registry_suffix(request)
     env = os.environ.copy()
     env.update(mode_env)
+    env["AIC_EXPERT_TASK_FAMILY"] = str(request.get("task_family", ""))
+    if registry_suffixes:
+        env_by_suffix = expert_registry_mode_env_by_suffix(request, registry_suffixes)
+        if env_by_suffix:
+            env["AIC_EXPERT_REGISTRY_MODE_ENV_BY_SUFFIX"] = json.dumps(env_by_suffix, sort_keys=True)
     return env, mode_env
 
 
@@ -882,46 +1318,83 @@ def write_expert_registry_overlay(
         summary = json.loads(summary_path.read_text(encoding="utf-8"))
     except json.JSONDecodeError:
         return None
-    suffix = effective_registry_suffix(request)
-    if not suffix:
-        return None
     mode = effective_expert_mode(request)
     overlay_dir = Path(generation.get("expert_registry_overlay_dir", DEFAULT_EXPERT_REGISTRY_OVERLAY_DIR))
     overlay_dir.mkdir(parents=True, exist_ok=True)
     path = overlay_dir / f"{_overlay_id()}.jsonl"
-    best_score = None
-    accepted = int(summary.get("accepted", 0) or 0)
-    reasons: list[str] = []
-    gpt5_paths: list[str] = []
+    entries: list[dict[str, Any]] = []
     for record in summary.get("records", []) or []:
         validation = record.get("validation") or {}
         replay_metrics = record.get("replay_metrics") or {}
         score = validation.get("score", replay_metrics.get("score"))
-        if score is not None:
-            best_score = float(score) if best_score is None else max(best_score, float(score))
-        reasons.extend(str(reason) for reason in validation.get("reasons", []) or [])
+        engine_config = replay_metrics.get("engine_config")
+        suffixes = (
+            infer_registry_suffixes_from_engine_config(Path(engine_config), str(request.get("task_family")))
+            if engine_config
+            else []
+        )
+        suffix = suffixes[0] if suffixes else effective_registry_suffix(request)
+        if not suffix:
+            continue
+        reasons = [str(reason) for reason in validation.get("reasons", []) or []]
+        acceptance_type = str(validation.get("acceptance_type") or "")
+        status = "passed" if bool(record.get("accepted")) else "attempted_not_passing"
+        if acceptance_type == "near_gate":
+            status = "near_gate_passed"
+        gpt5_paths: list[str] = []
         gpt5 = record.get("gpt5_failure_analysis") or {}
         for item in gpt5.values() if isinstance(gpt5, dict) else []:
             if isinstance(item, dict) and item.get("analysis"):
                 gpt5_paths.append(str(item["analysis"]))
-    entry = {
-        "schema_version": "aic_expert_registry_overlay/v1",
-        "timestamp_unix": time.time(),
-        "overlay_id": _overlay_id(),
-        "suffix": suffix,
-        "request_suffix": request.get("suffix"),
-        "mode": mode,
-        "task_family": request.get("task_family"),
-        "status": "passed" if accepted >= int(request["generation"]["target_accepted_trajectories"]) else "attempted_not_passing",
-        "score": best_score,
-        "summary": str(summary_path),
-        "output_dir": str(output_dir),
-        "mode_env": agent_mode_env or {},
-        "reason": "; ".join(sorted(set(reasons)))[:500] if reasons else summary.get("stopped_reason"),
-        "gpt5_analysis_paths": gpt5_paths,
-    }
+        entries.append(
+            {
+                "schema_version": "aic_expert_registry_overlay/v1",
+                "timestamp_unix": time.time(),
+                "overlay_id": _overlay_id(),
+                "suffix": suffix,
+                "request_suffix": request.get("suffix"),
+                "mode": mode,
+                "task_family": request.get("task_family"),
+                "status": status,
+                "acceptance_type": acceptance_type or "full_insertion",
+                "score": float(score) if score is not None else None,
+                "summary": str(summary_path),
+                "output_dir": str(output_dir),
+                "mode_env": agent_mode_env_for_registry_suffix(request, suffix),
+                "reason": "; ".join(sorted(set(reasons)))[:500] if reasons else summary.get("stopped_reason"),
+                "gpt5_analysis_paths": gpt5_paths,
+            }
+        )
+    if not entries:
+        suffix = effective_registry_suffix(request)
+        if not suffix:
+            return None
+        accepted = int(summary.get("accepted", 0) or 0)
+        entries.append(
+            {
+                "schema_version": "aic_expert_registry_overlay/v1",
+                "timestamp_unix": time.time(),
+                "overlay_id": _overlay_id(),
+                "suffix": suffix,
+                "request_suffix": request.get("suffix"),
+                "mode": mode,
+                "task_family": request.get("task_family"),
+                "status": (
+                    "passed"
+                    if accepted >= int(request["generation"]["target_accepted_trajectories"])
+                    else "attempted_not_passing"
+                ),
+                "score": None,
+                "summary": str(summary_path),
+                "output_dir": str(output_dir),
+                "mode_env": agent_mode_env or {},
+                "reason": summary.get("stopped_reason"),
+                "gpt5_analysis_paths": [],
+            }
+        )
     with path.open("a", encoding="utf-8") as f:
-        f.write(json.dumps(entry, sort_keys=True) + "\n")
+        for entry in entries:
+            f.write(json.dumps(entry, sort_keys=True) + "\n")
     return path
 
 
@@ -939,11 +1412,13 @@ def main() -> int:
     max_attempts = int(request["generation"]["max_attempts"])
     if target <= 0 or max_attempts <= 0:
         raise ValueError("target_accepted_trajectories and max_attempts must be > 0")
-    num_trials = args.num_trials_override or max_attempts
+    policy = request["generation"]["policy"]
+    agent_attempts = effective_max_agent_attempts(request, max_attempts) if policy == "agent" else max_attempts
+    num_trials = args.num_trials_override or agent_attempts
     if num_trials <= 0:
         raise ValueError("--num-trials-override must be > 0")
-    if num_trials > max_attempts:
-        raise ValueError("--num-trials-override cannot exceed generation.max_attempts")
+    if num_trials > agent_attempts:
+        raise ValueError("--num-trials-override cannot exceed the effective agent attempt budget")
 
     output_dir = derive_output_dir(request)
     append_if_exists = bool(request.get("generation", {}).get("append_if_exists", False))
@@ -1016,7 +1491,6 @@ def main() -> int:
         recording_cmd.extend(["--recorder-drain-sec", str(int(generation["recorder_drain_sec"]))])
     if "startup_delay_sec" in generation:
         recording_cmd.extend(["--startup-delay-sec", str(int(generation["startup_delay_sec"]))])
-    policy = request["generation"]["policy"]
     agent_mode_env: dict[str, str] | None = None
     if policy == "agent":
         agent_cmd = build_agent_generation_cmd(
@@ -1024,9 +1498,12 @@ def main() -> int:
             engine_config_path=engine_config_path,
             output_dir=output_dir,
             target=target,
-            max_attempts=max_attempts,
+            max_attempts=agent_attempts,
         )
-        agent_env, agent_mode_env = build_agent_generation_env(request)
+        agent_env, agent_mode_env = build_agent_generation_env(
+            request,
+            registry_suffixes=inferred_suffixes,
+        )
         if not args.skip_recording:
             commands.append(run_command_allowing_codes(agent_cmd, args.dry_run, {0, 2}, env=agent_env))
             write_expert_registry_overlay(
@@ -1062,6 +1539,7 @@ def main() -> int:
         "--include-videos",
         "--overwrite",
     ]
+    filter_min_score = agent_filter_min_score(request) if policy == "agent" else float(request["acceptance"]["min_score"])
     if policy == "agent" and agent_datasets:
         filter_cmd = [
             "pixi",
@@ -1073,7 +1551,7 @@ def main() -> int:
             "--score-csvs",
             *[str(path) for path in agent_score_csvs],
             "--min-score",
-            str(float(request["acceptance"]["min_score"])),
+            str(filter_min_score),
             "--output",
             str(output_dir / "accepted_dataset"),
             "--include-videos",
@@ -1097,6 +1575,16 @@ def main() -> int:
     accepted = count_selected(report_src)
     if accepted is None and policy == "agent":
         accepted = agent_accepted
+    actual_attempted = num_trials
+    if policy == "agent":
+        agent_summary_path = output_dir / "agent_generation" / "generation_summary.json"
+        if agent_summary_path.exists():
+            try:
+                agent_summary = json.loads(agent_summary_path.read_text(encoding="utf-8"))
+                if agent_summary.get("attempts") is not None:
+                    actual_attempted = int(agent_summary["attempts"])
+            except (OSError, ValueError, TypeError, json.JSONDecodeError):
+                actual_attempted = num_trials
     schema_comparison = None
     if args.inspect_reference_dataset:
         schema_comparison = compare_reference(output_dir / "accepted_dataset", args.inspect_reference_dataset)
@@ -1110,6 +1598,7 @@ def main() -> int:
         "count_label": _count_label(request["task_family"], request),
         "target_accepted_trajectories": target,
         "max_attempts": max_attempts,
+        "max_planner_attempts": agent_attempts if policy == "agent" else None,
         "min_score": float(request["acceptance"]["min_score"]),
         "seed": request.get("generation", {}).get("seed"),
         "raw_dataset": str(output_dir / "raw_dataset"),
@@ -1124,7 +1613,7 @@ def main() -> int:
         ),
         "agent_replay_datasets": [str(path) for path in agent_datasets],
         "scores": str(output_dir / "scores"),
-        "number_attempted": num_trials,
+        "number_attempted": actual_attempted,
         "number_accepted": accepted,
         "generated_engine_config": str(engine_config_path),
         "command_lines_run": commands,
@@ -1135,7 +1624,10 @@ def main() -> int:
                 "Missing cable fields inherit the existing generate_random_trials_config.py "
                 "internal cable jitter. Explicit cable fields in request YAML override it."
             ),
-            "attempt_strategy": "This first implementation generates max_attempts upfront unless --num-trials-override is used.",
+            "attempt_strategy": (
+                "Agent generation creates at most generation.max_planner_attempts full planner+replay attempts "
+                "when set, otherwise generation.max_attempts, unless --num-trials-override is lower."
+            ),
             "opposite_family_defaults": (
                 "Minimal sfp_to_nic requests default sc_ports.count to 0, and minimal sc_to_sc "
                 "requests default nic_cards.count to 0. Explicit opposite-family scene sections "

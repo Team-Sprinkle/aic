@@ -140,6 +140,31 @@ class MoveItPlanner:
 def waypoints_from_candidate(candidate: ApproachCandidate, *, start_time: float = 0.0) -> list[TrajectoryWaypoint]:
     """Helper for injected test backends that emulate a successful MoveIt plan."""
 
+    if candidate.route_subgoals:
+        waypoints: list[TrajectoryWaypoint] = []
+        for index, subgoal in enumerate(candidate.route_subgoals):
+            try:
+                phase = PhaseLabel(subgoal.phase)
+            except ValueError:
+                phase = PhaseLabel.APPROACH
+            waypoints.append(
+                TrajectoryWaypoint(
+                    timestamp=start_time + 2.0 * index,
+                    tcp_pose=TCPPose(
+                        position=list(subgoal.pose.position),
+                        orientation_xyzw=list(subgoal.pose.orientation_xyzw),
+                    ),
+                    phase=phase,
+                    source=SourceLabel.OPTIMIZER,
+                    diagnostics={
+                        "planner": "moveit",
+                        "candidate": candidate.name,
+                        "route_subgoal": subgoal.name,
+                    },
+                )
+            )
+        return waypoints
+
     return [
         TrajectoryWaypoint(
             timestamp=start_time,

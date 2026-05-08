@@ -5,6 +5,7 @@ from types import SimpleNamespace
 import importlib.util
 
 import pytest
+import yaml
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 REPO_ROOT = Path(__file__).resolve().parents[2]
@@ -46,10 +47,10 @@ from aic_teacher_official.expert_generator.replay_runner import (
 )
 from aic_teacher_official.expert_generator.nominal_expert import NominalExpert
 from aic_teacher_official.expert_generator.recovery_expert import RecoveryExpert
-from aic_teacher_official.expert_generator.scene_snapshot import SceneSnapshot, SerializablePose
+from aic_teacher_official.expert_generator.scene_snapshot import ObjectGeometry, SceneSnapshot, SerializablePose
 from aic_teacher_official.expert_generator.trajectory_repair import repair_precontact_approach
 from aic_teacher_official.expert_generator.trajectory_validator import TrajectoryValidator, ValidationCriteria
-from aic_teacher_official.expert_generator.vlm_strategy import ExpertMode, parse_vlm_strategy
+from aic_teacher_official.expert_generator.vlm_strategy import ExpertMode, build_strategy_prompt, parse_vlm_strategy
 from aic_teacher_official.expert_generator.vlm_strategy_client import OpenAIVLMStrategyProvider
 from aic_teacher_official.replay import SmoothTrajectoryReplayPolicy
 from aic_teacher_official.trajectory import SmoothTrajectory, PhaseLabel, SourceLabel, TCPPose, TrajectoryWaypoint
@@ -64,6 +65,38 @@ def _snapshot(mode="nominal"):
         tcp_pose=SerializablePose([0.0, 0.0, 0.30], [0.0, 0.0, 0.0, 1.0]),
         target_port_pose=SerializablePose([0.10, 0.20, 0.12], [0.0, 0.0, 0.0, 1.0]),
         camera_images=["/tmp/live_left.png"],
+    )
+
+
+def _sc_snapshot_with_nics(mode="nominal"):
+    snapshot = _snapshot(mode)
+    return SceneSnapshot(
+        **{
+            **snapshot.__dict__,
+            "task_config": {
+                "plug_type": "sc",
+                "port_type": "sc",
+                "target_module_name": "sc_port_0",
+            },
+            "collision_objects": [
+                ObjectGeometry(
+                    name="trial_nic_card_0",
+                    pose=SerializablePose([0.0, 0.04, 0.02], [0.0, 0.0, 0.0, 1.0]),
+                    shape="box",
+                    dimensions=[0.12, 0.06, 0.03],
+                    role="nic_card",
+                    metadata={"rail": "nic_rail_0"},
+                ),
+                ObjectGeometry(
+                    name="trial_nic_card_1",
+                    pose=SerializablePose([0.0, 0.09, 0.02], [0.0, 0.0, 0.0, 1.0]),
+                    shape="box",
+                    dimensions=[0.12, 0.06, 0.03],
+                    role="nic_card",
+                    metadata={"rail": "nic_rail_1"},
+                ),
+            ],
+        }
     )
 
 
@@ -257,8 +290,73 @@ def test_candidate_pose_generation_uses_strategy_and_port_orientation():
 
     assert [c.name for c in candidates][:2] == ["above_left", "above"]
     assert len(candidates) == 5
-    assert candidates[0].pre_insert_pose.position[:2] == pytest.approx([0.10, 0.20])
-    assert candidates[0].metadata["orientation_source"] == "cheatcode_style_target_port_geometry"
+
+
+def test_sc_to_sc_candidates_route_around_present_nic_cards():
+    snapshot = _sc_snapshot_with_nics()
+    candidates = generate_approach_candidates(snapshot, _strategy(approach_side="front"), count=3)
+
+    assert [c.name for c in candidates] == ["above_left", "back", "high_clearance_vertical"]
+    assert candidates[0].metadata["sc_nic_obstacle_route"] is True
+    assert snapshot.tcp_pose is not None
+    assert snapshot.target_port_pose is not None
+    route = candidates[0].route_subgoals
+    assert [subgoal.name for subgoal in route] == [
+        "camera_left_clearance",
+        "left_lane_descent",
+        "outside_lane_forward_past_cards",
+        "right_sweep_toward_port",
+        "port_standoff",
+        "pre_insert",
+    ]
+    assert route[0].pose.position[0] < snapshot.tcp_pose.position[0]
+    assert route[0].pose.position[1] == pytest.approx(snapshot.tcp_pose.position[1])
+    assert route[1].pose.position[0] == pytest.approx(route[0].pose.position[0])
+    assert route[1].pose.position[1] == pytest.approx(route[0].pose.position[1])
+    assert route[1].pose.position[2] < route[0].pose.position[2]
+    assert route[2].pose.position[0] == pytest.approx(route[1].pose.position[0])
+    assert route[2].pose.position[1] > 0.12
+    assert route[3].pose.position[1] == pytest.approx(route[2].pose.position[1])
+    assert route[3].pose.position[0] > route[2].pose.position[0]
+    assert route[4].pose.position[0] == pytest.approx(route[3].pose.position[0])
+    assert route[4].pose.position[1] < route[3].pose.position[1]
+    assert route[5].pose.position[0] > route[4].pose.position[0]
+    assert route[5].pose.position[1] == pytest.approx(route[4].pose.position[1])
+    assert route[5].pose.position[2] < route[4].pose.position[2]
+    assert candidates[0].approach_standoff_pose.position[0] < candidates[0].pre_insert_pose.position[0]
+    assert candidates[0].approach_standoff_pose.position[1] > 0.12
+    assert candidates[0].metadata["diagonal_bypass_progress_fraction"] == pytest.approx(0.0)
+    assert candidates[0].metadata["route_policy"] == "camera_left_then_outside_lane_moveit_around_present_nic_cards"
+
+
+def test_sc_to_sc_near_start_uses_short_approach_instead_of_high_bypass():
+    snapshot = _sc_snapshot_with_nics()
+    snapshot = SceneSnapshot(
+        **{
+            **snapshot.__dict__,
+            "tcp_pose": SerializablePose([-0.37, 0.19, 0.326], [0.0, 0.0, 0.0, 1.0]),
+            "target_port_pose": SerializablePose([-0.41, 0.204, 0.319], [0.0, 0.0, 0.0, 1.0]),
+            "plug_pose": SerializablePose([-0.37, 0.205, 0.310], [0.0, 0.0, 0.0, 1.0]),
+        }
+    )
+    candidates = generate_approach_candidates(snapshot, _strategy(approach_side="front"), count=1)
+
+    candidate = candidates[0]
+    assert candidate.metadata["near_start_short_approach"] is True
+    assert candidate.metadata["route_policy"] == "near_start_short_approach"
+    assert candidate.safe_lift_pose.position[1] == pytest.approx(snapshot.tcp_pose.position[1])
+    assert candidate.approach_standoff_pose.position[1] == pytest.approx(candidate.pre_insert_pose.position[1])
+    assert candidate.safe_lift_pose.position[2] < 0.40
+    assert candidate.pre_insert_pose.position[2] < 0.38
+
+
+def test_strategy_prompt_lists_sc_to_sc_nic_obstacles():
+    prompt = build_strategy_prompt(_sc_snapshot_with_nics().to_dict(), mode=ExpertMode.NOMINAL)
+
+    assert "SC-to-SC obstacle guidance" in prompt
+    assert "trial_nic_card_0" in prompt
+    assert "avoid_regions" in prompt
+    assert "wide outside lane" in prompt
 
 
 def test_moveit_wrapper_fails_when_unavailable_and_has_no_fallback():
@@ -326,6 +424,32 @@ def test_moveit_py_backend_can_plan_legacy_three_stage_sequence():
         "approach_standoff",
         "pre_insert",
     ]
+
+
+def test_moveit_py_backend_uses_explicit_sc_to_sc_bypass_subgoals():
+    snapshot = _sc_snapshot_with_nics()
+    strategy = _strategy(approach_side="front")
+    candidate = generate_approach_candidates(snapshot, strategy, count=1)[0]
+    fake_moveit = FakeMoveItPy()
+    backend = MoveItPyPlanningBackend(
+        config=MoveItPyBackendConfig(approach_segment_mode="three_stage"),
+        moveit_py=fake_moveit,
+    )
+    original_fk = moveit_py_backend._tcp_pose_from_joint_point
+    moveit_py_backend._tcp_pose_from_joint_point = lambda _robot_model, **_kwargs: (
+        TCPPose([0.1, 0.2, 0.3], [0.0, 0.0, 0.0, 1.0]),
+        object(),
+    )
+
+    try:
+        result = backend.plan_free_space_approach(snapshot, strategy, candidate)
+    finally:
+        moveit_py_backend._tcp_pose_from_joint_point = original_fk
+
+    expected_segments = [subgoal.name for subgoal in candidate.route_subgoals]
+    assert fake_moveit.component.goal_count == len(expected_segments)
+    assert fake_moveit.component.start_state_count == len(expected_segments) - 1
+    assert [segment["segment"] for segment in result.metadata["segments"]] == expected_segments
 
 
 def test_smooth_replay_interpolates_joint_targets():
@@ -640,6 +764,41 @@ def test_replay_runner_builds_official_recording_command(tmp_path):
     assert cmd[cmd.index("--teacher-action-mode") + 1] == "joint_position_then_cheatcode"
 
 
+def test_replay_runner_uses_single_trial_config_and_matching_score(monkeypatch, tmp_path):
+    root_config = tmp_path / "engine_config.yaml"
+    root_config.write_text("trials: {}\n", encoding="utf-8")
+    trial_config = tmp_path / "trials" / "trial_000002.yaml"
+    trial_config.parent.mkdir()
+    trial_config.write_text("trials: {trial_000002: {}}\n", encoding="utf-8")
+    captured = {}
+
+    def fake_run(cmd, cwd, env, text, stdout, stderr, check):
+        captured["cmd"] = cmd
+        score = tmp_path / "attempt_000002_candidate_00" / "results" / "trial_1_trial_000002" / "scoring.yaml"
+        score.parent.mkdir(parents=True)
+        score.write_text("total: 92\n", encoding="utf-8")
+        return SimpleNamespace(returncode=0)
+
+    class FakeTrajectory:
+        def save_json(self, path):
+            path.write_text("{}", encoding="utf-8")
+
+    monkeypatch.setattr("subprocess.run", fake_run)
+    runner = OfficialRecordingReplayRunner(
+        OfficialReplayConfig(
+            repo_root=Path("/repo"),
+            engine_config=root_config,
+            output_dir=tmp_path,
+        )
+    )
+
+    metrics = runner.replay_and_score(FakeTrajectory(), attempt_index=2, candidate_index=0)
+
+    assert captured["cmd"][captured["cmd"].index("--engine-config") + 1] == str(trial_config)
+    assert metrics["engine_config"] == str(trial_config)
+    assert metrics["scoring_yaml"].endswith("trial_1_trial_000002/scoring.yaml")
+
+
 def test_replay_runner_passes_recovery_env(monkeypatch, tmp_path):
     captured = {}
 
@@ -710,6 +869,98 @@ def test_expert_planner_runner_builds_live_policy_command(tmp_path):
     assert "--require-recorder-save-log" in cmd
     assert "--launch-moveit" in cmd
     assert "aic_moveit_config moveit.launch.py" in cmd
+
+
+def test_expert_planner_runner_uses_single_trial_config(monkeypatch, tmp_path):
+    root_config = tmp_path / "engine_config.yaml"
+    root_config.write_text("trials: {}\n", encoding="utf-8")
+    trial_config = tmp_path / "trials" / "trial_000003.yaml"
+    trial_config.parent.mkdir()
+    trial_config.write_text("trials: {trial_000003: {}}\n", encoding="utf-8")
+    captured = {}
+
+    def fake_run(cmd, cwd, text, stdout, stderr, env, check):
+        captured["cmd"] = cmd
+        captured["env"] = env
+        Path(env["AIC_EXPERT_PIECEWISE_OUTPUT"]).write_text("{}", encoding="utf-8")
+        return SimpleNamespace(returncode=0)
+
+    monkeypatch.setattr("subprocess.run", fake_run)
+    runner = ExpertPlannerRecordingRunner(
+        ExpertPlannerRunConfig(
+            repo_root=Path("/repo"),
+            engine_config=root_config,
+            output_dir=tmp_path / "planner_attempts",
+            expert_mode="nominal",
+        )
+    )
+
+    result = runner.run_planner(attempt_index=3, candidate_index=0, seed=11)
+
+    assert captured["cmd"][captured["cmd"].index("--engine-config") + 1] == str(trial_config)
+    assert captured["env"]["AIC_EXPERT_ENGINE_CONFIG"] == str(trial_config)
+    assert result["engine_config"] == str(trial_config)
+    assert result["piecewise_exists"] is True
+
+
+def test_expert_planner_runner_applies_per_trial_registry_env(monkeypatch, tmp_path):
+    root_config = tmp_path / "engine_config.yaml"
+    root_config.write_text("trials: {}\n", encoding="utf-8")
+    trial_config = tmp_path / "trials" / "trial_000001.yaml"
+    trial_config.parent.mkdir()
+    trial_config.write_text(
+        yaml.safe_dump(
+            {
+                "trials": {
+                    "trial_000001": {
+                        "scene": {
+                            "task_board": {
+                                "sc_rail_0": {"entity_present": True},
+                                "nic_rail_1": {"entity_present": True},
+                            }
+                        },
+                        "tasks": {
+                            "task_1": {
+                                "target_module_name": "sc_port_0",
+                            }
+                        },
+                    }
+                }
+            }
+        ),
+        encoding="utf-8",
+    )
+    captured = {}
+
+    def fake_run(cmd, cwd, text, stdout, stderr, env, check):
+        captured["env"] = env
+        Path(env["AIC_EXPERT_PIECEWISE_OUTPUT"]).write_text("{}", encoding="utf-8")
+        return SimpleNamespace(returncode=0)
+
+    monkeypatch.setattr("subprocess.run", fake_run)
+    monkeypatch.setenv("AIC_EXPERT_TASK_FAMILY", "sc_to_sc")
+    monkeypatch.setenv(
+        "AIC_EXPERT_REGISTRY_MODE_ENV_BY_SUFFIX",
+        json.dumps(
+            {
+                "matrix_sc2sc_sc1_present0_target0_nic1": {
+                    "AIC_OFFICIAL_TEACHER_SC_ENABLE_LIVE_Z_REPAIR": "true",
+                }
+            }
+        ),
+    )
+    runner = ExpertPlannerRecordingRunner(
+        ExpertPlannerRunConfig(
+            repo_root=Path("/repo"),
+            engine_config=root_config,
+            output_dir=tmp_path / "planner_attempts",
+            expert_mode="nominal",
+        )
+    )
+
+    runner.run_planner(attempt_index=1, candidate_index=0, seed=11)
+
+    assert captured["env"]["AIC_OFFICIAL_TEACHER_SC_ENABLE_LIVE_Z_REPAIR"] == "true"
 
 
 def test_moveit_config_assets_exist():
@@ -937,3 +1188,166 @@ def test_generation_loop_targets_accepted_and_stops(tmp_path):
     assert summary.accepted == 2
     assert summary.attempts == 2
     assert summary.stopped_reason == "target_reached"
+
+
+def test_near_gate_acceptance_overrides_standard_score_acceptance():
+    validation = TrajectoryValidator(
+        ValidationCriteria(score_threshold=10.0, require_insertion_event=False)
+    ).evaluate(
+        {
+            "score": 60.0,
+            "offlimit_contact_count": 0,
+            "moveit_success": True,
+            "mode": "nominal",
+        }
+    )
+    args = SimpleNamespace(
+        allow_near_gate_acceptance=True,
+        near_gate_max_lateral_error_m=0.004,
+        near_gate_max_axial_error_m=None,
+        near_gate_max_tcp_speed_mps=None,
+        near_gate_max_force_delta_n=None,
+        near_gate_max_force_n=None,
+        score_threshold=10.0,
+    )
+    assessment = {
+        "metrics": {
+            "preinsert_tracking_gate_checked": True,
+            "preinsert_tracking_gate_passed": False,
+            "preinsert_tracking_gate_final_lateral_error_m": 0.005,
+            "preinsert_tracking_gate_final_tcp_speed_mps": 0.001,
+            "preinsert_tracking_gate_force_delta_n": 1.0,
+        }
+    }
+
+    updated, metadata = generate_expert_trajectories._maybe_accept_near_gate(
+        validation,
+        assessment,
+        args=args,
+    )
+
+    assert validation.accepted is True
+    assert updated.accepted is False
+    assert "near_gate_acceptance_failed" in updated.reasons
+    assert metadata["near_gate_acceptance"]["accepted"] is False
+    assert "standard_validation_would_accept" in metadata["near_gate_acceptance"]["original_reasons"]
+
+
+def test_near_gate_acceptance_requires_axial_error_when_configured():
+    validation = TrajectoryValidator(
+        ValidationCriteria(score_threshold=90.0, require_insertion_event=False)
+    ).evaluate(
+        {
+            "score": 10.0,
+            "offlimit_contact_count": 0,
+            "moveit_success": True,
+            "mode": "nominal",
+        }
+    )
+    args = SimpleNamespace(
+        allow_near_gate_acceptance=True,
+        near_gate_max_lateral_error_m=0.004,
+        near_gate_max_axial_error_m=0.004,
+        near_gate_max_tcp_speed_mps=None,
+        near_gate_max_force_delta_n=None,
+        near_gate_max_force_n=None,
+        score_threshold=90.0,
+    )
+    assessment = {
+        "metrics": {
+            "preinsert_tracking_gate_checked": True,
+            "preinsert_tracking_gate_passed": True,
+            "preinsert_tracking_gate_final_lateral_error_m": 0.003,
+            "preinsert_tracking_gate_final_axial_error_m": 0.006,
+            "preinsert_tracking_gate_final_tcp_speed_mps": 0.001,
+            "preinsert_tracking_gate_force_delta_n": 1.0,
+            "offlimit_contact_count": 0,
+            "moveit_success": True,
+        }
+    }
+
+    updated, metadata = generate_expert_trajectories._maybe_accept_near_gate(
+        validation,
+        assessment,
+        args=args,
+    )
+
+    assert updated.accepted is False
+    assert metadata["near_gate_acceptance"]["checks"]["lateral_error_within_threshold"] is True
+    assert metadata["near_gate_acceptance"]["checks"]["axial_error_within_threshold"] is False
+    assert "near_gate_acceptance_failed" in updated.reasons
+
+
+def test_near_gate_acceptance_accepts_when_lateral_and_axial_error_pass():
+    validation = TrajectoryValidator(
+        ValidationCriteria(score_threshold=90.0, require_insertion_event=False)
+    ).evaluate(
+        {
+            "score": 10.0,
+            "offlimit_contact_count": 0,
+            "moveit_success": True,
+            "mode": "nominal",
+        }
+    )
+    args = SimpleNamespace(
+        allow_near_gate_acceptance=True,
+        near_gate_max_lateral_error_m=0.004,
+        near_gate_max_axial_error_m=0.004,
+        near_gate_max_tcp_speed_mps=None,
+        near_gate_max_force_delta_n=None,
+        near_gate_max_force_n=None,
+        score_threshold=90.0,
+    )
+    assessment = {
+        "metrics": {
+            "preinsert_tracking_gate_checked": True,
+            "preinsert_tracking_gate_passed": True,
+            "preinsert_tracking_gate_final_lateral_error_m": 0.003,
+            "preinsert_tracking_gate_final_axial_error_m": 0.002,
+            "preinsert_tracking_gate_final_tcp_speed_mps": 0.001,
+            "preinsert_tracking_gate_force_delta_n": 1.0,
+            "offlimit_contact_count": 0,
+            "moveit_success": True,
+        }
+    }
+
+    updated, metadata = generate_expert_trajectories._maybe_accept_near_gate(
+        validation,
+        assessment,
+        args=args,
+    )
+
+    assert updated.accepted is True
+    assert metadata["score"] == pytest.approx(90.0)
+    assert metadata["acceptance_type"] == "near_gate"
+    assert metadata["near_gate_acceptance"]["accepted"] is True
+
+
+def test_nominal_repair_is_skipped_after_near_gate_acceptance():
+    validation = TrajectoryValidator(
+        ValidationCriteria(score_threshold=90.0, require_insertion_event=False)
+    ).evaluate(
+        {
+            "score": 10.0,
+            "offlimit_contact_count": 0,
+            "moveit_success": True,
+            "mode": "nominal",
+        }
+    )
+    accepted = validation.__class__(
+        **{
+            **validation.__dict__,
+            "accepted": True,
+            "reasons": [],
+        }
+    )
+    assessment = {
+        "phase_speed_metrics": {
+            "phases": {
+                "local_preinsert_align": {"max_speed_mps": 0.1},
+                "moveit_approach": {"max_speed_mps": 0.2},
+            }
+        }
+    }
+
+    assert generate_expert_trajectories._should_attempt_nominal_repair(accepted, assessment) is False

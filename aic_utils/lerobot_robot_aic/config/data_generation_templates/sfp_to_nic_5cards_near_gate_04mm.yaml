@@ -1,0 +1,25 @@
+root_dir: outputs/trajectory_datasets_probe
+task_family: sfp_to_nic
+suffix: sfp_5cards_near_gate_04mm_strictaccept
+
+generation:
+  target_accepted_trajectories: 1
+  max_attempts: 12
+  max_planner_attempts: 2
+  policy: agent
+  expert_mode: nominal
+  auto_improve_on_failure: true
+  write_expert_registry_overlay: true
+  seed: 505
+  append_if_exists: true
+
+acceptance:
+  success_only: false
+  min_score: 10.0
+  stop_near_gate:
+    max_lateral_error_m: 0.004
+
+scene:
+  nic_cards:
+    count: 5
+    rails: [nic_rail_0, nic_rail_1, nic_rail_2, nic_rail_3, nic_rail_4]

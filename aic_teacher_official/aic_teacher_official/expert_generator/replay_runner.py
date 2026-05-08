@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+import json
 import re
 import shlex
 import subprocess
@@ -55,6 +56,12 @@ class OfficialRecordingReplayRunner:
     def __init__(self, config: OfficialReplayConfig):
         self.config = config
 
+    def engine_config_for_attempt(self, attempt_index: int) -> Path:
+        trial_config = self.config.engine_config.parent / "trials" / f"trial_{attempt_index:06d}.yaml"
+        if trial_config.exists():
+            return trial_config
+        return self.config.engine_config
+
     def replay_and_score(
         self,
         trajectory: SmoothTrajectory | Any,
@@ -73,11 +80,13 @@ class OfficialRecordingReplayRunner:
             trajectory.save_json(trajectory_path)
         else:
             raise TypeError("OfficialRecordingReplayRunner requires a SmoothTrajectory-like object with save_json")
+        engine_config = self.engine_config_for_attempt(attempt_index)
         cmd = self.build_command(
             trajectory_path=trajectory_path,
             attempt_dir=attempt_dir,
             attempt_index=attempt_index,
             candidate_index=candidate_index,
+            engine_config=engine_config,
         )
         env = os.environ.copy()
         source_paths = [
@@ -88,6 +97,7 @@ class OfficialRecordingReplayRunner:
         env["PYTHONPATH"] = ":".join(
             [str(path) for path in source_paths] + ([existing_pythonpath] if existing_pythonpath else [])
         )
+        env.update(_registry_env_for_engine_config(engine_config))
         env["AIC_EXPERT_MODE"] = self.config.expert_mode
         env["AIC_OFFICIAL_TEACHER_RUNTIME_TRACE"] = str(attempt_dir / "runtime_trace.jsonl")
         if self.config.ft_threshold_n is not None:
@@ -142,11 +152,12 @@ class OfficialRecordingReplayRunner:
                 stderr=stderr,
                 check=False,
             )
-        metrics = metrics_from_scoring_yaml(attempt_dir / "results" / "trial_1_trial_000001" / "scoring.yaml")
+        metrics = metrics_from_scoring_yaml(_scoring_yaml_for_attempt(attempt_dir))
         metrics.update(
             {
                 "replay_returncode": result.returncode,
                 "replay_command": " ".join(shlex.quote(part) for part in cmd),
+                "engine_config": str(engine_config),
                 "trajectory_path": str(trajectory_path),
                 "runtime_trace_path": str(attempt_dir / "runtime_trace.jsonl"),
             }
@@ -160,12 +171,14 @@ class OfficialRecordingReplayRunner:
         attempt_dir: Path,
         attempt_index: int,
         candidate_index: int,
+        engine_config: Path | None = None,
     ) -> list[str]:
+        engine_config = engine_config or self.config.engine_config
         cmd = [
             "bash",
             "./aic_utils/lerobot_robot_aic/scripts/launch_policy_recording_per_trial.sh",
             "--engine-config",
-            str(self.config.engine_config),
+            str(engine_config),
             "--policy-class",
             self.config.policy_class,
             "--teacher-trajectory",
@@ -198,6 +211,93 @@ class OfficialRecordingReplayRunner:
         if self.config.sim_distrobox:
             cmd.extend(["--sim-distrobox", self.config.sim_distrobox])
         return cmd
+
+
+def _scoring_yaml_for_attempt(attempt_dir: Path) -> Path:
+    scoring_paths = sorted((attempt_dir / "results").glob("trial_*_*/scoring.yaml"))
+    if scoring_paths:
+        return scoring_paths[0]
+    return attempt_dir / "results" / "trial_1_trial_000001" / "scoring.yaml"
+
+
+def _rail_indices(task_board: dict[str, Any], prefix: str) -> list[int]:
+    indices: list[int] = []
+    for key, value in task_board.items():
+        if not key.startswith(prefix) or not isinstance(value, dict):
+            continue
+        if value.get("entity_present"):
+            try:
+                indices.append(int(key.rsplit("_", 1)[1]))
+            except (IndexError, ValueError):
+                continue
+    return sorted(indices)
+
+
+def _parse_index(text: str, prefix: str) -> int | None:
+    if not text.startswith(prefix):
+        return None
+    try:
+        return int(text[len(prefix) :])
+    except ValueError:
+        return None
+
+
+def _registry_suffix_from_trial(task_family: str, trial: dict[str, Any]) -> str | None:
+    task = trial.get("tasks", {}).get("task_1", {})
+    task_board = trial.get("scene", {}).get("task_board", {})
+    if not isinstance(task, dict) or not isinstance(task_board, dict):
+        return None
+    if task_family == "sc_to_sc":
+        present = _rail_indices(task_board, "sc_rail_")
+        target = _parse_index(str(task.get("target_module_name", "")), "sc_port_")
+        if not present or target is None:
+            return None
+        nic_count = len(_rail_indices(task_board, "nic_rail_"))
+        present_label = "".join(str(idx) for idx in present)
+        return f"matrix_sc2sc_sc{len(present)}_present{present_label}_target{target}_nic{nic_count}"
+    if task_family == "sfp_to_nic":
+        present = _rail_indices(task_board, "nic_rail_")
+        target = _parse_index(str(task.get("target_module_name", "")), "nic_card_mount_")
+        port = _parse_index(str(task.get("port_name", "")), "sfp_port_")
+        if not present or target is None or port is None:
+            return None
+        present_label = "".join(str(idx) for idx in present)
+        return f"matrix_sfp2nic_cards{len(present)}_present{present_label}_target{target}_port{port}"
+    return None
+
+
+def _single_trial_registry_suffix(engine_config: Path) -> str | None:
+    task_family = os.environ.get("AIC_EXPERT_TASK_FAMILY", "")
+    if not task_family:
+        return None
+    try:
+        config = yaml.safe_load(engine_config.read_text(encoding="utf-8"))
+    except Exception:
+        return None
+    trials = config.get("trials") if isinstance(config, dict) else None
+    if not isinstance(trials, dict) or not trials:
+        return None
+    for trial in trials.values():
+        if isinstance(trial, dict):
+            return _registry_suffix_from_trial(task_family, trial)
+    return None
+
+
+def _registry_env_for_engine_config(engine_config: Path) -> dict[str, str]:
+    raw = os.environ.get("AIC_EXPERT_REGISTRY_MODE_ENV_BY_SUFFIX", "")
+    if not raw:
+        return {}
+    suffix = _single_trial_registry_suffix(engine_config)
+    if not suffix:
+        return {}
+    try:
+        env_by_suffix = json.loads(raw)
+    except json.JSONDecodeError:
+        return {}
+    mode_env = env_by_suffix.get(suffix) if isinstance(env_by_suffix, dict) else None
+    if not isinstance(mode_env, dict):
+        return {}
+    return {str(key): str(value) for key, value in mode_env.items()}
 
 
 def metrics_from_scoring_yaml(path: str | Path) -> dict[str, Any]:

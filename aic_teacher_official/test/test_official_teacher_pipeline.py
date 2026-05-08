@@ -4,6 +4,7 @@ from pathlib import Path
 import subprocess
 import sys
 
+import numpy as np
 import pytest
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
@@ -18,6 +19,9 @@ from aic_teacher_official.postprocess import (
     compact_stall_intervals,
     minimum_jerk_fraction,
     postprocess_piecewise_trajectory,
+    resample_precontact_joint_minimum_jerk,
+    resample_transport_minimum_jerk,
+    retime_tcp_speed_profile,
 )
 from aic_teacher_official.review import (
     _compact_manifest_for_gpt,
@@ -35,6 +39,7 @@ from aic_teacher_official.trajectory import (
     PhaseLabel,
     PiecewiseTrajectory,
     SourceLabel,
+    SmoothTrajectory,
     TCPPose,
     TrajectoryWaypoint,
     assert_monotonic_timestamps,
@@ -110,6 +115,228 @@ def test_smooth_trajectory_has_no_timestamp_regressions():
     assert_monotonic_timestamps(smooth.waypoints)
     assert smooth.waypoints[0].timestamp == pytest.approx(0.0)
     assert smooth.waypoints[-1].timestamp == pytest.approx(2.0)
+
+
+def test_tcp_speed_retiming_caps_fast_replay_segments():
+    smooth = postprocess_piecewise_trajectory(_piecewise(), sample_dt=0.2)
+    retimed = retime_tcp_speed_profile(
+        smooth,
+        max_tcp_speed_mps=0.04,
+        max_tcp_accel_mps2=0.10,
+        approach_max_tcp_speed_mps=None,
+        approach_max_tcp_accel_mps2=None,
+        min_segment_sec=0.05,
+    )
+
+    assert_monotonic_timestamps(retimed.waypoints)
+    for prev, curr in zip(retimed.waypoints, retimed.waypoints[1:]):
+        dt = curr.timestamp - prev.timestamp
+        delta = [
+            curr.tcp_pose.position[index] - prev.tcp_pose.position[index]
+            for index in range(3)
+        ]
+        speed = sum(component * component for component in delta) ** 0.5 / dt
+        assert speed <= 0.040001
+    assert retimed.metadata.postprocessing["tcp_speed_retiming"]["method"] == "bounded_tcp_speed_profile_v1"
+
+
+def test_tcp_speed_retiming_compacts_stationary_transport_samples():
+    smooth = SmoothTrajectory(
+        waypoints=[
+            TrajectoryWaypoint(
+                timestamp=0.0,
+                tcp_pose=TCPPose([0.0, 0.0, 0.3], [0.0, 0.0, 0.0, 1.0]),
+                phase=PhaseLabel.APPROACH,
+                source=SourceLabel.OPTIMIZER,
+            ),
+            TrajectoryWaypoint(
+                timestamp=1.0,
+                tcp_pose=TCPPose([0.0, 0.0, 0.3], [0.0, 0.0, 0.0, 1.0]),
+                phase=PhaseLabel.APPROACH,
+                source=SourceLabel.OPTIMIZER,
+            ),
+            TrajectoryWaypoint(
+                timestamp=2.0,
+                tcp_pose=TCPPose([0.1, 0.0, 0.3], [0.0, 0.0, 0.0, 1.0]),
+                phase=PhaseLabel.PRE_INSERTION,
+                source=SourceLabel.OPTIMIZER,
+            ),
+        ]
+    )
+    retimed = retime_tcp_speed_profile(
+        smooth,
+        max_tcp_speed_mps=0.02,
+        max_tcp_accel_mps2=0.05,
+        approach_max_tcp_speed_mps=0.10,
+        approach_max_tcp_accel_mps2=0.30,
+        min_segment_sec=0.05,
+        approach_stall_translation_m=0.0005,
+    )
+
+    retiming = retimed.metadata.postprocessing["tcp_speed_retiming"]
+    assert retiming["skipped_approach_stall_waypoints"] > 0
+    assert retimed.waypoints[-1].timestamp < smooth.waypoints[-1].timestamp
+
+
+def test_minimum_jerk_transport_resample_preserves_endpoints_and_duration():
+    smooth = SmoothTrajectory(
+        waypoints=[
+            TrajectoryWaypoint(
+                timestamp=0.0,
+                tcp_pose=TCPPose([0.0, 0.0, 0.3], [0.0, 0.0, 0.0, 1.0]),
+                phase=PhaseLabel.APPROACH,
+                source=SourceLabel.OPTIMIZER,
+                joint_names=["j0"],
+                joint_positions=[0.0],
+            ),
+            TrajectoryWaypoint(
+                timestamp=1.0,
+                tcp_pose=TCPPose([0.1, 0.0, 0.3], [0.0, 0.0, 0.0, 1.0]),
+                phase=PhaseLabel.ALIGNMENT,
+                source=SourceLabel.OPTIMIZER,
+                joint_names=["j0"],
+                joint_positions=[0.5],
+            ),
+            TrajectoryWaypoint(
+                timestamp=2.0,
+                tcp_pose=TCPPose([0.2, 0.0, 0.2], [0.0, 0.0, 0.0, 1.0]),
+                phase=PhaseLabel.PRE_INSERTION,
+                source=SourceLabel.OPTIMIZER,
+                joint_names=["j0"],
+                joint_positions=[1.0],
+            ),
+            TrajectoryWaypoint(
+                timestamp=3.0,
+                tcp_pose=TCPPose([0.2, 0.0, 0.1], [0.0, 0.0, 0.0, 1.0]),
+                phase=PhaseLabel.FINAL_INSERTION,
+                source=SourceLabel.CHEATCODE,
+            ),
+        ]
+    )
+
+    resampled = resample_transport_minimum_jerk(smooth, sample_dt=0.25)
+
+    assert resampled.waypoints[0].tcp_pose.position == pytest.approx([0.0, 0.0, 0.3])
+    assert resampled.waypoints[8].tcp_pose.position == pytest.approx([0.2, 0.0, 0.2])
+    assert resampled.waypoints[8].timestamp == pytest.approx(2.0)
+    assert resampled.waypoints[-1].phase == PhaseLabel.FINAL_INSERTION
+    assert resampled.metadata.postprocessing["minimum_jerk_transport"]["method"] == "arc_length_resample_v1"
+    assert np.linalg.norm(resampled.waypoints[1].tcp_velocity or []) < np.linalg.norm(
+        resampled.waypoints[4].tcp_velocity or []
+    )
+
+
+def test_joint_minimum_jerk_retime_rewrites_precontact_joint_targets():
+    smooth = SmoothTrajectory(
+        waypoints=[
+            TrajectoryWaypoint(
+                timestamp=0.0,
+                tcp_pose=TCPPose([0.0, 0.0, 0.3], [0.0, 0.0, 0.0, 1.0]),
+                phase=PhaseLabel.APPROACH,
+                source=SourceLabel.OPTIMIZER,
+                joint_names=["j0", "j1"],
+                joint_positions=[0.0, 0.0],
+            ),
+            TrajectoryWaypoint(
+                timestamp=1.0,
+                tcp_pose=TCPPose([0.1, 0.0, 0.3], [0.0, 0.0, 0.0, 1.0]),
+                phase=PhaseLabel.ALIGNMENT,
+                source=SourceLabel.OPTIMIZER,
+                joint_names=["j0", "j1"],
+                joint_positions=[0.5, 0.0],
+            ),
+            TrajectoryWaypoint(
+                timestamp=2.0,
+                tcp_pose=TCPPose([0.2, 0.0, 0.2], [0.0, 0.0, 0.0, 1.0]),
+                phase=PhaseLabel.PRE_INSERTION,
+                source=SourceLabel.OPTIMIZER,
+                joint_names=["j0", "j1"],
+                joint_positions=[1.0, 0.4],
+            ),
+            TrajectoryWaypoint(
+                timestamp=3.0,
+                tcp_pose=TCPPose([0.2, 0.0, 0.1], [0.0, 0.0, 0.0, 1.0]),
+                phase=PhaseLabel.FINAL_INSERTION,
+                source=SourceLabel.CHEATCODE,
+                joint_names=["j0", "j1"],
+                joint_positions=[1.0, 0.4],
+            ),
+        ]
+    )
+
+    retimed = resample_precontact_joint_minimum_jerk(
+        smooth,
+        sample_dt=0.25,
+        max_joint_speed_rad_s=0.3,
+    )
+
+    assert_monotonic_timestamps(retimed.waypoints)
+    assert retimed.waypoints[0].joint_positions == pytest.approx([0.0, 0.0])
+    assert retimed.waypoints[-2].joint_positions == pytest.approx([1.0, 0.4])
+    assert retimed.waypoints[-1].phase == PhaseLabel.FINAL_INSERTION
+    assert retimed.waypoints[-1].timestamp > smooth.waypoints[-1].timestamp
+    assert retimed.waypoints[0].joint_velocities == pytest.approx([0.0, 0.0])
+    assert retimed.waypoints[-2].joint_velocities == pytest.approx([0.0, 0.0])
+    assert any(
+        np.linalg.norm(waypoint.joint_velocities or []) > 0.0
+        for waypoint in retimed.waypoints[1:-2]
+    )
+    retiming = retimed.metadata.postprocessing["joint_minimum_jerk_retime"]
+    assert retiming["method"] == "precontact_joint_arc_length_v1"
+    assert retiming["max_observed_joint_speed_rad_s"] <= 0.300001
+
+
+def test_joint_retime_can_speed_up_safe_approach_phase_only():
+    smooth = SmoothTrajectory(
+        waypoints=[
+            TrajectoryWaypoint(
+                timestamp=0.0,
+                tcp_pose=TCPPose([0.0, 0.0, 0.3], [0.0, 0.0, 0.0, 1.0]),
+                phase=PhaseLabel.APPROACH,
+                source=SourceLabel.OPTIMIZER,
+                joint_names=["j0"],
+                joint_positions=[0.0],
+            ),
+            TrajectoryWaypoint(
+                timestamp=2.0,
+                tcp_pose=TCPPose([0.1, 0.0, 0.3], [0.0, 0.0, 0.0, 1.0]),
+                phase=PhaseLabel.APPROACH,
+                source=SourceLabel.OPTIMIZER,
+                joint_names=["j0"],
+                joint_positions=[0.4],
+            ),
+            TrajectoryWaypoint(
+                timestamp=4.0,
+                tcp_pose=TCPPose([0.2, 0.0, 0.2], [0.0, 0.0, 0.0, 1.0]),
+                phase=PhaseLabel.PRE_INSERTION,
+                source=SourceLabel.OPTIMIZER,
+                joint_names=["j0"],
+                joint_positions=[0.8],
+            ),
+            TrajectoryWaypoint(
+                timestamp=5.0,
+                tcp_pose=TCPPose([0.2, 0.0, 0.1], [0.0, 0.0, 0.0, 1.0]),
+                phase=PhaseLabel.FINAL_INSERTION,
+                source=SourceLabel.CHEATCODE,
+                joint_names=["j0"],
+                joint_positions=[0.8],
+            ),
+        ]
+    )
+
+    retimed = resample_precontact_joint_minimum_jerk(
+        smooth,
+        sample_dt=0.25,
+        approach_speedup=2.0,
+        preinsertion_speedup=2.0,
+    )
+
+    assert_monotonic_timestamps(retimed.waypoints)
+    retiming = retimed.metadata.postprocessing["joint_minimum_jerk_retime"]
+    assert retiming["approach_speedup"] == pytest.approx(2.0)
+    assert retiming["preinsertion_speedup"] == pytest.approx(2.0)
+    assert retiming["precontact_output_duration_sec"] == pytest.approx(2.0)
+    assert retimed.waypoints[-1].timestamp == pytest.approx(3.0)
 
 
 def test_smooth_trajectory_preserves_phase_labels():

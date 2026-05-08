@@ -136,6 +136,11 @@ class MoveItPyPlanningBackend:
         self,
         candidate_pose: ApproachCandidate,
     ) -> tuple[tuple[str, Any, PhaseLabel], ...]:
+        if candidate_pose.route_subgoals:
+            return tuple(
+                (subgoal.name, subgoal.pose, _phase_from_route_subgoal(subgoal.phase))
+                for subgoal in candidate_pose.route_subgoals
+            )
         if self.config.approach_segment_mode == "three_stage":
             return (
                 ("safe_lift", candidate_pose.safe_lift_pose, PhaseLabel.APPROACH),
@@ -215,6 +220,13 @@ def _pose_stamped_from_serializable(pose: Any) -> Any:
     msg.pose.orientation.z = float(pose.orientation_xyzw[2])
     msg.pose.orientation.w = float(pose.orientation_xyzw[3])
     return msg
+
+
+def _phase_from_route_subgoal(value: str) -> PhaseLabel:
+    try:
+        return PhaseLabel(value)
+    except ValueError:
+        return PhaseLabel.APPROACH
 
 
 def _plan_result_success(plan_result: Any) -> bool:

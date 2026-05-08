@@ -71,6 +71,7 @@ class OfficialExpertGeneratorPlanner(Policy):
             planning_attempts=int(os.environ.get("AIC_EXPERT_MOVEIT_PLANNING_ATTEMPTS", "5")),
             max_velocity_scaling_factor=float(os.environ.get("AIC_EXPERT_MOVEIT_MAX_VEL_SCALE", "0.1")),
             max_acceleration_scaling_factor=float(os.environ.get("AIC_EXPERT_MOVEIT_MAX_ACCEL_SCALE", "0.1")),
+            approach_segment_mode=os.environ.get("AIC_EXPERT_MOVEIT_APPROACH_SEGMENT_MODE", "three_stage"),
         )
 
     def insert_cable(
