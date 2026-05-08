@@ -34,6 +34,7 @@ class ExpertPlannerRunConfig:
     launch_moveit: bool = True
     moveit_launch_file: str = "aic_moveit_config moveit.launch.py"
     ft_threshold_n: float | None = None
+    record_dataset: bool = True
 
 
 class ExpertPlannerRecordingRunner:
@@ -136,6 +137,8 @@ class ExpertPlannerRecordingRunner:
             str(self.config.launch_moveit).lower(),
             "--moveit-launch-file",
             self.config.moveit_launch_file,
+            "--record-episode",
+            str(self.config.record_dataset).lower(),
         ]
         if self.config.sim_distrobox:
             cmd.extend(["--sim-distrobox", self.config.sim_distrobox])

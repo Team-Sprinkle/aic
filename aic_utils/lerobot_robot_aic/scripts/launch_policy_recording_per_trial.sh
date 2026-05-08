@@ -30,6 +30,7 @@ RESULTS_ROOT="${RESULTS_ROOT:-${WORKSPACE_DIR}/outputs/aic_results_per_trial}"
 REMOVE_BAG_DATA="${REMOVE_BAG_DATA:-true}"
 LAUNCH_MOVEIT="${LAUNCH_MOVEIT:-false}"
 MOVEIT_LAUNCH_FILE="${MOVEIT_LAUNCH_FILE:-aic_moveit_config moveit.launch.py}"
+RECORD_EPISODE="${RECORD_EPISODE:-true}"
 
 usage() {
   cat <<EOF_USAGE
@@ -87,6 +88,10 @@ Options:
   --moveit-launch-file "PKG FILE"
                                  ros2 launch target for MoveIt
                                  (default: "${MOVEIT_LAUNCH_FILE}")
+  --record-episode BOOL          Start the LeRobot recorder for this trial.
+                                 Planner-only attempts can set this false to
+                                 keep debug/planning artifacts without writing
+                                 an intermediate dataset (default: ${RECORD_EPISODE})
   -h, --help                     Show this help text
 
 Environment variable equivalents:
@@ -98,7 +103,7 @@ Environment variable equivalents:
   PAUSE_BETWEEN_TRIALS_SEC, CONTINUE_ON_FAILURE, PUSH_TO_HUB, TMP_DIR,
   RECORDER_DRAIN_SEC, REQUIRE_RECORDER_SAVE_LOG, SUDO_KEEPALIVE,
   GAZEBO_GUI, LAUNCH_RVIZ, RESULTS_ROOT, REMOVE_BAG_DATA,
-  LAUNCH_MOVEIT, MOVEIT_LAUNCH_FILE
+  LAUNCH_MOVEIT, MOVEIT_LAUNCH_FILE, RECORD_EPISODE
 EOF_USAGE
 }
 
@@ -130,6 +135,7 @@ while [[ $# -gt 0 ]]; do
     --remove-bag-data) REMOVE_BAG_DATA="$2"; shift 2 ;;
     --launch-moveit) LAUNCH_MOVEIT="$2"; shift 2 ;;
     --moveit-launch-file) MOVEIT_LAUNCH_FILE="$2"; shift 2 ;;
+    --record-episode) RECORD_EPISODE="$2"; shift 2 ;;
     -h|--help) usage; exit 0 ;;
     *)
       echo "Unknown option: $1" >&2
@@ -183,6 +189,7 @@ bool_or_die "${GAZEBO_GUI}" "--gazebo-gui"
 bool_or_die "${LAUNCH_RVIZ}" "--launch-rviz"
 bool_or_die "${REMOVE_BAG_DATA}" "--remove-bag-data"
 bool_or_die "${LAUNCH_MOVEIT}" "--launch-moveit"
+bool_or_die "${RECORD_EPISODE}" "--record-episode"
 int_or_die "${PER_TRIAL_TIMEOUT_SEC}" "--per-trial-timeout-sec"
 int_or_die "${STARTUP_DELAY_SEC}" "--startup-delay-sec"
 int_or_die "${PAUSE_BETWEEN_TRIALS_SEC}" "--pause-between-trials-sec"
@@ -450,9 +457,10 @@ echo "  sudo keepalive: ${SUDO_KEEPALIVE}"
   echo "  launch moveit: ${LAUNCH_MOVEIT}"
 echo "  per-trial scoring results root: ${RESULTS_ROOT}"
 echo "  remove bag data: ${REMOVE_BAG_DATA}"
+echo "  record episode: ${RECORD_EPISODE}"
 
 DATASET_EXISTS_BEFORE_RUN="false"
-if [[ -f "${DATASET_ROOT}/meta/info.json" ]]; then
+if [[ "${RECORD_EPISODE}" == "true" && -f "${DATASET_ROOT}/meta/info.json" ]]; then
   DATASET_EXISTS_BEFORE_RUN="true"
   echo "  dataset root already exists, first trial will use --dataset.resume"
 fi
@@ -522,31 +530,36 @@ for TRIAL_ID in "${TRIAL_IDS[@]}"; do
   # time building/updating the pixi package cache before it starts spinning.
   sleep 1
 
-  RECORDER_CMD=(
-    pixi run env "PYTHONPATH=${WORKSPACE_DIR}/aic_utils/lerobot_robot_aic:${PYTHONPATH:-}"
-    aic-policy-recorder
-    "--dataset.repo_id=${DATASET_REPO_ID}"
-    "--dataset.single_task=${DATASET_SINGLE_TASK}"
-    "--dataset.root=${DATASET_ROOT}"
-    --dataset.fps=20
-    "--action_mode=${ACTION_MODE}"
-    --max_episodes=1
-  )
-  if [[ "${SAVE_FAILED_EPISODES}" == "true" ]]; then
-    RECORDER_CMD+=(--save_failed_episodes)
-  fi
-  if [[ "${PUSH_TO_HUB}" == "true" ]]; then
-    RECORDER_CMD+=(--dataset.push_to_hub)
-  fi
-  if [[ "${RUN_INDEX}" -gt 1 || "${DATASET_EXISTS_BEFORE_RUN}" == "true" ]]; then
-    RECORDER_CMD+=(--dataset.resume)
-  fi
+  RECORDER_PID=""
+  if [[ "${RECORD_EPISODE}" == "true" ]]; then
+    RECORDER_CMD=(
+      pixi run env "PYTHONPATH=${WORKSPACE_DIR}/aic_utils/lerobot_robot_aic:${PYTHONPATH:-}"
+      aic-policy-recorder
+      "--dataset.repo_id=${DATASET_REPO_ID}"
+      "--dataset.single_task=${DATASET_SINGLE_TASK}"
+      "--dataset.root=${DATASET_ROOT}"
+      --dataset.fps=20
+      "--action_mode=${ACTION_MODE}"
+      --max_episodes=1
+    )
+    if [[ "${SAVE_FAILED_EPISODES}" == "true" ]]; then
+      RECORDER_CMD+=(--save_failed_episodes)
+    fi
+    if [[ "${PUSH_TO_HUB}" == "true" ]]; then
+      RECORDER_CMD+=(--dataset.push_to_hub)
+    fi
+    if [[ "${RUN_INDEX}" -gt 1 || "${DATASET_EXISTS_BEFORE_RUN}" == "true" ]]; then
+      RECORDER_CMD+=(--dataset.resume)
+    fi
 
-  (
-    cd "${WORKSPACE_DIR}"
-    "${RECORDER_CMD[@]}"
-  ) >"${RECORDER_LOG}" 2>&1 &
-  RECORDER_PID=$!
+    (
+      cd "${WORKSPACE_DIR}"
+      "${RECORDER_CMD[@]}"
+    ) >"${RECORDER_LOG}" 2>&1 &
+    RECORDER_PID=$!
+  else
+    echo "  recorder disabled for this trial"
+  fi
 
   START_EPOCH="$(date +%s)"
   SIM_EXIT_EPOCH=0
@@ -554,13 +567,18 @@ for TRIAL_ID in "${TRIAL_IDS[@]}"; do
   TRIAL_TIMED_OUT="false"
 
   while true; do
-    if ! kill -0 "${RECORDER_PID}" >/dev/null 2>&1; then
-      break
+    if [[ "${RECORD_EPISODE}" == "true" ]]; then
+      if ! kill -0 "${RECORDER_PID}" >/dev/null 2>&1; then
+        break
+      fi
     fi
 
     if ! kill -0 "${SIM_PID}" >/dev/null 2>&1; then
       if [[ "${SIM_EXIT_EPOCH}" -eq 0 ]]; then
         SIM_EXIT_EPOCH="$(date +%s)"
+      fi
+      if [[ "${RECORD_EPISODE}" != "true" ]]; then
+        break
       fi
       NOW_EPOCH="$(date +%s)"
       if [[ "$((NOW_EPOCH - SIM_EXIT_EPOCH))" -ge "${RECORDER_DRAIN_SEC}" ]]; then
@@ -594,7 +612,7 @@ for TRIAL_ID in "${TRIAL_IDS[@]}"; do
   if [[ -n "${MOVEIT_PID}" ]] && kill -0 "${MOVEIT_PID}" >/dev/null 2>&1; then
     terminate_process "${MOVEIT_PID}" "moveit"
   fi
-  if kill -0 "${RECORDER_PID}" >/dev/null 2>&1; then
+  if [[ "${RECORD_EPISODE}" == "true" ]] && kill -0 "${RECORDER_PID}" >/dev/null 2>&1; then
     terminate_process "${RECORDER_PID}" "recorder"
   fi
 
@@ -607,10 +625,15 @@ for TRIAL_ID in "${TRIAL_IDS[@]}"; do
     if ! wait "${MOVEIT_PID}"; then MOVEIT_EXIT=$?; fi
   fi
   RECORDER_EXIT=0
-  if ! wait "${RECORDER_PID}"; then RECORDER_EXIT=$?; fi
+  if [[ "${RECORD_EPISODE}" == "true" ]]; then
+    if ! wait "${RECORDER_PID}"; then RECORDER_EXIT=$?; fi
+  fi
 
   EPISODE_SAVED_LOG_MATCH="false"
-  if [[ -f "${RECORDER_LOG}" ]]; then
+  if [[ "${RECORD_EPISODE}" != "true" ]]; then
+    EPISODE_SAVED_LOG_MATCH="skipped"
+    echo "  Episode saved: recorder disabled"
+  elif [[ -f "${RECORDER_LOG}" ]]; then
     if grep -q "Episode saved" "${RECORDER_LOG}"; then
       EPISODE_SAVED_LOG_MATCH="true"
       EPISODE_SAVED_LOG_LINE="$(grep -n "Episode saved" "${RECORDER_LOG}" | tail -n 1)"
@@ -624,8 +647,8 @@ for TRIAL_ID in "${TRIAL_IDS[@]}"; do
 
   TRIAL_FAILED="false"
   if [[ "${TRIAL_TIMED_OUT}" == "true" ]]; then TRIAL_FAILED="true"; fi
-  if [[ "${RECORDER_DRAIN_TIMEOUT}" == "true" ]]; then TRIAL_FAILED="true"; fi
-  if [[ "${RECORDER_EXIT}" -ne 0 ]]; then TRIAL_FAILED="true"; fi
+  if [[ "${RECORD_EPISODE}" == "true" && "${RECORDER_DRAIN_TIMEOUT}" == "true" ]]; then TRIAL_FAILED="true"; fi
+  if [[ "${RECORD_EPISODE}" == "true" && "${RECORDER_EXIT}" -ne 0 ]]; then TRIAL_FAILED="true"; fi
   if [[ "${REQUIRE_RECORDER_SAVE_LOG}" == "true" && "${EPISODE_SAVED_LOG_MATCH}" != "true" ]]; then
     TRIAL_FAILED="true"
   fi

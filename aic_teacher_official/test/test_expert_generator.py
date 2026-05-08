@@ -904,6 +904,23 @@ def test_expert_planner_runner_builds_live_policy_command(tmp_path):
     assert "aic_moveit_config moveit.launch.py" in cmd
 
 
+def test_expert_planner_runner_can_skip_intermediate_dataset_recording(tmp_path):
+    runner = ExpertPlannerRecordingRunner(
+        ExpertPlannerRunConfig(
+            repo_root=Path("/repo"),
+            engine_config=Path("/repo/config.yaml"),
+            output_dir=tmp_path,
+            expert_mode="nominal",
+            record_dataset=False,
+        )
+    )
+
+    cmd = runner.build_command(attempt_dir=tmp_path / "attempt")
+
+    assert "--record-episode" in cmd
+    assert cmd[cmd.index("--record-episode") + 1] == "false"
+
+
 def test_expert_planner_runner_uses_single_trial_config(monkeypatch, tmp_path):
     root_config = tmp_path / "engine_config.yaml"
     root_config.write_text("trials: {}\n", encoding="utf-8")

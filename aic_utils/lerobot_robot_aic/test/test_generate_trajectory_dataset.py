@@ -138,6 +138,25 @@ def test_agent_success_only_defaults_to_requiring_insertion_event(tmp_path: Path
     assert cmd[cmd.index("--require-insertion-event") + 1] == "true"
 
 
+def test_agent_record_planner_dataset_flag_is_forwarded(tmp_path: Path) -> None:
+    request = base_request(tmp_path)
+    request["generation"]["policy"] = "agent"
+    request["generation"]["expert_mode"] = "nominal"
+    request["generation"]["record_planner_dataset"] = False
+    engine_path = gtd.write_engine_configs(request, tmp_path, 1)
+
+    cmd = gtd.build_agent_generation_cmd(
+        request=request,
+        engine_config_path=engine_path,
+        output_dir=tmp_path,
+        target=1,
+        max_attempts=1,
+    )
+
+    assert "--record-planner-dataset" in cmd
+    assert cmd[cmd.index("--record-planner-dataset") + 1] == "false"
+
+
 def test_agent_near_gate_acceptance_yaml_uses_min_score_filter_threshold(tmp_path: Path) -> None:
     request = base_request(tmp_path)
     request["generation"]["policy"] = "agent"

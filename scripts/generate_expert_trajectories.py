@@ -154,6 +154,12 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--launch-moveit", type=str_bool, default=True)
     parser.add_argument("--moveit-launch-file", default="aic_moveit_config moveit.launch.py")
     parser.add_argument(
+        "--record-planner-dataset",
+        type=str_bool,
+        default=True,
+        help="Record LeRobot datasets for planner attempts. Disable for faster planner-only debug artifacts.",
+    )
+    parser.add_argument(
         "--dry-run-config",
         action="store_true",
         help="Validate CLI/config and write generation_config.json without running Gazebo.",
@@ -229,6 +235,7 @@ def main() -> int:
         launch_moveit=args.launch_moveit,
         moveit_launch_file=args.moveit_launch_file,
         ft_threshold_n=ft_threshold,
+        record_dataset=args.record_planner_dataset,
     )
     payload = {
         "schema_version": "aic_expert_generation_config/v1",
@@ -271,6 +278,7 @@ def main() -> int:
             "launch_moveit": planner_config.launch_moveit,
             "moveit_launch_file": planner_config.moveit_launch_file,
             "ft_threshold_n": planner_config.ft_threshold_n,
+            "record_dataset": planner_config.record_dataset,
         },
         "notes": {
             "vlm_waypoints_allowed": False,
