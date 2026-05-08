@@ -9,6 +9,10 @@ preview = ["pixi-build"]
 
 [target.linux-64.dependencies]
 evdev = ">=1.9.2,<2"
+ros-kilted-aic-moveit-config = { path = "aic_moveit_config" }
+ros-kilted-aic-assets = { path = "aic_assets/package.xml" }
+ros-kilted-moveit-py = "*"                                                             # expert generator MoveIt planning backend
+ros-kilted-moveit-planners-ompl = "*"                                                  # required OMPL planner plugin for MoveIt
 
 [dependencies]
 isort = "==5.13.2"                                                                     # version bundled by the vscode extension

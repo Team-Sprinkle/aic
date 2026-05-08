@@ -1,0 +1,26 @@
+root_dir: outputs/trajectory_datasets
+task_family: sfp_to_nic
+suffix: ec2_02_sfp_hard
+
+generation:
+  target_accepted_trajectories: 400
+  max_attempts: 800
+  policy: agent
+  expert_mode: nominal
+  auto_improve_on_failure: true
+  write_expert_registry_overlay: true
+  seed: 202
+  append_if_exists: true
+  ft_threshold: 6.5
+  env:
+    AIC_EXPERT_VALIDATION_MAX_GUARDED_SPEED_MPS: "0.032"
+    AIC_OFFICIAL_TEACHER_TRACKING_GATE_FORCE_FRACTION: "5.0"
+    AIC_OFFICIAL_TEACHER_TRACKING_GATE_TIMEOUT_SEC: "5.0"
+
+acceptance:
+  success_only: true
+  min_score: 90.0
+
+scene:
+  nic_cards:
+    count: [3, 4, 5]

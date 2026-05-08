@@ -14,9 +14,6 @@ POLICY_CLASS="${POLICY_CLASS:-aic_example_policies.ros.CheatCode}"
 AIC_OFFICIAL_TEACHER_TRAJECTORY="${AIC_OFFICIAL_TEACHER_TRAJECTORY:-}"
 AIC_OFFICIAL_TEACHER_ACTION_MODE="${AIC_OFFICIAL_TEACHER_ACTION_MODE:-relative_delta_gripper_tcp}"
 SIM_DISTROBOX_NAME="${SIM_DISTROBOX_NAME:-aic_eval}"
-CONTAINER_WORKSPACE_DIR="${CONTAINER_WORKSPACE_DIR:-/home/chmin/yj/ws_aic/src/aic}"
-AIC_LAUNCH_BACKEND="${AIC_LAUNCH_BACKEND:-distrobox}"
-RESTART_SIM_CONTAINER="${RESTART_SIM_CONTAINER:-false}"
 SAVE_FAILED_EPISODES="${SAVE_FAILED_EPISODES:-false}"
 PER_TRIAL_TIMEOUT_SEC="${PER_TRIAL_TIMEOUT_SEC:-0}"
 STARTUP_DELAY_SEC="${STARTUP_DELAY_SEC:-8}"
@@ -31,6 +28,9 @@ GAZEBO_GUI="${GAZEBO_GUI:-true}"
 LAUNCH_RVIZ="${LAUNCH_RVIZ:-true}"
 RESULTS_ROOT="${RESULTS_ROOT:-${WORKSPACE_DIR}/outputs/aic_results_per_trial}"
 REMOVE_BAG_DATA="${REMOVE_BAG_DATA:-true}"
+LAUNCH_MOVEIT="${LAUNCH_MOVEIT:-false}"
+MOVEIT_LAUNCH_FILE="${MOVEIT_LAUNCH_FILE:-aic_moveit_config moveit.launch.py}"
+RECORD_EPISODE="${RECORD_EPISODE:-true}"
 
 usage() {
   cat <<EOF_USAGE
@@ -55,13 +55,6 @@ Options:
                                  absolute_cartesian_pose_base_link
                                  (default: ${AIC_OFFICIAL_TEACHER_ACTION_MODE})
   --sim-distrobox NAME           Distrobox name for simulation (default: ${SIM_DISTROBOX_NAME})
-  --launch-backend MODE          Process backend: distrobox or docker_exec
-                                 (default: ${AIC_LAUNCH_BACKEND})
-  --container-workspace-dir PATH Workspace path inside the runtime container
-                                 for docker_exec backend
-                                 (default: ${CONTAINER_WORKSPACE_DIR})
-  --restart-sim-container BOOL   Restart Docker eval container before each trial
-                                 (default: ${RESTART_SIM_CONTAINER})
   --dataset-repo-id ID           LeRobot dataset repo id (default: ${DATASET_REPO_ID})
   --dataset-root PATH            LeRobot dataset root (default: ${DATASET_ROOT})
   --dataset-single-task TXT      Dataset task prompt (default: "${DATASET_SINGLE_TASK}")
@@ -90,18 +83,27 @@ Options:
                                  (default: ${RESULTS_ROOT})
   --remove-bag-data BOOL         Remove per-trial scoring bag_* dirs after each trial
                                  (default: ${REMOVE_BAG_DATA})
+  --launch-moveit BOOL           Start MoveIt alongside simulation for planner policies
+                                 (default: ${LAUNCH_MOVEIT})
+  --moveit-launch-file "PKG FILE"
+                                 ros2 launch target for MoveIt
+                                 (default: "${MOVEIT_LAUNCH_FILE}")
+  --record-episode BOOL          Start the LeRobot recorder for this trial.
+                                 Planner-only attempts can set this false to
+                                 keep debug/planning artifacts without writing
+                                 an intermediate dataset (default: ${RECORD_EPISODE})
   -h, --help                     Show this help text
 
 Environment variable equivalents:
   WORKSPACE_DIR, ENGINE_CONFIG_FILE, POLICY_CLASS,
   AIC_OFFICIAL_TEACHER_TRAJECTORY, AIC_OFFICIAL_TEACHER_ACTION_MODE,
-  SIM_DISTROBOX_NAME, AIC_LAUNCH_BACKEND, CONTAINER_WORKSPACE_DIR,
-  RESTART_SIM_CONTAINER,
+  SIM_DISTROBOX_NAME,
   DATASET_REPO_ID, DATASET_ROOT, DATASET_SINGLE_TASK, ACTION_MODE,
   SAVE_FAILED_EPISODES, PER_TRIAL_TIMEOUT_SEC, STARTUP_DELAY_SEC,
   PAUSE_BETWEEN_TRIALS_SEC, CONTINUE_ON_FAILURE, PUSH_TO_HUB, TMP_DIR,
   RECORDER_DRAIN_SEC, REQUIRE_RECORDER_SAVE_LOG, SUDO_KEEPALIVE,
-  GAZEBO_GUI, LAUNCH_RVIZ, RESULTS_ROOT, REMOVE_BAG_DATA
+  GAZEBO_GUI, LAUNCH_RVIZ, RESULTS_ROOT, REMOVE_BAG_DATA,
+  LAUNCH_MOVEIT, MOVEIT_LAUNCH_FILE, RECORD_EPISODE
 EOF_USAGE
 }
 
@@ -113,9 +115,6 @@ while [[ $# -gt 0 ]]; do
     --teacher-trajectory) AIC_OFFICIAL_TEACHER_TRAJECTORY="$2"; shift 2 ;;
     --teacher-action-mode) AIC_OFFICIAL_TEACHER_ACTION_MODE="$2"; shift 2 ;;
     --sim-distrobox) SIM_DISTROBOX_NAME="$2"; shift 2 ;;
-    --launch-backend) AIC_LAUNCH_BACKEND="$2"; shift 2 ;;
-    --container-workspace-dir) CONTAINER_WORKSPACE_DIR="$2"; shift 2 ;;
-    --restart-sim-container) RESTART_SIM_CONTAINER="$2"; shift 2 ;;
     --dataset-repo-id) DATASET_REPO_ID="$2"; shift 2 ;;
     --dataset-root) DATASET_ROOT="$2"; shift 2 ;;
     --dataset-single-task) DATASET_SINGLE_TASK="$2"; shift 2 ;;
@@ -134,6 +133,9 @@ while [[ $# -gt 0 ]]; do
     --launch-rviz) LAUNCH_RVIZ="$2"; shift 2 ;;
     --results-root) RESULTS_ROOT="$2"; shift 2 ;;
     --remove-bag-data) REMOVE_BAG_DATA="$2"; shift 2 ;;
+    --launch-moveit) LAUNCH_MOVEIT="$2"; shift 2 ;;
+    --moveit-launch-file) MOVEIT_LAUNCH_FILE="$2"; shift 2 ;;
+    --record-episode) RECORD_EPISODE="$2"; shift 2 ;;
     -h|--help) usage; exit 0 ;;
     *)
       echo "Unknown option: $1" >&2
@@ -179,7 +181,6 @@ fi
 mkdir -p "${RESULTS_ROOT}"
 
 bool_or_die "${SAVE_FAILED_EPISODES}" "--save-failed-episodes"
-bool_or_die "${RESTART_SIM_CONTAINER}" "--restart-sim-container"
 bool_or_die "${CONTINUE_ON_FAILURE}" "--continue-on-failure"
 bool_or_die "${PUSH_TO_HUB}" "--push-to-hub"
 bool_or_die "${REQUIRE_RECORDER_SAVE_LOG}" "--require-recorder-save-log"
@@ -187,10 +188,8 @@ bool_or_die "${SUDO_KEEPALIVE}" "--sudo-keepalive"
 bool_or_die "${GAZEBO_GUI}" "--gazebo-gui"
 bool_or_die "${LAUNCH_RVIZ}" "--launch-rviz"
 bool_or_die "${REMOVE_BAG_DATA}" "--remove-bag-data"
-if [[ "${AIC_LAUNCH_BACKEND}" != "distrobox" && "${AIC_LAUNCH_BACKEND}" != "docker_exec" ]]; then
-  echo "Error: --launch-backend must be 'distrobox' or 'docker_exec' (got '${AIC_LAUNCH_BACKEND}')." >&2
-  exit 1
-fi
+bool_or_die "${LAUNCH_MOVEIT}" "--launch-moveit"
+bool_or_die "${RECORD_EPISODE}" "--record-episode"
 int_or_die "${PER_TRIAL_TIMEOUT_SEC}" "--per-trial-timeout-sec"
 int_or_die "${STARTUP_DELAY_SEC}" "--startup-delay-sec"
 int_or_die "${PAUSE_BETWEEN_TRIALS_SEC}" "--pause-between-trials-sec"
@@ -306,46 +305,102 @@ terminate_process() {
 }
 
 cleanup_stale_sim_router() {
-  # echo "  preflight: cleaning stale rmw_zenohd in distrobox '${SIM_DISTROBOX_NAME}'..."
-  # Best-effort host cleanup in case rmw_zenohd is bound in host namespace.
-  pkill -f rmw_zenohd >/dev/null 2>&1 || true
-  pkill -f "rmw_zenoh_cpp rmw_zenohd" >/dev/null 2>&1 || true
-
-  if [[ "${AIC_LAUNCH_BACKEND}" == "docker_exec" ]]; then
-    docker exec "${SIM_DISTROBOX_NAME}" bash -lc \
-      "pkill -f aic_policy_recorder >/dev/null 2>&1 || true; pkill -f 'ros2 run aic_model aic_model' >/dev/null 2>&1 || true; pkill -f rmw_zenohd >/dev/null 2>&1 || true; pkill -f 'rmw_zenoh_cpp rmw_zenohd' >/dev/null 2>&1 || true" \
-      >/dev/null 2>&1 || true
-  fi
-
-  sleep 10
-
-  # local attempt
-  # for attempt in {1..5}; do
-  #   if (
-  #     export DBX_CONTAINER_MANAGER=docker
-  #     distrobox enter -r "${SIM_DISTROBOX_NAME}" -- bash -lc "pkill -f rmw_zenohd >/dev/null 2>&1 || true; pkill -f 'rmw_zenoh_cpp rmw_zenohd' >/dev/null 2>&1 || true"
-  #   ); then
-  #     return 0
-  #   fi
-  #   echo "  preflight: distrobox cleanup attempt ${attempt}/5 failed; retrying..."
-  #   sleep 2
-  # done
-
-  # echo "  preflight: WARNING unable to run distrobox cleanup after retries; stale router may remain."
+  echo "  preflight: cleaning stale ROS/Gazebo processes in distrobox '${SIM_DISTROBOX_NAME}'..."
+  cleanup_host_sim_processes "preflight"
+  cleanup_sim_container_processes "preflight"
+  cleanup_host_sim_processes "preflight"
+  sleep 2
 }
 
-restart_sim_container() {
-  if [[ "${RESTART_SIM_CONTAINER}" != "true" ]]; then
+cleanup_host_sim_processes() {
+  local phase="${1:-cleanup}"
+  local patterns=(
+    "ros2 launch aic_bringup"
+    "aic_gz_bringup.launch.py"
+    "/opt/ros/kilted/lib/rclcpp_components/component_container"
+    "/ws_aic/install/lib/aic_engine/aic_engine"
+    "/ws_aic/install/lib/aic_adapter/aic_adapter"
+    "/ws_aic/install/lib/controller_manager/ros2_control_node"
+    "/opt/ros/kilted/lib/controller_manager/spawner"
+    "/opt/ros/kilted/lib/robot_state_publisher/robot_state_publisher"
+    "/opt/ros/kilted/lib/topic_tools/relay"
+    "/opt/ros/kilted/lib/tf2_ros/static_transform_publisher"
+    "/opt/ros/kilted/lib/moveit_ros_move_group/move_group"
+    "ros2 run aic_model aic_model"
+    "/aic_model/aic_model"
+    "gz sim"
+    "gzserver"
+    "ruby.*gz sim"
+    "rmw_zenoh_cpp rmw_zenohd"
+    "/opt/ros/kilted/lib/rmw_zenoh_cpp/rmw_zenohd"
+  )
+  local signal_name pattern pids remaining
+  for signal_name in INT TERM KILL; do
+    for pattern in "${patterns[@]}"; do
+      pkill "-${signal_name}" -f "${pattern}" >/dev/null 2>&1 || true
+      pids="$(pgrep -f "${pattern}" | awk -v self="$$" '$1 != self' || true)"
+      if [[ -n "${pids}" ]]; then
+        kill "-${signal_name}" ${pids} >/dev/null 2>&1 || true
+      fi
+    done
+    sleep 1
+  done
+
+  remaining=0
+  for pattern in "${patterns[@]}"; do
+    if pgrep -f "${pattern}" >/dev/null 2>&1; then
+      remaining=$((remaining + 1))
+    fi
+  done
+  if [[ "${remaining}" -gt 0 ]]; then
+    echo "  ${phase}: warning: ${remaining} stale host ROS/Gazebo process pattern(s) still matched after cleanup" >&2
+  fi
+}
+
+cleanup_sim_container_processes() {
+  local phase="${1:-cleanup}"
+  local cleanup_script
+  cleanup_script=$(cat <<'EOF_CLEANUP'
+patterns=(
+  "ros2 launch aic_bringup"
+  "aic_gz_bringup.launch.py"
+  "/opt/ros/kilted/lib/rclcpp_components/component_container"
+  "/ws_aic/install/lib/aic_engine/aic_engine"
+  "/ws_aic/install/lib/controller_manager/ros2_control_node"
+  "controller_manager/spawner"
+  "gz sim"
+  "gzserver"
+  "ruby.*gz sim"
+  "robot_state_publisher"
+  "aic_adapter"
+  "topic_tools"
+  "static_transform_publisher"
+  "rmw_zenoh_cpp rmw_zenohd"
+  "/opt/ros/kilted/lib/rmw_zenoh_cpp/rmw_zenohd"
+)
+for signal_name in INT TERM KILL; do
+  for pattern in "${patterns[@]}"; do
+    pids="$(pgrep -f "${pattern}" || true)"
+    if [[ -n "${pids}" ]]; then
+      kill "-${signal_name}" ${pids} >/dev/null 2>&1 || true
+    fi
+  done
+  sleep 1
+done
+EOF_CLEANUP
+)
+
+  if command -v docker >/dev/null 2>&1 && docker ps --format '{{.Names}}' | grep -Fxq "${SIM_DISTROBOX_NAME}"; then
+    docker exec "${SIM_DISTROBOX_NAME}" bash -lc "${cleanup_script}" >/dev/null 2>&1 || true
     return
   fi
-  if ! command -v docker >/dev/null 2>&1; then
-    echo "Error: --restart-sim-container=true requires 'docker'." >&2
-    exit 1
-  fi
 
-  echo "  preflight: restarting sim container '${SIM_DISTROBOX_NAME}'..."
-  docker restart "${SIM_DISTROBOX_NAME}" >/dev/null
-  sleep 2
+  if command -v distrobox >/dev/null 2>&1; then
+    (
+      export DBX_CONTAINER_MANAGER=docker
+      distrobox enter -r --no-tty "${SIM_DISTROBOX_NAME}" -- bash -lc "${cleanup_script}"
+    ) >/dev/null 2>&1 || echo "  ${phase}: warning: unable to clean distrobox '${SIM_DISTROBOX_NAME}'" >&2
+  fi
 }
 
 cleanup_trial_bags() {
@@ -393,19 +448,19 @@ echo "  temp dir: ${TMP_DIR}"
 echo "  recorder drain after sim exit: ${RECORDER_DRAIN_SEC}s"
 echo "  strict save-log check: ${REQUIRE_RECORDER_SAVE_LOG}"
 echo "  sudo keepalive: ${SUDO_KEEPALIVE}"
-echo "  restart sim container: ${RESTART_SIM_CONTAINER}"
-echo "  launch backend: ${AIC_LAUNCH_BACKEND}"
-echo "  gazebo gui: ${GAZEBO_GUI}"
-if [[ -n "${AIC_OFFICIAL_TEACHER_TRAJECTORY}" ]]; then
-  echo "  teacher trajectory: ${AIC_OFFICIAL_TEACHER_TRAJECTORY}"
-  echo "  teacher action mode: ${AIC_OFFICIAL_TEACHER_ACTION_MODE}"
-fi
-echo "  launch rviz: ${LAUNCH_RVIZ}"
+  echo "  gazebo gui: ${GAZEBO_GUI}"
+  if [[ -n "${AIC_OFFICIAL_TEACHER_TRAJECTORY}" ]]; then
+    echo "  teacher trajectory: ${AIC_OFFICIAL_TEACHER_TRAJECTORY}"
+    echo "  teacher action mode: ${AIC_OFFICIAL_TEACHER_ACTION_MODE}"
+  fi
+  echo "  launch rviz: ${LAUNCH_RVIZ}"
+  echo "  launch moveit: ${LAUNCH_MOVEIT}"
 echo "  per-trial scoring results root: ${RESULTS_ROOT}"
 echo "  remove bag data: ${REMOVE_BAG_DATA}"
+echo "  record episode: ${RECORD_EPISODE}"
 
 DATASET_EXISTS_BEFORE_RUN="false"
-if [[ -f "${DATASET_ROOT}/meta/info.json" ]]; then
+if [[ "${RECORD_EPISODE}" == "true" && -f "${DATASET_ROOT}/meta/info.json" ]]; then
   DATASET_EXISTS_BEFORE_RUN="true"
   echo "  dataset root already exists, first trial will use --dataset.resume"
 fi
@@ -435,79 +490,76 @@ for TRIAL_ID in "${TRIAL_IDS[@]}"; do
   mkdir -p "${TRIAL_RESULTS_DIR}"
   echo "  scoring dir: ${TRIAL_RESULTS_DIR}"
 
-  restart_sim_container
   cleanup_stale_sim_router
 
   SIM_CMD="/entrypoint.sh ground_truth:=true start_aic_engine:=true gazebo_gui:=${GAZEBO_GUI} launch_rviz:=${LAUNCH_RVIZ} aic_engine_config_file:=${SINGLE_CONFIG_PATH} shutdown_on_aic_engine_exit:=true"
 
-  if [[ "${AIC_LAUNCH_BACKEND}" == "docker_exec" ]]; then
-    (
-      docker exec -i "${SIM_DISTROBOX_NAME}" bash -lc "source /ws_aic/install/setup.bash && export RMW_IMPLEMENTATION=rmw_zenoh_cpp && cd \"${CONTAINER_WORKSPACE_DIR}\" && export AIC_RESULTS_DIR=\"${TRIAL_RESULTS_DIR}\" && ${SIM_CMD}"
-    ) >"${SIM_LOG}" 2>&1 &
-  elif [[ "${AIC_LAUNCH_BACKEND}" == "distrobox" ]]; then
-    (
-      export DBX_CONTAINER_MANAGER=docker
-      distrobox enter -r "${SIM_DISTROBOX_NAME}" -- bash -lc "cd \"${WORKSPACE_DIR}\" && export AIC_RESULTS_DIR=\"${TRIAL_RESULTS_DIR}\" && ${SIM_CMD}"
-    ) >"${SIM_LOG}" 2>&1 &
-  else
-    echo "Error: AIC_LAUNCH_BACKEND must be 'distrobox' or 'docker_exec' (got '${AIC_LAUNCH_BACKEND}')." >&2
-    exit 1
-  fi
+  (
+    export DBX_CONTAINER_MANAGER=docker
+    distrobox enter -r "${SIM_DISTROBOX_NAME}" -- bash -lc "cd \"${WORKSPACE_DIR}\" && export AIC_RESULTS_DIR=\"${TRIAL_RESULTS_DIR}\" && ${SIM_CMD}"
+  ) >"${SIM_LOG}" 2>&1 &
   SIM_PID=$!
-
-  if [[ "${AIC_LAUNCH_BACKEND}" == "docker_exec" ]]; then
-    (
-      teacher_env=""
-      if [[ -n "${AIC_OFFICIAL_TEACHER_TRAJECTORY}" ]]; then
-        teacher_env="export AIC_OFFICIAL_TEACHER_TRAJECTORY=\"${AIC_OFFICIAL_TEACHER_TRAJECTORY}\" AIC_OFFICIAL_TEACHER_ACTION_MODE=\"${AIC_OFFICIAL_TEACHER_ACTION_MODE}\" &&"
-      fi
-      docker exec -i "${SIM_DISTROBOX_NAME}" bash -lc "source /ws_aic/install/setup.bash && export RMW_IMPLEMENTATION=rmw_zenoh_cpp && cd \"${CONTAINER_WORKSPACE_DIR}\" && ${teacher_env} pixi run ros2 run aic_model aic_model --ros-args -p use_sim_time:=true -p \"policy:=${POLICY_CLASS}\""
-    ) >"${POLICY_LOG}" 2>&1 &
-  else
-    (
-      cd "${WORKSPACE_DIR}"
-      if [[ -n "${AIC_OFFICIAL_TEACHER_TRAJECTORY}" ]]; then
-        export AIC_OFFICIAL_TEACHER_TRAJECTORY
-        export AIC_OFFICIAL_TEACHER_ACTION_MODE
-      fi
-      pixi run ros2 run aic_model aic_model --ros-args -p use_sim_time:=true -p "policy:=${POLICY_CLASS}"
-    ) >"${POLICY_LOG}" 2>&1 &
-  fi
-  POLICY_PID=$!
 
   sleep "${STARTUP_DELAY_SEC}"
 
-  RECORDER_CMD=(
-    pixi run aic-policy-recorder
-    "--dataset.repo_id=${DATASET_REPO_ID}"
-    "--dataset.single_task=${DATASET_SINGLE_TASK}"
-    "--dataset.root=${DATASET_ROOT}"
-    --dataset.fps=20
-    "--action_mode=${ACTION_MODE}"
-    --max_episodes=1
-  )
-  if [[ "${SAVE_FAILED_EPISODES}" == "true" ]]; then
-    RECORDER_CMD+=(--save_failed_episodes)
-  fi
-  if [[ "${PUSH_TO_HUB}" == "true" ]]; then
-    RECORDER_CMD+=(--dataset.push_to_hub)
-  fi
-  if [[ "${RUN_INDEX}" -gt 1 || "${DATASET_EXISTS_BEFORE_RUN}" == "true" ]]; then
-    RECORDER_CMD+=(--dataset.resume)
+  MOVEIT_PID=""
+  if [[ "${LAUNCH_MOVEIT}" == "true" ]]; then
+    MOVEIT_LOG="${LOG_PREFIX}_moveit.log"
+    (
+      cd "${WORKSPACE_DIR}"
+      pixi run ros2 launch ${MOVEIT_LAUNCH_FILE}
+    ) >"${MOVEIT_LOG}" 2>&1 &
+    MOVEIT_PID=$!
+    echo "  moveit log: ${MOVEIT_LOG}"
+    sleep 5
   fi
 
-  if [[ "${AIC_LAUNCH_BACKEND}" == "docker_exec" ]]; then
-    printf -v RECORDER_CMD_QUOTED "%q " "${RECORDER_CMD[@]}"
-    (
-      docker exec -i "${SIM_DISTROBOX_NAME}" bash -lc "source /ws_aic/install/setup.bash && export RMW_IMPLEMENTATION=rmw_zenoh_cpp && cd \"${CONTAINER_WORKSPACE_DIR}\" && ${RECORDER_CMD_QUOTED}"
-    ) >"${RECORDER_LOG}" 2>&1 &
-  else
+  (
+    cd "${WORKSPACE_DIR}"
+    if [[ -n "${AIC_OFFICIAL_TEACHER_TRAJECTORY}" ]]; then
+      export AIC_OFFICIAL_TEACHER_TRAJECTORY
+      export AIC_OFFICIAL_TEACHER_ACTION_MODE
+    fi
+    pixi run env "PYTHONPATH=${WORKSPACE_DIR}/aic_teacher_official:${WORKSPACE_DIR}/aic_example_policies:${PYTHONPATH:-}" \
+      ros2 run aic_model aic_model --ros-args -p use_sim_time:=true -p "policy:=${POLICY_CLASS}"
+  ) >"${POLICY_LOG}" 2>&1 &
+  POLICY_PID=$!
+
+  # Start the control policy before the LeRobot sidecar. The AIC engine has a
+  # finite participant-model discovery window, while the recorder can spend
+  # time building/updating the pixi package cache before it starts spinning.
+  sleep 1
+
+  RECORDER_PID=""
+  if [[ "${RECORD_EPISODE}" == "true" ]]; then
+    RECORDER_CMD=(
+      pixi run env "PYTHONPATH=${WORKSPACE_DIR}/aic_utils/lerobot_robot_aic:${PYTHONPATH:-}"
+      aic-policy-recorder
+      "--dataset.repo_id=${DATASET_REPO_ID}"
+      "--dataset.single_task=${DATASET_SINGLE_TASK}"
+      "--dataset.root=${DATASET_ROOT}"
+      --dataset.fps=20
+      "--action_mode=${ACTION_MODE}"
+      --max_episodes=1
+    )
+    if [[ "${SAVE_FAILED_EPISODES}" == "true" ]]; then
+      RECORDER_CMD+=(--save_failed_episodes)
+    fi
+    if [[ "${PUSH_TO_HUB}" == "true" ]]; then
+      RECORDER_CMD+=(--dataset.push_to_hub)
+    fi
+    if [[ "${RUN_INDEX}" -gt 1 || "${DATASET_EXISTS_BEFORE_RUN}" == "true" ]]; then
+      RECORDER_CMD+=(--dataset.resume)
+    fi
+
     (
       cd "${WORKSPACE_DIR}"
       "${RECORDER_CMD[@]}"
     ) >"${RECORDER_LOG}" 2>&1 &
+    RECORDER_PID=$!
+  else
+    echo "  recorder disabled for this trial"
   fi
-  RECORDER_PID=$!
 
   START_EPOCH="$(date +%s)"
   SIM_EXIT_EPOCH=0
@@ -515,13 +567,18 @@ for TRIAL_ID in "${TRIAL_IDS[@]}"; do
   TRIAL_TIMED_OUT="false"
 
   while true; do
-    if ! kill -0 "${RECORDER_PID}" >/dev/null 2>&1; then
-      break
+    if [[ "${RECORD_EPISODE}" == "true" ]]; then
+      if ! kill -0 "${RECORDER_PID}" >/dev/null 2>&1; then
+        break
+      fi
     fi
 
     if ! kill -0 "${SIM_PID}" >/dev/null 2>&1; then
       if [[ "${SIM_EXIT_EPOCH}" -eq 0 ]]; then
         SIM_EXIT_EPOCH="$(date +%s)"
+      fi
+      if [[ "${RECORD_EPISODE}" != "true" ]]; then
+        break
       fi
       NOW_EPOCH="$(date +%s)"
       if [[ "$((NOW_EPOCH - SIM_EXIT_EPOCH))" -ge "${RECORDER_DRAIN_SEC}" ]]; then
@@ -547,10 +604,15 @@ for TRIAL_ID in "${TRIAL_IDS[@]}"; do
   if kill -0 "${SIM_PID}" >/dev/null 2>&1; then
     terminate_process "${SIM_PID}" "simulation"
   fi
+  cleanup_sim_container_processes "teardown"
+  cleanup_host_sim_processes "teardown"
   if kill -0 "${POLICY_PID}" >/dev/null 2>&1; then
     terminate_process "${POLICY_PID}" "policy"
   fi
-  if kill -0 "${RECORDER_PID}" >/dev/null 2>&1; then
+  if [[ -n "${MOVEIT_PID}" ]] && kill -0 "${MOVEIT_PID}" >/dev/null 2>&1; then
+    terminate_process "${MOVEIT_PID}" "moveit"
+  fi
+  if [[ "${RECORD_EPISODE}" == "true" ]] && kill -0 "${RECORDER_PID}" >/dev/null 2>&1; then
     terminate_process "${RECORDER_PID}" "recorder"
   fi
 
@@ -558,11 +620,20 @@ for TRIAL_ID in "${TRIAL_IDS[@]}"; do
   if ! wait "${SIM_PID}"; then SIM_EXIT=$?; fi
   POLICY_EXIT=0
   if ! wait "${POLICY_PID}"; then POLICY_EXIT=$?; fi
+  MOVEIT_EXIT=0
+  if [[ -n "${MOVEIT_PID}" ]]; then
+    if ! wait "${MOVEIT_PID}"; then MOVEIT_EXIT=$?; fi
+  fi
   RECORDER_EXIT=0
-  if ! wait "${RECORDER_PID}"; then RECORDER_EXIT=$?; fi
+  if [[ "${RECORD_EPISODE}" == "true" ]]; then
+    if ! wait "${RECORDER_PID}"; then RECORDER_EXIT=$?; fi
+  fi
 
   EPISODE_SAVED_LOG_MATCH="false"
-  if [[ -f "${RECORDER_LOG}" ]]; then
+  if [[ "${RECORD_EPISODE}" != "true" ]]; then
+    EPISODE_SAVED_LOG_MATCH="skipped"
+    echo "  Episode saved: recorder disabled"
+  elif [[ -f "${RECORDER_LOG}" ]]; then
     if grep -q "Episode saved" "${RECORDER_LOG}"; then
       EPISODE_SAVED_LOG_MATCH="true"
       EPISODE_SAVED_LOG_LINE="$(grep -n "Episode saved" "${RECORDER_LOG}" | tail -n 1)"
@@ -576,15 +647,15 @@ for TRIAL_ID in "${TRIAL_IDS[@]}"; do
 
   TRIAL_FAILED="false"
   if [[ "${TRIAL_TIMED_OUT}" == "true" ]]; then TRIAL_FAILED="true"; fi
-  if [[ "${RECORDER_DRAIN_TIMEOUT}" == "true" ]]; then TRIAL_FAILED="true"; fi
-  if [[ "${RECORDER_EXIT}" -ne 0 ]]; then TRIAL_FAILED="true"; fi
+  if [[ "${RECORD_EPISODE}" == "true" && "${RECORDER_DRAIN_TIMEOUT}" == "true" ]]; then TRIAL_FAILED="true"; fi
+  if [[ "${RECORD_EPISODE}" == "true" && "${RECORDER_EXIT}" -ne 0 ]]; then TRIAL_FAILED="true"; fi
   if [[ "${REQUIRE_RECORDER_SAVE_LOG}" == "true" && "${EPISODE_SAVED_LOG_MATCH}" != "true" ]]; then
     TRIAL_FAILED="true"
   fi
   TRIAL_TOTAL_SCORE=""
   if [[ -f "${SCORING_FILE}" ]]; then
     TRIAL_TOTAL_SCORE="$(awk '/^total:/{print $2; exit}' "${SCORING_FILE}")"
-    echo "  scoring total: ${TRIAL_TOTAL_SCORE}"
+    echo "  official scoring total: ${TRIAL_TOTAL_SCORE}"
   else
     echo "  scoring file missing: ${SCORING_FILE}"
   fi
@@ -593,6 +664,7 @@ for TRIAL_ID in "${TRIAL_IDS[@]}"; do
     FAILURES=$((FAILURES + 1))
     echo "  result: FAILED"
     echo "  exit codes: sim=${SIM_EXIT}, policy=${POLICY_EXIT}, recorder=${RECORDER_EXIT}"
+    if [[ -n "${MOVEIT_PID}" ]]; then echo "  moveit exit code: ${MOVEIT_EXIT}"; fi
     echo "  inspect logs: ${SIM_LOG}"
     echo "${RUN_INDEX},${TRIAL_ID},FAILED,${TRIAL_TOTAL_SCORE},${SCORING_FILE}" >> "${SCORE_SUMMARY_CSV}"
     if [[ "${CONTINUE_ON_FAILURE}" != "true" ]]; then
@@ -602,6 +674,7 @@ for TRIAL_ID in "${TRIAL_IDS[@]}"; do
   else
     echo "  result: OK"
     echo "  exit codes: sim=${SIM_EXIT}, policy=${POLICY_EXIT}, recorder=${RECORDER_EXIT}"
+    if [[ -n "${MOVEIT_PID}" ]]; then echo "  moveit exit code: ${MOVEIT_EXIT}"; fi
     echo "${RUN_INDEX},${TRIAL_ID},OK,${TRIAL_TOTAL_SCORE},${SCORING_FILE}" >> "${SCORE_SUMMARY_CSV}"
   fi
 

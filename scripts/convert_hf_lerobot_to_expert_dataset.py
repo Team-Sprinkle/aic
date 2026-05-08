@@ -9,8 +9,6 @@ scripts/generate_expert_trajectories.py and adds AIC expert metadata sidecars.
 from __future__ import annotations
 
 import argparse
-import csv
-from dataclasses import asdict, dataclass
 import json
 import re
 import shutil
@@ -19,37 +17,13 @@ from typing import Any
 
 import pandas as pd
 
+from aic_teacher_official.expert_generator.dataset_writer import (
+    DatasetMetadataWriter,
+    ExpertEpisodeMetadata,
+)
+
 
 SOURCE_URL = "https://huggingface.co/datasets/brucekimrok/sfp2nic_target_card0_port0_randomized"
-
-
-@dataclass(frozen=True)
-class ExpertEpisodeMetadata:
-    episode_index: int
-    mode: str
-    scene_id: str
-    candidate_index: int
-    trajectory_path: str | None
-    validation: dict[str, Any]
-    vlm_strategy: dict[str, Any]
-    moveit: dict[str, Any]
-    phase_labels: list[dict[str, Any]]
-    extra: dict[str, Any]
-
-
-class DatasetMetadataWriter:
-    """Small local writer for converted external LeRobot metadata sidecars."""
-
-    def __init__(self, root: Path):
-        self.root = root
-        self.root.mkdir(parents=True, exist_ok=True)
-        self.episodes_path = self.root / "episodes.jsonl"
-        if not self.episodes_path.exists():
-            self.episodes_path.write_text("", encoding="utf-8")
-
-    def append_episode(self, metadata: ExpertEpisodeMetadata) -> None:
-        with self.episodes_path.open("a", encoding="utf-8") as f:
-            f.write(json.dumps(asdict(metadata), sort_keys=True) + "\n")
 
 
 def parse_args() -> argparse.Namespace:
@@ -215,83 +189,6 @@ def _write_sidecars(
         )
 
 
-def _task_vector(task_family: str, target_card_index: int, target_port_index: int) -> list[int]:
-    if task_family != "sfp_to_nic":
-        raise ValueError(f"converter currently supports sfp_to_nic task vectors, got {task_family!r}")
-    if target_port_index not in (0, 1):
-        raise ValueError(f"target_port_index must be 0 or 1, got {target_port_index}")
-    if target_card_index not in range(5):
-        raise ValueError(f"target_card_index must be in 0..4, got {target_card_index}")
-    vector = [1, 0, 0, 0, 0, 0, 0, 0, 0, 1]
-    vector[2 + target_port_index] = 1
-    vector[4 + target_card_index] = 1
-    return vector
-
-
-def _write_manifest(
-    *,
-    output_dir: Path,
-    accepted_dataset: Path,
-    episode_rows: list[dict[str, Any]],
-    mode: str,
-    task_family: str,
-    target_card_index: int,
-    target_port_index: int,
-) -> None:
-    manifests = output_dir / "manifests"
-    manifests.mkdir(parents=True, exist_ok=True)
-    vector = _task_vector(task_family, target_card_index, target_port_index)
-    fieldnames = [
-        "accepted_episode_index",
-        "source_episode_index",
-        "selected",
-        "mode",
-        "task_family",
-        "target_port_index",
-        "target_card_index",
-        "target_card_valid",
-        "task_family_sfp_to_nic",
-        "task_family_sc_to_sc",
-        "target_port_0",
-        "target_port_1",
-        "target_card_0",
-        "target_card_1",
-        "target_card_2",
-        "target_card_3",
-        "target_card_4",
-        "task_vector",
-        "dataset_root",
-    ]
-    with (manifests / "accepted.csv").open("w", encoding="utf-8", newline="") as f:
-        writer = csv.DictWriter(f, fieldnames=fieldnames)
-        writer.writeheader()
-        for row in episode_rows:
-            episode_index = int(row["episode_index"])
-            writer.writerow(
-                {
-                    "accepted_episode_index": episode_index,
-                    "source_episode_index": episode_index,
-                    "selected": True,
-                    "mode": mode,
-                    "task_family": task_family,
-                    "target_port_index": target_port_index,
-                    "target_card_index": target_card_index,
-                    "target_card_valid": 1,
-                    "task_family_sfp_to_nic": vector[0],
-                    "task_family_sc_to_sc": vector[1],
-                    "target_port_0": vector[2],
-                    "target_port_1": vector[3],
-                    "target_card_0": vector[4],
-                    "target_card_1": vector[5],
-                    "target_card_2": vector[6],
-                    "target_card_3": vector[7],
-                    "target_card_4": vector[8],
-                    "task_vector": json.dumps(vector),
-                    "dataset_root": str(accepted_dataset),
-                }
-            )
-
-
 def main() -> None:
     args = parse_args()
     source = args.source.resolve()
@@ -327,15 +224,6 @@ def main() -> None:
     }
     _write_sidecars(writer_root=accepted_metadata, **sidecar_kwargs)
     _write_sidecars(writer_root=accepted_dataset, **sidecar_kwargs)
-    _write_manifest(
-        output_dir=output_dir,
-        accepted_dataset=accepted_dataset,
-        episode_rows=rows,
-        mode=args.mode,
-        task_family=task_family,
-        target_card_index=target_card_index,
-        target_port_index=target_port_index,
-    )
 
     conversion = {
         "schema_version": "aic_external_lerobot_conversion/v1",
@@ -344,7 +232,6 @@ def main() -> None:
         "source_url": args.source_url,
         "accepted_dataset": str(accepted_dataset),
         "accepted_metadata": str(accepted_metadata),
-        "accepted_manifest": str(output_dir / "manifests" / "accepted.csv"),
         "mode": args.mode,
         "task_family": task_family,
         "target_card_index": target_card_index,

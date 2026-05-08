@@ -3,13 +3,10 @@ from __future__ import annotations
 import importlib.util
 import json
 import math
-import argparse
-import os
 import subprocess
 import sys
 from pathlib import Path
 
-os.environ.setdefault("PYGAME_HIDE_SUPPORT_PROMPT", "1")
 import pytest
 import yaml
 
@@ -18,30 +15,11 @@ SCRIPT = (
     / "scripts"
     / "generate_trajectory_dataset.py"
 )
+TEMPLATE_DIR = Path(__file__).resolve().parents[1] / "config" / "data_generation_templates"
 spec = importlib.util.spec_from_file_location("generate_trajectory_dataset", SCRIPT)
 gtd = importlib.util.module_from_spec(spec)
 assert spec.loader is not None
 spec.loader.exec_module(gtd)
-
-PACKAGE_DIR = Path(__file__).resolve().parents[1]
-sys.path.insert(0, str(PACKAGE_DIR))
-
-from lerobot_robot_aic.dataset_schema import summarize_dataset_schema  # noqa: E402
-from lerobot_robot_aic.policy_recorder import should_save_episode  # noqa: E402
-from lerobot_robot_aic.task_metadata import (  # noqa: E402
-    join_task_vector_to_frames,
-    load_episode_task_vectors,
-    parse_task_metadata_csv,
-    task_vector_from_fields,
-    validate_task_vector,
-)
-from action_msgs.msg import GoalStatus  # noqa: E402
-
-TRAIN_SCRIPT = PACKAGE_DIR / "scripts" / "train_act_policy.py"
-train_spec = importlib.util.spec_from_file_location("train_act_policy", TRAIN_SCRIPT)
-train_act_policy = importlib.util.module_from_spec(train_spec)
-assert train_spec.loader is not None
-train_spec.loader.exec_module(train_act_policy)
 
 
 def base_request(tmp_path: Path, task_family: str = "sfp_to_nic") -> dict:
@@ -74,11 +52,469 @@ def test_yaml_parsing(tmp_path: Path) -> None:
     assert loaded["task_family"] == "sfp_to_nic"
 
 
-def test_policy_recorder_drops_failed_episodes_by_default() -> None:
-    assert should_save_episode(GoalStatus.STATUS_SUCCEEDED, save_failed_episodes=False)
-    assert not should_save_episode(GoalStatus.STATUS_ABORTED, save_failed_episodes=False)
-    assert not should_save_episode(GoalStatus.STATUS_CANCELED, save_failed_episodes=False)
-    assert should_save_episode(GoalStatus.STATUS_ABORTED, save_failed_episodes=True)
+def test_packaged_templates_default_to_agent_and_tracked_registry() -> None:
+    for name in (
+        "sfp_to_nic_minimal.yaml",
+        "sfp_to_nic_maximal.yaml",
+        "sc_to_sc_minimal.yaml",
+        "sc_to_sc_maximal.yaml",
+    ):
+        request = gtd.load_request(TEMPLATE_DIR / name)
+        gtd.validate_request(request)
+        assert request["generation"]["policy"] == "agent"
+        assert request["generation"]["expert_mode"] == "nominal"
+        assert request["generation"]["auto_improve_on_failure"] is True
+        assert request["generation"]["write_expert_registry_overlay"] is True
+
+    assert gtd.DEFAULT_EXPERT_SETTING_REGISTRY == (
+        Path(__file__).resolve().parents[3]
+        / "aic_utils"
+        / "lerobot_robot_aic"
+        / "config"
+        / "expert_setting_registry.json"
+    )
+
+
+@pytest.mark.parametrize(
+    ("expert_mode", "flag"),
+    [
+        ("nominal", "--nominal"),
+        ("nominalrecovery", "--nominalrecovery"),
+        ("recovery", "--recovery"),
+    ],
+)
+def test_agent_expert_mode_yaml_selects_expert_generator_flag(
+    tmp_path: Path, expert_mode: str, flag: str
+) -> None:
+    request = base_request(tmp_path)
+    request["generation"]["policy"] = "agent"
+    request["generation"]["expert_mode"] = expert_mode
+    engine_path = gtd.write_engine_configs(request, tmp_path, 1)
+
+    cmd = gtd.build_agent_generation_cmd(
+        request=request,
+        engine_config_path=engine_path,
+        output_dir=tmp_path,
+        target=1,
+        max_attempts=1,
+    )
+
+    assert flag in cmd
+
+
+def test_agent_success_only_controls_insertion_event_requirement(tmp_path: Path) -> None:
+    request = base_request(tmp_path)
+    request["generation"]["policy"] = "agent"
+    request["generation"]["expert_mode"] = "nominal"
+    request["acceptance"]["success_only"] = False
+    engine_path = gtd.write_engine_configs(request, tmp_path, 1)
+
+    cmd = gtd.build_agent_generation_cmd(
+        request=request,
+        engine_config_path=engine_path,
+        output_dir=tmp_path,
+        target=1,
+        max_attempts=1,
+    )
+
+    assert cmd[cmd.index("--require-insertion-event") + 1] == "false"
+
+
+def test_agent_success_only_defaults_to_requiring_insertion_event(tmp_path: Path) -> None:
+    request = base_request(tmp_path)
+    request["generation"]["policy"] = "agent"
+    request["generation"]["expert_mode"] = "nominal"
+    request["acceptance"].pop("success_only")
+    engine_path = gtd.write_engine_configs(request, tmp_path, 1)
+
+    cmd = gtd.build_agent_generation_cmd(
+        request=request,
+        engine_config_path=engine_path,
+        output_dir=tmp_path,
+        target=1,
+        max_attempts=1,
+    )
+
+    assert cmd[cmd.index("--require-insertion-event") + 1] == "true"
+
+
+def test_agent_record_planner_dataset_flag_is_forwarded(tmp_path: Path) -> None:
+    request = base_request(tmp_path)
+    request["generation"]["policy"] = "agent"
+    request["generation"]["expert_mode"] = "nominal"
+    request["generation"]["record_planner_dataset"] = False
+    engine_path = gtd.write_engine_configs(request, tmp_path, 1)
+
+    cmd = gtd.build_agent_generation_cmd(
+        request=request,
+        engine_config_path=engine_path,
+        output_dir=tmp_path,
+        target=1,
+        max_attempts=1,
+    )
+
+    assert "--record-planner-dataset" in cmd
+    assert cmd[cmd.index("--record-planner-dataset") + 1] == "false"
+
+
+def test_agent_enable_nominal_repair_flag_is_forwarded(tmp_path: Path) -> None:
+    request = base_request(tmp_path)
+    request["generation"]["policy"] = "agent"
+    request["generation"]["expert_mode"] = "nominal"
+    request["generation"]["enable_nominal_repair"] = False
+    engine_path = gtd.write_engine_configs(request, tmp_path, 1)
+
+    cmd = gtd.build_agent_generation_cmd(
+        request=request,
+        engine_config_path=engine_path,
+        output_dir=tmp_path,
+        target=1,
+        max_attempts=1,
+    )
+
+    assert "--enable-nominal-repair" in cmd
+    assert cmd[cmd.index("--enable-nominal-repair") + 1] == "false"
+
+
+def test_agent_near_gate_acceptance_yaml_uses_min_score_filter_threshold(tmp_path: Path) -> None:
+    request = base_request(tmp_path)
+    request["generation"]["policy"] = "agent"
+    request["generation"]["expert_mode"] = "nominal"
+    request["acceptance"]["min_score"] = 90.0
+    request["acceptance"]["stop_near_gate"] = {
+        "max_lateral_error_m": 0.003,
+        "max_axial_error_m": 0.006,
+        "max_force_n": 20.0,
+    }
+
+    assert gtd.agent_filter_min_score(request) == 90.0
+
+
+def test_agent_near_gate_acceptance_yaml_adds_generator_flags(tmp_path: Path) -> None:
+    request = base_request(tmp_path)
+    request["generation"]["policy"] = "agent"
+    request["generation"]["expert_mode"] = "nominal"
+    request["acceptance"]["stop_near_gate"] = {
+        "max_lateral_error_m": 0.003,
+        "max_axial_error_m": 0.006,
+        "max_force_n": 20.0,
+    }
+    engine_path = gtd.write_engine_configs(request, tmp_path, 1)
+
+    cmd = gtd.build_agent_generation_cmd(
+        request=request,
+        engine_config_path=engine_path,
+        output_dir=tmp_path,
+        target=1,
+        max_attempts=1,
+    )
+
+    assert "--allow-near-gate-acceptance" in cmd
+    assert cmd[cmd.index("--near-gate-max-lateral-error-m") + 1] == "0.003"
+    assert cmd[cmd.index("--near-gate-max-axial-error-m") + 1] == "0.006"
+    assert cmd[cmd.index("--near-gate-max-force-n") + 1] == "20.0"
+    assert "--near-gate-max-tcp-speed-mps" not in cmd
+    assert "--near-gate-max-force-delta-n" not in cmd
+    assert "--near-gate-selection-score" not in cmd
+    env, _ = gtd.build_agent_generation_env(request)
+    assert env["AIC_OFFICIAL_TEACHER_STOP_AT_NEAR_GATE"] == "true"
+    assert env["AIC_OFFICIAL_TEACHER_NEAR_GATE_MAX_LATERAL_ERROR_M"] == "0.003"
+    assert env["AIC_OFFICIAL_TEACHER_NEAR_GATE_MAX_AXIAL_ERROR_M"] == "0.006"
+    assert env["AIC_OFFICIAL_TEACHER_TRACKING_GATE_MAX_LATERAL_ERROR_M"] == "0.003"
+
+
+def test_legacy_near_gate_acceptance_yaml_still_adds_generator_flags(tmp_path: Path) -> None:
+    request = base_request(tmp_path)
+    request["generation"]["policy"] = "agent"
+    request["generation"]["expert_mode"] = "nominal"
+    request["acceptance"]["near_gate"] = {
+        "max_lateral_error_m": 0.003,
+    }
+    engine_path = gtd.write_engine_configs(request, tmp_path, 1)
+
+    cmd = gtd.build_agent_generation_cmd(
+        request=request,
+        engine_config_path=engine_path,
+        output_dir=tmp_path,
+        target=1,
+        max_attempts=1,
+    )
+
+    assert "--allow-near-gate-acceptance" in cmd
+
+
+def test_stop_near_gate_and_legacy_near_gate_are_mutually_exclusive(tmp_path: Path) -> None:
+    request = base_request(tmp_path)
+    request["acceptance"]["stop_near_gate"] = {}
+    request["acceptance"]["near_gate"] = {}
+
+    with pytest.raises(ValueError, match="stop_near_gate"):
+        gtd.validate_request(request)
+
+
+def test_sc_near_gate_tightens_sc_specific_tracking_gate(tmp_path: Path) -> None:
+    request = base_request(tmp_path, task_family="sc_to_sc")
+    request["generation"]["policy"] = "agent"
+    request["generation"]["expert_mode"] = "nominal"
+    request["acceptance"]["stop_near_gate"] = {
+        "max_lateral_error_m": 0.004,
+    }
+    engine_path = gtd.write_engine_configs(request, tmp_path, 1)
+
+    gtd.build_agent_generation_cmd(
+        request=request,
+        engine_config_path=engine_path,
+        output_dir=tmp_path,
+        target=1,
+        max_attempts=1,
+    )
+    env, _ = gtd.build_agent_generation_env(request)
+
+    assert env["AIC_OFFICIAL_TEACHER_SC_TRACKING_GATE_MAX_LATERAL_ERROR_M"] == "0.004"
+
+
+def test_start_near_gate_places_target_gate_at_requested_distance(tmp_path: Path) -> None:
+    request = base_request(tmp_path)
+    request["scene"]["start_near_gate"] = {"distance": 0.08}
+    gtd.validate_request(request)
+
+    trial = next(iter(gtd.generate_trials(request, 1).values()))
+    metadata = trial["generated_metadata"]["start_near_gate"]
+
+    assert metadata["achieved_distance"] == pytest.approx(0.08, abs=2e-6)
+    target = gtd._target_gate_position_world(trial)
+    reference = metadata["reference_tcp_position"]
+    measured = math.dist(target, reference)
+    assert measured == pytest.approx(0.08, abs=2e-6)
+
+
+def test_start_near_gate_places_reference_by_axial_and_lateral_distance(tmp_path: Path) -> None:
+    request = base_request(tmp_path)
+    request["scene"]["start_near_gate"] = {
+        "axial_distance_m": 0.05,
+        "lateral_distance_m": 0.01,
+    }
+    gtd.validate_request(request)
+
+    trial = next(iter(gtd.generate_trials(request, 1).values()))
+    metadata = trial["generated_metadata"]["start_near_gate"]
+
+    assert metadata["achieved_axial_distance_m"] == pytest.approx(0.05, abs=2e-5)
+    assert metadata["achieved_lateral_distance_m"] == pytest.approx(0.01, abs=2e-5)
+    assert metadata["achieved_distance"] == pytest.approx(math.sqrt(0.05**2 + 0.01**2), abs=2e-5)
+
+
+def test_start_near_gate_axial_lateral_uses_base_link_frame(tmp_path: Path) -> None:
+    request = base_request(tmp_path, task_family="sc_to_sc")
+    request["scene"]["start_near_gate"] = {
+        "axial_distance_m": 0.035,
+        "lateral_distance_m": 0.012,
+    }
+    gtd.validate_request(request)
+
+    trial = next(iter(gtd.generate_trials(request, 1).values()))
+    metadata = trial["generated_metadata"]["start_near_gate"]
+
+    assert metadata["axes"] == "xyz"
+    assert metadata["target_gate_position"][2] < 0.40
+    assert metadata["achieved_axial_distance_m"] == pytest.approx(0.035, abs=2e-5)
+    assert metadata["achieved_lateral_distance_m"] == pytest.approx(0.012, abs=2e-5)
+
+
+def test_start_near_gate_omitted_keeps_regular_random_board_pose(tmp_path: Path) -> None:
+    request = base_request(tmp_path)
+
+    trial = next(iter(gtd.generate_trials(request, 1).values()))
+
+    assert "generated_metadata" not in trial
+
+
+def test_start_near_gate_requires_distance(tmp_path: Path) -> None:
+    request = base_request(tmp_path)
+    request["scene"]["start_near_gate"] = {}
+
+    with pytest.raises(ValueError, match="axial_distance_m"):
+        gtd.validate_request(request)
+
+
+def test_agent_max_planner_attempts_caps_expert_generator_attempts_per_target(tmp_path: Path) -> None:
+    request = base_request(tmp_path)
+    request["generation"]["policy"] = "agent"
+    request["generation"]["expert_mode"] = "nominal"
+    request["generation"]["max_attempts"] = 12
+    request["generation"]["max_planner_attempts"] = 2
+    engine_path = gtd.write_engine_configs(request, tmp_path, 2)
+
+    cmd = gtd.build_agent_generation_cmd(
+        request=request,
+        engine_config_path=engine_path,
+        output_dir=tmp_path,
+        target=2,
+        max_attempts=gtd.effective_max_replay_attempts(request, 12),
+    )
+
+    assert gtd.effective_max_replay_attempts(request, 12) == 4
+    assert cmd[cmd.index("--max-total-attempts") + 1] == "4"
+
+
+def test_agent_score_csv_uses_validation_score(tmp_path: Path) -> None:
+    dataset_root = tmp_path / "attempt" / "dataset"
+    dataset_root.mkdir(parents=True)
+    record = {
+        "validation": {
+            "accepted": True,
+            "acceptance_type": "near_gate",
+            "score": 10.0,
+        }
+    }
+
+    score_csv = gtd._agent_score_csv_for_dataset(
+        output_dir=tmp_path,
+        dataset_root=dataset_root,
+        record=record,
+        index=1,
+    )
+
+    assert "10.0" in score_csv.read_text(encoding="utf-8")
+
+
+def test_near_gate_overlay_does_not_demote_passed_registry_entry() -> None:
+    registry = {
+        "settings": {
+            "matrix_sc2sc_sc1_present0_target0_nic2": {
+                "modes": {
+                    "nominal": {
+                        "status": "passed",
+                        "best_mode_env": {"KEEP": "true"},
+                    }
+                }
+            }
+        }
+    }
+
+    gtd._merge_registry_overlay_entry(
+        registry,
+        {
+            "suffix": "matrix_sc2sc_sc1_present0_target0_nic2",
+            "mode": "nominal",
+            "status": "near_gate_passed",
+            "mode_env": {"NEAR_GATE": "true"},
+            "score": 1.0,
+        },
+    )
+
+    mode_entry = registry["settings"]["matrix_sc2sc_sc1_present0_target0_nic2"]["modes"]["nominal"]
+    assert mode_entry["status"] == "passed"
+    assert mode_entry["best_mode_env"] == {"KEEP": "true"}
+
+
+def test_near_gate_overlay_supplies_registry_env_without_full_insertion() -> None:
+    suffix = "matrix_sc2sc_sc1_present0_target0_nic4"
+    registry = {
+        "settings": {
+            suffix: {
+                "modes": {
+                    "nominal": {
+                        "status": "unknown_not_logged",
+                        "best_mode_env": None,
+                    }
+                }
+            }
+        }
+    }
+
+    gtd._merge_registry_overlay_entry(
+        registry,
+        {
+            "suffix": suffix,
+            "mode": "nominal",
+            "status": "near_gate_passed",
+            "mode_env": {"AIC_EXPERT_SC_NIC_BYPASS_LEFT_OFFSET_M": "0.08"},
+            "score": 53.0,
+            "summary": "summary.json",
+        },
+    )
+    gtd._merge_registry_overlay_entry(
+        registry,
+        {
+            "suffix": suffix,
+            "mode": "nominal",
+            "status": "attempted_not_passing",
+            "mode_env": {"AIC_EXPERT_SC_NIC_BYPASS_LEFT_OFFSET_M": "0.12"},
+            "score": None,
+        },
+    )
+
+    mode_entry = registry["settings"][suffix]["modes"]["nominal"]
+    assert mode_entry["status"] == "near_gate_passed"
+    assert gtd._expert_registry_mode_env_from_entry(mode_entry) == {
+        "AIC_EXPERT_SC_NIC_BYPASS_LEFT_OFFSET_M": "0.08"
+    }
+
+
+def test_infers_exact_registry_suffix_from_generated_sfp_trial(tmp_path: Path) -> None:
+    request = base_request(tmp_path)
+    request["suffix"] = "batch"
+    request["generation"]["max_attempts"] = 1
+    request["scene"]["nic_cards"] = {
+        "count": 1,
+        "rails": ["nic_rail_3"],
+        "target_card": 3,
+        "target_port": "sfp_port_1",
+    }
+    engine_path = gtd.write_engine_configs(request, tmp_path, 1)
+
+    assert gtd.infer_registry_suffixes_from_engine_config(engine_path, "sfp_to_nic") == [
+        "matrix_sfp2nic_cards1_present3_target3_port1"
+    ]
+
+
+def test_registry_overlay_updates_mode_env(tmp_path: Path) -> None:
+    registry = tmp_path / "registry.json"
+    overlay_dir = tmp_path / "overlays"
+    suffix = "matrix_sfp2nic_cards1_present3_target3_port1"
+    registry.write_text(
+        json.dumps(
+            {
+                "settings": {
+                    suffix: {
+                        "modes": {
+                            "nominal": {
+                                "status": "unknown_not_logged",
+                                "best_score": None,
+                                "best_mode_env": None,
+                            }
+                        }
+                    }
+                }
+            }
+        ),
+        encoding="utf-8",
+    )
+    overlay_dir.mkdir()
+    (overlay_dir / "ec2-a.jsonl").write_text(
+        json.dumps(
+            {
+                "schema_version": "aic_expert_registry_overlay/v1",
+                "suffix": suffix,
+                "mode": "nominal",
+                "status": "passed",
+                "score": 96.0,
+                "mode_env": {"AIC_OFFICIAL_TEACHER_PIN_INSERTION_TARGET": "false"},
+            }
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+    request = base_request(tmp_path)
+    request["generation"]["policy"] = "agent"
+    request["generation"]["expert_setting_registry"] = str(registry)
+    request["generation"]["expert_registry_overlay_dir"] = str(overlay_dir)
+    request["generation"]["_inferred_expert_registry_suffix"] = suffix
+
+    env = gtd.expert_registry_mode_env(request)
+
+    assert env["AIC_OFFICIAL_TEACHER_PIN_INSERTION_TARGET"] == "false"
 
 
 def test_output_directory_derivation(tmp_path: Path) -> None:
@@ -94,22 +530,6 @@ def test_output_directory_derivation(tmp_path: Path) -> None:
     )
     request["scene"]["nic_cards"]["count"] = [1, 2]
     assert "nic_cards_mixed" in str(gtd.derive_output_dir(request))
-    request["output_dir"] = str(tmp_path / "custom_output")
-    assert gtd.derive_output_dir(request) == tmp_path / "custom_output"
-
-
-def test_derived_dataset_repo_id_is_hf_validation_safe(tmp_path: Path) -> None:
-    output_dir = (
-        tmp_path
-        / "outputs"
-        / "sfp_to_nic"
-        / "cheatcode"
-        / "nic_cards_1"
-        / "n10__hybrid_nominal_sfp_to_nic_cheatcode_with_extra_suffix"
-    )
-    repo_id = gtd.derived_dataset_repo_id(output_dir)
-    assert repo_id.startswith("local/")
-    assert len(repo_id) <= 96
 
 
 def test_sample_value_scalar_list_and_minmax() -> None:
@@ -155,51 +575,6 @@ def test_exact_nic_count_behavior(tmp_path: Path) -> None:
     assert sum(1 for rail in gtd.NIC_RAILS if board[rail]["entity_present"]) == 3
 
 
-def test_explicit_target_card_is_present_with_single_nic(tmp_path: Path) -> None:
-    request = base_request(tmp_path)
-    request["scene"]["nic_cards"] = {
-        "count": 1,
-        "rails": gtd.NIC_RAILS,
-        "target_card": 1,
-        "target_port": "sfp_port_1",
-    }
-    trial = next(iter(gtd.generate_trials(request, 1).values()))
-    board = trial["scene"]["task_board"]
-    assert board["nic_rail_1"]["entity_present"]
-    assert sum(1 for rail in gtd.NIC_RAILS if board[rail]["entity_present"]) == 1
-    assert trial["tasks"]["task_1"]["target_module_name"] == "nic_card_mount_1"
-    assert trial["tasks"]["task_1"]["port_name"] == "sfp_port_1"
-
-
-def test_explicit_target_card_is_present_with_mixed_nic_counts(tmp_path: Path) -> None:
-    request = base_request(tmp_path)
-    request["generation"]["seed"] = 11
-    request["scene"]["nic_cards"] = {
-        "count": [1, 2, 3],
-        "rails": gtd.NIC_RAILS,
-        "target_card": 1,
-    }
-    trials = gtd.generate_trials(request, 20)
-    seen_counts = set()
-    for trial in trials.values():
-        board = trial["scene"]["task_board"]
-        present_count = sum(1 for rail in gtd.NIC_RAILS if board[rail]["entity_present"])
-        seen_counts.add(present_count)
-        assert board["nic_rail_1"]["entity_present"]
-        assert trial["tasks"]["task_1"]["target_module_name"] == "nic_card_mount_1"
-    assert seen_counts <= {1, 2, 3}
-    assert len(seen_counts) > 1
-
-
-def test_default_sfp_target_port_randomizes_both_ports(tmp_path: Path) -> None:
-    request = base_request(tmp_path)
-    request["generation"]["seed"] = 5
-    request["scene"]["nic_cards"] = {"count": 1, "target_card": 0}
-    trials = gtd.generate_trials(request, 40)
-    ports = {trial["tasks"]["task_1"]["port_name"] for trial in trials.values()}
-    assert ports == {"sfp_port_0", "sfp_port_1"}
-
-
 def test_exact_sc_count_behavior(tmp_path: Path) -> None:
     request = base_request(tmp_path, task_family="sc_to_sc")
     request["scene"]["sc_ports"] = {"count": 1}
@@ -208,65 +583,30 @@ def test_exact_sc_count_behavior(tmp_path: Path) -> None:
     assert sum(1 for rail in gtd.SC_RAILS if board[rail]["entity_present"]) == 1
 
 
-def test_sc_target_port_index_is_derived_from_target_module(tmp_path: Path) -> None:
-    request = base_request(tmp_path, task_family="sc_to_sc")
-    request["scene"]["sc_ports"] = {"count": 1, "target_port": 1}
-    trial = next(iter(gtd.generate_trials(request, 1).values()))
-    assert trial["tasks"]["task_1"]["target_module_name"] == "sc_port_1"
-    metadata = gtd._task_metadata_from_trial("sc_to_sc", trial)
-    assert metadata["task"]["target_port_index"] == 1
-    assert metadata["task"]["target_card_index"] == -1
-
-
-def test_inconsistent_cable_type_override_is_rejected(tmp_path: Path) -> None:
+def test_minimal_sfp_request_defaults_sc_ports_absent(tmp_path: Path) -> None:
     request = base_request(tmp_path)
-    request["scene"]["cable"] = {"cable_type": "sfp_sc_cable_reversed"}
-    with pytest.raises(ValueError, match="requires scene.cable.cable_type"):
-        gtd.generate_trials(request, 1)
+    trial = next(iter(gtd.generate_trials(request, 1).values()))
+    board = trial["scene"]["task_board"]
+    assert all(not board[rail]["entity_present"] for rail in gtd.SC_RAILS)
 
 
-def test_recording_outputs_complete_accepts_failed_trial_rows(tmp_path: Path) -> None:
-    output_dir = tmp_path / "run"
-    (output_dir / "raw_dataset" / "meta").mkdir(parents=True)
-    (output_dir / "raw_dataset" / "meta" / "info.json").write_text("{}", encoding="utf-8")
-    (output_dir / "scores").mkdir()
-    (output_dir / "scores" / "score_summary.csv").write_text(
-        "\n".join(
-            [
-                "run_index,trial_id,status,total_score,scoring_yaml",
-                "1,trial_000001,OK,95,path/to/scoring.yaml",
-                "2,trial_000002,FAILED,0,path/to/scoring.yaml",
-                "3,trial_000003,OK,94,path/to/scoring.yaml",
-            ]
-        ),
-        encoding="utf-8",
-    )
+def test_packaged_minimal_templates_cover_official_task_choices() -> None:
+    template_dir = Path(__file__).resolve().parents[1] / "config" / "data_generation_templates"
 
-    complete, reason = gtd.recording_outputs_complete(output_dir, expected_trials=3)
+    sfp = gtd.load_request(template_dir / "sfp_to_nic_minimal.yaml")
+    gtd.validate_request(sfp)
+    assert "target_port" not in sfp["scene"]["nic_cards"]
+    ports = set()
+    for seed in range(20):
+        sfp["generation"]["seed"] = seed
+        trial = next(iter(gtd.generate_trials(sfp, 1).values()))
+        ports.add(trial["tasks"]["task_1"]["port_name"])
+    assert ports == {"sfp_port_0", "sfp_port_1"}
 
-    assert complete
-    assert "3/3" in reason
-
-
-def test_recording_outputs_complete_rejects_incomplete_score_summary(tmp_path: Path) -> None:
-    output_dir = tmp_path / "run"
-    (output_dir / "raw_dataset" / "meta").mkdir(parents=True)
-    (output_dir / "raw_dataset" / "meta" / "info.json").write_text("{}", encoding="utf-8")
-    (output_dir / "scores").mkdir()
-    (output_dir / "scores" / "score_summary.csv").write_text(
-        "\n".join(
-            [
-                "run_index,trial_id,status,total_score,scoring_yaml",
-                "1,trial_000001,OK,95,path/to/scoring.yaml",
-            ]
-        ),
-        encoding="utf-8",
-    )
-
-    complete, reason = gtd.recording_outputs_complete(output_dir, expected_trials=3)
-
-    assert not complete
-    assert "1/3" in reason
+    sc = gtd.load_request(template_dir / "sc_to_sc_minimal.yaml")
+    gtd.validate_request(sc)
+    assert sc["scene"]["sc_ports"]["count"] == 2
+    assert sc["scene"]["nic_cards"]["count"] == [1, 2, 3, 4, 5]
 
 
 def test_dry_run_creates_expected_files(tmp_path: Path) -> None:
@@ -305,170 +645,268 @@ def test_dry_run_creates_expected_files(tmp_path: Path) -> None:
     assert (out / "engine_config.yaml").exists()
     assert (out / "trials" / "trial_000001.yaml").exists()
     assert (out / "generation_summary.json").exists()
-    assert (out / "manifests" / "attempts.csv").exists()
-    assert (out / "manifests" / "accepted.csv").exists()
-    assert (out / "manifests" / "episode_task_metadata.jsonl").exists()
-    assert not (out / "raw_dataset").exists()
-    assert not (out / "accepted_dataset").exists()
-    summary = json.loads((out / "generation_summary.json").read_text(encoding="utf-8"))
-    assert summary["action_mode"] == "cartesian"
-    assert "manifests" in summary
-    manifest_rows = parse_task_metadata_csv(out / "manifests" / "attempts.csv")
-    assert manifest_rows
-    assert manifest_rows[0]["task_family"] == "sfp_to_nic"
-    assert len(manifest_rows[0]["task_vector"]) == 10
 
 
-def test_manifest_generation_joins_scores_and_selection_report(tmp_path: Path) -> None:
+def test_agent_policy_dry_run_uses_expert_generator(tmp_path: Path) -> None:
     request = base_request(tmp_path)
-    request["scene"]["nic_cards"] = {"count": 1, "target_card": 3, "target_port": "sfp_port_1"}
-    output_dir = tmp_path / "run"
-    output_dir.mkdir()
-    _, trials = gtd.write_engine_configs(request, output_dir, 1)
-    (output_dir / "scores").mkdir(exist_ok=True)
-    (output_dir / "scores" / "score_summary.csv").write_text(
-        "run_index,trial_id,status,total_score,scoring_yaml\n"
-        "1,trial_000001,OK,97.5,scores/trial_000001.yaml\n",
+    request["generation"]["policy"] = "agent"
+    request["generation"]["expert_mode"] = "nominal"
+    request["generation"]["per_trial_timeout_sec"] = 123
+    request["suffix"] = "agent_unit"
+    request_path = tmp_path / "request_agent.yaml"
+    request_path.write_text(yaml.safe_dump(request), encoding="utf-8")
+
+    result = subprocess.run(
+        [
+            sys.executable,
+            str(SCRIPT),
+            "--request-yaml",
+            str(request_path),
+            "--dry-run",
+            "--target-accepted-override",
+            "1",
+            "--max-attempts-override",
+            "2",
+        ],
+        text=True,
+        capture_output=True,
+        check=False,
+    )
+
+    assert result.returncode == 0, result.stderr
+    assert "scripts/generate_expert_trajectories.py" in result.stdout
+    assert "--nominal" in result.stdout
+    assert "--per-trial-timeout-sec 123" in result.stdout
+    assert "--planner-recorder-drain-sec 45" in result.stdout
+    out = (
+        tmp_path
+        / "outputs"
+        / "sfp_to_nic"
+        / "agent"
+        / "nic_cards_1"
+        / "n1__agent_unit"
+    )
+    assert (out / "engine_config.yaml").exists()
+
+
+def test_agent_policy_skips_registry_exhausted_setting(tmp_path: Path) -> None:
+    request = base_request(tmp_path)
+    request["generation"]["policy"] = "agent"
+    request["generation"]["expert_mode"] = "nominal"
+    request["suffix"] = "matrix_sfp2nic_cards1_present0_target0_port0"
+    registry = tmp_path / "registry.json"
+    registry.write_text(
+        json.dumps(
+            {
+                "settings": {
+                    request["suffix"]: {
+                        "modes": {
+                            "nominal": {
+                                "status": "skipped_exhausted",
+                                "last_reason": "7 attempts exhausted",
+                            }
+                        }
+                    }
+                }
+            }
+        ),
         encoding="utf-8",
     )
-    (output_dir / "accepted_dataset").mkdir()
-    (output_dir / "accepted_dataset" / "selection_report.csv").write_text(
-        "dataset_root,score_csv,trial_id,run_index,status,total_score,mapped_episode_index,selected,reason\n"
-        "raw,scores,trial_000001,1,OK,97.5,0,True,selected\n",
+    request["generation"]["expert_setting_registry"] = str(registry)
+    request_path = tmp_path / "request_agent_skip.yaml"
+    request_path.write_text(yaml.safe_dump(request), encoding="utf-8")
+
+    result = subprocess.run(
+        [
+            sys.executable,
+            str(SCRIPT),
+            "--request-yaml",
+            str(request_path),
+            "--target-accepted-override",
+            "1",
+            "--max-attempts-override",
+            "2",
+        ],
+        text=True,
+        capture_output=True,
+        check=False,
+    )
+
+    assert result.returncode == 0, result.stderr
+    assert "Skipped expert dataset generation" in result.stdout
+    out = tmp_path / "outputs" / "sfp_to_nic" / "agent" / "nic_cards_1" / f"n1__{request['suffix']}"
+    summary = json.loads((out / "generation_summary.json").read_text(encoding="utf-8"))
+    assert summary["status"] == "skipped"
+    assert summary["number_attempted"] == 0
+
+
+def test_agent_policy_uses_passed_registry_env_before_yaml_overrides(tmp_path: Path) -> None:
+    request = base_request(tmp_path)
+    request["generation"]["policy"] = "agent"
+    request["generation"]["expert_mode"] = "nominal"
+    request["generation"]["env"] = {
+        "AIC_OFFICIAL_TEACHER_PRECONTACT_PORT_ALIGN_SEC": "0.8",
+        "CUSTOM_AGENT_ENV": "yaml",
+    }
+    request["suffix"] = "matrix_sfp2nic_cards1_present0_target0_port0"
+    registry = tmp_path / "registry.json"
+    registry.write_text(
+        json.dumps(
+            {
+                "settings": {
+                    request["suffix"]: {
+                        "modes": {
+                            "nominal": {
+                                "status": "passed",
+                                "best_mode_env": {
+                                    "AIC_OFFICIAL_TEACHER_PRECONTACT_PORT_ALIGN_SEC": "0.6",
+                                    "AIC_OFFICIAL_TEACHER_PIN_INSERTION_TARGET": "false",
+                                },
+                            }
+                        }
+                    }
+                }
+            }
+        ),
         encoding="utf-8",
     )
+    request["generation"]["expert_setting_registry"] = str(registry)
 
-    paths = gtd.write_task_manifests(output_dir, "sfp_to_nic", trials)
+    _env, mode_env = gtd.build_agent_generation_env(request)
 
-    rows = parse_task_metadata_csv(Path(paths["accepted_csv"]))
-    assert rows[0]["accepted_episode_index"] == 0
-    assert rows[0]["source_episode_index"] == 0
-    assert rows[0]["target_card_index"] == 3
-    assert rows[0]["target_port_index"] == 1
-    assert rows[0]["task_vector"] == [1, 0, 0, 1, 0, 0, 0, 1, 0, 1]
-    vectors = load_episode_task_vectors(Path(paths["episode_task_metadata_jsonl"]))
-    assert vectors[0] == rows[0]["task_vector"]
+    assert mode_env["AIC_OFFICIAL_TEACHER_PRECONTACT_PORT_ALIGN_SEC"] == "0.8"
+    assert mode_env["AIC_OFFICIAL_TEACHER_PIN_INSERTION_TARGET"] == "false"
+    assert mode_env["CUSTOM_AGENT_ENV"] == "yaml"
 
 
-def test_task_vector_examples_and_validation() -> None:
-    assert task_vector_from_fields("sfp_to_nic", 1, 3) == [1, 0, 0, 1, 0, 0, 0, 1, 0, 1]
-    assert task_vector_from_fields("sc_to_sc", 0, -1) == [0, 1, 1, 0, 0, 0, 0, 0, 0, 0]
-    with pytest.raises(ValueError):
-        validate_task_vector([1, 0, 0], task_family="sfp_to_nic")
-    with pytest.raises(ValueError):
-        task_vector_from_fields("sc_to_sc", 0, 2)
-
-
-def test_join_task_vector_to_frames_broadcasts_by_episode() -> None:
-    frames = [{"episode_index": 0, "x": 1}, {"episode_index": 0, "x": 2}, {"episode_index": 1, "x": 3}]
-    vectors = {
-        0: task_vector_from_fields("sfp_to_nic", 1, 3),
-        1: task_vector_from_fields("sc_to_sc", 0, -1),
-    }
-    joined = join_task_vector_to_frames(frames, vectors)
-    assert joined[0]["task_vector"] == vectors[0]
-    assert joined[1]["task_vector"] == vectors[0]
-    assert joined[2]["task_vector"] == vectors[1]
-
-
-def write_fake_info(dataset_root: Path, action_names: list[str]) -> None:
-    meta = dataset_root / "meta"
-    meta.mkdir(parents=True)
-    info = {
-        "fps": 20,
-        "robot_type": "ur5e_aic",
-        "features": {
-            "action": {
-                "dtype": "float32",
-                "shape": [len(action_names)],
-                "names": action_names,
-            },
-            "observation.state": {
-                "dtype": "float32",
-                "shape": [31],
-                "names": ["tcp_pose.position.x"],
-            },
-        },
-    }
-    (meta / "info.json").write_text(json.dumps(info), encoding="utf-8")
-
-
-def test_dataset_schema_detects_cartesian_action_mode(tmp_path: Path) -> None:
-    dataset_root = tmp_path / "accepted_dataset"
-    write_fake_info(
-        dataset_root,
-        [
-            "delta_position.x",
-            "delta_position.y",
-            "delta_position.z",
-            "delta_rotation.x",
-            "delta_rotation.y",
-            "delta_rotation.z",
-        ],
+def test_agent_policy_exports_per_suffix_registry_env_for_mixed_batches(tmp_path: Path) -> None:
+    request = base_request(tmp_path, task_family="sc_to_sc")
+    request["generation"]["policy"] = "agent"
+    request["generation"]["expert_mode"] = "nominal"
+    request["generation"]["env"] = {"GLOBAL_YAML_OVERRIDE": "yaml"}
+    passed_suffix = "matrix_sc2sc_sc1_present0_target0_nic1"
+    unknown_suffix = "matrix_sc2sc_sc1_present1_target1_nic1"
+    registry = tmp_path / "registry.json"
+    registry.write_text(
+        json.dumps(
+            {
+                "settings": {
+                    passed_suffix: {
+                        "modes": {
+                            "nominal": {
+                                "status": "passed",
+                                "best_mode_env": {
+                                    "AIC_OFFICIAL_TEACHER_SC_ENABLE_LIVE_Z_REPAIR": "true",
+                                },
+                            }
+                        }
+                    },
+                    unknown_suffix: {
+                        "modes": {
+                            "nominal": {
+                                "status": "unknown_not_logged",
+                                "best_mode_env": {
+                                    "SHOULD_NOT_EXPORT": "true",
+                                },
+                            }
+                        }
+                    },
+                }
+            }
+        ),
+        encoding="utf-8",
     )
-    summary = summarize_dataset_schema(dataset_root)
-    assert summary.action_mode == "cartesian"
-    assert summary.fps == 20
-    assert summary.robot_type == "ur5e_aic"
+    request["generation"]["expert_setting_registry"] = str(registry)
 
-
-def test_dataset_schema_detects_joint_action_mode(tmp_path: Path) -> None:
-    dataset_root = tmp_path / "accepted_dataset"
-    write_fake_info(
-        dataset_root,
-        [
-            "shoulder_pan_joint",
-            "shoulder_lift_joint",
-            "elbow_joint",
-            "wrist_1_joint",
-            "wrist_2_joint",
-            "wrist_3_joint",
-        ],
+    env, _mode_env = gtd.build_agent_generation_env(
+        request,
+        registry_suffixes=[passed_suffix, unknown_suffix],
     )
-    assert summarize_dataset_schema(dataset_root).action_mode == "joint"
+
+    exported = json.loads(env["AIC_EXPERT_REGISTRY_MODE_ENV_BY_SUFFIX"])
+    assert env["AIC_EXPERT_TASK_FAMILY"] == "sc_to_sc"
+    assert set(exported) == {passed_suffix}
+    assert exported[passed_suffix]["AIC_OFFICIAL_TEACHER_SC_ENABLE_LIVE_Z_REPAIR"] == "true"
+    assert exported[passed_suffix]["GLOBAL_YAML_OVERRIDE"] == "yaml"
 
 
-def test_act_training_command_uses_local_root_and_act_policy(tmp_path: Path) -> None:
-    dataset_root = tmp_path / "accepted_dataset"
-    write_fake_info(
-        dataset_root,
-        [
-            "delta_position.x",
-            "delta_position.y",
-            "delta_position.z",
-            "delta_rotation.x",
-            "delta_rotation.y",
-            "delta_rotation.z",
-        ],
+def test_agent_overlay_records_concrete_trial_suffix(tmp_path: Path, monkeypatch) -> None:
+    request = base_request(tmp_path, task_family="sc_to_sc")
+    request["generation"]["policy"] = "agent"
+    request["generation"]["expert_mode"] = "nominal"
+    registry_suffix = "matrix_sc2sc_sc1_present0_target0_nic1"
+    registry = tmp_path / "registry.json"
+    registry.write_text(
+        json.dumps(
+            {
+                "settings": {
+                    registry_suffix: {
+                        "modes": {
+                            "nominal": {
+                                "status": "passed",
+                                "best_mode_env": {
+                                    "AIC_OFFICIAL_TEACHER_SC_ENABLE_LIVE_Z_REPAIR": "true",
+                                },
+                            }
+                        }
+                    }
+                }
+            }
+        ),
+        encoding="utf-8",
     )
-    args = argparse.Namespace(
-        dataset_root=dataset_root,
-        dataset_repo_id=None,
-        output_dir=tmp_path / "train",
-        job_name="act_smoke",
-        steps=200,
-        batch_size=4,
-        device="cpu",
-        num_workers=1,
-        lr="1e-4",
-        dataset_video_backend="pyav",
-        chunk_size=16,
-        n_action_steps=8,
-        n_obs_steps=1,
-        wandb=False,
-        policy_repo_id=None,
-        extra_arg=[],
+    overlay_dir = tmp_path / "overlays"
+    request["generation"]["expert_setting_registry"] = str(registry)
+    request["generation"]["expert_registry_overlay_dir"] = str(overlay_dir)
+    output_dir = tmp_path / "out"
+    trial_config = output_dir / "trials" / "trial_000001.yaml"
+    trial_config.parent.mkdir(parents=True)
+    trial_config.write_text(
+        yaml.safe_dump(
+            {
+                "trials": {
+                    "trial_000001": {
+                        "scene": {
+                            "task_board": {
+                                "sc_rail_0": {"entity_present": True},
+                                "nic_rail_1": {"entity_present": True},
+                            }
+                        },
+                        "tasks": {"task_1": {"target_module_name": "sc_port_0"}},
+                    }
+                }
+            }
+        ),
+        encoding="utf-8",
     )
-    cmd = train_act_policy.build_lerobot_train_cmd(args)
-    assert "lerobot-train" == cmd[0]
-    assert "--policy.type=act" in cmd
-    assert f"--dataset.root={dataset_root.resolve()}" in cmd
-    assert "--dataset.video_backend=pyav" in cmd
-    assert "--optimizer.lr=1e-4" in cmd
-    assert "--policy.optimizer_lr=1e-4" in cmd
-    assert "--policy.optimizer_lr_backbone=1e-4" in cmd
-    assert "--policy.chunk_size=16" in cmd
-    assert "--policy.n_action_steps=8" in cmd
-    assert "--policy.n_obs_steps=1" in cmd
-    assert "--policy.push_to_hub=false" in cmd
-    assert "--wandb.enable=false" in cmd
+    summary_dir = output_dir / "agent_generation"
+    summary_dir.mkdir(parents=True)
+    (summary_dir / "generation_summary.json").write_text(
+        json.dumps(
+            {
+                "accepted": 1,
+                "stopped_reason": "target_reached",
+                "records": [
+                    {
+                        "accepted": True,
+                        "validation": {"score": 95.0, "reasons": []},
+                        "replay_metrics": {"engine_config": str(trial_config)},
+                    }
+                ],
+            }
+        ),
+        encoding="utf-8",
+    )
+    monkeypatch.setenv("AIC_EXPERT_REGISTRY_OVERLAY_ID", "unit-host")
+
+    path = gtd.write_expert_registry_overlay(
+        request=request,
+        output_dir=output_dir,
+        agent_mode_env={},
+    )
+
+    assert path == overlay_dir / "unit-host.jsonl"
+    entries = [json.loads(line) for line in path.read_text(encoding="utf-8").splitlines()]
+    assert entries[0]["suffix"] == registry_suffix
+    assert entries[0]["status"] == "passed"
+    assert entries[0]["mode_env"]["AIC_OFFICIAL_TEACHER_SC_ENABLE_LIVE_Z_REPAIR"] == "true"

@@ -5,7 +5,10 @@ suffix: first_batch
 generation:
   target_accepted_trajectories: 200
   max_attempts: 400
-  policy: cheatcode
+  policy: agent
+  expert_mode: nominal
+  auto_improve_on_failure: true
+  write_expert_registry_overlay: true
   seed: 42
   append_if_exists: true
 

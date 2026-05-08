@@ -1,0 +1,31 @@
+root_dir: outputs/trajectory_datasets_probe
+task_family: sc_to_sc
+suffix: sc_4cards_near_gate_registry_minimal
+
+generation:
+  target_accepted_trajectories: 1
+  max_attempts: 12
+  max_planner_attempts: 2
+  policy: agent
+  expert_mode: nominal
+  auto_improve_on_failure: true
+  write_expert_registry_overlay: true
+  seed: 404
+  append_if_exists: true
+  allow_short_agent_drain: true
+  recorder_drain_sec: 15
+
+acceptance:
+  success_only: false
+  min_score: 10.0
+  stop_near_gate:
+    max_lateral_error_m: 0.004
+    max_axial_error_m: 0.004
+    max_force_delta_n: 5.0
+    max_force_n: 60.0
+
+scene:
+  sc_ports:
+    count: 1
+  nic_cards:
+    count: 4

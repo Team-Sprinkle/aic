@@ -24,6 +24,7 @@ from rclpy.time import Time
 from tf2_ros import TransformException
 
 from aic_teacher_official.context import OfficialTeacherContext
+from aic_teacher_official.debug_recorder import validate_image, write_json
 from aic_teacher_official.generate_piecewise import (
     PiecewiseGeneratorConfig,
     generate_piecewise_file,
@@ -48,6 +49,14 @@ class OfficialTeacherOraclePlanner(Policy):
         )
         self._max_vlm_calls = int(os.environ.get("AIC_OFFICIAL_TEACHER_MAX_VLM_CALLS", "20"))
         self._use_vlm = os.environ.get("AIC_OFFICIAL_TEACHER_USE_VLM", "true").lower() == "true"
+        self._debug_output_dir = os.environ.get("AIC_OFFICIAL_TEACHER_DEBUG_OUTPUT_DIR", "")
+        self._image_sample_period_sec = float(
+            os.environ.get("AIC_OFFICIAL_TEACHER_IMAGE_SAMPLE_PERIOD_SEC", "0.5")
+        )
+        self._image_capture_duration_sec = float(
+            os.environ.get("AIC_OFFICIAL_TEACHER_IMAGE_CAPTURE_DURATION_SEC", "2.0")
+        )
+        self._max_planner_images = int(os.environ.get("AIC_OFFICIAL_TEACHER_MAX_PLANNER_IMAGES", "8"))
 
     def _wait_for_tf(self, target_frame: str, source_frame: str, timeout_sec: float = 15.0) -> bool:
         start = self.time_now()
@@ -103,20 +112,46 @@ class OfficialTeacherOraclePlanner(Policy):
         )
 
     def _save_observation_images(self, get_observation: GetObservationCallback) -> list[Path]:
-        observation = get_observation()
-        if observation is None:
-            return []
         self._image_dir.mkdir(parents=True, exist_ok=True)
         image_paths: list[Path] = []
-        for name in ("left", "center", "right"):
-            image = getattr(observation, f"{name}_image")
-            path = self._image_dir / f"{name}.png"
-            try:
-                self._write_png(image, path)
-                image_paths.append(path)
-            except Exception as ex:
-                self.get_logger().warn(f"Could not save {name} image for VLM context: {ex}")
+        started = self.time_now()
+        capture_duration = Duration(seconds=max(0.0, self._image_capture_duration_sec))
+        sample_index = 0
+        while True:
+            observation = get_observation()
+            if observation is not None:
+                for name in ("left", "center", "right"):
+                    image = getattr(observation, f"{name}_image")
+                    path = self._image_dir / f"{name}_{sample_index:03d}.png"
+                    try:
+                        self._write_png(image, path)
+                        image_paths.append(path)
+                    except Exception as ex:
+                        self.get_logger().warn(f"Could not save {name} image for VLM context: {ex}")
+            if (self.time_now() - started) >= capture_duration:
+                break
+            sample_index += 1
+            self.sleep_for(self._image_sample_period_sec)
         return image_paths
+
+    def _validated_planner_images(self, image_paths: list[Path]) -> list[Path]:
+        entries = []
+        selected: list[Path] = []
+        for path in image_paths:
+            validation = validate_image(path)
+            entries.append({"path": str(path), "validation": validation})
+            if validation.get("valid") and not validation.get("near_constant"):
+                selected.append(path)
+        manifest = {
+            "source": "OfficialTeacherOraclePlanner.live_observation_window",
+            "image_sample_period_sec": self._image_sample_period_sec,
+            "image_capture_duration_sec": self._image_capture_duration_sec,
+            "captured_image_count": len(image_paths),
+            "selected_image_count": len(selected[: self._max_planner_images]),
+            "entries": entries,
+        }
+        write_json(self._image_dir / "live_image_validation.json", manifest)
+        return selected[: self._max_planner_images]
 
     @staticmethod
     def _write_png(image, path: Path) -> None:
@@ -159,7 +194,8 @@ class OfficialTeacherOraclePlanner(Policy):
         self.get_logger().info(f"OfficialTeacherOraclePlanner task: {task}")
         send_feedback("official_teacher_oracle_planning_started")
         context = self._capture_context(task)
-        image_paths = self._save_observation_images(get_observation)
+        captured_image_paths = self._save_observation_images(get_observation)
+        image_paths = self._validated_planner_images(captured_image_paths)
         vlm_plan = None
         if self._use_vlm:
             vlm_plan = call_gpt5_mini_delta_planner(
@@ -167,6 +203,7 @@ class OfficialTeacherOraclePlanner(Policy):
                 image_paths=image_paths,
                 max_calls=self._max_vlm_calls,
                 model="gpt-5-mini",
+                debug_output_dir=self._debug_output_dir or None,
             )
         generate_piecewise_file(
             PiecewiseGeneratorConfig(

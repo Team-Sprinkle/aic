@@ -13,7 +13,7 @@
 #  See the License for the specific language governing permissions and
 #  limitations under the License.
 #
-
+import math
 
 import numpy as np
 
@@ -186,7 +186,7 @@ class CheatCode(Policy):
 
         target_x = port_xy[0] + i_gain * self._tip_x_error_integrator
         target_y = port_xy[1] + i_gain * self._tip_y_error_integrator
-        target_z = port_transform.translation.z + z_offset - plug_tip_gripper_offset[2]
+        target_z = port_transform.translation.z + z_offset + plug_tip_gripper_offset[2]
 
         blend_xyz = (
             position_fraction * target_x + (1.0 - position_fraction) * gripper_xyz[0],
@@ -231,9 +231,25 @@ class CheatCode(Policy):
                 w=gripper_tf_stamped.transform.rotation.w,
             ),
         )
+        delta_pose = compute_delta_pose(current_pose, target_pose)
+        max_translation_step_m = 0.0
+        delta = np.asarray(
+            [
+                delta_pose.position.x,
+                delta_pose.position.y,
+                delta_pose.position.z,
+            ],
+            dtype=np.float64,
+        )
+        norm = float(np.linalg.norm(delta))
+        if max_translation_step_m > 0.0 and norm > max_translation_step_m:
+            delta *= max_translation_step_m / norm
+            delta_pose.position.x = float(delta[0])
+            delta_pose.position.y = float(delta[1])
+            delta_pose.position.z = float(delta[2])
         self.set_delta_pose_target(
             move_robot=move_robot,
-            delta_pose=compute_delta_pose(current_pose, target_pose),
+            delta_pose=delta_pose,
         )
 
     def insert_cable(
@@ -300,17 +316,71 @@ class CheatCode(Policy):
 
         self.get_logger().info("[CheatCode] Descent")
 
-        # Descend until the cable is inserted into the port.
-        while True:
+        handoff_blend_sec = 2.0
+        handoff_speed_mps = 0.02
+        start_descent_z_offset = 0.005
+        rate_limited_handoff_sec = abs(z_offset - start_descent_z_offset) / handoff_speed_mps
+        blend_steps = max(1, int(max(handoff_blend_sec, rate_limited_handoff_sec) / dt))
+        for t in range(blend_steps):
             if self._task_completed_in_simulation(task):
                 self.get_logger().info(
                     "[CheatCode] Early exit: simulation reported task completion."
                 )
                 return True
-            if z_offset < -0.015:
-                break
+            fraction = (t + 1) / blend_steps
+            try:
+                self._send_delta_pose_target(
+                    move_robot=move_robot,
+                    target_pose=self.calc_gripper_pose(
+                        port_transform,
+                        slerp_fraction=1.0,
+                        position_fraction=1.0,
+                        z_offset=z_offset + fraction * (start_descent_z_offset - z_offset),
+                        reset_xy_integrator=True,
+                    ),
+                )
+            except TransformException as ex:
+                self.get_logger().warn(f"TF lookup failed during insertion handoff blend: {ex}")
+            self.sleep_for(dt)
 
-            z_offset -= 0.0005
+        z_offset = start_descent_z_offset
+        settle_duration_sec = 1.0
+        settle_steps = max(1, int(settle_duration_sec / dt))
+        for _ in range(settle_steps):
+            if self._task_completed_in_simulation(task):
+                self.get_logger().info(
+                    "[CheatCode] Early exit: simulation reported task completion."
+                )
+                return True
+            try:
+                self._send_delta_pose_target(
+                    move_robot=move_robot,
+                    target_pose=self.calc_gripper_pose(
+                        port_transform,
+                        z_offset=z_offset,
+                        reset_xy_integrator=True,
+                    ),
+                )
+            except TransformException as ex:
+                self.get_logger().warn(f"TF lookup failed during insertion settle: {ex}")
+            self.sleep_for(dt)
+
+        # Descend until the cable is inserted into the port. Use a minimum-jerk
+        # schedule so the geometric insertion does not start with a z-step.
+        insertion_speed_mps = 0.0009
+        end_z_offset = -0.015
+        insertion_distance = max(0.0, z_offset - end_z_offset)
+        insertion_duration = max(dt, insertion_distance / insertion_speed_mps)
+        insertion_steps = max(1, int(math.ceil(insertion_duration / dt)))
+        for step in range(1, insertion_steps + 1):
+            if self._task_completed_in_simulation(task):
+                self.get_logger().info(
+                    "[CheatCode] Early exit: simulation reported task completion."
+                )
+                return True
+
+            fraction = 10.0 * (step / insertion_steps) ** 3 - 15.0 * (step / insertion_steps) ** 4 + 6.0 * (step / insertion_steps) ** 5
+            z_offset = start_descent_z_offset - fraction * insertion_distance
             self.get_logger().info(f"z_offset: {z_offset:0.5}")
             try:
                 self._send_delta_pose_target(
