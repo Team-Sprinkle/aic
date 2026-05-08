@@ -52,6 +52,22 @@ def str_bool(value: str) -> bool:
 
 IMAGE_SUFFIXES = {".png", ".jpg", ".jpeg", ".webp", ".bmp"}
 ATTEMPT_DIR_RE = re.compile(r"attempt_(\d{6})")
+TRANSIENT_PLANNER_ERROR_TYPES = {
+    "APIConnectionError",
+    "APITimeoutError",
+    "InternalServerError",
+    "RateLimitError",
+}
+TRANSIENT_PLANNER_ERROR_MARKERS = (
+    "429",
+    "insufficient_quota",
+    "rate limit",
+    "rate_limit",
+    "quota",
+    "temporarily unavailable",
+    "timeout",
+    "connection",
+)
 
 
 def parse_args() -> argparse.Namespace:
@@ -368,11 +384,17 @@ def run_live_generation(
             "planner": planner_result,
             "accepted": False,
         }
-        if _planner_result_is_quota_failure(planner_result):
-            record["reason"] = "planner_openai_quota_exhausted"
+        if _planner_result_is_transient_external_failure(planner_result):
+            record["reason"] = "planner_transient_external_failure"
+            record["planner_failure"] = _planner_failure_payload(planner_result)
             records.append(record)
-            raise RuntimeError(
-                "Planner OpenAI quota exhausted; stopping generation instead of consuming more attempts."
+            return _generation_summary(
+                args=args,
+                mode=mode,
+                accepted=accepted,
+                attempts=attempts,
+                records=records,
+                stopped_reason="planner_transient_external_failure",
             )
         piecewise_path = Path(planner_result["piecewise_path"])
         if not piecewise_path.exists():
@@ -573,13 +595,39 @@ def run_live_generation(
 
 
 def _planner_result_is_quota_failure(planner_result: dict[str, Any]) -> bool:
-    error = str(planner_result.get("error") or "").lower()
-    error_type = str(planner_result.get("type") or "").lower()
+    payload = _planner_failure_payload(planner_result) or planner_result
+    error = str(payload.get("error") or "").lower()
+    error_type = str(payload.get("type") or "").lower()
     return (
         "insufficient_quota" in error
         or "exceeded your current quota" in error
         or (error_type == "ratelimiterror" and "quota" in error)
     )
+
+
+def _planner_result_is_transient_external_failure(planner_result: dict[str, Any]) -> bool:
+    payload = _planner_failure_payload(planner_result) or planner_result
+    if _planner_result_is_quota_failure(payload):
+        return True
+    if payload.get("type") in TRANSIENT_PLANNER_ERROR_TYPES:
+        return True
+    error_text = str(payload.get("error") or "").lower()
+    return any(marker in error_text for marker in TRANSIENT_PLANNER_ERROR_MARKERS)
+
+
+def _planner_failure_payload(planner_result: dict[str, Any]) -> dict[str, Any] | None:
+    return _planner_failure_payload_from_attempt_dir(Path(str(planner_result.get("attempt_dir", ""))))
+
+
+def _planner_failure_payload_from_attempt_dir(attempt_dir: Path) -> dict[str, Any] | None:
+    result_path = attempt_dir / "planner_debug" / "expert_generation_result.json"
+    if not result_path.exists():
+        return None
+    try:
+        payload = json.loads(result_path.read_text(encoding="utf-8"))
+    except json.JSONDecodeError:
+        return None
+    return payload if isinstance(payload, dict) else None
 
 
 def _count_existing_accepted(output_dir: Path) -> int:
@@ -600,10 +648,19 @@ def _max_existing_attempt_index(output_dir: Path) -> int:
         if not root.exists():
             continue
         for path in root.iterdir():
+            if root.name == "planner_attempts" and _planner_attempt_is_transient_without_piecewise(path):
+                continue
             match = ATTEMPT_DIR_RE.search(path.name)
             if match:
                 max_index = max(max_index, int(match.group(1)))
     return max_index
+
+
+def _planner_attempt_is_transient_without_piecewise(path: Path) -> bool:
+    if (path / "piecewise_trajectory.json").exists():
+        return False
+    payload = _planner_failure_payload_from_attempt_dir(path)
+    return _planner_result_is_transient_external_failure(payload or {})
 
 
 def _maybe_run_gpt5_failure_analysis(
@@ -811,7 +868,12 @@ def _augment_validation_with_debug(validation, assessment: dict, *, mode: Expert
     reasons = list(validation.reasons)
     metrics = assessment.get("metrics", {})
     guarded_speed = metrics.get("max_guarded_insert_speed_mps")
-    guarded_speed_threshold = float(os.environ.get("AIC_EXPERT_VALIDATION_MAX_GUARDED_SPEED_MPS", "0.02"))
+    guarded_speed_threshold = float(
+        os.environ.get(
+            "AIC_EXPERT_VALIDATION_MAX_GUARDED_SPEED_MPS",
+            os.environ.get("AIC_EXPERT_VALIDATION_MAX_GUARDED_INSERT_SPEED_MPS", "0.02"),
+        )
+    )
     if guarded_speed is not None and guarded_speed > guarded_speed_threshold:
         reasons.append("guarded_insert_speed_threshold")
     gate_passed = metrics.get("tracking_gate_passed")

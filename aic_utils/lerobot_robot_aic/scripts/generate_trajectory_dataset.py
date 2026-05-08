@@ -1120,6 +1120,8 @@ def build_agent_generation_cmd(
 
 
 def _overlay_paths(generation: dict[str, Any]) -> list[Path]:
+    if "expert_setting_registry" in generation and "expert_registry_overlay_dir" not in generation:
+        return []
     overlay_dir = Path(generation.get("expert_registry_overlay_dir", DEFAULT_EXPERT_REGISTRY_OVERLAY_DIR))
     if not overlay_dir.exists():
         return []
@@ -1269,6 +1271,11 @@ def agent_mode_env_for_registry_suffix(request: dict[str, Any], suffix: str | No
         raise ValueError("generation.env must be a map of environment variable names to values")
     if isinstance(yaml_env, dict):
         mode_env.update({str(key): str(value) for key, value in yaml_env.items()})
+    legacy_env = generation.get("env_overrides", {})
+    if legacy_env is not None and not isinstance(legacy_env, dict):
+        raise ValueError("generation.env_overrides must be a map of environment variable names to values")
+    if isinstance(legacy_env, dict):
+        mode_env.update({str(key): str(value) for key, value in legacy_env.items()})
     return mode_env
 
 

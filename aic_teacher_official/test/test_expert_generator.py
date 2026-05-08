@@ -674,6 +674,57 @@ def test_live_generation_resume_uses_next_unused_attempt_index(tmp_path):
     assert generate_expert_trajectories._max_existing_attempt_index(tmp_path) == 9
 
 
+def test_existing_attempt_count_ignores_transient_planner_failure(tmp_path):
+    planner_attempt = tmp_path / "planner_attempts" / "attempt_000010_candidate_04"
+    debug_dir = planner_attempt / "planner_debug"
+    debug_dir.mkdir(parents=True)
+    (debug_dir / "expert_generation_result.json").write_text(
+        json.dumps(
+            {
+                "success": False,
+                "reason": "exception",
+                "type": "RateLimitError",
+                "error": "Error code: 429 - insufficient_quota",
+            }
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+    (tmp_path / "replay_attempts" / "attempt_000007_candidate_01").mkdir(parents=True)
+
+    assert generate_expert_trajectories._max_existing_attempt_index(tmp_path) == 7
+
+
+def test_live_debug_guarded_speed_threshold_accepts_legacy_env_name(monkeypatch):
+    validation = TrajectoryValidator(ValidationCriteria(score_threshold=90.0)).evaluate(
+        {
+            "score": 91.0,
+            "insertion_event_reached": True,
+            "max_force_n": 0.0,
+            "offlimit_contact_count": 0,
+            "mode": "nominal",
+            "moveit_success": True,
+        }
+    )
+    assessment = {"metrics": {"max_guarded_insert_speed_mps": 0.022}}
+
+    default_result = generate_expert_trajectories._augment_validation_with_debug(
+        validation,
+        assessment,
+        mode=ExpertMode.NOMINAL,
+    )
+    assert default_result.accepted is False
+    assert "guarded_insert_speed_threshold" in default_result.reasons
+
+    monkeypatch.setenv("AIC_EXPERT_VALIDATION_MAX_GUARDED_INSERT_SPEED_MPS", "0.025")
+    relaxed_result = generate_expert_trajectories._augment_validation_with_debug(
+        validation,
+        assessment,
+        mode=ExpertMode.NOMINAL,
+    )
+    assert relaxed_result is validation
+
+
 def test_ft_window_aggregation_min_max_median():
     windows = aggregate_ft_windows(
         [
