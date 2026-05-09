@@ -3128,7 +3128,10 @@ class OfficialTeacherReplay(Policy):
         self._active_port_transform = port_transform
         send_feedback("official_teacher_replay_online_cheatcode_final_insertion")
         dt = float(os.environ.get("AIC_OFFICIAL_TEACHER_CHEATCODE_DT", "0.05"))
+        is_sc_plug = str(getattr(task, "plug_name", "")).startswith("sc")
         z_offset = float(os.environ.get("AIC_OFFICIAL_TEACHER_CHEATCODE_START_Z_OFFSET", "0.045"))
+        if is_sc_plug:
+            z_offset = float(os.environ.get("AIC_OFFICIAL_TEACHER_SC_CHEATCODE_START_Z_OFFSET", "0.030"))
         settle_sec = float(os.environ.get("AIC_OFFICIAL_TEACHER_PRE_INSERT_SETTLE_SEC", "0.35"))
         cheatcode_z_mode = os.environ.get(
             "AIC_OFFICIAL_TEACHER_CHEATCODE_Z_MODE",
@@ -3336,6 +3339,10 @@ class OfficialTeacherReplay(Policy):
             return False
 
         insertion_speed_mps = float(os.environ.get("AIC_OFFICIAL_TEACHER_CHEATCODE_INSERTION_SPEED_MPS", "0.012"))
+        if is_sc_plug:
+            insertion_speed_mps = float(
+                os.environ.get("AIC_OFFICIAL_TEACHER_SC_CHEATCODE_INSERTION_SPEED_MPS", "0.014")
+            )
         if "AIC_OFFICIAL_TEACHER_CHEATCODE_HANDOFF_START_Z_OFFSET" in os.environ:
             handoff_start_z_offset = float(os.environ["AIC_OFFICIAL_TEACHER_CHEATCODE_HANDOFF_START_Z_OFFSET"])
         else:
@@ -3345,6 +3352,10 @@ class OfficialTeacherReplay(Policy):
                 else z_offset
             )
         fixed_end_z_offset = float(os.environ.get("AIC_OFFICIAL_TEACHER_CHEATCODE_END_Z_OFFSET", "-0.015"))
+        if is_sc_plug:
+            fixed_end_z_offset = float(
+                os.environ.get("AIC_OFFICIAL_TEACHER_SC_CHEATCODE_END_Z_OFFSET", "-0.030")
+            )
         fallback_distance = max(0.0, z_offset - fixed_end_z_offset)
         if cheatcode_z_mode == "tf_depth":
             planned_insertion_distance = self._compute_guarded_insertion_depth(
@@ -4286,7 +4297,7 @@ class OfficialTeacherReplay(Policy):
                     "AIC_OFFICIAL_TEACHER_SC_GUARDED_INSERT_LATERAL_SERVO_FORCE_LIMIT_N"
                     if is_sc_plug
                     else "AIC_OFFICIAL_TEACHER_GUARDED_INSERT_LATERAL_SERVO_FORCE_LIMIT_N",
-                    "5.0",
+                    "8.0" if is_sc_plug else "5.0",
                 )
             )
             guarded_servo_allow_force_relief = is_sc_plug and (
@@ -4325,7 +4336,7 @@ class OfficialTeacherReplay(Policy):
                 radius_m = max(0.0, float(os.environ.get("AIC_OFFICIAL_TEACHER_SC_FINAL_SEAT_RADIUS_M", "0.0008")))
                 extra_depth_m = max(
                     0.0,
-                    float(os.environ.get("AIC_OFFICIAL_TEACHER_SC_FINAL_SEAT_EXTRA_DEPTH_M", "0.003")),
+                    float(os.environ.get("AIC_OFFICIAL_TEACHER_SC_FINAL_SEAT_EXTRA_DEPTH_M", "0.006")),
                 )
                 cycles = float(os.environ.get("AIC_OFFICIAL_TEACHER_SC_FINAL_SEAT_CYCLES", "2.0"))
                 force_limit_n = float(
@@ -4737,7 +4748,7 @@ class OfficialTeacherReplay(Policy):
             if sc_no_event_recovery_enabled:
                 no_event_force_delta = self._force_delta_norm(get_observation, baseline_force)
                 no_event_force_threshold = float(
-                    os.environ.get("AIC_OFFICIAL_TEACHER_SC_NO_EVENT_RECOVERY_FORCE_THRESHOLD_N", "5.0")
+                    os.environ.get("AIC_OFFICIAL_TEACHER_SC_NO_EVENT_RECOVERY_FORCE_THRESHOLD_N", "7.0")
                 )
                 no_event_z_threshold = float(
                     os.environ.get("AIC_OFFICIAL_TEACHER_SC_NO_EVENT_RECOVERY_Z_OFFSET_M", "-0.010")
@@ -4752,7 +4763,13 @@ class OfficialTeacherReplay(Policy):
                         z_threshold_m=no_event_z_threshold,
                     )
                     if not recover_after_contact():
-                        return False
+                        self._trace_event(
+                            "sc_no_event_recovery_failed_continuing_to_final_seat",
+                            retry_count=retry_count,
+                            force_delta_n=no_event_force_delta,
+                            z_offset=current_z,
+                        )
+                        break
                     if retry_requested:
                         continue
             break
