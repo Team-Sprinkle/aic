@@ -830,6 +830,19 @@ def test_agent_policy_exports_per_suffix_registry_env_for_mixed_batches(tmp_path
     assert exported[passed_suffix]["GLOBAL_YAML_OVERRIDE"] == "yaml"
 
 
+def test_agent_generation_output_dir_reuses_legacy_root_when_resuming(tmp_path: Path) -> None:
+    request = base_request(tmp_path)
+    request["generation"]["policy"] = "agent"
+    output_dir = gtd.derive_output_dir(request)
+    (output_dir / "accepted_metadata" / "meta").mkdir(parents=True)
+    (output_dir / "accepted_metadata" / "meta" / "validation_results.jsonl").write_text(
+        "{}\n",
+        encoding="utf-8",
+    )
+
+    assert gtd.agent_generation_output_dir(output_dir, request) == output_dir
+
+
 def test_agent_overlay_records_concrete_trial_suffix(tmp_path: Path, monkeypatch) -> None:
     request = base_request(tmp_path, task_family="sc_to_sc")
     request["generation"]["policy"] = "agent"

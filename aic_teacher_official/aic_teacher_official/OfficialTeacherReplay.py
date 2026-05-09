@@ -4240,31 +4240,56 @@ class OfficialTeacherReplay(Policy):
             last_target_pose = None
             descent_step = 1
             is_sc_plug = str(getattr(task, "plug_name", "")).startswith("sc")
-            sc_guarded_servo_enabled = (
-                is_sc_plug
-                and os.environ.get(
-                    "AIC_OFFICIAL_TEACHER_SC_GUARDED_INSERT_LATERAL_SERVO",
-                    "false",
-                ).lower()
-                in {"1", "true", "yes", "on"}
+            guarded_servo_env = (
+                "AIC_OFFICIAL_TEACHER_SC_GUARDED_INSERT_LATERAL_SERVO"
+                if is_sc_plug
+                else "AIC_OFFICIAL_TEACHER_GUARDED_INSERT_LATERAL_SERVO"
+            )
+            guarded_servo_enabled = (
+                os.environ.get(guarded_servo_env, "false").lower() in {"1", "true", "yes", "on"}
                 and insertion_command_mode == "exact_position"
             )
-            sc_guarded_servo_gain = float(
-                os.environ.get("AIC_OFFICIAL_TEACHER_SC_GUARDED_INSERT_LATERAL_SERVO_GAIN", "0.35")
+            guarded_servo_gain = float(
+                os.environ.get(
+                    "AIC_OFFICIAL_TEACHER_SC_GUARDED_INSERT_LATERAL_SERVO_GAIN"
+                    if is_sc_plug
+                    else "AIC_OFFICIAL_TEACHER_GUARDED_INSERT_LATERAL_SERVO_GAIN",
+                    "0.35",
+                )
             )
-            sc_guarded_servo_step_limit_m = float(
-                os.environ.get("AIC_OFFICIAL_TEACHER_SC_GUARDED_INSERT_LATERAL_SERVO_STEP_LIMIT_M", "0.0004")
+            guarded_servo_step_limit_m = float(
+                os.environ.get(
+                    "AIC_OFFICIAL_TEACHER_SC_GUARDED_INSERT_LATERAL_SERVO_STEP_LIMIT_M"
+                    if is_sc_plug
+                    else "AIC_OFFICIAL_TEACHER_GUARDED_INSERT_LATERAL_SERVO_STEP_LIMIT_M",
+                    "0.0004",
+                )
             )
-            sc_guarded_servo_max_bias_m = float(
-                os.environ.get("AIC_OFFICIAL_TEACHER_SC_GUARDED_INSERT_LATERAL_SERVO_MAX_BIAS_M", "0.004")
+            guarded_servo_max_bias_m = float(
+                os.environ.get(
+                    "AIC_OFFICIAL_TEACHER_SC_GUARDED_INSERT_LATERAL_SERVO_MAX_BIAS_M"
+                    if is_sc_plug
+                    else "AIC_OFFICIAL_TEACHER_GUARDED_INSERT_LATERAL_SERVO_MAX_BIAS_M",
+                    "0.004",
+                )
             )
-            sc_guarded_servo_deadband_m = float(
-                os.environ.get("AIC_OFFICIAL_TEACHER_SC_GUARDED_INSERT_LATERAL_SERVO_DEADBAND_M", "0.0004")
+            guarded_servo_deadband_m = float(
+                os.environ.get(
+                    "AIC_OFFICIAL_TEACHER_SC_GUARDED_INSERT_LATERAL_SERVO_DEADBAND_M"
+                    if is_sc_plug
+                    else "AIC_OFFICIAL_TEACHER_GUARDED_INSERT_LATERAL_SERVO_DEADBAND_M",
+                    "0.0004",
+                )
             )
-            sc_guarded_servo_force_limit_n = float(
-                os.environ.get("AIC_OFFICIAL_TEACHER_SC_GUARDED_INSERT_LATERAL_SERVO_FORCE_LIMIT_N", "5.0")
+            guarded_servo_force_limit_n = float(
+                os.environ.get(
+                    "AIC_OFFICIAL_TEACHER_SC_GUARDED_INSERT_LATERAL_SERVO_FORCE_LIMIT_N"
+                    if is_sc_plug
+                    else "AIC_OFFICIAL_TEACHER_GUARDED_INSERT_LATERAL_SERVO_FORCE_LIMIT_N",
+                    "5.0",
+                )
             )
-            sc_guarded_servo_allow_force_relief = (
+            guarded_servo_allow_force_relief = is_sc_plug and (
                 os.environ.get(
                     "AIC_OFFICIAL_TEACHER_SC_GUARDED_INSERT_LATERAL_SERVO_ALLOW_FORCE_RELIEF",
                     "false",
@@ -4281,7 +4306,7 @@ class OfficialTeacherReplay(Policy):
                 ).lower()
                 in {"1", "true", "yes", "on"}
             )
-            sc_guarded_servo_bias = np.zeros(3, dtype=np.float64)
+            guarded_servo_bias = np.zeros(3, dtype=np.float64)
 
             def sc_final_seating_probe() -> bool | None:
                 if (
@@ -4317,7 +4342,7 @@ class OfficialTeacherReplay(Policy):
                     cycles=cycles,
                     force_limit_n=force_limit_n,
                     start_z_offset=current_z,
-                    servo_bias_base_m=sc_guarded_servo_bias.tolist(),
+                    servo_bias_base_m=guarded_servo_bias.tolist(),
                 )
                 for step in range(1, steps + 1):
                     if self._task_completed_in_simulation(task):
@@ -4342,7 +4367,7 @@ class OfficialTeacherReplay(Policy):
                     try:
                         if pin_insertion_target:
                             target_xyz = self._pose_position_array(insertion_reference_pose)
-                            target_xyz[:2] = target_xyz[:2] + sc_guarded_servo_bias[:2] + dither_bias[:2]
+                            target_xyz[:2] = target_xyz[:2] + guarded_servo_bias[:2] + dither_bias[:2]
                             target_xyz[2] = float(insertion_reference_pose.position.z) - (
                                 guarded_start_z_offset - probe_z
                             )
@@ -4356,7 +4381,7 @@ class OfficialTeacherReplay(Policy):
                                 port_transform,
                                 z_offset=probe_z,
                                 preserve_current_z=(cheatcode_z_mode == "tf_depth"),
-                                lateral_offset_base=active_lateral_offset + sc_guarded_servo_bias + dither_bias,
+                                lateral_offset_base=active_lateral_offset + guarded_servo_bias + dither_bias,
                             )
                         if cheatcode_z_mode == "tf_depth":
                             target_pose.position.z = insertion_start_z - (guarded_start_z_offset - probe_z)
@@ -4488,7 +4513,7 @@ class OfficialTeacherReplay(Policy):
                 commanded_z = current_z
                 contact_confirmed = False
                 try:
-                    if sc_guarded_servo_enabled:
+                    if guarded_servo_enabled:
                         plug_transform = self._lookup_active_plug_transform()
                         if plug_transform is not None:
                             force_delta_for_servo = self._force_delta_norm(get_observation, baseline_force)
@@ -4501,42 +4526,43 @@ class OfficialTeacherReplay(Policy):
                                 dtype=np.float64,
                             )
                             plug_error_norm = float(np.linalg.norm(plug_error_base[:2]))
-                            over_servo_force_limit = force_delta_for_servo > sc_guarded_servo_force_limit_n
+                            over_servo_force_limit = force_delta_for_servo > guarded_servo_force_limit_n
                             can_force_relieve = (
-                                sc_guarded_servo_allow_force_relief
+                                guarded_servo_allow_force_relief
                                 and over_servo_force_limit
-                                and plug_error_norm > sc_guarded_servo_deadband_m
+                                and plug_error_norm > guarded_servo_deadband_m
                             )
-                            if plug_error_norm > sc_guarded_servo_deadband_m and (
+                            if plug_error_norm > guarded_servo_deadband_m and (
                                 not over_servo_force_limit or can_force_relieve
                             ):
                                 correction_gain = (
-                                    sc_guarded_servo_gain * sc_guarded_servo_force_relief_gain
+                                    guarded_servo_gain * sc_guarded_servo_force_relief_gain
                                     if can_force_relieve
-                                    else sc_guarded_servo_gain
+                                    else guarded_servo_gain
                                 )
                                 correction = correction_gain * plug_error_base
                                 correction_norm = float(np.linalg.norm(correction[:2]))
-                                if correction_norm > sc_guarded_servo_step_limit_m:
-                                    correction *= sc_guarded_servo_step_limit_m / correction_norm
-                                proposed_bias = sc_guarded_servo_bias + correction
+                                if correction_norm > guarded_servo_step_limit_m:
+                                    correction *= guarded_servo_step_limit_m / correction_norm
+                                proposed_bias = guarded_servo_bias + correction
                                 proposed_norm = float(np.linalg.norm(proposed_bias[:2]))
-                                if proposed_norm > sc_guarded_servo_max_bias_m:
-                                    proposed_bias *= sc_guarded_servo_max_bias_m / proposed_norm
-                                sc_guarded_servo_bias = proposed_bias
+                                if proposed_norm > guarded_servo_max_bias_m:
+                                    proposed_bias *= guarded_servo_max_bias_m / proposed_norm
+                                guarded_servo_bias = proposed_bias
                                 self._trace_event(
                                     (
                                         "sc_guarded_insert_lateral_servo_force_relief_updated"
                                         if can_force_relieve
-                                        else "sc_guarded_insert_lateral_servo_updated"
+                                        else "guarded_insert_lateral_servo_updated"
                                     ),
                                     retry_count=retry_count,
                                     z_offset=commanded_z,
                                     plug_tip_lateral_error_m=plug_error_norm,
                                     correction_base_m=correction.tolist(),
-                                    servo_bias_base_m=sc_guarded_servo_bias.tolist(),
+                                    servo_bias_base_m=guarded_servo_bias.tolist(),
                                     force_delta_n=force_delta_for_servo,
-                                    force_limit_n=sc_guarded_servo_force_limit_n,
+                                    force_limit_n=guarded_servo_force_limit_n,
+                                    plug_name=str(getattr(task, "plug_name", "")),
                                 )
                                 if can_force_relieve and sc_guarded_servo_force_relief_hold_z:
                                     commanded_z = guarded_start_z_offset - self._minimum_jerk_fraction(
@@ -4548,21 +4574,22 @@ class OfficialTeacherReplay(Policy):
                                         requested_z_offset=current_z,
                                         held_z_offset=commanded_z,
                                         force_delta_n=force_delta_for_servo,
-                                        force_limit_n=sc_guarded_servo_force_limit_n,
+                                        force_limit_n=guarded_servo_force_limit_n,
                                     )
-                            elif plug_error_norm > sc_guarded_servo_deadband_m:
+                            elif plug_error_norm > guarded_servo_deadband_m:
                                 self._trace_event(
-                                    "sc_guarded_insert_lateral_servo_skipped_force",
+                                    "guarded_insert_lateral_servo_skipped_force",
                                     retry_count=retry_count,
                                     z_offset=commanded_z,
                                     plug_tip_lateral_error_m=plug_error_norm,
                                     force_delta_n=force_delta_for_servo,
-                                    force_limit_n=sc_guarded_servo_force_limit_n,
+                                    force_limit_n=guarded_servo_force_limit_n,
+                                    plug_name=str(getattr(task, "plug_name", "")),
                                 )
                     if pin_insertion_target:
                         target_xyz = self._pose_position_array(insertion_reference_pose)
-                        if sc_guarded_servo_enabled:
-                            target_xyz[:2] = target_xyz[:2] + sc_guarded_servo_bias[:2]
+                        if guarded_servo_enabled:
+                            target_xyz[:2] = target_xyz[:2] + guarded_servo_bias[:2]
                         target_xyz[2] = float(insertion_reference_pose.position.z) - (
                             guarded_start_z_offset - commanded_z
                         )
@@ -4576,7 +4603,7 @@ class OfficialTeacherReplay(Policy):
                             port_transform,
                             z_offset=commanded_z,
                             preserve_current_z=(cheatcode_z_mode == "tf_depth"),
-                            lateral_offset_base=active_lateral_offset + sc_guarded_servo_bias,
+                            lateral_offset_base=active_lateral_offset + guarded_servo_bias,
                         )
                     if cheatcode_z_mode == "tf_depth":
                         target_pose.position.z = insertion_start_z - (guarded_start_z_offset - commanded_z)
