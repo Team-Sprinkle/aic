@@ -22,6 +22,8 @@ SYNC_LOCAL_AIC_MIRROR="${SYNC_LOCAL_AIC_MIRROR:-1}"
 DEFAULT_SYNC_REL_PATHS=(
   "aic/aic_utils/aic_isaac/aic_isaaclab/scripts/teleop.py"
   "aic/aic_utils/aic_isaac/aic_isaaclab/scripts/cheatcode_modified_eval.py"
+  "aic/aic_utils/aic_isaac/aic_isaaclab/scripts/cheatcode_eval_helpers.py"
+  "aic/aic_utils/aic_isaac/aic_isaaclab/scripts/force_analysis_from_csv.py"
   "aic/aic_utils/aic_isaac/aic_isaaclab/source/aic_task/aic_task/tasks/manager_based/aic_task/aic_task_env_cfg.py"
   "aic/outputs/configs/fixed_1_trials_sfp2nic.yaml"
 )

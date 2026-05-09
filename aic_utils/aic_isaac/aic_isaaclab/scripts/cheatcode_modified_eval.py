@@ -14,1020 +14,1000 @@ import logging
 import math
 import re
 import traceback
+from collections import deque
 from pathlib import Path
-from typing import Any
+from typing import Any, Tuple, List, Optional
 
 import yaml
+import numpy as np
+import torch
+import gymnasium as gym
 
 from isaaclab.app import AppLauncher
 
-parser = argparse.ArgumentParser(
-    description="CheatCodeModified-style policy runner for Isaac force parity."
-)
-parser.add_argument("--task", type=str, default="AIC-Task-v0", help="Task name.")
-parser.add_argument(
-    "--num_envs",
-    type=int,
-    default=1,
-    help="Number of environments. Force-parity mode supports only 1.",
-)
-parser.add_argument(
-    "--disable_fabric",
-    action="store_true",
-    default=False,
-    help="Disable fabric and use USD I/O operations.",
-)
-parser.add_argument("--target_module_name", type=str, default="", help="Task metadata label.")
-parser.add_argument("--port_name", type=str, default="", help="Task metadata label.")
-parser.add_argument("--plug_name", type=str, default="", help="Task metadata label.")
-parser.add_argument("--cable_name", type=str, default="", help="Task metadata label.")
-parser.add_argument("--cable_type", type=str, default="", help="Task metadata label.")
-parser.add_argument(
-    "--out",
-    type=str,
-    default="aic/outputs/force_parity/output.csv",
-    help="Output CSV path.",
-)
-parser.add_argument(
-    "--force_log_body",
-    type=str,
-    default="wrist_3_link",
-    help="Body name suffix used for force logging.",
-)
-parser.add_argument(
-    "--misalign_x_m",
-    type=float,
-    default=0.004,
-    help="Intentional x misalignment in meters.",
-)
-parser.add_argument(
-    "--misalign_y_m",
-    type=float,
-    default=0.0,
-    help="Intentional y misalignment in meters.",
-)
-parser.add_argument(
-    "--align_seconds",
-    type=float,
-    default=1.0,
-    help="Duration to apply lateral misalignment motion.",
-)
-parser.add_argument(
-    "--initial_z_offset_m",
-    type=float,
-    default=0.2,
-    help="CheatCode-style initial height offset used for handoff distance.",
-)
-parser.add_argument(
-    "--start_descent_z_offset_m",
-    type=float,
-    default=0.005,
-    help="CheatCode-style start insertion height offset.",
-)
-parser.add_argument(
-    "--end_z_offset_m",
-    type=float,
-    default=-0.015,
-    help="CheatCode-style insertion end height offset.",
-)
-parser.add_argument(
-    "--handoff_min_seconds",
-    type=float,
-    default=2.0,
-    help="Minimum duration of the pre-insertion handoff phase.",
-)
-parser.add_argument(
-    "--handoff_speed_mps",
-    type=float,
-    default=0.02,
-    help="Descent speed during handoff phase (m/s).",
-)
-parser.add_argument(
-    "--settle_seconds",
-    type=float,
-    default=1.0,
-    help="Settle duration before insertion.",
-)
-parser.add_argument(
-    "--insertion_speed_mps",
-    type=float,
-    default=0.0009,
-    help="Insertion speed in m/s (minimum-jerk schedule).",
-)
-parser.add_argument(
-    "--hold_seconds",
-    type=float,
-    default=5.0,
-    help="Hold duration after insertion motion.",
-)
-parser.add_argument(
-    "--force_backoff_threshold_n",
-    type=float,
-    default=1.0e9,
-    help="Absolute delta-from-baseline Fz threshold to trigger immediate backoff.",
-)
-parser.add_argument(
-    "--backoff_m",
-    type=float,
-    default=0.015,
-    help="Backoff distance in +Z after force trigger.",
-)
-parser.add_argument(
-    "--backoff_seconds",
-    type=float,
-    default=0.7,
-    help="Backoff command duration.",
-)
-parser.add_argument(
-    "--gazebo_trial_config",
-    type=str,
-    default="",
-    help="Optional Gazebo/aic_engine YAML config path for pose parity conversion.",
-)
-parser.add_argument(
-    "--gazebo_trial_id",
-    type=str,
-    default="trial_1",
-    help="Trial id under 'trials' in the Gazebo/aic_engine config.",
-)
-parser.add_argument(
-    "--enable_gazebo_parity",
-    action="store_true",
-    default=False,
-    help="Apply Gazebo->Isaac frame/pose conversion from the trial config.",
-)
-parser.add_argument(
-    "--gazebo_to_isaac_offset_x",
-    type=float,
-    default=0.0,
-    help="Gazebo->Isaac world transform translation x (meters).",
-)
-parser.add_argument(
-    "--gazebo_to_isaac_offset_y",
-    type=float,
-    default=0.0,
-    help="Gazebo->Isaac world transform translation y (meters).",
-)
-parser.add_argument(
-    "--gazebo_to_isaac_offset_z",
-    type=float,
-    default=-1.14,
-    help="Gazebo->Isaac world transform translation z (meters).",
-)
-parser.add_argument(
-    "--gazebo_to_isaac_yaw_offset",
-    type=float,
-    default=math.pi / 2.0,
-    help="Gazebo->Isaac world transform yaw offset (radians).",
-)
-parser.add_argument(
-    "--gazebo_to_isaac_board_yaw_extra",
-    type=float,
-    default=math.pi,
-    help="Additional board-only yaw rotation (radians) after Gazebo->Isaac transform.",
-)
-parser.add_argument("--robot_offset_x", type=float, default=0.08, help="Robot world-frame x offset (m).")
-parser.add_argument("--robot_offset_y", type=float, default=0.08, help="Robot world-frame y offset (m).")
-parser.add_argument("--robot_offset_yaw", type=float, default=0.0, help="Robot world-frame yaw offset (rad).")
-parser.add_argument("--task_board_offset_x", type=float, default=0.0, help="Task board world-frame x offset (m).")
-parser.add_argument("--task_board_offset_y", type=float, default=0.12, help="Task board world-frame y offset (m).")
-parser.add_argument(
-    "--task_board_offset_yaw", type=float, default=0.0, help="Task board world-frame yaw offset (rad)."
-)
-parser.add_argument("--sc_port_offset_x", type=float, default=0.0, help="sc_port world-frame x offset (m).")
-parser.add_argument("--sc_port_offset_y", type=float, default=0.0, help="sc_port world-frame y offset (m).")
-parser.add_argument("--sc_port_offset_yaw", type=float, default=0.0, help="sc_port world-frame yaw offset (rad).")
-parser.add_argument("--sc_port_2_offset_x", type=float, default=0.0, help="sc_port_2 world-frame x offset (m).")
-parser.add_argument("--sc_port_2_offset_y", type=float, default=0.0, help="sc_port_2 world-frame y offset (m).")
-parser.add_argument(
-    "--sc_port_2_offset_yaw", type=float, default=0.0, help="sc_port_2 world-frame yaw offset (rad)."
-)
-parser.add_argument("--nic_card_offset_x", type=float, default=0.0, help="nic_card world-frame x offset (m).")
-parser.add_argument("--nic_card_offset_y", type=float, default=0.0, help="nic_card world-frame y offset (m).")
-parser.add_argument("--nic_card_offset_yaw", type=float, default=0.0, help="nic_card world-frame yaw offset (rad).")
-parser.add_argument(
-    "--no_match_gazebo_physics",
-    action="store_true",
-    default=False,
-    help="Do not align Isaac physics step/solver defaults to Gazebo world settings.",
-)
-AppLauncher.add_app_launcher_args(parser)
-args_cli = parser.parse_args()
-if hasattr(args_cli, "enable_cameras"):
-    args_cli.enable_cameras = True
-
-if args_cli.num_envs != 1:
-    raise ValueError("--num_envs must be 1 for force-parity policy evaluation.")
-
-app_launcher = AppLauncher(args_cli)
-simulation_app = app_launcher.app
-
-import gymnasium as gym
-import torch
-
-import isaaclab_tasks  # noqa: F401
-from isaaclab_tasks.utils import parse_env_cfg
-
-import aic_task.tasks  # noqa: F401
+from cheatcode_eval_helpers import FrameDebugHelper, TrajectorySchedule, obs_term_slices
 
 LOGGER = logging.getLogger("aic.cheatcode_eval")
 
 
-def _setup_logging() -> None:
-    logging.basicConfig(
-        level=logging.INFO,
-        format="[%(asctime)s][%(levelname)s] %(message)s",
-        datefmt="%H:%M:%S",
-    )
+# =============================================================================
+# CLI PARSER SETUP
+# =============================================================================
+def build_parser() -> argparse.ArgumentParser:
+    parser = argparse.ArgumentParser(description="CheatCodeModified-style policy runner for Isaac force parity.")
+    
+    # Environment & Hardware
+    parser.add_argument("--task", type=str, default="AIC-Task-v0", help="Task name.")
+    parser.add_argument("--num_envs", type=int, default=1, help="Force-parity mode supports only 1.")
+    parser.add_argument("--disable_fabric", action="store_true", default=False, help="Disable fabric.")
+    
+    # Task Metadata
+    parser.add_argument("--target_module_name", type=str, default="")
+    parser.add_argument("--port_name", type=str, default="")
+    parser.add_argument("--plug_name", type=str, default="")
+    parser.add_argument("--cable_name", type=str, default="")
+    parser.add_argument("--cable_type", type=str, default="")
+    parser.add_argument("--out", type=str, default="aic/outputs/force_parity/output.csv")
+    parser.add_argument("--force_log_body", type=str, default="wrist_3_link")
+    parser.add_argument("--tcp_frame_name", type=str, default="gripper_tcp")
+    parser.add_argument("--allow_tcp_fallback_to_wrist", action="store_true", default=False)
+
+    # Trajectory Schedule
+    parser.add_argument("--misalign_x_m", type=float, default=0.004)
+    parser.add_argument("--misalign_y_m", type=float, default=0.0)
+    parser.add_argument("--align_seconds", type=float, default=1.0)
+    parser.add_argument("--initial_z_offset_m", type=float, default=0.2)
+    parser.add_argument("--start_descent_z_offset_m", type=float, default=0.005)
+    parser.add_argument("--end_z_offset_m", type=float, default=-0.015)
+    parser.add_argument("--handoff_min_seconds", type=float, default=2.0)
+    parser.add_argument("--handoff_speed_mps", type=float, default=0.02)
+    parser.add_argument("--settle_seconds", type=float, default=1.0)
+    parser.add_argument("--insertion_speed_mps", type=float, default=0.0009)
+    parser.add_argument("--hold_seconds", type=float, default=5.0)
+
+    # Force Guard Parameters
+    parser.add_argument("--force_backoff_threshold_n", type=float, default=1.0e9)
+    parser.add_argument("--force_l2_drop_threshold_n", type=float, default=1.7)
+    parser.add_argument("--force_l2_horizon_sec", type=float, default=0.15)
+    parser.add_argument("--force_median_samples", type=int, default=3)
+    parser.add_argument("--force_z_delta_threshold_n", type=float, default=1.0e9)
+    parser.add_argument("--stall_window_sec", type=float, default=0.25)
+    parser.add_argument("--stall_max_descent_m", type=float, default=0.00015)
+    parser.add_argument("--stall_force_rise_n", type=float, default=1.0e9)
+    parser.add_argument("--force_direction_xy_scale", type=float, default=0.3)
+    parser.add_argument("--unrecoverable_force_n", type=float, default=50.0)
+    parser.add_argument("--backoff_m", type=float, default=0.015)
+    parser.add_argument("--backoff_seconds", type=float, default=0.7)
+
+    # Gazebo Parity Configs
+    parser.add_argument("--gazebo_trial_config", type=str, default="")
+    parser.add_argument("--gazebo_trial_id", type=str, default="trial_1")
+    parser.add_argument("--enable_gazebo_parity", action="store_true", default=False)
+    parser.add_argument("--gazebo_to_isaac_offset_x", type=float, default=0.0)
+    parser.add_argument("--gazebo_to_isaac_offset_y", type=float, default=0.0)
+    parser.add_argument("--gazebo_to_isaac_offset_z", type=float, default=-1.14)
+    parser.add_argument("--gazebo_to_isaac_yaw_offset", type=float, default=math.pi / 2.0)
+    parser.add_argument("--gazebo_to_isaac_board_yaw_extra", type=float, default=math.pi)
+    
+    # Asset Offsets
+    for asset in ["robot", "task_board", "sc_port", "sc_port_2", "nic_card"]:
+        parser.add_argument(f"--{asset}_offset_x", type=float, default=0.0 if asset != "robot" else 0.08)
+        parser.add_argument(f"--{asset}_offset_y", type=float, default=0.12 if asset == "task_board" else (0.08 if asset == "robot" else 0.0))
+        parser.add_argument(f"--{asset}_offset_yaw", type=float, default=0.0)
+
+    # Debug & Misc
+    parser.add_argument("--validate_frame_transformer_only", action="store_true", default=False)
+    parser.add_argument("--transformer_validate_steps", type=int, default=300)
+    parser.add_argument("--debug_frame_log_every", type=int, default=50)
+    parser.add_argument("--enable_force_analysis_png", action="store_true", default=True)
+    parser.add_argument("--force_analysis_png_path", type=str, default="")
+    parser.add_argument("--no_match_gazebo_physics", action="store_true", default=False)
+    parser.add_argument("--enable_orientation_align", action="store_true", default=True)
+    parser.add_argument("--rot_scale_rad_per_action", type=float, default=0.2)
+    parser.add_argument("--approach_in_port_local_frame", action="store_true", default=True)
+    parser.add_argument("--tcp_bias_x_m", type=float, default=0.0)
+    parser.add_argument("--tcp_bias_y_m", type=float, default=0.0)
+    parser.add_argument("--tcp_bias_z_m", type=float, default=0.0)
+    parser.add_argument("--tcp_bias_roll_deg", type=float, default=0.0)
+    parser.add_argument("--tcp_bias_pitch_deg", type=float, default=0.0)
+    parser.add_argument("--tcp_bias_yaw_deg", type=float, default=0.0)
+    parser.add_argument("--tcp_to_port_roll_offset_deg", type=float, default=0.0)
+    parser.add_argument("--tcp_to_port_pitch_offset_deg", type=float, default=0.0)
+    parser.add_argument("--tcp_to_port_yaw_offset_deg", type=float, default=0.0)
+    # Backward compatibility aliases.
+    parser.add_argument("--tcp_target_roll_offset_deg", type=float, default=0.0)
+    parser.add_argument("--tcp_target_pitch_offset_deg", type=float, default=0.0)
+    parser.add_argument("--tcp_target_yaw_offset_deg", type=float, default=0.0)
+
+    AppLauncher.add_app_launcher_args(parser)
+    return parser
 
 
-def _resolve_wrist_index(robot: Any, body_name_suffix: str) -> int:
-    body_names = list(robot.body_names)
-    for i, body_name in enumerate(body_names):
-        if body_name.endswith(body_name_suffix):
-            return i
-    raise RuntimeError(
-        f"Could not find body suffix '{body_name_suffix}' in robot.body_names: {body_names}"
-    )
+# =============================================================================
+# MATH UTILITIES
+# =============================================================================
+class QuatMath:
+    @staticmethod
+    def conjugate(q: Tuple[float, float, float, float]) -> Tuple[float, float, float, float]:
+        return (q[0], -q[1], -q[2], -q[3])
 
+    @staticmethod
+    def mul(q1: Tuple[float, float, float, float], q2: Tuple[float, float, float, float]) -> Tuple[float, float, float, float]:
+        w1, x1, y1, z1 = q1
+        w2, x2, y2, z2 = q2
+        return (
+            w1 * w2 - x1 * x2 - y1 * y2 - z1 * z2,
+            w1 * x2 + x1 * w2 + y1 * z2 - z1 * y2,
+            w1 * y2 - x1 * z2 + y1 * w2 + z1 * x2,
+            w1 * z2 + x1 * y2 - y1 * x2 + z1 * w2,
+        )
 
-def _clear_scene_randomization(env_cfg: Any) -> None:
-    if not hasattr(env_cfg, "events"):
-        return
-    if not hasattr(env_cfg.events, "randomize_board_and_parts"):
-        return
-    event_term = env_cfg.events.randomize_board_and_parts
-    if event_term is None or not hasattr(event_term, "params"):
-        return
-    params = event_term.params
-    params["board_range"] = {"x": (0.0, 0.0), "y": (0.0, 0.0)}
-    parts = params.get("parts", [])
-    for part_cfg in parts:
-        if not isinstance(part_cfg, dict):
-            continue
-        part_cfg["pose_range"] = {}
-        if "snap_step" in part_cfg:
-            part_cfg.pop("snap_step")
+    @staticmethod
+    def normalize(q: Tuple[float, float, float, float]) -> Tuple[float, float, float, float]:
+        n = math.sqrt(sum(x*x for x in q))
+        return (1.0, 0.0, 0.0, 0.0) if n <= 1.0e-12 else (q[0]/n, q[1]/n, q[2]/n, q[3]/n)
 
-
-def _min_jerk_fraction(s: float) -> float:
-    return 10.0 * s**3 - 15.0 * s**4 + 6.0 * s**5
-
-
-def _quat_conjugate(q: tuple[float, float, float, float]) -> tuple[float, float, float, float]:
-    return (q[0], -q[1], -q[2], -q[3])
-
-
-def _quat_mul(
-    q1: tuple[float, float, float, float], q2: tuple[float, float, float, float]
-) -> tuple[float, float, float, float]:
-    w1, x1, y1, z1 = q1
-    w2, x2, y2, z2 = q2
-    return (
-        w1 * w2 - x1 * x2 - y1 * y2 - z1 * z2,
-        w1 * x2 + x1 * w2 + y1 * z2 - z1 * y2,
-        w1 * y2 - x1 * z2 + y1 * w2 + z1 * x2,
-        w1 * z2 + x1 * y2 - y1 * x2 + z1 * w2,
-    )
-
-
-def _quat_normalize(q: tuple[float, float, float, float]) -> tuple[float, float, float, float]:
-    n = math.sqrt(q[0] * q[0] + q[1] * q[1] + q[2] * q[2] + q[3] * q[3])
-    if n <= 1.0e-12:
-        return (1.0, 0.0, 0.0, 0.0)
-    return (q[0] / n, q[1] / n, q[2] / n, q[3] / n)
-
-
-def _quat_from_rpy(roll: float, pitch: float, yaw: float) -> tuple[float, float, float, float]:
-    cy = math.cos(yaw * 0.5)
-    sy = math.sin(yaw * 0.5)
-    cp = math.cos(pitch * 0.5)
-    sp = math.sin(pitch * 0.5)
-    cr = math.cos(roll * 0.5)
-    sr = math.sin(roll * 0.5)
-    return _quat_normalize(
-        (
+    @staticmethod
+    def from_rpy(roll: float, pitch: float, yaw: float) -> Tuple[float, float, float, float]:
+        cy, sy = math.cos(yaw * 0.5), math.sin(yaw * 0.5)
+        cp, sp = math.cos(pitch * 0.5), math.sin(pitch * 0.5)
+        cr, sr = math.cos(roll * 0.5), math.sin(roll * 0.5)
+        return QuatMath.normalize((
             cr * cp * cy + sr * sp * sy,
             sr * cp * cy - cr * sp * sy,
             cr * sp * cy + sr * cp * sy,
             cr * cp * sy - sr * sp * cy,
+        ))
+
+    @staticmethod
+    def apply(q: Tuple[float, float, float, float], v: Tuple[float, float, float]) -> Tuple[float, float, float]:
+        r = QuatMath.mul(QuatMath.mul(q, (0.0, v[0], v[1], v[2])), QuatMath.conjugate(q))
+        return (r[1], r[2], r[3])
+
+
+# =============================================================================
+# GAZEBO PARITY MANAGER
+# =============================================================================
+class GazeboParityManager:
+    def __init__(self, args, env_cfg):
+        self.args = args
+        self.env_cfg = env_cfg
+        self.hidden_pos = (10.0, 10.0, -10.0)
+        self.identity_quat = (1.0, 0.0, 0.0, 0.0)
+
+    def apply(self):
+        if not self.args.gazebo_trial_config:
+            raise ValueError("--enable_gazebo_parity requires --gazebo_trial_config")
+        
+        config_root = self._load_yaml(Path(self.args.gazebo_trial_config).expanduser())
+        trial_cfg = config_root.get("trials", {}).get(self.args.gazebo_trial_id)
+        if not trial_cfg:
+            raise KeyError(f"Trial '{self.args.gazebo_trial_id}' not found.")
+
+        task_board_cfg = trial_cfg["scene"]["task_board"]
+        board_pos_is, board_quat_is = self._setup_task_board(task_board_cfg)
+        self._setup_sc_ports(task_board_cfg, board_pos_is, board_quat_is)
+        self._setup_nic_card(trial_cfg, task_board_cfg, board_pos_is, board_quat_is)
+        self._setup_robot(config_root.get("robot", {}))
+
+    def _load_yaml(self, path: Path) -> dict:
+        with path.open("r", encoding="utf-8") as f:
+            return yaml.safe_load(f)
+
+    def _transform_world(self, pos_gz, rpy_gz):
+        c, s = math.cos(self.args.gazebo_to_isaac_yaw_offset), math.sin(self.args.gazebo_to_isaac_yaw_offset)
+        pos_isaac = (
+            c * pos_gz[0] - s * pos_gz[1] + self.args.gazebo_to_isaac_offset_x,
+            s * pos_gz[0] + c * pos_gz[1] + self.args.gazebo_to_isaac_offset_y,
+            pos_gz[2] + self.args.gazebo_to_isaac_offset_z,
         )
-    )
+        rpy_isaac = (0.0, 0.0, rpy_gz[2] + self.args.gazebo_to_isaac_yaw_offset)
+        return pos_isaac, rpy_isaac
 
+    def _apply_offset(self, pos_w, quat_w, dx, dy, dyaw):
+        out_pos = (pos_w[0] + dx, pos_w[1] + dy, pos_w[2])
+        if abs(dyaw) <= 1.0e-12: return out_pos, quat_w
+        return out_pos, QuatMath.normalize(QuatMath.mul(QuatMath.from_rpy(0.0, 0.0, dyaw), quat_w))
 
-def _quat_apply(
-    q: tuple[float, float, float, float], v: tuple[float, float, float]
-) -> tuple[float, float, float]:
-    qv = (0.0, v[0], v[1], v[2])
-    r = _quat_mul(_quat_mul(q, qv), _quat_conjugate(q))
-    return (r[1], r[2], r[3])
+    def _compose_pose(self, p_pos, p_quat, c_pos, c_rpy):
+        c_quat = QuatMath.from_rpy(*c_rpy)
+        c_world_quat = QuatMath.normalize(QuatMath.mul(p_quat, c_quat))
+        rot = QuatMath.apply(p_quat, c_pos)
+        c_world_pos = (p_pos[0] + rot[0], p_pos[1] + rot[1], p_pos[2] + rot[2])
+        return c_world_pos, c_world_quat
 
-
-def _transform_gazebo_world_to_isaac(
-    pos_gz: tuple[float, float, float],
-    rpy_gz: tuple[float, float, float],
-) -> tuple[tuple[float, float, float], tuple[float, float, float]]:
-    c = math.cos(args_cli.gazebo_to_isaac_yaw_offset)
-    s = math.sin(args_cli.gazebo_to_isaac_yaw_offset)
-    x_rot = c * pos_gz[0] - s * pos_gz[1]
-    y_rot = s * pos_gz[0] + c * pos_gz[1]
-    pos_isaac = (
-        x_rot + args_cli.gazebo_to_isaac_offset_x,
-        y_rot + args_cli.gazebo_to_isaac_offset_y,
-        pos_gz[2] + args_cli.gazebo_to_isaac_offset_z,
-    )
-    # Keep world mapping strictly planar: preserve only yaw in the world transform.
-    # This prevents accidental roll/pitch "tilt" from leaking into Isaac world poses.
-    rpy_isaac = (
-        0.0,
-        0.0,
-        rpy_gz[2] + args_cli.gazebo_to_isaac_yaw_offset,
-    )
-    return pos_isaac, rpy_isaac
-
-
-def _compose_local_pose(
-    parent_world_pos: tuple[float, float, float],
-    parent_world_quat: tuple[float, float, float, float],
-    child_local_pos: tuple[float, float, float],
-    child_local_rpy: tuple[float, float, float],
-) -> tuple[tuple[float, float, float], tuple[float, float, float, float]]:
-    child_local_quat = _quat_from_rpy(*child_local_rpy)
-    child_world_quat = _quat_normalize(_quat_mul(parent_world_quat, child_local_quat))
-    rotated = _quat_apply(parent_world_quat, child_local_pos)
-    child_world_pos = (
-        parent_world_pos[0] + rotated[0],
-        parent_world_pos[1] + rotated[1],
-        parent_world_pos[2] + rotated[2],
-    )
-    return child_world_pos, child_world_quat
-
-
-def _apply_world_xy_yaw_offset(
-    pos_w: tuple[float, float, float],
-    quat_w: tuple[float, float, float, float],
-    dx: float,
-    dy: float,
-    dyaw: float,
-) -> tuple[tuple[float, float, float], tuple[float, float, float, float]]:
-    out_pos = (pos_w[0] + dx, pos_w[1] + dy, pos_w[2])
-    if abs(dyaw) <= 1.0e-12:
-        return out_pos, quat_w
-    q_delta = _quat_from_rpy(0.0, 0.0, dyaw)
-    out_quat = _quat_normalize(_quat_mul(q_delta, quat_w))
-    return out_pos, out_quat
-
-
-def _first_present_rail(task_board_cfg: dict[str, Any], rail_prefix: str, count: int) -> int | None:
-    for i in range(count):
-        rail_key = f"{rail_prefix}_{i}"
-        rail_cfg = task_board_cfg.get(rail_key, {})
-        if bool(rail_cfg.get("entity_present", False)):
-            return i
-    return None
-
-
-def _select_target_nic_rail_idx(trial_cfg: dict[str, Any], task_board_cfg: dict[str, Any]) -> int | None:
-    target_name = ""
-    try:
-        target_name = str(trial_cfg["tasks"]["task_1"]["target_module_name"])
-    except Exception:
-        target_name = ""
-    if target_name.startswith("nic_card_mount_"):
-        suffix = target_name.removeprefix("nic_card_mount_")
-        if suffix.isdigit():
-            idx = int(suffix)
-            rail_key = f"nic_rail_{idx}"
-            rail_cfg = task_board_cfg.get(rail_key, {})
-            if bool(rail_cfg.get("entity_present", False)):
-                return idx
-    return _first_present_rail(task_board_cfg, "nic_rail", 5)
-
-
-def _as_pose_tuple(pose_cfg: dict[str, Any]) -> tuple[float, float, float]:
-    return (float(pose_cfg.get("x", 0.0)), float(pose_cfg.get("y", 0.0)), float(pose_cfg.get("z", 0.0)))
-
-
-def _as_rpy_tuple(pose_cfg: dict[str, Any]) -> tuple[float, float, float]:
-    return (
-        float(pose_cfg.get("roll", 0.0)),
-        float(pose_cfg.get("pitch", 0.0)),
-        float(pose_cfg.get("yaw", 0.0)),
-    )
-
-
-def _load_yaml(path: Path) -> dict[str, Any]:
-    with path.open("r", encoding="utf-8") as f:
-        obj = yaml.safe_load(f)
-    if not isinstance(obj, dict):
-        raise ValueError(f"YAML root must be a mapping: {path}")
-    return obj
-
-
-def _measure_nic_rails_from_xacro() -> tuple[float, list[float], float] | None:
-    """Read NIC rail geometry from Gazebo task_board xacro.
-
-    Returns:
-        (spacing_m, y_by_idx_gz, x_base_gz) or None on failure.
-    """
-    xacro_path = (
-        Path(__file__).resolve().parents[4] / "aic_description" / "urdf" / "task_board.urdf.xacro"
-    )
-    if not xacro_path.is_file():
-        return None
-    text = xacro_path.read_text(encoding="utf-8")
-    pattern = re.compile(
-        r'nic_card_mount_(\d+)" pose="\$\{([-0-9.]+) \+ \$\(arg nic_card_mount_\d+_translation\)\} ([-0-9.]+) '
-    )
-    matches = pattern.findall(text)
-    if len(matches) < 5:
-        return None
-    data = sorted((int(idx), float(xbase), float(yval)) for idx, xbase, yval in matches[:5])
-    y_by_idx = [y for _, _, y in data]
-    x_base = float(data[0][1])
-    diffs = [abs(y_by_idx[i + 1] - y_by_idx[i]) for i in range(len(y_by_idx) - 1)]
-    spacing = sum(diffs) / len(diffs) if diffs else 0.04
-    return spacing, y_by_idx, x_base
-
-
-def _apply_gazebo_trial_parity(env_cfg: Any) -> None:
-    if not args_cli.gazebo_trial_config:
-        raise ValueError("--enable_gazebo_parity requires --gazebo_trial_config")
-    hidden_pos = (10.0, 10.0, -10.0)
-    identity_quat = (1.0, 0.0, 0.0, 0.0)
-
-    config_path = Path(args_cli.gazebo_trial_config).expanduser()
-    config_root = _load_yaml(config_path)
-    trials = config_root.get("trials", {})
-    if args_cli.gazebo_trial_id not in trials:
-        raise KeyError(
-            f"Trial '{args_cli.gazebo_trial_id}' not found in {config_path}. "
-            f"Available: {list(trials.keys())}"
+    def _setup_task_board(self, task_board_cfg):
+        cfg = task_board_cfg["pose"]
+        pos_gz = (cfg.get("x", 0.0), cfg.get("y", 0.0), cfg.get("z", 0.0))
+        rpy_gz = (cfg.get("roll", 0.0), cfg.get("pitch", 0.0), cfg.get("yaw", 0.0))
+        
+        pos_is, rpy_is = self._transform_world(pos_gz, rpy_gz)
+        rpy_is = (rpy_is[0], rpy_is[1], rpy_is[2] + self.args.gazebo_to_isaac_board_yaw_extra)
+        
+        board_pos, board_quat = self._apply_offset(
+            pos_is, QuatMath.from_rpy(*rpy_is), 
+            self.args.task_board_offset_x, self.args.task_board_offset_y, self.args.task_board_offset_yaw
         )
-    trial_cfg = trials[args_cli.gazebo_trial_id]
-    scene_cfg = trial_cfg["scene"]
-    task_board_cfg = scene_cfg["task_board"]
-    board_pose_cfg = task_board_cfg["pose"]
+        self.env_cfg.scene.task_board.init_state.pos = board_pos
+        self.env_cfg.scene.task_board.init_state.rot = board_quat
+        return board_pos, board_quat
 
-    board_pos_gz = _as_pose_tuple(board_pose_cfg)
-    board_rpy_gz = _as_rpy_tuple(board_pose_cfg)
-    board_pos_is, board_rpy_is = _transform_gazebo_world_to_isaac(board_pos_gz, board_rpy_gz)
-    board_rpy_is = (
-        board_rpy_is[0],
-        board_rpy_is[1],
-        board_rpy_is[2] + args_cli.gazebo_to_isaac_board_yaw_extra,
-    )
-    board_quat_is = _quat_from_rpy(*board_rpy_is)
-    board_pos_is, board_quat_is = _apply_world_xy_yaw_offset(
-        board_pos_is,
-        board_quat_is,
-        args_cli.task_board_offset_x,
-        args_cli.task_board_offset_y,
-        args_cli.task_board_offset_yaw,
-    )
-
-    env_cfg.scene.task_board.init_state.pos = board_pos_is
-    env_cfg.scene.task_board.init_state.rot = board_quat_is
-
-    # SC ports: use Isaac-local rail anchors and apply Gazebo translation along
-    # the SC rail direction (x-axis in Isaac-local board frame).
-    sc_anchor_local = {
-        0: (0.0067, -0.0362, 0.005),
-        1: (0.0076, -0.0783, 0.005),
-    }
-    sc_base_local_quat = {
-        0: _quat_normalize(tuple(float(v) for v in env_cfg.scene.sc_port.init_state.rot)),
-        1: _quat_normalize(tuple(float(v) for v in env_cfg.scene.sc_port_2.init_state.rot)),
-    }
-    for idx, scene_name in ((0, "sc_port"), (1, "sc_port_2")):
-        rail_key = f"sc_rail_{idx}"
-        rail_cfg = task_board_cfg.get(rail_key, {})
-        if not bool(rail_cfg.get("entity_present", False)):
-            LOGGER.info("Gazebo parity: %s not present; hiding %s.", rail_key, scene_name)
-            getattr(env_cfg.scene, scene_name).init_state.pos = hidden_pos
-            getattr(env_cfg.scene, scene_name).init_state.rot = identity_quat
-            continue
-        pose = rail_cfg.get("entity_pose", {})
-        trans = -float(pose.get("translation", 0.0))
-        roll = float(pose.get("roll", 0.0))
-        pitch = float(pose.get("pitch", 0.0))
-        yaw = float(pose.get("yaw", 0.0))
-        ax, ay, az = sc_anchor_local[idx]
-        local_pos = (ax + trans, ay, az)
-        local_delta_quat = _quat_from_rpy(roll, pitch, yaw)
-        local_quat = _quat_normalize(_quat_mul(sc_base_local_quat[idx], local_delta_quat))
-        part_pos, part_quat = _compose_local_pose(board_pos_is, board_quat_is, local_pos, (0.0, 0.0, 0.0))
-        part_quat = _quat_normalize(_quat_mul(board_quat_is, local_quat))
-        if scene_name == "sc_port":
-            part_pos, part_quat = _apply_world_xy_yaw_offset(
-                part_pos,
-                part_quat,
-                args_cli.sc_port_offset_x,
-                args_cli.sc_port_offset_y,
-                args_cli.sc_port_offset_yaw,
-            )
-        else:
-            part_pos, part_quat = _apply_world_xy_yaw_offset(
-                part_pos,
-                part_quat,
-                args_cli.sc_port_2_offset_x,
-                args_cli.sc_port_2_offset_y,
-                args_cli.sc_port_2_offset_yaw,
-            )
-        getattr(env_cfg.scene, scene_name).init_state.pos = part_pos
-        getattr(env_cfg.scene, scene_name).init_state.rot = part_quat
-        LOGGER.info(
-            "Gazebo parity: %s -> %s world_pos=%s world_quat=%s",
-            rail_key,
-            scene_name,
-            part_pos,
-            part_quat,
-        )
-
-    # NIC card mount pose in Gazebo is rail-relative.
-    nic_idx = _select_target_nic_rail_idx(trial_cfg, task_board_cfg)
-    if nic_idx is not None:
-        rail_key = f"nic_rail_{nic_idx}"
-        rail_cfg = task_board_cfg.get(rail_key, {})
-        pose = rail_cfg.get("entity_pose", {})
-        trans = -float(pose.get("translation", 0.0))
-        roll = float(pose.get("roll", 0.0))
-        pitch = float(pose.get("pitch", 0.0))
-        yaw = float(pose.get("yaw", 0.0))
-        # Isaac-local rail model:
-        # - slot index chooses local y row
-        # - Gazebo NIC rail translation maps to local x (as in task_board xacro)
-        # - x correction is measured from repository xacro vs Isaac center anchor.
-        nic_anchor_local_center = (-0.03235, 0.02329, 0.0743)
-        nic_base_local_quat = _quat_normalize(tuple(float(v) for v in env_cfg.scene.nic_card.init_state.rot))
-        rail_info = _measure_nic_rails_from_xacro()
-        if rail_info is not None:
-            spacing_m, y_by_idx_gz, x_base_gz = rail_info
-            y_by_idx = [
-                nic_anchor_local_center[1] + (2 - i) * spacing_m for i in range(5)
-            ]
-            # Gazebo NIC mount x-base vs Isaac NIC center-anchor x.
-            nic_local_x_correction = x_base_gz - nic_anchor_local_center[0]
-            LOGGER.info(
-                "Gazebo parity: measured NIC rails from xacro spacing=%.5f y_gz=%s x_base=%.6f -> local_x_correction=%.6f",
-                spacing_m,
-                y_by_idx_gz,
-                x_base_gz,
-                nic_local_x_correction,
-            )
-        else:
-            y_by_idx = [0.10329, 0.06329, 0.02329, -0.01671, -0.05671]
-            nic_local_x_correction = 0.0
-            spacing_m = 0.04
-            LOGGER.warning(
-                "Gazebo parity: could not measure NIC rails from xacro; using fallback y rails and x correction 0.0"
-            )
-        nic_pos_y_shift = 2.0 * spacing_m
-        local_pos = (
-            nic_anchor_local_center[0] + nic_local_x_correction + trans,
-            y_by_idx[nic_idx] + nic_pos_y_shift,
-            nic_anchor_local_center[2],
-        )
-        local_delta_quat = _quat_from_rpy(roll, pitch, yaw)
-        local_quat = _quat_normalize(_quat_mul(nic_base_local_quat, local_delta_quat))
-        nic_pos, nic_quat = _compose_local_pose(board_pos_is, board_quat_is, local_pos, (0.0, 0.0, 0.0))
-        nic_quat = _quat_normalize(_quat_mul(board_quat_is, local_quat))
-        nic_pos, nic_quat = _apply_world_xy_yaw_offset(
-            nic_pos,
-            nic_quat,
-            args_cli.nic_card_offset_x,
-            args_cli.nic_card_offset_y,
-            args_cli.nic_card_offset_yaw,
-        )
-        env_cfg.scene.nic_card.init_state.pos = nic_pos
-        env_cfg.scene.nic_card.init_state.rot = nic_quat
-        LOGGER.info(
-            "Gazebo parity: nic_rail_%d -> nic_card world_pos=%s world_quat=%s",
-            nic_idx,
-            nic_pos,
-            nic_quat,
-        )
-    else:
-        LOGGER.info("Gazebo parity: no present nic_rail_* found for trial; hiding nic_card.")
-        env_cfg.scene.nic_card.init_state.pos = hidden_pos
-        env_cfg.scene.nic_card.init_state.rot = identity_quat
-
-    # Use official robot home joint positions when provided.
-    robot_cfg = config_root.get("robot", {})
-    # Match Gazebo robot spawn arguments from aic_gz_bringup.launch.py, then
-    # map through Gazebo->Isaac world transform so robot remains above workcell.
-    robot_pos_gz = (-0.2, 0.2, 1.14)
-    robot_rpy_gz = (0.0, 0.0, -3.141)
-    robot_pos_is, robot_rpy_is = _transform_gazebo_world_to_isaac(robot_pos_gz, robot_rpy_gz)
-    robot_quat_is = _quat_from_rpy(*robot_rpy_is)
-    robot_pos_is, robot_quat_is = _apply_world_xy_yaw_offset(
-        robot_pos_is,
-        robot_quat_is,
-        args_cli.robot_offset_x,
-        args_cli.robot_offset_y,
-        args_cli.robot_offset_yaw,
-    )
-    env_cfg.scene.robot.init_state.pos = robot_pos_is
-    env_cfg.scene.robot.init_state.rot = robot_quat_is
-    LOGGER.info(
-        "Gazebo parity: robot spawn gz_pos=%s gz_rpy=%s -> isaac_pos=%s isaac_rpy=%s",
-        robot_pos_gz,
-        robot_rpy_gz,
-        robot_pos_is,
-        robot_rpy_is,
-    )
-    home_joint_positions = robot_cfg.get("home_joint_positions")
-    if isinstance(home_joint_positions, dict):
-        env_cfg.scene.robot.init_state.joint_pos = {
-            str(k): float(v) for k, v in home_joint_positions.items()
+    def _setup_sc_ports(self, task_board_cfg, board_pos_is, board_quat_is):
+        sc_anchors = {0: (0.0067, -0.0362, 0.005), 1: (0.0076, -0.0783, 0.005)}
+        sc_quats = {
+            0: QuatMath.normalize(tuple(self.env_cfg.scene.sc_port.init_state.rot)),
+            1: QuatMath.normalize(tuple(self.env_cfg.scene.sc_port_2.init_state.rot)),
         }
 
-    LOGGER.info(
-        "Applied Gazebo parity from %s (%s): board_pos_gz=%s board_pos_isaac=%s",
-        config_path,
-        args_cli.gazebo_trial_id,
-        board_pos_gz,
-        board_pos_is,
-    )
+        for idx, scene_name in ((0, "sc_port"), (1, "sc_port_2")):
+            rail_cfg = task_board_cfg.get(f"sc_rail_{idx}", {})
+            if not rail_cfg.get("entity_present", False):
+                getattr(self.env_cfg.scene, scene_name).init_state.pos = self.hidden_pos
+                getattr(self.env_cfg.scene, scene_name).init_state.rot = self.identity_quat
+                continue
+
+            pose = rail_cfg.get("entity_pose", {})
+            local_pos = (sc_anchors[idx][0] - pose.get("translation", 0.0), sc_anchors[idx][1], sc_anchors[idx][2])
+            local_quat = QuatMath.normalize(QuatMath.mul(sc_quats[idx], QuatMath.from_rpy(pose.get("roll", 0.0), pose.get("pitch", 0.0), pose.get("yaw", 0.0))))
+            
+            part_pos, _ = self._compose_pose(board_pos_is, board_quat_is, local_pos, (0.0, 0.0, 0.0))
+            part_quat = QuatMath.normalize(QuatMath.mul(board_quat_is, local_quat))
+            
+            dx, dy, dyaw = (self.args.sc_port_offset_x, self.args.sc_port_offset_y, self.args.sc_port_offset_yaw) if idx == 0 else \
+                           (self.args.sc_port_2_offset_x, self.args.sc_port_2_offset_y, self.args.sc_port_2_offset_yaw)
+            
+            part_pos, part_quat = self._apply_offset(part_pos, part_quat, dx, dy, dyaw)
+            getattr(self.env_cfg.scene, scene_name).init_state.pos = part_pos
+            getattr(self.env_cfg.scene, scene_name).init_state.rot = part_quat
+
+    def _setup_nic_card(self, trial_cfg, task_board_cfg, board_pos_is, board_quat_is):
+        nic_idx = self._get_nic_idx(trial_cfg, task_board_cfg)
+        if nic_idx is None:
+            self.env_cfg.scene.nic_card.init_state.pos = self.hidden_pos
+            self.env_cfg.scene.nic_card.init_state.rot = self.identity_quat
+            return
+
+        rail_cfg = task_board_cfg.get(f"nic_rail_{nic_idx}", {})
+        pose = rail_cfg.get("entity_pose", {})
+        
+        # Hardcoded fallback logic wrapped cleanly
+        nic_anchor_center = (-0.03235, 0.02329, 0.0743)
+        nic_base_quat = QuatMath.normalize(tuple(self.env_cfg.scene.nic_card.init_state.rot))
+        spacing_m, nic_local_x_correction = 0.04, 0.0
+        y_by_idx = [0.10329, 0.06329, 0.02329, -0.01671, -0.05671]
+
+        local_pos = (
+            nic_anchor_center[0] + nic_local_x_correction - pose.get("translation", 0.0),
+            y_by_idx[nic_idx] + (2.0 * spacing_m),
+            nic_anchor_center[2],
+        )
+        local_delta_quat = QuatMath.from_rpy(pose.get("roll", 0.0), pose.get("pitch", 0.0), pose.get("yaw", 0.0))
+        local_quat = QuatMath.normalize(QuatMath.mul(nic_base_quat, local_delta_quat))
+        
+        nic_pos, _ = self._compose_pose(board_pos_is, board_quat_is, local_pos, (0.0, 0.0, 0.0))
+        nic_quat = QuatMath.normalize(QuatMath.mul(board_quat_is, local_quat))
+        nic_pos, nic_quat = self._apply_offset(nic_pos, nic_quat, self.args.nic_card_offset_x, self.args.nic_card_offset_y, self.args.nic_card_offset_yaw)
+
+        self.env_cfg.scene.nic_card.init_state.pos = nic_pos
+        self.env_cfg.scene.nic_card.init_state.rot = nic_quat
+
+    def _get_nic_idx(self, trial_cfg, task_board_cfg) -> Optional[int]:
+        target_name = str(trial_cfg.get("tasks", {}).get("task_1", {}).get("target_module_name", ""))
+        if target_name.startswith("nic_card_mount_"):
+            idx = int(target_name.replace("nic_card_mount_", ""))
+            if task_board_cfg.get(f"nic_rail_{idx}", {}).get("entity_present", False):
+                return idx
+        for i in range(5):
+            if task_board_cfg.get(f"nic_rail_{i}", {}).get("entity_present", False):
+                return i
+        return None
+
+    def _setup_robot(self, robot_cfg):
+        pos_is, rpy_is = self._transform_world((-0.2, 0.2, 1.14), (0.0, 0.0, -3.141))
+        robot_pos, robot_quat = self._apply_offset(pos_is, QuatMath.from_rpy(*rpy_is), self.args.robot_offset_x, self.args.robot_offset_y, self.args.robot_offset_yaw)
+        self.env_cfg.scene.robot.init_state.pos = robot_pos
+        self.env_cfg.scene.robot.init_state.rot = robot_quat
+
+        home_joints = robot_cfg.get("home_joint_positions")
+        if isinstance(home_joints, dict):
+            self.env_cfg.scene.robot.init_state.joint_pos = {str(k): float(v) for k, v in home_joints.items()}
 
 
-def _apply_gazebo_physics_match(env_cfg: Any) -> None:
-    # Gazebo world uses 2 ms Bullet Featherstone physics steps (500 Hz).
+# =============================================================================
+# GUARDED INSERTION MONITOR
+# =============================================================================
+class GuardedInsertionMonitor:
+    def __init__(self, args):
+        self.args = args
+        self.history = deque(maxlen=max(16, int(math.ceil(max(args.force_l2_horizon_sec, args.stall_window_sec) / 0.016)) + 8))
+        self.baseline_fz = None
+        self.triggered = False
+        self.stop_reason = ""
+        self.delta_force_out = None
+
+    def update(self, time_s: float, force_xyz: np.ndarray, tcp_z: float):
+        if self.baseline_fz is None:
+            self.baseline_fz = float(force_xyz[2])
+        self.history.append((time_s, force_xyz, tcp_z))
+        self._check_guard()
+
+    def _median_force(self, samples) -> Optional[np.ndarray]:
+        vectors = [s[1] for s in samples if s[1] is not None]
+        return np.median(np.stack(vectors[-self.args.force_median_samples:]), axis=0) if len(vectors) >= self.args.force_median_samples else None
+
+    def _check_guard(self):
+        if len(self.history) < 2 or self.triggered: return
+        latest_time, latest_force, latest_z = self.history[-1]
+        fz = float(latest_force[2])
+
+        # 1. Absolute Threshold
+        if abs(fz - self.baseline_fz) >= self.args.force_backoff_threshold_n:
+            self._trigger("force_abs_delta", np.array([0.0, 0.0, max(0.0, fz - self.baseline_fz)], dtype=np.float64))
+            return
+
+        # 2. L2 Drop Threshold
+        if len(self.history) >= 2 * self.args.force_median_samples:
+            current = self._median_force(list(self.history))
+            prev_candidates = [s for s in self.history if s[0] <= latest_time - self.args.force_l2_horizon_sec]
+            previous = self._median_force(prev_candidates)
+            if current is not None and previous is not None:
+                delta = previous - current
+                if float(np.linalg.norm(delta)) > self.args.force_l2_drop_threshold_n:
+                    self._trigger("force_l2_drop", delta)
+                    return
+
+        # 3. Z Delta Threshold
+        if abs(fz - self.baseline_fz) >= self.args.force_z_delta_threshold_n:
+            self._trigger("force_z_delta", np.array([0.0, 0.0, max(0.0, fz - self.baseline_fz)], dtype=np.float64))
+            return
+
+        # 4. Stall Detection
+        window = [s for s in self.history if latest_time - s[0] <= self.args.stall_window_sec]
+        if len(window) >= 2 and latest_time > window[0][0]:
+            z_descent = float(window[0][2] - latest_z)
+            force_rise = fz - min(float(s[1][2]) for s in window)
+            if z_descent <= self.args.stall_max_descent_m and force_rise >= self.args.stall_force_rise_n:
+                self._trigger("stall", np.array([0.0, 0.0, 1.0], dtype=np.float64))
+
+    def _trigger(self, reason: str, delta: np.ndarray):
+        self.triggered = True
+        self.stop_reason = reason
+        self.delta_force_out = delta
+
+    def get_backoff_cmd(self, steps: int) -> Tuple[float, float, float]:
+        direction = np.asarray(self.delta_force_out, dtype=np.float64)
+        norm = float(np.linalg.norm(direction))
+        direction = np.array([0.0, 0.0, 1.0]) if norm <= 1.0e-9 else direction / (norm + 1.0e-6)
+        
+        direction[0] *= self.args.force_direction_xy_scale
+        direction[1] *= self.args.force_direction_xy_scale
+        if direction[2] < 0.0: direction[2] = abs(direction[2])
+        
+        norm = float(np.linalg.norm(direction))
+        if norm > 1.0e-9: direction /= norm
+        
+        return (
+            self.args.backoff_m * float(direction[0]) / steps,
+            self.args.backoff_m * float(direction[1]) / steps,
+            self.args.backoff_m * float(direction[2]) / steps
+        )
+
+
+# =============================================================================
+# DATA LOGGER
+# =============================================================================
+class TrajectoryLogger:
+    def __init__(
+        self,
+        out_path: str,
+        task_meta: dict,
+        target_port_root: str,
+        target_port_rigid: str,
+        initial_tcp_pose_b: np.ndarray,
+        initial_gripper_pose_b: np.ndarray,
+    ):
+        self.out_path = Path(out_path).expanduser()
+        self.task_meta = task_meta
+        self.target_port_root = target_port_root
+        self.target_port_rigid = target_port_rigid
+        self.initial_tcp_pose_b = initial_tcp_pose_b
+        self.initial_gripper_pose_b = initial_gripper_pose_b
+        self.rows = []
+        self.headers = [
+            "time_s", "step", "phase", "cmd_x_norm", "cmd_y_norm", "cmd_z_norm",
+            "cmd_x_m", "cmd_y_m", "cmd_z_m", "force_x_n", "force_y_n", "force_z_n",
+            "torque_x_nm", "torque_y_nm", "torque_z_nm", "ee_x_m", "ee_y_m", "ee_z_m",
+            "ee_qw", "ee_qx", "ee_qy", "ee_qz", "target_module_name", "port_name",
+            "plug_name", "cable_name", "cable_type", "guarded_stop_reason",
+            "port_x_in_base_m", "port_y_in_base_m", "port_z_in_base_m", "tcp_z_in_base_m",
+            "target_port_x_b_m", "target_port_y_b_m", "target_port_z_b_m",
+            "target_port_root_prim", "target_port_rigid_prim",
+            "initial_tcp_x_b_m", "initial_tcp_y_b_m", "initial_tcp_z_b_m", "initial_tcp_qw_b", "initial_tcp_qx_b", "initial_tcp_qy_b", "initial_tcp_qz_b",
+            "initial_gripper_x_b_m", "initial_gripper_y_b_m", "initial_gripper_z_b_m", "initial_gripper_qw_b", "initial_gripper_qx_b", "initial_gripper_qy_b", "initial_gripper_qz_b",
+            "target_x_b_m", "target_y_b_m", "target_z_b_m", "target_qw_b", "target_qx_b", "target_qy_b", "target_qz_b",
+            "tcp_x_b_m", "tcp_y_b_m", "tcp_z_b_m", "tcp_qw_b", "tcp_qx_b", "tcp_qy_b", "tcp_qz_b",
+            "tcp_target_rot_err_x_rad", "tcp_target_rot_err_y_rad", "tcp_target_rot_err_z_rad", "tcp_target_rot_err_angle_rad",
+            "gripper_x_b_m", "gripper_y_b_m", "gripper_z_b_m", "gripper_qw_b", "gripper_qx_b", "gripper_qy_b", "gripper_qz_b",
+            "plug_x_b_m", "plug_y_b_m", "plug_z_b_m", "plug_qw_b", "plug_qx_b", "plug_qy_b", "plug_qz_b",
+        ]
+        # Write-through mode: ensure file exists even on abrupt interruptions.
+        self.out_path.parent.mkdir(parents=True, exist_ok=True)
+        with self.out_path.open("w", newline="", encoding="utf-8") as f:
+            writer = csv.writer(f)
+            writer.writerow(self.headers)
+
+    def record(
+        self,
+        step_dt,
+        step,
+        phase,
+        cmds,
+        cmds_m,
+        wrench,
+        ee_pose,
+        reason,
+        port_rel,
+        tcp_z,
+        target_pose_b,
+        tcp_pose_b,
+        tcp_target_rot_err_b,
+        gripper_pose_b,
+        plug_pose_b,
+    ):
+        row = [
+            f"{step * step_dt:.6f}", str(step), phase,
+            f"{cmds[0]:.8f}", f"{cmds[1]:.8f}", f"{cmds[2]:.8f}",
+            f"{cmds_m[0]:.8f}", f"{cmds_m[1]:.8f}", f"{cmds_m[2]:.8f}",
+            f"{wrench[0]:.8f}", f"{wrench[1]:.8f}", f"{wrench[2]:.8f}",
+            f"{wrench[3]:.8f}", f"{wrench[4]:.8f}", f"{wrench[5]:.8f}",
+            f"{ee_pose[0]:.8f}", f"{ee_pose[1]:.8f}", f"{ee_pose[2]:.8f}",
+            f"{ee_pose[3]:.8f}", f"{ee_pose[4]:.8f}", f"{ee_pose[5]:.8f}", f"{ee_pose[6]:.8f}",
+            self.task_meta["target_module_name"], self.task_meta["port_name"],
+            self.task_meta["plug_name"], self.task_meta["cable_name"], self.task_meta["cable_type"],
+            reason, f"{port_rel[0]:.8f}", f"{port_rel[1]:.8f}", f"{port_rel[2]:.8f}", f"{tcp_z:.8f}",
+            f"{port_rel[0]:.8f}", f"{port_rel[1]:.8f}", f"{port_rel[2]:.8f}",
+            self.target_port_root, self.target_port_rigid,
+            f"{self.initial_tcp_pose_b[0]:.8f}", f"{self.initial_tcp_pose_b[1]:.8f}", f"{self.initial_tcp_pose_b[2]:.8f}",
+            f"{self.initial_tcp_pose_b[3]:.8f}", f"{self.initial_tcp_pose_b[4]:.8f}", f"{self.initial_tcp_pose_b[5]:.8f}", f"{self.initial_tcp_pose_b[6]:.8f}",
+            f"{self.initial_gripper_pose_b[0]:.8f}", f"{self.initial_gripper_pose_b[1]:.8f}", f"{self.initial_gripper_pose_b[2]:.8f}",
+            f"{self.initial_gripper_pose_b[3]:.8f}", f"{self.initial_gripper_pose_b[4]:.8f}", f"{self.initial_gripper_pose_b[5]:.8f}", f"{self.initial_gripper_pose_b[6]:.8f}",
+            f"{target_pose_b[0]:.8f}", f"{target_pose_b[1]:.8f}", f"{target_pose_b[2]:.8f}",
+            f"{target_pose_b[3]:.8f}", f"{target_pose_b[4]:.8f}", f"{target_pose_b[5]:.8f}", f"{target_pose_b[6]:.8f}",
+            f"{tcp_pose_b[0]:.8f}", f"{tcp_pose_b[1]:.8f}", f"{tcp_pose_b[2]:.8f}",
+            f"{tcp_pose_b[3]:.8f}", f"{tcp_pose_b[4]:.8f}", f"{tcp_pose_b[5]:.8f}", f"{tcp_pose_b[6]:.8f}",
+            f"{tcp_target_rot_err_b[0]:.8f}", f"{tcp_target_rot_err_b[1]:.8f}", f"{tcp_target_rot_err_b[2]:.8f}",
+            f"{float(np.linalg.norm(tcp_target_rot_err_b)):.8f}",
+            f"{gripper_pose_b[0]:.8f}", f"{gripper_pose_b[1]:.8f}", f"{gripper_pose_b[2]:.8f}",
+            f"{gripper_pose_b[3]:.8f}", f"{gripper_pose_b[4]:.8f}", f"{gripper_pose_b[5]:.8f}", f"{gripper_pose_b[6]:.8f}",
+            f"{plug_pose_b[0]:.8f}", f"{plug_pose_b[1]:.8f}", f"{plug_pose_b[2]:.8f}",
+            f"{plug_pose_b[3]:.8f}", f"{plug_pose_b[4]:.8f}", f"{plug_pose_b[5]:.8f}", f"{plug_pose_b[6]:.8f}",
+        ]
+        self.rows.append(row)
+        with self.out_path.open("a", newline="", encoding="utf-8") as f:
+            writer = csv.writer(f)
+            writer.writerow(row)
+
+    def save(self):
+        self.out_path.parent.mkdir(parents=True, exist_ok=True)
+        with self.out_path.open("w", newline="", encoding="utf-8") as f:
+            writer = csv.writer(f)
+            writer.writerow(self.headers)
+            writer.writerows(self.rows)
+
+    def save_force_analysis_png(self, png_path: Optional[str] = None):
+        if len(self.rows) == 0:
+            return None
+        try:
+            import matplotlib.pyplot as plt
+        except Exception:
+            LOGGER.warning("matplotlib is not available; skipping force analysis PNG generation.")
+            return None
+
+        col = {name: idx for idx, name in enumerate(self.headers)}
+        t = [float(r[col["time_s"]]) for r in self.rows]
+        fx = [float(r[col["force_x_n"]]) for r in self.rows]
+        fy = [float(r[col["force_y_n"]]) for r in self.rows]
+        fz = [float(r[col["force_z_n"]]) for r in self.rows]
+        tx = [float(r[col["torque_x_nm"]]) for r in self.rows]
+        ty = [float(r[col["torque_y_nm"]]) for r in self.rows]
+        tz = [float(r[col["torque_z_nm"]]) for r in self.rows]
+
+        out_path = Path(png_path).expanduser() if png_path else self.out_path.with_suffix(".force_analysis.png")
+        out_path.parent.mkdir(parents=True, exist_ok=True)
+
+        fig, axes = plt.subplots(2, 1, figsize=(14, 8), sharex=True)
+        axes[0].plot(t, fx, label="Fx [N]", linewidth=1.0)
+        axes[0].plot(t, fy, label="Fy [N]", linewidth=1.0)
+        axes[0].plot(t, fz, label="Fz [N]", linewidth=1.0)
+        axes[0].set_ylabel("Force [N]")
+        axes[0].grid(True, alpha=0.3)
+        axes[0].legend(loc="upper right")
+
+        axes[1].plot(t, tx, label="Tx [Nm]", linewidth=1.0)
+        axes[1].plot(t, ty, label="Ty [Nm]", linewidth=1.0)
+        axes[1].plot(t, tz, label="Tz [Nm]", linewidth=1.0)
+        axes[1].set_xlabel("Time [s]")
+        axes[1].set_ylabel("Torque [Nm]")
+        axes[1].grid(True, alpha=0.3)
+        axes[1].legend(loc="upper right")
+
+        fig.suptitle("Force / Torque vs Time")
+        fig.tight_layout()
+        fig.savefig(out_path, dpi=150)
+        plt.close(fig)
+        return out_path
+
+
+# =============================================================================
+# ENVIRONMENT HELPERS
+# =============================================================================
+def configure_physics(env_cfg, args):
+    if args.no_match_gazebo_physics: return
     env_cfg.sim.dt = 0.002
     env_cfg.decimation = 1
     env_cfg.sim.render_interval = 1
-    if hasattr(env_cfg.sim, "gravity"):
-        env_cfg.sim.gravity = (0.0, 0.0, -9.8)
-    physx_cfg = getattr(env_cfg.sim, "physx", None)
-    if physx_cfg is not None and hasattr(physx_cfg, "solver_type"):
-        # PGS is closer in behavior to non-TGS schemes than PhysX TGS.
-        physx_cfg.solver_type = 0
-    LOGGER.info(
-        "Applied Gazebo physics match: dt=%s decimation=%s render_interval=%s gravity=%s physx.solver_type=%s",
-        getattr(env_cfg.sim, "dt", None),
-        getattr(env_cfg, "decimation", None),
-        getattr(env_cfg.sim, "render_interval", None),
-        getattr(env_cfg.sim, "gravity", None),
-        getattr(getattr(env_cfg.sim, "physx", None), "solver_type", None),
+    if hasattr(env_cfg.sim, "gravity"): env_cfg.sim.gravity = (0.0, 0.0, -9.8)
+    if hasattr(env_cfg.sim, "physx") and hasattr(env_cfg.sim.physx, "solver_type"):
+        env_cfg.sim.physx.solver_type = 0
+
+def clear_randomization(env_cfg):
+    term = getattr(getattr(env_cfg, "events", None), "randomize_board_and_parts", None)
+    if term and hasattr(term, "params"):
+        term.params["board_range"] = {"x": (0.0, 0.0), "y": (0.0, 0.0)}
+        for p in term.params.get("parts", []):
+            if isinstance(p, dict):
+                p["pose_range"] = {}
+                p.pop("snap_step", None)
+
+
+def _quat_conj_wxyz(q: torch.Tensor) -> torch.Tensor:
+    return torch.stack((q[0], -q[1], -q[2], -q[3]))
+
+
+def _quat_mul_wxyz(q1: torch.Tensor, q2: torch.Tensor) -> torch.Tensor:
+    w1, x1, y1, z1 = q1
+    w2, x2, y2, z2 = q2
+    return torch.stack(
+        (
+            w1 * w2 - x1 * x2 - y1 * y2 - z1 * z2,
+            w1 * x2 + x1 * w2 + y1 * z2 - z1 * y2,
+            w1 * y2 - x1 * z2 + y1 * w2 + z1 * x2,
+            w1 * z2 + x1 * y2 - y1 * x2 + z1 * w2,
+        )
     )
 
 
-def _to_xyz_tuple(value: Any) -> tuple[float, float, float] | str:
-    try:
-        if hasattr(value, "tolist"):
-            value = value.tolist()
-        return (float(value[0]), float(value[1]), float(value[2]))
-    except Exception:
-        return str(value)
+def _quat_norm_wxyz(q: torch.Tensor) -> torch.Tensor:
+    return q / torch.clamp(torch.linalg.norm(q), min=1.0e-9)
 
 
-def _log_scene_profile_snapshot(env_cfg: Any, env: Any) -> None:
-    for key in ("task_board", "sc_port", "sc_port_2", "nic_card"):
-        cfg_pos = None
-        cfg_rot = None
+def _quat_to_rotvec_wxyz(q: torch.Tensor) -> torch.Tensor:
+    qn = _quat_norm_wxyz(q)
+    if qn[0] < 0.0:
+        qn = -qn
+    w = torch.clamp(qn[0], -1.0, 1.0)
+    angle = 2.0 * torch.acos(w)
+    s = torch.sqrt(torch.clamp(1.0 - w * w, min=0.0))
+    if float(s.item()) < 1.0e-6:
+        return torch.zeros(3, device=qn.device, dtype=qn.dtype)
+    axis = qn[1:4] / s
+    return axis * angle
+
+
+def _quat_apply_wxyz(q: torch.Tensor, v: torch.Tensor) -> torch.Tensor:
+    v_quat = torch.stack((torch.tensor(0.0, device=v.device, dtype=v.dtype), v[0], v[1], v[2]))
+    out = _quat_mul_wxyz(_quat_mul_wxyz(q, v_quat), _quat_conj_wxyz(q))
+    return out[1:4]
+
+
+def _get_prim_pose_world_wxyz(stage, prim_path: str) -> tuple[np.ndarray, np.ndarray]:
+    from pxr import UsdGeom
+    prim = stage.GetPrimAtPath(prim_path)
+    if not prim.IsValid():
+        raise RuntimeError(f"Prim does not exist: {prim_path}")
+    xf = UsdGeom.Xformable(prim)
+    m = xf.ComputeLocalToWorldTransform(0.0)
+    t = m.ExtractTranslation()
+    q = m.ExtractRotationQuat()
+    # pxr returns imaginary + real; convert to wxyz
+    pos = np.array([float(t[0]), float(t[1]), float(t[2])], dtype=np.float64)
+    quat = np.array([float(q.GetReal()), float(q.GetImaginary()[0]), float(q.GetImaginary()[1]), float(q.GetImaginary()[2])], dtype=np.float64)
+    return pos, quat
+
+
+def _world_pose_to_base_pose(
+    target_pos_w: torch.Tensor,
+    target_quat_w: torch.Tensor,
+    base_pos_w: torch.Tensor,
+    base_quat_w: torch.Tensor,
+) -> tuple[torch.Tensor, torch.Tensor]:
+    base_quat_conj = _quat_conj_wxyz(base_quat_w)
+    pos_rel_w = target_pos_w - base_pos_w
+    pos_rel_b = _quat_apply_wxyz(base_quat_conj, pos_rel_w)
+    quat_rel_b = _quat_norm_wxyz(_quat_mul_wxyz(base_quat_conj, target_quat_w))
+    return pos_rel_b, quat_rel_b
+
+def init_transformer(task_meta: dict, args):
+    from isaaclab.sensors import FrameTransformer
+    from isaaclab.sensors.frame_transformer.frame_transformer_cfg import FrameTransformerCfg
+    from omni.usd import get_context
+
+    stage = get_context().get_stage()
+
+    def resolve_first_named(base_path: str, name: str) -> str:
+        base = stage.GetPrimAtPath(base_path)
+        if not base.IsValid():
+            raise RuntimeError(f"Prim does not exist: {base_path}")
+        queue = [base]
+        while queue:
+            prim = queue.pop(0)
+            if prim.GetName() == name:
+                return str(prim.GetPath())
+            queue.extend(list(prim.GetChildren()))
+        raise RuntimeError(f"Could not resolve prim '{name}' under {base_path}")
+
+    def resolve_first_rigid(base_path: str) -> str:
+        base = stage.GetPrimAtPath(base_path)
+        if not base.IsValid():
+            raise RuntimeError(f"Prim does not exist: {base_path}")
+        queue = [base]
+        while queue:
+            prim = queue.pop(0)
+            # avoid pxr dependency: rigid bodies expose this schema attr when authored
+            attr = prim.GetAttribute("physics:rigidBodyEnabled")
+            if attr.IsValid():
+                return str(prim.GetPath())
+            queue.extend(list(prim.GetChildren()))
+        raise RuntimeError(f"Could not resolve rigid body under {base_path}")
+
+    def resolve_plug(robot_root: str) -> str:
+        hint = str(task_meta.get("plug_name", "")).lower()
+        candidates = ["sc_plug_link", "lc_plug_link"] if "sc" in hint else ["lc_plug_link", "sc_plug_link"]
+        for c in candidates:
+            try:
+                return resolve_first_named(robot_root, c)
+            except RuntimeError:
+                continue
+        raise RuntimeError(f"Could not resolve plug link under {robot_root}")
+
+    def resolve_named_prim_under(base_path: str, name_hint: str) -> Optional[str]:
+        base = stage.GetPrimAtPath(base_path)
+        if not base.IsValid():
+            return None
+        name_hint = name_hint.lower()
+        exact_match = None
+        contains_match = None
+        queue = [base]
+        while queue:
+            prim = queue.pop(0)
+            prim_name = prim.GetName().lower()
+            if prim_name == name_hint:
+                exact_match = str(prim.GetPath())
+                break
+            if contains_match is None and name_hint in prim_name:
+                contains_match = str(prim.GetPath())
+            queue.extend(list(prim.GetChildren()))
+        return exact_match or contains_match
+
+    def resolve_port_root() -> str:
+        target_module = str(task_meta.get("target_module_name", "")).lower()
+        port_name = str(task_meta.get("port_name", "")).lower()
+        if "nic_card" in target_module or "sfp" in port_name:
+            nic_root = "/World/envs/env_0/nic_card"
+            matched = resolve_named_prim_under(nic_root, port_name)
+            if matched is not None:
+                LOGGER.info("Resolved NIC target port by name: port_name='%s' -> '%s'", port_name, matched)
+                return matched
+            LOGGER.warning(
+                "Could not resolve port_name='%s' under '%s'. Falling back to NIC root; targeting may be wrong.",
+                port_name,
+                nic_root,
+            )
+            return nic_root
+        if "sc" in port_name:
+            return "/World/envs/env_0/sc_port"
+        if "lc" in port_name:
+            return "/World/envs/env_0/lc_port"
+        raise ValueError(f"Unknown target port mapping for {target_module}/{port_name}")
+
+    robot_root = "/World/envs/env_0/Robot"
+    base_link = resolve_first_named(robot_root, "base_link")
+    tcp_candidates = [args.tcp_frame_name]
+    if args.allow_tcp_fallback_to_wrist and args.tcp_frame_name != "wrist_3_link":
+        tcp_candidates.append("wrist_3_link")
+    tcp_link = None
+    for candidate in tcp_candidates:
         try:
-            cfg_obj = getattr(env_cfg.scene, key)
-            cfg_pos = _to_xyz_tuple(cfg_obj.init_state.pos)
-            cfg_rot = tuple(float(v) for v in cfg_obj.init_state.rot)
-        except Exception:
-            cfg_pos = "unavailable"
-            cfg_rot = "unavailable"
-
-        live_pos = None
-        live_rot = None
-        try:
-            obj = env.scene[key]
-            live_pos = _to_xyz_tuple(obj.data.root_pos_w[0, :3])
-            live_rot = tuple(float(v) for v in obj.data.root_quat_w[0, :4].tolist())
-        except Exception:
-            live_pos = "unavailable"
-            live_rot = "unavailable"
-
-        LOGGER.info(
-            "Scene profile '%s': cfg_init_pos=%s cfg_init_rot=%s live_root_pos=%s live_root_rot=%s",
-            key,
-            cfg_pos,
-            cfg_rot,
-            live_pos,
-            live_rot,
+            tcp_link = resolve_first_named(robot_root, candidate)
+            break
+        except RuntimeError:
+            continue
+    if tcp_link is None:
+        raise RuntimeError(
+            f"Could not resolve TCP frame under {robot_root}. Tried: {tcp_candidates}"
         )
+    ee_gripper = resolve_first_named(robot_root, "gripper_tcp")
+    plug_link = resolve_plug(robot_root)
+    port_root = resolve_port_root()
+    port_rigid = None
+    use_usd_port_pose = False
+    try:
+        port_rigid = resolve_first_rigid(port_root)
+    except RuntimeError:
+        use_usd_port_pose = True
+        LOGGER.warning(
+            "Resolved port prim '%s' is non-rigid. Using USD world pose lookup for port target frame.",
+            port_root,
+        )
+    nic_rigid = resolve_first_rigid("/World/envs/env_0/nic_card")
+
+    target_frames = [
+        FrameTransformerCfg.FrameCfg(name="base_self", prim_path=base_link),
+        FrameTransformerCfg.FrameCfg(name="tcp", prim_path=tcp_link),
+        FrameTransformerCfg.FrameCfg(name="ee_gripper", prim_path=ee_gripper),
+        FrameTransformerCfg.FrameCfg(name="plug", prim_path=plug_link),
+        FrameTransformerCfg.FrameCfg(name="nic_card_port", prim_path=nic_rigid),
+    ]
+    if port_rigid is not None:
+        target_frames.append(FrameTransformerCfg.FrameCfg(name="port", prim_path=port_rigid))
+
+    cfg = FrameTransformerCfg(
+        prim_path=base_link,
+        target_frames=target_frames,
+    )
+    transformer = FrameTransformer(cfg)
+    if not transformer.is_initialized: transformer._initialize_impl()
+    LOGGER.info(
+        "FrameTransformer init: base=%s tcp=%s ee_gripper=%s plug=%s port_root=%s port_rigid=%s use_usd_port_pose=%s",
+        base_link,
+        tcp_link,
+        ee_gripper,
+        plug_link,
+        port_root,
+        port_rigid,
+        use_usd_port_pose,
+    )
+    return transformer, stage, port_root, port_rigid, tcp_link, use_usd_port_pose
 
 
-def main() -> None:
-    _setup_logging()
-    LOGGER.info("Starting cheatcode_modified_eval.")
-    LOGGER.info("CLI args: %s", vars(args_cli))
+# =============================================================================
+# MAIN ORCHESTRATION
+# =============================================================================
+def main():
+    logging.basicConfig(level=logging.INFO, format="[%(asctime)s][%(levelname)s] %(message)s", datefmt="%H:%M:%S")
+    args = build_parser().parse_args()
+    if hasattr(args, "enable_cameras"): args.enable_cameras = True
+    
+    app_launcher = AppLauncher(args)
+    simulation_app = app_launcher.app
+    import isaaclab_tasks  # noqa: F401
+    import aic_task.tasks  # noqa: F401
+    from isaaclab_tasks.utils import parse_env_cfg
+
+    task_meta = {k: getattr(args, k) for k in ["target_module_name", "port_name", "plug_name", "cable_name", "cable_type"]}
     env = None
+    logger = None
+    
     try:
-        task_meta = {
-            "target_module_name": str(args_cli.target_module_name),
-            "port_name": str(args_cli.port_name),
-            "plug_name": str(args_cli.plug_name),
-            "cable_name": str(args_cli.cable_name),
-            "cable_type": str(args_cli.cable_type),
-        }
-        LOGGER.info("Task metadata: %s", task_meta)
-        LOGGER.info(
-            "Launcher flags: headless=%s, enable_cameras=%s, device=%s",
-            getattr(args_cli, "headless", None),
-            getattr(args_cli, "enable_cameras", None),
-            getattr(args_cli, "device", None),
-        )
-
-        LOGGER.info("Parsing environment config for task '%s'...", args_cli.task)
-        env_cfg = parse_env_cfg(
-            args_cli.task,
-            device=args_cli.device,
-            num_envs=args_cli.num_envs,
-            use_fabric=not args_cli.disable_fabric,
-        )
-        if not args_cli.no_match_gazebo_physics:
-            _apply_gazebo_physics_match(env_cfg)
-        if args_cli.enable_gazebo_parity:
-            _apply_gazebo_trial_parity(env_cfg)
-        LOGGER.info(
-            "Parsed env cfg: decimation=%s, sim.dt=%s, render_interval=%s",
-            getattr(env_cfg, "decimation", None),
-            getattr(getattr(env_cfg, "sim", None), "dt", None),
-            getattr(env_cfg, "render_interval", None),
-        )
-        LOGGER.info(
-            "Env cfg class: %s.%s (file=%s)",
-            env_cfg.__class__.__module__,
-            env_cfg.__class__.__name__,
-            inspect.getsourcefile(env_cfg.__class__),
-        )
-        LOGGER.info("Action term arm_action: %s", getattr(env_cfg.actions, "arm_action", None))
-        LOGGER.info(
-            "Event terms: reset_robot_joints=%s randomize_light=%s randomize_board_and_parts=%s",
-            getattr(env_cfg.events, "reset_robot_joints", None),
-            getattr(env_cfg.events, "randomize_light", None),
-            getattr(env_cfg.events, "randomize_board_and_parts", None),
-        )
-        _clear_scene_randomization(env_cfg)
-        LOGGER.info("Creating gym environment...")
-        env = gym.make(args_cli.task, cfg=env_cfg).unwrapped
-        LOGGER.info("Environment created. Calling reset()...")
+        # 1. Setup Environment
+        env_cfg = parse_env_cfg(args.task, device=args.device, num_envs=args.num_envs, use_fabric=not args.disable_fabric)
+        configure_physics(env_cfg, args)
+        if args.enable_gazebo_parity: GazeboParityManager(args, env_cfg).apply()
+        clear_randomization(env_cfg)
+        
+        env = gym.make(args.task, cfg=env_cfg).unwrapped
         env.reset()
-        LOGGER.info("Environment reset complete.")
-        _log_scene_profile_snapshot(env_cfg, env)
 
-        robot = env.scene["robot"]
-        LOGGER.info("Robot body names: %s", list(robot.body_names))
-        wrist_idx = _resolve_wrist_index(robot, args_cli.force_log_body)
         step_dt = float(getattr(env, "step_dt", 1.0 / 60.0))
         action_shape = env.action_space.shape
-        if len(action_shape) != 2:
-            raise RuntimeError(f"Expected vectorized action space shape (N, A), got {action_shape}")
-        action_dim = int(action_shape[1])
-
-        if action_dim < 3:
-            raise RuntimeError(
-                f"Expected at least 3 action dims (xyz delta), got {action_dim}"
-            )
-
-        align_steps = max(1, int(round(args_cli.align_seconds / step_dt)))
-        handoff_distance = max(
-            0.0, args_cli.initial_z_offset_m - args_cli.start_descent_z_offset_m
+        scale_m_per_action = 0.05
+        
+        # 2. Setup Tools
+        schedule = TrajectorySchedule(
+            align_steps=max(1, int(round(args.align_seconds / step_dt))),
+            handoff_steps=max(1, int(round(max(args.handoff_min_seconds, max(0.0, args.initial_z_offset_m - args.start_descent_z_offset_m) / args.handoff_speed_mps) / step_dt))),
+            settle_steps=max(1, int(round(args.settle_seconds / step_dt))),
+            insertion_steps=max(1, int(round(max(step_dt, max(0.0, args.start_descent_z_offset_m - args.end_z_offset_m) / args.insertion_speed_mps) / step_dt))),
+            handoff_distance=max(0.0, args.initial_z_offset_m - args.start_descent_z_offset_m),
+            insertion_distance=max(0.0, args.start_descent_z_offset_m - args.end_z_offset_m),
+            misalign_x_m=args.misalign_x_m,
+            misalign_y_m=args.misalign_y_m,
         )
-        handoff_seconds = max(
-            args_cli.handoff_min_seconds,
-            handoff_distance / max(args_cli.handoff_speed_mps, 1.0e-9),
+        
+        total_steps = schedule.align_steps + schedule.handoff_steps + schedule.settle_steps + schedule.insertion_steps + max(1, int(round(args.hold_seconds / step_dt)))
+        if args.validate_frame_transformer_only:
+            total_steps = int(max(1, args.transformer_validate_steps))
+        backoff_steps = max(1, int(round(args.backoff_seconds / step_dt)))
+        
+        frame_transformer, stage, target_port_root, target_port_rigid, resolved_tcp_frame, use_usd_port_pose = init_transformer(task_meta, args)
+        LOGGER.info(
+            "Target port mapping resolved: root='%s' rigid='%s' for target_module='%s' port='%s' tcp_frame='%s'",
+            target_port_root,
+            target_port_rigid,
+            task_meta["target_module_name"],
+            task_meta["port_name"],
+            resolved_tcp_frame,
         )
-        handoff_steps = max(1, int(round(handoff_seconds / step_dt)))
-        settle_steps = max(1, int(round(args_cli.settle_seconds / step_dt)))
-        insertion_distance = max(
-            0.0, args_cli.start_descent_z_offset_m - args_cli.end_z_offset_m
+        frame_names = list(frame_transformer.data.target_frame_names)
+        base_required = ["tcp", "ee_gripper", "plug"]
+        if not use_usd_port_pose:
+            base_required.append("port")
+        frame_idx = {n: frame_names.index(n) for n in base_required}
+        frame_transformer.update(step_dt)
+        init_frames = FrameDebugHelper.sample(frame_transformer, frame_idx)
+        initial_tcp_pose_b = np.concatenate(
+            [init_frames["tcp_pos_b"].detach().cpu().numpy(), init_frames["tcp_quat_b"].detach().cpu().numpy()]
         )
-        insertion_seconds = max(
-            step_dt, insertion_distance / max(args_cli.insertion_speed_mps, 1.0e-9)
+        initial_gripper_pose_b = np.concatenate(
+            [init_frames["ee_gripper_pos_b"].detach().cpu().numpy(), init_frames["ee_gripper_quat_b"].detach().cpu().numpy()]
         )
-        insertion_steps = max(1, int(round(insertion_seconds / step_dt)))
-        hold_steps = max(1, int(round(args_cli.hold_seconds / step_dt)))
-        backoff_steps = max(1, int(round(args_cli.backoff_seconds / step_dt)))
-
-        print(
-            "CheatCodeModified-style schedule "
-            f"(dt={step_dt:.6f}s): align={align_steps}, handoff={handoff_steps}, "
-            f"settle={settle_steps}, insertion={insertion_steps}, hold={hold_steps}"
+        roll_deg = args.tcp_to_port_roll_offset_deg if abs(args.tcp_to_port_roll_offset_deg) > 1.0e-12 else args.tcp_target_roll_offset_deg
+        pitch_deg = args.tcp_to_port_pitch_offset_deg if abs(args.tcp_to_port_pitch_offset_deg) > 1.0e-12 else args.tcp_target_pitch_offset_deg
+        yaw_deg = args.tcp_to_port_yaw_offset_deg if abs(args.tcp_to_port_yaw_offset_deg) > 1.0e-12 else args.tcp_target_yaw_offset_deg
+        roll = math.radians(roll_deg)
+        pitch = math.radians(pitch_deg)
+        yaw = math.radians(yaw_deg)
+        quat_offset_np = QuatMath.from_rpy(roll, pitch, yaw)  # wxyz
+        quat_offset_t = torch.tensor(quat_offset_np, device=env.device, dtype=torch.float32)
+        bias_roll = math.radians(args.tcp_bias_roll_deg)
+        bias_pitch = math.radians(args.tcp_bias_pitch_deg)
+        bias_yaw = math.radians(args.tcp_bias_yaw_deg)
+        quat_bias_np = QuatMath.from_rpy(bias_roll, bias_pitch, bias_yaw)  # wxyz
+        quat_bias_t = torch.tensor(quat_bias_np, device=env.device, dtype=torch.float32)
+        pos_bias_t = torch.tensor([args.tcp_bias_x_m, args.tcp_bias_y_m, args.tcp_bias_z_m], device=env.device, dtype=torch.float32)
+        
+        monitor = GuardedInsertionMonitor(args)
+        logger = TrajectoryLogger(
+            args.out,
+            task_meta,
+            target_port_root,
+            target_port_rigid,
+            initial_tcp_pose_b,
+            initial_gripper_pose_b,
         )
-        print(
-            "Task metadata labels: "
-            f"target_module={task_meta['target_module_name']}, "
-            f"port={task_meta['port_name']}, plug={task_meta['plug_name']}"
-        )
-
-        rows: list[list[str]] = []
-        baseline_fz: float | None = None
+        
+        obs_slices = obs_term_slices(env, "policy")
+        cumulative_insertion = 0.0
         backoff_remaining = 0
         insertion_started = False
-        insertion_triggered = False
-
-        scale_m_per_action = 0.05
-        cumulative_insertion = 0.0
-        total_steps = align_steps + handoff_steps + settle_steps + insertion_steps + hold_steps
-        LOGGER.info(
-            "Computed schedule: total_steps=%d (align=%d handoff=%d settle=%d insertion=%d hold=%d backoff=%d)",
-            total_steps,
-            align_steps,
-            handoff_steps,
-            settle_steps,
-            insertion_steps,
-            hold_steps,
-            backoff_steps,
-        )
-
+        backoff_cmd_xyz = (0.0, 0.0, 0.0)
+        running_offset_x = 0.0
+        running_offset_y = 0.0
+        running_offset_z = 0.0
+        # 3. Main Rollout Loop
         for step in range(total_steps):
-            if not simulation_app.is_running():
-                LOGGER.warning(
-                    "Simulation app stopped before step %d/%d. "
-                    "No further env.step() calls will run.",
-                    step,
-                    total_steps,
-                )
-                break
-
-            phase = "hold"
-            cmd_x_m = 0.0
-            cmd_y_m = 0.0
-            cmd_z_m = 0.0
-
-            if backoff_remaining > 0:
-                phase = "backoff"
-                cmd_z_m = args_cli.backoff_m / backoff_steps
-                backoff_remaining -= 1
+            if not simulation_app.is_running(): break
+            
+            if args.validate_frame_transformer_only:
+                phase = "validate"
+                cmd_dx_m = 0.0
+                cmd_dy_m = 0.0
+                cmd_dz_m = 0.0
+                started_insert = False
             else:
-                if step < align_steps:
-                    phase = "align"
-                    cmd_x_m = args_cli.misalign_x_m / align_steps
-                    cmd_y_m = args_cli.misalign_y_m / align_steps
-                elif step < align_steps + handoff_steps:
-                    phase = "handoff"
-                    cmd_z_m = -handoff_distance / handoff_steps
-                elif step < align_steps + handoff_steps + settle_steps:
-                    phase = "settle"
-                elif step < align_steps + handoff_steps + settle_steps + insertion_steps:
-                    phase = "insertion"
-                    insertion_started = True
-                    insertion_step = step - (align_steps + handoff_steps + settle_steps) + 1
-                    frac = _min_jerk_fraction(insertion_step / insertion_steps)
-                    target_cumulative = frac * insertion_distance
-                    delta = target_cumulative - cumulative_insertion
-                    cumulative_insertion = target_cumulative
-                    cmd_z_m = -delta
-                else:
-                    phase = "hold"
-
-            cmd_x = cmd_x_m / scale_m_per_action
-            cmd_y = cmd_y_m / scale_m_per_action
-            cmd_z = cmd_z_m / scale_m_per_action
-
+                phase, cmd_dx_m, cmd_dy_m, cmd_dz_m, cumulative_insertion, started_insert, backoff_remaining = schedule.command_for_step(
+                    step,
+                    cumulative_insertion=cumulative_insertion,
+                    backoff_remaining=backoff_remaining,
+                    backoff_cmd_xyz_m=backoff_cmd_xyz,
+                )
+            insertion_started = insertion_started or started_insert
             with torch.inference_mode():
-                actions = torch.zeros(action_shape, device=env.device)
-                actions[0, 0] = cmd_x
-                actions[0, 1] = cmd_y
-                actions[0, 2] = cmd_z
-                env.step(actions)
-                if step == 0:
-                    LOGGER.info("First env.step() completed successfully.")
-
-                if hasattr(robot.data, "body_incoming_wrench_b"):
-                    wrench_b = robot.data.body_incoming_wrench_b[0, wrist_idx]
-                elif hasattr(robot.data, "body_incoming_joint_wrench_b"):
-                    wrench_b = robot.data.body_incoming_joint_wrench_b[0, wrist_idx]
+                # Apply Actions
+                tcp_pos_base_pre = frame_transformer.data.target_pos_source[0, frame_idx["tcp"]]
+                if use_usd_port_pose:
+                    base_pos_w = frame_transformer.data.source_pos_w[0]
+                    base_quat_w = frame_transformer.data.source_quat_w[0]
+                    port_pos_w_np, port_quat_w_np = _get_prim_pose_world_wxyz(stage, target_port_root)
+                    port_pos_w_t = torch.tensor(port_pos_w_np, device=env.device, dtype=base_pos_w.dtype)
+                    port_quat_w_t = torch.tensor(port_quat_w_np, device=env.device, dtype=base_quat_w.dtype)
+                    port_pos_base, port_quat_base = _world_pose_to_base_pose(port_pos_w_t, port_quat_w_t, base_pos_w, base_quat_w)
                 else:
-                    raise AttributeError(
-                        "Robot data has neither body_incoming_wrench_b nor "
-                        "body_incoming_joint_wrench_b."
+                    port_pos_base = frame_transformer.data.target_pos_source[0, frame_idx["port"]]
+                    port_quat_base = frame_transformer.data.target_quat_source[0, frame_idx["port"]]
+                desired_quat_b = _quat_norm_wxyz(_quat_mul_wxyz(_quat_mul_wxyz(port_quat_base, quat_offset_t), quat_bias_t.to(port_quat_base.dtype)))
+                running_offset_x += cmd_dx_m
+                running_offset_y += cmd_dy_m
+                running_offset_z += cmd_dz_m
+                if args.approach_in_port_local_frame:
+                    local_offset = torch.tensor(
+                        [running_offset_x, running_offset_y, args.initial_z_offset_m + running_offset_z],
+                        device=env.device,
+                        dtype=port_pos_base.dtype,
                     )
-
-                ee_pos_w = robot.data.body_pos_w[0, wrist_idx]
-                if hasattr(robot.data, "body_quat_w"):
-                    ee_quat_w = robot.data.body_quat_w[0, wrist_idx]
-                    qw = float(ee_quat_w[0].item())
-                    qx = float(ee_quat_w[1].item())
-                    qy = float(ee_quat_w[2].item())
-                    qz = float(ee_quat_w[3].item())
+                    desired_pos_b = port_pos_base + _quat_apply_wxyz(port_quat_base, local_offset + pos_bias_t.to(port_pos_base.dtype))
                 else:
-                    qw = math.nan
-                    qx = math.nan
-                    qy = math.nan
-                    qz = math.nan
+                    desired_pos_b = torch.tensor(
+                        [
+                            port_pos_base[0] + running_offset_x + float(pos_bias_t[0].item()),
+                            port_pos_base[1] + running_offset_y + float(pos_bias_t[1].item()),
+                            port_pos_base[2] + args.initial_z_offset_m + running_offset_z + float(pos_bias_t[2].item()),
+                        ],
+                        device=env.device,
+                        dtype=port_pos_base.dtype,
+                    )
+                tcp_quat_base_pre = frame_transformer.data.target_quat_source[0, frame_idx["tcp"]]
+                quat_err = _quat_mul_wxyz(desired_quat_b, _quat_conj_wxyz(tcp_quat_base_pre))
+                rotvec_err = _quat_to_rotvec_wxyz(quat_err)
 
-                fx = float(wrench_b[0].item())
-                fy = float(wrench_b[1].item())
-                fz = float(wrench_b[2].item())
-                tx = float(wrench_b[3].item())
-                ty = float(wrench_b[4].item())
-                tz = float(wrench_b[5].item())
-                ee_x = float(ee_pos_w[0].item())
-                ee_y = float(ee_pos_w[1].item())
-                ee_z = float(ee_pos_w[2].item())
+                pos_err_b = desired_pos_b - tcp_pos_base_pre
+                actions = torch.zeros(action_shape, device=env.device)
+                if not args.validate_frame_transformer_only:
+                    actions[0, 0] = torch.clamp(pos_err_b[0] / scale_m_per_action, -1.0, 1.0)
+                    actions[0, 1] = torch.clamp(pos_err_b[1] / scale_m_per_action, -1.0, 1.0)
+                    actions[0, 2] = torch.clamp(pos_err_b[2] / scale_m_per_action, -1.0, 1.0)
+                    if args.enable_orientation_align:
+                        rot_scale = max(args.rot_scale_rad_per_action, 1.0e-4)
+                        actions[0, 3] = torch.clamp(rotvec_err[0] / rot_scale, -1.0, 1.0)
+                        actions[0, 4] = torch.clamp(rotvec_err[1] / rot_scale, -1.0, 1.0)
+                        actions[0, 5] = torch.clamp(rotvec_err[2] / rot_scale, -1.0, 1.0)
+                    else:
+                        actions[0, 3:6] = 0.0
+                env.step(actions)
+                frame_transformer.update(step_dt)
+                
+                # Read Observations
+                eef = env.obs_buf["policy"][0, obs_slices["eef_pose"][0]:obs_slices["eef_pose"][1]].cpu().numpy()
+                wrench_scaled = env.obs_buf["policy"][0, obs_slices["body_forces"][0]+36:obs_slices["body_forces"][0]+42].cpu().numpy()
+                wrench = wrench_scaled / 0.1
+                frames = FrameDebugHelper.sample(frame_transformer, frame_idx)
+                tcp_pos_base = frames["tcp_pos_b"]
+                tcp_quat_base = frames["tcp_quat_b"]
+                gripper_pos_b = frames["ee_gripper_pos_b"]
+                gripper_quat_b = frames["ee_gripper_quat_b"]
+                plug_pos_b = frames["plug_pos_b"]
+                plug_quat_b = frames["plug_quat_b"]
+                tcp_target_quat_err = _quat_mul_wxyz(desired_quat_b, _quat_conj_wxyz(tcp_quat_base))
+                tcp_target_rotvec_err = _quat_to_rotvec_wxyz(tcp_target_quat_err)
+                
+                # Check Guard
+                if insertion_started:
+                    monitor.update(step * step_dt, wrench[:3], float(tcp_pos_base[2]))
+                    if monitor.triggered and backoff_remaining == 0:
+                        backoff_cmd_xyz = monitor.get_backoff_cmd(backoff_steps)
+                        backoff_remaining = backoff_steps - 1
+                    
+                    if abs(wrench[2]) >= args.unrecoverable_force_n:
+                        env.reset()
+                        monitor = GuardedInsertionMonitor(args) # Reset monitor
+                        continue
 
-                if insertion_started and baseline_fz is None:
-                    baseline_fz = fz
-                if (
-                    insertion_started
-                    and baseline_fz is not None
-                    and not insertion_triggered
-                    and abs(fz - baseline_fz) >= args_cli.force_backoff_threshold_n
-                ):
-                    insertion_triggered = True
-                    backoff_remaining = backoff_steps
-
-                rows.append(
-                    [
-                        f"{step * step_dt:.6f}",
-                        str(step),
-                        phase,
-                        f"{cmd_x:.8f}",
-                        f"{cmd_y:.8f}",
-                        f"{cmd_z:.8f}",
-                        f"{cmd_x_m:.8f}",
-                        f"{cmd_y_m:.8f}",
-                        f"{cmd_z_m:.8f}",
-                        f"{fx:.8f}",
-                        f"{fy:.8f}",
-                        f"{fz:.8f}",
-                        f"{tx:.8f}",
-                        f"{ty:.8f}",
-                        f"{tz:.8f}",
-                        f"{ee_x:.8f}",
-                        f"{ee_y:.8f}",
-                        f"{ee_z:.8f}",
-                        f"{qw:.8f}",
-                        f"{qx:.8f}",
-                        f"{qy:.8f}",
-                        f"{qz:.8f}",
-                        task_meta["target_module_name"],
-                        task_meta["port_name"],
-                        task_meta["plug_name"],
-                        task_meta["cable_name"],
-                        task_meta["cable_type"],
-                    ]
+                # Log
+                cmds = (cmd_dx_m/scale_m_per_action, cmd_dy_m/scale_m_per_action, cmd_dz_m/scale_m_per_action)
+                target_pose_b = np.concatenate([desired_pos_b.detach().cpu().numpy(), desired_quat_b.detach().cpu().numpy()])
+                tcp_pose_b = np.concatenate([tcp_pos_base.detach().cpu().numpy(), tcp_quat_base.detach().cpu().numpy()])
+                gripper_pose_b = np.concatenate([gripper_pos_b.detach().cpu().numpy(), gripper_quat_b.detach().cpu().numpy()])
+                plug_pose_b = np.concatenate([plug_pos_b.detach().cpu().numpy(), plug_quat_b.detach().cpu().numpy()])
+                logger.record(
+                    step_dt, step, phase, cmds, (cmd_dx_m, cmd_dy_m, cmd_dz_m), wrench, eef, monitor.stop_reason,
+                    port_pos_base.detach().cpu().numpy(), float(tcp_pos_base[2].item()),
+                    target_pose_b,
+                    tcp_pose_b,
+                    tcp_target_rotvec_err.detach().cpu().numpy(),
+                    gripper_pose_b,
+                    plug_pose_b,
                 )
 
-        out_path = Path(args_cli.out).expanduser()
-        out_path.parent.mkdir(parents=True, exist_ok=True)
-        with out_path.open("w", newline="", encoding="utf-8") as f:
-            writer = csv.writer(f)
-            writer.writerow(
-                [
-                    "time_s",
-                    "step",
-                    "phase",
-                    "cmd_x_norm",
-                    "cmd_y_norm",
-                    "cmd_z_norm",
-                    "cmd_x_m",
-                    "cmd_y_m",
-                    "cmd_z_m",
-                    "force_x_n",
-                    "force_y_n",
-                    "force_z_n",
-                    "torque_x_nm",
-                    "torque_y_nm",
-                    "torque_z_nm",
-                    "ee_x_m",
-                    "ee_y_m",
-                    "ee_z_m",
-                    "ee_qw",
-                    "ee_qx",
-                    "ee_qy",
-                    "ee_qz",
-                    "target_module_name",
-                    "port_name",
-                    "plug_name",
-                    "cable_name",
-                    "cable_type",
-                ]
-            )
-            writer.writerows(rows)
+        # 4. Normal exit save
+        logger.save()
 
-        if rows:
-            fz_values = [float(row[11]) for row in rows]
-            peak_abs_fz = max(abs(v) for v in fz_values)
-            print(
-                f"Wrote {len(rows)} samples to {out_path} "
-                f"(peak |Fz|={peak_abs_fz:.6f} N, triggered_backoff={insertion_triggered})"
-            )
-        else:
-            LOGGER.warning(
-                "No samples were recorded. This usually means the app was no longer running "
-                "before the first simulation step."
-            )
-            print(f"No samples were recorded. Output CSV still created at {out_path}.")
+    except KeyboardInterrupt:
+        print("\nInterrupted by user (Ctrl+C). Saving partial CSV...")
     except Exception:
-        LOGGER.error("Fatal exception during evaluation.")
         traceback.print_exc()
-        raise
     finally:
-        if env is not None:
-            env.close()
+        if logger is not None:
+            try:
+                logger.save()
+                print(f"CSV saved to: {logger.out_path}")
+                if args.enable_force_analysis_png:
+                    png_out = logger.save_force_analysis_png(args.force_analysis_png_path if args.force_analysis_png_path else None)
+                    if png_out is not None:
+                        print(f"Force analysis PNG saved to: {png_out}")
+            except Exception:
+                traceback.print_exc()
+        if env: env.close()
         simulation_app.close()
-
 
 if __name__ == "__main__":
     main()
-    hidden_pos = (10.0, 10.0, -10.0)
-    identity_quat = (1.0, 0.0, 0.0, 0.0)
