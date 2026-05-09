@@ -30,7 +30,9 @@ from aic_model.policy import (
 )
 from aic_task_interfaces.msg import Task
 from geometry_msgs.msg import Point, Pose, Quaternion
+from rclpy.duration import Duration
 from rclpy.time import Time
+from std_msgs.msg import String
 from tf2_ros import TransformException
 
 
@@ -83,7 +85,13 @@ class TransportToMean(Policy):
        BOARD_SIZE_X to reduce jitter from partial line detections.
     5. Recover the board origin from the known edge offset and move to either
        the NIC rail target or the legacy mean-port target in that board frame.
-       The TCP orientation is preserved exactly from the pre-transport pose.
+       The TCP orientation is preserved during transport. By default, transport
+       moves horizontally at the current view height before moving vertically to
+       the final transport z, reducing cable sweeps across nearer NIC cards.
+    6. Optionally tilt the TCP in place by the minimal rotation needed to align
+       the estimated SFP tip +z axis with base_link -z for downward insertion.
+    7. Descend straight down in base_link at a fixed rate, stopping early if
+       the scoring insertion event is observed.
     """
 
     BOARD_SIZE_X = 0.30
@@ -128,11 +136,28 @@ class TransportToMean(Policy):
 
     def __init__(self, parent_node):
         super().__init__(parent_node)
+        self._latest_insertion_event_namespace = ""
+        self._insertion_event_sub = self._parent_node.create_subscription(
+            String,
+            "/scoring/insertion_event",
+            self._insertion_event_callback,
+            10,
+        )
         self.z_offset = float(os.getenv("AIC_TRANSPORT_MEAN_Z_OFFSET", "0.12"))
         self.duration_sec = float(os.getenv("AIC_TRANSPORT_MEAN_DURATION_SEC", "3"))
         self.dt = float(os.getenv("AIC_TRANSPORT_MEAN_DT", "0.05"))
         self.hold_sec = float(os.getenv("AIC_TRANSPORT_MEAN_HOLD_SEC", "10.0"))
         self.min_target_z = float(os.getenv("AIC_TRANSPORT_MIN_TARGET_Z", "0.25"))
+        self.xy_then_z_transport = self._env_flag(
+            "AIC_TRANSPORT_XY_THEN_Z_TRANSPORT",
+            default=True,
+        )
+        self.xy_transport_duration_sec = float(
+            os.getenv("AIC_TRANSPORT_XY_DURATION_SEC", str(self.duration_sec))
+        )
+        self.z_transport_duration_sec = float(
+            os.getenv("AIC_TRANSPORT_Z_DURATION_SEC", str(self.duration_sec))
+        )
         self.detect_board = self._env_flag("AIC_TRANSPORT_DETECT_BOARD", default=True)
         self.detect_only = self._env_flag("AIC_TRANSPORT_DETECT_ONLY", default=False)
         self.move_to_view_first = self._env_flag(
@@ -187,6 +212,9 @@ class TransportToMean(Policy):
         self.short_edge_scan_hold_sec = float(
             os.getenv("AIC_TRANSPORT_SHORT_EDGE_SCAN_HOLD_SEC", "0.2")
         )
+        self.short_edge_scan_z_offset = float(
+            os.getenv("AIC_TRANSPORT_SHORT_EDGE_SCAN_Z_OFFSET", "0.03")
+        )
         self.short_edge_min_width = float(
             os.getenv("AIC_TRANSPORT_SHORT_EDGE_MIN_WIDTH", "0.24")
         )
@@ -202,6 +230,40 @@ class TransportToMean(Policy):
         self.reconstruct_short_edge_width = self._env_flag(
             "AIC_TRANSPORT_RECONSTRUCT_SHORT_EDGE_WIDTH",
             default=True,
+        )
+        self.tilt_tip_down_after_transport = self._env_flag(
+            "AIC_TRANSPORT_TILT_TIP_DOWN_AFTER_TRANSPORT",
+            default=True,
+        )
+        self.tilt_tip_duration_sec = float(
+            os.getenv("AIC_TRANSPORT_TILT_TIP_DURATION_SEC", "1.0")
+        )
+        self.tip_axis_tcp = self._normalized_vector(
+            np.array(
+                [
+                    float(os.getenv("AIC_TRANSPORT_TIP_AXIS_TCP_X", "0.000136")),
+                    float(os.getenv("AIC_TRANSPORT_TIP_AXIS_TCP_Y", "-0.350201")),
+                    float(os.getenv("AIC_TRANSPORT_TIP_AXIS_TCP_Z", "0.936674")),
+                ],
+                dtype=np.float64,
+            )
+        )
+        if self.tip_axis_tcp is None:
+            self.tip_axis_tcp = np.array([0.0, 0.0, 1.0], dtype=np.float64)
+        self.descend_after_transport = self._env_flag(
+            "AIC_TRANSPORT_DESCEND_AFTER_TRANSPORT",
+            default=True,
+        )
+        self.descend_step_m = float(os.getenv("AIC_TRANSPORT_DESCEND_STEP_M", "0.0005"))
+        self.descend_dt_sec = float(os.getenv("AIC_TRANSPORT_DESCEND_DT_SEC", "0.05"))
+        self.descend_max_distance_m = float(
+            os.getenv(
+                "AIC_TRANSPORT_DESCEND_MAX_DISTANCE_M",
+                str(max(self.z_offset + 0.015, 0.0)),
+            )
+        )
+        self.descend_wait_for_insertion_sec = float(
+            os.getenv("AIC_TRANSPORT_DESCEND_WAIT_FOR_INSERTION_SEC", "5.0")
         )
         self.constrain_board_pose_bounds = self._env_flag(
             "AIC_TRANSPORT_CONSTRAIN_BOARD_POSE_BOUNDS",
@@ -225,7 +287,7 @@ class TransportToMean(Policy):
         self.board_yaw_base_max = float(
             os.getenv("AIC_TRANSPORT_BOARD_YAW_BASE_MAX", "0.12")
         )
-        self.trial_config_path = os.getenv("AIC_TRANSPORT_TRIAL_CONFIG", "/home/jk/ws_aic/src/aic/outputs/configs/trial_000004.yaml").strip()
+        self.trial_config_path = os.getenv("AIC_TRANSPORT_TRIAL_CONFIG", "").strip()
         self.trial_config_search_glob = os.getenv(
             "AIC_TRANSPORT_TRIAL_CONFIG_GLOB",
             "outputs/configs/trial_*.yaml",
@@ -243,6 +305,22 @@ class TransportToMean(Policy):
         if raw is None:
             return default
         return raw.strip().lower() in ("1", "true", "yes", "on")
+
+    def _insertion_event_callback(self, msg: String) -> None:
+        self._latest_insertion_event_namespace = msg.data.strip().strip("/")
+        self.get_logger().info(
+            "TransportToMean received insertion event for namespace: "
+            f"'{self._latest_insertion_event_namespace}'"
+        )
+
+    def _task_completed_in_simulation(self, task: Task) -> bool:
+        namespace = self._latest_insertion_event_namespace
+        if not namespace:
+            return False
+        tokens = [token for token in namespace.split("/") if token]
+        if len(tokens) < 2:
+            return False
+        return tokens[-2] == task.target_module_name and tokens[-1] == task.port_name
 
     @staticmethod
     def _parse_index_from_suffix(value: str, prefix: str) -> int:
@@ -331,7 +409,36 @@ class TransportToMean(Policy):
         start_pose: Pose,
         target_xyz: tuple[float, float, float],
         fraction: float,
+        target_orientation: Quaternion | None = None,
     ) -> Pose:
+        if target_orientation is None:
+            orientation = start_pose.orientation
+        else:
+            q_start = np.array(
+                [
+                    start_pose.orientation.x,
+                    start_pose.orientation.y,
+                    start_pose.orientation.z,
+                    start_pose.orientation.w,
+                ],
+                dtype=np.float64,
+            )
+            q_target = np.array(
+                [
+                    target_orientation.x,
+                    target_orientation.y,
+                    target_orientation.z,
+                    target_orientation.w,
+                ],
+                dtype=np.float64,
+            )
+            q_interp = self._quat_slerp(q_start, q_target, fraction)
+            orientation = Quaternion(
+                x=float(q_interp[0]),
+                y=float(q_interp[1]),
+                z=float(q_interp[2]),
+                w=float(q_interp[3]),
+            )
         return Pose(
             position=Point(
                 x=start_pose.position.x
@@ -341,7 +448,7 @@ class TransportToMean(Policy):
                 z=start_pose.position.z
                 + fraction * (target_xyz[2] - start_pose.position.z),
             ),
-            orientation=start_pose.orientation,
+            orientation=orientation,
         )
 
     def _move_to_pose(
@@ -351,14 +458,193 @@ class TransportToMean(Policy):
         target_xyz: tuple[float, float, float],
         *,
         duration_sec: float,
+        target_orientation: Quaternion | None = None,
     ) -> Pose:
         steps = max(1, int(duration_sec / self.dt))
         for step in range(steps + 1):
             fraction = step / steps
-            pose = self._interpolated_pose(start_pose, target_xyz, fraction)
+            pose = self._interpolated_pose(
+                start_pose,
+                target_xyz,
+                fraction,
+                target_orientation,
+            )
             self.set_pose_target(move_robot=move_robot, pose=pose)
             self.sleep_for(self.dt)
-        return self._interpolated_pose(start_pose, target_xyz, 1.0)
+        return self._interpolated_pose(start_pose, target_xyz, 1.0, target_orientation)
+
+    def _move_to_transport_target_pose(
+        self,
+        move_robot: MoveRobotCallback,
+        start_pose: Pose,
+        target_xyz: tuple[float, float, float],
+    ) -> Pose:
+        if not self.xy_then_z_transport:
+            return self._move_to_pose(
+                move_robot,
+                start_pose,
+                target_xyz,
+                duration_sec=self.duration_sec,
+            )
+
+        xy_target_xyz = (
+            target_xyz[0],
+            target_xyz[1],
+            start_pose.position.z,
+        )
+        xy_distance = float(
+            np.linalg.norm(
+                np.array(
+                    [
+                        target_xyz[0] - start_pose.position.x,
+                        target_xyz[1] - start_pose.position.y,
+                    ],
+                    dtype=np.float64,
+                )
+            )
+        )
+        z_distance = abs(float(target_xyz[2] - start_pose.position.z))
+        self.get_logger().info(
+            "TransportToMean moving to transport target as XY-then-Z path: "
+            f"xy_target={[round(value, 5) for value in xy_target_xyz]}, "
+            f"final_target={[round(value, 5) for value in target_xyz]}, "
+            f"xy_distance={xy_distance:.5f} m, z_distance={z_distance:.5f} m"
+        )
+
+        current_pose = start_pose
+        if xy_distance > 1e-6:
+            current_pose = self._move_to_pose(
+                move_robot,
+                current_pose,
+                xy_target_xyz,
+                duration_sec=self.xy_transport_duration_sec,
+            )
+        if z_distance > 1e-6:
+            current_pose = self._move_to_pose(
+                move_robot,
+                current_pose,
+                target_xyz,
+                duration_sec=self.z_transport_duration_sec,
+            )
+        return current_pose
+
+    def _move_to_tip_down_pose(
+        self,
+        move_robot: MoveRobotCallback,
+        start_pose: Pose,
+    ) -> Pose:
+        q_tcp = self._quat_normalized(
+            np.array(
+                [
+                    start_pose.orientation.x,
+                    start_pose.orientation.y,
+                    start_pose.orientation.z,
+                    start_pose.orientation.w,
+                ],
+                dtype=np.float64,
+            )
+        )
+        tcp_rot_base = self._quat_xyzw_to_rot(q_tcp)
+        tip_axis_base = self._normalized_vector(tcp_rot_base @ self.tip_axis_tcp)
+        target_axis_base = np.array([0.0, 0.0, -1.0], dtype=np.float64)
+        if tip_axis_base is None:
+            self.get_logger().warn(
+                "TransportToMean tip-down tilt skipped: configured tip axis is invalid."
+            )
+            return start_pose
+
+        q_delta = self._quat_from_two_vectors(tip_axis_base, target_axis_base)
+        q_target = self._quat_multiply(q_delta, q_tcp)
+        correction_angle = float(
+            np.arccos(np.clip(np.dot(tip_axis_base, target_axis_base), -1.0, 1.0))
+        )
+        target_orientation = Quaternion(
+            x=float(q_target[0]),
+            y=float(q_target[1]),
+            z=float(q_target[2]),
+            w=float(q_target[3]),
+        )
+        self.get_logger().info(
+            "TransportToMean tilting TCP to align cable tip with base -z: "
+            f"tip_axis_tcp={np.round(self.tip_axis_tcp, 5).tolist()}, "
+            f"tip_axis_base={np.round(tip_axis_base, 5).tolist()}, "
+            f"correction_angle={correction_angle:.5f} rad "
+            f"({np.degrees(correction_angle):.2f} deg), "
+            f"target_orientation_xyzw={np.round(q_target, 5).tolist()}"
+        )
+        return self._move_to_pose(
+            move_robot,
+            start_pose,
+            (
+                start_pose.position.x,
+                start_pose.position.y,
+                start_pose.position.z,
+            ),
+            duration_sec=self.tilt_tip_duration_sec,
+            target_orientation=target_orientation,
+        )
+
+    def _descend_until_inserted(
+        self,
+        task: Task,
+        move_robot: MoveRobotCallback,
+        start_pose: Pose,
+    ) -> Pose:
+        step_m = abs(self.descend_step_m)
+        if step_m <= 0.0 or self.descend_dt_sec <= 0.0 or self.descend_max_distance_m <= 0.0:
+            self.get_logger().info(
+                "TransportToMean descent skipped because descent step, dt, or max "
+                "distance is non-positive."
+            )
+            return start_pose
+
+        max_steps = int(np.ceil(self.descend_max_distance_m / step_m))
+        current_pose = start_pose
+        self.get_logger().info(
+            "TransportToMean descending TCP in base -z: "
+            f"step={step_m:.5f} m, dt={self.descend_dt_sec:.3f} s, "
+            f"max_distance={self.descend_max_distance_m:.5f} m, "
+            f"rate={step_m / self.descend_dt_sec:.5f} m/s"
+        )
+        for step in range(1, max_steps + 1):
+            if self._task_completed_in_simulation(task):
+                self.get_logger().info(
+                    "TransportToMean descent early exit: simulation reported "
+                    "task completion."
+                )
+                return current_pose
+
+            distance = min(step * step_m, self.descend_max_distance_m)
+            current_pose = Pose(
+                position=Point(
+                    x=start_pose.position.x,
+                    y=start_pose.position.y,
+                    z=start_pose.position.z - distance,
+                ),
+                orientation=start_pose.orientation,
+            )
+            self.set_pose_target(move_robot=move_robot, pose=current_pose)
+            if step == 1 or step % 20 == 0 or step == max_steps:
+                self.get_logger().info(
+                    "TransportToMean descent: "
+                    f"step={step}/{max_steps}, distance={distance:.5f} m, "
+                    f"target_z={current_pose.position.z:.5f}"
+                )
+            self.sleep_for(self.descend_dt_sec)
+
+        if self.descend_wait_for_insertion_sec > 0.0:
+            self.get_logger().info("TransportToMean waiting briefly for insertion event.")
+            wait_started = self.time_now()
+            wait_timeout = Duration(seconds=self.descend_wait_for_insertion_sec)
+            while (self.time_now() - wait_started) < wait_timeout:
+                if self._task_completed_in_simulation(task):
+                    self.get_logger().info(
+                        "TransportToMean insertion event observed before timeout."
+                    )
+                    break
+                self.sleep_for(min(self.descend_dt_sec, 0.05))
+
+        return current_pose
 
     def _move_to_view_pose(
         self,
@@ -393,12 +679,13 @@ class TransportToMean(Policy):
         move_robot: MoveRobotCallback,
     ) -> None:
         start_pose = self._tcp_pose_from_observation(get_observation)
-        scan_z = max(start_pose.position.z, self.view_z)
+        scan_z = max(start_pose.position.z + self.short_edge_scan_z_offset, self.view_z)
         current_pose = start_pose
         self.get_logger().info(
             "TransportToMean scanning for full short-edge view "
             f"start_y={start_pose.position.y:.4f}, y_step={self.short_edge_scan_y_step:.4f}, "
             f"max_steps={self.short_edge_scan_max_steps}, z={scan_z:.4f}, "
+            f"z_offset={self.short_edge_scan_z_offset:.4f}, "
             f"min_width={self.short_edge_min_width:.4f}, "
             f"min_endpoint_margin_px={self.short_edge_min_endpoint_margin_px:.1f}"
         )
@@ -467,6 +754,105 @@ class TransportToMean(Policy):
             ],
             dtype=np.float64,
         )
+
+    @staticmethod
+    def _normalized_vector(vector: np.ndarray) -> np.ndarray | None:
+        vector = np.asarray(vector, dtype=np.float64).reshape(3)
+        norm = float(np.linalg.norm(vector))
+        if norm <= 1e-9:
+            return None
+        return vector / norm
+
+    @staticmethod
+    def _quat_normalized(quat_xyzw: np.ndarray) -> np.ndarray:
+        quat = np.asarray(quat_xyzw, dtype=np.float64).reshape(4)
+        norm = float(np.linalg.norm(quat))
+        if norm <= 1e-12:
+            return np.array([0.0, 0.0, 0.0, 1.0], dtype=np.float64)
+        return quat / norm
+
+    @staticmethod
+    def _quat_multiply(q1_xyzw: np.ndarray, q2_xyzw: np.ndarray) -> np.ndarray:
+        q1 = TransportToMean._quat_normalized(q1_xyzw)
+        q2 = TransportToMean._quat_normalized(q2_xyzw)
+        x1, y1, z1, w1 = q1
+        x2, y2, z2, w2 = q2
+        return TransportToMean._quat_normalized(
+            np.array(
+                [
+                    w1 * x2 + x1 * w2 + y1 * z2 - z1 * y2,
+                    w1 * y2 - x1 * z2 + y1 * w2 + z1 * x2,
+                    w1 * z2 + x1 * y2 - y1 * x2 + z1 * w2,
+                    w1 * w2 - x1 * x2 - y1 * y2 - z1 * z2,
+                ],
+                dtype=np.float64,
+            )
+        )
+
+    @staticmethod
+    def _quat_from_axis_angle(axis: np.ndarray, angle: float) -> np.ndarray:
+        axis = np.asarray(axis, dtype=np.float64).reshape(3)
+        norm = float(np.linalg.norm(axis))
+        if norm <= 1e-12:
+            return np.array([0.0, 0.0, 0.0, 1.0], dtype=np.float64)
+        axis = axis / norm
+        half_angle = 0.5 * float(angle)
+        return TransportToMean._quat_normalized(
+            np.array(
+                [
+                    axis[0] * np.sin(half_angle),
+                    axis[1] * np.sin(half_angle),
+                    axis[2] * np.sin(half_angle),
+                    np.cos(half_angle),
+                ],
+                dtype=np.float64,
+            )
+        )
+
+    @staticmethod
+    def _quat_from_two_vectors(source: np.ndarray, target: np.ndarray) -> np.ndarray:
+        source_vec = TransportToMean._normalized_vector(source)
+        target_vec = TransportToMean._normalized_vector(target)
+        if source_vec is None or target_vec is None:
+            return np.array([0.0, 0.0, 0.0, 1.0], dtype=np.float64)
+
+        dot = float(np.clip(np.dot(source_vec, target_vec), -1.0, 1.0))
+        if dot > 0.999999:
+            return np.array([0.0, 0.0, 0.0, 1.0], dtype=np.float64)
+        if dot < -0.999999:
+            axis = np.cross(source_vec, np.array([1.0, 0.0, 0.0], dtype=np.float64))
+            if float(np.linalg.norm(axis)) <= 1e-9:
+                axis = np.cross(
+                    source_vec,
+                    np.array([0.0, 1.0, 0.0], dtype=np.float64),
+                )
+            return TransportToMean._quat_from_axis_angle(axis, np.pi)
+
+        axis = np.cross(source_vec, target_vec)
+        return TransportToMean._quat_from_axis_angle(axis, float(np.arccos(dot)))
+
+    @staticmethod
+    def _quat_slerp(
+        q0_xyzw: np.ndarray,
+        q1_xyzw: np.ndarray,
+        fraction: float,
+    ) -> np.ndarray:
+        q0 = TransportToMean._quat_normalized(q0_xyzw)
+        q1 = TransportToMean._quat_normalized(q1_xyzw)
+        dot = float(np.dot(q0, q1))
+        if dot < 0.0:
+            q1 = -q1
+            dot = -dot
+        if dot > 0.9995:
+            return TransportToMean._quat_normalized(q0 + fraction * (q1 - q0))
+
+        theta_0 = float(np.arccos(np.clip(dot, -1.0, 1.0)))
+        theta = theta_0 * float(fraction)
+        sin_theta = float(np.sin(theta))
+        sin_theta_0 = float(np.sin(theta_0))
+        s0 = float(np.cos(theta)) - dot * sin_theta / sin_theta_0
+        s1 = sin_theta / sin_theta_0
+        return TransportToMean._quat_normalized(s0 * q0 + s1 * q1)
 
     @staticmethod
     def _normalized_xy(vector: np.ndarray) -> np.ndarray | None:
@@ -1239,6 +1625,7 @@ class TransportToMean(Policy):
         send_feedback: SendFeedbackCallback,
     ) -> bool:
         self.get_logger().info(f"TransportToMean.insert_cable() task: {task}")
+        self._latest_insertion_event_namespace = ""
         try:
             card_index, port_index = self._task_indices(task)
             self.get_logger().info(
@@ -1285,15 +1672,27 @@ class TransportToMean(Policy):
         )
         self._log_trial_config_target_error(task, target_xyz, target_source)
 
-        target_pose = self._move_to_pose(
+        target_pose = self._move_to_transport_target_pose(
             move_robot,
             start_pose,
             target_xyz,
-            duration_sec=self.duration_sec,
         )
+        if self.tilt_tip_down_after_transport:
+            send_feedback("Tilting TCP to align cable tip with downward insertion axis.")
+            target_pose = self._move_to_tip_down_pose(
+                move_robot,
+                self._tcp_pose_from_observation(get_observation),
+            )
+        if self.descend_after_transport:
+            send_feedback("Descending TCP for insertion.")
+            target_pose = self._descend_until_inserted(
+                task,
+                move_robot,
+                self._tcp_pose_from_observation(get_observation),
+            )
         final_tcp_pose = self._tcp_pose_from_observation(get_observation)
         self.get_logger().info(
-            "TransportToMean final TCP pose after transport: "
+            "TransportToMean final TCP pose after transport/alignment/descent: "
             f"xyz={[round(final_tcp_pose.position.x, 5), round(final_tcp_pose.position.y, 5), round(final_tcp_pose.position.z, 5)]}, "
             f"orientation_xyzw={[round(final_tcp_pose.orientation.x, 5), round(final_tcp_pose.orientation.y, 5), round(final_tcp_pose.orientation.z, 5), round(final_tcp_pose.orientation.w, 5)]}"
         )
