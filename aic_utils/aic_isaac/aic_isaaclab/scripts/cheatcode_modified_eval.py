@@ -51,6 +51,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--force_log_body", type=str, default="wrist_3_link")
     parser.add_argument("--tcp_frame_name", type=str, default="gripper_tcp")
     parser.add_argument("--allow_tcp_fallback_to_wrist", action="store_true", default=False)
+    parser.add_argument("--disable_cable_dynamics", action="store_true", default=False)
 
     # Trajectory Schedule
     parser.add_argument("--misalign_x_m", type=float, default=0.004)
@@ -321,15 +322,38 @@ class GuardedInsertionMonitor:
         self.args = args
         self.history = deque(maxlen=max(16, int(math.ceil(max(args.force_l2_horizon_sec, args.stall_window_sec) / 0.016)) + 8))
         self.baseline_fz = None
+        self.first_time = None
         self.triggered = False
         self.stop_reason = ""
         self.delta_force_out = None
+        # Conservative defaults for penalty-avoidance behavior (CheatCodeModified-style).
+        self.sustained_force_n = 20.0
+        self.sustained_force_sec = 0.10
+        self.emergency_force_n = 60.0
+        self.release_force_n = 12.0
+        self.release_dwell_sec = 0.25
+        self.guard_warmup_sec = 0.40
+        self.release_ready_time = None
 
     def update(self, time_s: float, force_xyz: np.ndarray, tcp_z: float):
+        if self.first_time is None:
+            self.first_time = time_s
         if self.baseline_fz is None:
             self.baseline_fz = float(force_xyz[2])
         self.history.append((time_s, force_xyz, tcp_z))
         self._check_guard()
+
+    def should_release_descent_lock(self) -> bool:
+        if len(self.history) == 0:
+            return False
+        latest_time, latest_force, _ = self.history[-1]
+        fnorm = float(np.linalg.norm(latest_force))
+        if fnorm <= self.release_force_n:
+            if self.release_ready_time is None:
+                self.release_ready_time = latest_time + self.release_dwell_sec
+            return latest_time >= self.release_ready_time
+        self.release_ready_time = None
+        return False
 
     def _median_force(self, samples) -> Optional[np.ndarray]:
         vectors = [s[1] for s in samples if s[1] is not None]
@@ -339,6 +363,25 @@ class GuardedInsertionMonitor:
         if len(self.history) < 2 or self.triggered: return
         latest_time, latest_force, latest_z = self.history[-1]
         fz = float(latest_force[2])
+        if self.first_time is not None and (latest_time - self.first_time) < self.guard_warmup_sec:
+            return
+
+        # 0) Conservative collision detection.
+        fnorm = float(np.linalg.norm(latest_force))
+        if fnorm >= self.emergency_force_n:
+            self._trigger("force_emergency_norm", np.asarray(latest_force, dtype=np.float64))
+            return
+        # Conservative component-wise check for eval penalty rule (|F| >= 20N).
+        comp_window = [s for s in self.history if latest_time - s[0] <= self.sustained_force_sec]
+        if comp_window and all(float(np.max(np.abs(s[1]))) >= self.sustained_force_n for s in comp_window):
+            if (latest_time - comp_window[0][0]) >= self.sustained_force_sec:
+                self._trigger("force_sustained_20n_component", np.asarray(latest_force, dtype=np.float64))
+                return
+        sustained_window = [s for s in self.history if latest_time - s[0] <= self.sustained_force_sec]
+        if sustained_window and all(float(np.linalg.norm(s[1])) >= self.sustained_force_n for s in sustained_window):
+            if (latest_time - sustained_window[0][0]) >= self.sustained_force_sec:
+                self._trigger("force_sustained_20n", np.asarray(latest_force, dtype=np.float64))
+                return
 
         # 1. Absolute Threshold
         if abs(fz - self.baseline_fz) >= self.args.force_backoff_threshold_n:
@@ -627,6 +670,41 @@ def _world_pose_to_base_pose(
     quat_rel_b = _quat_norm_wxyz(_quat_mul_wxyz(base_quat_conj, target_quat_w))
     return pos_rel_b, quat_rel_b
 
+
+def _disable_cable_dynamics_on_stage():
+    from omni.usd import get_context
+
+    stage = get_context().get_stage()
+    cable_root_path = "/World/envs/env_0/Robot/cable"
+    cable_root = stage.GetPrimAtPath(cable_root_path)
+    if not cable_root.IsValid():
+        LOGGER.warning("Cable root prim not found at '%s'; cannot disable cable dynamics.", cable_root_path)
+        return
+
+    rigid_count = 0
+    collision_count = 0
+    queue = [cable_root]
+    while queue:
+        prim = queue.pop(0)
+        rb_attr = prim.GetAttribute("physics:rigidBodyEnabled")
+        if rb_attr.IsValid():
+            rb_attr.Set(False)
+            rigid_count += 1
+        kin_attr = prim.GetAttribute("physics:kinematicEnabled")
+        if kin_attr.IsValid():
+            kin_attr.Set(True)
+        col_attr = prim.GetAttribute("physics:collisionEnabled")
+        if col_attr.IsValid():
+            col_attr.Set(False)
+            collision_count += 1
+        queue.extend(list(prim.GetChildren()))
+    LOGGER.info(
+        "Disabled cable dynamics on '%s': rigid_body_attrs=%d collision_attrs=%d",
+        cable_root_path,
+        rigid_count,
+        collision_count,
+    )
+
 def init_transformer(task_meta: dict, args):
     from isaaclab.sensors import FrameTransformer
     from isaaclab.sensors.frame_transformer.frame_transformer_cfg import FrameTransformerCfg
@@ -797,6 +875,10 @@ def main():
         
         env = gym.make(args.task, cfg=env_cfg).unwrapped
         env.reset()
+        if args.disable_cable_dynamics:
+            _disable_cable_dynamics_on_stage()
+            # one extra reset to ensure modified physics attrs are reflected in state init
+            env.reset()
 
         step_dt = float(getattr(env, "step_dt", 1.0 / 60.0))
         action_shape = env.action_space.shape
@@ -874,6 +956,15 @@ def main():
         running_offset_x = 0.0
         running_offset_y = 0.0
         running_offset_z = 0.0
+        descent_lock = False
+        # Gentle collision handling: stop briefly, then retreat +5mm upward continuously.
+        collision_hold_steps = max(1, int(round(0.10 / step_dt)))
+        gentle_backoff_total_m = 0.005
+        gentle_backoff_speed_mps = 0.002
+        gentle_backoff_steps = max(1, int(round(gentle_backoff_total_m / (gentle_backoff_speed_mps * step_dt))))
+        gentle_backoff_step_m = gentle_backoff_total_m / gentle_backoff_steps
+        collision_hold_remaining = 0
+        collision_backoff_remaining = 0
         # 3. Main Rollout Loop
         for step in range(total_steps):
             if not simulation_app.is_running(): break
@@ -891,6 +982,20 @@ def main():
                     backoff_remaining=backoff_remaining,
                     backoff_cmd_xyz_m=backoff_cmd_xyz,
                 )
+            if collision_hold_remaining > 0:
+                phase = "collision_stop"
+                cmd_dx_m = 0.0
+                cmd_dy_m = 0.0
+                cmd_dz_m = 0.0
+                collision_hold_remaining -= 1
+            elif collision_backoff_remaining > 0:
+                phase = "collision_backoff"
+                cmd_dx_m = 0.0
+                cmd_dy_m = 0.0
+                cmd_dz_m = gentle_backoff_step_m
+                collision_backoff_remaining -= 1
+            if descent_lock and cmd_dz_m < 0.0:
+                cmd_dz_m = 0.0
             insertion_started = insertion_started or started_insert
             with torch.inference_mode():
                 # Apply Actions
@@ -960,16 +1065,25 @@ def main():
                 tcp_target_quat_err = _quat_mul_wxyz(desired_quat_b, _quat_conj_wxyz(tcp_quat_base))
                 tcp_target_rotvec_err = _quat_to_rotvec_wxyz(tcp_target_quat_err)
                 
-                # Check Guard
-                if insertion_started:
+                # Check Guard (conservative: active in all rollout phases except explicit validation mode).
+                if not args.validate_frame_transformer_only:
                     monitor.update(step * step_dt, wrench[:3], float(tcp_pos_base[2]))
-                    if monitor.triggered and backoff_remaining == 0:
-                        backoff_cmd_xyz = monitor.get_backoff_cmd(backoff_steps)
-                        backoff_remaining = backoff_steps - 1
+                    if monitor.triggered and collision_hold_remaining == 0 and collision_backoff_remaining == 0:
+                        descent_lock = True
+                        collision_hold_remaining = collision_hold_steps
+                        collision_backoff_remaining = gentle_backoff_steps
+                    if descent_lock and collision_hold_remaining == 0 and collision_backoff_remaining == 0 and monitor.should_release_descent_lock():
+                        # Keep descent locked; only clear trigger state after safe-force dwell.
+                        monitor.triggered = False
+                        monitor.stop_reason = ""
+                        monitor.delta_force_out = None
                     
                     if abs(wrench[2]) >= args.unrecoverable_force_n:
                         env.reset()
                         monitor = GuardedInsertionMonitor(args) # Reset monitor
+                        descent_lock = False
+                        collision_hold_remaining = 0
+                        collision_backoff_remaining = 0
                         continue
 
                 # Log
