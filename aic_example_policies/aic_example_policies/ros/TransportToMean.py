@@ -83,6 +83,7 @@ class TransportToMean(Policy):
        BOARD_SIZE_X to reduce jitter from partial line detections.
     5. Recover the board origin from the known edge offset and move to either
        the NIC rail target or the legacy mean-port target in that board frame.
+       The TCP orientation is preserved exactly from the pre-transport pose.
     """
 
     BOARD_SIZE_X = 0.30
@@ -1291,6 +1292,11 @@ class TransportToMean(Policy):
             duration_sec=self.duration_sec,
         )
         final_tcp_pose = self._tcp_pose_from_observation(get_observation)
+        self.get_logger().info(
+            "TransportToMean final TCP pose after transport: "
+            f"xyz={[round(final_tcp_pose.position.x, 5), round(final_tcp_pose.position.y, 5), round(final_tcp_pose.position.z, 5)]}, "
+            f"orientation_xyzw={[round(final_tcp_pose.orientation.x, 5), round(final_tcp_pose.orientation.y, 5), round(final_tcp_pose.orientation.z, 5), round(final_tcp_pose.orientation.w, 5)]}"
+        )
         self._log_trial_config_final_pose_error(
             task,
             target_xyz,
