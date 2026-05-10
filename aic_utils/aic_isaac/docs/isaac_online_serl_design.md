@@ -48,7 +48,7 @@ The online path should be off-policy:
 
 ## Current Code State
 
-`aic_utils/aic_isaac/scripts/train_isaac_serl_stage5.py` launches the Isaac Lab
+`aic_utils/aic_isaac/scripts/train_isaac_online_serl.py` launches the Isaac Lab
 online SERL trainer:
 
 - loads the offline ACT-adapter SERL checkpoint;

@@ -1,4 +1,4 @@
-# IsaacLab Stage 5 Bringup
+# IsaacLab Online RL Bringup
 
 ## Host prerequisites
 
@@ -68,7 +68,7 @@ Use the finite RSL-RL evaluator for headless checkpoint metrics:
 
 ```bash
 cd /workspace/isaaclab
-CHECKPOINT=/workspace/isaaclab/aic/outputs/train/stage5_aic_lowdim_ppo/aic_task/2026-04-30_09-08-49_stage5_aic_lowdim_ppo/model_200.pt \
+CHECKPOINT=/workspace/isaaclab/aic/outputs/train/isaac_aic_lowdim_ppo/aic_task/2026-04-30_09-08-49_isaac_aic_lowdim_ppo/model_200.pt \
   NUM_ENVS=4 NUM_EPISODES=4 MAX_STEPS=6500 \
   aic/aic_utils/aic_isaac/aic_isaaclab/scripts/eval_aic_isaaclab_ppo.sh
 ```

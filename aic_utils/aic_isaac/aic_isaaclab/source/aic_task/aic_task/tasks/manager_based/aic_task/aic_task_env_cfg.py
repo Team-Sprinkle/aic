@@ -71,7 +71,7 @@ class AICTaskSceneCfg(InteractiveSceneCfg):
             pos=(-0.18, -0.122, 0),
             rot=(0.0, 0.0, 0.0, 1.0),
             joint_pos={
-                "shoulder_pan_joint": 0.1597,
+                "shoulder_pan_joint": -0.1597,
                 "shoulder_lift_joint": -1.3542,
                 "elbow_joint": -1.6648,
                 "wrist_1_joint": -1.6933,
@@ -538,7 +538,42 @@ class RewardsCfg:
         params={
             "body_cfg": SceneEntityCfg("robot", body_names=MISSING),
             "target_cfg": SceneEntityCfg("sc_port"),
-            "std": 0.05,
+            "std": 0.02,
+            "target_position_offset": (0.093, 0.140, 0.020),
+            "body_position_offset": (0.0, 0.0, 0.0),
+        },
+    )
+    target_distance_exp = RewTerm(
+        func=mdp.body_to_object_distance_exp,
+        weight=0.0,
+        params={
+            "body_cfg": SceneEntityCfg("robot", body_names=MISSING),
+            "target_cfg": SceneEntityCfg("sc_port"),
+            "sigma": 0.01,
+            "target_position_offset": (0.093, 0.140, 0.020),
+            "body_position_offset": (0.0, 0.0, 0.0),
+        },
+    )
+    target_orientation_tanh = RewTerm(
+        func=mdp.body_to_object_orientation_tanh,
+        weight=0.0,
+        params={
+            "body_cfg": SceneEntityCfg("robot", body_names=MISSING),
+            "target_cfg": SceneEntityCfg("sc_port"),
+            "std": 0.25,
+            "body_orientation_offset": None,
+            "target_orientation_offset": None,
+        },
+    )
+    target_reaching_bonus = RewTerm(
+        func=mdp.body_to_object_reaching_bonus,
+        weight=0.0,
+        params={
+            "body_cfg": SceneEntityCfg("robot", body_names=MISSING),
+            "target_cfg": SceneEntityCfg("sc_port"),
+            "threshold": 0.01,
+            "target_position_offset": (0.093, 0.140, 0.020),
+            "body_position_offset": (0.0, 0.0, 0.0),
         },
     )
     target_lateral_error = RewTerm(
@@ -548,6 +583,8 @@ class RewardsCfg:
             "body_cfg": SceneEntityCfg("robot", body_names=MISSING),
             "target_cfg": SceneEntityCfg("sc_port"),
             "axis": 0,
+            "target_position_offset": (0.093, 0.140, 0.020),
+            "body_position_offset": (0.0, 0.0, 0.0),
         },
     )
 
@@ -628,6 +665,9 @@ class AICTaskEnvCfg(ManagerBasedRLEnvCfg):
         ].body_names = ee_body
         self.rewards.reaching_bonus.params["asset_cfg"].body_names = ee_body
         self.rewards.target_distance_tanh.params["body_cfg"].body_names = ee_body
+        self.rewards.target_distance_exp.params["body_cfg"].body_names = ee_body
+        self.rewards.target_orientation_tanh.params["body_cfg"].body_names = ee_body
+        self.rewards.target_reaching_bonus.params["body_cfg"].body_names = ee_body
         self.rewards.target_lateral_error.params["body_cfg"].body_names = ee_body
 
         # # Arm action: joint position control
@@ -800,13 +840,74 @@ class AICTaskEnvCfg(ManagerBasedRLEnvCfg):
         self.observations.policy.eef_pose.noise = Unoise(n_min=-0.003, n_max=0.003)
 
     def _apply_optional_insertion_reward_weights(self) -> None:
+        target_scene_name = os.environ.get("AIC_ISAAC_TARGET_SCENE_NAME", "sc_port")
+        target_body_name = os.environ.get("AIC_ISAAC_TARGET_BODY_NAME")
+        target_offset = tuple(
+            float(value)
+            for value in os.environ.get(
+                "AIC_ISAAC_TARGET_POSITION_OFFSET", "0.093,0.140,0.020"
+            ).split(",")
+        )
+        if len(target_offset) != 3:
+            raise ValueError("AIC_ISAAC_TARGET_POSITION_OFFSET must contain three comma-separated floats")
+        body_offset = tuple(
+            float(value)
+            for value in os.environ.get(
+                "AIC_ISAAC_BODY_POSITION_OFFSET", "0.0,0.0,0.0"
+            ).split(",")
+        )
+        if len(body_offset) != 3:
+            raise ValueError("AIC_ISAAC_BODY_POSITION_OFFSET must contain three comma-separated floats")
+        target_orientation_offset_raw = os.environ.get("AIC_ISAAC_TARGET_ORIENTATION_OFFSET")
+        target_orientation_offset = (
+            None
+            if not target_orientation_offset_raw
+            else tuple(float(value) for value in target_orientation_offset_raw.split(","))
+        )
+        if target_orientation_offset is not None and len(target_orientation_offset) != 4:
+            raise ValueError("AIC_ISAAC_TARGET_ORIENTATION_OFFSET must contain four comma-separated floats")
+        body_orientation_offset_raw = os.environ.get("AIC_ISAAC_BODY_ORIENTATION_OFFSET")
+        body_orientation_offset = (
+            None
+            if not body_orientation_offset_raw
+            else tuple(float(value) for value in body_orientation_offset_raw.split(","))
+        )
+        if body_orientation_offset is not None and len(body_orientation_offset) != 4:
+            raise ValueError("AIC_ISAAC_BODY_ORIENTATION_OFFSET must contain four comma-separated floats")
+        for term_name in (
+            "target_distance_tanh",
+            "target_distance_exp",
+            "target_orientation_tanh",
+            "target_reaching_bonus",
+            "target_lateral_error",
+        ):
+            term = getattr(self.rewards, term_name)
+            term.params["target_cfg"].name = target_scene_name
+            if target_body_name:
+                term.params["body_cfg"].body_names = [target_body_name]
+            if "target_position_offset" in term.params:
+                term.params["target_position_offset"] = target_offset
+            if "body_position_offset" in term.params:
+                term.params["body_position_offset"] = body_offset
+            if "target_orientation_offset" in term.params:
+                term.params["target_orientation_offset"] = target_orientation_offset
+            if "body_orientation_offset" in term.params:
+                term.params["body_orientation_offset"] = body_orientation_offset
         distance_weight = float(
             os.environ.get("AIC_ISAAC_INSERTION_DISTANCE_WEIGHT", "0.0")
         )
+        close_weight = float(os.environ.get("AIC_ISAAC_INSERTION_CLOSE_WEIGHT", "0.0"))
+        orientation_weight = float(
+            os.environ.get("AIC_ISAAC_INSERTION_ORIENTATION_WEIGHT", "0.0")
+        )
+        reaching_weight = float(os.environ.get("AIC_ISAAC_INSERTION_REACHING_WEIGHT", "0.0"))
         lateral_weight = float(
             os.environ.get("AIC_ISAAC_INSERTION_LATERAL_WEIGHT", "0.0")
         )
         self.rewards.target_distance_tanh.weight = distance_weight
+        self.rewards.target_distance_exp.weight = close_weight
+        self.rewards.target_orientation_tanh.weight = orientation_weight
+        self.rewards.target_reaching_bonus.weight = reaching_weight
         self.rewards.target_lateral_error.weight = lateral_weight
 
     def _apply_initial_arm_joint_override(self) -> None:

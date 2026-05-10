@@ -197,7 +197,7 @@ incomplete or only partially represented by current utilities.
    - Added online SERL/SAC design doc:
      `aic_utils/aic_isaac/docs/isaac_online_serl_design.md`.
    - Added online SERL host launcher:
-     `aic_utils/aic_isaac/scripts/train_isaac_serl_stage5.py`.
+     `aic_utils/aic_isaac/scripts/train_isaac_online_serl.py`.
    - Added Isaac Lab online SERL trainer:
      `aic_utils/aic_isaac/aic_isaaclab/scripts/serl/train.py`.
    - Added ACT TorchScript export utility:
@@ -210,7 +210,7 @@ incomplete or only partially represented by current utilities.
      the trained adapter actor, collects replay, updates twin critics and the
      adapter, and saves an online checkpoint.
    - Actual artifact-producing online SERL run:
-     `outputs/train/isaac_stage5_online_serl_adapter/2026-04-30_20-18-32_online_serl_adapter_short/checkpoint_latest.pt`.
+     `outputs/train/isaac_online_serl_adapter/2026-04-30_20-18-32_online_serl_adapter_short/checkpoint_latest.pt`.
    - Online run result: 3 Isaac steps, 2 online updates, final metrics
      `reward_mean=-0.017923442646861076`,
      `critic_loss=0.01120422501116991`,
@@ -218,7 +218,7 @@ incomplete or only partially represented by current utilities.
      `adapter_delta_norm=0.1511501669883728`,
      `q_mean=-0.0775182694196701`.
    - Online sanity run with 30-minute wall-time guard:
-     `outputs/train/isaac_stage5_online_serl_adapter/2026-04-30_20-55-36_online_serl_adapter_sanity_300/checkpoint_latest.pt`.
+     `outputs/train/isaac_online_serl_adapter/2026-04-30_20-55-36_online_serl_adapter_sanity_300/checkpoint_latest.pt`.
    - Sanity command requested `steps=300`, `updates=100`, `batch_size=8`,
      `max_wall_time_minutes=30`; it stopped by `target_updates`, not by wall
      time, after 107 Isaac steps, 100 online updates, and 4.087678201599981
@@ -232,7 +232,7 @@ incomplete or only partially represented by current utilities.
      `act_preservation_loss=0.6926227807998657`,
      `q_mean=0.01647045835852623`.
    - 1k guarded online SERL run:
-     `outputs/train/isaac_stage5_online_serl_adapter/2026-04-30_21-11-49_online_serl_adapter_1k_guarded/checkpoint_latest.pt`.
+     `outputs/train/isaac_online_serl_adapter/2026-04-30_21-11-49_online_serl_adapter_1k_guarded/checkpoint_latest.pt`.
    - 1k command requested `steps=1000`, `updates=1000`, `batch_size=8`,
      `max_wall_time_minutes=30`, `adapter_penalty_weight=0.01`, and
      `act_preservation_weight=0.1`; it stopped by `max_steps`, not wall time,
@@ -286,7 +286,7 @@ incomplete or only partially represented by current utilities.
    - `--allow-zero-images` exists only for explicit adapter interface validation
      and must not be used as real transfer scoring.
    - Actual short ACT-adapter Gazebo transfer command:
-     `pixi run python aic_utils/gazebo_rl/scripts/serl_transfer_validate.py --policy-kind act_adapter_serl --checkpoint outputs/train/isaac_stage5_online_serl_adapter/2026-04-30_21-11-49_online_serl_adapter_1k_guarded/checkpoint_latest.pt --act-torchscript outputs/train/hybrid_act_nominal_n10/act_policy_ts_cuda.pt --workspace-dir . --sim-distrobox aic_eval --device cuda --max-steps 3 --per-trial-timeout-sec 300 --ground-truth true --gazebo-gui false --launch-rviz false --output-dir outputs/gazebo_rl/serl_transfer_validation/act_adapter_3step_latest`.
+     `pixi run python aic_utils/gazebo_rl/scripts/serl_transfer_validate.py --policy-kind act_adapter_serl --checkpoint outputs/train/isaac_online_serl_adapter/2026-04-30_21-11-49_online_serl_adapter_1k_guarded/checkpoint_latest.pt --act-torchscript outputs/train/hybrid_act_nominal_n10/act_policy_ts_cuda.pt --workspace-dir . --sim-distrobox aic_eval --device cuda --max-steps 3 --per-trial-timeout-sec 300 --ground-truth true --gazebo-gui false --launch-rviz false --output-dir outputs/gazebo_rl/serl_transfer_validation/act_adapter_3step_latest`.
    - Actual short transfer summary:
      `outputs/gazebo_rl/serl_transfer_validation/act_adapter_3step_latest/transfer_validation_summary.json`.
    - Result: completed 3 real Gazebo steps with `include_images=true` and
@@ -299,11 +299,11 @@ incomplete or only partially represented by current utilities.
      was produced.
    - Added bounded execution guards:
      `--adapter-delta-clip 0.05` and `--action-clip 0.05` are now available in
-     `train_vision_offline_serl.py`, `train_isaac_serl_stage5.py`, Isaac
+     `train_vision_offline_serl.py`, `train_isaac_online_serl.py`, Isaac
      `aic_isaaclab/scripts/serl/train.py`, and `serl_transfer_validate.py`.
      Isaac online SERL and Gazebo transfer default to `0.05` for both guards.
    - Actual short clipped ACT-adapter Gazebo transfer command:
-     `pixi run python aic_utils/gazebo_rl/scripts/serl_transfer_validate.py --policy-kind act_adapter_serl --checkpoint outputs/train/isaac_stage5_online_serl_adapter/2026-04-30_21-11-49_online_serl_adapter_1k_guarded/checkpoint_latest.pt --act-torchscript outputs/train/hybrid_act_nominal_n10/act_policy_ts_cuda.pt --workspace-dir . --sim-distrobox aic_eval --device cuda --max-steps 3 --per-trial-timeout-sec 300 --ground-truth true --gazebo-gui false --launch-rviz false --adapter-delta-clip 0.05 --action-clip 0.05 --output-dir outputs/gazebo_rl/serl_transfer_validation/act_adapter_clipped_3step_latest`.
+     `pixi run python aic_utils/gazebo_rl/scripts/serl_transfer_validate.py --policy-kind act_adapter_serl --checkpoint outputs/train/isaac_online_serl_adapter/2026-04-30_21-11-49_online_serl_adapter_1k_guarded/checkpoint_latest.pt --act-torchscript outputs/train/hybrid_act_nominal_n10/act_policy_ts_cuda.pt --workspace-dir . --sim-distrobox aic_eval --device cuda --max-steps 3 --per-trial-timeout-sec 300 --ground-truth true --gazebo-gui false --launch-rviz false --adapter-delta-clip 0.05 --action-clip 0.05 --output-dir outputs/gazebo_rl/serl_transfer_validation/act_adapter_clipped_3step_latest`.
    - Actual clipped transfer summary:
      `outputs/gazebo_rl/serl_transfer_validation/act_adapter_clipped_3step_latest/transfer_validation_summary.json`.
    - Clipped result: completed 3 real Gazebo steps with live images; elapsed
@@ -396,14 +396,14 @@ incomplete or only partially represented by current utilities.
 
 - `aic_utils/aic_isaac/aic_isaaclab/scripts/train_aic_isaaclab_ppo_smoke.sh`
   - Camera-enabled PPO smoke wrapper.
-  - Defaults: `AIC_ISAAC_DISABLE_CAMERAS=0`, `RUN_NAME=stage5_ppo_smoke_camera`.
+  - Defaults: `AIC_ISAAC_DISABLE_CAMERAS=0`, `RUN_NAME=isaac_rsl_rl_smoke_camera`.
   - Produces real RSL-RL model artifacts when run; despite "smoke" naming, it performs actual training for the configured iteration count.
 
 - `aic_utils/aic_isaac/aic_isaaclab/scripts/eval_aic_isaaclab_ppo.sh`
   - Camera-enabled finite checkpoint evaluator wrapper.
   - Requires `CHECKPOINT`.
 
-- `aic_utils/aic_isaac/scripts/train_isaac_ppo_stage5.py`
+- `aic_utils/aic_isaac/scripts/train_isaac_rsl_rl.py`
   - Host-side wrapper for Isaac PPO.
   - Adds `--enable_cameras` and sets `AIC_ISAAC_DISABLE_CAMERAS=0`.
   - Still starts PPO from scratch or resumes an RSL-RL-native checkpoint only.
@@ -449,8 +449,8 @@ docker run --rm --gpus all --entrypoint bash \
   -lc 'set -euo pipefail; cd /workspace/isaaclab; \
     aic/aic_utils/aic_isaac/aic_isaaclab/scripts/install_aic_task.sh >/tmp/aic_install.log; \
     TASK_ID=AIC-Task-v0 NUM_ENVS=1 MAX_ITERATIONS=1 SEED=3 \
-    RUN_NAME=stage5_ppo_camera_required_strict \
-    OUTPUT_DIR=/workspace/isaaclab/aic/outputs/train/isaac_stage5_camera_required_strict \
+    RUN_NAME=isaac_rsl_rl_camera_required_strict \
+    OUTPUT_DIR=/workspace/isaaclab/aic/outputs/train/isaac_rsl_rl_camera_required_strict \
     aic/aic_utils/aic_isaac/aic_isaaclab/scripts/train_aic_isaaclab_ppo_smoke.sh'
 ```
 
@@ -458,10 +458,10 @@ Result: success. This was actual PPO training, but only one iteration. It
 produced real RSL-RL artifacts:
 
 ```text
-outputs/train/isaac_stage5_camera_required_strict/aic_task/2026-04-30_11-29-03_stage5_ppo_camera_required_strict/model_0.pt
-outputs/train/isaac_stage5_camera_required_strict/aic_task/2026-04-30_11-29-03_stage5_ppo_camera_required_strict/params/env.yaml
-outputs/train/isaac_stage5_camera_required_strict/aic_task/2026-04-30_11-29-03_stage5_ppo_camera_required_strict/params/agent.yaml
-outputs/train/isaac_stage5_camera_required_strict/aic_task/2026-04-30_11-29-03_stage5_ppo_camera_required_strict/events.out.tfevents...
+outputs/train/isaac_rsl_rl_camera_required_strict/aic_task/2026-04-30_11-29-03_isaac_rsl_rl_camera_required_strict/model_0.pt
+outputs/train/isaac_rsl_rl_camera_required_strict/aic_task/2026-04-30_11-29-03_isaac_rsl_rl_camera_required_strict/params/env.yaml
+outputs/train/isaac_rsl_rl_camera_required_strict/aic_task/2026-04-30_11-29-03_isaac_rsl_rl_camera_required_strict/params/agent.yaml
+outputs/train/isaac_rsl_rl_camera_required_strict/aic_task/2026-04-30_11-29-03_isaac_rsl_rl_camera_required_strict/events.out.tfevents...
 ```
 
 Training confirmation:
@@ -480,7 +480,7 @@ docker run --rm --gpus all --entrypoint bash \
   nvcr.io/nvidia/isaac-lab:2.3.2 \
   -lc 'set -euo pipefail; cd /workspace/isaaclab; \
     aic/aic_utils/aic_isaac/aic_isaaclab/scripts/install_aic_task.sh >/tmp/aic_install.log; \
-    CHECKPOINT=/workspace/isaaclab/aic/outputs/train/isaac_stage5_camera_required_strict/aic_task/2026-04-30_11-29-03_stage5_ppo_camera_required_strict/model_0.pt \
+    CHECKPOINT=/workspace/isaaclab/aic/outputs/train/isaac_rsl_rl_camera_required_strict/aic_task/2026-04-30_11-29-03_isaac_rsl_rl_camera_required_strict/model_0.pt \
     NUM_ENVS=1 NUM_EPISODES=1 MAX_STEPS=16 SEED=3 \
     aic/aic_utils/aic_isaac/aic_isaaclab/scripts/eval_aic_isaaclab_ppo.sh'
 ```
@@ -529,7 +529,7 @@ Static checks:
 
 ```bash
 PYTHONPYCACHEPREFIX=/tmp/aic_pycache python3 -m py_compile \
-  aic_utils/aic_isaac/scripts/train_isaac_ppo_stage5.py \
+  aic_utils/aic_isaac/scripts/train_isaac_rsl_rl.py \
   aic_utils/aic_isaac/aic_isaaclab/scripts/rsl_rl/train.py \
   aic_utils/aic_isaac/aic_isaaclab/scripts/rsl_rl/eval.py
 
@@ -538,7 +538,7 @@ git diff --check
 
 Result: success. Host `pytest` is not installed, so the pytest file was not run
 through pytest in this session. A direct wrapper assertion check confirmed
-`--enable_cameras` and `AIC_ISAAC_DISABLE_CAMERAS=0` are set by the Stage 5 wrapper.
+`--enable_cameras` and `AIC_ISAAC_DISABLE_CAMERAS=0` are set by the Isaac online RL wrapper.
 
 ## Historical Low-Dimensional Runs
 
@@ -549,7 +549,7 @@ pipeline goal.
 Historical lowdim training:
 
 ```text
-outputs/train/stage5_aic_lowdim_ppo/aic_task/2026-04-30_09-08-49_stage5_aic_lowdim_ppo/model_200.pt
+outputs/train/isaac_aic_lowdim_ppo/aic_task/2026-04-30_09-08-49_isaac_aic_lowdim_ppo/model_200.pt
 ```
 
 Historical lowdim evaluator result:
@@ -1217,14 +1217,14 @@ Results:
 - `AIC-Task-v0` import smoke passed.
 - No-camera environment smoke passed with policy observation shape `(154,)`,
   action dimension `6`, and `AIC IsaacLab env smoke OK`.
-- The fixed-task ACT-backed Stage 5 wrapper dry-run passed with
+- The fixed-task ACT-backed Isaac online RL wrapper dry-run passed with
   `sfp_to_nic`, card 0, port 0, the ACT TorchScript checkpoint, and the offline
   SERL checkpoint. It validated checkpoint metadata and generated the concrete
   IsaacLab training command.
 - Follow-up fix: `smoke_aic_isaaclab_env.sh` now reads `center_camera`,
   `left_camera`, and `right_camera` RGB tensors when cameras are enabled. Scene
   creation alone is no longer considered a camera/training smoke pass.
-- The host Stage 5 SERL wrapper now forwards `--rendering-mode` and
+- The host Isaac online RL SERL wrapper now forwards `--rendering-mode` and
   `--kit-args` so camera/runtime debugging settings can be specified without
   editing the trainer.
 - Strict camera smoke command rerun:
@@ -1270,8 +1270,8 @@ Isaac driver-check fix:
   checkpoints:
 
   ```text
-  outputs/train/isaac_stage5_serl/camera_required_train_smoke/2026-05-03_14-21-08_camera_required_train_smoke/checkpoint_latest.pt
-  outputs/train/isaac_stage5_serl/camera_required_update_smoke/2026-05-03_14-21-55_camera_required_update_smoke/checkpoint_latest.pt
+  outputs/train/isaac_online_serl/camera_required_train_smoke/2026-05-03_14-21-08_camera_required_train_smoke/checkpoint_latest.pt
+  outputs/train/isaac_online_serl/camera_required_update_smoke/2026-05-03_14-21-55_camera_required_update_smoke/checkpoint_latest.pt
   ```
 
 The update smoke command used the fixed task context `sfp_to_nic`, card 0, port

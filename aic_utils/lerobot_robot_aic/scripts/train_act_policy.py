@@ -35,6 +35,19 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--num-workers", type=int, default=1)
     parser.add_argument("--lr", default="1e-4", help="Optimizer learning rate.")
     parser.add_argument("--dataset-video-backend", default="pyav")
+    parser.add_argument("--vision-backbone", default="resnet18")
+    parser.add_argument("--pretrained-backbone-weights", default="ResNet18_Weights.IMAGENET1K_V1")
+    parser.add_argument("--replace-final-stride-with-dilation", action=argparse.BooleanOptionalAction, default=False)
+    parser.add_argument("--dim-model", type=int, default=512)
+    parser.add_argument("--dim-feedforward", type=int, default=3200)
+    parser.add_argument("--n-encoder-layers", type=int, default=4)
+    parser.add_argument("--n-decoder-layers", type=int, default=1)
+    parser.add_argument("--n-vae-encoder-layers", type=int, default=4)
+    parser.add_argument("--n-heads", type=int, default=8)
+    parser.add_argument("--kl-weight", type=float, default=10.0)
+    parser.add_argument("--dropout", type=float, default=0.1)
+    parser.add_argument("--pre-norm", action=argparse.BooleanOptionalAction, default=False)
+    parser.add_argument("--latent-dim", type=int, default=32)
     parser.add_argument("--save-freq", type=int, default=20000)
     parser.add_argument("--log-freq", type=int, default=200)
     parser.add_argument("--eval-freq", type=int, default=0)
@@ -129,6 +142,19 @@ def build_lerobot_train_cmd(args: argparse.Namespace) -> list[str]:
         f"--optimizer.lr={args.lr}",
         f"--policy.optimizer_lr={args.lr}",
         f"--policy.optimizer_lr_backbone={args.lr}",
+        f"--policy.vision_backbone={args.vision_backbone}",
+        f"--policy.pretrained_backbone_weights={args.pretrained_backbone_weights}",
+        f"--policy.replace_final_stride_with_dilation={str(bool(args.replace_final_stride_with_dilation)).lower()}",
+        f"--policy.dim_model={args.dim_model}",
+        f"--policy.dim_feedforward={args.dim_feedforward}",
+        f"--policy.n_encoder_layers={args.n_encoder_layers}",
+        f"--policy.n_decoder_layers={args.n_decoder_layers}",
+        f"--policy.n_vae_encoder_layers={args.n_vae_encoder_layers}",
+        f"--policy.n_heads={args.n_heads}",
+        f"--policy.kl_weight={args.kl_weight}",
+        f"--policy.dropout={args.dropout}",
+        f"--policy.pre_norm={str(bool(args.pre_norm)).lower()}",
+        f"--policy.latent_dim={args.latent_dim}",
         f"--policy.chunk_size={args.chunk_size}",
         f"--policy.n_action_steps={args.n_action_steps}",
         f"--policy.n_obs_steps={args.n_obs_steps}",

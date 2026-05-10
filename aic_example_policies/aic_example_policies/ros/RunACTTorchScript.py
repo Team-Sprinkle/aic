@@ -20,6 +20,7 @@ from __future__ import annotations
 
 import json
 import os
+import sys
 import time
 from pathlib import Path
 from typing import Any
@@ -40,6 +41,13 @@ from aic_model.policy import (
 )
 from aic_model_interfaces.msg import Observation
 from aic_task_interfaces.msg import Task
+
+REPO_ROOT = Path(__file__).resolve().parents[3]
+LEROBOT_AIC_PACKAGE_DIR = REPO_ROOT / "aic_utils" / "lerobot_robot_aic"
+if LEROBOT_AIC_PACKAGE_DIR.exists() and str(LEROBOT_AIC_PACKAGE_DIR) not in sys.path:
+    sys.path.insert(0, str(LEROBOT_AIC_PACKAGE_DIR))
+
+from lerobot_robot_aic.runtime_features import AICRuntimeFeatureAssembler  # noqa: E402
 
 
 class RunACTTorchScript(Policy):
@@ -84,6 +92,7 @@ class RunACTTorchScript(Policy):
         self.action_mean = self._stat(stats, "action.mean", (1, -1))
         self.action_std = self._stat(stats, "action.std", (1, -1))
         self._current_task: Task | None = None
+        self.feature_assembler = AICRuntimeFeatureAssembler(self.state_dim, fps=self.control_hz)
 
         self.get_logger().info(
             "TorchScript ACT policy loaded from "
@@ -128,7 +137,7 @@ class RunACTTorchScript(Policy):
         return tensor
 
     def _apply_task_vector_identity_normalization(self) -> None:
-        if self.state_dim != 42:
+        if self.state_dim not in (42, 82):
             return
         self.state_mean[:, -10:] = 0.0
         self.state_std[:, -10:] = 1.0
@@ -164,41 +173,11 @@ class RunACTTorchScript(Policy):
         raise ValueError(f"Cannot infer task vector from target_module_name={task.target_module_name!r}")
 
     def _state_vector(self, obs_msg: Observation) -> np.ndarray:
-        tcp_pose = obs_msg.controller_state.tcp_pose
-        tcp_vel = obs_msg.controller_state.tcp_velocity
-        values = [
-            tcp_pose.position.x,
-            tcp_pose.position.y,
-            tcp_pose.position.z,
-            tcp_pose.orientation.x,
-            tcp_pose.orientation.y,
-            tcp_pose.orientation.z,
-            tcp_pose.orientation.w,
-            tcp_vel.linear.x,
-            tcp_vel.linear.y,
-            tcp_vel.linear.z,
-            tcp_vel.angular.x,
-            tcp_vel.angular.y,
-            tcp_vel.angular.z,
-            *obs_msg.controller_state.tcp_error,
-            *obs_msg.joint_states.position[:7],
-        ]
-        if self.state_dim >= 32:
-            values.extend(
-                [
-                    obs_msg.wrist_wrench.wrench.force.x,
-                    obs_msg.wrist_wrench.wrench.force.y,
-                    obs_msg.wrist_wrench.wrench.force.z,
-                    obs_msg.wrist_wrench.wrench.torque.x,
-                    obs_msg.wrist_wrench.wrench.torque.y,
-                    obs_msg.wrist_wrench.wrench.torque.z,
-                ]
-            )
-        if self.state_dim == 42:
+        if self.feature_assembler.uses_task_vector:
             if self._current_task is None:
-                raise ValueError("checkpoint expects task-conditioned 42D state, but no active task is set")
-            values.extend(self._task_vector(self._current_task))
-        return np.asarray(values, dtype=np.float32)
+                raise ValueError(f"checkpoint expects task-conditioned {self.state_dim}D state, but no active task is set")
+            self.feature_assembler.task_vector = np.asarray(self._task_vector(self._current_task), dtype=np.float32)
+        return self.feature_assembler.assemble_ros(obs_msg)
 
     def prepare_observations(self, obs_msg: Observation) -> dict[str, torch.Tensor]:
         camera_msg_by_key = {
@@ -292,6 +271,7 @@ class RunACTTorchScript(Policy):
         **kwargs,
     ) -> bool:
         self._current_task = task
+        self.feature_assembler.reset(self._task_vector(task) if self.feature_assembler.uses_task_vector else None)
         self.get_logger().info(f"RunACTTorchScript.insert_cable() enter. Task: {task}")
         if self.start_delay_sec > 0.0:
             self.get_logger().info(f"Waiting {self.start_delay_sec:.2f}s before first ACT TorchScript command.")

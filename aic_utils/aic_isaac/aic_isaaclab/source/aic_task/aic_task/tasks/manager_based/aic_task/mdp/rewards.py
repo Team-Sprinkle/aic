@@ -20,7 +20,7 @@ import torch
 
 from isaaclab.assets import Articulation, RigidObject
 from isaaclab.managers import SceneEntityCfg
-from isaaclab.utils.math import combine_frame_transforms, quat_error_magnitude, quat_mul
+from isaaclab.utils.math import combine_frame_transforms, quat_apply, quat_error_magnitude, quat_mul
 
 if TYPE_CHECKING:
     from isaaclab.envs import ManagerBasedRLEnv
@@ -142,11 +142,58 @@ def ee_reaching_bonus(
 # ---------------------------------------------------------------------------
 
 
+def _target_position_w(
+    target_asset: RigidObject,
+    target_position_offset: tuple[float, float, float] | list[float] | None,
+) -> torch.Tensor:
+    if target_position_offset is None:
+        return target_asset.data.root_pos_w
+    offset = torch.tensor(
+        target_position_offset,
+        dtype=target_asset.data.root_pos_w.dtype,
+        device=target_asset.data.root_pos_w.device,
+    ).reshape(1, 3)
+    return target_asset.data.root_pos_w + quat_apply(target_asset.data.root_quat_w, offset.expand_as(target_asset.data.root_pos_w))
+
+
+def _body_position_w(
+    body_asset: RigidObject,
+    body_id: int,
+    body_position_offset: tuple[float, float, float] | list[float] | None,
+) -> torch.Tensor:
+    body_pos_w = body_asset.data.body_pos_w[:, body_id]  # type: ignore
+    if body_position_offset is None:
+        return body_pos_w
+    offset = torch.tensor(
+        body_position_offset,
+        dtype=body_pos_w.dtype,
+        device=body_pos_w.device,
+    ).reshape(1, 3)
+    body_quat_w = body_asset.data.body_quat_w[:, body_id]  # type: ignore
+    return body_pos_w + quat_apply(body_quat_w, offset.expand_as(body_pos_w))
+
+
+def _offset_quat_w(
+    base_quat_w: torch.Tensor,
+    orientation_offset: tuple[float, float, float, float] | list[float] | None,
+) -> torch.Tensor:
+    if orientation_offset is None:
+        return base_quat_w
+    offset = torch.tensor(
+        orientation_offset,
+        dtype=base_quat_w.dtype,
+        device=base_quat_w.device,
+    ).reshape(1, 4)
+    return quat_mul(base_quat_w, offset.expand_as(base_quat_w))
+
+
 def body_to_object_distance_tanh(
     env: ManagerBasedRLEnv,
     std: float,
     body_cfg: SceneEntityCfg,
     target_cfg: SceneEntityCfg,
+    target_position_offset: tuple[float, float, float] | list[float] | None = None,
+    body_position_offset: tuple[float, float, float] | list[float] | None = None,
 ) -> torch.Tensor:
     """Reward a body approaching a target object's root pose.
 
@@ -157,10 +204,64 @@ def body_to_object_distance_tanh(
     """
     body_asset: RigidObject = env.scene[body_cfg.name]
     target_asset: RigidObject = env.scene[target_cfg.name]
-    body_pos_w = body_asset.data.body_pos_w[:, body_cfg.body_ids[0]]  # type: ignore
-    target_pos_w = target_asset.data.root_pos_w
+    body_pos_w = _body_position_w(body_asset, body_cfg.body_ids[0], body_position_offset)
+    target_pos_w = _target_position_w(target_asset, target_position_offset)
     distance = torch.norm(body_pos_w - target_pos_w, dim=1)
     return 1.0 - torch.tanh(distance / std)
+
+
+def body_to_object_distance_exp(
+    env: ManagerBasedRLEnv,
+    sigma: float,
+    body_cfg: SceneEntityCfg,
+    target_cfg: SceneEntityCfg,
+    target_position_offset: tuple[float, float, float] | list[float] | None = None,
+    body_position_offset: tuple[float, float, float] | list[float] | None = None,
+) -> torch.Tensor:
+    """Reward precise body-to-target proximity using an exponential kernel."""
+    body_asset: RigidObject = env.scene[body_cfg.name]
+    target_asset: RigidObject = env.scene[target_cfg.name]
+    body_pos_w = _body_position_w(body_asset, body_cfg.body_ids[0], body_position_offset)
+    target_pos_w = _target_position_w(target_asset, target_position_offset)
+    dist_sq = torch.sum(torch.square(body_pos_w - target_pos_w), dim=1)
+    return torch.exp(-dist_sq / (sigma**2))
+
+
+def body_to_object_orientation_tanh(
+    env: ManagerBasedRLEnv,
+    std: float,
+    body_cfg: SceneEntityCfg,
+    target_cfg: SceneEntityCfg,
+    body_orientation_offset: tuple[float, float, float, float] | list[float] | None = None,
+    target_orientation_offset: tuple[float, float, float, float] | list[float] | None = None,
+) -> torch.Tensor:
+    """Reward semantic body-frame alignment to a semantic target frame."""
+    body_asset: RigidObject = env.scene[body_cfg.name]
+    target_asset: RigidObject = env.scene[target_cfg.name]
+    body_quat_w = _offset_quat_w(
+        body_asset.data.body_quat_w[:, body_cfg.body_ids[0]],  # type: ignore
+        body_orientation_offset,
+    )
+    target_quat_w = _offset_quat_w(target_asset.data.root_quat_w, target_orientation_offset)
+    ang_error = quat_error_magnitude(body_quat_w, target_quat_w)
+    return 1.0 - torch.tanh(ang_error / std)
+
+
+def body_to_object_reaching_bonus(
+    env: ManagerBasedRLEnv,
+    threshold: float,
+    body_cfg: SceneEntityCfg,
+    target_cfg: SceneEntityCfg,
+    target_position_offset: tuple[float, float, float] | list[float] | None = None,
+    body_position_offset: tuple[float, float, float] | list[float] | None = None,
+) -> torch.Tensor:
+    """Sparse +1 when the selected body is within *threshold* of the target object."""
+    body_asset: RigidObject = env.scene[body_cfg.name]
+    target_asset: RigidObject = env.scene[target_cfg.name]
+    body_pos_w = _body_position_w(body_asset, body_cfg.body_ids[0], body_position_offset)
+    target_pos_w = _target_position_w(target_asset, target_position_offset)
+    distance = torch.norm(body_pos_w - target_pos_w, dim=1)
+    return (distance < threshold).float()
 
 
 def body_to_object_lateral_error(
@@ -168,6 +269,8 @@ def body_to_object_lateral_error(
     body_cfg: SceneEntityCfg,
     target_cfg: SceneEntityCfg,
     axis: int = 0,
+    target_position_offset: tuple[float, float, float] | list[float] | None = None,
+    body_position_offset: tuple[float, float, float] | list[float] | None = None,
 ) -> torch.Tensor:
     """Penalize lateral error to a target object's root pose.
 
@@ -177,8 +280,8 @@ def body_to_object_lateral_error(
     """
     body_asset: RigidObject = env.scene[body_cfg.name]
     target_asset: RigidObject = env.scene[target_cfg.name]
-    body_pos_w = body_asset.data.body_pos_w[:, body_cfg.body_ids[0]]  # type: ignore
-    delta = body_pos_w - target_asset.data.root_pos_w
+    body_pos_w = _body_position_w(body_asset, body_cfg.body_ids[0], body_position_offset)
+    delta = body_pos_w - _target_position_w(target_asset, target_position_offset)
     mask = torch.ones(3, dtype=torch.bool, device=delta.device)
     mask[axis] = False
     return torch.norm(delta[:, mask], dim=1)

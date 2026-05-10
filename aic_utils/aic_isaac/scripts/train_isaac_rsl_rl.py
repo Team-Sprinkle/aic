@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Launch Stage 5 Isaac Lab PPO/RSL-RL training for AIC."""
+"""Launch legacy Isaac Lab PPO/RSL-RL training for AIC."""
 
 from __future__ import annotations
 
@@ -36,7 +36,7 @@ def parse_args() -> argparse.Namespace:
         default=os.environ.get("ISAACLAB_LAUNCHER", "isaaclab"),
         help="Isaac Lab launcher command or path. Defaults to ISAACLAB_LAUNCHER or 'isaaclab'.",
     )
-    parser.add_argument("--run-name", default="stage5_ppo_smoke")
+    parser.add_argument("--run-name", default="isaac_rsl_rl_smoke")
     parser.add_argument("--resume", action="store_true")
     parser.add_argument("--checkpoint", default=None)
     parser.add_argument("--load-run", default=None)

@@ -14,45 +14,125 @@ from torch import nn
 from torch.nn import functional as F
 
 from gazebo_rl.gym_env import GazeboRLEnv
-from gazebo_rl.serl_policy import ACTAdapterSERLGazeboPolicy, ACT_CAMERA_KEYS, task_vector_from_context
+from gazebo_rl.serl_policy import (
+    ACTAdapterSERLGazeboPolicy,
+    ACT_CAMERA_KEYS,
+    _activation,
+    _make_state_encoder,
+    task_vector_from_context,
+)
 from gazebo_rl.train import add_recording_args
 
 
 class ImageStateEncoder(nn.Module):
-    def __init__(self, *, state_dim: int, camera_keys: list[str], feature_dim: int = 256):
+    def __init__(
+        self,
+        *,
+        state_dim: int,
+        camera_keys: list[str],
+        feature_dim: int = 256,
+        per_camera_dim: int = 64,
+        activation: str = "relu",
+        state_encoding: str = "none",
+        state_encoding_indices: list[int] | tuple[int, ...] = (),
+        state_encoding_num_bands: int = 4,
+        state_encoding_max_freq: float = 8.0,
+        state_encoding_scale: float = 1.0,
+    ):
         super().__init__()
         self.camera_keys = list(camera_keys)
+        self.state_encoder, encoded_state_dim = _make_state_encoder(
+            state_dim=state_dim,
+            state_encoding=state_encoding,
+            state_encoding_indices=state_encoding_indices,
+            state_encoding_num_bands=state_encoding_num_bands,
+            state_encoding_max_freq=state_encoding_max_freq,
+            state_encoding_scale=state_encoding_scale,
+        )
         self.image_encoder = nn.Sequential(
             nn.Conv2d(3, 16, kernel_size=5, stride=4, padding=2),
-            nn.ReLU(),
+            _activation(activation),
             nn.Conv2d(16, 32, kernel_size=3, stride=4, padding=1),
-            nn.ReLU(),
+            _activation(activation),
             nn.AdaptiveAvgPool2d((1, 1)),
             nn.Flatten(),
-            nn.Linear(32, 64),
-            nn.ReLU(),
+            nn.Linear(32, per_camera_dim),
+            _activation(activation),
         )
-        self.proj = nn.Sequential(nn.Linear(state_dim + 64 * len(self.camera_keys), feature_dim), nn.ReLU())
+        self.proj = nn.Sequential(
+            nn.Linear(encoded_state_dim + per_camera_dim * len(self.camera_keys), feature_dim),
+            _activation(activation),
+        )
 
     def forward(self, obs: dict[str, Any]) -> torch.Tensor:
         image_features = [self.image_encoder(obs["images"][key]) for key in self.camera_keys]
-        return self.proj(torch.cat([obs["state"], *image_features], dim=-1))
+        return self.proj(torch.cat([self.state_encoder(obs["state"]), *image_features], dim=-1))
 
 
 class VisionCritic(nn.Module):
-    def __init__(self, *, state_dim: int, camera_keys: list[str], action_dim: int, feature_dim: int = 256):
+    def __init__(
+        self,
+        *,
+        state_dim: int,
+        camera_keys: list[str],
+        action_dim: int,
+        feature_dim: int = 256,
+        arch: str = "concat",
+        hidden_dim: int = 256,
+        num_layers: int = 2,
+        per_camera_dim: int = 64,
+        activation: str = "relu",
+        state_encoding: str = "none",
+        state_encoding_indices: list[int] | tuple[int, ...] = (),
+        state_encoding_num_bands: int = 4,
+        state_encoding_max_freq: float = 8.0,
+        state_encoding_scale: float = 1.0,
+    ):
         super().__init__()
-        self.encoder = ImageStateEncoder(state_dim=state_dim, camera_keys=camera_keys, feature_dim=feature_dim)
-        self.q = nn.Sequential(
-            nn.Linear(feature_dim + action_dim, 256),
-            nn.ReLU(),
-            nn.Linear(256, 256),
-            nn.ReLU(),
-            nn.Linear(256, 1),
+        self.arch = str(arch)
+        self.encoder = ImageStateEncoder(
+            state_dim=state_dim,
+            camera_keys=camera_keys,
+            feature_dim=feature_dim,
+            per_camera_dim=per_camera_dim,
+            activation=activation,
+            state_encoding=state_encoding,
+            state_encoding_indices=state_encoding_indices,
+            state_encoding_num_bands=state_encoding_num_bands,
+            state_encoding_max_freq=state_encoding_max_freq,
+            state_encoding_scale=state_encoding_scale,
         )
+        if self.arch == "concat":
+            self.q = self._mlp(feature_dim + action_dim, hidden_dim, num_layers, 1, activation=activation)
+        elif self.arch == "multiplicative":
+            self.action_proj = nn.Sequential(nn.Linear(action_dim, feature_dim), _activation(activation))
+            self.q = self._mlp(feature_dim * 3, hidden_dim, num_layers, 1, activation=activation)
+        elif self.arch == "value_advantage":
+            self.value = self._mlp(feature_dim, hidden_dim, num_layers, 1, activation=activation)
+            self.advantage = self._mlp(feature_dim + action_dim, hidden_dim, num_layers, 1, activation=activation)
+        else:
+            raise ValueError(f"Unsupported critic architecture: {self.arch!r}")
+
+    @staticmethod
+    def _mlp(input_dim: int, hidden_dim: int, num_layers: int, output_dim: int, *, activation: str) -> nn.Sequential:
+        layers: list[nn.Module] = []
+        dim = input_dim
+        for _ in range(num_layers):
+            layers.extend([nn.Linear(dim, hidden_dim), _activation(activation)])
+            dim = hidden_dim
+        layers.append(nn.Linear(dim, output_dim))
+        return nn.Sequential(*layers)
 
     def forward(self, obs: dict[str, Any], action: torch.Tensor) -> torch.Tensor:
-        return self.q(torch.cat([self.encoder(obs), action], dim=-1))
+        obs_feature = self.encoder(obs)
+        if self.arch == "concat":
+            return self.q(torch.cat([obs_feature, action], dim=-1))
+        if self.arch == "multiplicative":
+            action_feature = self.action_proj(action)
+            return self.q(torch.cat([obs_feature, action_feature, obs_feature * action_feature], dim=-1))
+        if self.arch == "value_advantage":
+            return self.value(obs_feature) + self.advantage(torch.cat([obs_feature, action], dim=-1))
+        raise RuntimeError(f"Unsupported critic architecture at forward: {self.arch!r}")
 
 
 class ReplayBuffer:
@@ -109,21 +189,15 @@ class GazeboOnlineSERLTrainer:
         adapter_penalty_weight: float,
         act_preservation_weight: float,
         device: torch.device,
+        critic_kwargs: dict[str, Any] | None = None,
     ):
         self.policy = policy
         self.actor = policy.actor.to(device)
         self.critic1 = critic1.to(device)
         self.critic2 = critic2.to(device)
-        self.target_critic1 = VisionCritic(
-            state_dim=policy.state_dim,
-            camera_keys=ACT_CAMERA_KEYS,
-            action_dim=policy.action_dim,
-        ).to(device)
-        self.target_critic2 = VisionCritic(
-            state_dim=policy.state_dim,
-            camera_keys=ACT_CAMERA_KEYS,
-            action_dim=policy.action_dim,
-        ).to(device)
+        critic_kwargs = dict(critic_kwargs or {})
+        self.target_critic1 = VisionCritic(**critic_kwargs).to(device)
+        self.target_critic2 = VisionCritic(**critic_kwargs).to(device)
         self.target_critic1.load_state_dict(self.critic1.state_dict())
         self.target_critic2.load_state_dict(self.critic2.state_dict())
         self.gamma = float(gamma)
@@ -285,8 +359,29 @@ def load_trainer(args: argparse.Namespace) -> tuple[GazeboOnlineSERLTrainer, dic
         task_vector=task_vector,
     )
     checkpoint = torch.load(args.checkpoint, map_location="cpu")
-    critic1 = VisionCritic(state_dim=policy.state_dim, camera_keys=ACT_CAMERA_KEYS, action_dim=policy.action_dim)
-    critic2 = VisionCritic(state_dim=policy.state_dim, camera_keys=ACT_CAMERA_KEYS, action_dim=policy.action_dim)
+    offline_cfg = checkpoint.get("vision_offline_serl_config") or (
+        (checkpoint.get("online_serl_config") or {}).get("checkpoint") or {}
+    ).get("vision_offline_serl_config") or (
+        (checkpoint.get("online_gazebo_serl_config") or {}).get("checkpoint") or {}
+    ).get("vision_offline_serl_config") or {}
+    critic_kwargs = {
+        "state_dim": policy.state_dim,
+        "camera_keys": ACT_CAMERA_KEYS,
+        "action_dim": policy.action_dim,
+        "feature_dim": int(offline_cfg.get("critic_feature_dim", 256)),
+        "arch": str(offline_cfg.get("critic_arch", "concat")),
+        "hidden_dim": int(offline_cfg.get("critic_hidden_dim", 256)),
+        "num_layers": int(offline_cfg.get("critic_num_layers", 2)),
+        "per_camera_dim": int(offline_cfg.get("critic_per_camera_dim", 64)),
+        "activation": str(offline_cfg.get("critic_activation", "relu")),
+        "state_encoding": str(offline_cfg.get("state_encoding", "none")),
+        "state_encoding_indices": tuple(int(i) for i in offline_cfg.get("state_encoding_indices", ())),
+        "state_encoding_num_bands": int(offline_cfg.get("state_encoding_num_bands", 4)),
+        "state_encoding_max_freq": float(offline_cfg.get("state_encoding_max_freq", 8.0)),
+        "state_encoding_scale": float(offline_cfg.get("state_encoding_scale", 1.0)),
+    }
+    critic1 = VisionCritic(**critic_kwargs)
+    critic2 = VisionCritic(**critic_kwargs)
     critic_init = getattr(args, "critic_init", "scratch")
     critic_checkpoint_path = getattr(args, "critic_checkpoint", None)
     if critic_init == "act":
@@ -306,6 +401,7 @@ def load_trainer(args: argparse.Namespace) -> tuple[GazeboOnlineSERLTrainer, dic
         adapter_penalty_weight=args.adapter_penalty_weight,
         act_preservation_weight=args.act_preservation_weight,
         device=device,
+        critic_kwargs=critic_kwargs,
     )
     train_config = {
         "checkpoint_path": str(Path(args.checkpoint).resolve()),

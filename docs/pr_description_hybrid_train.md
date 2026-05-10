@@ -159,7 +159,7 @@ docs/hybrid_model_architecture_review.md
 docs/pr_validation_commands.md
 docs/gazebo_online_serl_status.md
 docs/offline_serl_pretrain.md
-docs/isaac_rl_stage5.md
+docs/isaac_online_rl.md
 HYBRID_TRAIN_PIPELINE_STATUS.md
 aic_utils/lerobot_robot_aic/README.md
 ```

@@ -27,9 +27,9 @@ Set:
   AIC_SERL_CHECKPOINT
   AIC_SERL_ACT_TORCHSCRIPT
 
-The model receives the same 32D low-dimensional state used by RunACT plus the
-canonical 10D task vector derived from the official Task message when the
-checkpoint expects task conditioning.
+The model receives the runtime state dimension expected by the checkpoint:
+32D base observation, optionally plus 40D contact/force recovery features and
+the canonical 10D task vector derived from the official Task message.
 """
 
 from __future__ import annotations
@@ -226,6 +226,7 @@ class RunACTAdapterSERL(Policy):
             dtype=torch.float32,
             device=self.policy.device,
         ).reshape(1, -1)
+        self.policy.feature_assembler.task_vector = self.policy.task_vector.squeeze(0).detach().cpu().numpy()
         action = self.policy.act(self._observation_dict(obs_msg), explore=False)
         return np.asarray(action[:6], dtype=np.float32)
 
@@ -305,6 +306,10 @@ class RunACTAdapterSERL(Policy):
         **kwargs,
     ) -> bool:
         self._current_task = task
+        if self.policy.feature_assembler.uses_task_vector:
+            self.policy.feature_assembler.reset(self._task_vector(task))
+        else:
+            self.policy.feature_assembler.reset()
         self.get_logger().info(f"RunACTAdapterSERL.insert_cable() enter. Task: {task}")
         if self.start_delay_sec > 0.0:
             self.get_logger().info(f"Waiting {self.start_delay_sec:.2f}s before first SERL command.")

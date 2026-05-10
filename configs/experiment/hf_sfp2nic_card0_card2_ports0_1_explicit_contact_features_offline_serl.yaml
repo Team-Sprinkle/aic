@@ -3,7 +3,7 @@
 defaults:
   - /train: vision_offline_serl
   - /model: act_adapter_serl
-  - /data: hf_sfp2nic_card0_card2_ports0_1_explicit
+  - /data: hf_sfp2nic_card0_card2_ports0_1_explicit_contact_features
   - /hardware: default
   - _self_
 
@@ -12,33 +12,33 @@ run:
   dataset_tag: ${data.dataset_tag}
   model_family: ${model.family}
   stage: ${train.stage}
-  name: offline_serl_from_act110k_300k_bs128x4_clip010
+  name: offline_serl_contact_features_from_act
   output_root: outputs/train
-  output_dir: ${run.output_root}/${run.task_family}/${run.dataset_tag}/${run.model_family}/${run.stage}/20260505_offline_serl_from_act110k_300k_bs128x4_clip010
+  output_dir: ${run.output_root}/${run.task_family}/${run.dataset_tag}/${run.model_family}/${run.stage}/20260508_offline_serl_contact_features_from_act
 
 train:
   dataset_root: ${data.dataset_root}
-  act_checkpoint: /data1/chmin/yj/ws_aic/src/aic/outputs/train/sfp_to_nic/hf_sfp2nic_card0_card2_ports0_1_explicit/act/bc/20260505_act_multidata_taskvec_300k_bs8_4gpu_v2/checkpoints/110000/pretrained_model
+  # Override this to a checkpoint trained with the matching 82D contact-feature state.
+  act_checkpoint: null
   output_dir: ${run.output_dir}
   job_name: ${run.name}
   steps: 300000
-  # Per-GPU batch size. With 4 DDP ranks this is an effective batch of 512.
   batch_size: 128
   device: ${hardware.effective_device}
   lr: 0.0001
-  adapter_lr: 0.0001
+  adapter_lr: 0.00001
   act_lr: 0.00001
   critic_lr: 0.0001
   gamma: 0.99
   tau: 0.005
-  bc_weight: 1.0
+  bc_weight: 5.0
   cql_weight: 0.0
   adapter_penalty_weight: 0.001
-  act_preservation_weight: 0.01
+  act_preservation_weight: 1.0
   smoothness_weight: 0.0
-  # Match the ACT checkpoint's n_action_steps=2 for the flattened action chunk.
   action_horizon: 2
   actor_mode: act_adapter
+  actor_update_mode: q_bc
   freeze_act: true
   adapter_hidden_dim: 256
   adapter_num_layers: 2
@@ -46,9 +46,8 @@ train:
   adapter_layer_norm: false
   adapter_activation: gelu
   adapter_scale: 1.0
-  adapter_delta_clip: 0.10
+  adapter_delta_clip: 0.000001
   action_clip: null
-  actor_update_mode: q_bc
   critic_image_encoder: small_conv
   critic_arch: multiplicative
   critic_feature_dim: 256
@@ -71,6 +70,8 @@ train:
   reward_mode: dataset
   camera_keys: ${data.camera_keys}
   dataset_video_backend: pyav
+  num_workers: 8
+  pin_memory: true
   save_every: 10000
   val_fraction: 0.05
   val_every: 10000

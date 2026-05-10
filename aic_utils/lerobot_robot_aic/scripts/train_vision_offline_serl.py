@@ -7,6 +7,7 @@ import argparse
 import json
 import os
 import sys
+import time
 from dataclasses import asdict
 from pathlib import Path
 from typing import Any
@@ -58,12 +59,55 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--smoothness-weight", type=float, default=0.0)
     parser.add_argument("--action-horizon", type=int, default=8)
     parser.add_argument("--actor-mode", choices=["act_direct", "act_adapter"], default="act_adapter")
+    parser.add_argument(
+        "--actor-update-mode",
+        choices=["q_bc", "bc_only", "critic_only"],
+        default="q_bc",
+        help="Actor update objective. critic_only trains only critics while keeping the ACT adapter fixed.",
+    )
     parser.add_argument("--freeze-act", action=argparse.BooleanOptionalAction, default=True)
     parser.add_argument("--adapter-hidden-dim", type=int, default=256)
     parser.add_argument("--adapter-num-layers", type=int, default=2)
+    parser.add_argument("--adapter-arch", choices=["mlp", "gated"], default="mlp")
+    parser.add_argument("--adapter-layer-norm", action=argparse.BooleanOptionalAction, default=False)
+    parser.add_argument("--adapter-activation", choices=["relu", "gelu"], default="gelu")
     parser.add_argument("--adapter-scale", type=float, default=1.0)
     parser.add_argument("--adapter-delta-clip", type=float, default=None)
     parser.add_argument("--action-clip", type=float, default=None)
+    parser.add_argument(
+        "--critic-image-encoder",
+        choices=["small_conv", "resnet18", "resnet18_imagenet", "convnext_tiny", "convnext_tiny_imagenet"],
+        default="small_conv",
+        help="Visual backbone used by the offline SERL critics.",
+    )
+    parser.add_argument(
+        "--critic-arch",
+        choices=["concat", "multiplicative", "value_advantage"],
+        default="concat",
+        help="Critic state/action fusion architecture.",
+    )
+    parser.add_argument("--critic-feature-dim", type=int, default=256)
+    parser.add_argument("--critic-hidden-dim", type=int, default=256)
+    parser.add_argument("--critic-num-layers", type=int, default=2)
+    parser.add_argument("--critic-per-camera-dim", type=int, default=64)
+    parser.add_argument("--critic-layer-norm", action=argparse.BooleanOptionalAction, default=False)
+    parser.add_argument("--critic-activation", choices=["relu", "gelu"], default="gelu")
+    parser.add_argument(
+        "--state-encoding",
+        choices=["none", "fourier"],
+        default="fourier",
+        help="Model-side state coordinate encoding applied to adapter and critic state inputs.",
+    )
+    parser.add_argument(
+        "--state-encoding-indices",
+        type=int,
+        nargs="*",
+        default=None,
+        help="State indices to Fourier encode. Defaults to tcp position and tcp error xyz: 0 1 2 13 14 15.",
+    )
+    parser.add_argument("--state-encoding-num-bands", type=int, default=4)
+    parser.add_argument("--state-encoding-max-freq", type=float, default=8.0)
+    parser.add_argument("--state-encoding-scale", type=float, default=10.0)
     parser.add_argument(
         "--reward-mode",
         choices=["dataset", "final_success", "zero"],
@@ -76,6 +120,18 @@ def parse_args() -> argparse.Namespace:
         help="LeRobot visual observation keys. Defaults to ACT checkpoint camera keys.",
     )
     parser.add_argument("--dataset-video-backend", default="pyav")
+    parser.add_argument(
+        "--num-workers",
+        type=int,
+        default=0,
+        help="DataLoader workers for train/validation video decoding.",
+    )
+    parser.add_argument(
+        "--pin-memory",
+        action=argparse.BooleanOptionalAction,
+        default=True,
+        help="Pin DataLoader memory before host-to-GPU transfer.",
+    )
     parser.add_argument("--save-every", type=int, default=500)
     parser.add_argument("--val-fraction", type=float, default=0.0)
     parser.add_argument("--val-every", type=int, default=0)
@@ -87,6 +143,7 @@ def parse_args() -> argparse.Namespace:
     )
     parser.add_argument("--early-stopping-patience", type=int, default=0)
     parser.add_argument("--early-stopping-min-delta", type=float, default=0.0)
+    parser.add_argument("--max-wall-time-minutes", type=float, default=0.0)
     parser.add_argument("--dry-run", action="store_true")
     return parser.parse_args()
 
@@ -174,15 +231,34 @@ def _train_config(args: argparse.Namespace, dataset_summary: dict[str, Any], war
         "smoothness_weight": args.smoothness_weight,
         "action_horizon": args.action_horizon,
         "actor_mode": args.actor_mode,
+        "actor_update_mode": args.actor_update_mode,
         "freeze_act": args.freeze_act,
         "adapter_hidden_dim": args.adapter_hidden_dim,
         "adapter_num_layers": args.adapter_num_layers,
+        "adapter_arch": args.adapter_arch,
+        "adapter_layer_norm": args.adapter_layer_norm,
+        "adapter_activation": args.adapter_activation,
         "adapter_scale": args.adapter_scale,
         "adapter_delta_clip": args.adapter_delta_clip,
         "action_clip": args.action_clip,
+        "critic_image_encoder": args.critic_image_encoder,
+        "critic_arch": args.critic_arch,
+        "critic_feature_dim": args.critic_feature_dim,
+        "critic_hidden_dim": args.critic_hidden_dim,
+        "critic_num_layers": args.critic_num_layers,
+        "critic_per_camera_dim": args.critic_per_camera_dim,
+        "critic_layer_norm": args.critic_layer_norm,
+        "critic_activation": args.critic_activation,
+        "state_encoding": args.state_encoding,
+        "state_encoding_indices": list(_state_encoding_indices(args)),
+        "state_encoding_num_bands": args.state_encoding_num_bands,
+        "state_encoding_max_freq": args.state_encoding_max_freq,
+        "state_encoding_scale": args.state_encoding_scale,
         "reward_mode": args.reward_mode,
         "camera_keys": dataset_summary["camera_keys"],
         "dataset_video_backend": args.dataset_video_backend,
+        "num_workers": args.num_workers,
+        "pin_memory": args.pin_memory,
         "save_every": args.save_every,
         "val_fraction": args.val_fraction,
         "val_every": args.val_every,
@@ -190,9 +266,18 @@ def _train_config(args: argparse.Namespace, dataset_summary: dict[str, Any], war
         "early_stopping_metric": args.early_stopping_metric,
         "early_stopping_patience": args.early_stopping_patience,
         "early_stopping_min_delta": args.early_stopping_min_delta,
+        "max_wall_time_minutes": args.max_wall_time_minutes,
         "dataset_summary": dataset_summary,
         "act_warmstart": warmstart,
     }
+
+
+def _state_encoding_indices(args: argparse.Namespace) -> tuple[int, ...]:
+    if args.state_encoding == "none":
+        return ()
+    if args.state_encoding_indices is not None and len(args.state_encoding_indices) > 0:
+        return tuple(int(i) for i in args.state_encoding_indices)
+    return (0, 1, 2, 13, 14, 15)
 
 
 def _model_summary(trainer: VisionOfflineSERLTrainer) -> dict[str, int]:
@@ -301,6 +386,14 @@ def main() -> int:
         state_dim=dataset.state_dim,
         adapter_hidden_dim=args.adapter_hidden_dim,
         adapter_num_layers=args.adapter_num_layers,
+        adapter_arch=args.adapter_arch,
+        adapter_layer_norm=args.adapter_layer_norm,
+        adapter_activation=args.adapter_activation,
+        state_encoding=args.state_encoding,
+        state_encoding_indices=_state_encoding_indices(args),
+        state_encoding_num_bands=args.state_encoding_num_bands,
+        state_encoding_max_freq=args.state_encoding_max_freq,
+        state_encoding_scale=args.state_encoding_scale,
         adapter_scale=args.adapter_scale,
         freeze_act=args.freeze_act,
         adapter_delta_clip=args.adapter_delta_clip,
@@ -325,7 +418,24 @@ def main() -> int:
         act_lr=args.act_lr,
         critic_lr=args.critic_lr,
         actor_mode=args.actor_mode,
+        actor_update_mode=args.actor_update_mode,
         freeze_act=args.freeze_act,
+        critic_image_encoder=args.critic_image_encoder,
+        critic_arch=args.critic_arch,
+        critic_feature_dim=args.critic_feature_dim,
+        critic_hidden_dim=args.critic_hidden_dim,
+        critic_num_layers=args.critic_num_layers,
+        critic_per_camera_dim=args.critic_per_camera_dim,
+        critic_layer_norm=args.critic_layer_norm,
+        critic_activation=args.critic_activation,
+        adapter_arch=args.adapter_arch,
+        adapter_layer_norm=args.adapter_layer_norm,
+        adapter_activation=args.adapter_activation,
+        state_encoding=args.state_encoding,
+        state_encoding_indices=_state_encoding_indices(args),
+        state_encoding_num_bands=args.state_encoding_num_bands,
+        state_encoding_max_freq=args.state_encoding_max_freq,
+        state_encoding_scale=args.state_encoding_scale,
     )
     trainer = VisionOfflineSERLTrainer(config=config, actor=actor, device=device)
     if distributed:
@@ -377,10 +487,22 @@ def main() -> int:
         shuffle=sampler is None,
         sampler=sampler,
         drop_last=False,
-        num_workers=0,
+        num_workers=args.num_workers,
+        pin_memory=args.pin_memory,
+        persistent_workers=args.num_workers > 0,
+        prefetch_factor=2 if args.num_workers > 0 else None,
     )
     val_loader = (
-        DataLoader(val_dataset, batch_size=args.batch_size, shuffle=False, drop_last=False, num_workers=0)
+        DataLoader(
+            val_dataset,
+            batch_size=args.batch_size,
+            shuffle=False,
+            drop_last=False,
+            num_workers=args.num_workers,
+            pin_memory=args.pin_memory,
+            persistent_workers=args.num_workers > 0,
+            prefetch_factor=2 if args.num_workers > 0 else None,
+        )
         if val_dataset is not None
         else None
     )
@@ -396,10 +518,15 @@ def main() -> int:
     best_val_step = 0
     bad_val_checks = 0
     stop_reason = "max_steps"
+    started = time.monotonic()
     while step < args.steps:
         if sampler is not None:
             sampler.set_epoch(step)
         for batch in loader:
+            if args.max_wall_time_minutes > 0.0 and (time.monotonic() - started) >= args.max_wall_time_minutes * 60.0:
+                stop_reason = "max_wall_time"
+                step = args.steps
+                break
             step += 1
             metrics = trainer.train_step(batch)
             metrics["step"] = step
@@ -475,6 +602,7 @@ def main() -> int:
             "best_val_step": best_val_step if best_val_step else None,
             "best_val_checkpoint": str(run_dir / "checkpoint_best_val.pt") if best_val_step else None,
             "actor_mode": args.actor_mode,
+            "actor_update_mode": args.actor_update_mode,
             "freeze_act": args.freeze_act,
             "act_checkpoint": str(args.act_checkpoint),
             "critic_init": "scratch",

@@ -75,7 +75,19 @@ def main() -> int:
     traced.save(str(args.output))
     meta_path = args.output.with_suffix(".json")
     meta_path.write_text(
-        json.dumps({**metadata, "torchscript_path": str(args.output)}, indent=2, sort_keys=True),
+        json.dumps(
+            {
+                **metadata,
+                "torchscript_path": str(args.output),
+                "torchscript_export_device": str(args.device),
+                "runtime_note": (
+                    "TorchScript traces can specialize internal tensors to the export device. "
+                    "Use a CPU export for CPU runtime evaluation and a CUDA export for Isaac GPU training."
+                ),
+            },
+            indent=2,
+            sort_keys=True,
+        ),
         encoding="utf-8",
     )
     print(f"Wrote ACT TorchScript: {args.output}")

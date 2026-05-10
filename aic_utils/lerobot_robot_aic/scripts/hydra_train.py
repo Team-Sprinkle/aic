@@ -97,6 +97,19 @@ def _act_lerobot_args(cfg: DictConfig) -> list[str]:
         f"--policy.chunk_size={train.chunk_size}",
         f"--policy.n_action_steps={train.n_action_steps}",
         f"--policy.n_obs_steps={train.n_obs_steps}",
+        f"--policy.dim_model={train.dim_model}",
+        f"--policy.dim_feedforward={train.dim_feedforward}",
+        f"--policy.n_encoder_layers={train.n_encoder_layers}",
+        f"--policy.n_decoder_layers={train.n_decoder_layers}",
+        f"--policy.n_vae_encoder_layers={train.n_vae_encoder_layers}",
+        f"--policy.n_heads={train.n_heads}",
+        f"--policy.kl_weight={train.kl_weight}",
+        f"--policy.vision_backbone={train.vision_backbone}",
+        f"--policy.pretrained_backbone_weights={train.pretrained_backbone_weights}",
+        f"--policy.replace_final_stride_with_dilation={str(bool(train.replace_final_stride_with_dilation)).lower()}",
+        f"--policy.dropout={train.dropout}",
+        f"--policy.pre_norm={str(bool(train.pre_norm)).lower()}",
+        f"--policy.latent_dim={train.latent_dim}",
         f"--steps={train.steps}",
         f"--save_freq={train.save_freq}",
         f"--log_freq={train.log_freq}",
@@ -166,13 +179,31 @@ def _vision_offline_serl_cmd(cfg: DictConfig) -> list[str]:
         "smoothness_weight",
         "action_horizon",
         "actor_mode",
+        "actor_update_mode",
         "adapter_hidden_dim",
         "adapter_num_layers",
+        "adapter_arch",
+        "adapter_layer_norm",
+        "adapter_activation",
         "adapter_scale",
         "adapter_delta_clip",
         "action_clip",
         "reward_mode",
+        "critic_image_encoder",
+        "critic_arch",
+        "critic_feature_dim",
+        "critic_hidden_dim",
+        "critic_num_layers",
+        "critic_per_camera_dim",
+        "critic_layer_norm",
+        "critic_activation",
+        "state_encoding",
+        "state_encoding_num_bands",
+        "state_encoding_max_freq",
+        "state_encoding_scale",
         "dataset_video_backend",
+        "num_workers",
+        "pin_memory",
         "save_every",
         "val_fraction",
         "val_every",
@@ -192,6 +223,9 @@ def _vision_offline_serl_cmd(cfg: DictConfig) -> list[str]:
     if train.get("camera_keys") is not None:
         cmd.append("--camera-keys")
         cmd.extend(str(v) for v in train.camera_keys)
+    if train.get("state_encoding_indices") is not None:
+        cmd.append("--state-encoding-indices")
+        cmd.extend(str(v) for v in train.state_encoding_indices)
     _append_value_arg(cmd, "dry-run", bool(train.dry_run))
     return cmd
 

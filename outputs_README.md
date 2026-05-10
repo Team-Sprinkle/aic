@@ -140,8 +140,8 @@ Within generated dataset roots, the usual files/folders are:
 
 | Folder | Meaning |
 | --- | --- |
-| `train/isaac_stage5_helper_smoke/` | Isaac Stage 5 helper smoke-training output. |
-| `train/isaac_stage5_smoke/` | Isaac Stage 5 smoke-training output. |
-| `train/stage5_aic_lowdim_ppo/` | Low-dimensional PPO training output for the Stage 5 AIC task. |
+| `train/isaac_rsl_rl_helper_smoke/` | Isaac Isaac online RL helper smoke-training output. |
+| `train/isaac_rsl_rl_smoke/` | Isaac Isaac online RL smoke-training output. |
+| `train/isaac_aic_lowdim_ppo/` | Low-dimensional PPO training output for the Isaac online RL AIC task. |
 
 These training folders currently contain run directories under `aic_task/`.

@@ -1,6 +1,6 @@
-# Isaac RL Stage 5
+# Isaac Online RL
 
-Stage 5 now treats online SERL/SAC with the ACT-adapter actor as the primary
+Isaac online RL now treats online SERL/SAC with the ACT-adapter actor as the primary
 future hybrid path. The existing Isaac Lab + RSL-RL PPO stack remains available
 as a legacy smoke test, baseline, and backup trainer:
 
@@ -19,7 +19,7 @@ before PPO training.
 - Intended actor: the same ACT-adapter actor produced by
   `train_vision_offline_serl.py --actor-mode act_adapter`.
 - Default training: ACT frozen, adapter and critics trainable.
-- Host launcher: `aic_utils/aic_isaac/scripts/train_isaac_serl_stage5.py`.
+- Host launcher: `aic_utils/aic_isaac/scripts/train_isaac_online_serl.py`.
 - Isaac trainer: `aic_utils/aic_isaac/aic_isaaclab/scripts/serl/train.py`.
 - Design doc: `aic_utils/aic_isaac/docs/isaac_online_serl_design.md`.
 - Current status: short-run capable. It loads an ACT TorchScript export, keeps
@@ -29,13 +29,14 @@ before PPO training.
 Dry-run checkpoint inspection:
 
 ```bash
-pixi run python aic_utils/aic_isaac/scripts/train_isaac_serl_stage5.py \
+pixi run python aic_utils/aic_isaac/scripts/train_isaac_online_serl.py \
   --checkpoint outputs/train/hybrid_vision_offline_serl_adapter_nominal_n10/checkpoint_latest.pt \
   --act-torchscript outputs/train/hybrid_act_nominal_n10/act_policy_ts_cuda.pt \
-  --output-dir outputs/train/isaac_stage5_online_serl_adapter \
+  --output-dir outputs/train/isaac_online_serl_adapter \
   --device cuda \
   --steps 10 \
   --batch-size 2 \
+  --warmup-steps 0 \
   --dry-run
 ```
 
@@ -48,7 +49,7 @@ First artifact-producing command was run inside the Isaac Lab container:
   --seed 1 \
   --checkpoint /workspace/isaaclab/aic/outputs/train/hybrid_vision_offline_serl_adapter_nominal_n10/checkpoint_latest.pt \
   --act_torchscript /workspace/isaaclab/aic/outputs/train/hybrid_act_nominal_n10/act_policy_ts_cuda.pt \
-  --output_dir /workspace/isaaclab/aic/outputs/train/isaac_stage5_online_serl_adapter \
+  --output_dir /workspace/isaaclab/aic/outputs/train/isaac_online_serl_adapter \
   --run_name online_serl_adapter_short \
   --steps 8 \
   --updates 2 \
@@ -60,7 +61,7 @@ First artifact-producing command was run inside the Isaac Lab container:
 Result:
 
 ```text
-outputs/train/isaac_stage5_online_serl_adapter/2026-04-30_20-18-32_online_serl_adapter_short/checkpoint_latest.pt
+outputs/train/isaac_online_serl_adapter/2026-04-30_20-18-32_online_serl_adapter_short/checkpoint_latest.pt
 ```
 
 The run completed 3 Isaac steps and 2 online updates before stopping after the
@@ -69,7 +70,7 @@ requested update count.
 Sanity run:
 
 ```text
-outputs/train/isaac_stage5_online_serl_adapter/2026-04-30_20-55-36_online_serl_adapter_sanity_300/checkpoint_latest.pt
+outputs/train/isaac_online_serl_adapter/2026-04-30_20-55-36_online_serl_adapter_sanity_300/checkpoint_latest.pt
 ```
 
 Requested `steps=300`, `updates=100`, `batch_size=8`, and
@@ -82,7 +83,7 @@ be watched.
 1k guarded run:
 
 ```text
-outputs/train/isaac_stage5_online_serl_adapter/2026-04-30_21-11-49_online_serl_adapter_1k_guarded/checkpoint_latest.pt
+outputs/train/isaac_online_serl_adapter/2026-04-30_21-11-49_online_serl_adapter_1k_guarded/checkpoint_latest.pt
 ```
 
 Requested `steps=1000`, `updates=1000`, `batch_size=8`,
@@ -108,7 +109,7 @@ The Gazebo transfer validator now has an ACT-adapter SERL policy mode:
 ```bash
 pixi run python aic_utils/gazebo_rl/scripts/serl_transfer_validate.py \
   --policy-kind act_adapter_serl \
-  --checkpoint outputs/train/isaac_stage5_online_serl_adapter/2026-04-30_21-11-49_online_serl_adapter_1k_guarded/checkpoint_latest.pt \
+  --checkpoint outputs/train/isaac_online_serl_adapter/2026-04-30_21-11-49_online_serl_adapter_1k_guarded/checkpoint_latest.pt \
   --act-torchscript outputs/train/hybrid_act_nominal_n10/act_policy_ts_cuda.pt \
   --workspace-dir . \
   --device cuda \
@@ -160,7 +161,7 @@ scored transfer run.
 - RL stack: RSL-RL PPO
 - Config: `aic_utils/aic_isaac/aic_isaaclab/source/aic_task/aic_task/tasks/manager_based/aic_task/agents/rsl_rl_ppo_cfg.py`
 - Base training entrypoint: `aic_utils/aic_isaac/aic_isaaclab/scripts/rsl_rl/train.py`
-- Stage 5 wrapper: `aic_utils/aic_isaac/scripts/train_isaac_ppo_stage5.py`
+- Isaac online RL wrapper: `aic_utils/aic_isaac/scripts/train_isaac_rsl_rl.py`
 
 ## Current Action Interface
 
@@ -190,14 +191,22 @@ A joint-position action config is present in comments but is not active.
 - `joint_torques`: smoothness/contact-safety regularization.
 - `joint_pos_limits`: safety regularization.
 
-Optional insertion-aware terms are added but disabled by default:
+Insertion-aware target-geometry terms are available for Isaac online SERL:
 
 - `target_distance_tanh`: body-to-target-object distance reward.
+- `target_distance_exp`: close-range body-to-target-object distance reward.
+- `target_orientation_tanh`: body-to-target-object orientation reward.
+- `target_reaching_bonus`: sparse bonus when the body target point reaches the target frame threshold.
 - `target_lateral_error`: lateral error penalty to a target object.
 
-These use available object root poses as approximate targets. They should stay
-low-weight or disabled until the Isaac assets expose semantic cable-tip and
-port-insertion frames.
+For SFP-to-NIC, the default target frame is derived from the Gazebo SDF assets:
+the reward target is the SFP port entrance/opening, not the deeper
+`sfp_port_*_link` inserted frame. Port 0/1 link frames are defined in
+`aic_assets/models/NIC Card/model.sdf`; the entrance offset is
+`(0, 0, -0.0458)` in the Gazebo port frame. Isaac uses the SFP module tip
+position `(0, -0.02365, 0)` as the body point and root/body quaternions for
+orientation. The Gazebo SDF semantic orientation offsets were validated as a
+poor Isaac controller target and are not the default.
 
 ## Randomization Profiles
 
@@ -210,6 +219,9 @@ Select a profile through the wrapper:
 ```
 
 Internally this sets `AIC_ISAAC_RANDOMIZATION_PROFILE`.
+For the online SERL wrapper, Isaac IK action scaling is controlled separately
+with `--isaac-action-scale` and defaults to `1.0`, because ACT/SERL actions are
+already physical TCP deltas.
 
 `none`:
 
@@ -217,7 +229,6 @@ Internally this sets `AIC_ISAAC_RANDOMIZATION_PROFILE`.
 - fixes light intensity/color;
 - disables board/part pose noise;
 - disables lowdim observation noise;
-- uses action scale `0.05`.
 
 `light`:
 
@@ -228,7 +239,6 @@ Internally this sets `AIC_ISAAC_RANDOMIZATION_PROFILE`.
 - task board x/y noise: `(-0.005, 0.005)`;
 - SC port x offsets and NIC card y offsets;
 - lowdim observation noise already present in the policy observation group;
-- action scale `0.05`.
 
 `heavy`:
 
@@ -239,7 +249,6 @@ Internally this sets `AIC_ISAAC_RANDOMIZATION_PROFILE`.
 - SC port x/y/z/yaw offsets;
 - NIC card x/y/z/yaw offsets with y snapping preserved;
 - larger lowdim observation noise;
-- action scale `0.06`.
 
 Physics/material randomization, cable stiffness randomization, controller
 stiffness/damping randomization, and camera-pose jitter are documented future
@@ -250,14 +259,14 @@ without more invasive Isaac scene work.
 
 ```bash
 cd ~/ws_aic/src/aic
-pixi run python aic_utils/aic_isaac/scripts/train_isaac_ppo_stage5.py \
+pixi run python aic_utils/aic_isaac/scripts/train_isaac_rsl_rl.py \
   --task AIC-Task-v0 \
   --num-envs 4 \
   --max-iterations 1 \
   --seed 1 \
   --headless \
   --randomization-profile heavy \
-  --output-dir outputs/train/isaac_stage5_smoke
+  --output-dir outputs/train/isaac_rsl_rl_smoke
 ```
 
 Use `--dry-run` to print the underlying Isaac Lab command without launching
@@ -266,8 +275,11 @@ Isaac Sim.
 Optional insertion reward weights:
 
 ```bash
-  --insertion-distance-weight 0.05 \
-  --insertion-lateral-weight -0.01
+  --insertion-distance-weight 0.5 \
+  --insertion-close-weight 0.3 \
+  --insertion-orientation-weight 0.0 \
+  --insertion-reaching-weight 1.0 \
+  --insertion-lateral-weight 0.0
 ```
 
 ## Checkpoint Bridge Status
@@ -284,7 +296,7 @@ Checkpoints are not fully interchangeable, but there is now a bounded bridge:
   ACT-adapter actor-critic checkpoint.
 - Isaac PPO uses RSL-RL's PPO actor-critic architecture.
 
-The Stage 5 wrapper accepts `--init-policy-checkpoint` for an offline SERL
+The Isaac online RL wrapper accepts `--init-policy-checkpoint` for an offline SERL
 checkpoint and forwards it to the Isaac Lab RSL-RL train entrypoint. The train
 entrypoint applies a conservative warm start:
 
@@ -300,14 +312,14 @@ checkpoint resume.
 Example SERL-initialized PPO command:
 
 ```bash
-pixi run python aic_utils/aic_isaac/scripts/train_isaac_ppo_stage5.py \
+pixi run python aic_utils/aic_isaac/scripts/train_isaac_rsl_rl.py \
   --task AIC-Task-v0 \
   --num-envs 4 \
   --max-iterations 1 \
   --seed 1 \
   --headless \
   --randomization-profile light \
-  --output-dir outputs/train/isaac_stage5_serl_warmstart \
+  --output-dir outputs/train/isaac_online_serl_warmstart \
   --init-policy-checkpoint outputs/train/hybrid_offline_serl_nominal_n10/checkpoint_latest.pt
 ```
 

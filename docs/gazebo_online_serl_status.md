@@ -225,7 +225,7 @@ Clipped ACT-adapter transfer validation command:
 ```bash
 pixi run python aic_utils/gazebo_rl/scripts/serl_transfer_validate.py \
   --policy-kind act_adapter_serl \
-  --checkpoint outputs/train/isaac_stage5_online_serl_adapter/2026-04-30_21-11-49_online_serl_adapter_1k_guarded/checkpoint_latest.pt \
+  --checkpoint outputs/train/isaac_online_serl_adapter/2026-04-30_21-11-49_online_serl_adapter_1k_guarded/checkpoint_latest.pt \
   --act-torchscript outputs/train/hybrid_act_nominal_n10/act_policy_ts_cuda.pt \
   --workspace-dir . \
   --sim-distrobox aic_eval \

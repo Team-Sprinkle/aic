@@ -6,7 +6,8 @@ from typing import Any
 
 from gazebo_rl.ipc import IPCMessage, IPCServer, JsonLineConnection
 from gazebo_rl.runner import GazeboRLRunner, GazeboRLRunnerConfig
-from gazebo_rl.score_parser import dense_training_reward, score_from_scoring_yaml
+from gazebo_rl.score_parser import dense_training_reward, gazebo_terminal_score, score_from_scoring_yaml
+from gazebo_rl.task_geometry_reward import dense_task_geometry_reward
 
 
 class GazeboRLEnv:
@@ -138,16 +139,33 @@ class GazeboRLEnv:
             raise RuntimeError(f"Bridge error: {msg.payload}")
         if msg.type == "done":
             parsed = score_from_scoring_yaml(self.results_dir)
-            return self._last_obs, dense_training_reward(terminal=True, results_dir=self.results_dir), True, False, {
+            terminal_score = gazebo_terminal_score(self.results_dir)
+            reward, reward_info = dense_task_geometry_reward(
+                prev_obs=self._last_obs,
+                obs=self._last_obs,
+                terminal_score=terminal_score,
+            )
+            if reward_info.get("task_geometry_reward_available", 0.0) == 0.0:
+                reward = dense_training_reward(terminal=True, results_dir=self.results_dir)
+            return self._last_obs, reward, True, False, {
                 "done": msg.payload,
                 "score": parsed,
+                "reward": reward_info,
             }
         obs = msg.payload["observation"]
+        prev_obs = self._last_obs
         self._last_obs = obs
         terminated = bool(msg.payload.get("terminated", False))
         truncated = self._step_count >= self.max_steps
-        reward = dense_training_reward(terminal=terminated, results_dir=self.results_dir)
-        info = {"step_count": self._step_count, "results_dir": str(self.results_dir)}
+        terminal_score = gazebo_terminal_score(self.results_dir) if terminated else 0.0
+        reward, reward_info = dense_task_geometry_reward(
+            prev_obs=prev_obs,
+            obs=obs,
+            terminal_score=terminal_score,
+        )
+        if reward_info.get("task_geometry_reward_available", 0.0) == 0.0:
+            reward = dense_training_reward(terminal=terminated, results_dir=self.results_dir)
+        info = {"step_count": self._step_count, "results_dir": str(self.results_dir), "reward": reward_info}
         if truncated:
             self._conn.send("done", {"reason": "env_max_steps", "step_count": self._step_count})
         return obs, reward, terminated, truncated, info
