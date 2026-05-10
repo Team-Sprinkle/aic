@@ -124,6 +124,13 @@ def generate_approach_candidates(
         raise ValueError("tcp_pose is required to generate approach candidates")
     target = snapshot.target_port_pose
     current = snapshot.tcp_pose
+    nic_obstacles = _nic_obstacles(snapshot)
+    sc_nic_obstacle_route = _sc_to_sc_with_nic_obstacles(snapshot)
+    if sc_nic_obstacle_route:
+        pre_insert_z_offset_m = _env_float(
+            "AIC_EXPERT_SC_NIC_PREINSERT_Z_OFFSET_M",
+            pre_insert_z_offset_m,
+        )
     near_start = _distance(current.position, target.position) <= 0.08
     effective_z_offset = _effective_pre_insert_z_offset(
         snapshot,
@@ -133,8 +140,6 @@ def generate_approach_candidates(
     cheatcode_pre_insert = _cheatcode_gripper_target(snapshot, z_offset=effective_z_offset)
     orientation = list(cheatcode_pre_insert.orientation_xyzw)
     clearance = float(strategy.preferred_clearance_m)
-    nic_obstacles = _nic_obstacles(snapshot)
-    sc_nic_obstacle_route = _sc_to_sc_with_nic_obstacles(snapshot)
     sc_bypass_left_offset = _env_float("AIC_EXPERT_SC_NIC_BYPASS_LEFT_OFFSET_M", SC_NIC_BYPASS_LEFT_OFFSET_M)
     sc_approach_left_offset = _env_float(
         "AIC_EXPERT_SC_NIC_APPROACH_LEFT_OFFSET_M",
@@ -153,6 +158,10 @@ def generate_approach_candidates(
         staging_z = cheatcode_pre_insert.position[2]
         route_clearance = clearance
         if route_around_nics:
+            route_clearance = max(
+                route_clearance,
+                _env_float("AIC_EXPERT_SC_NIC_ROUTE_CLEARANCE_M", route_clearance),
+            )
             route_clearance = min(
                 route_clearance,
                 _env_float("AIC_EXPERT_SC_NIC_MAX_ROUTE_CLEARANCE_M", 0.055),
