@@ -180,7 +180,7 @@ class AICTaskSceneCfg(InteractiveSceneCfg):
             ),
         ),
         init_state=RigidObjectCfg.InitialStateCfg(
-            pos=(0.2913, 0.1507, 0.005),
+            pos=(0.3004, 0.1928, 0.005),
             rot=(0.73136, 0.0, 0.0, -0.682),
         ),
     )
@@ -352,7 +352,7 @@ class EventCfg:
                 },
                 {
                     "scene_name": "sc_port_2",
-                    "offset": (0.0076, -0.0783, 0.005),
+                    "offset": (0.0067, -0.083, 0.005),
                     "pose_range": {"x": (-0.005, 0.02)},
                 },
                 {
@@ -732,7 +732,7 @@ class AICTaskEnvCfg(ManagerBasedRLEnvCfg):
                 },
                 {
                     "scene_name": "sc_port_2",
-                    "offset": (0.0076, -0.0783, 0.005),
+                    "offset": (0.0067, -0.083, 0.005),
                     "pose_range": {"x": (-0.005, 0.02)},
                 },
                 {
@@ -774,7 +774,7 @@ class AICTaskEnvCfg(ManagerBasedRLEnvCfg):
             },
             {
                 "scene_name": "sc_port_2",
-                "offset": (0.0076, -0.0783, 0.005),
+                "offset": (0.0067, -0.083, 0.005),
                 "pose_range": {
                     "x": (-0.015, 0.03),
                     "y": (-0.004, 0.004),
