@@ -1902,12 +1902,24 @@ class OfficialTeacherReplay(Policy):
                 or final_lateral_error <= max_lateral_error_m
             )
             axial_ok = True
+            max_axial_error_m = None
             if near_gate_axial_target_m is not None:
                 near_gate_max_axial_text = os.environ.get("AIC_OFFICIAL_TEACHER_NEAR_GATE_MAX_AXIAL_ERROR_M")
                 near_gate_max_axial_m = (
                     float(near_gate_max_axial_text) if near_gate_max_axial_text not in (None, "") else 0.003
                 )
-                axial_ok = final_axial_error is not None and final_axial_error <= near_gate_max_axial_m
+                max_axial_error_m = near_gate_max_axial_m
+            else:
+                max_axial_error_text = os.environ.get("AIC_OFFICIAL_TEACHER_TRACKING_GATE_MAX_AXIAL_ERROR_M")
+                if is_sc_plug:
+                    max_axial_error_text = os.environ.get(
+                        "AIC_OFFICIAL_TEACHER_SC_TRACKING_GATE_MAX_AXIAL_ERROR_M",
+                        max_axial_error_text,
+                    )
+                if max_axial_error_text not in (None, ""):
+                    max_axial_error_m = float(max_axial_error_text)
+            if max_axial_error_m is not None and max_axial_error_m > 0.0:
+                axial_ok = final_axial_error is not None and final_axial_error <= max_axial_error_m
             passed = bool(
                 final_error is not None
                 and final_error <= gate_threshold
@@ -2002,13 +2014,23 @@ class OfficialTeacherReplay(Policy):
                 or final_lateral_error <= max_lateral_error_m
             )
             axial_ok = True
-            near_gate_max_axial_m = None
+            max_axial_error_m = None
             if near_gate_axial_target_m is not None:
                 near_gate_max_axial_text = os.environ.get("AIC_OFFICIAL_TEACHER_NEAR_GATE_MAX_AXIAL_ERROR_M")
-                near_gate_max_axial_m = (
+                max_axial_error_m = (
                     float(near_gate_max_axial_text) if near_gate_max_axial_text not in (None, "") else 0.003
                 )
-                axial_ok = final_axial_error is not None and final_axial_error <= near_gate_max_axial_m
+            else:
+                max_axial_error_text = os.environ.get("AIC_OFFICIAL_TEACHER_TRACKING_GATE_MAX_AXIAL_ERROR_M")
+                if is_sc_plug:
+                    max_axial_error_text = os.environ.get(
+                        "AIC_OFFICIAL_TEACHER_SC_TRACKING_GATE_MAX_AXIAL_ERROR_M",
+                        max_axial_error_text,
+                    )
+                if max_axial_error_text not in (None, ""):
+                    max_axial_error_m = float(max_axial_error_text)
+            if max_axial_error_m is not None and max_axial_error_m > 0.0:
+                axial_ok = final_axial_error is not None and final_axial_error <= max_axial_error_m
             passed = bool(
                 final_error is not None
                 and final_error <= gate_threshold
@@ -2018,12 +2040,21 @@ class OfficialTeacherReplay(Policy):
                 and axial_ok
             )
         else:
-            near_gate_max_axial_text = os.environ.get("AIC_OFFICIAL_TEACHER_NEAR_GATE_MAX_AXIAL_ERROR_M")
-            near_gate_max_axial_m = (
-                float(near_gate_max_axial_text)
-                if near_gate_axial_target_m is not None and near_gate_max_axial_text not in (None, "")
-                else (0.003 if near_gate_axial_target_m is not None else None)
-            )
+            max_axial_error_m = None
+            if near_gate_axial_target_m is not None:
+                near_gate_max_axial_text = os.environ.get("AIC_OFFICIAL_TEACHER_NEAR_GATE_MAX_AXIAL_ERROR_M")
+                max_axial_error_m = (
+                    float(near_gate_max_axial_text) if near_gate_max_axial_text not in (None, "") else 0.003
+                )
+            else:
+                max_axial_error_text = os.environ.get("AIC_OFFICIAL_TEACHER_TRACKING_GATE_MAX_AXIAL_ERROR_M")
+                if is_sc_plug:
+                    max_axial_error_text = os.environ.get(
+                        "AIC_OFFICIAL_TEACHER_SC_TRACKING_GATE_MAX_AXIAL_ERROR_M",
+                        max_axial_error_text,
+                    )
+                if max_axial_error_text not in (None, ""):
+                    max_axial_error_m = float(max_axial_error_text)
         self._trace_event(
             "tracking_gate_checked",
             tracking_gate_passed=passed,
@@ -2036,7 +2067,7 @@ class OfficialTeacherReplay(Policy):
             final_axial_error_m=final_axial_error,
             speed_threshold_mps=speed_threshold,
             max_lateral_error_m=max_lateral_error_m if max_lateral_error_m > 0.0 else None,
-            max_axial_error_m=near_gate_max_axial_m,
+            max_axial_error_m=max_axial_error_m,
             final_tcp_speed_mps=final_speed,
             force_delta_n=final_force_delta,
             ft_threshold_n=self._ft_threshold_n,
@@ -2430,6 +2461,42 @@ class OfficialTeacherReplay(Policy):
                 os.environ.get("AIC_OFFICIAL_TEACHER_LOCAL_PREINSERT_ALIGN_SPEED_MPS", "0.08"),
             )
         )
+        max_axial_error_m = None
+        if near_gate_axial_target_m is not None:
+            near_gate_max_axial_text = os.environ.get("AIC_OFFICIAL_TEACHER_NEAR_GATE_MAX_AXIAL_ERROR_M")
+            max_axial_error_m = (
+                float(near_gate_max_axial_text) if near_gate_max_axial_text not in (None, "") else 0.003
+            )
+        else:
+            max_axial_error_text = os.environ.get("AIC_OFFICIAL_TEACHER_TRACKING_GATE_MAX_AXIAL_ERROR_M")
+            if str(getattr(task, "plug_name", "")).startswith("sc"):
+                max_axial_error_text = os.environ.get(
+                    "AIC_OFFICIAL_TEACHER_SC_TRACKING_GATE_MAX_AXIAL_ERROR_M",
+                    max_axial_error_text,
+                )
+            if max_axial_error_text not in (None, ""):
+                max_axial_error_m = float(max_axial_error_text)
+        last_axial_error = (
+            float(self._last_tracking_gate_axial_error_m)
+            if self._last_tracking_gate_axial_error_m is not None
+            else None
+        )
+        if (
+            os.environ.get("AIC_OFFICIAL_TEACHER_REALIGN_CLOSE_AXIAL_GATE", "true").lower()
+            in {"1", "true", "yes", "on"}
+            and preserve_current_z
+            and max_axial_error_m is not None
+            and max_axial_error_m > 0.0
+            and last_axial_error is not None
+            and last_axial_error > max_axial_error_m
+        ):
+            preserve_current_z = False
+            self._trace_event(
+                "nominal_precontact_realign_close_axial_gate",
+                reason=reason,
+                axial_error_m=last_axial_error,
+                max_axial_error_m=max_axial_error_m,
+            )
         self._trace_event(
             "nominal_precontact_realign_started",
             reason=reason,
@@ -2486,11 +2553,22 @@ class OfficialTeacherReplay(Policy):
                 if self._last_tracking_gate_speed_mps is not None
                 else None
             )
+            last_axial_error = (
+                float(self._last_tracking_gate_axial_error_m)
+                if self._last_tracking_gate_axial_error_m is not None
+                else None
+            )
             speed_threshold = float(os.environ.get("AIC_OFFICIAL_TEACHER_TRACKING_GATE_SPEED_MPS", "0.006"))
+            axial_ok_for_low_force_miss = (
+                max_axial_error_m is None
+                or max_axial_error_m <= 0.0
+                or (last_axial_error is not None and last_axial_error <= max_axial_error_m)
+            )
             allow_small_low_force_miss = (
                 allowed_lateral_m > 0.0
                 and last_lateral_error is not None
                 and last_lateral_error <= allowed_lateral_m
+                and axial_ok_for_low_force_miss
                 and last_force_delta < self._ft_threshold_n
                 and (last_speed is None or last_speed <= speed_threshold)
             )
@@ -5167,6 +5245,16 @@ class OfficialTeacherReplay(Policy):
                         if stop_at_near_gate
                         else None
                     )
+                    cheatcode_start_z_offset = float(
+                        os.environ.get("AIC_OFFICIAL_TEACHER_CHEATCODE_START_Z_OFFSET", "0.045")
+                    )
+                    if str(getattr(task, "plug_name", "")).startswith("sc"):
+                        cheatcode_start_z_offset = float(
+                            os.environ.get(
+                                "AIC_OFFICIAL_TEACHER_SC_CHEATCODE_START_Z_OFFSET",
+                                str(cheatcode_start_z_offset),
+                            )
+                        )
                     gate_passed = self._hold_preinsert_until_tracking_gate(
                         task,
                         port_transform,
@@ -5179,7 +5267,7 @@ class OfficialTeacherReplay(Policy):
                             )
                         ),
                         dt=command_dt_sec,
-                        z_offset=float(os.environ.get("AIC_OFFICIAL_TEACHER_CHEATCODE_START_Z_OFFSET", "0.045")),
+                        z_offset=cheatcode_start_z_offset,
                         preserve_current_z=preinsert_gate_preserve_current_z and not stop_at_near_gate,
                         near_gate_axial_target_m=stop_near_gate_axial_target_m,
                     )
@@ -5194,13 +5282,13 @@ class OfficialTeacherReplay(Policy):
                                 target.waypoint.diagnostics.get(
                                     "pre_insert_settle_sec",
                                     os.environ.get("AIC_OFFICIAL_TEACHER_PRE_INSERT_SETTLE_SEC", "0.35"),
-                                )
-                            ),
-                            dt=command_dt_sec,
-                            z_offset=float(os.environ.get("AIC_OFFICIAL_TEACHER_CHEATCODE_START_Z_OFFSET", "0.045")),
-                            preserve_current_z=preinsert_align_preserve_current_z and not stop_at_near_gate,
-                            near_gate_axial_target_m=stop_near_gate_axial_target_m,
-                            reason="trajectory_preinsert_tracking_gate",
+                            )
+                        ),
+                        dt=command_dt_sec,
+                        z_offset=cheatcode_start_z_offset,
+                        preserve_current_z=preinsert_align_preserve_current_z and not stop_at_near_gate,
+                        near_gate_axial_target_m=stop_near_gate_axial_target_m,
+                        reason="trajectory_preinsert_tracking_gate",
                         )
                         if not gate_passed:
                             send_feedback("official_teacher_replay_tracking_gate_failed")
@@ -5213,9 +5301,7 @@ class OfficialTeacherReplay(Policy):
                             else 0.0
                         )
                         if last_gate_force_delta >= self._ft_threshold_n:
-                            start_z_offset = float(
-                                os.environ.get("AIC_OFFICIAL_TEACHER_CHEATCODE_START_Z_OFFSET", "0.045")
-                            )
+                            start_z_offset = cheatcode_start_z_offset
                             self._trace_event(
                                 "contact_detected",
                                 retry_count=0,
@@ -5255,9 +5341,7 @@ class OfficialTeacherReplay(Policy):
                                 )
                             ),
                             dt=command_dt_sec,
-                            z_offset=float(
-                                os.environ.get("AIC_OFFICIAL_TEACHER_CHEATCODE_START_Z_OFFSET", "0.045")
-                            ),
+                            z_offset=cheatcode_start_z_offset,
                             preserve_current_z=preinsert_align_preserve_current_z and not stop_at_near_gate,
                             gain_profile="recovery",
                         )
@@ -5273,9 +5357,7 @@ class OfficialTeacherReplay(Policy):
                                 )
                             ),
                             dt=command_dt_sec,
-                            z_offset=float(
-                                os.environ.get("AIC_OFFICIAL_TEACHER_CHEATCODE_START_Z_OFFSET", "0.045")
-                            ),
+                            z_offset=cheatcode_start_z_offset,
                             preserve_current_z=preinsert_gate_preserve_current_z and not stop_at_near_gate,
                             near_gate_axial_target_m=stop_near_gate_axial_target_m,
                         )
