@@ -976,8 +976,8 @@ def _augment_validation_with_debug(validation, assessment: dict, *, mode: Expert
     guarded_speed = metrics.get("max_guarded_insert_speed_mps")
     guarded_speed_threshold = float(
         os.environ.get(
-            "AIC_EXPERT_VALIDATION_MAX_GUARDED_SPEED_MPS",
-            os.environ.get("AIC_EXPERT_VALIDATION_MAX_GUARDED_INSERT_SPEED_MPS", "0.02"),
+            "AIC_EXPERT_VALIDATION_MAX_GUARDED_INSERT_SPEED_MPS",
+            os.environ.get("AIC_EXPERT_VALIDATION_MAX_GUARDED_SPEED_MPS", "0.02"),
         )
     )
     if guarded_speed is not None and guarded_speed > guarded_speed_threshold:

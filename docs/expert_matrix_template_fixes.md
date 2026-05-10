@@ -77,6 +77,47 @@ Fix candidate: keep the broad matrix at one accepted trajectory per setting, but
 
 Status: setting `0092_matrix_sc2sc_sc2_present01_target1_nic2` was marked failed by operator instruction after 10 nominal, 10 nominalrecovery, and 1 recovery logged failures. GPT-5 analysis of nominal repeat 10 found frame usage mostly consistent, but only one candidate was tried, precontact residual was about `2.9 mm`, insertion used pinned XY exact-position descent, and no recovery triggered despite force spikes. Move on from setting 92; use the multi-candidate fallback on the next failed settings.
 
+### SC-to-SC NIC Bypass Full-Insertion Template
+
+Symptom: crowded SC-to-SC full-insertion runs with NIC cards can score `1.0` or
+low partial scores even when planning and replay complete. In the
+`sc_ports.count: 1`, `nic_cards.count: 5`, seed `51500` run, center-camera
+inspection showed the cable getting caught on the NIC stack unless the route
+moved farther camera-left before approaching the port. GPT-5 replay analysis
+also found a separate axial miss: the guarded insertion followed the clear route
+but stopped too high above the SC port, yielding no insertion event.
+
+Fix: use the global SC/NIC outside-left bypass route:
+
+```text
+camera_left_clearance -> left_lane_descent -> outside_lane_forward_past_cards
+-> right_sweep_toward_port -> port_standoff -> port_overhead_before_descent
+-> pre_insert
+```
+
+The route first establishes outside-left clearance, descends in that lane, moves
+forward past the full NIC stack with cards remaining to the right in the
+center-camera view, then sweeps right to the selected SC port. Do not route
+between NIC cards or move directly toward the port before establishing the
+outside-left lane. Use `AIC_EXPERT_SC_NIC_BYPASS_LEFT_OFFSET_M=0.08`,
+`AIC_EXPERT_SC_NIC_MIN_RIGHT_SWEEP_M=0.045`, and cap route clearance with
+`AIC_EXPERT_SC_NIC_MAX_ROUTE_CLEARANCE_M=0.055` so the lane is wide enough
+without pushing MoveIt into an unreachable high route.
+
+For insertion, keep SC-specific settings explicit in request YAMLs:
+`AIC_OFFICIAL_TEACHER_SC_CHEATCODE_START_Z_OFFSET=0.030`,
+`AIC_OFFICIAL_TEACHER_SC_CHEATCODE_INSERTION_SPEED_MPS=0.014`,
+`AIC_OFFICIAL_TEACHER_SC_CHEATCODE_END_Z_OFFSET=-0.030`,
+enable SC guarded lateral servo with force limit `8.0`, enable SC final seat
+with extra depth `0.0060`, and enable SC no-event recovery with threshold `7.0`.
+The SC cheatcode offsets/speed and related SC force/depth thresholds are also
+SC-gated replay defaults so the behavior is portable when a request omits one
+of those variables, but full dataset requests should include them for auditability.
+
+Status: implemented and validated on `sc_ports.count: 1`, `nic_cards.count: 5`,
+seed `51500`. The validation accepted on attempt 1 with score `89.17`,
+insertion event reached, tier 3 score `75`, and no off-limit contacts.
+
 ### SC Plug-Tip XY Offset Template
 
 Symptom: early `sc_to_sc` settings score `1.0` with no insertion event, no force, and no off-limit contact. Tracking gate passes and guarded insertion descends, but the plug misses the port because the replay aligns `gripper/tcp` x/y to the port while only applying the plug-to-gripper offset in z.

@@ -493,19 +493,42 @@ when registry env is present for the matching suffix:
 
 ```text
 camera_left_clearance -> left_lane_descent -> outside_lane_forward_past_cards
--> right_sweep_toward_port -> port_standoff -> pre_insert
+-> right_sweep_toward_port -> port_standoff -> port_overhead_before_descent
+-> pre_insert
 ```
 
 This keeps the cable outside the NIC-card stack before any approach to the SC
-port. Reproduce that behavior from a small request by using
-`sc_to_sc_4cards_near_gate_registry_minimal.yaml`, or by adding the same
-`acceptance.stop_near_gate` and `scene.nic_cards.count: 4` fields to a copy of
-`sc_to_sc_minimal.yaml`. Keep `generation.use_expert_registry_env` at its
-default `true`, and make sure the relevant overlay JSONL is present under:
+port. The route is now generated globally for SC-to-SC scenes with present NIC
+cards: first move camera-left to the outside-left clearance lane, descend in
+that lane, move forward past the full NIC stack with the cards staying on the
+right side of the center-camera view, then sweep right to port standoff and
+descend to pre-insert. The default left lane can be widened with
+`AIC_EXPERT_SC_NIC_BYPASS_LEFT_OFFSET_M`, and `AIC_EXPERT_SC_NIC_MIN_RIGHT_SWEEP_M`
+keeps the lane left of randomized SC pre-insert poses. For crowded SC-to-SC
+full-insertion requests, use `generation.use_expert_registry_env: true` and
+include the SC insertion env block used by the successful run:
 
-```text
-aic_utils/lerobot_robot_aic/config/expert_setting_registry_overlays/
-```
+- `AIC_EXPERT_SC_NIC_BYPASS_LEFT_OFFSET_M: "0.08"`
+- `AIC_EXPERT_SC_NIC_APPROACH_LEFT_OFFSET_M: "0.05"`
+- `AIC_EXPERT_SC_NIC_MIN_RIGHT_SWEEP_M: "0.045"`
+- `AIC_EXPERT_SC_NIC_MAX_ROUTE_CLEARANCE_M: "0.055"`
+- `AIC_EXPERT_SC_NIC_BYPASS_Y_MARGIN_M: "0.14"`
+- `AIC_OFFICIAL_TEACHER_SC_CHEATCODE_START_Z_OFFSET: "0.030"`
+- `AIC_OFFICIAL_TEACHER_SC_CHEATCODE_INSERTION_SPEED_MPS: "0.014"`
+- `AIC_OFFICIAL_TEACHER_SC_CHEATCODE_END_Z_OFFSET: "-0.030"`
+- `AIC_OFFICIAL_TEACHER_SC_GUARDED_INSERT_LATERAL_SERVO: "true"`
+- `AIC_OFFICIAL_TEACHER_SC_GUARDED_INSERT_LATERAL_SERVO_FORCE_LIMIT_N: "8.0"`
+- `AIC_OFFICIAL_TEACHER_SC_FINAL_SEAT_ENABLED: "true"`
+- `AIC_OFFICIAL_TEACHER_SC_FINAL_SEAT_EXTRA_DEPTH_M: "0.0060"`
+- `AIC_OFFICIAL_TEACHER_SC_NO_EVENT_RECOVERY: "true"`
+- `AIC_OFFICIAL_TEACHER_SC_NO_EVENT_RECOVERY_FORCE_THRESHOLD_N: "7.0"`
+
+These settings were validated on `sc_ports.count: 1`, `nic_cards.count: 5`,
+seed `51500`, with score `89.17` and successful insertion. The SC-specific
+cheatcode start/end offsets, insertion speed, guarded-servo force limit, final
+seat depth, and no-event recovery threshold are also SC-gated defaults in
+`OfficialTeacherReplay`; request YAMLs keep them explicit so runs are
+self-documenting and portable across machines.
 
 For `policy: cheatcode`, the script invokes the per-trial recorder with:
 

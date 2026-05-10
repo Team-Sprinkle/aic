@@ -124,6 +124,13 @@ def generate_approach_candidates(
         raise ValueError("tcp_pose is required to generate approach candidates")
     target = snapshot.target_port_pose
     current = snapshot.tcp_pose
+    nic_obstacles = _nic_obstacles(snapshot)
+    sc_nic_obstacle_route = _sc_to_sc_with_nic_obstacles(snapshot)
+    if sc_nic_obstacle_route:
+        pre_insert_z_offset_m = _env_float(
+            "AIC_EXPERT_SC_NIC_PREINSERT_Z_OFFSET_M",
+            pre_insert_z_offset_m,
+        )
     near_start = _distance(current.position, target.position) <= 0.08
     effective_z_offset = _effective_pre_insert_z_offset(
         snapshot,
@@ -133,8 +140,6 @@ def generate_approach_candidates(
     cheatcode_pre_insert = _cheatcode_gripper_target(snapshot, z_offset=effective_z_offset)
     orientation = list(cheatcode_pre_insert.orientation_xyzw)
     clearance = float(strategy.preferred_clearance_m)
-    nic_obstacles = _nic_obstacles(snapshot)
-    sc_nic_obstacle_route = _sc_to_sc_with_nic_obstacles(snapshot)
     sc_bypass_left_offset = _env_float("AIC_EXPERT_SC_NIC_BYPASS_LEFT_OFFSET_M", SC_NIC_BYPASS_LEFT_OFFSET_M)
     sc_approach_left_offset = _env_float(
         "AIC_EXPERT_SC_NIC_APPROACH_LEFT_OFFSET_M",
@@ -151,26 +156,51 @@ def generate_approach_candidates(
             dy = 0.0
             extra_clearance = 0.0
         staging_z = cheatcode_pre_insert.position[2]
+        route_clearance = clearance
+        if route_around_nics:
+            route_clearance = max(
+                route_clearance,
+                _env_float("AIC_EXPERT_SC_NIC_ROUTE_CLEARANCE_M", route_clearance),
+            )
+            route_clearance = min(
+                route_clearance,
+                _env_float("AIC_EXPERT_SC_NIC_MAX_ROUTE_CLEARANCE_M", 0.055),
+            )
         lift_z = max(current.position[2], staging_z + extra_clearance)
         diagonal_bypass_progress_fraction = 0.0
         if route_around_nics:
-            lift_z = max(lift_z, staging_z + clearance + extra_clearance)
+            lift_z = max(lift_z, staging_z + route_clearance + extra_clearance)
             bypass_y = _nic_bypass_y(nic_obstacles, target.position[1])
-            wide_left_x = float(current.position[0]) - sc_bypass_left_offset
+            # Use the current TCP as the nominal camera-left bypass lane, then
+            # shift left of the randomized pre-insert pose enough to keep the
+            # cable outside the NIC stack before the rightward sweep. A full
+            # extra bypass offset from a far-left port can push the lane outside
+            # MoveIt's reachable corridor.
+            min_right_sweep_m = _env_float(
+                "AIC_EXPERT_SC_NIC_MIN_RIGHT_SWEEP_M",
+                min(0.045, sc_bypass_left_offset),
+            )
+            current_bypass_x = float(current.position[0]) - sc_bypass_left_offset
+            minimum_left_of_port_x = float(cheatcode_pre_insert.position[0]) - min_right_sweep_m
+            wide_left_x = min(current_bypass_x, minimum_left_of_port_x)
+            approach_side_offset_m = min(
+                sc_approach_left_offset,
+                max(0.010, 0.5 * min_right_sweep_m),
+            )
             if name == "high_clearance_vertical":
-                dx = max(-0.5 * sc_bypass_left_offset, wide_left_x - cheatcode_pre_insert.position[0])
+                dx = -0.5 * approach_side_offset_m
                 dy = bypass_y - cheatcode_pre_insert.position[1]
             elif name == "back":
-                dx = max(-0.75 * sc_approach_left_offset, wide_left_x - cheatcode_pre_insert.position[0])
+                dx = -0.75 * approach_side_offset_m
                 dy = bypass_y - cheatcode_pre_insert.position[1]
             elif name == "above_left":
-                dx = max(-sc_approach_left_offset, wide_left_x - cheatcode_pre_insert.position[0])
+                dx = -approach_side_offset_m
                 dy = bypass_y - cheatcode_pre_insert.position[1]
             elif name == "above_right":
                 dx = 0.05
                 dy = bypass_y - cheatcode_pre_insert.position[1]
         safe_lift_x = wide_left_x if route_around_nics else current.position[0]
-        approach_z = staging_z + (min(clearance, 0.02) if near_start else clearance) + extra_clearance
+        approach_z = staging_z + (min(route_clearance, 0.02) if near_start else route_clearance) + extra_clearance
         safe_lift_z = lift_z
         if route_around_nics:
             safe_lift_z = max(safe_lift_z, approach_z + _env_float("AIC_EXPERT_SC_NIC_LEFT_CLEARANCE_EXTRA_Z_M", 0.04))
@@ -218,12 +248,20 @@ def generate_approach_candidates(
                 z=approach_z,
                 orientation_xyzw=orientation,
             )
+            port_overhead = _pose_at(
+                cheatcode_pre_insert,
+                x=cheatcode_pre_insert.position[0],
+                y=cheatcode_pre_insert.position[1],
+                z=approach_z,
+                orientation_xyzw=orientation,
+            )
             route_subgoals = (
                 RouteSubgoal("camera_left_clearance", safe_lift, "approach"),
                 RouteSubgoal("left_lane_descent", left_descent, "approach"),
                 RouteSubgoal("outside_lane_forward_past_cards", outside_lane_forward, "obstacle_avoidance"),
                 RouteSubgoal("right_sweep_toward_port", right_sweep, "alignment"),
                 RouteSubgoal("port_standoff", approach, "alignment"),
+                RouteSubgoal("port_overhead_before_descent", port_overhead, "alignment"),
                 RouteSubgoal("pre_insert", pre_insert, "pre_insertion"),
             )
         candidates.append(
@@ -246,6 +284,8 @@ def generate_approach_candidates(
                     "route_subgoal_names": [subgoal.name for subgoal in route_subgoals],
                     "sc_nic_bypass_left_offset_m": sc_bypass_left_offset if route_around_nics else 0.0,
                     "sc_nic_approach_left_offset_m": sc_approach_left_offset if route_around_nics else 0.0,
+                    "sc_nic_min_right_sweep_m": min_right_sweep_m if route_around_nics else 0.0,
+                    "sc_nic_route_clearance_m": route_clearance if route_around_nics else None,
                     "sc_nic_bypass_y": bypass_y if route_around_nics else None,
                     "route_policy": (
                         "near_start_short_approach"

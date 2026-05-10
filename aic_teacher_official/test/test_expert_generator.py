@@ -402,6 +402,7 @@ def test_sc_to_sc_candidates_route_around_present_nic_cards():
         "outside_lane_forward_past_cards",
         "right_sweep_toward_port",
         "port_standoff",
+        "port_overhead_before_descent",
         "pre_insert",
     ]
     assert route[0].pose.position[0] < snapshot.tcp_pose.position[0]
@@ -417,11 +418,36 @@ def test_sc_to_sc_candidates_route_around_present_nic_cards():
     assert route[4].pose.position[1] < route[3].pose.position[1]
     assert route[5].pose.position[0] > route[4].pose.position[0]
     assert route[5].pose.position[1] == pytest.approx(route[4].pose.position[1])
-    assert route[5].pose.position[2] < route[4].pose.position[2]
+    assert route[5].pose.position[2] == pytest.approx(route[4].pose.position[2])
+    assert route[6].pose.position[0] == pytest.approx(route[5].pose.position[0])
+    assert route[6].pose.position[1] == pytest.approx(route[5].pose.position[1])
+    assert route[6].pose.position[2] < route[5].pose.position[2]
     assert candidates[0].approach_standoff_pose.position[0] < candidates[0].pre_insert_pose.position[0]
     assert candidates[0].approach_standoff_pose.position[1] > 0.12
     assert candidates[0].metadata["diagonal_bypass_progress_fraction"] == pytest.approx(0.0)
     assert candidates[0].metadata["route_policy"] == "camera_left_then_outside_lane_moveit_around_present_nic_cards"
+
+
+def test_sc_to_sc_bypass_lane_stays_left_of_randomized_preinsert_pose():
+    snapshot = _sc_snapshot_with_nics()
+    snapshot = SceneSnapshot(
+        **{
+            **snapshot.__dict__,
+            "target_port_pose": SerializablePose([-0.10, 0.20, 0.12], [0.0, 0.0, 0.0, 1.0]),
+        }
+    )
+    candidate = generate_approach_candidates(snapshot, _strategy(approach_side="front"), count=1)[0]
+
+    route = candidate.route_subgoals
+    left_lane = route[2].pose.position
+    right_sweep = route[3].pose.position
+    port_overhead = route[5].pose.position
+    pre_insert = route[6].pose.position
+    assert left_lane[0] < pre_insert[0]
+    assert right_sweep[0] > left_lane[0]
+    assert port_overhead[0] == pytest.approx(pre_insert[0])
+    assert port_overhead[1] == pytest.approx(pre_insert[1])
+    assert port_overhead[2] > pre_insert[2]
 
 
 def test_sc_to_sc_near_start_uses_short_approach_instead_of_high_bypass():
