@@ -183,6 +183,10 @@ class MagentaSquare(Policy):
         self.magenta_consensus_distance_m = float(
             os.getenv("AIC_MAGENTA_CONSENSUS_DISTANCE_M", "0.08")
         )
+        self.magenta_spawn_require_consensus = self._env_flag(
+            "AIC_MAGENTA_SPAWN_REQUIRE_CONSENSUS",
+            default=True,
+        )
         self.magenta_edge_width_tolerance_m = float(
             os.getenv("AIC_MAGENTA_BOARD_EDGE_WIDTH_TOLERANCE_M", "0.07")
         )
@@ -251,7 +255,7 @@ class MagentaSquare(Policy):
             os.getenv("AIC_TRANSPORT_SHORT_EDGE_SCAN_Y_STEP", "-0.04")
         )
         self.short_edge_scan_max_steps = int(
-            os.getenv("AIC_TRANSPORT_SHORT_EDGE_SCAN_MAX_STEPS", "4")
+            os.getenv("AIC_TRANSPORT_SHORT_EDGE_SCAN_MAX_STEPS", "10")
         )
         self.short_edge_scan_duration_sec = float(
             os.getenv("AIC_TRANSPORT_SHORT_EDGE_SCAN_DURATION_SEC", "0.8")
@@ -700,7 +704,9 @@ class MagentaSquare(Policy):
         self.get_logger().info(
             "TransportToMean scanning for full short-edge view "
             f"start_y={start_pose.position.y:.4f}, y_step={self.short_edge_scan_y_step:.4f}, "
-            f"max_steps={self.short_edge_scan_max_steps}, z={scan_z:.4f}, "
+            f"max_steps={self.short_edge_scan_max_steps}, "
+            f"total_y={self.short_edge_scan_y_step * self.short_edge_scan_max_steps:.4f}, "
+            f"z={scan_z:.4f}, "
             f"z_offset={self.short_edge_scan_z_offset:.4f}, "
             f"min_width={self.short_edge_min_width:.4f}, "
             f"min_endpoint_margin_px={self.short_edge_min_endpoint_margin_px:.1f}"
@@ -1933,6 +1939,54 @@ class MagentaSquare(Policy):
         )
         return [best]
 
+    def _spawn_magenta_observations(
+        self,
+        obs,
+    ) -> list[MagentaMarkerObservation | MagentaRoiObservation]:
+        observations = self._multicamera_magenta_roi_observations(obs)
+        if not observations:
+            return []
+
+        geometry_fit_observations = [
+            observation
+            for observation in observations
+            if isinstance(observation, MagentaMarkerObservation)
+        ]
+        if geometry_fit_observations:
+            return geometry_fit_observations
+
+        if not self.magenta_spawn_require_consensus:
+            return observations
+
+        best_cluster = []
+        for candidate in observations:
+            cluster = [
+                observation
+                for observation in observations
+                if np.linalg.norm(
+                    observation.marker_center_base[:2] - candidate.marker_center_base[:2]
+                )
+                <= self.magenta_consensus_distance_m
+            ]
+            if len(cluster) > len(best_cluster) or (
+                len(cluster) == len(best_cluster)
+                and sum(observation.score for observation in cluster)
+                > sum(observation.score for observation in best_cluster)
+            ):
+                best_cluster = cluster
+
+        if len(best_cluster) >= 2:
+            return best_cluster
+
+        self.get_logger().info(
+            "MagentaSquare rejected weak spawn magenta evidence: "
+            f"cameras={[observation.camera_name for observation in observations]}, "
+            f"centers={[np.round(ob.marker_center_base, 4).tolist() for ob in observations]}, "
+            f"require_consensus={self.magenta_spawn_require_consensus}, "
+            f"consensus_distance={self.magenta_consensus_distance_m:.3f} m"
+        )
+        return []
+
     def _detect_board_edge_candidates(
         self,
         camera_name: str,
@@ -2518,20 +2572,45 @@ class MagentaSquare(Policy):
         target_source = ""
         if self.detect_board:
             view_pose = self._tcp_pose_from_observation(get_observation)
-            if self.move_to_view_first:
-                view_pose = self._move_to_view_pose(get_observation, move_robot)
+            short_edge_scan_done = False
+            spawn_obs = get_observation()
+            spawn_magenta_observations = self._spawn_magenta_observations(spawn_obs)
+            if not spawn_magenta_observations:
+                self.get_logger().info(
+                    "MagentaSquare found no magenta blob at spawn; "
+                    "skipping aerial view and scanning -y for short-edge board estimation."
+                )
+                self._move_to_short_edge_view(get_observation, move_robot)
+                short_edge_scan_done = True
+                obs = get_observation()
+                target_xyz = self._multicamera_short_edge_target_xyz(task, obs)
+                detected_board = target_xyz is not None
+                if detected_board:
+                    target_source = "multi-camera short-edge fit"
+            else:
+                self.get_logger().info(
+                    "MagentaSquare found magenta blob at spawn; "
+                    "using aerial magenta-guided board search: "
+                    f"cameras={[observation.camera_name for observation in spawn_magenta_observations]}"
+                )
+                if self.move_to_view_first:
+                    view_pose = self._move_to_view_pose(get_observation, move_robot)
 
-            target_xyz, target_source = self._detect_target_from_linear_view_search(
-                task,
-                get_observation,
-                move_robot,
-                view_pose,
-            )
-            detected_board = target_xyz is not None
+                target_xyz, target_source = self._detect_target_from_linear_view_search(
+                    task,
+                    get_observation,
+                    move_robot,
+                    view_pose,
+                )
+                detected_board = target_xyz is not None
+
             if not detected_board:
                 send_feedback(
-                    "Linear +y view-search board detection failed; trying one final short-edge board fit."
+                    "Board detection failed; trying one final short-edge board fit "
+                    "from the current view."
                 )
+                if not short_edge_scan_done:
+                    self._move_to_short_edge_view(get_observation, move_robot)
                 obs = get_observation()
                 target_xyz = self._multicamera_short_edge_target_xyz(task, obs)
                 detected_board = target_xyz is not None
