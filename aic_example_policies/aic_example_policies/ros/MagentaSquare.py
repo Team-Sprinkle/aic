@@ -180,6 +180,18 @@ class MagentaSquare(Policy):
         self.magenta_edge_support_tolerance_m = float(
             os.getenv("AIC_MAGENTA_EDGE_SUPPORT_TOLERANCE_M", "0.008")
         )
+        self.magenta_edge_thickness_tolerance_m = float(
+            os.getenv(
+                "AIC_MAGENTA_EDGE_THICKNESS_TOLERANCE_M",
+                str(2.5 * self.magenta_edge_support_tolerance_m),
+            )
+        )
+        self.magenta_gap_fraction_weight = float(
+            os.getenv("AIC_MAGENTA_GAP_FRACTION_WEIGHT", "3.0")
+        )
+        self.magenta_gap_thickness_weight = float(
+            os.getenv("AIC_MAGENTA_GAP_THICKNESS_WEIGHT", "1.0")
+        )
         self.magenta_square_size_tolerance_m = float(
             os.getenv("AIC_MAGENTA_SQUARE_SIZE_TOLERANCE_M", "0.04")
         )
@@ -1695,6 +1707,9 @@ class MagentaSquare(Policy):
 
         edge_support = []
         edge_gap_centers = []
+        edge_gap_fractions = []
+        edge_thickness_scores = []
+        edge_gap_scores = []
         for idx in range(4):
             p0 = box_xy[idx]
             p1 = box_xy[(idx + 1) % 4]
@@ -1703,6 +1718,9 @@ class MagentaSquare(Policy):
             if edge_len <= 1e-9:
                 edge_support.append(0)
                 edge_gap_centers.append(0.5 * (p0 + p1))
+                edge_gap_fractions.append(0.0)
+                edge_thickness_scores.append(0.0)
+                edge_gap_scores.append(0.0)
                 continue
             edge_dir = edge_vec / edge_len
             normal = np.array([-edge_dir[1], edge_dir[0]], dtype=np.float64)
@@ -1718,10 +1736,29 @@ class MagentaSquare(Policy):
             )
             gap_size, gap_center = self._magenta_edge_gap_center(points_xy, p0, p1)
             gap_fraction = gap_size / max(edge_len, 1e-9)
+            thick_mask = (
+                (dist <= self.magenta_edge_thickness_tolerance_m)
+                & (along >= -self.magenta_edge_support_tolerance_m)
+                & (along <= edge_len + self.magenta_edge_support_tolerance_m)
+            )
+            if np.count_nonzero(thick_mask) > 0:
+                thickness_score = float(
+                    np.percentile(dist[thick_mask], 90)
+                    / max(self.magenta_edge_thickness_tolerance_m, 1e-9)
+                )
+            else:
+                thickness_score = 0.0
+            gap_score = (
+                self.magenta_gap_fraction_weight * gap_fraction
+                + self.magenta_gap_thickness_weight * thickness_score
+            )
             edge_support.append(support_count / max(edge_len, 1e-9) - 200.0 * gap_fraction)
             edge_gap_centers.append(gap_center)
+            edge_gap_fractions.append(float(gap_fraction))
+            edge_thickness_scores.append(thickness_score)
+            edge_gap_scores.append(gap_score)
 
-        gap_edge_idx = int(np.argmin(edge_support))
+        gap_edge_idx = int(np.argmax(edge_gap_scores))
         plus_y_edge_idx = (gap_edge_idx + 2) % 4
         gap_edge_center_xy = 0.5 * (
             box_xy[gap_edge_idx] + box_xy[(gap_edge_idx + 1) % 4]
@@ -1787,6 +1824,9 @@ class MagentaSquare(Policy):
             f"center={np.round(marker_center_base, 4).tolist()}, "
             f"sides={np.round(side_lengths, 4).tolist()}, "
             f"edge_support={np.round(edge_support, 2).tolist()}, "
+            f"edge_gap_fraction={np.round(edge_gap_fractions, 3).tolist()}, "
+            f"edge_thickness_score={np.round(edge_thickness_scores, 3).tolist()}, "
+            f"edge_gap_score={np.round(edge_gap_scores, 3).tolist()}, "
             f"gap_edge={gap_edge_idx}, "
             f"board_origin={np.round(board_origin, 4).tolist()}, "
             f"board_x_axis={np.round(board_x_axis, 4).tolist()}, "
