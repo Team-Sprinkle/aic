@@ -554,6 +554,17 @@ class RewardsCfg:
             "body_position_offset": (0.0, 0.0, 0.0),
         },
     )
+    target_distance_progress = RewTerm(
+        func=mdp.body_to_object_distance_progress,
+        weight=0.0,
+        params={
+            "body_cfg": SceneEntityCfg("robot", body_names=MISSING),
+            "target_cfg": SceneEntityCfg("sc_port"),
+            "scale": 0.003,
+            "target_position_offset": (0.093, 0.140, 0.020),
+            "body_position_offset": (0.0, 0.0, 0.0),
+        },
+    )
     target_orientation_tanh = RewTerm(
         func=mdp.body_to_object_orientation_tanh,
         weight=0.0,
@@ -565,8 +576,33 @@ class RewardsCfg:
             "target_orientation_offset": None,
         },
     )
+    target_orientation_gated_exp = RewTerm(
+        func=mdp.body_to_object_orientation_gated_exp,
+        weight=0.0,
+        params={
+            "body_cfg": SceneEntityCfg("robot", body_names=MISSING),
+            "target_cfg": SceneEntityCfg("sc_port"),
+            "std": 0.03,
+            "gate_sigma": 0.012,
+            "body_orientation_offset": None,
+            "target_orientation_offset": None,
+            "target_position_offset": (0.093, 0.140, 0.020),
+            "body_position_offset": (0.0, 0.0, 0.0),
+        },
+    )
     target_reaching_bonus = RewTerm(
         func=mdp.body_to_object_reaching_bonus,
+        weight=0.0,
+        params={
+            "body_cfg": SceneEntityCfg("robot", body_names=MISSING),
+            "target_cfg": SceneEntityCfg("sc_port"),
+            "threshold": 0.01,
+            "target_position_offset": (0.093, 0.140, 0.020),
+            "body_position_offset": (0.0, 0.0, 0.0),
+        },
+    )
+    target_success_once_bonus = RewTerm(
+        func=mdp.body_to_object_success_once_bonus,
         weight=0.0,
         params={
             "body_cfg": SceneEntityCfg("robot", body_names=MISSING),
@@ -594,7 +630,7 @@ class RewardsCfg:
             "threshold": 3.0,
             "reference": 20.0,
             "max_penalty": 1.0,
-            "asset_cfg": SceneEntityCfg("robot"),
+            "asset_cfg": SceneEntityCfg("robot", body_names="gripper_tcp"),
         },
     )
 
@@ -676,8 +712,11 @@ class AICTaskEnvCfg(ManagerBasedRLEnvCfg):
         self.rewards.reaching_bonus.params["asset_cfg"].body_names = ee_body
         self.rewards.target_distance_tanh.params["body_cfg"].body_names = ee_body
         self.rewards.target_distance_exp.params["body_cfg"].body_names = ee_body
+        self.rewards.target_distance_progress.params["body_cfg"].body_names = ee_body
         self.rewards.target_orientation_tanh.params["body_cfg"].body_names = ee_body
+        self.rewards.target_orientation_gated_exp.params["body_cfg"].body_names = ee_body
         self.rewards.target_reaching_bonus.params["body_cfg"].body_names = ee_body
+        self.rewards.target_success_once_bonus.params["body_cfg"].body_names = ee_body
         self.rewards.target_lateral_error.params["body_cfg"].body_names = ee_body
 
         # # Arm action: joint position control
@@ -887,8 +926,11 @@ class AICTaskEnvCfg(ManagerBasedRLEnvCfg):
         for term_name in (
             "target_distance_tanh",
             "target_distance_exp",
+            "target_distance_progress",
             "target_orientation_tanh",
+            "target_orientation_gated_exp",
             "target_reaching_bonus",
+            "target_success_once_bonus",
             "target_lateral_error",
         ):
             term = getattr(self.rewards, term_name)
@@ -911,18 +953,26 @@ class AICTaskEnvCfg(ManagerBasedRLEnvCfg):
             os.environ.get("AIC_ISAAC_INSERTION_ORIENTATION_WEIGHT", "0.0")
         )
         reaching_weight = float(os.environ.get("AIC_ISAAC_INSERTION_REACHING_WEIGHT", "0.0"))
+        terminal_weight = float(os.environ.get("AIC_ISAAC_INSERTION_TERMINAL_WEIGHT", "0.0"))
+        progress_weight = float(os.environ.get("AIC_ISAAC_INSERTION_PROGRESS_WEIGHT", "0.0"))
         lateral_weight = float(
             os.environ.get("AIC_ISAAC_INSERTION_LATERAL_WEIGHT", "0.0")
         )
         force_delta_weight = float(
             os.environ.get("AIC_ISAAC_FORCE_DELTA_PENALTY_WEIGHT", "0.0")
         )
-        self.rewards.target_distance_tanh.weight = distance_weight
-        self.rewards.target_distance_exp.weight = close_weight
-        self.rewards.target_orientation_tanh.weight = orientation_weight
-        self.rewards.target_reaching_bonus.weight = reaching_weight
-        self.rewards.target_lateral_error.weight = lateral_weight
-        self.rewards.force_delta_penalty.weight = force_delta_weight
+        reward_weight_multiplier = 1.0 / max(float(self.sim.dt) * float(self.decimation), 1.0e-9)
+        self.rewards.target_distance_tanh.weight = distance_weight * reward_weight_multiplier
+        self.rewards.target_distance_exp.weight = close_weight * reward_weight_multiplier
+        self.rewards.target_distance_progress.weight = progress_weight * reward_weight_multiplier
+        self.rewards.target_orientation_tanh.weight = orientation_weight * reward_weight_multiplier
+        self.rewards.target_orientation_gated_exp.weight = float(
+            os.environ.get("AIC_ISAAC_INSERTION_ORIENTATION_GATED_WEIGHT", "0.0")
+        ) * reward_weight_multiplier
+        self.rewards.target_reaching_bonus.weight = reaching_weight * reward_weight_multiplier
+        self.rewards.target_success_once_bonus.weight = terminal_weight * reward_weight_multiplier
+        self.rewards.target_lateral_error.weight = lateral_weight * reward_weight_multiplier
+        self.rewards.force_delta_penalty.weight = force_delta_weight * reward_weight_multiplier
 
     def _apply_initial_arm_joint_override(self) -> None:
         raw = os.environ.get("AIC_ISAAC_INITIAL_ARM_JOINT_POS")

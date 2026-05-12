@@ -80,16 +80,21 @@ parser.add_argument(
     help="Directory containing generated Isaac per-episode YAML configs.",
 )
 parser.add_argument("--target_reward_body", default="sfp_tip_link")
-parser.add_argument("--target_reward_distance_weight", type=float, default=0.5)
-parser.add_argument("--target_reward_close_weight", type=float, default=0.3)
-parser.add_argument("--target_reward_orientation_weight", type=float, default=0.0)
-parser.add_argument("--target_reward_reaching_weight", type=float, default=1.0)
+parser.add_argument("--target_reward_progress_weight", type=float, default=0.25)
+parser.add_argument("--target_reward_progress_scale", type=float, default=0.003)
+parser.add_argument("--target_reward_distance_weight", type=float, default=0.25)
+parser.add_argument("--target_reward_close_weight", type=float, default=0.35)
+parser.add_argument("--target_reward_orientation_weight", type=float, default=0.10)
+parser.add_argument("--target_reward_orientation_std", type=float, default=0.03)
+parser.add_argument("--target_reward_orientation_gate_sigma", type=float, default=0.012)
+parser.add_argument("--target_reward_reaching_weight", type=float, default=0.0)
+parser.add_argument("--target_reward_terminal_weight", type=float, default=1.0)
 parser.add_argument("--target_reward_lateral_weight", type=float, default=0.0)
-parser.add_argument("--force_delta_penalty_weight", type=float, default=0.0)
+parser.add_argument("--force_delta_penalty_weight", type=float, default=0.2)
 parser.add_argument("--force_delta_threshold", type=float, default=3.0)
 parser.add_argument("--force_delta_reference", type=float, default=20.0)
 parser.add_argument("--target_reward_distance_std", type=float, default=0.02)
-parser.add_argument("--target_reward_close_sigma", type=float, default=0.01)
+parser.add_argument("--target_reward_close_sigma", type=float, default=0.006)
 parser.add_argument("--target_reward_reaching_threshold", type=float, default=0.01)
 parser.add_argument(
     "--target_reward_position_offset",
@@ -513,8 +518,11 @@ def _configure_task_geometry_rewards(env_cfg: Any, args: argparse.Namespace) -> 
     for name in (
         "target_distance_tanh",
         "target_distance_exp",
+        "target_distance_progress",
         "target_orientation_tanh",
+        "target_orientation_gated_exp",
         "target_reaching_bonus",
+        "target_success_once_bonus",
         "target_lateral_error",
     ):
         term = getattr(rewards, name)
@@ -530,15 +538,24 @@ def _configure_task_geometry_rewards(env_cfg: Any, args: argparse.Namespace) -> 
             term.params["body_orientation_offset"] = body_orientation_offset
     rewards.target_distance_tanh.params["std"] = float(args.target_reward_distance_std)
     rewards.target_distance_exp.params["sigma"] = float(args.target_reward_close_sigma)
+    rewards.target_distance_progress.params["scale"] = float(args.target_reward_progress_scale)
     rewards.target_reaching_bonus.params["threshold"] = float(args.target_reward_reaching_threshold)
+    rewards.target_success_once_bonus.params["threshold"] = float(args.target_reward_reaching_threshold)
+    rewards.target_orientation_gated_exp.params["std"] = float(args.target_reward_orientation_std)
+    rewards.target_orientation_gated_exp.params["gate_sigma"] = float(args.target_reward_orientation_gate_sigma)
 
-    rewards.target_distance_tanh.weight = float(args.target_reward_distance_weight)
-    rewards.target_distance_exp.weight = float(args.target_reward_close_weight)
-    rewards.target_orientation_tanh.weight = float(args.target_reward_orientation_weight)
-    rewards.target_reaching_bonus.weight = float(args.target_reward_reaching_weight)
-    rewards.target_lateral_error.weight = float(args.target_reward_lateral_weight)
+    env_step_dt = float(getattr(env_cfg, "sim").dt) * float(getattr(env_cfg, "decimation"))
+    reward_weight_multiplier = 1.0 / max(env_step_dt, 1.0e-9)
+    rewards.target_distance_tanh.weight = float(args.target_reward_distance_weight) * reward_weight_multiplier
+    rewards.target_distance_exp.weight = float(args.target_reward_close_weight) * reward_weight_multiplier
+    rewards.target_distance_progress.weight = float(args.target_reward_progress_weight) * reward_weight_multiplier
+    rewards.target_orientation_tanh.weight = 0.0
+    rewards.target_orientation_gated_exp.weight = float(args.target_reward_orientation_weight) * reward_weight_multiplier
+    rewards.target_reaching_bonus.weight = float(args.target_reward_reaching_weight) * reward_weight_multiplier
+    rewards.target_success_once_bonus.weight = float(args.target_reward_terminal_weight) * reward_weight_multiplier
+    rewards.target_lateral_error.weight = float(args.target_reward_lateral_weight) * reward_weight_multiplier
     if hasattr(rewards, "force_delta_penalty"):
-        rewards.force_delta_penalty.weight = float(args.force_delta_penalty_weight)
+        rewards.force_delta_penalty.weight = float(args.force_delta_penalty_weight) * reward_weight_multiplier
         rewards.force_delta_penalty.params["threshold"] = float(args.force_delta_threshold)
         rewards.force_delta_penalty.params["reference"] = float(args.force_delta_reference)
 
@@ -556,12 +573,19 @@ def _configure_task_geometry_rewards(env_cfg: Any, args: argparse.Namespace) -> 
     return {
         "target_scene_name": target_scene_name,
         "target_body": target_body[0],
-        "distance_weight": float(rewards.target_distance_tanh.weight),
-        "close_weight": float(rewards.target_distance_exp.weight),
-        "orientation_weight": float(rewards.target_orientation_tanh.weight),
-        "reaching_weight": float(rewards.target_reaching_bonus.weight),
-        "lateral_weight": float(rewards.target_lateral_error.weight),
-        "force_delta_penalty_weight": float(rewards.force_delta_penalty.weight) if hasattr(rewards, "force_delta_penalty") else 0.0,
+        "isaac_env_step_dt": env_step_dt,
+        "isaac_reward_weight_multiplier": reward_weight_multiplier,
+        "distance_weight": float(args.target_reward_distance_weight),
+        "close_weight": float(args.target_reward_close_weight),
+        "progress_weight": float(args.target_reward_progress_weight),
+        "progress_scale": float(args.target_reward_progress_scale),
+        "orientation_weight": float(args.target_reward_orientation_weight),
+        "orientation_std": float(args.target_reward_orientation_std),
+        "orientation_gate_sigma": float(args.target_reward_orientation_gate_sigma),
+        "reaching_weight": float(args.target_reward_reaching_weight),
+        "terminal_weight": float(args.target_reward_terminal_weight),
+        "lateral_weight": float(args.target_reward_lateral_weight),
+        "force_delta_penalty_weight": float(args.force_delta_penalty_weight) if hasattr(rewards, "force_delta_penalty") else 0.0,
         "force_delta_threshold": float(args.force_delta_threshold),
         "force_delta_reference": float(args.force_delta_reference),
         "target_position_offset": [float(v) for v in target_position_offset],
@@ -739,10 +763,14 @@ def _isaac_contact_recovery_features(base_state: torch.Tensor, *, env, device: t
     if computers is None or len(computers) != batch_size:
         computers = [ContactRecoveryFeatureComputer() for _ in range(batch_size)]
         setattr(_isaac_contact_recovery_features, "_computers", computers)
-        setattr(_isaac_contact_recovery_features, "_step_count", 0)
     step_dt = float(getattr(env.unwrapped, "step_dt", 1.0 / 20.0))
-    step_count = int(getattr(_isaac_contact_recovery_features, "_step_count", 0))
+    step_count = int(getattr(env.unwrapped, "common_step_counter", 0))
     time_sec = step_count * step_dt
+    reset_mask = getattr(env.unwrapped, "episode_length_buf", None)
+    if reset_mask is not None:
+        for idx in range(batch_size):
+            if int(reset_mask[idx].detach().cpu()) <= 1:
+                computers[idx].reset()
     force = base_state[:, 26:29].detach().cpu().numpy()
     torque = base_state[:, 29:32].detach().cpu().numpy()
     pos = base_state[:, 0:3].detach().cpu().numpy()
@@ -757,7 +785,6 @@ def _isaac_contact_recovery_features(base_state: torch.Tensor, *, env, device: t
         )
         for idx in range(batch_size)
     ]
-    setattr(_isaac_contact_recovery_features, "_step_count", step_count + 1)
     out = torch.as_tensor(np.stack(features, axis=0), dtype=torch.float32, device=device)
     if out.shape[1] != CONTACT_RECOVERY_FEATURE_DIM:
         raise RuntimeError(f"Expected {CONTACT_RECOVERY_FEATURE_DIM} contact features, got {out.shape[1]}")
@@ -781,7 +808,8 @@ def _force_delta_metrics(env, *, device: torch.device) -> dict[str, torch.Tensor
         prev = force.detach().clone()
     delta_norm = torch.norm(force - prev.to(device), dim=1)
     setattr(_force_delta_metrics, "_previous_force", force.detach().clone())
-    normalized = ((delta_norm - float(args_cli.force_delta_threshold)) / max(float(args_cli.force_delta_reference), 1e-6)).clamp(min=0.0, max=1.0)
+    denominator = max(float(args_cli.force_delta_reference) - float(args_cli.force_delta_threshold), 1e-6)
+    normalized = ((delta_norm - float(args_cli.force_delta_threshold)) / denominator).clamp(min=0.0, max=1.0)
     return {
         "force_norm": torch.norm(force, dim=1),
         "force_delta_norm": delta_norm,

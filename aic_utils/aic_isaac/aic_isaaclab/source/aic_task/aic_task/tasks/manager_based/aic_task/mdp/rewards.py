@@ -249,6 +249,37 @@ def body_to_object_distance_exp(
     return torch.exp(-dist_sq / (sigma**2))
 
 
+def body_to_object_distance_progress(
+    env: ManagerBasedRLEnv,
+    scale: float,
+    body_cfg: SceneEntityCfg,
+    target_cfg: SceneEntityCfg,
+    target_position_offset: tuple[float, float, float] | list[float] | None = None,
+    body_position_offset: tuple[float, float, float] | list[float] | None = None,
+) -> torch.Tensor:
+    """Reward one-step progress toward the semantic target point.
+
+    This mirrors the offline dense reward term:
+    ``clip((previous_distance - current_distance) / scale, -1, 1)``.
+    """
+    body_asset: RigidObject = env.scene[body_cfg.name]
+    target_asset: RigidObject = env.scene[target_cfg.name]
+    body_pos_w = _body_position_w(body_asset, body_cfg.body_ids[0], body_position_offset)
+    target_pos_w = _target_position_w(env, target_asset, target_position_offset)
+    distance = torch.norm(body_pos_w - target_pos_w, dim=1)
+    previous = getattr(env, "_aic_previous_target_distance", None)
+    reset_mask = getattr(env, "episode_length_buf", None)
+    if previous is None or previous.shape != distance.shape:
+        previous = distance.detach().clone()
+    else:
+        previous = previous.to(distance.device)
+        if reset_mask is not None:
+            previous = torch.where(reset_mask.to(distance.device) <= 1, distance.detach(), previous)
+    progress = ((previous - distance) / max(float(scale), 1.0e-9)).clamp(min=-1.0, max=1.0)
+    setattr(env, "_aic_previous_target_distance", distance.detach().clone())
+    return progress
+
+
 def body_to_object_orientation_tanh(
     env: ManagerBasedRLEnv,
     std: float,
@@ -269,6 +300,34 @@ def body_to_object_orientation_tanh(
     return 1.0 - torch.tanh(ang_error / std)
 
 
+def body_to_object_orientation_gated_exp(
+    env: ManagerBasedRLEnv,
+    std: float,
+    gate_sigma: float,
+    body_cfg: SceneEntityCfg,
+    target_cfg: SceneEntityCfg,
+    body_orientation_offset: tuple[float, float, float, float] | list[float] | None = None,
+    target_orientation_offset: tuple[float, float, float, float] | list[float] | None = None,
+    target_position_offset: tuple[float, float, float] | list[float] | None = None,
+    body_position_offset: tuple[float, float, float] | list[float] | None = None,
+) -> torch.Tensor:
+    """Reward orientation alignment only near the target, matching offline rewards."""
+    body_asset: RigidObject = env.scene[body_cfg.name]
+    target_asset: RigidObject = env.scene[target_cfg.name]
+    body_quat_w = _offset_quat_w(
+        body_asset.data.body_quat_w[:, body_cfg.body_ids[0]],  # type: ignore
+        body_orientation_offset,
+    )
+    target_quat_w = _offset_quat_w(target_asset.data.root_quat_w, target_orientation_offset)
+    ang_error = quat_error_magnitude(body_quat_w, target_quat_w)
+    orientation_alignment = torch.exp(-torch.square(ang_error / max(float(std), 1.0e-9)))
+    body_pos_w = _body_position_w(body_asset, body_cfg.body_ids[0], body_position_offset)
+    target_pos_w = _target_position_w(env, target_asset, target_position_offset)
+    distance = torch.norm(body_pos_w - target_pos_w, dim=1)
+    orientation_gate = torch.exp(-torch.square(distance / max(float(gate_sigma), 1.0e-9)))
+    return orientation_alignment * orientation_gate
+
+
 def body_to_object_reaching_bonus(
     env: ManagerBasedRLEnv,
     threshold: float,
@@ -284,6 +343,33 @@ def body_to_object_reaching_bonus(
     target_pos_w = _target_position_w(env, target_asset, target_position_offset)
     distance = torch.norm(body_pos_w - target_pos_w, dim=1)
     return (distance < threshold).float()
+
+
+def body_to_object_success_once_bonus(
+    env: ManagerBasedRLEnv,
+    threshold: float,
+    body_cfg: SceneEntityCfg,
+    target_cfg: SceneEntityCfg,
+    target_position_offset: tuple[float, float, float] | list[float] | None = None,
+    body_position_offset: tuple[float, float, float] | list[float] | None = None,
+) -> torch.Tensor:
+    """Emit a sparse +1 once when an episode first reaches the target threshold."""
+    body_asset: RigidObject = env.scene[body_cfg.name]
+    target_asset: RigidObject = env.scene[target_cfg.name]
+    body_pos_w = _body_position_w(body_asset, body_cfg.body_ids[0], body_position_offset)
+    target_pos_w = _target_position_w(env, target_asset, target_position_offset)
+    success = torch.norm(body_pos_w - target_pos_w, dim=1) <= float(threshold)
+    achieved = getattr(env, "_aic_success_bonus_emitted", None)
+    reset_mask = getattr(env, "episode_length_buf", None)
+    if achieved is None or achieved.shape != success.shape:
+        achieved = torch.zeros_like(success)
+    else:
+        achieved = achieved.to(success.device)
+        if reset_mask is not None:
+            achieved = torch.where(reset_mask.to(success.device) <= 1, torch.zeros_like(achieved), achieved)
+    bonus = torch.logical_and(success, torch.logical_not(achieved)).float()
+    setattr(env, "_aic_success_bonus_emitted", torch.logical_or(achieved, success).detach().clone())
+    return bonus
 
 
 def body_to_object_lateral_error(
@@ -336,7 +422,8 @@ def force_delta_penalty(
         previous = current.detach().clone()
     delta_norm = torch.norm(current - previous.to(current.device), dim=1)
     setattr(env, "_aic_previous_force_w", current.detach().clone())
-    normalized = ((delta_norm - float(threshold)) / max(float(reference), 1e-6)).clamp(min=0.0, max=float(max_penalty))
+    denominator = max(float(reference) - float(threshold), 1e-6)
+    normalized = ((delta_norm - float(threshold)) / denominator).clamp(min=0.0, max=float(max_penalty))
     return -normalized
 
 

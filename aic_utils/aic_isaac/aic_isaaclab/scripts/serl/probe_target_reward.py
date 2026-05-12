@@ -6,6 +6,7 @@ from __future__ import annotations
 import argparse
 import json
 import math
+import sys
 from pathlib import Path
 
 from isaaclab.app import AppLauncher
@@ -28,9 +29,19 @@ parser.add_argument("--record_cameras", action="store_true")
 parser.add_argument("--video_dir", type=Path)
 parser.add_argument("--video_fps", type=float, default=20.0)
 parser.add_argument("--distance_std", type=float, default=0.02)
-parser.add_argument("--close_sigma", type=float, default=0.01)
+parser.add_argument("--close_sigma", type=float, default=0.006)
 parser.add_argument("--reaching_threshold", type=float, default=0.01)
-parser.add_argument("--orientation_weight", type=float, default=0.0)
+parser.add_argument("--progress_scale", type=float, default=0.003)
+parser.add_argument("--progress_weight", type=float, default=0.25)
+parser.add_argument("--distance_weight", type=float, default=0.25)
+parser.add_argument("--close_weight", type=float, default=0.35)
+parser.add_argument("--orientation_weight", type=float, default=0.10)
+parser.add_argument("--orientation_std", type=float, default=0.03)
+parser.add_argument("--orientation_gate_sigma", type=float, default=0.012)
+parser.add_argument("--terminal_weight", type=float, default=1.0)
+parser.add_argument("--force_delta_penalty_weight", type=float, default=0.2)
+parser.add_argument("--force_delta_threshold", type=float, default=3.0)
+parser.add_argument("--force_delta_reference", type=float, default=20.0)
 parser.add_argument(
     "--disable_semantic_orientation_offsets",
     action="store_true",
@@ -89,7 +100,24 @@ from isaaclab.utils import math as math_utils
 
 import aic_task.tasks  # noqa: F401
 
+LEROBOT_AIC_PACKAGE_DIR = Path(__file__).resolve().parents[4] / "lerobot_robot_aic"
+LEROBOT_AIC_MODULE_DIR = LEROBOT_AIC_PACKAGE_DIR / "lerobot_robot_aic"
+if LEROBOT_AIC_MODULE_DIR.exists() and str(LEROBOT_AIC_MODULE_DIR) not in sys.path:
+    sys.path.insert(0, str(LEROBOT_AIC_MODULE_DIR))
+
+from contact_recovery_features import CONTACT_RECOVERY_FEATURE_NAMES, ContactRecoveryFeatureComputer
+from task_encoding import encode_task_vector
+
 CAMERA_NAMES = ("center_camera", "left_camera", "right_camera")
+ARM_JOINT_NAMES = (
+    "shoulder_pan_joint",
+    "shoulder_lift_joint",
+    "elbow_joint",
+    "wrist_1_joint",
+    "wrist_2_joint",
+    "wrist_3_joint",
+)
+CONTROLLED_TCP_BODY = "gripper_tcp"
 SFP_PORT_LOCAL = {
     0: (0.01295, -0.031572, 0.00501),
     1: (-0.01025, -0.031572, 0.00501),
@@ -215,8 +243,11 @@ def _configure_rewards(env_cfg) -> dict[str, object]:
     for name in (
         "target_distance_tanh",
         "target_distance_exp",
+        "target_distance_progress",
         "target_orientation_tanh",
+        "target_orientation_gated_exp",
         "target_reaching_bonus",
+        "target_success_once_bonus",
         "target_lateral_error",
     ):
         term = getattr(rewards, name)
@@ -231,14 +262,26 @@ def _configure_rewards(env_cfg) -> dict[str, object]:
         if "body_orientation_offset" in term.params:
             term.params["body_orientation_offset"] = body_orientation_offset
 
-    rewards.target_distance_tanh.weight = 0.5
-    rewards.target_distance_exp.weight = 0.3
-    rewards.target_orientation_tanh.weight = float(args_cli.orientation_weight)
-    rewards.target_reaching_bonus.weight = 1.0
+    env_step_dt = float(env_cfg.sim.dt) * float(env_cfg.decimation)
+    reward_weight_multiplier = 1.0 / max(env_step_dt, 1.0e-9)
+    rewards.target_distance_tanh.weight = float(args_cli.distance_weight) * reward_weight_multiplier
+    rewards.target_distance_exp.weight = float(args_cli.close_weight) * reward_weight_multiplier
+    rewards.target_distance_progress.weight = float(args_cli.progress_weight) * reward_weight_multiplier
+    rewards.target_orientation_tanh.weight = 0.0
+    rewards.target_orientation_gated_exp.weight = float(args_cli.orientation_weight) * reward_weight_multiplier
+    rewards.target_reaching_bonus.weight = 0.0
+    rewards.target_success_once_bonus.weight = float(args_cli.terminal_weight) * reward_weight_multiplier
     rewards.target_lateral_error.weight = 0.0
     rewards.target_distance_tanh.params["std"] = float(args_cli.distance_std)
     rewards.target_distance_exp.params["sigma"] = float(args_cli.close_sigma)
+    rewards.target_distance_progress.params["scale"] = float(args_cli.progress_scale)
+    rewards.target_orientation_gated_exp.params["std"] = float(args_cli.orientation_std)
+    rewards.target_orientation_gated_exp.params["gate_sigma"] = float(args_cli.orientation_gate_sigma)
     rewards.target_reaching_bonus.params["threshold"] = float(args_cli.reaching_threshold)
+    rewards.target_success_once_bonus.params["threshold"] = float(args_cli.reaching_threshold)
+    rewards.force_delta_penalty.weight = float(args_cli.force_delta_penalty_weight) * reward_weight_multiplier
+    rewards.force_delta_penalty.params["threshold"] = float(args_cli.force_delta_threshold)
+    rewards.force_delta_penalty.params["reference"] = float(args_cli.force_delta_reference)
     return {
         "target_scene": target_scene,
         "target_body": args_cli.target_body,
@@ -253,11 +296,21 @@ def _configure_rewards(env_cfg) -> dict[str, object]:
         "distance_std": float(args_cli.distance_std),
         "close_sigma": float(args_cli.close_sigma),
         "reaching_threshold": float(args_cli.reaching_threshold),
-        "distance_weight": 0.5,
-        "close_weight": 0.3,
+        "isaac_env_step_dt": env_step_dt,
+        "isaac_reward_weight_multiplier": reward_weight_multiplier,
+        "progress_weight": float(args_cli.progress_weight),
+        "progress_scale": float(args_cli.progress_scale),
+        "distance_weight": float(args_cli.distance_weight),
+        "close_weight": float(args_cli.close_weight),
         "orientation_weight": float(args_cli.orientation_weight),
-        "reaching_weight": 1.0,
+        "orientation_std": float(args_cli.orientation_std),
+        "orientation_gate_sigma": float(args_cli.orientation_gate_sigma),
+        "reaching_weight": 0.0,
+        "terminal_weight": float(args_cli.terminal_weight),
         "lateral_weight": 0.0,
+        "force_delta_penalty_weight": float(args_cli.force_delta_penalty_weight),
+        "force_delta_threshold": float(args_cli.force_delta_threshold),
+        "force_delta_reference": float(args_cli.force_delta_reference),
         "command_pose_rewards_disabled": True,
     }
 
@@ -480,9 +533,99 @@ def main() -> None:
     target = unwrapped.scene[reward_config["target_scene"]]
     body_names = list(robot.body_names)
     body_index = _named_index(body_names, args_cli.target_body)
+    force_body_index = _named_index(body_names, "gripper_tcp")
+    controlled_tcp_index = _named_index(body_names, CONTROLLED_TCP_BODY)
     wrist_index = _named_index(body_names, "wrist_3_link")
+    joint_names = list(getattr(robot, "joint_names", []))
+    arm_joint_indices = [_named_index(joint_names, name) for name in ARM_JOINT_NAMES]
+    feature_computer = ContactRecoveryFeatureComputer()
+    task_vector_np = encode_task_vector(
+        task_family=args_cli.task_family,
+        target_port_index=int(args_cli.target_port_index),
+        target_card_index=0 if args_cli.task_family == "sfp_to_nic" else -1,
+    )
+    latest_norm_index = CONTACT_RECOVERY_FEATURE_NAMES.index("force_thresh_1.latest_delta_norm")
+    latest_time_index = CONTACT_RECOVERY_FEATURE_NAMES.index("force_thresh_1.time_since_latest_sec")
+    previous_distance: torch.Tensor | None = None
+    previous_force: torch.Tensor | None = None
+    success_emitted = False
+
+    def selected_force() -> torch.Tensor:
+        incoming_wrench = getattr(robot.data, "body_incoming_wrench_w", None)
+        if incoming_wrench is None:
+            incoming_wrench = getattr(robot.data, "body_incoming_wrench_b", None)
+        if incoming_wrench is None:
+            return torch.zeros((args_cli.num_envs, 3), dtype=robot.data.root_pos_w.dtype, device=unwrapped.device)
+        return incoming_wrench[:, force_body_index, :3]
+
+    def lerobot_compatible_feature_probe() -> dict[str, object]:
+        data = robot.data
+        root_pos_w = data.root_pos_w
+        root_quat_w = data.root_quat_w
+        tcp_pos_w = data.body_pos_w[:, controlled_tcp_index]
+        tcp_quat_w = data.body_quat_w[:, controlled_tcp_index]
+        tcp_pos, tcp_quat = math_utils.subtract_frame_transforms(root_pos_w, root_quat_w, tcp_pos_w, tcp_quat_w)
+        tcp_quat_xyzw = torch.cat([tcp_quat[:, 1:4], tcp_quat[:, 0:1]], dim=-1)
+        tcp_lin_vel = getattr(data, "body_lin_vel_w", torch.zeros(args_cli.num_envs, len(body_names), 3, device=unwrapped.device))[
+            :, controlled_tcp_index
+        ]
+        tcp_ang_vel = getattr(data, "body_ang_vel_w", torch.zeros(args_cli.num_envs, len(body_names), 3, device=unwrapped.device))[
+            :, controlled_tcp_index
+        ]
+        tcp_lin_vel = math_utils.quat_apply_inverse(root_quat_w, tcp_lin_vel)
+        tcp_ang_vel = math_utils.quat_apply_inverse(root_quat_w, tcp_ang_vel)
+        wrench = torch.cat([selected_force(), torch.zeros(args_cli.num_envs, 3, device=unwrapped.device)], dim=-1)
+        incoming_wrench = getattr(data, "body_incoming_wrench_w", None)
+        if incoming_wrench is None:
+            incoming_wrench = getattr(data, "body_incoming_wrench_b", None)
+        if incoming_wrench is not None:
+            wrench = incoming_wrench[:, controlled_tcp_index, :6]
+        base_state = torch.cat(
+            [
+                tcp_pos,
+                tcp_quat_xyzw,
+                tcp_lin_vel,
+                tcp_ang_vel,
+                torch.zeros(args_cli.num_envs, 6, device=unwrapped.device),
+                data.joint_pos[:, arm_joint_indices],
+                torch.full((args_cli.num_envs, 1), 0.0035405, device=unwrapped.device),
+                wrench,
+            ],
+            dim=-1,
+        )
+        step_dt = float(getattr(unwrapped, "step_dt", 1.0 / 30.0))
+        time_sec = float(getattr(unwrapped, "common_step_counter", 0)) * step_dt
+        features = feature_computer.update(
+            time_sec=time_sec,
+            tcp_position_base=base_state[0, 0:3].detach().cpu().numpy(),
+            tcp_orientation_xyzw=base_state[0, 3:7].detach().cpu().numpy(),
+            force=base_state[0, 26:29].detach().cpu().numpy(),
+            torque=base_state[0, 29:32].detach().cpu().numpy(),
+        )
+        state82 = torch.cat(
+            [
+                base_state[0],
+                torch.as_tensor(features, dtype=base_state.dtype, device=base_state.device),
+                torch.as_tensor(task_vector_np, dtype=base_state.dtype, device=base_state.device),
+            ],
+            dim=0,
+        )
+        return {
+            "feature_time_sec": time_sec,
+            "feature_state_dim": int(state82.numel()),
+            "feature_base_dim": int(base_state.shape[-1]),
+            "feature_contact_dim": int(len(features)),
+            "feature_task_dim": int(len(task_vector_np)),
+            "feature_tcp_pos_base": [float(v) for v in state82[0:3].detach().cpu()],
+            "feature_tcp_quat_xyzw": [float(v) for v in state82[3:7].detach().cpu()],
+            "feature_force_xyz": [float(v) for v in state82[26:29].detach().cpu()],
+            "feature_force_thresh_1_latest_time_sec": float(features[latest_time_index]),
+            "feature_force_thresh_1_latest_delta_norm": float(features[latest_norm_index]),
+            "feature_task_vector": [float(v) for v in task_vector_np],
+        }
 
     def metrics(step: int, reward_value: torch.Tensor | None = None) -> dict[str, float | int | None]:
+        nonlocal previous_distance, previous_force, success_emitted
         body_pos = robot.data.body_pos_w[:, body_index]
         body_quat = robot.data.body_quat_w[:, body_index]
         target_pos = target.data.root_pos_w
@@ -513,22 +656,55 @@ def main() -> None:
         orientation = 2.0 * torch.acos(dot)
         distance_reward = 1.0 - torch.tanh(distance / float(args_cli.distance_std))
         close_reward = torch.exp(-(distance * distance) / (float(args_cli.close_sigma) ** 2))
-        orientation_reward = 1.0 - torch.tanh(orientation / 0.25)
+        if previous_distance is None:
+            progress_reward = torch.zeros_like(distance)
+        else:
+            progress_reward = ((previous_distance.to(distance.device) - distance) / float(args_cli.progress_scale)).clamp(-1.0, 1.0)
+        previous_distance = distance.detach().clone()
+        orientation_alignment = torch.exp(-torch.square(orientation / float(args_cli.orientation_std)))
+        orientation_gate = torch.exp(-torch.square(distance / float(args_cli.orientation_gate_sigma)))
+        orientation_reward = orientation_alignment * orientation_gate
+        force = selected_force()
+        if previous_force is None:
+            force_delta = torch.zeros_like(force)
+        else:
+            force_delta = force - previous_force.to(force.device)
+        previous_force = force.detach().clone()
+        force_delta_norm = torch.linalg.norm(force_delta, dim=1)
+        force_denominator = max(float(args_cli.force_delta_reference) - float(args_cli.force_delta_threshold), 1.0e-6)
+        force_penalty_unit = -((force_delta_norm - float(args_cli.force_delta_threshold)) / force_denominator).clamp(0.0, 1.0)
+        terminal_unit_value = 0.0
+        if bool((distance <= float(args_cli.reaching_threshold))[0].detach().cpu()) and not success_emitted:
+            terminal_unit_value = 1.0
+            success_emitted = True
         expected = (
-            0.5 * distance_reward
-            + 0.3 * close_reward
+            float(args_cli.progress_weight) * progress_reward
+            + float(args_cli.distance_weight) * distance_reward
+            + float(args_cli.close_weight) * close_reward
             + float(args_cli.orientation_weight) * orientation_reward
-            + (distance < float(args_cli.reaching_threshold)).float()
+            + float(args_cli.force_delta_penalty_weight) * force_penalty_unit
+            + float(args_cli.terminal_weight) * torch.full_like(distance, terminal_unit_value)
         )
         return {
             "step": step,
             "reward": None if reward_value is None else float(reward_value.reshape(-1)[0].detach().cpu()),
             "distance_m": float(distance[0].detach().cpu()),
             "orientation_error_rad": float(orientation[0].detach().cpu()),
-            "distance_reward": float(distance_reward[0].detach().cpu()),
-            "close_reward": float(close_reward[0].detach().cpu()),
-            "orientation_reward": float(orientation_reward[0].detach().cpu()),
-            "expected_target_reward_before_safety": float(expected[0].detach().cpu()),
+            "progress_unit": float(progress_reward[0].detach().cpu()),
+            "progress_weighted": float((float(args_cli.progress_weight) * progress_reward)[0].detach().cpu()),
+            "distance_unit": float(distance_reward[0].detach().cpu()),
+            "distance_weighted": float((float(args_cli.distance_weight) * distance_reward)[0].detach().cpu()),
+            "close_unit": float(close_reward[0].detach().cpu()),
+            "close_weighted": float((float(args_cli.close_weight) * close_reward)[0].detach().cpu()),
+            "orientation_unit": float(orientation_reward[0].detach().cpu()),
+            "orientation_weighted": float((float(args_cli.orientation_weight) * orientation_reward)[0].detach().cpu()),
+            "force_norm": float(torch.linalg.norm(force, dim=1)[0].detach().cpu()),
+            "force_delta_norm": float(force_delta_norm[0].detach().cpu()),
+            "force_delta_penalty_unit": float(force_penalty_unit[0].detach().cpu()),
+            "force_delta_penalty_weighted": float((float(args_cli.force_delta_penalty_weight) * force_penalty_unit)[0].detach().cpu()),
+            "terminal_unit": terminal_unit_value,
+            "terminal_weighted": float(args_cli.terminal_weight) * terminal_unit_value,
+            "expected_dense_reward": float(expected[0].detach().cpu()),
             "body_minus_target_local_x": float(body_minus_target_local[0, 0].detach().cpu()),
             "body_minus_target_local_y": float(body_minus_target_local[0, 1].detach().cpu()),
             "body_minus_target_local_z": float(body_minus_target_local[0, 2].detach().cpu()),
@@ -538,6 +714,7 @@ def main() -> None:
             "body_root_pos_w": _tensor_xyz(body_pos[0]),
             "body_root_quat_w": _tensor_quat(body_quat[0]),
             "reward_body_pos_w": _tensor_xyz(body_point[0]),
+            **lerobot_compatible_feature_probe(),
         }
 
     rows = [metrics(0)]
@@ -602,24 +779,27 @@ def main() -> None:
     exact = {
         "distance_m": 0.0,
         "orientation_error_rad": 0.0,
-        "distance_reward": 1.0,
-        "close_reward": 1.0,
-        "orientation_reward": 1.0,
-        "expected_target_reward_before_safety": 1.8 + float(args_cli.orientation_weight),
+        "distance_unit": 1.0,
+        "close_unit": 1.0,
+        "orientation_unit": 1.0,
+        "expected_dense_reward_without_progress_or_force": (
+            float(args_cli.distance_weight)
+            + float(args_cli.close_weight)
+            + float(args_cli.orientation_weight)
+            + float(args_cli.terminal_weight)
+        ),
     }
+    if video_recorder is not None:
+        video_paths = video_recorder.close()
     summary = {
         "reward_config": reward_config,
         "rows": rows,
-        "best": max(rows, key=lambda row: float(row["expected_target_reward_before_safety"])),
+        "best": max(rows, key=lambda row: float(row["expected_dense_reward"])),
         "exact_alignment_expected": exact,
         "video_paths": video_paths,
     }
     args_cli.output.parent.mkdir(parents=True, exist_ok=True)
     args_cli.output.write_text(json.dumps(summary, indent=2, sort_keys=True), encoding="utf-8")
-    if video_recorder is not None:
-        video_paths = video_recorder.close()
-        summary["video_paths"] = video_paths
-        args_cli.output.write_text(json.dumps(summary, indent=2, sort_keys=True), encoding="utf-8")
     env.close()
     print("SUMMARY", json.dumps(summary, indent=2, sort_keys=True), flush=True)
 

@@ -24,10 +24,13 @@ from .observations import *  # noqa: F401, F403
 from .rewards import (  # noqa: F401
     body_lin_acc_l2,
     body_to_object_distance_exp,
+    body_to_object_distance_progress,
     body_to_object_distance_tanh,
     body_to_object_lateral_error,
+    body_to_object_orientation_gated_exp,
     body_to_object_orientation_tanh,
     body_to_object_reaching_bonus,
+    body_to_object_success_once_bonus,
     ee_reaching_bonus,
     force_delta_penalty,
     joint_acc_l2,

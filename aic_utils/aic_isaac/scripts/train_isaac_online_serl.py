@@ -92,17 +92,22 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
             "card0/port0 smoke data as closely as the current Isaac scene allows."
         ),
     )
-    parser.add_argument("--insertion-distance-weight", type=float, default=0.5)
-    parser.add_argument("--insertion-close-weight", type=float, default=0.3)
-    parser.add_argument("--insertion-orientation-weight", type=float, default=0.0)
-    parser.add_argument("--insertion-reaching-weight", type=float, default=1.0)
+    parser.add_argument("--insertion-progress-weight", type=float, default=0.25)
+    parser.add_argument("--insertion-progress-scale", type=float, default=0.003)
+    parser.add_argument("--insertion-distance-weight", type=float, default=0.25)
+    parser.add_argument("--insertion-close-weight", type=float, default=0.35)
+    parser.add_argument("--insertion-orientation-weight", type=float, default=0.10)
+    parser.add_argument("--insertion-orientation-std", type=float, default=0.03)
+    parser.add_argument("--insertion-orientation-gate-sigma", type=float, default=0.012)
+    parser.add_argument("--insertion-reaching-weight", type=float, default=0.0)
+    parser.add_argument("--insertion-terminal-weight", type=float, default=1.0)
     parser.add_argument("--insertion-lateral-weight", type=float, default=0.0)
-    parser.add_argument("--force-delta-penalty-weight", type=float, default=0.0)
+    parser.add_argument("--force-delta-penalty-weight", type=float, default=0.2)
     parser.add_argument("--force-delta-threshold", type=float, default=3.0)
     parser.add_argument("--force-delta-reference", type=float, default=20.0)
     parser.add_argument("--target-reward-body", default="sfp_tip_link")
     parser.add_argument("--target-reward-distance-std", type=float, default=0.02)
-    parser.add_argument("--target-reward-close-sigma", type=float, default=0.01)
+    parser.add_argument("--target-reward-close-sigma", type=float, default=0.006)
     parser.add_argument("--target-reward-reaching-threshold", type=float, default=0.01)
     parser.add_argument("--target-reward-position-offset", type=float, nargs=3, default=None)
     parser.add_argument("--target-reward-body-position-offset", type=float, nargs=3, default=None)
@@ -217,6 +222,11 @@ def build_plan(args: argparse.Namespace, *, inspect_required: bool = True) -> di
         warmup_steps=args.warmup_steps,
     )
     checkpoint = inspect_checkpoint(args.checkpoint, required=inspect_required)
+    insertion_progress_weight = float(getattr(args, "insertion_progress_weight", 0.25))
+    insertion_progress_scale = float(getattr(args, "insertion_progress_scale", 0.003))
+    insertion_orientation_std = float(getattr(args, "insertion_orientation_std", 0.03))
+    insertion_orientation_gate_sigma = float(getattr(args, "insertion_orientation_gate_sigma", 0.012))
+    insertion_terminal_weight = float(getattr(args, "insertion_terminal_weight", 1.0))
     return {
         "status": "implemented_short_run_capable",
         "note": (
@@ -251,8 +261,13 @@ def build_plan(args: argparse.Namespace, *, inspect_required: bool = True) -> di
         "randomization_profile": args.randomization_profile,
         "insertion_distance_weight": args.insertion_distance_weight,
         "insertion_close_weight": args.insertion_close_weight,
+        "insertion_progress_weight": insertion_progress_weight,
+        "insertion_progress_scale": insertion_progress_scale,
         "insertion_orientation_weight": args.insertion_orientation_weight,
+        "insertion_orientation_std": insertion_orientation_std,
+        "insertion_orientation_gate_sigma": insertion_orientation_gate_sigma,
         "insertion_reaching_weight": args.insertion_reaching_weight,
+        "insertion_terminal_weight": insertion_terminal_weight,
         "insertion_lateral_weight": args.insertion_lateral_weight,
         "force_delta_penalty_weight": args.force_delta_penalty_weight,
         "force_delta_threshold": args.force_delta_threshold,
@@ -301,6 +316,11 @@ def build_plan(args: argparse.Namespace, *, inspect_required: bool = True) -> di
 
 
 def build_command(args: argparse.Namespace) -> tuple[list[str], dict[str, str]]:
+    insertion_progress_weight = float(getattr(args, "insertion_progress_weight", 0.25))
+    insertion_progress_scale = float(getattr(args, "insertion_progress_scale", 0.003))
+    insertion_orientation_std = float(getattr(args, "insertion_orientation_std", 0.03))
+    insertion_orientation_gate_sigma = float(getattr(args, "insertion_orientation_gate_sigma", 0.012))
+    insertion_terminal_weight = float(getattr(args, "insertion_terminal_weight", 1.0))
     cmd = [
         args.isaaclab,
         "-p",
@@ -369,10 +389,20 @@ def build_command(args: argparse.Namespace) -> tuple[list[str], dict[str, str]]:
         str(args.insertion_distance_weight),
         "--target_reward_close_weight",
         str(args.insertion_close_weight),
+        "--target_reward_progress_weight",
+        str(insertion_progress_weight),
+        "--target_reward_progress_scale",
+        str(insertion_progress_scale),
         "--target_reward_orientation_weight",
         str(args.insertion_orientation_weight),
+        "--target_reward_orientation_std",
+        str(insertion_orientation_std),
+        "--target_reward_orientation_gate_sigma",
+        str(insertion_orientation_gate_sigma),
         "--target_reward_reaching_weight",
         str(args.insertion_reaching_weight),
+        "--target_reward_terminal_weight",
+        str(insertion_terminal_weight),
         "--target_reward_lateral_weight",
         str(args.insertion_lateral_weight),
         "--force_delta_penalty_weight",
@@ -419,8 +449,11 @@ def build_command(args: argparse.Namespace) -> tuple[list[str], dict[str, str]]:
     env["AIC_ISAAC_RANDOMIZATION_PROFILE"] = args.randomization_profile
     env["AIC_ISAAC_INSERTION_DISTANCE_WEIGHT"] = str(args.insertion_distance_weight)
     env["AIC_ISAAC_INSERTION_CLOSE_WEIGHT"] = str(args.insertion_close_weight)
+    env["AIC_ISAAC_INSERTION_PROGRESS_WEIGHT"] = str(insertion_progress_weight)
     env["AIC_ISAAC_INSERTION_ORIENTATION_WEIGHT"] = str(args.insertion_orientation_weight)
+    env["AIC_ISAAC_INSERTION_ORIENTATION_GATED_WEIGHT"] = str(args.insertion_orientation_weight)
     env["AIC_ISAAC_INSERTION_REACHING_WEIGHT"] = str(args.insertion_reaching_weight)
+    env["AIC_ISAAC_INSERTION_TERMINAL_WEIGHT"] = str(insertion_terminal_weight)
     env["AIC_ISAAC_INSERTION_LATERAL_WEIGHT"] = str(args.insertion_lateral_weight)
     env["AIC_ISAAC_FORCE_DELTA_PENALTY_WEIGHT"] = str(args.force_delta_penalty_weight)
     if args.initial_arm_joint_pos:
