@@ -131,6 +131,12 @@ class MagentaSquare(Policy):
         0: 0.01295,
         1: -0.01025,
     }
+    SC_RAIL_X = -0.075
+    SC_RAIL_Y = {
+        0: 0.0295,
+        1: 0.0705,
+    }
+    SC_RAIL_APPROACH_Z = 0.133476
 
     MAGENTA_SQUARE_SIZE = 0.095
     MAGENTA_CENTER_BOARD = np.array([-0.075, 0.150, 0.011], dtype=np.float64)
@@ -183,6 +189,10 @@ class MagentaSquare(Policy):
         self.magenta_consensus_distance_m = float(
             os.getenv("AIC_MAGENTA_CONSENSUS_DISTANCE_M", "0.08")
         )
+        self.magenta_require_geometry_fit_for_target = self._env_flag(
+            "AIC_MAGENTA_REQUIRE_GEOMETRY_FIT_FOR_TARGET",
+            default=True,
+        )
         self.magenta_spawn_require_consensus = self._env_flag(
             "AIC_MAGENTA_SPAWN_REQUIRE_CONSENSUS",
             default=True,
@@ -193,15 +203,18 @@ class MagentaSquare(Policy):
         self.magenta_edge_marker_distance_tolerance_m = float(
             os.getenv("AIC_MAGENTA_BOARD_EDGE_MARKER_DISTANCE_TOLERANCE_M", "0.12")
         )
+        self.magenta_edge_parallel_min_dot = float(
+            os.getenv("AIC_MAGENTA_BOARD_EDGE_PARALLEL_MIN_DOT", "0.85")
+        )
         self.magenta_linear_view_enabled = self._env_flag(
             "AIC_MAGENTA_LINEAR_VIEW_ENABLED",
             default=True,
         )
         self.magenta_linear_view_y_distance_m = float(
-            os.getenv("AIC_MAGENTA_LINEAR_VIEW_Y_DISTANCE_M", "0.7")
+            os.getenv("AIC_MAGENTA_LINEAR_VIEW_Y_DISTANCE_M", "0.8")
         )
         self.magenta_linear_view_steps = int(
-            os.getenv("AIC_MAGENTA_LINEAR_VIEW_STEPS", "7")
+            os.getenv("AIC_MAGENTA_LINEAR_VIEW_STEPS", "8")
         )
         self.magenta_linear_view_move_duration_sec = float(
             os.getenv("AIC_MAGENTA_LINEAR_VIEW_MOVE_DURATION_SEC", "0.45")
@@ -251,6 +264,14 @@ class MagentaSquare(Policy):
             "AIC_TRANSPORT_NIC_RAIL_USE_PORT_X_OFFSET",
             default=False,
         )
+        self.sc_rail_approach_z = float(
+            os.getenv(
+                "AIC_TRANSPORT_SC_RAIL_APPROACH_Z",
+                str(self.SC_RAIL_APPROACH_Z),
+            )
+        )
+        self.sc_rail_x_offset = float(os.getenv("AIC_TRANSPORT_SC_RAIL_X_OFFSET", "0.0"))
+        self.sc_rail_y_offset = float(os.getenv("AIC_TRANSPORT_SC_RAIL_Y_OFFSET", "0.0"))
         self.short_edge_scan_y_step = float(
             os.getenv("AIC_TRANSPORT_SHORT_EDGE_SCAN_Y_STEP", "-0.04")
         )
@@ -313,6 +334,12 @@ class MagentaSquare(Policy):
                 str(max(self.z_offset + 0.015, 0.0)),
             )
         )
+        self.sc_descend_max_distance_m = float(
+            os.getenv(
+                "AIC_TRANSPORT_SC_DESCEND_MAX_DISTANCE_M",
+                str(max(self.z_offset + self.sc_rail_approach_z + 0.02, 0.0)),
+            )
+        )
         self.descend_wait_for_insertion_sec = float(
             os.getenv("AIC_TRANSPORT_DESCEND_WAIT_FOR_INSERTION_SEC", "5.0")
         )
@@ -365,6 +392,23 @@ class MagentaSquare(Policy):
         port_index = self._parse_index_from_suffix(task.port_name, "sfp_port_")
         return card_index, port_index
 
+    def _sc_task_index(self, task: Task) -> int:
+        if task.port_name != "sc_port_base":
+            raise ValueError(
+                f"Unsupported SC port name {task.port_name!r}; expected 'sc_port_base'"
+            )
+        return self._parse_index_from_suffix(task.target_module_name, "sc_port_")
+
+    def _task_family(self, task: Task) -> str:
+        if task.target_module_name.startswith("nic_card_mount_"):
+            return "sfp_to_nic"
+        if task.target_module_name.startswith("sc_port_"):
+            return "sc_to_sc"
+        raise ValueError(
+            "Unsupported target module "
+            f"{task.target_module_name!r}; expected nic_card_mount_* or sc_port_*"
+        )
+
     def _nic_rail_xyz_board(self, task: Task) -> tuple[float, float, float]:
         card_index, port_index = self._task_indices(task)
         if not 0 <= card_index <= 4 or port_index not in self.SFP_PORT_X_OFFSETS:
@@ -384,12 +428,43 @@ class MagentaSquare(Policy):
             self.nic_rail_approach_z,
         )
 
+    def _sc_rail_xyz_board(self, task: Task) -> tuple[float, float, float]:
+        port_index = self._sc_task_index(task)
+        if port_index not in self.SC_RAIL_Y:
+            raise ValueError(
+                "Unsupported SC rail target "
+                f"port={port_index}; expected port 0..1"
+            )
+        return (
+            self.SC_RAIL_X + self.sc_rail_x_offset,
+            self.SC_RAIL_Y[port_index] + self.sc_rail_y_offset,
+            self.sc_rail_approach_z,
+        )
+
     def _board_pose_target_xyz_board(self, task: Task) -> tuple[float, float, float]:
+        task_family = self._task_family(task)
+        if task_family == "sc_to_sc":
+            return self._sc_rail_xyz_board(task)
         if self.board_pose_target_mode in ("nic_rail", "rail"):
             return self._nic_rail_xyz_board(task)
         raise ValueError(
             "Unsupported AIC_TRANSPORT_BOARD_POSE_TARGET_MODE "
-            f"{self.board_pose_target_mode!r}; expected 'nic_rail'"
+            f"{self.board_pose_target_mode!r}; expected 'nic_rail' for SFP-to-NIC"
+        )
+
+    def _task_target_summary(self, task: Task) -> str:
+        task_family = self._task_family(task)
+        if task_family == "sc_to_sc":
+            port_index = self._sc_task_index(task)
+            return (
+                f"family=sc_to_sc, sc_port={port_index}, "
+                f"target_mode=sc_rail, rail_target={self._sc_rail_xyz_board(task)}"
+            )
+        card_index, port_index = self._task_indices(task)
+        return (
+            f"family=sfp_to_nic, card={card_index}, port={port_index}, "
+            f"target_mode={self.board_pose_target_mode}, "
+            f"rail_target={self._nic_rail_xyz_board(task)}"
         )
 
     @staticmethod
@@ -485,6 +560,11 @@ class MagentaSquare(Policy):
         target_xyz: tuple[float, float, float],
     ) -> Pose:
         if not self.xy_then_z_transport:
+            self.get_logger().info(
+                "MagentaSquare movement method: direct Cartesian transport to localized target; "
+                f"target={[round(value, 5) for value in target_xyz]}, "
+                f"duration={self.duration_sec:.3f}s"
+            )
             return self._move_to_pose(
                 move_robot,
                 start_pose,
@@ -510,7 +590,7 @@ class MagentaSquare(Policy):
         )
         z_distance = abs(float(target_xyz[2] - start_pose.position.z))
         self.get_logger().info(
-            "TransportToMean moving to transport target as XY-then-Z path: "
+            "MagentaSquare movement method: XY-then-Z Cartesian transport to localized target; "
             f"xy_target={[round(value, 5) for value in xy_target_xyz]}, "
             f"final_target={[round(value, 5) for value in target_xyz]}, "
             f"xy_distance={xy_distance:.5f} m, z_distance={z_distance:.5f} m"
@@ -596,19 +676,29 @@ class MagentaSquare(Policy):
         start_pose: Pose,
     ) -> Pose:
         step_m = abs(self.descend_step_m)
-        if step_m <= 0.0 or self.descend_dt_sec <= 0.0 or self.descend_max_distance_m <= 0.0:
+        try:
+            task_family = self._task_family(task)
+        except ValueError:
+            task_family = "unknown"
+        max_distance_m = (
+            self.sc_descend_max_distance_m
+            if task_family == "sc_to_sc"
+            else self.descend_max_distance_m
+        )
+        if step_m <= 0.0 or self.descend_dt_sec <= 0.0 or max_distance_m <= 0.0:
             self.get_logger().info(
                 "TransportToMean descent skipped because descent step, dt, or max "
                 "distance is non-positive."
             )
             return start_pose
 
-        max_steps = int(np.ceil(self.descend_max_distance_m / step_m))
+        max_steps = int(np.ceil(max_distance_m / step_m))
         current_pose = start_pose
         self.get_logger().info(
             "TransportToMean descending TCP in base -z: "
+            f"task_family={task_family}, "
             f"step={step_m:.5f} m, dt={self.descend_dt_sec:.3f} s, "
-            f"max_distance={self.descend_max_distance_m:.5f} m, "
+            f"max_distance={max_distance_m:.5f} m, "
             f"rate={step_m / self.descend_dt_sec:.5f} m/s"
         )
         for step in range(1, max_steps + 1):
@@ -619,7 +709,7 @@ class MagentaSquare(Policy):
                 )
                 return current_pose
 
-            distance = min(step * step_m, self.descend_max_distance_m)
+            distance = min(step * step_m, max_distance_m)
             current_pose = Pose(
                 position=Point(
                     x=start_pose.position.x,
@@ -764,12 +854,23 @@ class MagentaSquare(Policy):
             or self.magenta_linear_view_steps <= 0
             or self.magenta_linear_view_y_distance_m <= 0.0
         ):
+            self.get_logger().info(
+                "MagentaSquare detection method: single-view magenta attempt; "
+                "linear +y magenta search disabled, falling back to short-edge if needed."
+            )
             obs = get_observation()
             target_xyz = self._multicamera_magenta_target_xyz(task, obs)
             if target_xyz is not None:
+                self.get_logger().info(
+                    "MagentaSquare detection selected: magenta ROI + board +y edge fit "
+                    "from current view."
+                )
                 return target_xyz, "magenta ROI + board +y edge fit"
             target_xyz = self._multicamera_short_edge_target_xyz(task, obs)
             if target_xyz is not None:
+                self.get_logger().info(
+                    "MagentaSquare detection selected: short-edge fallback from current view."
+                )
                 return target_xyz, "multi-camera short-edge fit"
             return None, ""
 
@@ -780,7 +881,8 @@ class MagentaSquare(Policy):
         target_xyz = self._multicamera_magenta_target_xyz(task, obs)
         if target_xyz is not None:
             self.get_logger().info(
-                "MagentaSquare accepted magenta-guided edge target at high view pose; "
+                "MagentaSquare detection selected: magenta ROI + board +y edge fit "
+                "at high view pose; "
                 "skipping +y linear search."
             )
             return target_xyz, "magenta ROI + board +y edge fit"
@@ -789,6 +891,10 @@ class MagentaSquare(Policy):
         if candidate is not None:
             fallback_target = candidate
             fallback_source = "multi-camera short-edge fit"
+            self.get_logger().info(
+                "MagentaSquare detection fallback candidate stored: short-edge fit "
+                "from high view pose; continuing magenta +y search before using it."
+            )
 
         step_count = max(1, self.magenta_linear_view_steps)
         self.get_logger().info(
@@ -834,6 +940,10 @@ class MagentaSquare(Policy):
                 if candidate is not None:
                     fallback_target = candidate
                     fallback_source = "multi-camera short-edge fit"
+                    self.get_logger().info(
+                        "MagentaSquare detection fallback candidate stored: "
+                        "short-edge fit during linear +y search; continuing magenta search."
+                    )
 
         current_pose = self._move_to_pose(
             move_robot,
@@ -847,7 +957,8 @@ class MagentaSquare(Policy):
         )
         if fallback_target is not None:
             self.get_logger().info(
-                "MagentaSquare linear +y view search using short-edge fallback target."
+                "MagentaSquare detection selected: short-edge fallback after linear +y "
+                "magenta search did not produce a valid geometry-fit marker target."
             )
         return fallback_target, fallback_source
 
@@ -2066,6 +2177,11 @@ class MagentaSquare(Policy):
             marker_y_axis = self._normalized_xy(
                 np.average(np.vstack(aligned_y_axes), axis=0)
             )
+        marker_edge_axis = None
+        if marker_y_axis is not None:
+            marker_edge_axis = self._normalized_xy(
+                np.array([marker_y_axis[1], -marker_y_axis[0], 0.0], dtype=np.float64)
+            )
 
         edge_candidates = self._multicamera_board_edge_candidates(obs)
         if not edge_candidates:
@@ -2081,10 +2197,17 @@ class MagentaSquare(Policy):
             )
         )
         scored = []
+        parallel_reject_count = 0
         for candidate in edge_candidates:
             edge_dir = self._normalized_xy(candidate.p1_base - candidate.p0_base)
             if edge_dir is None:
                 continue
+            parallel_score = 0.0
+            if marker_edge_axis is not None:
+                parallel_score = abs(float(np.dot(edge_dir[:2], marker_edge_axis[:2])))
+                if parallel_score < self.magenta_edge_parallel_min_dot:
+                    parallel_reject_count += 1
+                    continue
             width_error = abs(candidate.width_base - self.BOARD_SIZE_X)
             if width_error > self.magenta_edge_width_tolerance_m:
                 continue
@@ -2113,6 +2236,7 @@ class MagentaSquare(Policy):
                 2.0 * width_score
                 + distance_score
                 + marker_axis_score
+                + parallel_score
                 + min(candidate.score / 400.0, 2.0)
             )
             scored.append(
@@ -2124,6 +2248,7 @@ class MagentaSquare(Policy):
                     width_error,
                     distance_error,
                     marker_axis_score,
+                    parallel_score,
                 )
             )
 
@@ -2131,7 +2256,9 @@ class MagentaSquare(Policy):
             self.get_logger().warn(
                 "MagentaSquare found no board +y edge consistent with marker prior: "
                 f"marker_center={np.round(marker_center, 4).tolist()}, "
-                f"candidate_count={len(edge_candidates)}"
+                f"candidate_count={len(edge_candidates)}, "
+                f"parallel_reject_count={parallel_reject_count}, "
+                f"parallel_min_dot={self.magenta_edge_parallel_min_dot:.3f}"
             )
             return None
 
@@ -2144,6 +2271,7 @@ class MagentaSquare(Policy):
             width_error,
             distance_error,
             marker_axis_score,
+            parallel_score,
         ) = scored[0]
         plus_y_edge_center = best_candidate.center_base.copy()
         plus_y_edge_center[2] = self.board_plane_z
@@ -2187,9 +2315,12 @@ class MagentaSquare(Policy):
             f"edge_width={best_candidate.width_base:.4f}, "
             f"width_error={width_error:.4f}, "
             f"distance_error={distance_error:.4f}, "
+            f"parallel_score={parallel_score:.3f}, "
+            f"parallel_min_dot={self.magenta_edge_parallel_min_dot:.3f}, "
             f"marker_axis_score={marker_axis_score:.3f}, "
             f"score={best_score:.3f}, "
             f"candidate_count={len(edge_candidates)}, "
+            f"parallel_reject_count={parallel_reject_count}, "
             f"board_origin={np.round(board_origin, 4).tolist()}, "
             f"board_x_axis={np.round(board_x_axis, 4).tolist()}, "
             f"board_y_axis={np.round(board_y_axis, 4).tolist()}, "
@@ -2210,6 +2341,20 @@ class MagentaSquare(Policy):
             return None
 
         observations = self._magenta_roi_consensus(observations)
+        if self.magenta_require_geometry_fit_for_target:
+            geometry_fit_observations = [
+                observation
+                for observation in observations
+                if isinstance(observation, MagentaMarkerObservation)
+            ]
+            if not geometry_fit_observations:
+                self.get_logger().warn(
+                    "MagentaSquare found only partial/rough magenta ROI evidence; "
+                    "requiring a geometry-fit hollow square before accepting a "
+                    "magenta-guided transport target."
+                )
+                return None
+            observations = geometry_fit_observations
 
         edge_target = self._plus_y_edge_target_from_magenta_prior(task, obs, observations)
         if edge_target is not None:
@@ -2247,10 +2392,15 @@ class MagentaSquare(Policy):
             self.board_plane_z + target_board[2] + self.z_offset,
             self.min_target_z,
         )
+        target_mode = (
+            "sc_rail"
+            if task.target_module_name.startswith("sc_port_")
+            else self.board_pose_target_mode
+        )
         self.get_logger().info(
             "TransportToMean board-pose target: "
             f"source={source}, "
-            f"mode={self.board_pose_target_mode}, "
+            f"mode={target_mode}, "
             f"board_target={np.round(target_board, 4).tolist()}, "
             f"target_base={np.round(target_base, 4).tolist()}"
         )
@@ -2557,12 +2707,9 @@ class MagentaSquare(Policy):
         self.get_logger().info(f"MagentaSquare.insert_cable() task: {task}")
         self._latest_insertion_event_namespace = ""
         try:
-            card_index, port_index = self._task_indices(task)
             self.get_logger().info(
                 "MagentaSquare parsed task target: "
-                f"card={card_index}, port={port_index}, "
-                f"target_mode={self.board_pose_target_mode}, "
-                f"rail_target={self._nic_rail_xyz_board(task)}"
+                f"{self._task_target_summary(task)}"
             )
         except ValueError as ex:
             self.get_logger().error(str(ex))
@@ -2577,8 +2724,8 @@ class MagentaSquare(Policy):
             spawn_magenta_observations = self._spawn_magenta_observations(spawn_obs)
             if not spawn_magenta_observations:
                 self.get_logger().info(
-                    "MagentaSquare found no magenta blob at spawn; "
-                    "skipping aerial view and scanning -y for short-edge board estimation."
+                    "MagentaSquare detection route selected: spawn magenta gate failed; "
+                    "skipping aerial magenta search and scanning -y for short-edge board estimation."
                 )
                 self._move_to_short_edge_view(get_observation, move_robot)
                 short_edge_scan_done = True
@@ -2587,14 +2734,23 @@ class MagentaSquare(Policy):
                 detected_board = target_xyz is not None
                 if detected_board:
                     target_source = "multi-camera short-edge fit"
+                    self.get_logger().info(
+                        "MagentaSquare detection selected: short-edge fit after spawn-gated "
+                        "-y scan."
+                    )
             else:
                 self.get_logger().info(
-                    "MagentaSquare found magenta blob at spawn; "
+                    "MagentaSquare detection route selected: spawn magenta gate passed; "
                     "using aerial magenta-guided board search: "
                     f"cameras={[observation.camera_name for observation in spawn_magenta_observations]}"
                 )
                 if self.move_to_view_first:
                     view_pose = self._move_to_view_pose(get_observation, move_robot)
+                else:
+                    self.get_logger().info(
+                        "MagentaSquare movement method: high aerial view move disabled; "
+                        "running magenta-guided search from current pose."
+                    )
 
                 target_xyz, target_source = self._detect_target_from_linear_view_search(
                     task,
@@ -2610,12 +2766,20 @@ class MagentaSquare(Policy):
                     "from the current view."
                 )
                 if not short_edge_scan_done:
+                    self.get_logger().info(
+                        "MagentaSquare detection fallback route: running -y short-edge scan "
+                        "before final board fit."
+                    )
                     self._move_to_short_edge_view(get_observation, move_robot)
+                    short_edge_scan_done = True
                 obs = get_observation()
                 target_xyz = self._multicamera_short_edge_target_xyz(task, obs)
                 detected_board = target_xyz is not None
                 if detected_board:
                     target_source = "multi-camera short-edge fit"
+                    self.get_logger().info(
+                        "MagentaSquare detection selected: final short-edge fallback."
+                    )
 
             if not detected_board:
                 send_feedback("Task board detection failed; no fixed mean fallback.")
@@ -2631,6 +2795,10 @@ class MagentaSquare(Policy):
             return False
 
         start_pose = self._tcp_pose_from_observation(get_observation)
+        self.get_logger().info(
+            "MagentaSquare final localization choice: "
+            f"source={target_source}, target_xyz={np.round(np.asarray(target_xyz), 5).tolist()}"
+        )
         send_feedback(
             f"Transporting TCP to {target_source} target position "
             f"x={target_xyz[0]:.4f}, y={target_xyz[1]:.4f}, z={target_xyz[2]:.4f}"
@@ -2643,18 +2811,28 @@ class MagentaSquare(Policy):
             target_xyz,
         )
         if self.tilt_tip_down_after_transport:
+            self.get_logger().info(
+                "MagentaSquare movement stage: tilt TCP to align estimated cable tip downward."
+            )
             send_feedback("Tilting TCP to align cable tip with downward insertion axis.")
             target_pose = self._move_to_tip_down_pose(
                 move_robot,
                 self._tcp_pose_from_observation(get_observation),
             )
+        else:
+            self.get_logger().info("MagentaSquare movement stage skipped: tip-down tilt disabled.")
         if self.descend_after_transport:
+            self.get_logger().info(
+                "MagentaSquare movement stage: descend in base -z for insertion."
+            )
             send_feedback("Descending TCP for insertion.")
             target_pose = self._descend_until_inserted(
                 task,
                 move_robot,
                 self._tcp_pose_from_observation(get_observation),
             )
+        else:
+            self.get_logger().info("MagentaSquare movement stage skipped: descent disabled.")
         final_tcp_pose = self._tcp_pose_from_observation(get_observation)
         self.get_logger().info(
             "MagentaSquare final TCP pose after transport/alignment/descent: "
