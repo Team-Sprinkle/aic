@@ -17,8 +17,6 @@ hidden_dim: 256
 num_layers: 2
 reward_mode: dataset
 obs_mode: lowdim
-include_task_vector: true
-missing_task_vector: error
 critic_init: scratch
 critic_checkpoint: null
 act_checkpoint: null

@@ -1,12 +1,15 @@
 from __future__ import annotations
 
 import math
+import os
 import random
 import re
+from pathlib import Path
 from typing import TYPE_CHECKING
 
 import omni.usd
 import torch
+import yaml
 from pxr import Gf, Sdf, UsdGeom, UsdLux
 
 if TYPE_CHECKING:
@@ -19,6 +22,7 @@ _ENV_REGEX_RE = re.compile(r"env_(?:\.\*|\[\^/\]\*)")
 # subsequent reset. Holding the quaternion fixed keeps the composed child
 # transforms from referenced USDs (e.g. port frames) correctly aligned.
 _cached_orientations: dict[str, torch.Tensor] = {}
+_episode_config_cache: dict[str, object] = {"root": None, "episodes": [], "cursor": 0}
 
 
 def randomize_dome_light(
@@ -95,6 +99,72 @@ def _apply_yaw_noise(base_rot: torch.Tensor, yaw_range: tuple[float, float]) -> 
     return _quat_mul_wxyz(_yaw_offset_quat(yaw), base_rot)
 
 
+def _range_tuple(value, default=(0.0, 0.0)) -> tuple[float, float]:
+    if value is None:
+        return (float(default[0]), float(default[1]))
+    if isinstance(value, (int, float)):
+        return (float(value), float(value))
+    if isinstance(value, (list, tuple)) and len(value) == 2:
+        return (float(value[0]), float(value[1]))
+    raise ValueError(f"Expected fixed value or two-value range, got {value!r}")
+
+
+def _load_episode_configs_from_env() -> list[dict]:
+    root_raw = os.environ.get("AIC_ISAAC_EPISODE_CONFIG_DIR")
+    if not root_raw:
+        return []
+    if _episode_config_cache["root"] == root_raw:
+        return list(_episode_config_cache["episodes"])
+    root = Path(root_raw)
+    episodes_dir = root if root.name == "episodes" else root / "episodes"
+    if not episodes_dir.exists():
+        raise FileNotFoundError(f"AIC_ISAAC_EPISODE_CONFIG_DIR has no episodes directory: {root}")
+    episodes = []
+    for path in sorted(episodes_dir.glob("episode_*.yaml")):
+        data = yaml.safe_load(path.read_text(encoding="utf-8")) or {}
+        if not isinstance(data, dict):
+            raise ValueError(f"Isaac episode config must be a mapping: {path}")
+        episodes.append(data)
+    if not episodes:
+        raise ValueError(f"No episode_*.yaml files found in {episodes_dir}")
+    _episode_config_cache.update({"root": root_raw, "episodes": episodes, "cursor": 0})
+    return episodes
+
+
+def _episode_for_envs(env_ids: torch.Tensor) -> dict[int, dict]:
+    episodes = _load_episode_configs_from_env()
+    if not episodes:
+        return {}
+    cursor = int(_episode_config_cache.get("cursor", 0))
+    by_env: dict[int, dict] = {}
+    for env_id in env_ids.tolist():
+        episode = episodes[cursor % len(episodes)]
+        cursor += 1
+        by_env[int(env_id)] = episode
+    _episode_config_cache["cursor"] = cursor
+    return by_env
+
+
+def _episode_randomization_for_envs(env: ManagerBasedEnv, env_ids: torch.Tensor) -> dict[int, dict]:
+    episode_by_env = _episode_for_envs(env_ids)
+    if not episode_by_env:
+        return {}
+    current = dict(getattr(env, "_aic_current_episode_by_env", {}))
+    randomization_by_env: dict[int, dict] = {}
+    for env_id, episode in episode_by_env.items():
+        randomization = episode.get("isaac_randomization") or {}
+        if not isinstance(randomization, dict):
+            raise ValueError(f"episode {episode.get('episode_id')} has invalid isaac_randomization")
+        current[int(env_id)] = episode
+        randomization_by_env[int(env_id)] = randomization
+    setattr(env, "_aic_current_episode_by_env", current)
+    return randomization_by_env
+
+
+def _part_cfg_by_name(parts: list[dict]) -> dict[str, dict]:
+    return {str(part["scene_name"]): part for part in parts}
+
+
 def _write_usd_xform_pose(
     stage,
     prim_path_template: str,
@@ -161,6 +231,7 @@ def randomize_board_and_parts(
     n = len(env_ids)
     env_origins = env.scene.env_origins[env_ids]
     stage = omni.usd.get_context().get_stage() if sync_usd_xforms else None
+    episode_by_env = _episode_randomization_for_envs(env, env_ids)
 
     all_names = [board_scene_name] + [p["scene_name"] for p in parts]
     if not _cached_orientations:
@@ -171,20 +242,21 @@ def randomize_board_and_parts(
 
     # Board pose.
     board_asset = env.scene[board_scene_name]
-    board_rot = _apply_yaw_noise(
-        _cached_orientations[board_scene_name][env_ids],
-        board_range.get("yaw", (0.0, 0.0)),
-    )
-    board_pos = torch.tensor([board_default_pos], device=device).expand(n, -1).clone()
-    board_pos[:, 0] += torch.empty(n, device=device).uniform_(
-        *board_range.get("x", (0.0, 0.0))
-    )
-    board_pos[:, 1] += torch.empty(n, device=device).uniform_(
-        *board_range.get("y", (0.0, 0.0))
-    )
-    board_pos[:, 2] += torch.empty(n, device=device).uniform_(
-        *board_range.get("z", (0.0, 0.0))
-    )
+    board_rot = _cached_orientations[board_scene_name][env_ids].clone()
+    board_pos = torch.empty(n, 3, device=device)
+    for local_idx, env_id in enumerate(env_ids.tolist()):
+        randomization = episode_by_env.get(int(env_id), {})
+        base = tuple(float(v) for v in randomization.get("board_default_pos", board_default_pos))
+        ranges = randomization.get("board_range", board_range)
+        board_pos[local_idx] = torch.tensor(base, device=device)
+        for axis_idx, axis in enumerate(("x", "y", "z")):
+            lo, hi = _range_tuple(ranges.get(axis), (0.0, 0.0))
+            board_pos[local_idx, axis_idx] += torch.empty(1, device=device).uniform_(lo, hi).item()
+        yaw_range = _range_tuple(ranges.get("yaw"), (0.0, 0.0))
+        board_rot[local_idx : local_idx + 1] = _apply_yaw_noise(
+            board_rot[local_idx : local_idx + 1],
+            yaw_range,
+        )
     board_world_pos = board_pos + env_origins
 
     board_asset.write_root_pose_to_sim(
@@ -204,23 +276,27 @@ def randomize_board_and_parts(
         )
 
     # Part poses, anchored to the board.
+    default_parts_by_name = _part_cfg_by_name(list(parts))
     for part_cfg in parts:
         pname = part_cfg["scene_name"]
         part_asset = env.scene[pname]
-        pr = part_cfg.get("pose_range", {})
-        part_rot = _apply_yaw_noise(
-            _cached_orientations[pname][env_ids],
-            pr.get("yaw", (0.0, 0.0)),
-        )
-
-        ox, oy, oz = part_cfg["offset"]
-        snap = part_cfg.get("snap_step", {})
+        part_rot = _cached_orientations[pname][env_ids].clone()
 
         part_pos = board_world_pos.clone()
-        for idx in range(n):
+        for idx, env_id in enumerate(env_ids.tolist()):
+            randomization = episode_by_env.get(int(env_id), {})
+            parts_by_name = _part_cfg_by_name(randomization.get("parts", []))
+            effective_part = parts_by_name.get(pname, default_parts_by_name[pname])
+            pr = effective_part.get("pose_range", {})
+            snap = effective_part.get("snap_step", {})
+            ox, oy, oz = tuple(float(v) for v in effective_part.get("offset", part_cfg["offset"]))
             part_pos[idx, 0] += ox + _sample_axis(pr, snap, "x")
             part_pos[idx, 1] += oy + _sample_axis(pr, snap, "y")
             part_pos[idx, 2] = board_world_pos[idx, 2] + oz + _sample_axis(pr, snap, "z")
+            part_rot[idx : idx + 1] = _apply_yaw_noise(
+                part_rot[idx : idx + 1],
+                _range_tuple(pr.get("yaw"), (0.0, 0.0)),
+            )
 
         part_asset.write_root_pose_to_sim(
             torch.cat([part_pos, part_rot], dim=-1), env_ids=env_ids

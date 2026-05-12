@@ -393,12 +393,12 @@ def _as_image_tensor(value: Any, *, device: torch.device) -> torch.Tensor:
         encoding = str(value.get("encoding", "rgb8")).lower()
         raw = base64.b64decode(str(value["data_b64"]))
         if encoding in {"jpeg_rgb8", "jpg_rgb8", "jpeg", "jpg"}:
-            import cv2
+            from io import BytesIO
 
-            decoded = cv2.imdecode(np.frombuffer(raw, dtype=np.uint8), cv2.IMREAD_COLOR)
-            if decoded is None:
-                raise ValueError("Could not decode JPEG image payload from Gazebo observation")
-            image = torch.from_numpy(cv2.cvtColor(decoded, cv2.COLOR_BGR2RGB))
+            from PIL import Image
+
+            with Image.open(BytesIO(raw)) as decoded:
+                image = torch.from_numpy(np.asarray(decoded.convert("RGB")).copy())
         else:
             channels = 4 if encoding in {"rgba8", "bgra8"} else 1 if encoding in {"mono8", "8uc1"} else 3
             image = torch.frombuffer(bytearray(raw), dtype=torch.uint8)

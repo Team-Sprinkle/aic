@@ -1,11 +1,13 @@
 from __future__ import annotations
 
 import base64
+from io import BytesIO
 
 import numpy as np
 import pytest
 import torch
 from torch import nn
+from PIL import Image
 
 from gazebo_rl.serl_policy import (
     ACTAdapterSERLGazeboPolicy,
@@ -143,18 +145,16 @@ def test_act_adapter_gazebo_policy_accepts_encoded_camera_images(tmp_path):
 
 
 def test_act_adapter_gazebo_policy_accepts_jpeg_camera_images(tmp_path):
-    import cv2
-
     checkpoint_path, act_path = _write_fake_act_adapter_checkpoint(tmp_path)
     policy = ACTAdapterSERLGazeboPolicy(checkpoint_path, act_torchscript=act_path, action_clip=None)
     rgb = np.zeros((256, 288, 3), dtype=np.uint8)
-    ok, encoded = cv2.imencode(".jpg", cv2.cvtColor(rgb, cv2.COLOR_RGB2BGR))
-    assert ok
+    encoded = BytesIO()
+    Image.fromarray(rgb).save(encoded, format="JPEG")
     image = {
         "height": 256,
         "width": 288,
         "encoding": "jpeg_rgb8",
-        "data_b64": base64.b64encode(encoded.tobytes()).decode("ascii"),
+        "data_b64": base64.b64encode(encoded.getvalue()).decode("ascii"),
     }
     obs = _obs()
     obs["images"] = {

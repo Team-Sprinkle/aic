@@ -110,7 +110,9 @@ def _read_dataframes(dataset_root: Path) -> pd.DataFrame:
 
 
 def _rewards(df: pd.DataFrame, reward_mode: RewardMode) -> np.ndarray:
-    if reward_mode == "dataset" and "reward" in df.columns:
+    if reward_mode == "dataset":
+        if "reward" not in df.columns:
+            raise ValueError("reward_mode='dataset' requires a 'reward' column. Run add_offline_rewards.py first.")
         return df["reward"].to_numpy(dtype=np.float32)
     if reward_mode == "zero":
         return np.zeros(len(df), dtype=np.float32)

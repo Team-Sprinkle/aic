@@ -312,7 +312,7 @@ class PolicyRecorder(Node):
         self._latest_joint_cmd = msg
         self._latest_joint_wall_time = time.time()
 
-    def _image_to_bgr(self, image_msg: Image) -> np.ndarray:
+    def _image_to_rgb(self, image_msg: Image) -> np.ndarray:
         h = int(image_msg.height)
         w = int(image_msg.width)
         step = int(image_msg.step)
@@ -327,19 +327,19 @@ class PolicyRecorder(Node):
             return np.zeros((h, w, 3), dtype=np.uint8)
 
         if encoding == "bgr8":
-            image = row_data[:, : w * 3].reshape(h, w, 3)
+            bgr = row_data[:, : w * 3].reshape(h, w, 3)
+            image = cv2.cvtColor(bgr, cv2.COLOR_BGR2RGB)
         elif encoding == "rgb8":
-            rgb = row_data[:, : w * 3].reshape(h, w, 3)
-            image = cv2.cvtColor(rgb, cv2.COLOR_RGB2BGR)
+            image = row_data[:, : w * 3].reshape(h, w, 3)
         elif encoding == "mono8":
             gray = row_data[:, :w]
-            image = cv2.cvtColor(gray, cv2.COLOR_GRAY2BGR)
+            image = cv2.cvtColor(gray, cv2.COLOR_GRAY2RGB)
         elif encoding == "bgra8":
             bgra = row_data[:, : w * 4].reshape(h, w, 4)
-            image = cv2.cvtColor(bgra, cv2.COLOR_BGRA2BGR)
+            image = cv2.cvtColor(bgra, cv2.COLOR_BGRA2RGB)
         elif encoding == "rgba8":
             rgba = row_data[:, : w * 4].reshape(h, w, 4)
-            image = cv2.cvtColor(rgba, cv2.COLOR_RGBA2BGR)
+            image = cv2.cvtColor(rgba, cv2.COLOR_RGBA2RGB)
         else:
             if encoding not in self._unsupported_encodings_logged:
                 self.get_logger().warn(
@@ -393,9 +393,9 @@ class PolicyRecorder(Node):
             "wrist_wrench.torque.x": float(obs.wrist_wrench.wrench.torque.x),
             "wrist_wrench.torque.y": float(obs.wrist_wrench.wrench.torque.y),
             "wrist_wrench.torque.z": float(obs.wrist_wrench.wrench.torque.z),
-            "left_camera": self._image_to_bgr(obs.left_image),
-            "center_camera": self._image_to_bgr(obs.center_image),
-            "right_camera": self._image_to_bgr(obs.right_image),
+            "left_camera": self._image_to_rgb(obs.left_image),
+            "center_camera": self._image_to_rgb(obs.center_image),
+            "right_camera": self._image_to_rgb(obs.right_image),
         }
 
         joints = _fixed_len([float(v) for v in obs.joint_states.position], 7)

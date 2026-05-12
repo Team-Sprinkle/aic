@@ -29,6 +29,7 @@ from .rewards import (  # noqa: F401
     body_to_object_orientation_tanh,
     body_to_object_reaching_bonus,
     ee_reaching_bonus,
+    force_delta_penalty,
     joint_acc_l2,
     joint_pos_limits,
     joint_torques_l2,

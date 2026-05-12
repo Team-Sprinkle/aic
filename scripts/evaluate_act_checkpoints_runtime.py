@@ -196,7 +196,7 @@ def evaluate_checkpoint_once(
     logs_dir: Path,
     attempt: int,
 ) -> dict[str, object]:
-    step = checkpoint_path.parent.name
+    step = checkpoint_path.parent.name if checkpoint_path.is_dir() else checkpoint_path.stem
     eval_dir.mkdir(parents=True, exist_ok=True)
 
     checkpoint_container = host_to_container(checkpoint_path, args)
@@ -242,6 +242,16 @@ export AIC_ACT_RUNTIME_COMMAND_MODE={args.command_mode}
 export AIC_ACT_COMMAND_FRAME={args.command_frame}
 export AIC_ACT_MAX_TRANSLATION_DELTA={args.max_translation_delta}
 export AIC_ACT_MAX_ROTATION_DELTA={args.max_rotation_delta}
+export AIC_SERL_CHECKPOINT={checkpoint_container}
+export AIC_SERL_ACT_TORCHSCRIPT={host_to_container(args.act_torchscript, args) if args.act_torchscript else ""}
+export AIC_SERL_DEVICE={args.policy_device}
+export AIC_SERL_MAX_RUNTIME_SEC={args.max_runtime_sec}
+export AIC_SERL_START_DELAY_SEC={args.start_delay_sec}
+export AIC_SERL_CONTROL_HZ={args.control_hz}
+export AIC_SERL_COMMAND_MODE={args.command_mode}
+export AIC_SERL_COMMAND_FRAME={args.command_frame}
+export AIC_SERL_MAX_TRANSLATION_DELTA={args.max_translation_delta}
+export AIC_SERL_MAX_ROTATION_DELTA={args.max_rotation_delta}
 pixi run ros2 run aic_model aic_model --ros-args \\
   -p use_sim_time:=true \\
   -p policy:={args.policy_module} \\
@@ -291,7 +301,7 @@ ros2 run aic_engine aic_engine --ros-args \\
 
 
 def evaluate_checkpoint(checkpoint_path: Path, args: argparse.Namespace) -> dict[str, object]:
-    step = checkpoint_path.parent.name
+    step = checkpoint_path.parent.name if checkpoint_path.is_dir() else checkpoint_path.stem
     final_eval_dir = args.run_dir.resolve() / args.eval_subdir / step
     final_eval_dir.mkdir(parents=True, exist_ok=True)
 
@@ -327,7 +337,13 @@ def evaluate_checkpoint(checkpoint_path: Path, args: argparse.Namespace) -> dict
 
 
 def iter_checkpoints(args: argparse.Namespace) -> list[Path]:
-    return sorted(path for path in args.run_dir.glob(args.checkpoint_glob) if (path / "model.safetensors").exists())
+    checkpoints: list[Path] = []
+    for path in args.run_dir.glob(args.checkpoint_glob):
+        if path.is_dir() and (path / "model.safetensors").exists():
+            checkpoints.append(path)
+        elif path.is_file() and path.suffix in {".pt", ".pth"}:
+            checkpoints.append(path)
+    return sorted(checkpoints)
 
 
 def main() -> int:

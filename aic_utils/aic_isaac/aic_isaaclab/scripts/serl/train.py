@@ -11,6 +11,7 @@ import sys
 import time
 import traceback
 import copy
+import random
 from collections import deque
 from datetime import datetime
 from pathlib import Path
@@ -43,7 +44,12 @@ parser.add_argument("--freeze_act", action=argparse.BooleanOptionalAction, defau
 parser.add_argument("--adapter_penalty_weight", type=float, default=1e-3)
 parser.add_argument("--act_preservation_weight", type=float, default=1e-2)
 parser.add_argument("--adapter_delta_clip", type=float, default=0.05)
-parser.add_argument("--action_clip", type=float, default=0.05)
+parser.add_argument(
+    "--action_clip",
+    type=float,
+    default=0.0,
+    help="Optional full-action clamp. Defaults disabled because it can distort the ACT base action.",
+)
 parser.add_argument(
     "--isaac_action_scale",
     type=float,
@@ -57,12 +63,31 @@ parser.add_argument("--task_family", choices=["sfp_to_nic", "sc_to_sc"], default
 parser.add_argument("--target_port_index", type=int, default=0)
 parser.add_argument("--target_card_index", type=int, default=0)
 parser.add_argument("--target_card_valid", type=int, default=1)
+parser.add_argument(
+    "--task_distribution_yaml",
+    type=str,
+    default=None,
+    help=(
+        "Optional expert-generation-style YAML used to sample canonical 10D task vectors. "
+        "The current Isaac scene still uses the configured randomization profile for physical "
+        "part placement; this YAML controls task-family/card/port conditioning."
+    ),
+)
+parser.add_argument(
+    "--episode_config_dir",
+    type=str,
+    default=None,
+    help="Directory containing generated Isaac per-episode YAML configs.",
+)
 parser.add_argument("--target_reward_body", default="sfp_tip_link")
 parser.add_argument("--target_reward_distance_weight", type=float, default=0.5)
 parser.add_argument("--target_reward_close_weight", type=float, default=0.3)
 parser.add_argument("--target_reward_orientation_weight", type=float, default=0.0)
 parser.add_argument("--target_reward_reaching_weight", type=float, default=1.0)
 parser.add_argument("--target_reward_lateral_weight", type=float, default=0.0)
+parser.add_argument("--force_delta_penalty_weight", type=float, default=0.0)
+parser.add_argument("--force_delta_threshold", type=float, default=3.0)
+parser.add_argument("--force_delta_reference", type=float, default=20.0)
 parser.add_argument("--target_reward_distance_std", type=float, default=0.02)
 parser.add_argument("--target_reward_close_sigma", type=float, default=0.01)
 parser.add_argument("--target_reward_reaching_threshold", type=float, default=0.01)
@@ -91,8 +116,14 @@ parser.add_argument(
 parser.add_argument("--disable_command_pose_rewards", action=argparse.BooleanOptionalAction, default=True)
 parser.add_argument("--gripper_joint_position", type=float, default=0.0035405)
 parser.add_argument("--disable_fabric", action="store_true", default=False)
+parser.add_argument("--save_step_images", action=argparse.BooleanOptionalAction, default=False)
+parser.add_argument("--image_log_every", type=int, default=1)
+parser.add_argument("--max_logged_image_steps", type=int, default=200)
 AppLauncher.add_app_launcher_args(parser)
 args_cli = parser.parse_args()
+os.environ["AIC_ISAAC_TASK_FAMILY"] = args_cli.task_family
+if args_cli.episode_config_dir:
+    os.environ["AIC_ISAAC_EPISODE_CONFIG_DIR"] = args_cli.episode_config_dir
 args_cli.enable_cameras = True
 PROCESS_START_TIME = time.monotonic()
 
@@ -102,6 +133,7 @@ simulation_app = app_launcher.app
 import gymnasium as gym
 import numpy as np
 import torch
+import yaml
 
 import isaaclab_tasks  # noqa: F401
 from isaaclab_tasks.utils import parse_env_cfg
@@ -127,8 +159,13 @@ SFP_PORT_LOCAL = {
 }
 SFP_PORT_RPY = (4.69895, 0.0, 0.0)
 SFP_PORT_ENTRANCE_LOCAL = (0.0, 0.0, -0.0458)
+SFP_PORT_SEATED_TARGET_ROOT_LOCAL = {
+    0: (0.01059, -0.07594, 0.01540),
+    1: (-0.01261, -0.07594, 0.01540),
+}
 SFP_TIP_LOCAL = (0.0, -0.02365, 0.0)
 SFP_TIP_RPY = (1.5708, 0.0, 0.0)
+CONTROLLED_TCP_BODY = "gripper_tcp"
 
 
 def _rpy_matrix(roll: float, pitch: float, yaw: float) -> tuple[tuple[float, float, float], ...]:
@@ -243,7 +280,158 @@ ARM_JOINT_NAMES = [
 ]
 
 
+def _load_task_distribution(path: str | None) -> dict[str, Any] | None:
+    if not path:
+        return None
+    distribution_path = Path(path)
+    if not distribution_path.exists():
+        raise FileNotFoundError(f"task_distribution_yaml does not exist: {distribution_path}")
+    data = yaml.safe_load(distribution_path.read_text(encoding="utf-8")) or {}
+    if not isinstance(data, dict):
+        raise ValueError("task_distribution_yaml must contain a mapping")
+    return data
+
+
+TASK_DISTRIBUTION = _load_task_distribution(args_cli.task_distribution_yaml)
+
+
+def _load_episode_configs(path: str | None) -> list[dict[str, Any]]:
+    if not path:
+        return []
+    root = Path(path)
+    episodes_dir = root if root.name == "episodes" else root / "episodes"
+    if not episodes_dir.exists():
+        raise FileNotFoundError(f"episode_config_dir does not contain an episodes directory: {root}")
+    episodes: list[dict[str, Any]] = []
+    for yaml_path in sorted(episodes_dir.glob("episode_*.yaml")):
+        data = yaml.safe_load(yaml_path.read_text(encoding="utf-8")) or {}
+        if not isinstance(data, dict):
+            raise ValueError(f"Episode config must contain a mapping: {yaml_path}")
+        episodes.append(data)
+    if not episodes:
+        raise ValueError(f"No episode_*.yaml files found in {episodes_dir}")
+    return episodes
+
+
+EPISODE_CONFIGS = _load_episode_configs(args_cli.episode_config_dir)
+
+
+def _choices(value: Any, default: list[Any]) -> list[Any]:
+    if value is None or value == "auto":
+        return list(default)
+    if isinstance(value, list):
+        return value
+    return [value]
+
+
+def _sample_int_choice(value: Any, default: list[int], rng: random.Random) -> int:
+    return int(rng.choice([int(v) for v in _choices(value, default)]))
+
+
+def _port_index(value: Any) -> int:
+    if isinstance(value, str):
+        if value.startswith("sfp_port_"):
+            return int(value.removeprefix("sfp_port_"))
+        if value.startswith("sc_port_"):
+            return int(value.removeprefix("sc_port_"))
+    return int(value)
+
+
+def _sample_task_context_from_distribution(rng: random.Random) -> tuple[str, int, int, int]:
+    if EPISODE_CONFIGS:
+        idx = int(getattr(_sample_task_context_from_distribution, "_calls", 0))
+        setattr(_sample_task_context_from_distribution, "_calls", idx + 1)
+        context = EPISODE_CONFIGS[idx % len(EPISODE_CONFIGS)].get("task_context") or {}
+        return (
+            str(context["task_family"]),
+            int(context["target_port_index"]),
+            int(context["target_card_index"]),
+            int(context["target_card_valid"]),
+        )
+    cfg = TASK_DISTRIBUTION
+    if not cfg:
+        return (
+            args_cli.task_family,
+            int(args_cli.target_port_index),
+            int(args_cli.target_card_index),
+            int(args_cli.target_card_valid),
+        )
+    episodes = cfg.get("episodes")
+    if isinstance(episodes, list) and episodes:
+        idx = int(getattr(_sample_task_context_from_distribution, "_distribution_episode_calls", 0))
+        setattr(_sample_task_context_from_distribution, "_distribution_episode_calls", idx + 1)
+        context = episodes[idx % len(episodes)]
+        return (
+            str(context["task_family"]),
+            int(context["target_port_index"]),
+            int(context["target_card_index"]),
+            int(context["target_card_valid"]),
+        )
+    scene = cfg.get("scene") or {}
+    family = str(rng.choice(_choices(cfg.get("task_family"), [args_cli.task_family])))
+    if family == "sfp_to_nic":
+        nic_cfg = scene.get("nic_cards") or {}
+        nic_count = _sample_int_choice(nic_cfg.get("count"), [1, 2, 3, 4, 5], rng)
+        nic_count = max(1, min(5, nic_count))
+        target_card_raw = nic_cfg.get("target_card", "auto")
+        target_card = rng.randrange(nic_count) if target_card_raw == "auto" else _sample_int_choice(target_card_raw, list(range(nic_count)), rng)
+        target_port = _port_index(rng.choice(_choices(nic_cfg.get("target_port"), [0, 1])))
+        if target_port not in {0, 1}:
+            raise ValueError(f"sfp_to_nic target_port must resolve to 0 or 1, got {target_port}")
+        return family, target_port, target_card, 1
+    if family == "sc_to_sc":
+        sc_cfg = scene.get("sc_ports") or {}
+        sc_count = _sample_int_choice(sc_cfg.get("count"), [1, 2], rng)
+        sc_count = max(1, min(2, sc_count))
+        target_port_raw = sc_cfg.get("target_port", "auto")
+        target_port = rng.randrange(sc_count) if target_port_raw == "auto" else _port_index(rng.choice(_choices(target_port_raw, list(range(sc_count)))))
+        if target_port not in {0, 1}:
+            raise ValueError(f"sc_to_sc target_port must resolve to 0 or 1, got {target_port}")
+        return family, target_port, -1, 0
+    raise ValueError(f"Unsupported task_family in task_distribution_yaml: {family!r}")
+
+
+def _current_episode_by_env(env) -> dict[int, dict[str, Any]]:
+    return dict(getattr(env.unwrapped, "_aic_current_episode_by_env", {}) or {})
+
+
+def _episode_context_tuple(episode: dict[str, Any]) -> tuple[str, int, int, int]:
+    context = episode.get("task_context") or {}
+    return (
+        str(context["task_family"]),
+        int(context["target_port_index"]),
+        int(context["target_card_index"]),
+        int(context["target_card_valid"]),
+    )
+
+
+def _task_vector_from_contexts(contexts: list[tuple[str, int, int, int]], *, device: torch.device) -> torch.Tensor:
+    rows: list[list[float]] = []
+    for family_name, port_index, card_index, card_valid in contexts:
+        family = [1.0, 0.0] if family_name == "sfp_to_nic" else [0.0, 1.0]
+        port = [1.0, 0.0] if port_index == 0 else [0.0, 1.0]
+        card = [0.0] * 5
+        if card_valid:
+            card[card_index] = 1.0
+        rows.append(family + port + card + [float(card_valid)])
+    return torch.tensor(rows, dtype=torch.float32, device=device)
+
+
 def _canonical_task_vector(args: argparse.Namespace, *, device: torch.device, batch_size: int) -> torch.Tensor:
+    if TASK_DISTRIBUTION is not None or EPISODE_CONFIGS:
+        rng = random.Random(int(args.seed) + int(getattr(_canonical_task_vector, "_calls", 0)))
+        setattr(_canonical_task_vector, "_calls", int(getattr(_canonical_task_vector, "_calls", 0)) + 1)
+        rows: list[list[float]] = []
+        for _ in range(batch_size):
+            family_name, port_index, card_index, card_valid = _sample_task_context_from_distribution(rng)
+            family = [1.0, 0.0] if family_name == "sfp_to_nic" else [0.0, 1.0]
+            port = [1.0, 0.0] if port_index == 0 else [0.0, 1.0]
+            card = [0.0] * 5
+            if card_valid:
+                card[card_index] = 1.0
+            rows.append(family + port + card + [float(card_valid)])
+        return torch.tensor(rows, dtype=torch.float32, device=device)
+
     if args.task_family == "sfp_to_nic":
         family = [1.0, 0.0]
         if args.target_card_valid != 1:
@@ -286,7 +474,7 @@ def _target_reward_position_offset(args: argparse.Namespace) -> tuple[float, flo
     if args.target_reward_position_offset is not None:
         return tuple(float(v) for v in args.target_reward_position_offset)
     if args.task_family == "sfp_to_nic":
-        return _offset_from_port_frame(int(args.target_port_index), SFP_PORT_ENTRANCE_LOCAL)
+        return SFP_PORT_SEATED_TARGET_ROOT_LOCAL[int(args.target_port_index)]
     return (0.093, 0.140, 0.020)
 
 
@@ -349,6 +537,10 @@ def _configure_task_geometry_rewards(env_cfg: Any, args: argparse.Namespace) -> 
     rewards.target_orientation_tanh.weight = float(args.target_reward_orientation_weight)
     rewards.target_reaching_bonus.weight = float(args.target_reward_reaching_weight)
     rewards.target_lateral_error.weight = float(args.target_reward_lateral_weight)
+    if hasattr(rewards, "force_delta_penalty"):
+        rewards.force_delta_penalty.weight = float(args.force_delta_penalty_weight)
+        rewards.force_delta_penalty.params["threshold"] = float(args.force_delta_threshold)
+        rewards.force_delta_penalty.params["reference"] = float(args.force_delta_reference)
 
     if args.disable_command_pose_rewards:
         for name in (
@@ -369,6 +561,9 @@ def _configure_task_geometry_rewards(env_cfg: Any, args: argparse.Namespace) -> 
         "orientation_weight": float(rewards.target_orientation_tanh.weight),
         "reaching_weight": float(rewards.target_reaching_bonus.weight),
         "lateral_weight": float(rewards.target_lateral_error.weight),
+        "force_delta_penalty_weight": float(rewards.force_delta_penalty.weight) if hasattr(rewards, "force_delta_penalty") else 0.0,
+        "force_delta_threshold": float(args.force_delta_threshold),
+        "force_delta_reference": float(args.force_delta_reference),
         "target_position_offset": [float(v) for v in target_position_offset],
         "body_position_offset": [float(v) for v in body_position_offset],
         "target_orientation_offset": None if target_orientation_offset is None else [float(v) for v in target_orientation_offset],
@@ -471,7 +666,7 @@ def _isaac_lerobot_state(env, args: argparse.Namespace, *, device: torch.device,
     robot = env.unwrapped.scene["robot"]
     body_names = list(getattr(robot, "body_names", []))
     joint_names = list(getattr(robot, "joint_names", []))
-    wrist_index = _named_index(body_names, "wrist_3_link")
+    wrist_index = _named_index(body_names, CONTROLLED_TCP_BODY)
     joint_indices = [_named_index(joint_names, name) for name in ARM_JOINT_NAMES]
     data = robot.data
     batch_size = int(data.body_pos_w.shape[0])
@@ -481,9 +676,9 @@ def _isaac_lerobot_state(env, args: argparse.Namespace, *, device: torch.device,
     tcp_pos_w = data.body_pos_w[:, wrist_index]
     tcp_quat_w = data.body_quat_w[:, wrist_index]
     tcp_pos, tcp_quat = math_utils.subtract_frame_transforms(root_pos_w, root_quat_w, tcp_pos_w, tcp_quat_w)
-    # Isaac Lab and the current LeRobot files both store this quaternion
-    # numerically as wxyz, despite the historical LeRobot feature names saying
-    # xyzw. Keep the numeric contract so checkpoint normalizers remain valid.
+    # Isaac Lab returns quaternions as wxyz; the LeRobot/Gazebo observation
+    # contract stores orientation fields as xyzw.
+    tcp_quat_xyzw = torch.cat([tcp_quat[:, 1:4], tcp_quat[:, 0:1]], dim=-1)
     tcp_lin_vel = getattr(data, "body_lin_vel_w", torch.zeros(batch_size, len(body_names), 3, device=device))[
         :, wrist_index
     ]
@@ -500,14 +695,32 @@ def _isaac_lerobot_state(env, args: argparse.Namespace, *, device: torch.device,
         dtype=torch.float32,
         device=device,
     )
-    wrench = torch.zeros(batch_size, 6, dtype=torch.float32, device=device)
+    incoming_wrench = getattr(data, "body_incoming_wrench_w", None)
+    if incoming_wrench is None:
+        incoming_wrench = getattr(data, "body_incoming_wrench_b", None)
+    if incoming_wrench is None:
+        wrench = torch.zeros(batch_size, 6, dtype=torch.float32, device=device)
+    else:
+        wrench = incoming_wrench[:, wrist_index, :6].to(device=device, dtype=torch.float32)
     base_state = torch.cat(
-        [tcp_pos, tcp_quat, tcp_lin_vel, tcp_ang_vel, tcp_error, joint_pos, gripper, wrench],
+        [tcp_pos, tcp_quat_xyzw, tcp_lin_vel, tcp_ang_vel, tcp_error, joint_pos, gripper, wrench],
         dim=-1,
     )
     if base_state.shape[1] != 32:
         raise RuntimeError(f"Expected Isaac LeRobot-compatible base state dim 32, got {base_state.shape[1]}")
-    task_vector = _canonical_task_vector(args, device=device, batch_size=batch_size)
+    episode_by_env = _current_episode_by_env(env)
+    if episode_by_env:
+        contexts: list[tuple[str, int, int, int]] = []
+        for env_id in range(batch_size):
+            episode = episode_by_env.get(env_id)
+            contexts.append(
+                _episode_context_tuple(episode)
+                if episode is not None
+                else _sample_task_context_from_distribution(random.Random(int(args.seed) + env_id))
+            )
+        task_vector = _task_vector_from_contexts(contexts, device=device)
+    else:
+        task_vector = _canonical_task_vector(args, device=device, batch_size=batch_size)
     if state_dim in {32, 42}:
         state = torch.cat([base_state, task_vector], dim=-1)
     elif state_dim in {72, 82}:
@@ -551,11 +764,68 @@ def _isaac_contact_recovery_features(base_state: torch.Tensor, *, env, device: t
     return out
 
 
+def _force_delta_metrics(env, *, device: torch.device) -> dict[str, torch.Tensor]:
+    robot = env.unwrapped.scene["robot"]
+    data = robot.data
+    body_names = list(getattr(robot, "body_names", []))
+    wrist_index = _named_index(body_names, CONTROLLED_TCP_BODY)
+    incoming_wrench = getattr(data, "body_incoming_wrench_w", None)
+    if incoming_wrench is None:
+        incoming_wrench = getattr(data, "body_incoming_wrench_b", None)
+    if incoming_wrench is None:
+        force = torch.zeros(env.unwrapped.num_envs, 3, device=device)
+    else:
+        force = incoming_wrench[:, wrist_index, :3].to(device=device, dtype=torch.float32)
+    prev = getattr(_force_delta_metrics, "_previous_force", None)
+    if prev is None or prev.shape != force.shape:
+        prev = force.detach().clone()
+    delta_norm = torch.norm(force - prev.to(device), dim=1)
+    setattr(_force_delta_metrics, "_previous_force", force.detach().clone())
+    normalized = ((delta_norm - float(args_cli.force_delta_threshold)) / max(float(args_cli.force_delta_reference), 1e-6)).clamp(min=0.0, max=1.0)
+    return {
+        "force_norm": torch.norm(force, dim=1),
+        "force_delta_norm": delta_norm,
+        "force_delta_penalty": -float(args_cli.force_delta_penalty_weight) * normalized,
+    }
+
+
+def _episode_metadata(env, env_index: int) -> dict[str, Any]:
+    episode = _current_episode_by_env(env).get(env_index) or {}
+    context = episode.get("task_context") or {}
+    curriculum = episode.get("curriculum") or {}
+    return {
+        "episode_id": episode.get("episode_id"),
+        "task_family": context.get("task_family"),
+        "target_port_index": context.get("target_port_index"),
+        "target_card_index": context.get("target_card_index"),
+        "target_card_valid": context.get("target_card_valid"),
+        "source_request": (episode.get("source_request") or {}).get("name"),
+        "global_episode_index": curriculum.get("global_episode_index"),
+        "gpu_id": curriculum.get("gpu_id"),
+        "start_near_gate": bool((episode.get("scene") or {}).get("start_near_gate")),
+    }
+
+
+def _save_images(images: dict[str, torch.Tensor], *, run_dir: Path, step: int, max_steps: int, every: int) -> None:
+    if max_steps >= 0 and step > max_steps:
+        return
+    if every <= 0 or step % every != 0:
+        return
+    from torchvision.utils import save_image
+
+    image_dir = run_dir / "step_images" / f"step_{step:06d}"
+    image_dir.mkdir(parents=True, exist_ok=True)
+    for key, tensor in images.items():
+        camera = key.rsplit(".", 1)[-1]
+        for env_idx in range(tensor.shape[0]):
+            save_image(tensor[env_idx].detach().cpu().clamp(0.0, 1.0), image_dir / f"env_{env_idx:04d}_{camera}.png")
+
+
 def _tcp_delta_action_to_isaac_base_action(env, tcp_action: torch.Tensor) -> torch.Tensor:
     """Convert Gazebo/LeRobot gripper-tcp delta actions to Isaac IK root-frame deltas."""
     robot = env.unwrapped.scene["robot"]
     body_names = list(getattr(robot, "body_names", []))
-    wrist_index = _named_index(body_names, "wrist_3_link")
+    wrist_index = _named_index(body_names, CONTROLLED_TCP_BODY)
     data = robot.data
     _, tcp_quat_b = math_utils.subtract_frame_transforms(
         data.root_pos_w,
@@ -1202,8 +1472,24 @@ def main() -> None:
                 "target_card_index": args_cli.target_card_index,
                 "target_card_valid": args_cli.target_card_valid,
             },
+            "task_distribution_yaml": args_cli.task_distribution_yaml,
+            "task_distribution": TASK_DISTRIBUTION,
+            "episode_config_dir": args_cli.episode_config_dir,
+            "episode_config_count": len(EPISODE_CONFIGS),
+            "first_episode_config": EPISODE_CONFIGS[0] if EPISODE_CONFIGS else None,
+            "task_distribution_scope": (
+                "When episode configs are provided, the Isaac reset event stores the current child YAML "
+                "per env and the policy task vector/replay metadata read that same assignment. Without "
+                "episode configs, the task vector falls back to task_distribution_yaml or CLI task fields."
+            ),
             "gripper_joint_position": args_cli.gripper_joint_position,
             "task_geometry_reward": task_geometry_reward_config,
+            "image_logging": {
+                "save_step_images": args_cli.save_step_images,
+                "image_log_every": args_cli.image_log_every,
+                "max_logged_image_steps": args_cli.max_logged_image_steps,
+                "note": "Replay stores image tensors in memory for training; PNG logging is for audit/debug artifacts.",
+            },
         },
         "args": vars(args_cli),
     }
@@ -1218,6 +1504,14 @@ def main() -> None:
     policy_obs = _policy_tensor(obs).to(device)
     print(f"[AIC SERL] Policy obs shape: {tuple(policy_obs.shape)}", flush=True)
     current_images = _raw_camera_images(env, device=device)
+    if args_cli.save_step_images:
+        _save_images(
+            current_images,
+            run_dir=run_dir,
+            step=0,
+            max_steps=args_cli.max_logged_image_steps,
+            every=max(args_cli.image_log_every, 1),
+        )
     print("[AIC SERL] Initial raw camera read complete", flush=True)
     updates_done = 0
     last_metrics: dict[str, float] = {}
@@ -1254,10 +1548,19 @@ def main() -> None:
         _timing_log(args_cli.debug_timing and step == 1, "tcp_to_isaac_action", t0)
         t0 = time.monotonic()
         next_obs, reward, terminated, truncated, _ = env.step(env_action)
+        force_metrics = _force_delta_metrics(env, device=device)
         _timing_log(args_cli.debug_timing and step == 1, "env_step", t0)
         next_policy_obs = _policy_tensor(next_obs).to(device)
         t0 = time.monotonic()
         next_images = _raw_camera_images(env, device=device)
+        if args_cli.save_step_images:
+            _save_images(
+                next_images,
+                run_dir=run_dir,
+                step=step,
+                max_steps=args_cli.max_logged_image_steps,
+                every=args_cli.image_log_every,
+            )
         _timing_log(args_cli.debug_timing and step == 1, "next_camera_read", t0)
         t0 = time.monotonic()
         next_act_obs = _act_obs_from_env(
@@ -1287,6 +1590,7 @@ def main() -> None:
                     "action": action_for_critic[env_index],
                     "reward": reward[env_index],
                     "done": done[env_index],
+                    "metadata": _episode_metadata(env, env_index),
                 }
             )
         policy_obs = next_policy_obs
@@ -1310,6 +1614,10 @@ def main() -> None:
             "updates_done": updates_done,
             "replay_size": len(replay),
             "reward_mean": float(reward.mean().detach().cpu()),
+            "force_norm_mean": float(force_metrics["force_norm"].mean().detach().cpu()),
+            "force_delta_norm_mean": float(force_metrics["force_delta_norm"].mean().detach().cpu()),
+            "force_delta_penalty_mean": float(force_metrics["force_delta_penalty"].mean().detach().cpu()),
+            "episodes": [_episode_metadata(env, idx) for idx in range(policy_obs.shape[0])],
             **last_metrics,
         }
         with metrics_path.open("a", encoding="utf-8") as f:

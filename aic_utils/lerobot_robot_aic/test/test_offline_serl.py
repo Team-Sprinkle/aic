@@ -19,7 +19,7 @@ from lerobot_robot_aic.offline_rl_dataset import (  # noqa: E402
     load_lerobot_transitions,
 )
 from lerobot_robot_aic.offline_serl import OfflineSERLConfig, OfflineSERLTrainer  # noqa: E402
-from lerobot_robot_aic.task_encoding import TASK_VECTOR_DIM, encode_task_vector, task_encoding_schema  # noqa: E402
+from lerobot_robot_aic.task_encoding import TASK_VECTOR_DIM, encode_task_vector  # noqa: E402
 
 
 def write_fake_lerobot_dataset(root: Path) -> None:
@@ -118,26 +118,6 @@ def test_offline_dataset_constructs_action_chunks(tmp_path: Path) -> None:
     assert arrays.action[3].tolist() == [0.0, 1.0, 1.0, 1.0]
 
 
-def test_offline_dataset_appends_task_vector(tmp_path: Path) -> None:
-    root = tmp_path / "dataset"
-    manifest = tmp_path / "manifests" / "accepted.csv"
-    write_fake_lerobot_dataset(root)
-    write_task_manifest(manifest)
-
-    arrays, _ = load_lerobot_transitions(
-        root,
-        reward_mode="final_success",
-        include_task_vector=True,
-        task_metadata=manifest,
-    )
-
-    assert arrays.obs.shape == (6, 3 + TASK_VECTOR_DIM)
-    assert arrays.next_obs.shape == (6, 3 + TASK_VECTOR_DIM)
-    assert arrays.obs[0, :3].tolist() == [0.0, 1.0, 0.0]
-    assert arrays.obs[0, 3:].tolist() == pytest.approx([1, 0, 0, 1, 0, 0, 0, 1, 0, 1])
-    assert arrays.obs[3, 3:].tolist() == pytest.approx([0, 1, 1, 0, 0, 0, 0, 0, 0, 0])
-
-
 def test_offline_serl_train_step_and_checkpoint(tmp_path: Path) -> None:
     root = tmp_path / "dataset"
     write_fake_lerobot_dataset(root)
@@ -213,44 +193,6 @@ def test_train_offline_serl_dry_run(tmp_path: Path) -> None:
     assert summary["training_config"]["action_horizon"] == 2
     assert summary["training_config"]["hidden_dim"] == 64
     assert summary["training_config"]["num_layers"] == 3
-
-
-def test_train_offline_serl_dry_run_with_task_vector(tmp_path: Path) -> None:
-    root = tmp_path / "dataset"
-    manifest = tmp_path / "manifests" / "accepted.csv"
-    write_fake_lerobot_dataset(root)
-    write_task_manifest(manifest)
-    script = PACKAGE_DIR / "scripts" / "train_offline_serl.py"
-    result = subprocess.run(
-        [
-            sys.executable,
-            str(script),
-            "--dataset-root",
-            str(root),
-            "--task-metadata",
-            str(manifest),
-            "--include-task-vector",
-            "--output-dir",
-            str(tmp_path / "out"),
-            "--job-name",
-            "dry",
-            "--steps",
-            "1",
-            "--batch-size",
-            "2",
-            "--device",
-            "cpu",
-            "--dry-run",
-        ],
-        text=True,
-        capture_output=True,
-        check=False,
-    )
-    assert result.returncode == 0, result.stderr
-    summary = json.loads(result.stdout)
-    assert summary["training_config"]["original_obs_dim"] == 3
-    assert summary["training_config"]["effective_obs_dim"] == 3 + TASK_VECTOR_DIM
-    assert summary["task_conditioning"]["task_encoding_schema"] == task_encoding_schema()
 
 
 def test_train_offline_serl_rejects_act_critic_init(tmp_path: Path) -> None:

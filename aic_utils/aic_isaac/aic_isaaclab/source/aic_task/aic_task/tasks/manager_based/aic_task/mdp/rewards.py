@@ -143,9 +143,13 @@ def ee_reaching_bonus(
 
 
 def _target_position_w(
+    env: ManagerBasedRLEnv,
     target_asset: RigidObject,
     target_position_offset: tuple[float, float, float] | list[float] | None,
 ) -> torch.Tensor:
+    episode_positions = _episode_target_position_w(env)
+    if episode_positions is not None:
+        return episode_positions.to(device=target_asset.data.root_pos_w.device, dtype=target_asset.data.root_pos_w.dtype)
     if target_position_offset is None:
         return target_asset.data.root_pos_w
     offset = torch.tensor(
@@ -154,6 +158,24 @@ def _target_position_w(
         device=target_asset.data.root_pos_w.device,
     ).reshape(1, 3)
     return target_asset.data.root_pos_w + quat_apply(target_asset.data.root_quat_w, offset.expand_as(target_asset.data.root_pos_w))
+
+
+def _episode_target_position_w(env: ManagerBasedRLEnv) -> torch.Tensor | None:
+    episode_by_env = getattr(env, "_aic_current_episode_by_env", None)
+    if not episode_by_env:
+        return None
+    origins = env.scene.env_origins
+    rows: list[torch.Tensor] = []
+    for env_id in range(env.num_envs):
+        episode = episode_by_env.get(env_id)
+        if not episode:
+            return None
+        target = ((episode.get("scene") or {}).get("target") or {}).get("target_pose_world") or {}
+        position = target.get("position")
+        if position is None:
+            return None
+        rows.append(torch.tensor(position, dtype=origins.dtype, device=origins.device) + origins[env_id])
+    return torch.stack(rows, dim=0)
 
 
 def _body_position_w(
@@ -205,7 +227,7 @@ def body_to_object_distance_tanh(
     body_asset: RigidObject = env.scene[body_cfg.name]
     target_asset: RigidObject = env.scene[target_cfg.name]
     body_pos_w = _body_position_w(body_asset, body_cfg.body_ids[0], body_position_offset)
-    target_pos_w = _target_position_w(target_asset, target_position_offset)
+    target_pos_w = _target_position_w(env, target_asset, target_position_offset)
     distance = torch.norm(body_pos_w - target_pos_w, dim=1)
     return 1.0 - torch.tanh(distance / std)
 
@@ -222,7 +244,7 @@ def body_to_object_distance_exp(
     body_asset: RigidObject = env.scene[body_cfg.name]
     target_asset: RigidObject = env.scene[target_cfg.name]
     body_pos_w = _body_position_w(body_asset, body_cfg.body_ids[0], body_position_offset)
-    target_pos_w = _target_position_w(target_asset, target_position_offset)
+    target_pos_w = _target_position_w(env, target_asset, target_position_offset)
     dist_sq = torch.sum(torch.square(body_pos_w - target_pos_w), dim=1)
     return torch.exp(-dist_sq / (sigma**2))
 
@@ -259,7 +281,7 @@ def body_to_object_reaching_bonus(
     body_asset: RigidObject = env.scene[body_cfg.name]
     target_asset: RigidObject = env.scene[target_cfg.name]
     body_pos_w = _body_position_w(body_asset, body_cfg.body_ids[0], body_position_offset)
-    target_pos_w = _target_position_w(target_asset, target_position_offset)
+    target_pos_w = _target_position_w(env, target_asset, target_position_offset)
     distance = torch.norm(body_pos_w - target_pos_w, dim=1)
     return (distance < threshold).float()
 
@@ -281,10 +303,41 @@ def body_to_object_lateral_error(
     body_asset: RigidObject = env.scene[body_cfg.name]
     target_asset: RigidObject = env.scene[target_cfg.name]
     body_pos_w = _body_position_w(body_asset, body_cfg.body_ids[0], body_position_offset)
-    delta = body_pos_w - _target_position_w(target_asset, target_position_offset)
+    delta = body_pos_w - _target_position_w(env, target_asset, target_position_offset)
     mask = torch.ones(3, dtype=torch.bool, device=delta.device)
     mask[axis] = False
     return torch.norm(delta[:, mask], dim=1)
+
+
+def force_delta_penalty(
+    env: ManagerBasedRLEnv,
+    threshold: float = 3.0,
+    reference: float = 20.0,
+    max_penalty: float = 1.0,
+    asset_cfg: SceneEntityCfg = SceneEntityCfg("robot"),
+) -> torch.Tensor:
+    """Penalize sudden changes in incoming body wrench.
+
+    The returned value is non-positive. Use a positive reward weight to apply
+    this as a penalty, matching the offline dense reward convention.
+    """
+    asset: Articulation = env.scene[asset_cfg.name]
+    wrench = getattr(asset.data, "body_incoming_wrench_w", None)
+    if wrench is None:
+        wrench = getattr(asset.data, "body_incoming_wrench_b", None)
+    if wrench is None:
+        current = torch.zeros(env.num_envs, 3, device=env.device)
+    else:
+        body_ids = asset_cfg.body_ids
+        selected = wrench if body_ids is None or body_ids == slice(None) else wrench[:, body_ids, :]
+        current = selected[..., :3].sum(dim=1)
+    previous = getattr(env, "_aic_previous_force_w", None)
+    if previous is None or previous.shape != current.shape:
+        previous = current.detach().clone()
+    delta_norm = torch.norm(current - previous.to(current.device), dim=1)
+    setattr(env, "_aic_previous_force_w", current.detach().clone())
+    normalized = ((delta_norm - float(threshold)) / max(float(reference), 1e-6)).clamp(min=0.0, max=float(max_penalty))
+    return -normalized
 
 
 # ---------------------------------------------------------------------------

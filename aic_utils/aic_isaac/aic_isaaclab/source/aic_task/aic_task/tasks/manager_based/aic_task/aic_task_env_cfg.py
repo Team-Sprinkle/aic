@@ -65,7 +65,7 @@ class AICTaskSceneCfg(InteractiveSceneCfg):
                 solver_position_iteration_count=16,
                 solver_velocity_iteration_count=8,
             ),
-            activate_contact_sensors=False,
+            activate_contact_sensors=True,
         ),
         init_state=ArticulationCfg.InitialStateCfg(
             pos=(-0.18, -0.122, 0),
@@ -587,6 +587,16 @@ class RewardsCfg:
             "body_position_offset": (0.0, 0.0, 0.0),
         },
     )
+    force_delta_penalty = RewTerm(
+        func=mdp.force_delta_penalty,
+        weight=0.0,
+        params={
+            "threshold": 3.0,
+            "reference": 20.0,
+            "max_penalty": 1.0,
+            "asset_cfg": SceneEntityCfg("robot"),
+        },
+    )
 
     # -- Smoothness penalties --
     action_rate = RewTerm(func=mdp.action_rate_l2, weight=-0.0001)
@@ -904,11 +914,15 @@ class AICTaskEnvCfg(ManagerBasedRLEnvCfg):
         lateral_weight = float(
             os.environ.get("AIC_ISAAC_INSERTION_LATERAL_WEIGHT", "0.0")
         )
+        force_delta_weight = float(
+            os.environ.get("AIC_ISAAC_FORCE_DELTA_PENALTY_WEIGHT", "0.0")
+        )
         self.rewards.target_distance_tanh.weight = distance_weight
         self.rewards.target_distance_exp.weight = close_weight
         self.rewards.target_orientation_tanh.weight = orientation_weight
         self.rewards.target_reaching_bonus.weight = reaching_weight
         self.rewards.target_lateral_error.weight = lateral_weight
+        self.rewards.force_delta_penalty.weight = force_delta_weight
 
     def _apply_initial_arm_joint_override(self) -> None:
         raw = os.environ.get("AIC_ISAAC_INITIAL_ARM_JOINT_POS")

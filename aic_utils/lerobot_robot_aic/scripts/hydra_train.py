@@ -139,7 +139,6 @@ def _offline_serl_cmd(cfg: DictConfig) -> list[str]:
         "num_layers",
         "reward_mode",
         "obs_mode",
-        "missing_task_vector",
         "critic_init",
         "critic_checkpoint",
         "act_checkpoint",
@@ -150,7 +149,6 @@ def _offline_serl_cmd(cfg: DictConfig) -> list[str]:
         if key in {"dataset_root", "task_metadata", "output_dir", "critic_checkpoint", "act_checkpoint"}:
             value = _as_path(value)
         _append_value_arg(cmd, key.replace("_", "-"), value)
-    _append_value_arg(cmd, "include-task-vector", bool(train.include_task_vector))
     _append_value_arg(cmd, "dry-run", bool(train.dry_run))
     return cmd
 
@@ -347,7 +345,7 @@ def _prepare_run_metadata(cfg: DictConfig, cuda_summary: dict[str, Any]) -> None
     OmegaConf.save(cfg, run_dir / "resolved_config.yaml", resolve=True)
     write_json(run_dir / "resolved_config.json", resolved)
     write_json(run_dir / "git_info.json", git_info(REPO_ROOT))
-    if bool(cfg.train.get("include_task_vector", False)) or cfg.model.get("task_vector_dim", 0):
+    if cfg.model.get("task_vector_dim", 0):
         write_json(run_dir / "task_encoding_schema.json", task_encoding_schema())
     write_json(run_dir / "hardware_selection.json", cuda_summary)
 

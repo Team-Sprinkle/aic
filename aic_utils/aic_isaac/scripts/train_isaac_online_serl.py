@@ -9,11 +9,18 @@ import os
 import shlex
 import shutil
 import subprocess
+import sys
 from dataclasses import asdict, dataclass
 from pathlib import Path
 from typing import Any
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
+SCRIPT_DIR = Path(__file__).resolve().parent
+if str(SCRIPT_DIR) not in sys.path:
+    sys.path.insert(0, str(SCRIPT_DIR))
+
+from isaac_episode_configs import _split_filenames, materialize_episode_configs, materialize_many_episode_configs
+
 ISAAC_SERL_TRAIN = (
     REPO_ROOT / "aic_utils" / "aic_isaac" / "aic_isaaclab" / "scripts" / "serl" / "train.py"
 )
@@ -63,7 +70,12 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser.add_argument("--adapter-penalty-weight", type=float, default=1e-3)
     parser.add_argument("--act-preservation-weight", type=float, default=1e-2)
     parser.add_argument("--adapter-delta-clip", type=float, default=0.05)
-    parser.add_argument("--action-clip", type=float, default=0.05)
+    parser.add_argument(
+        "--action-clip",
+        type=float,
+        default=0.0,
+        help="Optional full-action clamp. Defaults disabled because it can distort the ACT base action.",
+    )
     parser.add_argument(
         "--isaac-action-scale",
         type=float,
@@ -85,6 +97,9 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser.add_argument("--insertion-orientation-weight", type=float, default=0.0)
     parser.add_argument("--insertion-reaching-weight", type=float, default=1.0)
     parser.add_argument("--insertion-lateral-weight", type=float, default=0.0)
+    parser.add_argument("--force-delta-penalty-weight", type=float, default=0.0)
+    parser.add_argument("--force-delta-threshold", type=float, default=3.0)
+    parser.add_argument("--force-delta-reference", type=float, default=20.0)
     parser.add_argument("--target-reward-body", default="sfp_tip_link")
     parser.add_argument("--target-reward-distance-std", type=float, default=0.02)
     parser.add_argument("--target-reward-close-sigma", type=float, default=0.01)
@@ -96,6 +111,56 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser.add_argument("--target-port-index", type=int, default=0)
     parser.add_argument("--target-card-index", type=int, default=0)
     parser.add_argument("--target-card-valid", type=int, default=1)
+    parser.add_argument(
+        "--task-distribution-yaml",
+        type=Path,
+        default=None,
+        help=(
+            "Optional expert-generation-style YAML for sampling task conditioning "
+            "inside Isaac online SERL."
+        ),
+    )
+    parser.add_argument(
+        "--isaac-user-config-yaml",
+        type=Path,
+        default=None,
+        help=(
+            "Minimal user YAML, matching the expert data-generation request format. "
+            "The wrapper materializes per-episode Isaac YAMLs and passes them to the trainer."
+        ),
+    )
+    parser.add_argument(
+        "--isaac-user-config-dir",
+        type=Path,
+        default=None,
+        help="Directory containing multiple minimal expert-generation-style YAMLs.",
+    )
+    parser.add_argument(
+        "--isaac-user-config-filenames",
+        default="",
+        help=(
+            "Whitespace- or comma-separated filenames inside --isaac-user-config-dir. "
+            "When omitted, all *.yaml/*.yml files in the directory are used."
+        ),
+    )
+    parser.add_argument(
+        "--max-gpus",
+        type=int,
+        default=1,
+        help="Maximum GPU shards to materialize for curriculum episode configs.",
+    )
+    parser.add_argument(
+        "--episode-config-dir",
+        type=Path,
+        default=None,
+        help="Optional pre-materialized Isaac episode config directory.",
+    )
+    parser.add_argument(
+        "--episode-config-count",
+        type=int,
+        default=None,
+        help="Number of per-episode configs to generate from --isaac-user-config-yaml.",
+    )
     parser.add_argument("--gripper-joint-position", type=float, default=0.0035405)
     parser.add_argument(
         "--initial-arm-joint-pos",
@@ -113,6 +178,9 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser.add_argument("--run-name", default="isaac_online_serl")
     parser.add_argument("--debug-timing", action=argparse.BooleanOptionalAction, default=True)
     parser.add_argument("--disable-fabric", action="store_true", default=False)
+    parser.add_argument("--save-step-images", action=argparse.BooleanOptionalAction, default=False)
+    parser.add_argument("--image-log-every", type=int, default=1)
+    parser.add_argument("--max-logged-image-steps", type=int, default=200)
     parser.add_argument("--dry-run", action="store_true")
     parser.add_argument("--extra-arg", action="append", default=[])
     return parser.parse_args(argv)
@@ -186,6 +254,9 @@ def build_plan(args: argparse.Namespace, *, inspect_required: bool = True) -> di
         "insertion_orientation_weight": args.insertion_orientation_weight,
         "insertion_reaching_weight": args.insertion_reaching_weight,
         "insertion_lateral_weight": args.insertion_lateral_weight,
+        "force_delta_penalty_weight": args.force_delta_penalty_weight,
+        "force_delta_threshold": args.force_delta_threshold,
+        "force_delta_reference": args.force_delta_reference,
         "target_reward_body": args.target_reward_body,
         "target_reward_distance_std": args.target_reward_distance_std,
         "target_reward_close_sigma": args.target_reward_close_sigma,
@@ -200,9 +271,19 @@ def build_plan(args: argparse.Namespace, *, inspect_required: bool = True) -> di
             "target_card_index": args.target_card_index,
             "target_card_valid": args.target_card_valid,
         },
+        "task_distribution_yaml": str(args.task_distribution_yaml) if args.task_distribution_yaml else None,
+        "isaac_user_config_yaml": str(args.isaac_user_config_yaml) if args.isaac_user_config_yaml else None,
+        "isaac_user_config_dir": str(args.isaac_user_config_dir) if args.isaac_user_config_dir else None,
+        "isaac_user_config_filenames": args.isaac_user_config_filenames,
+        "episode_config_dir": str(args.episode_config_dir) if args.episode_config_dir else None,
+        "episode_config_count": args.episode_config_count,
+        "max_gpus": args.max_gpus,
         "gripper_joint_position": args.gripper_joint_position,
         "debug_timing": args.debug_timing,
         "disable_fabric": args.disable_fabric,
+        "save_step_images": args.save_step_images,
+        "image_log_every": args.image_log_every,
+        "max_logged_image_steps": args.max_logged_image_steps,
         "replay_buffer": asdict(replay),
         "checkpoint": checkpoint,
         "implemented": [
@@ -294,6 +375,12 @@ def build_command(args: argparse.Namespace) -> tuple[list[str], dict[str, str]]:
         str(args.insertion_reaching_weight),
         "--target_reward_lateral_weight",
         str(args.insertion_lateral_weight),
+        "--force_delta_penalty_weight",
+        str(args.force_delta_penalty_weight),
+        "--force_delta_threshold",
+        str(args.force_delta_threshold),
+        "--force_delta_reference",
+        str(args.force_delta_reference),
         "--target_reward_body",
         args.target_reward_body,
         "--target_reward_distance_std",
@@ -303,12 +390,19 @@ def build_command(args: argparse.Namespace) -> tuple[list[str], dict[str, str]]:
         "--target_reward_reaching_threshold",
         str(args.target_reward_reaching_threshold),
     ]
+    if args.task_distribution_yaml is not None:
+        cmd.extend(["--task_distribution_yaml", str(args.task_distribution_yaml)])
+    if args.episode_config_dir is not None:
+        cmd.extend(["--episode_config_dir", str(args.episode_config_dir)])
     if args.target_reward_position_offset is not None:
         cmd.extend(["--target_reward_position_offset", *(str(v) for v in args.target_reward_position_offset)])
     if args.target_reward_body_position_offset is not None:
         cmd.extend(["--target_reward_body_position_offset", *(str(v) for v in args.target_reward_body_position_offset)])
     cmd.append("--freeze_act" if args.freeze_act else "--no-freeze_act")
     cmd.append("--debug_timing" if args.debug_timing else "--no-debug_timing")
+    cmd.append("--save_step_images" if args.save_step_images else "--no-save_step_images")
+    cmd.extend(["--image_log_every", str(args.image_log_every)])
+    cmd.extend(["--max_logged_image_steps", str(args.max_logged_image_steps)])
     if args.disable_fabric:
         cmd.append("--disable_fabric")
     if args.headless:
@@ -328,8 +422,11 @@ def build_command(args: argparse.Namespace) -> tuple[list[str], dict[str, str]]:
     env["AIC_ISAAC_INSERTION_ORIENTATION_WEIGHT"] = str(args.insertion_orientation_weight)
     env["AIC_ISAAC_INSERTION_REACHING_WEIGHT"] = str(args.insertion_reaching_weight)
     env["AIC_ISAAC_INSERTION_LATERAL_WEIGHT"] = str(args.insertion_lateral_weight)
+    env["AIC_ISAAC_FORCE_DELTA_PENALTY_WEIGHT"] = str(args.force_delta_penalty_weight)
     if args.initial_arm_joint_pos:
         env["AIC_ISAAC_INITIAL_ARM_JOINT_POS"] = args.initial_arm_joint_pos
+    if args.episode_config_dir is not None:
+        env["AIC_ISAAC_EPISODE_CONFIG_DIR"] = str(args.episode_config_dir)
     return cmd, env
 
 
@@ -348,6 +445,16 @@ def validate_launch_inputs(args: argparse.Namespace) -> None:
         raise ValueError("--target-reward-position-offset must contain exactly three values")
     if args.target_reward_body_position_offset is not None and len(args.target_reward_body_position_offset) != 3:
         raise ValueError("--target-reward-body-position-offset must contain exactly three values")
+    if args.task_distribution_yaml is not None and not args.task_distribution_yaml.exists():
+        raise FileNotFoundError(f"--task-distribution-yaml does not exist: {args.task_distribution_yaml}")
+    if args.isaac_user_config_yaml is not None and not args.isaac_user_config_yaml.exists():
+        raise FileNotFoundError(f"--isaac-user-config-yaml does not exist: {args.isaac_user_config_yaml}")
+    if args.isaac_user_config_dir is not None and not args.isaac_user_config_dir.exists():
+        raise FileNotFoundError(f"--isaac-user-config-dir does not exist: {args.isaac_user_config_dir}")
+    if args.episode_config_dir is not None and not args.episode_config_dir.exists():
+        raise FileNotFoundError(f"--episode-config-dir does not exist: {args.episode_config_dir}")
+    if args.episode_config_count is not None and args.episode_config_count <= 0:
+        raise ValueError("--episode-config-count must be positive")
     if args.warmup_steps > args.steps * args.num_envs:
         raise ValueError(
             "--warmup-steps is larger than the maximum transitions collected by "
@@ -355,9 +462,38 @@ def validate_launch_inputs(args: argparse.Namespace) -> None:
         )
 
 
+def prepare_user_episode_configs(args: argparse.Namespace) -> dict[str, Any] | None:
+    if args.isaac_user_config_yaml is None and args.isaac_user_config_dir is None:
+        return None
+    output_dir = args.episode_config_dir or (args.output_dir / "isaac_episode_configs")
+    if args.isaac_user_config_dir is not None:
+        input_yamls = [args.isaac_user_config_yaml] if args.isaac_user_config_yaml is not None else []
+        summary = materialize_many_episode_configs(
+            input_dir=args.isaac_user_config_dir,
+            output_dir=output_dir,
+            filenames=_split_filenames(args.isaac_user_config_filenames),
+            input_yamls=input_yamls,
+            max_gpus=args.max_gpus,
+            episode_count_override=args.episode_config_count,
+        )
+    else:
+        summary = materialize_episode_configs(
+            args.isaac_user_config_yaml,
+            output_dir,
+            episode_count=args.episode_config_count,
+        )
+    args.episode_config_dir = Path(summary["episodes_dir"])
+    if args.task_distribution_yaml is None:
+        args.task_distribution_yaml = Path(summary["task_distribution_yaml"])
+    return summary
+
+
 def main() -> int:
     args = parse_args()
+    user_config_summary = prepare_user_episode_configs(args)
     plan = build_plan(args, inspect_required=not args.dry_run)
+    if user_config_summary is not None:
+        plan["isaac_user_config_materialization"] = user_config_summary
     rendered = json.dumps(plan, indent=2, sort_keys=True)
     if args.dry_run:
         cmd, _ = build_command(args)
