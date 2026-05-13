@@ -55,6 +55,12 @@ parser.add_argument("--updates", type=int, default=8)
 parser.add_argument("--batch_size", type=int, default=4)
 parser.add_argument("--replay_capacity", type=int, default=10000)
 parser.add_argument("--warmup_steps", type=int, default=0)
+parser.add_argument(
+    "--episode_length_s",
+    type=float,
+    default=0.0,
+    help="Optional Isaac episode timeout in seconds. 0 keeps the task default.",
+)
 parser.add_argument("--max_wall_time_minutes", type=float, default=0.0)
 parser.add_argument("--log_every", type=int, default=10)
 parser.add_argument(
@@ -190,6 +196,12 @@ parser.add_argument("--disable_fabric", action="store_true", default=False)
 parser.add_argument("--save_step_images", action=argparse.BooleanOptionalAction, default=False)
 parser.add_argument("--image_log_every", type=int, default=1)
 parser.add_argument("--max_logged_image_steps", type=int, default=200)
+parser.add_argument(
+    "--swap_rgb_channels",
+    action=argparse.BooleanOptionalAction,
+    default=False,
+    help="Reverse Isaac camera RGB channel order before ACT/SERL inference and debug image logging.",
+)
 AppLauncher.add_app_launcher_args(parser)
 args_cli = parser.parse_args()
 os.environ["AIC_ISAAC_TASK_FAMILY"] = args_cli.task_family
@@ -430,8 +442,13 @@ def _resolve_act_checkpoint_dir(path: Path) -> Path:
     candidates: list[Path]
     if checkpoint_dir.is_absolute():
         candidates = [checkpoint_dir]
+        host_prefix = "/data1/chmin/yj/ws_aic/src/aic"
+        container_prefix = "/workspace/isaaclab/aic"
+        checkpoint_str = str(checkpoint_dir)
+        if checkpoint_str.startswith(host_prefix):
+            candidates.append(Path(container_prefix + checkpoint_str[len(host_prefix) :]))
     else:
-        candidates = [Path.cwd() / checkpoint_dir, path.parent / checkpoint_dir]
+        candidates = [Path.cwd() / checkpoint_dir, Path.cwd() / "aic" / checkpoint_dir, path.parent / checkpoint_dir]
     for candidate in candidates:
         if (candidate / "policy_preprocessor_step_3_normalizer_processor.safetensors").exists():
             return candidate
@@ -983,6 +1000,8 @@ def _camera_tensor(env, sensor_name: str, *, device: torch.device) -> torch.Tens
         image = image[..., :3].permute(0, 3, 1, 2).contiguous()
     elif image.shape[1] != 3:
         raise RuntimeError(f"Camera sensor {sensor_name!r} rgb output has unexpected shape: {tuple(image.shape)}")
+    if bool(getattr(args_cli, "swap_rgb_channels", False)):
+        image = image.flip(1)
     return F.interpolate(image, size=(256, 288), mode="bilinear", align_corners=False)
 
 
@@ -1196,6 +1215,7 @@ def _episode_metadata(env, env_index: int) -> dict[str, Any]:
         "global_episode_index": curriculum.get("global_episode_index"),
         "gpu_id": curriculum.get("gpu_id"),
         "start_near_gate": bool((episode.get("scene") or {}).get("start_near_gate")),
+        "tcp_reset": (getattr(env.unwrapped, "_aic_tcp_reset_report_by_env", {}) or {}).get(env_index),
     }
 
 
@@ -2120,6 +2140,8 @@ def main() -> None:
         use_fabric=not args_cli.disable_fabric,
     )
     env_cfg.seed = args_cli.seed
+    if float(args_cli.episode_length_s) > 0.0:
+        env_cfg.episode_length_s = float(args_cli.episode_length_s)
     # The SERL actor consumes raw camera tensors directly from the sensors. Avoid
     # computing the PPO-specific ResNet feature observation terms, but keep the
     # camera sensors enabled and rendered.
@@ -2152,6 +2174,7 @@ def main() -> None:
                 else f"first_{state_dim}_dims"
             ),
             "image_source": "raw_isaac_camera_sensor_rgb_resized_to_3x256x288",
+            "swap_rgb_channels": bool(args_cli.swap_rgb_channels),
             "act_torchscript": str(args_cli.act_torchscript),
             "act_torchscript_device": str(act_torchscript_device),
             "action_executed": "first_action_from_flattened_chunk",
@@ -2174,6 +2197,7 @@ def main() -> None:
             "task_distribution_yaml": args_cli.task_distribution_yaml,
             "task_distribution": TASK_DISTRIBUTION,
             "episode_config_dir": args_cli.episode_config_dir,
+            "episode_length_s": float(getattr(env_cfg, "episode_length_s", 0.0)),
             "episode_config_count": len(EPISODE_CONFIGS),
             "first_episode_config": EPISODE_CONFIGS[0] if EPISODE_CONFIGS else None,
             "task_distribution_scope": (

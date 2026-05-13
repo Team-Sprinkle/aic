@@ -32,7 +32,7 @@ from isaaclab.devices.spacemouse import Se3SpaceMouseCfg
 from isaaclab.devices.gamepad import Se3GamepadCfg
 
 from . import mdp
-from .mdp.events import randomize_dome_light, randomize_board_and_parts
+from .mdp.events import randomize_dome_light, randomize_board_and_parts, reset_robot_tcp_to_episode_start
 
 # Resolve asset directory relative to this file (portable across machines)
 _THIS_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -362,6 +362,16 @@ class EventCfg:
                     "snap_step": {"y": 0.04},
                 },
             ],
+        },
+    )
+
+    reset_robot_tcp_to_episode_start = EventTerm(
+        func=reset_robot_tcp_to_episode_start,
+        mode="reset",
+        params={
+            "body_name": "gripper_tcp",
+            "max_iterations": 8,
+            "position_tolerance": 0.002,
         },
     )
 

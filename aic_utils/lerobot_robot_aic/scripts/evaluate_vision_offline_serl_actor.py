@@ -62,6 +62,7 @@ def main() -> int:
         action_horizon=action_horizon,
         reward_mode=train_config.get("reward_mode", "dataset"),
         video_backend=train_config.get("dataset_video_backend", "pyav"),
+        swap_rgb_channels=train_config.get("swap_rgb_channels"),
     )
     val_indices = _split_by_episode(dataset, val_fraction)
     loader = DataLoader(

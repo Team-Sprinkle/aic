@@ -121,6 +121,15 @@ def parse_args() -> argparse.Namespace:
     )
     parser.add_argument("--dataset-video-backend", default="pyav")
     parser.add_argument(
+        "--swap-rgb-channels",
+        action=argparse.BooleanOptionalAction,
+        default=None,
+        help=(
+            "Reverse image channel order after LeRobot video decode. By default this follows "
+            "meta/info.json aic_rgb_patch.swap_rgb_channels when present."
+        ),
+    )
+    parser.add_argument(
         "--num-workers",
         type=int,
         default=0,
@@ -257,6 +266,7 @@ def _train_config(args: argparse.Namespace, dataset_summary: dict[str, Any], war
         "reward_mode": args.reward_mode,
         "camera_keys": dataset_summary["camera_keys"],
         "dataset_video_backend": args.dataset_video_backend,
+        "swap_rgb_channels": args.swap_rgb_channels,
         "num_workers": args.num_workers,
         "pin_memory": args.pin_memory,
         "save_every": args.save_every,
@@ -376,6 +386,7 @@ def main() -> int:
         action_horizon=args.action_horizon,
         reward_mode=args.reward_mode,
         video_backend=args.dataset_video_backend,
+        swap_rgb_channels=args.swap_rgb_channels,
     )
     dataset_summary = asdict(dataset.summary)
     actor, warmstart = load_act_actor(

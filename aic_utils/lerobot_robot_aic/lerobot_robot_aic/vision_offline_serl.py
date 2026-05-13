@@ -167,12 +167,23 @@ class VisionOfflineSERLDataset(Dataset[dict[str, Any]]):
         action_horizon: int,
         reward_mode: RewardMode = "dataset",
         video_backend: str = "pyav",
+        swap_rgb_channels: bool | None = None,
     ):
         if action_horizon < 1:
             raise ValueError("action_horizon must be >= 1")
         self.dataset_root = Path(dataset_root)
         self.camera_keys = list(camera_keys)
         self.action_horizon = int(action_horizon)
+        if swap_rgb_channels is None:
+            swap_rgb_channels = False
+            info_path = self.dataset_root / "meta" / "info.json"
+            if info_path.exists():
+                try:
+                    info = json.loads(info_path.read_text(encoding="utf-8"))
+                    swap_rgb_channels = bool((info.get("aic_rgb_patch") or {}).get("swap_rgb_channels", False))
+                except Exception:
+                    swap_rgb_channels = False
+        self.swap_rgb_channels = bool(swap_rgb_channels)
         self.lerobot = LeRobotDataset(
             repo_id=f"local/{self.dataset_root.name}",
             root=self.dataset_root,
@@ -213,9 +224,15 @@ class VisionOfflineSERLDataset(Dataset[dict[str, Any]]):
 
     def _obs_at(self, idx: int) -> dict[str, Any]:
         item = self.lerobot[idx]
+        images = {key: item[key].float() for key in self.camera_keys}
+        if self.swap_rgb_channels:
+            images = {
+                key: value.flip(0) if value.ndim >= 3 and int(value.shape[0]) in (3, 4) else value
+                for key, value in images.items()
+            }
         return {
             "state": item["observation.state"].float(),
-            "images": {key: item[key].float() for key in self.camera_keys},
+            "images": images,
         }
 
     def __getitem__(self, idx: int) -> dict[str, Any]:

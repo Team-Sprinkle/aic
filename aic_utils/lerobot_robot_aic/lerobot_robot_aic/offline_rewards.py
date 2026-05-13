@@ -15,16 +15,18 @@ OfflineRewardObjective = Literal["insertion", "near_gate"]
 @dataclass(frozen=True)
 class OfflineRewardConfig:
     objective: OfflineRewardObjective = "insertion"
-    distance_std_m: float = 0.02
-    close_sigma_m: float = 0.006
+    # Keep these defaults in parity with Isaac online SERL's dense target reward.
+    # Wider distance kernels make the reward useful before the plug reaches the gate.
+    distance_std_m: float = 0.08
+    close_sigma_m: float = 0.02
     orientation_std_rad: float = 0.03
     orientation_gate_sigma_m: float = 0.012
-    progress_scale_m: float = 0.003
-    progress_weight: float = 0.25
-    distance_weight: float = 0.25
-    close_weight: float = 0.35
+    progress_scale_m: float = 0.01
+    progress_weight: float = 0.60
+    distance_weight: float = 0.60
+    close_weight: float = 0.25
     orientation_weight: float = 0.10
-    force_delta_penalty_weight: float = 0.20
+    force_delta_penalty_weight: float = 0.25
     force_delta_threshold_n: float = 3.0
     force_delta_reference_n: float = 20.0
     terminal_bonus: float = 1.0

@@ -224,6 +224,14 @@ def _apply_start_near_gate(
     board_pos: tuple[float, float, float],
     rng: random.Random,
 ) -> tuple[tuple[float, float, float], dict[str, Any] | None]:
+    """Compute near-gate TCP-start metadata without moving the target scene.
+
+    Earlier logic moved the board/target so the unchanged robot TCP appeared to
+    be near the gate. For online RL that is the wrong curriculum: the scene
+    should stay as specified, and the robot/cable reset should move near the
+    target. The child YAML therefore records tcp_start_position_world while
+    leaving board_pos unchanged.
+    """
     start = (request.get("scene") or {}).get("start_near_gate")
     if not isinstance(start, dict):
         return board_pos, None
@@ -245,7 +253,6 @@ def _apply_start_near_gate(
         direction = _vsub(current_target, reference)
         if _vnorm(direction) < 1e-6:
             direction = _perpendicular(axis, rng)
-        desired_target = _vadd(reference, _vscale(_normalize(direction), distance))
         requested = {"distance": distance}
     else:
         axial = float(start["axial_distance_m"])
@@ -260,25 +267,22 @@ def _apply_start_near_gate(
             if not isinstance(reference_raw, (list, tuple)) or len(reference_raw) != 3:
                 raise ValueError("scene.start_near_gate.reference_tcp_position must be a 3-value list")
             reference = (float(reference_raw[0]), float(reference_raw[1]), float(reference_raw[2]))
-        desired_target = _vsub(reference, _vadd(_vscale(axis, axial), _vscale(lateral_dir, lateral)))
         requested = {
             "axial_distance_m": axial,
             "lateral_distance_m": lateral,
             "lateral_direction_world": _round3(lateral_dir),
         }
-    delta = _vsub(desired_target, current_target)
     axes = str(start.get("axes", "xyz")).lower()
     if axes not in {"xyz", "xy"}:
         raise ValueError("scene.start_near_gate.axes must be 'xyz' or 'xy'")
-    if axes == "xy":
-        delta = (delta[0], delta[1], 0.0)
-    board_pos = _vadd(board_pos, delta)
-    achieved_target = tuple(float(v) for v in _target_spec(context, board_pos)["target_pose_world"]["position"])
+    achieved_target = current_target
     ref_delta = _vsub(reference, achieved_target)
     axial_component = abs(_vdot(ref_delta, axis))
     lateral_component = math.sqrt(max(0.0, _vnorm(ref_delta) ** 2 - axial_component * axial_component))
     return board_pos, {
         **requested,
+        "reset_mode": "tcp_start_position_world",
+        "tcp_start_position_world": _round3(reference),
         "reference_tcp_position": _round3(reference),
         "target_gate_position": _round3(achieved_target),
         "target_gate_axis_world": _round3(axis),

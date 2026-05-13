@@ -313,3 +313,104 @@ def randomize_board_and_parts(
                 part_pos,
                 part_rot,
             )
+
+
+def reset_robot_tcp_to_episode_start(
+    env: ManagerBasedEnv,
+    env_ids: torch.Tensor,
+    body_name: str = "gripper_tcp",
+    joint_names: tuple[str, ...] = (
+        "shoulder_pan_joint",
+        "shoulder_lift_joint",
+        "elbow_joint",
+        "wrist_1_joint",
+        "wrist_2_joint",
+        "wrist_3_joint",
+    ),
+    max_iterations: int = 8,
+    position_tolerance: float = 0.002,
+    damping: float = 0.05,
+    max_joint_delta: float = 0.25,
+) -> None:
+    """Move robot TCP to child-YAML near-gate reset poses.
+
+    Episode YAMLs store start_near_gate.tcp_start_position_world in the same
+    env-local world convention as board/part positions. This reset event adds
+    the Isaac env origin, solves a small damped positional IK problem, and
+    writes the resulting arm joint state before the episode begins.
+    """
+    episode_by_env = getattr(env, "_aic_current_episode_by_env", {}) or {}
+    targets: list[tuple[int, torch.Tensor]] = []
+    for local_idx, env_id in enumerate(env_ids.tolist()):
+        start = ((episode_by_env.get(int(env_id)) or {}).get("scene") or {}).get("start_near_gate") or {}
+        if start.get("reset_mode") != "tcp_start_position_world":
+            continue
+        raw_target = start.get("tcp_start_position_world")
+        if not isinstance(raw_target, (list, tuple)) or len(raw_target) != 3:
+            continue
+        target_local = torch.tensor(raw_target, dtype=torch.float32, device=env.device)
+        targets.append((local_idx, target_local + env.scene.env_origins[env_ids[local_idx]]))
+    if not targets:
+        return
+
+    robot = env.scene["robot"]
+    body_ids, body_names = robot.find_bodies(body_name, preserve_order=True)
+    if not body_ids:
+        raise RuntimeError(f"Robot body {body_name!r} not found; available bodies: {robot.body_names}")
+    joint_ids, resolved_joint_names = robot.find_joints(list(joint_names), preserve_order=True)
+    if len(joint_ids) != len(joint_names):
+        raise RuntimeError(
+            f"Could not resolve all near-gate reset joints {joint_names}; resolved {resolved_joint_names}"
+        )
+
+    local_indices = torch.tensor([idx for idx, _ in targets], dtype=torch.long, device=env.device)
+    active_env_ids = env_ids[local_indices]
+    target_pos = torch.stack([target for _, target in targets], dim=0)
+    body_id = int(body_ids[0])
+    jacobian_body_id = max(body_id - 1, 0)
+    q = robot.data.joint_pos[active_env_ids][:, joint_ids].clone()
+    zeros = torch.zeros_like(q)
+    eye = torch.eye(3, dtype=torch.float32, device=env.device).unsqueeze(0)
+    initial_error = torch.linalg.norm(
+        target_pos - robot.data.body_pos_w[active_env_ids, body_id].to(dtype=torch.float32),
+        dim=1,
+    )
+
+    for _ in range(max(1, int(max_iterations))):
+        current = robot.data.body_pos_w[active_env_ids, body_id].to(dtype=torch.float32)
+        error = target_pos - current
+        if bool((torch.linalg.norm(error, dim=1) <= float(position_tolerance)).all()):
+            break
+        jacobians = robot.root_physx_view.get_jacobians()
+        jac = jacobians[active_env_ids, jacobian_body_id, :3, :][:, :, joint_ids].to(dtype=torch.float32)
+        jac_t = jac.transpose(1, 2)
+        lhs = jac @ jac_t + (float(damping) ** 2) * eye
+        dq = jac_t @ torch.linalg.solve(lhs, error.unsqueeze(-1))
+        dq = dq.squeeze(-1).clamp(min=-float(max_joint_delta), max=float(max_joint_delta))
+        q = q + dq
+        limits = getattr(robot.data, "soft_joint_pos_limits", None)
+        if limits is not None:
+            lo = limits[active_env_ids][:, joint_ids, 0]
+            hi = limits[active_env_ids][:, joint_ids, 1]
+            q = torch.max(torch.min(q, hi), lo)
+        robot.write_joint_state_to_sim(q, zeros, joint_ids=joint_ids, env_ids=active_env_ids)
+        robot.set_joint_position_target(q, joint_ids=joint_ids, env_ids=active_env_ids)
+        if hasattr(env, "sim"):
+            env.sim.forward()
+        robot.update(0.0)
+
+    final_error = torch.linalg.norm(
+        target_pos - robot.data.body_pos_w[active_env_ids, body_id].to(dtype=torch.float32),
+        dim=1,
+    )
+    report = dict(getattr(env, "_aic_tcp_reset_report_by_env", {}) or {})
+    for row, env_id in enumerate(active_env_ids.tolist()):
+        report[int(env_id)] = {
+            "body_name": body_name,
+            "target_position_world": [float(v) for v in target_pos[row].detach().cpu().tolist()],
+            "initial_error_m": float(initial_error[row].detach().cpu()),
+            "final_error_m": float(final_error[row].detach().cpu()),
+            "max_iterations": int(max_iterations),
+            "position_tolerance_m": float(position_tolerance),
+        }
+    setattr(env, "_aic_tcp_reset_report_by_env", report)

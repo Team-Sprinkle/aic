@@ -77,6 +77,12 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser.add_argument("--replay-capacity", type=int, default=100_000)
     parser.add_argument("--batch-size", type=int, default=256)
     parser.add_argument("--warmup-steps", type=int, default=1_000)
+    parser.add_argument(
+        "--episode-length-s",
+        type=float,
+        default=0.0,
+        help="Optional Isaac episode timeout in seconds. 0 keeps the task default.",
+    )
     parser.add_argument("--max-wall-time-minutes", type=float, default=0.0)
     parser.add_argument("--log-every", type=int, default=10)
     parser.add_argument(
@@ -237,6 +243,12 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser.add_argument("--save-step-images", action=argparse.BooleanOptionalAction, default=False)
     parser.add_argument("--image-log-every", type=int, default=1)
     parser.add_argument("--max-logged-image-steps", type=int, default=200)
+    parser.add_argument(
+        "--swap-rgb-channels",
+        action=argparse.BooleanOptionalAction,
+        default=False,
+        help="Reverse Isaac camera RGB channel order before ACT/SERL inference and debug image logging.",
+    )
     parser.add_argument("--dry-run", action="store_true")
     parser.add_argument("--extra-arg", action="append", default=[])
     return parser.parse_args(argv)
@@ -322,6 +334,7 @@ def build_plan(args: argparse.Namespace, *, inspect_required: bool = True) -> di
         "steps": args.steps,
         "updates": args.updates,
         "warmup_steps": args.warmup_steps,
+        "episode_length_s": float(getattr(args, "episode_length_s", 0.0)),
         "max_wall_time_minutes": args.max_wall_time_minutes,
         "save_every_steps": getattr(args, "save_every_steps", 0),
         "save_latest_every_steps": getattr(args, "save_latest_every_steps", 0),
@@ -449,6 +462,8 @@ def build_command(args: argparse.Namespace) -> tuple[list[str], dict[str, str]]:
         str(args.replay_capacity),
         "--warmup_steps",
         str(args.warmup_steps),
+        "--episode_length_s",
+        str(float(getattr(args, "episode_length_s", 0.0))),
         "--max_wall_time_minutes",
         str(args.max_wall_time_minutes),
         "--log_every",
@@ -578,6 +593,7 @@ def build_command(args: argparse.Namespace) -> tuple[list[str], dict[str, str]]:
     cmd.append("--save_step_images" if args.save_step_images else "--no-save_step_images")
     cmd.extend(["--image_log_every", str(args.image_log_every)])
     cmd.extend(["--max_logged_image_steps", str(args.max_logged_image_steps)])
+    cmd.append("--swap_rgb_channels" if bool(getattr(args, "swap_rgb_channels", False)) else "--no-swap_rgb_channels")
     if args.disable_fabric:
         cmd.append("--disable_fabric")
     if args.headless:
