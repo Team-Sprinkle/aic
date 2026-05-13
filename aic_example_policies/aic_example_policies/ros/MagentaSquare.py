@@ -340,6 +340,9 @@ class MagentaSquare(Policy):
         )
         self.descend_step_m = float(os.getenv("AIC_TRANSPORT_DESCEND_STEP_M", "0.0005"))
         self.descend_dt_sec = float(os.getenv("AIC_TRANSPORT_DESCEND_DT_SEC", "0.05"))
+        self.sc_descend_speed_multiplier = float(
+            os.getenv("AIC_TRANSPORT_SC_DESCEND_SPEED_MULTIPLIER", "2.0")
+        )
         self.descend_max_distance_m = float(
             os.getenv(
                 "AIC_TRANSPORT_DESCEND_MAX_DISTANCE_M",
@@ -692,6 +695,10 @@ class MagentaSquare(Policy):
             task_family = self._task_family(task)
         except ValueError:
             task_family = "unknown"
+        speed_multiplier = (
+            self.sc_descend_speed_multiplier if task_family == "sc_to_sc" else 1.0
+        )
+        step_m *= max(speed_multiplier, 0.0)
         max_distance_m = (
             self.sc_descend_max_distance_m
             if task_family == "sc_to_sc"
@@ -709,6 +716,7 @@ class MagentaSquare(Policy):
         self.get_logger().info(
             "TransportToMean descending TCP in base -z: "
             f"task_family={task_family}, "
+            f"speed_multiplier={speed_multiplier:.3f}, "
             f"step={step_m:.5f} m, dt={self.descend_dt_sec:.3f} s, "
             f"max_distance={max_distance_m:.5f} m, "
             f"rate={step_m / self.descend_dt_sec:.5f} m/s"
