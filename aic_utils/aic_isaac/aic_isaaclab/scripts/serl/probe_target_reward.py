@@ -42,6 +42,11 @@ parser.add_argument("--terminal_weight", type=float, default=1.0)
 parser.add_argument("--force_delta_penalty_weight", type=float, default=0.2)
 parser.add_argument("--force_delta_threshold", type=float, default=3.0)
 parser.add_argument("--force_delta_reference", type=float, default=20.0)
+parser.add_argument("--expert_dataset_root", type=Path)
+parser.add_argument("--expert_bc_weight", type=float, default=0.0)
+parser.add_argument("--expert_bc_action_horizon", type=int, default=4)
+parser.add_argument("--expert_bc_max_samples", type=int, default=8192)
+parser.add_argument("--expert_bc_neighbor_chunk", type=int, default=8192)
 parser.add_argument(
     "--disable_semantic_orientation_offsets",
     action="store_true",
@@ -92,7 +97,10 @@ app_launcher = AppLauncher(args_cli)
 simulation_app = app_launcher.app
 
 import gymnasium as gym
+import numpy as np
+import pandas as pd
 import torch
+from torch.nn import functional as F
 
 import isaaclab_tasks  # noqa: F401
 from isaaclab_tasks.utils import parse_env_cfg
@@ -100,8 +108,17 @@ from isaaclab.utils import math as math_utils
 
 import aic_task.tasks  # noqa: F401
 
-LEROBOT_AIC_PACKAGE_DIR = Path(__file__).resolve().parents[4] / "lerobot_robot_aic"
+LEROBOT_AIC_PACKAGE_DIR = next(
+    (
+        parent / "lerobot_robot_aic"
+        for parent in Path(__file__).resolve().parents
+        if (parent / "lerobot_robot_aic" / "lerobot_robot_aic" / "__init__.py").exists()
+    ),
+    Path(__file__).resolve().parents[4] / "lerobot_robot_aic",
+)
 LEROBOT_AIC_MODULE_DIR = LEROBOT_AIC_PACKAGE_DIR / "lerobot_robot_aic"
+if LEROBOT_AIC_PACKAGE_DIR.exists() and str(LEROBOT_AIC_PACKAGE_DIR) not in sys.path:
+    sys.path.insert(0, str(LEROBOT_AIC_PACKAGE_DIR))
 if LEROBOT_AIC_MODULE_DIR.exists() and str(LEROBOT_AIC_MODULE_DIR) not in sys.path:
     sys.path.insert(0, str(LEROBOT_AIC_MODULE_DIR))
 
@@ -118,6 +135,7 @@ ARM_JOINT_NAMES = (
     "wrist_3_joint",
 )
 CONTROLLED_TCP_BODY = "gripper_tcp"
+EXPERT_BC_STATE_INDICES = (0, 1, 2, 13, 14, 15, 72, 73, 74, 75, 76, 77, 78, 79, 80, 81)
 SFP_PORT_LOCAL = {
     0: (0.01295, -0.031572, 0.00501),
     1: (-0.01025, -0.031572, 0.00501),
@@ -126,6 +144,89 @@ SFP_PORT_RPY = (4.69895, 0.0, 0.0)
 SFP_PORT_ENTRANCE_LOCAL = (0.0, 0.0, -0.0458)
 SFP_TIP_LOCAL = (0.0, -0.02365, 0.0)
 SFP_TIP_RPY = (1.5708, 0.0, 0.0)
+
+
+def _stack_vector_column(series: pd.Series, key: str) -> np.ndarray:
+    values = [np.asarray(value, dtype=np.float32).reshape(-1) for value in series]
+    if not values:
+        raise ValueError(f"Column {key!r} is empty")
+    dim = int(values[0].shape[0])
+    if any(int(value.shape[0]) != dim for value in values):
+        raise ValueError(f"Column {key!r} has inconsistent vector sizes")
+    return np.stack(values, axis=0).astype(np.float32)
+
+
+def _action_chunks(action: np.ndarray, episode: np.ndarray, horizon: int) -> np.ndarray:
+    horizon = int(horizon)
+    if horizon <= 1:
+        return action.astype(np.float32)
+    chunks = np.empty((action.shape[0], action.shape[1] * horizon), dtype=np.float32)
+    for idx in range(action.shape[0]):
+        episode_id = episode[idx]
+        values = []
+        last_valid = action[idx]
+        for offset in range(horizon):
+            src = idx + offset
+            if src < action.shape[0] and episode[src] == episode_id:
+                last_valid = action[src]
+            values.append(last_valid)
+        chunks[idx] = np.concatenate(values, axis=0)
+    return chunks
+
+
+def _load_lerobot_expert_arrays(
+    dataset_root: Path,
+    action_horizon: int,
+    *,
+    max_samples: int = 0,
+) -> tuple[np.ndarray, np.ndarray, dict[str, object]]:
+    data_dir = dataset_root / "data"
+    data_files = sorted(data_dir.rglob("*.parquet"))
+    if not data_files:
+        raise FileNotFoundError(f"No parquet files under {data_dir}")
+    required = {"observation.state", "action", "episode_index", "frame_index"}
+    df = pd.concat([pd.read_parquet(path, columns=sorted(required)) for path in data_files], ignore_index=True)
+    missing = required - set(df.columns)
+    if missing:
+        raise ValueError(f"Expert dataset missing columns: {sorted(missing)}")
+    sort_keys = ["episode_index", "frame_index"]
+    if "index" in df.columns:
+        sort_keys.append("index")
+    df = df.sort_values(sort_keys).reset_index(drop=True)
+    full_count = int(len(df))
+    episode = df["episode_index"].to_numpy(dtype=np.int64)
+    if max_samples > 0 and full_count > int(max_samples):
+        row_indices = np.linspace(0, full_count - 1, num=int(max_samples), dtype=np.int64)
+        obs = _stack_vector_column(df["observation.state"].iloc[row_indices], "observation.state")
+        action_series = df["action"]
+        first_action = np.asarray(action_series.iloc[int(row_indices[0])], dtype=np.float32).reshape(-1)
+        action = np.empty((row_indices.shape[0], first_action.shape[0] * int(action_horizon)), dtype=np.float32)
+        for out_idx, row_idx in enumerate(row_indices):
+            values = []
+            last_valid = np.asarray(action_series.iloc[int(row_idx)], dtype=np.float32).reshape(-1)
+            for offset in range(int(action_horizon)):
+                src = int(row_idx) + offset
+                if src < full_count and episode[src] == episode[int(row_idx)]:
+                    last_valid = np.asarray(action_series.iloc[src], dtype=np.float32).reshape(-1)
+                values.append(last_valid)
+            action[out_idx] = np.concatenate(values, axis=0)
+        single_action_dim = int(first_action.shape[0])
+    else:
+        obs = _stack_vector_column(df["observation.state"], "observation.state")
+        single_action = _stack_vector_column(df["action"], "action")
+        action = _action_chunks(single_action, episode, int(action_horizon))
+        single_action_dim = int(single_action.shape[1])
+    schema = {
+        "dataset_root": str(dataset_root),
+        "num_frames": full_count,
+        "sampled_frames": int(obs.shape[0]),
+        "num_episodes": int(df["episode_index"].nunique()),
+        "obs_dim": int(obs.shape[1]),
+        "single_action_dim": single_action_dim,
+        "action_horizon": int(action_horizon),
+        "action_dim": int(action.shape[1]),
+    }
+    return obs, action, schema
 
 
 def _rpy_matrix(roll: float, pitch: float, yaw: float) -> tuple[tuple[float, float, float], ...]:
@@ -171,6 +272,57 @@ def _target_scene_name(index: int) -> str:
     if index == 1:
         return "sc_port_2"
     raise ValueError("target_port_index must be 0 or 1")
+
+
+class ExpertActionPrior:
+    def __init__(
+        self,
+        *,
+        dataset_root: Path,
+        action_horizon: int,
+        state_dim: int,
+        action_dim: int,
+        max_samples: int,
+        neighbor_chunk: int,
+        device: torch.device,
+    ):
+        obs_all, action_all, schema = _load_lerobot_expert_arrays(
+            dataset_root,
+            action_horizon,
+            max_samples=max_samples,
+        )
+        if obs_all.shape[1] != state_dim:
+            raise ValueError(f"Expert state dim {obs_all.shape[1]} != expected {state_dim}")
+        if action_all.shape[1] != action_dim:
+            raise ValueError(f"Expert action dim {action_all.shape[1]} != expected {action_dim}")
+        count = int(schema.get("num_frames", obs_all.shape[0]))
+        sample_indices = slice(None)
+        obs = obs_all[sample_indices][:, EXPERT_BC_STATE_INDICES]
+        mean = obs.mean(axis=0, keepdims=True)
+        std = obs.std(axis=0, keepdims=True) + 1.0e-6
+        self.dataset_root = Path(dataset_root)
+        self.schema = schema
+        self.count = count
+        self.sampled_count = int(obs.shape[0])
+        self.neighbor_chunk = max(1, int(neighbor_chunk))
+        self.obs = torch.as_tensor((obs - mean) / std, dtype=torch.float32, device=device)
+        self.action = torch.as_tensor(action_all[sample_indices], dtype=torch.float32, device=device)
+        self.mean = torch.as_tensor(mean.reshape(-1), dtype=torch.float32, device=device)
+        self.std = torch.as_tensor(std.reshape(-1), dtype=torch.float32, device=device)
+
+    def nearest_action(self, state82: torch.Tensor) -> torch.Tensor:
+        query = (state82.reshape(1, -1)[:, EXPERT_BC_STATE_INDICES] - self.mean) / self.std
+        best_dist = None
+        best_index = None
+        for start in range(0, self.obs.shape[0], self.neighbor_chunk):
+            dist = torch.cdist(query, self.obs[start : start + self.neighbor_chunk])
+            chunk_dist, chunk_index = dist.min(dim=1)
+            if best_dist is None or bool((chunk_dist < best_dist)[0].detach().cpu()):
+                best_dist = chunk_dist
+                best_index = chunk_index + start
+        if best_index is None:
+            raise RuntimeError("Expert BC prior has no samples")
+        return self.action[best_index]
 
 
 def _target_position_offset() -> tuple[float, float, float]:
@@ -546,9 +698,21 @@ def main() -> None:
     )
     latest_norm_index = CONTACT_RECOVERY_FEATURE_NAMES.index("force_thresh_1.latest_delta_norm")
     latest_time_index = CONTACT_RECOVERY_FEATURE_NAMES.index("force_thresh_1.time_since_latest_sec")
+    expert_prior = None
+    if args_cli.expert_dataset_root is not None and args_cli.expert_bc_weight > 0.0:
+        expert_prior = ExpertActionPrior(
+            dataset_root=args_cli.expert_dataset_root,
+            action_horizon=args_cli.expert_bc_action_horizon,
+            state_dim=82,
+            action_dim=6 * args_cli.expert_bc_action_horizon,
+            max_samples=args_cli.expert_bc_max_samples,
+            neighbor_chunk=args_cli.expert_bc_neighbor_chunk,
+            device=torch.device(unwrapped.device),
+        )
     previous_distance: torch.Tensor | None = None
     previous_force: torch.Tensor | None = None
     success_emitted = False
+    pending_bc_action_chunk: torch.Tensor | None = None
 
     def selected_force() -> torch.Tensor:
         incoming_wrench = getattr(robot.data, "body_incoming_wrench_w", None)
@@ -610,6 +774,24 @@ def main() -> None:
             ],
             dim=0,
         )
+        bc_report: dict[str, object] = {
+            "bc_loss": 0.0,
+            "bc_loss_weighted": 0.0,
+            "bc_weight": float(args_cli.expert_bc_weight),
+            "bc_enabled": expert_prior is not None,
+        }
+        if expert_prior is not None and pending_bc_action_chunk is not None:
+            expert_action = expert_prior.nearest_action(state82)
+            bc_loss = F.smooth_l1_loss(pending_bc_action_chunk.reshape(1, -1), expert_action)
+            bc_report = {
+                "bc_loss": float(bc_loss.detach().cpu()),
+                "bc_loss_weighted": float((float(args_cli.expert_bc_weight) * bc_loss).detach().cpu()),
+                "bc_weight": float(args_cli.expert_bc_weight),
+                "bc_enabled": True,
+                "bc_expert_action_norm": float(expert_action.norm(dim=-1).mean().detach().cpu()),
+                "bc_query_action_norm": float(pending_bc_action_chunk.reshape(1, -1).norm(dim=-1).mean().detach().cpu()),
+                "bc_action_l2": float((pending_bc_action_chunk.reshape(1, -1) - expert_action).norm(dim=-1).mean().detach().cpu()),
+            }
         return {
             "feature_time_sec": time_sec,
             "feature_state_dim": int(state82.numel()),
@@ -622,6 +804,7 @@ def main() -> None:
             "feature_force_thresh_1_latest_time_sec": float(features[latest_time_index]),
             "feature_force_thresh_1_latest_delta_norm": float(features[latest_norm_index]),
             "feature_task_vector": [float(v) for v in task_vector_np],
+            **bc_report,
         }
 
     def metrics(step: int, reward_value: torch.Tensor | None = None) -> dict[str, float | int | None]:
@@ -743,6 +926,7 @@ def main() -> None:
             delta = target_pos - body_point
             action = torch.zeros((args_cli.num_envs, 6), device=unwrapped.device)
             action[:, :3] = _clip_by_norm(delta, args_cli.max_delta)
+            pending_bc_action_chunk = action.reshape(-1).repeat(args_cli.expert_bc_action_horizon).detach()
             diagnostics = {
                 "world_delta_norm_m": float(torch.linalg.norm(delta, dim=-1)[0].detach().cpu()),
                 "cmd_world_pos_norm_m": float(torch.linalg.norm(action[:, :3], dim=-1)[0].detach().cpu()),
@@ -764,6 +948,7 @@ def main() -> None:
                 body_index=body_index,
                 controller_target_offset=controller_target_offset,
             )
+            pending_bc_action_chunk = tcp_action.reshape(-1).repeat(args_cli.expert_bc_action_horizon).detach()
             action = _tcp_delta_action_to_isaac_base_action(env, tcp_action)
         _, reward, terminated, truncated, _ = env.step(action)
         if video_recorder is not None:
@@ -793,6 +978,17 @@ def main() -> None:
         video_paths = video_recorder.close()
     summary = {
         "reward_config": reward_config,
+        "expert_bc": None
+        if expert_prior is None
+        else {
+            "dataset_root": str(expert_prior.dataset_root),
+            "weight": float(args_cli.expert_bc_weight),
+            "num_transitions": expert_prior.count,
+            "sampled_transitions": expert_prior.sampled_count,
+            "state_indices": list(EXPERT_BC_STATE_INDICES),
+            "action_horizon": int(args_cli.expert_bc_action_horizon),
+            "note": "Diagnostic only for cheatcode probe; cheatcode is not used as training data.",
+        },
         "rows": rows,
         "best": max(rows, key=lambda row: float(row["expected_dense_reward"])),
         "exact_alignment_expected": exact,

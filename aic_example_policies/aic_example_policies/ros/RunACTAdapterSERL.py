@@ -93,8 +93,8 @@ class RunACTAdapterSERL(Policy):
         self.max_rotation_delta = float(os.environ.get("AIC_SERL_MAX_ROTATION_DELTA", 0.2))
         self.translation_deadband = float(os.environ.get("AIC_SERL_TRANSLATION_DEADBAND", 5e-4))
         self.rotation_deadband = float(os.environ.get("AIC_SERL_ROTATION_DEADBAND", 1e-3))
-        self.adapter_delta_clip = self._optional_float("AIC_SERL_ADAPTER_DELTA_CLIP", 0.02)
-        self.action_clip = self._optional_float("AIC_SERL_ACTION_CLIP", 0.05)
+        self.adapter_delta_clip = self._optional_float("AIC_SERL_ADAPTER_DELTA_CLIP", None)
+        self.action_clip = self._optional_float("AIC_SERL_ACTION_CLIP", None)
         self.allow_zero_images = self._bool_env("AIC_SERL_ALLOW_ZERO_IMAGES", False)
 
         self._current_task: Task | None = None

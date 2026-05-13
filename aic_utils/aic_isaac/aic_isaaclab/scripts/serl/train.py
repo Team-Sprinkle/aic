@@ -7,6 +7,7 @@ import argparse
 import json
 import math
 import os
+import signal
 import sys
 import time
 import traceback
@@ -23,8 +24,30 @@ parser = argparse.ArgumentParser(description=__doc__)
 parser.add_argument("--task", default="AIC-Task-v0")
 parser.add_argument("--num_envs", type=int, default=1)
 parser.add_argument("--seed", type=int, default=1)
-parser.add_argument("--checkpoint", type=str, required=True)
+parser.add_argument("--checkpoint", type=str, default=None)
+parser.add_argument(
+    "--act_only",
+    action="store_true",
+    help="Initialize from ACT TorchScript only with a zero adapter and fresh critics.",
+)
+parser.add_argument("--act_only_state_dim", type=int, default=82)
+parser.add_argument("--act_only_action_horizon", type=int, default=4)
+parser.add_argument("--act_only_single_action_dim", type=int, default=6)
+parser.add_argument("--act_only_adapter_hidden_dim", type=int, default=256)
+parser.add_argument("--act_only_adapter_num_layers", type=int, default=2)
+parser.add_argument("--act_only_adapter_activation", choices=["relu", "gelu", "tanh"], default="gelu")
+parser.add_argument("--act_only_state_encoding", choices=["none", "fourier"], default="fourier")
+parser.add_argument("--act_only_state_encoding_indices", type=int, nargs="*", default=[0, 1, 2, 13, 14, 15])
+parser.add_argument("--act_only_state_encoding_num_bands", type=int, default=4)
+parser.add_argument("--act_only_state_encoding_max_freq", type=float, default=8.0)
+parser.add_argument("--act_only_state_encoding_scale", type=float, default=10.0)
 parser.add_argument("--act_torchscript", type=str, required=True)
+parser.add_argument(
+    "--act_torchscript_device",
+    choices=["auto", "cpu", "cuda"],
+    default="auto",
+    help="Device for frozen ACT TorchScript inference. Auto uses CUDA only for CUDA-exported TorchScript.",
+)
 parser.add_argument("--output_dir", type=str, default="outputs/train/isaac_online_serl")
 parser.add_argument("--run_name", default="isaac_online_serl")
 parser.add_argument("--steps", type=int, default=64)
@@ -34,6 +57,24 @@ parser.add_argument("--replay_capacity", type=int, default=10000)
 parser.add_argument("--warmup_steps", type=int, default=0)
 parser.add_argument("--max_wall_time_minutes", type=float, default=0.0)
 parser.add_argument("--log_every", type=int, default=10)
+parser.add_argument(
+    "--save_every_steps",
+    type=int,
+    default=0,
+    help="Save periodic online SERL checkpoints every N environment steps. 0 disables periodic saves.",
+)
+parser.add_argument(
+    "--save_latest_every_steps",
+    type=int,
+    default=0,
+    help="Overwrite checkpoint_latest.pt every N environment steps. 0 only writes final latest.",
+)
+parser.add_argument(
+    "--ram_watchdog_min_available_gb",
+    type=float,
+    default=0.0,
+    help="If >0, save and stop when MemAvailable drops below this many GiB.",
+)
 parser.add_argument("--debug_timing", action=argparse.BooleanOptionalAction, default=True)
 parser.add_argument("--gamma", type=float, default=0.99)
 parser.add_argument("--tau", type=float, default=0.005)
@@ -57,6 +98,31 @@ parser.add_argument(
     help="Scale applied by Isaac's IK action term. ACT/SERL actions are already physical TCP deltas.",
 )
 parser.add_argument("--bc_weight", type=float, default=0.0)
+parser.add_argument(
+    "--expert_dataset_root",
+    type=str,
+    default=None,
+    help="Optional clean LeRobot dataset root used for a small online BC regularizer.",
+)
+parser.add_argument("--expert_bc_weight", type=float, default=None)
+parser.add_argument("--expert_bc_max_samples", type=int, default=8192)
+parser.add_argument("--expert_bc_neighbor_chunk", type=int, default=8192)
+parser.add_argument(
+    "--expert_bc_every",
+    type=int,
+    default=4,
+    help="Compute expert BC actor regularization every N actor updates. Use 1 for every update.",
+)
+parser.add_argument(
+    "--expert_bc_state_indices",
+    type=int,
+    nargs="*",
+    default=[0, 1, 2, 13, 14, 15, 72, 73, 74, 75, 76, 77, 78, 79, 80, 81],
+    help=(
+        "State dimensions used for nearest expert lookup. Defaults to TCP position, "
+        "TCP error position, and the 10D task vector."
+    ),
+)
 parser.add_argument("--cql_weight", type=float, default=0.0)
 parser.add_argument("--state_source", choices=["lerobot_compatible", "policy_prefix"], default="lerobot_compatible")
 parser.add_argument("--task_family", choices=["sfp_to_nic", "sc_to_sc"], default="sfp_to_nic")
@@ -131,14 +197,27 @@ if args_cli.episode_config_dir:
     os.environ["AIC_ISAAC_EPISODE_CONFIG_DIR"] = args_cli.episode_config_dir
 args_cli.enable_cameras = True
 PROCESS_START_TIME = time.monotonic()
+STOP_REQUESTED: str | None = None
+
+
+def _request_stop(signum: int, _frame: Any) -> None:
+    global STOP_REQUESTED
+    STOP_REQUESTED = f"signal_{signum}"
+    print(f"[AIC SERL] Stop requested by signal {signum}; will save checkpoint after current step.", flush=True)
+
+
+signal.signal(signal.SIGTERM, _request_stop)
+signal.signal(signal.SIGINT, _request_stop)
 
 app_launcher = AppLauncher(args_cli)
 simulation_app = app_launcher.app
 
 import gymnasium as gym
 import numpy as np
+import pandas as pd
 import torch
 import yaml
+from safetensors.torch import load_file
 
 import isaaclab_tasks  # noqa: F401
 from isaaclab_tasks.utils import parse_env_cfg
@@ -150,12 +229,104 @@ import aic_task.tasks  # noqa: F401
 from torch import nn
 from torch.nn import functional as F
 
-LEROBOT_AIC_PACKAGE_DIR = Path(__file__).resolve().parents[4] / "lerobot_robot_aic"
+LEROBOT_AIC_PACKAGE_DIR = next(
+    (
+        parent / "lerobot_robot_aic"
+        for parent in Path(__file__).resolve().parents
+        if (parent / "lerobot_robot_aic" / "lerobot_robot_aic" / "__init__.py").exists()
+    ),
+    Path(__file__).resolve().parents[4] / "lerobot_robot_aic",
+)
 LEROBOT_AIC_MODULE_DIR = LEROBOT_AIC_PACKAGE_DIR / "lerobot_robot_aic"
+if LEROBOT_AIC_PACKAGE_DIR.exists() and str(LEROBOT_AIC_PACKAGE_DIR) not in sys.path:
+    sys.path.insert(0, str(LEROBOT_AIC_PACKAGE_DIR))
 if LEROBOT_AIC_MODULE_DIR.exists() and str(LEROBOT_AIC_MODULE_DIR) not in sys.path:
     sys.path.insert(0, str(LEROBOT_AIC_MODULE_DIR))
 
 from contact_recovery_features import CONTACT_RECOVERY_FEATURE_DIM, ContactRecoveryFeatureComputer
+
+
+def _stack_vector_column(series: pd.Series, key: str) -> np.ndarray:
+    values = [np.asarray(value, dtype=np.float32).reshape(-1) for value in series]
+    if not values:
+        raise ValueError(f"Column {key!r} is empty")
+    dim = int(values[0].shape[0])
+    if any(int(value.shape[0]) != dim for value in values):
+        raise ValueError(f"Column {key!r} has inconsistent vector sizes")
+    return np.stack(values, axis=0).astype(np.float32)
+
+
+def _action_chunks(action: np.ndarray, episode: np.ndarray, horizon: int) -> np.ndarray:
+    horizon = int(horizon)
+    if horizon <= 1:
+        return action.astype(np.float32)
+    chunks = np.empty((action.shape[0], action.shape[1] * horizon), dtype=np.float32)
+    for idx in range(action.shape[0]):
+        episode_id = episode[idx]
+        values = []
+        last_valid = action[idx]
+        for offset in range(horizon):
+            src = idx + offset
+            if src < action.shape[0] and episode[src] == episode_id:
+                last_valid = action[src]
+            values.append(last_valid)
+        chunks[idx] = np.concatenate(values, axis=0)
+    return chunks
+
+
+def _load_lerobot_expert_arrays(
+    dataset_root: Path,
+    action_horizon: int,
+    *,
+    max_samples: int = 0,
+) -> tuple[np.ndarray, np.ndarray, dict[str, Any]]:
+    data_dir = dataset_root / "data"
+    data_files = sorted(data_dir.rglob("*.parquet"))
+    if not data_files:
+        raise FileNotFoundError(f"No parquet files under {data_dir}")
+    required = {"observation.state", "action", "episode_index", "frame_index"}
+    df = pd.concat([pd.read_parquet(path, columns=sorted(required)) for path in data_files], ignore_index=True)
+    missing = required - set(df.columns)
+    if missing:
+        raise ValueError(f"Expert dataset missing columns: {sorted(missing)}")
+    sort_keys = ["episode_index", "frame_index"]
+    if "index" in df.columns:
+        sort_keys.append("index")
+    df = df.sort_values(sort_keys).reset_index(drop=True)
+    full_count = int(len(df))
+    episode = df["episode_index"].to_numpy(dtype=np.int64)
+    if max_samples > 0 and full_count > int(max_samples):
+        row_indices = np.linspace(0, full_count - 1, num=int(max_samples), dtype=np.int64)
+        obs = _stack_vector_column(df["observation.state"].iloc[row_indices], "observation.state")
+        action_series = df["action"]
+        first_action = np.asarray(action_series.iloc[int(row_indices[0])], dtype=np.float32).reshape(-1)
+        action = np.empty((row_indices.shape[0], first_action.shape[0] * int(action_horizon)), dtype=np.float32)
+        for out_idx, row_idx in enumerate(row_indices):
+            values = []
+            last_valid = np.asarray(action_series.iloc[int(row_idx)], dtype=np.float32).reshape(-1)
+            for offset in range(int(action_horizon)):
+                src = int(row_idx) + offset
+                if src < full_count and episode[src] == episode[int(row_idx)]:
+                    last_valid = np.asarray(action_series.iloc[src], dtype=np.float32).reshape(-1)
+                values.append(last_valid)
+            action[out_idx] = np.concatenate(values, axis=0)
+        single_action_dim = int(first_action.shape[0])
+    else:
+        obs = _stack_vector_column(df["observation.state"], "observation.state")
+        single_action = _stack_vector_column(df["action"], "action")
+        action = _action_chunks(single_action, episode, int(action_horizon))
+        single_action_dim = int(single_action.shape[1])
+    schema = {
+        "dataset_root": str(dataset_root),
+        "num_frames": full_count,
+        "sampled_frames": int(obs.shape[0]),
+        "num_episodes": int(df["episode_index"].nunique()),
+        "obs_dim": int(obs.shape[1]),
+        "single_action_dim": single_action_dim,
+        "action_horizon": int(action_horizon),
+        "action_dim": int(action.shape[1]),
+    }
+    return obs, action, schema
 
 
 SFP_PORT_LOCAL = {
@@ -244,6 +415,78 @@ class FourierStateEncoding(nn.Module):
         angles = selected.unsqueeze(-1) * self.freqs.to(device=state.device, dtype=state.dtype).view(1, 1, -1)
         encoded = torch.cat([torch.sin(angles), torch.cos(angles)], dim=-1).flatten(start_dim=1)
         return torch.cat([state, encoded], dim=-1)
+
+
+def _torchscript_metadata(path: Path) -> dict[str, Any]:
+    metadata_path = path.with_suffix(".json")
+    if not metadata_path.exists():
+        raise FileNotFoundError(f"ACT TorchScript metadata not found: {metadata_path}")
+    return json.loads(metadata_path.read_text(encoding="utf-8"))
+
+
+def _resolve_act_checkpoint_dir(path: Path) -> Path:
+    metadata = _torchscript_metadata(path)
+    checkpoint_dir = Path(str(metadata.get("checkpoint_dir", "")))
+    candidates: list[Path]
+    if checkpoint_dir.is_absolute():
+        candidates = [checkpoint_dir]
+    else:
+        candidates = [Path.cwd() / checkpoint_dir, path.parent / checkpoint_dir]
+    for candidate in candidates:
+        if (candidate / "policy_preprocessor_step_3_normalizer_processor.safetensors").exists():
+            return candidate
+    raise FileNotFoundError(
+        "Could not resolve ACT checkpoint normalizer directory from "
+        f"{path.with_suffix('.json')}: tried {', '.join(str(c) for c in candidates)}"
+    )
+
+
+class ACTRuntimeNormalizer(nn.Module):
+    """LeRobot ACT runtime scaling around the exported TorchScript model."""
+
+    def __init__(self, act_torchscript_path: Path, *, state_dim: int, action_dim: int):
+        super().__init__()
+        checkpoint_dir = _resolve_act_checkpoint_dir(act_torchscript_path)
+        stats = load_file(str(checkpoint_dir / "policy_preprocessor_step_3_normalizer_processor.safetensors"))
+
+        def stat(key: str, shape: tuple[int, ...]) -> torch.Tensor:
+            if key not in stats:
+                raise KeyError(f"ACT normalizer stats are missing {key!r}")
+            tensor = stats[key].float().view(*shape)
+            if key.endswith(".std"):
+                tensor = torch.where(torch.abs(tensor) < 1.0e-8, torch.ones_like(tensor), tensor)
+            return tensor
+
+        state_mean = stat("observation.state.mean", (1, -1))[:, :state_dim]
+        state_std = stat("observation.state.std", (1, -1))[:, :state_dim]
+        if state_dim in (42, 82):
+            state_mean[:, -10:] = 0.0
+            state_std[:, -10:] = 1.0
+
+        self.register_buffer("state_mean", state_mean, persistent=False)
+        self.register_buffer("state_std", state_std, persistent=False)
+        self.register_buffer("action_mean", stat("action.mean", (1, -1))[:, :action_dim], persistent=False)
+        self.register_buffer("action_std", stat("action.std", (1, -1))[:, :action_dim], persistent=False)
+        for key in CAMERA_KEYS:
+            safe_key = key.replace(".", "__")
+            self.register_buffer(f"{safe_key}_mean", stat(f"{key}.mean", (1, 3, 1, 1)), persistent=False)
+            self.register_buffer(f"{safe_key}_std", stat(f"{key}.std", (1, 3, 1, 1)), persistent=False)
+
+    def normalize_state(self, state: torch.Tensor) -> torch.Tensor:
+        return (state - self.state_mean.to(device=state.device, dtype=state.dtype)) / self.state_std.to(
+            device=state.device, dtype=state.dtype
+        )
+
+    def normalize_image(self, key: str, image: torch.Tensor) -> torch.Tensor:
+        safe_key = key.replace(".", "__")
+        mean = getattr(self, f"{safe_key}_mean").to(device=image.device, dtype=image.dtype)
+        std = getattr(self, f"{safe_key}_std").to(device=image.device, dtype=image.dtype)
+        return (image - mean) / std
+
+    def unnormalize_action(self, normalized_action: torch.Tensor) -> torch.Tensor:
+        return normalized_action * self.action_std.to(
+            device=normalized_action.device, dtype=normalized_action.dtype
+        ) + self.action_mean.to(device=normalized_action.device, dtype=normalized_action.dtype)
 
 
 def _make_state_encoder(
@@ -637,6 +880,83 @@ class ReplayBuffer:
         }
 
 
+class ExpertActionPrior:
+    """Nearest-neighbor expert action prior for a small online BC regularizer."""
+
+    def __init__(
+        self,
+        *,
+        dataset_root: Path,
+        action_horizon: int,
+        state_dim: int,
+        action_dim: int,
+        state_indices: list[int] | tuple[int, ...],
+        max_samples: int,
+        neighbor_chunk: int,
+        device: torch.device,
+    ):
+        obs_all, action_all, schema = _load_lerobot_expert_arrays(
+            dataset_root,
+            action_horizon,
+            max_samples=max_samples,
+        )
+        if obs_all.shape[1] != state_dim:
+            raise ValueError(
+                f"Expert dataset state dim {obs_all.shape[1]} does not match online state dim {state_dim}"
+            )
+        if action_all.shape[1] != action_dim:
+            raise ValueError(
+                f"Expert dataset action dim {action_all.shape[1]} does not match online action dim {action_dim}"
+            )
+        count = int(schema.get("num_frames", obs_all.shape[0]))
+        indices = np.arange(obs_all.shape[0], dtype=np.int64)
+        selected_indices = [int(i) for i in state_indices if 0 <= int(i) < state_dim]
+        if not selected_indices:
+            raise ValueError("expert BC state index set is empty")
+        obs = obs_all[indices][:, selected_indices].astype(np.float32)
+        mean = obs.mean(axis=0, keepdims=True)
+        std = obs.std(axis=0, keepdims=True) + 1.0e-6
+        self.dataset_root = Path(dataset_root)
+        self.schema = schema
+        self.count = int(count)
+        self.sampled_count = int(indices.shape[0])
+        self.state_indices = selected_indices
+        self.neighbor_chunk = int(max(1, neighbor_chunk))
+        self.obs = torch.as_tensor((obs - mean) / std, dtype=torch.float32, device=device)
+        self.action = torch.as_tensor(action_all[indices], dtype=torch.float32, device=device)
+        self.mean = torch.as_tensor(mean.reshape(-1), dtype=torch.float32, device=device)
+        self.std = torch.as_tensor(std.reshape(-1), dtype=torch.float32, device=device)
+
+    def nearest_actions(self, state: torch.Tensor) -> torch.Tensor:
+        query = (state[:, self.state_indices] - self.mean) / self.std
+        best_dist: torch.Tensor | None = None
+        best_index: torch.Tensor | None = None
+        for start in range(0, self.obs.shape[0], self.neighbor_chunk):
+            ref = self.obs[start : start + self.neighbor_chunk]
+            dist = torch.cdist(query, ref, p=2.0)
+            chunk_dist, chunk_index = dist.min(dim=1)
+            if best_dist is None:
+                best_dist = chunk_dist
+                best_index = chunk_index + start
+            else:
+                mask = chunk_dist < best_dist
+                best_dist = torch.where(mask, chunk_dist, best_dist)
+                best_index = torch.where(mask, chunk_index + start, best_index)
+        if best_index is None:
+            raise RuntimeError("Expert prior has no actions")
+        return self.action[best_index]
+
+    def report(self) -> dict[str, Any]:
+        return {
+            "dataset_root": str(self.dataset_root),
+            "num_transitions": self.count,
+            "sampled_transitions": self.sampled_count,
+            "state_indices": self.state_indices,
+            "neighbor_chunk": self.neighbor_chunk,
+            "dataset_schema": self.schema,
+        }
+
+
 def _policy_tensor(obs: Any) -> torch.Tensor:
     if isinstance(obs, dict):
         obs = obs.get("policy", obs)
@@ -817,6 +1137,51 @@ def _force_delta_metrics(env, *, device: torch.device) -> dict[str, torch.Tensor
     }
 
 
+def _reward_term_metrics(env, *, device: torch.device) -> dict[str, Any]:
+    """Return reward-manager term contributions without re-evaluating reward funcs."""
+    manager = getattr(env.unwrapped, "reward_manager", None)
+    if manager is None:
+        return {}
+    names = list(getattr(manager, "active_terms", []))
+    step_reward = getattr(manager, "_step_reward", None)
+    episode_sums = getattr(manager, "_episode_sums", None)
+    if step_reward is None:
+        return {}
+    dt = float(getattr(env.unwrapped, "step_dt", 1.0))
+    step_reward = step_reward.to(device=device, dtype=torch.float32)
+    step_contrib = step_reward * dt
+    out: dict[str, Any] = {
+        "reward_step_dt": dt,
+        "reward_terms_mean": {
+            name: float(step_contrib[:, idx].mean().detach().cpu())
+            for idx, name in enumerate(names)
+        },
+        "reward_terms_rate_mean": {
+            name: float(step_reward[:, idx].mean().detach().cpu())
+            for idx, name in enumerate(names)
+        },
+        "reward_terms_abs_mean": {
+            name: float(step_contrib[:, idx].abs().mean().detach().cpu())
+            for idx, name in enumerate(names)
+        },
+    }
+    if isinstance(episode_sums, dict):
+        out["reward_terms_accum_mean"] = {
+            name: float(episode_sums[name].to(device=device, dtype=torch.float32).mean().detach().cpu())
+            for name in names
+            if name in episode_sums
+        }
+        out["reward_total_accum_mean"] = float(
+            sum(
+                episode_sums[name].to(device=device, dtype=torch.float32).mean()
+                for name in names
+                if name in episode_sums
+            ).detach().cpu()
+        )
+    out["reward_terms_total_from_terms_mean"] = float(step_contrib.sum(dim=1).mean().detach().cpu())
+    return out
+
+
 def _episode_metadata(env, env_index: int) -> dict[str, Any]:
     episode = _current_episode_by_env(env).get(env_index) or {}
     context = episode.get("task_context") or {}
@@ -942,9 +1307,15 @@ class IsaacACTAdapterActor(nn.Module):
         super().__init__()
         self.act_base = act_base
         self.act_torchscript_path = Path(act_torchscript_path)
+        self.act_base_device = torch.device("cpu")
         self.state_dim = int(state_dim)
         self.action_dim = int(action_dim)
         self.action_horizon = int(action_horizon)
+        self.act_normalizer = ACTRuntimeNormalizer(
+            self.act_torchscript_path,
+            state_dim=self.state_dim,
+            action_dim=self.action_dim // self.action_horizon,
+        )
         self.adapter_scale = float(adapter_scale)
         self.adapter_delta_clip = None if adapter_delta_clip is None else float(adapter_delta_clip)
         self.action_clip = None if action_clip is None else float(action_clip)
@@ -967,13 +1338,20 @@ class IsaacACTAdapterActor(nn.Module):
 
     def action_components(self, obs: dict[str, Any]) -> dict[str, torch.Tensor]:
         output_device = obs["state"].device
+        act_device = self.act_base_device
+        normalized_state = self.act_normalizer.normalize_state(obs["state"]).to(act_device)
+        normalized_images = {
+            key: self.act_normalizer.normalize_image(key, value).to(act_device)
+            for key, value in obs["images"].items()
+        }
         chunk = self.act_base(
-            obs["state"].to("cpu"),
-            obs["images"]["observation.images.center_camera"].to("cpu"),
-            obs["images"]["observation.images.left_camera"].to("cpu"),
-            obs["images"]["observation.images.right_camera"].to("cpu"),
+            normalized_state,
+            normalized_images["observation.images.center_camera"],
+            normalized_images["observation.images.left_camera"],
+            normalized_images["observation.images.right_camera"],
         )
-        base_action = chunk[:, : self.action_horizon, :].reshape(obs["state"].shape[0], -1).to(output_device)
+        base_action = self.act_normalizer.unnormalize_action(chunk).to(output_device)
+        base_action = base_action[:, : self.action_horizon, :].reshape(obs["state"].shape[0], -1)
         encoded_state = self.state_encoder(obs["state"])
         raw_delta_action = self.adapter(torch.cat([encoded_state, base_action], dim=-1))
         if self.adapter_delta_clip is not None and self.adapter_delta_clip > 0.0:
@@ -1176,6 +1554,38 @@ class VisionCritic(nn.Module):
         raise RuntimeError(f"Unsupported critic architecture at forward: {self.arch!r}")
 
 
+def _torchscript_export_device(path: Path) -> str | None:
+    meta_path = path.with_suffix(".json")
+    if not meta_path.exists():
+        return None
+    try:
+        data = json.loads(meta_path.read_text(encoding="utf-8"))
+    except Exception:
+        return None
+    value = data.get("torchscript_export_device")
+    return str(value) if value is not None else None
+
+
+def _resolve_act_torchscript_device(path: Path, requested: str, train_device: torch.device) -> torch.device:
+    if requested == "cpu":
+        return torch.device("cpu")
+    if requested == "cuda":
+        if train_device.type != "cuda":
+            raise ValueError("--act_torchscript_device=cuda requires a CUDA training device")
+        return train_device
+    exported = _torchscript_export_device(path)
+    if exported and exported.startswith("cuda") and train_device.type == "cuda":
+        return train_device
+    return torch.device("cpu")
+
+
+def _load_act_base(path: Path, act_device: torch.device) -> torch.jit.ScriptModule:
+    module = torch.jit.load(str(path), map_location=act_device).eval()
+    for param in module.parameters():
+        param.requires_grad = False
+    return module
+
+
 class OnlineSERLTrainer:
     def __init__(
         self,
@@ -1189,14 +1599,15 @@ class OnlineSERLTrainer:
         critic_lr: float,
         adapter_penalty_weight: float,
         act_preservation_weight: float,
+        bc_weight: float,
+        expert_prior: ExpertActionPrior | None,
+        expert_bc_every: int,
+        act_torchscript_device: torch.device,
         device: torch.device,
     ):
         self.actor = actor.to(device)
-        # TorchScript ACT exports are traced on CPU and include CPU-created latent tensors.
-        # Keep the frozen ACT base on CPU while training the adapter/critics on Isaac's device.
-        self.actor.act_base = torch.jit.load(str(self.actor.act_torchscript_path), map_location="cpu").eval()
-        for param in self.actor.act_base.parameters():
-            param.requires_grad = False
+        self.actor.act_base = _load_act_base(self.actor.act_torchscript_path, act_torchscript_device)
+        self.actor.act_base_device = act_torchscript_device
         self.critic1 = critic1.to(device)
         self.critic2 = critic2.to(device)
         self.target_critic1 = copy.deepcopy(self.critic1).to(device)
@@ -1207,10 +1618,15 @@ class OnlineSERLTrainer:
         self.tau = tau
         self.adapter_penalty_weight = adapter_penalty_weight
         self.act_preservation_weight = act_preservation_weight
+        self.bc_weight = float(bc_weight)
+        self.expert_prior = expert_prior
+        self.expert_bc_every = max(1, int(expert_bc_every))
+        self.update_count = 0
         self.actor_opt = torch.optim.Adam(self.actor.parameters(), lr=adapter_lr)
         self.critic_opt = torch.optim.Adam(list(self.critic1.parameters()) + list(self.critic2.parameters()), lr=critic_lr)
 
     def train_step(self, batch: dict[str, Any]) -> dict[str, float]:
+        self.update_count += 1
         obs, next_obs = batch["obs"], batch["next_obs"]
         action, reward, done = batch["action"], batch["reward"], batch["done"]
         with torch.no_grad():
@@ -1231,21 +1647,57 @@ class OnlineSERLTrainer:
         actor_q = torch.minimum(self.critic1(obs, actor_action), self.critic2(obs, actor_action))
         adapter_penalty = delta_action.square().mean()
         act_preservation_loss = F.mse_loss(actor_action, base_action)
-        actor_loss = -actor_q.mean() + self.adapter_penalty_weight * adapter_penalty + self.act_preservation_weight * act_preservation_loss
+        compute_bc = (
+            self.expert_prior is not None
+            and self.bc_weight > 0.0
+            and self.update_count % self.expert_bc_every == 0
+        )
+        if compute_bc:
+            bc_t0 = time.monotonic()
+            expert_action = self.expert_prior.nearest_actions(obs["state"]).detach()
+            bc_loss = F.smooth_l1_loss(actor_action, expert_action)
+            bc_elapsed_ms = (time.monotonic() - bc_t0) * 1000.0
+        else:
+            bc_loss = torch.zeros((), dtype=actor_action.dtype, device=actor_action.device)
+            bc_elapsed_ms = 0.0
+        bc_loss_weighted = self.bc_weight * bc_loss
+        q_actor_loss = -actor_q.mean()
+        adapter_penalty_weighted = self.adapter_penalty_weight * adapter_penalty
+        act_preservation_loss_weighted = self.act_preservation_weight * act_preservation_loss
+        actor_loss = q_actor_loss + adapter_penalty_weighted + act_preservation_loss_weighted + bc_loss_weighted
         self.actor_opt.zero_grad(set_to_none=True)
         actor_loss.backward()
         self.actor_opt.step()
         self._soft_update()
         return {
             "actor_loss": float(actor_loss.detach().cpu()),
+            "actor_q_loss": float(q_actor_loss.detach().cpu()),
             "critic_loss": float(critic_loss.detach().cpu()),
             "q_mean": float(torch.minimum(q1, q2).mean().detach().cpu()),
+            "base_action_norm": float(base_action.norm(dim=-1).mean().detach().cpu()),
+            "base_action_abs_max": float(base_action.abs().max().detach().cpu()),
+            "base_action_min": float(base_action.min().detach().cpu()),
+            "base_action_max": float(base_action.max().detach().cpu()),
+            "final_action_norm": float(actor_action.norm(dim=-1).mean().detach().cpu()),
+            "final_action_abs_max": float(actor_action.abs().max().detach().cpu()),
             "adapter_delta_norm": float(delta_action.norm(dim=-1).mean().detach().cpu()),
+            "adapter_delta_abs_max": float(delta_action.abs().max().detach().cpu()),
             "raw_adapter_delta_norm": float(
                 components.get("raw_delta_action", delta_action).norm(dim=-1).mean().detach().cpu()
             ),
+            "raw_adapter_delta_abs_max": float(
+                components.get("raw_delta_action", delta_action).abs().max().detach().cpu()
+            ),
             "adapter_penalty": float(adapter_penalty.detach().cpu()),
+            "adapter_penalty_weighted": float(adapter_penalty_weighted.detach().cpu()),
             "act_preservation_loss": float(act_preservation_loss.detach().cpu()),
+            "act_preservation_loss_weighted": float(act_preservation_loss_weighted.detach().cpu()),
+            "bc_loss": float(bc_loss.detach().cpu()),
+            "bc_loss_weighted": float(bc_loss_weighted.detach().cpu()),
+            "bc_weight": float(self.bc_weight),
+            "bc_computed": float(compute_bc),
+            "bc_every": float(self.expert_bc_every),
+            "bc_lookup_ms": float(bc_elapsed_ms),
             "final_minus_act_norm": float((actor_action - base_action).norm(dim=-1).mean().detach().cpu()),
             "unclipped_final_minus_act_norm": float(
                 (components.get("unclipped_final_action", actor_action) - base_action)
@@ -1280,6 +1732,7 @@ def _load_adapter_actor(
     action_dim: int,
     action_horizon: int,
     device: torch.device,
+    act_torchscript_device: torch.device,
     adapter_delta_clip: float | None,
     action_clip: float | None,
 ) -> IsaacACTAdapterActor:
@@ -1287,9 +1740,7 @@ def _load_adapter_actor(
     hidden_dim, num_layers = _infer_adapter_shape(actor_state)
     offline_cfg, _, warmstart = _checkpoint_training_context(checkpoint)
     adapter_scale = float(warmstart.get("adapter_scale", 1.0))
-    act_base = torch.jit.load(str(act_torchscript), map_location="cpu").eval()
-    for param in act_base.parameters():
-        param.requires_grad = False
+    act_base = _load_act_base(act_torchscript, act_torchscript_device)
     actor = IsaacACTAdapterActor(
         act_base=act_base,
         act_torchscript_path=act_torchscript,
@@ -1308,20 +1759,110 @@ def _load_adapter_actor(
         state_encoding_max_freq=float(offline_cfg.get("state_encoding_max_freq", 8.0)),
         state_encoding_scale=float(offline_cfg.get("state_encoding_scale", 1.0)),
     ).to(device)
-    actor.act_base = torch.jit.load(str(actor.act_torchscript_path), map_location="cpu").eval()
-    for param in actor.act_base.parameters():
-        param.requires_grad = False
+    actor.act_base = _load_act_base(actor.act_torchscript_path, act_torchscript_device)
+    actor.act_base_device = act_torchscript_device
     own_state = actor.state_dict()
     compatible = {key: value for key, value in actor_state.items() if key in own_state and tuple(value.shape) == tuple(own_state[key].shape)}
     own_state.update(compatible)
     actor.load_state_dict(own_state, strict=True)
-    actor.act_base = torch.jit.load(str(actor.act_torchscript_path), map_location="cpu").eval()
-    for param in actor.act_base.parameters():
-        param.requires_grad = False
+    actor.act_base = _load_act_base(actor.act_torchscript_path, act_torchscript_device)
+    actor.act_base_device = act_torchscript_device
+    return actor
+
+
+def _act_only_training_context(args: argparse.Namespace) -> tuple[dict[str, Any], dict[str, Any], dict[str, Any]]:
+    action_horizon = int(args.act_only_action_horizon)
+    single_action_dim = int(args.act_only_single_action_dim)
+    action_dim = action_horizon * single_action_dim
+    offline_cfg = {
+        "state_dim": int(args.act_only_state_dim),
+        "action_dim": action_dim,
+        "action_horizon": action_horizon,
+        "camera_keys": list(CAMERA_KEYS),
+        "actor_mode": "act_adapter",
+        "actor_update_mode": "online_q_from_act_only",
+        "freeze_act": True,
+        "critic_image_encoder": "small_conv",
+        "critic_arch": "multiplicative",
+        "critic_feature_dim": 256,
+        "critic_hidden_dim": 256,
+        "critic_num_layers": 2,
+        "critic_per_camera_dim": 64,
+        "critic_layer_norm": False,
+        "critic_activation": "gelu",
+        "adapter_arch": "mlp",
+        "adapter_layer_norm": False,
+        "adapter_activation": str(args.act_only_adapter_activation),
+        "state_encoding": str(args.act_only_state_encoding),
+        "state_encoding_indices": list(args.act_only_state_encoding_indices),
+        "state_encoding_num_bands": int(args.act_only_state_encoding_num_bands),
+        "state_encoding_max_freq": float(args.act_only_state_encoding_max_freq),
+        "state_encoding_scale": float(args.act_only_state_encoding_scale),
+    }
+    dataset_summary = {
+        "source": "act_only_online",
+        "state_dim": offline_cfg["state_dim"],
+        "single_action_dim": single_action_dim,
+        "action_dim": action_dim,
+        "action_horizon": action_horizon,
+        "camera_keys": list(CAMERA_KEYS),
+    }
+    warmstart = {
+        "mode": "act_only_zero_adapter",
+        "act_torchscript": str(args.act_torchscript),
+        "adapter_scale": 1.0,
+        "adapter_delta_clip": args.adapter_delta_clip,
+        "initial_delta_norm": 0.0,
+        "initial_final_minus_act_norm": 0.0,
+    }
+    return offline_cfg, dataset_summary, warmstart
+
+
+def _init_zero_act_adapter_actor(
+    args: argparse.Namespace,
+    *,
+    act_torchscript: Path,
+    state_dim: int,
+    action_dim: int,
+    action_horizon: int,
+    device: torch.device,
+    act_torchscript_device: torch.device,
+    adapter_delta_clip: float | None,
+    action_clip: float | None,
+) -> IsaacACTAdapterActor:
+    act_base = _load_act_base(act_torchscript, act_torchscript_device)
+    actor = IsaacACTAdapterActor(
+        act_base=act_base,
+        act_torchscript_path=act_torchscript,
+        state_dim=state_dim,
+        action_dim=action_dim,
+        action_horizon=action_horizon,
+        hidden_dim=int(args.act_only_adapter_hidden_dim),
+        num_layers=int(args.act_only_adapter_num_layers),
+        adapter_scale=1.0,
+        adapter_delta_clip=adapter_delta_clip,
+        action_clip=action_clip,
+        adapter_activation=str(args.act_only_adapter_activation),
+        state_encoding=str(args.act_only_state_encoding),
+        state_encoding_indices=tuple(int(i) for i in args.act_only_state_encoding_indices),
+        state_encoding_num_bands=int(args.act_only_state_encoding_num_bands),
+        state_encoding_max_freq=float(args.act_only_state_encoding_max_freq),
+        state_encoding_scale=float(args.act_only_state_encoding_scale),
+    ).to(device)
+    for module in actor.adapter.modules():
+        if isinstance(module, nn.Linear):
+            nn.init.zeros_(module.weight)
+            nn.init.zeros_(module.bias)
+    with torch.no_grad():
+        actor.log_std.fill_(-2.0)
+    actor.act_base = _load_act_base(actor.act_torchscript_path, act_torchscript_device)
+    actor.act_base_device = act_torchscript_device
     return actor
 
 
 def _save_checkpoint(path: Path, trainer: OnlineSERLTrainer, train_config: dict[str, Any], step: int) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    tmp = path.with_suffix(path.suffix + f".tmp.{os.getpid()}")
     torch.save(
         {
             "actor": trainer.actor.state_dict(),
@@ -1334,7 +1875,67 @@ def _save_checkpoint(path: Path, trainer: OnlineSERLTrainer, train_config: dict[
             "online_serl_config": train_config,
             "step": step,
         },
-        path,
+        tmp,
+    )
+    os.replace(tmp, path)
+
+
+def _progress_result(stop_reason: str, step: int, updates_done: int) -> dict[str, Any]:
+    return {
+        "stop_reason": stop_reason,
+        "steps_completed": step,
+        "updates_done": updates_done,
+        "elapsed_minutes": (time.monotonic() - PROCESS_START_TIME) / 60.0,
+    }
+
+
+def _mem_available_gb() -> float | None:
+    try:
+        for line in Path("/proc/meminfo").read_text(encoding="utf-8").splitlines():
+            if line.startswith("MemAvailable:"):
+                return float(line.split()[1]) / (1024.0 * 1024.0)
+    except OSError:
+        return None
+    return None
+
+
+def _cpu_tree(value: Any) -> Any:
+    if isinstance(value, torch.Tensor):
+        return value.detach().cpu()
+    if isinstance(value, dict):
+        return {key: _cpu_tree(item) for key, item in value.items()}
+    if isinstance(value, list):
+        return [_cpu_tree(item) for item in value]
+    if isinstance(value, tuple):
+        return tuple(_cpu_tree(item) for item in value)
+    return value
+
+
+def _transition_payload(
+    *,
+    act_obs: dict[str, Any],
+    next_act_obs: dict[str, Any],
+    action_for_critic: torch.Tensor,
+    reward: torch.Tensor,
+    done: torch.Tensor,
+    env_index: int,
+    metadata: dict[str, Any],
+) -> dict[str, Any]:
+    return _cpu_tree(
+        {
+            "obs": {
+                "state": act_obs["state"][env_index],
+                "images": {key: value[env_index] for key, value in act_obs["images"].items()},
+            },
+            "next_obs": {
+                "state": next_act_obs["state"][env_index],
+                "images": {key: value[env_index] for key, value in next_act_obs["images"].items()},
+            },
+            "action": action_for_critic[env_index],
+            "reward": reward[env_index],
+            "done": done[env_index],
+            "metadata": metadata,
+        }
     )
 
 
@@ -1362,24 +1963,58 @@ def _checkpoint_training_context(checkpoint: dict[str, Any]) -> tuple[dict[str, 
 
 def main() -> None:
     torch.manual_seed(args_cli.seed)
-    checkpoint_path = Path(args_cli.checkpoint)
-    checkpoint = torch.load(checkpoint_path, map_location="cpu")
-    offline_cfg, dataset_summary, warmstart = _checkpoint_training_context(checkpoint)
+    if args_cli.act_only:
+        checkpoint_path = Path(args_cli.checkpoint) if args_cli.checkpoint else None
+        if checkpoint_path is None:
+            checkpoint: dict[str, Any] | None = None
+            offline_cfg, dataset_summary, warmstart = _act_only_training_context(args_cli)
+        else:
+            checkpoint = torch.load(checkpoint_path, map_location="cpu")
+            offline_cfg, dataset_summary, warmstart = _checkpoint_training_context(checkpoint)
+    else:
+        if not args_cli.checkpoint:
+            raise ValueError("--checkpoint is required unless --act_only is set")
+        checkpoint_path = Path(args_cli.checkpoint)
+        checkpoint = torch.load(checkpoint_path, map_location="cpu")
+        offline_cfg, dataset_summary, warmstart = _checkpoint_training_context(checkpoint)
     state_dim = int(offline_cfg["state_dim"])
     action_horizon = int(offline_cfg["action_horizon"])
     single_action_dim = int(offline_cfg["action_dim"] // action_horizon)
 
     device = torch.device(args_cli.device)
-    actor = _load_adapter_actor(
-        checkpoint,
-        act_torchscript=Path(args_cli.act_torchscript),
-        state_dim=state_dim,
-        action_dim=int(offline_cfg["action_dim"]),
-        action_horizon=action_horizon,
-        device=device,
-        adapter_delta_clip=args_cli.adapter_delta_clip,
-        action_clip=args_cli.action_clip,
+    act_torchscript_path = Path(args_cli.act_torchscript)
+    act_torchscript_device = _resolve_act_torchscript_device(
+        act_torchscript_path,
+        args_cli.act_torchscript_device,
+        device,
     )
+    if checkpoint is not None:
+        actor = _load_adapter_actor(
+            checkpoint,
+            act_torchscript=act_torchscript_path,
+            state_dim=state_dim,
+            action_dim=int(offline_cfg["action_dim"]),
+            action_horizon=action_horizon,
+            device=device,
+            act_torchscript_device=act_torchscript_device,
+            adapter_delta_clip=args_cli.adapter_delta_clip,
+            action_clip=args_cli.action_clip,
+        )
+        print(f"[AIC SERL] Resumed ACT-adapter actor from checkpoint: {checkpoint_path}", flush=True)
+    elif args_cli.act_only:
+        actor = _init_zero_act_adapter_actor(
+            args_cli,
+            act_torchscript=act_torchscript_path,
+            state_dim=state_dim,
+            action_dim=int(offline_cfg["action_dim"]),
+            action_horizon=action_horizon,
+            device=device,
+            act_torchscript_device=act_torchscript_device,
+            adapter_delta_clip=args_cli.adapter_delta_clip,
+            action_clip=args_cli.action_clip,
+        )
+    else:
+        raise RuntimeError("Non-ACT-only training requires a checkpoint.")
     critic_image_encoder = str(offline_cfg.get("critic_image_encoder", "small_conv"))
     critic_arch = str(offline_cfg.get("critic_arch", "concat"))
     critic_feature_dim = int(offline_cfg.get("critic_feature_dim", 256))
@@ -1429,8 +2064,28 @@ def main() -> None:
         state_encoding_max_freq=state_encoding_max_freq,
         state_encoding_scale=state_encoding_scale,
     )
-    critic1.load_state_dict(checkpoint["critic1"], strict=True)
-    critic2.load_state_dict(checkpoint["critic2"], strict=True)
+    if checkpoint is not None:
+        critic1.load_state_dict(checkpoint["critic1"], strict=True)
+        critic2.load_state_dict(checkpoint["critic2"], strict=True)
+        print(f"[AIC SERL] Resumed critics from checkpoint: {checkpoint_path}", flush=True)
+    expert_bc_weight = float(args_cli.expert_bc_weight if args_cli.expert_bc_weight is not None else args_cli.bc_weight)
+    expert_prior = None
+    if args_cli.expert_dataset_root and expert_bc_weight > 0.0:
+        expert_prior = ExpertActionPrior(
+            dataset_root=Path(args_cli.expert_dataset_root),
+            action_horizon=action_horizon,
+            state_dim=state_dim,
+            action_dim=int(offline_cfg["action_dim"]),
+            state_indices=tuple(args_cli.expert_bc_state_indices),
+            max_samples=args_cli.expert_bc_max_samples,
+            neighbor_chunk=args_cli.expert_bc_neighbor_chunk,
+            device=device,
+        )
+        print(
+            f"[AIC SERL] Loaded expert BC prior: {expert_prior.sampled_count}/{expert_prior.count} "
+            f"transitions from {expert_prior.dataset_root}",
+            flush=True,
+        )
     trainer = OnlineSERLTrainer(
         actor=actor,
         critic1=critic1,
@@ -1441,8 +2096,22 @@ def main() -> None:
         critic_lr=args_cli.critic_lr,
         adapter_penalty_weight=args_cli.adapter_penalty_weight,
         act_preservation_weight=args_cli.act_preservation_weight,
+        bc_weight=expert_bc_weight,
+        expert_prior=expert_prior,
+        expert_bc_every=args_cli.expert_bc_every,
+        act_torchscript_device=act_torchscript_device,
         device=device,
     )
+    if checkpoint is not None:
+        if "target_critic1" in checkpoint:
+            trainer.target_critic1.load_state_dict(checkpoint["target_critic1"], strict=True)
+        if "target_critic2" in checkpoint:
+            trainer.target_critic2.load_state_dict(checkpoint["target_critic2"], strict=True)
+        if "actor_optimizer" in checkpoint:
+            trainer.actor_opt.load_state_dict(checkpoint["actor_optimizer"])
+        if "critic_optimizer" in checkpoint:
+            trainer.critic_opt.load_state_dict(checkpoint["critic_optimizer"])
+        print(f"[AIC SERL] Resumed target critics and optimizer state from checkpoint: {checkpoint_path}", flush=True)
 
     env_cfg = parse_env_cfg(
         args_cli.task,
@@ -1468,7 +2137,8 @@ def main() -> None:
     run_dir.mkdir(parents=True, exist_ok=True)
     metrics_path = run_dir / "metrics.jsonl"
     train_config = {
-        "checkpoint_path": str(checkpoint_path),
+        "checkpoint_path": None if checkpoint_path is None else str(checkpoint_path),
+        "act_only": bool(args_cli.act_only),
         "checkpoint": {
             "vision_offline_serl_config": offline_cfg,
             "dataset_summary": dataset_summary,
@@ -1483,6 +2153,7 @@ def main() -> None:
             ),
             "image_source": "raw_isaac_camera_sensor_rgb_resized_to_3x256x288",
             "act_torchscript": str(args_cli.act_torchscript),
+            "act_torchscript_device": str(act_torchscript_device),
             "action_executed": "first_action_from_flattened_chunk",
             "action_frame_contract": (
                 "actor outputs LeRobot/Gazebo gripper-tcp deltas; Isaac execution converts them "
@@ -1512,11 +2183,26 @@ def main() -> None:
             ),
             "gripper_joint_position": args_cli.gripper_joint_position,
             "task_geometry_reward": task_geometry_reward_config,
+            "expert_bc": {
+                "weight": expert_bc_weight,
+                "enabled": expert_prior is not None,
+                "prior": None if expert_prior is None else expert_prior.report(),
+                "every_updates": args_cli.expert_bc_every,
+                "loss": "smooth_l1(actor_action, nearest_expert_action_by_selected_state_indices)",
+                "scope": (
+                    "Small actor regularizer only. It does not change environment rewards "
+                    "and is not computed from cheatcode rollouts during training."
+                ),
+            },
             "image_logging": {
                 "save_step_images": args_cli.save_step_images,
                 "image_log_every": args_cli.image_log_every,
                 "max_logged_image_steps": args_cli.max_logged_image_steps,
                 "note": "Replay stores image tensors in memory for training; PNG logging is for audit/debug artifacts.",
+            },
+            "checkpointing": {
+                "save_every_steps": args_cli.save_every_steps,
+                "periodic_dir": "checkpoints",
             },
         },
         "args": vars(args_cli),
@@ -1546,6 +2232,20 @@ def main() -> None:
     stop_reason = "max_steps"
     for step in range(1, args_cli.steps + 1):
         step_start_time = time.monotonic()
+        if STOP_REQUESTED is not None:
+            stop_reason = STOP_REQUESTED
+            print(f"[AIC SERL] Stop requested before step {step}; saving and exiting.", flush=True)
+            break
+        if args_cli.ram_watchdog_min_available_gb > 0.0:
+            mem_available_gb = _mem_available_gb()
+            if mem_available_gb is not None and mem_available_gb < args_cli.ram_watchdog_min_available_gb:
+                stop_reason = f"ram_watchdog_{mem_available_gb:.1f}gb_available"
+                print(
+                    f"[AIC SERL] RAM watchdog stop before step {step}: "
+                    f"MemAvailable={mem_available_gb:.1f} GiB",
+                    flush=True,
+                )
+                break
         if args_cli.max_wall_time_minutes > 0.0:
             elapsed_minutes = (time.monotonic() - PROCESS_START_TIME) / 60.0
             if elapsed_minutes >= args_cli.max_wall_time_minutes:
@@ -1577,6 +2277,7 @@ def main() -> None:
         t0 = time.monotonic()
         next_obs, reward, terminated, truncated, _ = env.step(env_action)
         force_metrics = _force_delta_metrics(env, device=device)
+        reward_term_metrics = _reward_term_metrics(env, device=device)
         _timing_log(args_cli.debug_timing and step == 1, "env_step", t0)
         next_policy_obs = _policy_tensor(next_obs).to(device)
         t0 = time.monotonic()
@@ -1608,19 +2309,16 @@ def main() -> None:
             single_action_dim=single_action_dim,
         )
         for env_index in range(policy_obs.shape[0]):
-            replay.append(
-                {
-                    "obs": {"state": act_obs["state"][env_index], "images": {k: v[env_index] for k, v in act_obs["images"].items()}},
-                    "next_obs": {
-                        "state": next_act_obs["state"][env_index],
-                        "images": {k: v[env_index] for k, v in next_act_obs["images"].items()},
-                    },
-                    "action": action_for_critic[env_index],
-                    "reward": reward[env_index],
-                    "done": done[env_index],
-                    "metadata": _episode_metadata(env, env_index),
-                }
+            transition = _transition_payload(
+                act_obs=act_obs,
+                next_act_obs=next_act_obs,
+                action_for_critic=action_for_critic,
+                reward=reward,
+                done=done,
+                env_index=env_index,
+                metadata=_episode_metadata(env, env_index),
             )
+            replay.append(transition)
         policy_obs = next_policy_obs
         current_images = next_images
 
@@ -1646,6 +2344,9 @@ def main() -> None:
             "force_delta_norm_mean": float(force_metrics["force_delta_norm"].mean().detach().cpu()),
             "force_delta_penalty_mean": float(force_metrics["force_delta_penalty"].mean().detach().cpu()),
             "episodes": [_episode_metadata(env, idx) for idx in range(policy_obs.shape[0])],
+            "step_wall_s": time.monotonic() - step_start_time,
+            "env_steps_per_s": float(policy_obs.shape[0]) / max(time.monotonic() - step_start_time, 1.0e-9),
+            **reward_term_metrics,
             **last_metrics,
         }
         with metrics_path.open("a", encoding="utf-8") as f:
@@ -1656,16 +2357,27 @@ def main() -> None:
                 f"reward={row['reward_mean']:.6f} step_wall={time.monotonic() - step_start_time:.3f}s",
                 flush=True,
             )
+        if args_cli.save_every_steps > 0 and step % args_cli.save_every_steps == 0:
+            periodic_config = {
+                **train_config,
+                "result": _progress_result("periodic_checkpoint", step, updates_done),
+            }
+            periodic_path = run_dir / "checkpoints" / f"checkpoint_{step:06d}.pt"
+            _save_checkpoint(periodic_path, trainer, periodic_config, step)
+            print(f"Wrote periodic online SERL checkpoint: {periodic_path}", flush=True)
+        if args_cli.save_latest_every_steps > 0 and step % args_cli.save_latest_every_steps == 0:
+            latest_config = {
+                **train_config,
+                "result": _progress_result("latest_checkpoint", step, updates_done),
+            }
+            _save_checkpoint(run_dir / "checkpoint_latest.pt", trainer, latest_config, step)
+            print(f"Wrote latest online SERL checkpoint: {run_dir / 'checkpoint_latest.pt'}", flush=True)
         if updates_done >= args_cli.updates:
             stop_reason = "target_updates"
             break
 
-    train_config["result"] = {
-        "stop_reason": stop_reason,
-        "steps_completed": step if stop_reason != "max_wall_time" else max(step - 1, 0),
-        "updates_done": updates_done,
-        "elapsed_minutes": (time.monotonic() - PROCESS_START_TIME) / 60.0,
-    }
+    final_step = step if stop_reason != "max_wall_time" else max(step - 1, 0)
+    train_config["result"] = _progress_result(stop_reason, final_step, updates_done)
     (run_dir / "train_config.json").write_text(json.dumps(train_config, indent=2, sort_keys=True), encoding="utf-8")
     _save_checkpoint(run_dir / "checkpoint_latest.pt", trainer, train_config, train_config["result"]["steps_completed"])
     print(f"Wrote online SERL checkpoint: {run_dir / 'checkpoint_latest.pt'}")

@@ -39,6 +39,7 @@ def test_isaac_serl_plan_inspects_adapter_checkpoint(tmp_path: Path) -> None:
         kit_args=None,
         checkpoint=checkpoint,
         act_torchscript=tmp_path / "act_ts.pt",
+        act_torchscript_device="auto",
         output_dir=tmp_path / "out",
         steps=10,
         updates=2,
@@ -111,6 +112,8 @@ def test_isaac_serl_plan_inspects_adapter_checkpoint(tmp_path: Path) -> None:
     assert str(checkpoint) in cmd
     assert "--act_torchscript" in cmd
     assert str(tmp_path / "act_ts.pt") in cmd
+    assert "--act_torchscript_device" in cmd
+    assert "auto" in cmd
     assert "--updates" in cmd
     assert "2" in cmd
     assert "--rendering_mode" in cmd

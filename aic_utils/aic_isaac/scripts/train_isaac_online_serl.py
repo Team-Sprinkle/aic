@@ -52,8 +52,25 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         default=None,
         help="Optional raw Omniverse Kit args forwarded to IsaacLab, for driver/runtime debugging.",
     )
-    parser.add_argument("--checkpoint", type=Path, required=True)
+    parser.add_argument("--checkpoint", type=Path, default=None)
+    parser.add_argument(
+        "--act-only",
+        action="store_true",
+        help="Start from ACT TorchScript only with zero adapter and fresh critics.",
+    )
+    parser.add_argument("--act-only-state-dim", type=int, default=82)
+    parser.add_argument("--act-only-action-horizon", type=int, default=4)
+    parser.add_argument("--act-only-single-action-dim", type=int, default=6)
+    parser.add_argument("--act-only-adapter-hidden-dim", type=int, default=256)
+    parser.add_argument("--act-only-adapter-num-layers", type=int, default=2)
+    parser.add_argument("--act-only-adapter-activation", choices=["relu", "gelu", "tanh"], default="gelu")
     parser.add_argument("--act-torchscript", type=Path, required=True)
+    parser.add_argument(
+        "--act-torchscript-device",
+        choices=["auto", "cpu", "cuda"],
+        default="auto",
+        help="Device for frozen ACT TorchScript inference. Auto uses CUDA only for CUDA-exported TorchScript.",
+    )
     parser.add_argument("--output-dir", type=Path, default=Path("outputs/train/isaac_online_serl"))
     parser.add_argument("--steps", type=int, default=10_000)
     parser.add_argument("--updates", type=int, default=8)
@@ -62,11 +79,45 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser.add_argument("--warmup-steps", type=int, default=1_000)
     parser.add_argument("--max-wall-time-minutes", type=float, default=0.0)
     parser.add_argument("--log-every", type=int, default=10)
+    parser.add_argument(
+        "--save-every-steps",
+        type=int,
+        default=0,
+        help="Save periodic online SERL checkpoints every N Isaac environment steps. 0 disables periodic saves.",
+    )
+    parser.add_argument(
+        "--save-latest-every-steps",
+        type=int,
+        default=0,
+        help="Overwrite checkpoint_latest.pt every N Isaac environment steps. 0 only writes final latest.",
+    )
+    parser.add_argument(
+        "--ram-watchdog-min-available-gb",
+        type=float,
+        default=0.0,
+        help="If >0, trainer saves/exits when host MemAvailable drops below this many GiB.",
+    )
     parser.add_argument("--gamma", type=float, default=0.99)
     parser.add_argument("--tau", type=float, default=0.005)
     parser.add_argument("--adapter-lr", type=float, default=1e-4)
     parser.add_argument("--critic-lr", type=float, default=1e-4)
     parser.add_argument("--act-lr", type=float, default=1e-5)
+    parser.add_argument(
+        "--bc-weight",
+        type=float,
+        default=0.0,
+        help="Legacy expert BC fallback weight. Defaults to zero so BC is strictly opt-in.",
+    )
+    parser.add_argument("--expert-dataset-root", type=Path, default=None)
+    parser.add_argument("--expert-bc-weight", type=float, default=None)
+    parser.add_argument("--expert-bc-max-samples", type=int, default=8192)
+    parser.add_argument("--expert-bc-neighbor-chunk", type=int, default=8192)
+    parser.add_argument(
+        "--expert-bc-every",
+        type=int,
+        default=4,
+        help="Compute expert BC regularization every N actor updates. Use 1 for every update.",
+    )
     parser.add_argument("--adapter-penalty-weight", type=float, default=1e-3)
     parser.add_argument("--act-preservation-weight", type=float, default=1e-2)
     parser.add_argument("--adapter-delta-clip", type=float, default=0.05)
@@ -221,12 +272,38 @@ def build_plan(args: argparse.Namespace, *, inspect_required: bool = True) -> di
         batch_size=args.batch_size,
         warmup_steps=args.warmup_steps,
     )
-    checkpoint = inspect_checkpoint(args.checkpoint, required=inspect_required)
+    act_only = bool(getattr(args, "act_only", False))
+    act_only_state_dim = int(getattr(args, "act_only_state_dim", 82))
+    act_only_action_horizon = int(getattr(args, "act_only_action_horizon", 4))
+    act_only_single_action_dim = int(getattr(args, "act_only_single_action_dim", 6))
+    act_only_adapter_hidden_dim = int(getattr(args, "act_only_adapter_hidden_dim", 256))
+    act_only_adapter_num_layers = int(getattr(args, "act_only_adapter_num_layers", 2))
+    act_only_adapter_activation = str(getattr(args, "act_only_adapter_activation", "gelu"))
+    checkpoint = (
+        {
+            "path": None,
+            "exists": False,
+            "act_only": True,
+            "vision_offline_serl_config": {
+                "state_dim": act_only_state_dim,
+                "action_dim": act_only_action_horizon * act_only_single_action_dim,
+                "action_horizon": act_only_action_horizon,
+            },
+        }
+        if act_only
+        else inspect_checkpoint(args.checkpoint, required=inspect_required)
+    )
     insertion_progress_weight = float(getattr(args, "insertion_progress_weight", 0.25))
     insertion_progress_scale = float(getattr(args, "insertion_progress_scale", 0.003))
     insertion_orientation_std = float(getattr(args, "insertion_orientation_std", 0.03))
     insertion_orientation_gate_sigma = float(getattr(args, "insertion_orientation_gate_sigma", 0.012))
     insertion_terminal_weight = float(getattr(args, "insertion_terminal_weight", 1.0))
+    bc_weight = float(getattr(args, "bc_weight", 0.0))
+    expert_dataset_root = getattr(args, "expert_dataset_root", None)
+    expert_bc_weight = getattr(args, "expert_bc_weight", None)
+    expert_bc_max_samples = int(getattr(args, "expert_bc_max_samples", 8192))
+    expert_bc_neighbor_chunk = int(getattr(args, "expert_bc_neighbor_chunk", 8192))
+    expert_bc_every = int(getattr(args, "expert_bc_every", 4))
     return {
         "status": "implemented_short_run_capable",
         "note": (
@@ -246,13 +323,30 @@ def build_plan(args: argparse.Namespace, *, inspect_required: bool = True) -> di
         "updates": args.updates,
         "warmup_steps": args.warmup_steps,
         "max_wall_time_minutes": args.max_wall_time_minutes,
+        "save_every_steps": getattr(args, "save_every_steps", 0),
+        "save_latest_every_steps": getattr(args, "save_latest_every_steps", 0),
+        "ram_watchdog_min_available_gb": getattr(args, "ram_watchdog_min_available_gb", 0.0),
         "freeze_act": args.freeze_act,
+        "act_only": act_only,
+        "act_only_state_dim": act_only_state_dim,
+        "act_only_action_horizon": act_only_action_horizon,
+        "act_only_single_action_dim": act_only_single_action_dim,
+        "act_only_adapter_hidden_dim": act_only_adapter_hidden_dim,
+        "act_only_adapter_num_layers": act_only_adapter_num_layers,
+        "act_only_adapter_activation": act_only_adapter_activation,
         "act_torchscript": str(args.act_torchscript),
+        "act_torchscript_device": args.act_torchscript_device,
         "gamma": args.gamma,
         "tau": args.tau,
         "adapter_lr": args.adapter_lr,
         "critic_lr": args.critic_lr,
         "act_lr": args.act_lr,
+        "bc_weight": bc_weight,
+        "expert_dataset_root": str(expert_dataset_root) if expert_dataset_root else None,
+        "expert_bc_weight": expert_bc_weight,
+        "expert_bc_max_samples": expert_bc_max_samples,
+        "expert_bc_neighbor_chunk": expert_bc_neighbor_chunk,
+        "expert_bc_every": expert_bc_every,
         "adapter_penalty_weight": args.adapter_penalty_weight,
         "act_preservation_weight": args.act_preservation_weight,
         "adapter_delta_clip": args.adapter_delta_clip,
@@ -321,6 +415,12 @@ def build_command(args: argparse.Namespace) -> tuple[list[str], dict[str, str]]:
     insertion_orientation_std = float(getattr(args, "insertion_orientation_std", 0.03))
     insertion_orientation_gate_sigma = float(getattr(args, "insertion_orientation_gate_sigma", 0.012))
     insertion_terminal_weight = float(getattr(args, "insertion_terminal_weight", 1.0))
+    bc_weight = float(getattr(args, "bc_weight", 0.0))
+    expert_dataset_root = getattr(args, "expert_dataset_root", None)
+    expert_bc_weight = getattr(args, "expert_bc_weight", None)
+    expert_bc_max_samples = int(getattr(args, "expert_bc_max_samples", 8192))
+    expert_bc_neighbor_chunk = int(getattr(args, "expert_bc_neighbor_chunk", 8192))
+    expert_bc_every = int(getattr(args, "expert_bc_every", 4))
     cmd = [
         args.isaaclab,
         "-p",
@@ -331,10 +431,10 @@ def build_command(args: argparse.Namespace) -> tuple[list[str], dict[str, str]]:
         str(args.num_envs),
         "--seed",
         str(args.seed),
-        "--checkpoint",
-        str(args.checkpoint),
         "--act_torchscript",
         str(args.act_torchscript),
+        "--act_torchscript_device",
+        args.act_torchscript_device,
         "--output_dir",
         str(args.output_dir),
         "--run_name",
@@ -353,6 +453,12 @@ def build_command(args: argparse.Namespace) -> tuple[list[str], dict[str, str]]:
         str(args.max_wall_time_minutes),
         "--log_every",
         str(args.log_every),
+        "--save_every_steps",
+        str(getattr(args, "save_every_steps", 0)),
+        "--save_latest_every_steps",
+        str(getattr(args, "save_latest_every_steps", 0)),
+        "--ram_watchdog_min_available_gb",
+        str(getattr(args, "ram_watchdog_min_available_gb", 0.0)),
         "--gamma",
         str(args.gamma),
         "--tau",
@@ -363,6 +469,8 @@ def build_command(args: argparse.Namespace) -> tuple[list[str], dict[str, str]]:
         str(args.critic_lr),
         "--act_lr",
         str(args.act_lr),
+        "--bc_weight",
+        str(bc_weight),
         "--adapter_penalty_weight",
         str(args.adapter_penalty_weight),
         "--act_preservation_weight",
@@ -420,6 +528,43 @@ def build_command(args: argparse.Namespace) -> tuple[list[str], dict[str, str]]:
         "--target_reward_reaching_threshold",
         str(args.target_reward_reaching_threshold),
     ]
+    act_only = bool(getattr(args, "act_only", False))
+    if act_only:
+        cmd.extend(
+            [
+                "--act_only",
+                "--act_only_state_dim",
+                str(getattr(args, "act_only_state_dim", 82)),
+                "--act_only_action_horizon",
+                str(getattr(args, "act_only_action_horizon", 4)),
+                "--act_only_single_action_dim",
+                str(getattr(args, "act_only_single_action_dim", 6)),
+                "--act_only_adapter_hidden_dim",
+                str(getattr(args, "act_only_adapter_hidden_dim", 256)),
+                "--act_only_adapter_num_layers",
+                str(getattr(args, "act_only_adapter_num_layers", 2)),
+                "--act_only_adapter_activation",
+                str(getattr(args, "act_only_adapter_activation", "gelu")),
+            ]
+        )
+        if args.checkpoint is not None:
+            cmd.extend(["--checkpoint", str(args.checkpoint)])
+    else:
+        cmd.extend(["--checkpoint", str(args.checkpoint)])
+    if expert_dataset_root is not None:
+        cmd.extend(["--expert_dataset_root", str(expert_dataset_root)])
+    if expert_bc_weight is not None:
+        cmd.extend(["--expert_bc_weight", str(expert_bc_weight)])
+    cmd.extend(
+        [
+            "--expert_bc_max_samples",
+            str(expert_bc_max_samples),
+            "--expert_bc_neighbor_chunk",
+            str(expert_bc_neighbor_chunk),
+            "--expert_bc_every",
+            str(expert_bc_every),
+        ]
+    )
     if args.task_distribution_yaml is not None:
         cmd.extend(["--task_distribution_yaml", str(args.task_distribution_yaml)])
     if args.episode_config_dir is not None:
@@ -466,6 +611,14 @@ def build_command(args: argparse.Namespace) -> tuple[list[str], dict[str, str]]:
 def validate_launch_inputs(args: argparse.Namespace) -> None:
     if not args.act_torchscript.exists():
         raise FileNotFoundError(f"ACT TorchScript checkpoint does not exist: {args.act_torchscript}")
+    if bool(getattr(args, "act_only", False)):
+        if args.checkpoint is not None and not args.checkpoint.exists():
+            raise FileNotFoundError(f"Checkpoint does not exist: {args.checkpoint}")
+    else:
+        if args.checkpoint is None:
+            raise ValueError("--checkpoint is required unless --act-only is set")
+        if not args.checkpoint.exists():
+            raise FileNotFoundError(f"Checkpoint does not exist: {args.checkpoint}")
     if args.warmup_steps < 0:
         raise ValueError("--warmup-steps must be non-negative")
     if args.batch_size <= 0:
@@ -493,6 +646,12 @@ def validate_launch_inputs(args: argparse.Namespace) -> None:
             "--warmup-steps is larger than the maximum transitions collected by "
             "--steps * --num-envs, so no online updates would run"
         )
+    if getattr(args, "save_every_steps", 0) < 0:
+        raise ValueError("--save-every-steps must be non-negative")
+    if getattr(args, "save_latest_every_steps", 0) < 0:
+        raise ValueError("--save-latest-every-steps must be non-negative")
+    if getattr(args, "ram_watchdog_min_available_gb", 0.0) < 0.0:
+        raise ValueError("--ram-watchdog-min-available-gb must be non-negative")
 
 
 def prepare_user_episode_configs(args: argparse.Namespace) -> dict[str, Any] | None:

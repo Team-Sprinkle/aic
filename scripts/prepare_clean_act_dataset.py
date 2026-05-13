@@ -51,9 +51,25 @@ def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--s3-clean-root", type=Path, default=Path("outputs/s3_clean"))
     parser.add_argument(
+        "--clean-root",
+        type=Path,
+        action="append",
+        default=None,
+        help=(
+            "Clean dataset root to scan. May be passed multiple times. "
+            "If omitted, --s3-clean-root is used for backwards compatibility."
+        ),
+    )
+    parser.add_argument(
         "--output-root",
         type=Path,
         default=Path("outputs/hf_combined/clean_sfp_to_nic_sc_to_sc_task_conditioned_contact_features"),
+    )
+    parser.add_argument(
+        "--reward-objective",
+        choices=["none", "insertion", "near_gate"],
+        default="none",
+        help="Recompute dense offline rewards while materializing the canonical 82D dataset.",
     )
     parser.add_argument("--overwrite", action="store_true")
     return parser.parse_args()
@@ -189,7 +205,7 @@ def _task_row(
 
 def main() -> None:
     args = parse_args()
-    clean_root = args.s3_clean_root.resolve()
+    clean_roots = [p.resolve() for p in (args.clean_root or [args.s3_clean_root])]
     output_root = args.output_root.resolve()
     raw_root = output_root.parent / f"{output_root.name}_raw32"
     fake_score_dir = output_root.parent / f"{output_root.name}_fake_scores"
@@ -201,13 +217,24 @@ def main() -> None:
         shutil.rmtree(raw_root, ignore_errors=True)
         shutil.rmtree(fake_score_dir, ignore_errors=True)
 
-    roots = sorted(
-        p.parent.parent
-        for p in clean_root.glob("**/accepted_dataset/meta/info.json")
-        if any(part in {"sfp_to_nic", "sc_to_sc"} for part in p.parts) and _has_source_data(p.parent.parent)
-    )
+    roots_by_key: dict[str, Path] = {}
+    for clean_root in clean_roots:
+        for info_path in clean_root.glob("**/accepted_dataset/meta/info.json"):
+            root = info_path.parent.parent
+            if not any(part in {"sfp_to_nic", "sc_to_sc"} for part in root.parts):
+                continue
+            if not _has_source_data(root):
+                continue
+            try:
+                key = str(root.relative_to(clean_root))
+            except ValueError:
+                key = str(root)
+            # Earlier --clean-root entries win. This lets callers put a freshly
+            # synced root before an older local mirror while avoiding duplicates.
+            roots_by_key.setdefault(key, root)
+    roots = sorted(roots_by_key.values())
     if not roots:
-        raise RuntimeError(f"No accepted_dataset roots found under {clean_root}")
+        raise RuntimeError(f"No accepted_dataset roots found under {clean_roots}")
 
     score_csvs = [_fake_score_csv(root, fake_score_dir) for root in roots]
     cmd = [
@@ -266,6 +293,8 @@ def main() -> None:
             str(manifest_path),
             "--output-root",
             str(output_root),
+            "--reward-objective",
+            str(args.reward_objective),
             "--overwrite",
         ],
         cwd=REPO_ROOT,
@@ -275,8 +304,10 @@ def main() -> None:
     info = json.loads((output_root / "meta" / "info.json").read_text(encoding="utf-8"))
     report = {
         "accepted_dataset_roots": len(roots),
+        "clean_roots": [str(path) for path in clean_roots],
         "output_root": str(output_root),
         "raw_root": str(raw_root),
+        "reward_objective": args.reward_objective,
         "manifest": str(manifest_path),
         "total_episodes": info.get("total_episodes"),
         "total_frames": info.get("total_frames"),

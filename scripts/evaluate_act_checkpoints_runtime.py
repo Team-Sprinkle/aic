@@ -138,12 +138,32 @@ def run_engine_monitoring_sim(
             stderr=subprocess.STDOUT,
         )
         start = time.monotonic()
+        sim_failed_after_score_at: float | None = None
         while True:
             engine_returncode = engine_proc.poll()
             if engine_returncode is not None:
                 return engine_returncode, None
 
             sim_returncode = sim_proc.poll()
+            engine_log = ""
+            if engine_log_path.exists():
+                try:
+                    engine_log = engine_log_path.read_text(encoding="utf-8", errors="replace")
+                except OSError:
+                    engine_log = ""
+            score_reported = "Finished scoring trial, total score is:" in engine_log
+            if sim_returncode is not None and score_reported:
+                if sim_failed_after_score_at is None:
+                    sim_failed_after_score_at = time.monotonic()
+                if time.monotonic() - sim_failed_after_score_at <= 45.0:
+                    time.sleep(1.0)
+                    continue
+                stop_process(engine_proc)
+                return None, (
+                    "simulator exited after a trial score was reported, but aic_engine "
+                    "did not finish within the post-score grace period "
+                    f"(sim returncode={sim_returncode})"
+                )
             if sim_returncode is not None:
                 stop_process(engine_proc)
                 return None, f"simulator exited while engine was running (returncode={sim_returncode})"
@@ -153,6 +173,17 @@ def run_engine_monitoring_sim(
                     sim_log = sim_log_path.read_text(encoding="utf-8", errors="replace")
                 except OSError:
                     sim_log = ""
+                if "ros_gz_container" in sim_log and "process has died" in sim_log and score_reported:
+                    if sim_failed_after_score_at is None:
+                        sim_failed_after_score_at = time.monotonic()
+                    if time.monotonic() - sim_failed_after_score_at <= 45.0:
+                        time.sleep(1.0)
+                        continue
+                    stop_process(engine_proc)
+                    return None, (
+                        "ros_gz_container died after a trial score was reported, but aic_engine "
+                        "did not finish within the post-score grace period"
+                    )
                 if "ros_gz_container" in sim_log and "process has died" in sim_log:
                     stop_process(engine_proc)
                     return None, "ros_gz_container died while engine was running"
@@ -300,8 +331,12 @@ ros2 run aic_engine aic_engine --ros-args \\
     return summary
 
 
+def checkpoint_eval_step(checkpoint_path: Path) -> str:
+    return checkpoint_path.parent.name if checkpoint_path.is_dir() else checkpoint_path.stem
+
+
 def evaluate_checkpoint(checkpoint_path: Path, args: argparse.Namespace) -> dict[str, object]:
-    step = checkpoint_path.parent.name if checkpoint_path.is_dir() else checkpoint_path.stem
+    step = checkpoint_eval_step(checkpoint_path)
     final_eval_dir = args.run_dir.resolve() / args.eval_subdir / step
     final_eval_dir.mkdir(parents=True, exist_ok=True)
 
@@ -355,7 +390,7 @@ def main() -> int:
         for checkpoint in iter_checkpoints(args):
             if checkpoint in evaluated:
                 continue
-            marker = args.run_dir / args.eval_subdir / checkpoint.parent.name / "eval_summary.json"
+            marker = args.run_dir / args.eval_subdir / checkpoint_eval_step(checkpoint) / "eval_summary.json"
             if marker.exists():
                 evaluated.add(checkpoint)
                 continue

@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import argparse
+import time
 import subprocess
 import sys
 from pathlib import Path
@@ -30,6 +31,12 @@ def parse_args() -> argparse.Namespace:
         help="Skip output roots that already contain contact/recovery feature metadata.",
     )
     parser.add_argument("--limit", type=int, default=None)
+    parser.add_argument(
+        "--changed-since-epoch",
+        type=float,
+        default=None,
+        help="Only process dataset roots containing at least one file modified at or after this Unix timestamp.",
+    )
     return parser.parse_args()
 
 
@@ -40,6 +47,21 @@ def dataset_roots(input_root: Path) -> list[Path]:
         if (root / "data").is_dir():
             roots.append(root)
     return roots
+
+
+def root_changed_since(dataset_root: Path, changed_since_epoch: float | None) -> bool:
+    if changed_since_epoch is None:
+        return True
+    cutoff = float(changed_since_epoch)
+    for path in dataset_root.rglob("*"):
+        if not path.is_file():
+            continue
+        try:
+            if path.stat().st_mtime >= cutoff:
+                return True
+        except FileNotFoundError:
+            continue
+    return False
 
 
 def main() -> None:
@@ -54,10 +76,18 @@ def main() -> None:
         / "add_contact_recovery_features.py"
     )
     roots = dataset_roots(input_root)
+    roots = [root for root in roots if root_changed_since(root, args.changed_since_epoch)]
     if args.limit is not None:
         roots = roots[: args.limit]
     if not roots:
-        raise FileNotFoundError(f"No LeRobot dataset roots found under {input_root}")
+        if args.changed_since_epoch is None:
+            raise FileNotFoundError(f"No LeRobot dataset roots found under {input_root}")
+        print(
+            f"No LeRobot dataset roots changed since {args.changed_since_epoch} "
+            f"({time.strftime('%Y-%m-%dT%H:%M:%SZ', time.gmtime(args.changed_since_epoch))}) under {input_root}",
+            flush=True,
+        )
+        return
 
     for index, dataset_root in enumerate(roots, start=1):
         rel = dataset_root.relative_to(input_root)
