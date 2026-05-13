@@ -15,8 +15,11 @@ COPY pixi_env_setup.sh /ws_aic/src/aic/
 # Add other dependencies
 
 SHELL ["/bin/bash", "-c"]
-RUN --mount=type=cache,target=/root/.cache/rattler/cache --mount=type=cache,target=/ws_aic/src/aic/.pixi/build \
-    cd /ws_aic/src/aic && pixi install --locked
+RUN rm -rf /root/.cache/rattler/cache /ws_aic/src/aic/.pixi \
+ && cd /ws_aic/src/aic \
+ && rm -f pixi.lock \
+ && pixi install --concurrent-downloads 1 --concurrent-solves 1
+
 
 WORKDIR /ws_aic/src/aic
 COPY --chmod=755 <<"EOF" /entrypoint.sh
@@ -57,4 +60,4 @@ exec pixi run --as-is ros2 run aic_model aic_model "$@"
 EOF
 
 ENTRYPOINT ["/entrypoint.sh"]
-CMD ["--ros-args", "-p", "policy:=aic_example_policies.ros.TransportToMean", "-p", "use_sim_time:=true"]
+CMD ["--ros-args", "-p", "policy:=aic_example_policies.ros.MagentaSquare", "-p", "use_sim_time:=true"]
