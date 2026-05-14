@@ -22,6 +22,8 @@ from isaaclab.assets import Articulation, RigidObject
 from isaaclab.managers import SceneEntityCfg
 from isaaclab.utils.math import combine_frame_transforms, quat_apply, quat_error_magnitude, quat_mul
 
+from .force_penalty import force_delta_penalty_curve
+
 if TYPE_CHECKING:
     from isaaclab.envs import ManagerBasedRLEnv
 
@@ -201,6 +203,25 @@ def _episode_target_position_w(env: ManagerBasedRLEnv) -> torch.Tensor | None:
     return torch.stack(rows, dim=0)
 
 
+def _episode_insertion_axis_w(env: ManagerBasedRLEnv) -> torch.Tensor | None:
+    episode_by_env = getattr(env, "_aic_current_episode_by_env", None)
+    if not episode_by_env:
+        return None
+    origins = env.scene.env_origins
+    rows: list[torch.Tensor] = []
+    for env_id in range(env.num_envs):
+        episode = episode_by_env.get(env_id)
+        if not episode:
+            return None
+        target = ((episode.get("scene") or {}).get("target") or {})
+        axis = target.get("insertion_axis_world")
+        if axis is None:
+            return None
+        axis_tensor = torch.tensor(axis, dtype=origins.dtype, device=origins.device)
+        rows.append(axis_tensor / torch.linalg.norm(axis_tensor).clamp(min=1.0e-9))
+    return torch.stack(rows, dim=0)
+
+
 def _episode_target_orientation_w(env: ManagerBasedRLEnv) -> torch.Tensor | None:
     episode_by_env = getattr(env, "_aic_current_episode_by_env", None)
     if not episode_by_env:
@@ -263,13 +284,163 @@ def _target_orientation_w(
     return _offset_quat_w(target_asset.data.root_quat_w, target_orientation_offset)
 
 
+def _quat_conjugate_wxyz(quat: torch.Tensor) -> torch.Tensor:
+    return torch.cat([quat[:, 0:1], -quat[:, 1:4]], dim=1)
+
+
+def _target_frame_delta(
+    env: ManagerBasedRLEnv,
+    body_asset: RigidObject,
+    body_id: int,
+    target_asset: RigidObject,
+    *,
+    target_position_offset: tuple[float, float, float] | list[float] | None,
+    body_position_offset: tuple[float, float, float] | list[float] | None,
+    target_orientation_offset: tuple[float, float, float, float] | list[float] | None,
+) -> torch.Tensor:
+    body_pos_w = _body_position_w(body_asset, body_id, body_position_offset)
+    target_pos_w = _target_position_w(env, target_asset, target_position_offset)
+    target_quat_w = _target_orientation_w(env, target_asset, target_orientation_offset)
+    return quat_apply(_quat_conjugate_wxyz(target_quat_w), body_pos_w - target_pos_w)
+
+
+def _lateral_error_from_delta(delta_target: torch.Tensor, insertion_axis: int) -> torch.Tensor:
+    axis = int(insertion_axis)
+    if axis < 0 or axis > 2:
+        raise ValueError(f"insertion_axis must be 0, 1, or 2, got {insertion_axis}")
+    mask = torch.ones(3, dtype=torch.bool, device=delta_target.device)
+    mask[axis] = False
+    return torch.norm(delta_target[:, mask], dim=1)
+
+
+def _axis_lateral_error_w(body_pos_w: torch.Tensor, target_pos_w: torch.Tensor, axis_w: torch.Tensor) -> torch.Tensor:
+    delta = body_pos_w - target_pos_w
+    axial = torch.sum(delta * axis_w, dim=1, keepdim=True) * axis_w
+    lateral = delta - axial
+    return torch.norm(lateral, dim=1)
+
+
+def _semantic_axial_lateral_errors(
+    env: ManagerBasedRLEnv,
+    body_asset: RigidObject,
+    body_id: int,
+    target_asset: RigidObject,
+    *,
+    insertion_axis: int,
+    target_position_offset: tuple[float, float, float] | list[float] | None,
+    body_position_offset: tuple[float, float, float] | list[float] | None,
+    target_orientation_offset: tuple[float, float, float, float] | list[float] | None,
+) -> tuple[torch.Tensor, torch.Tensor]:
+    """Return absolute axial and lateral error using episode insertion-axis metadata when present."""
+    axis_w = _episode_insertion_axis_w(env)
+    if axis_w is not None:
+        body_pos_w = _body_position_w(body_asset, body_id, body_position_offset)
+        target_pos_w = _target_position_w(env, target_asset, target_position_offset)
+        axis_w = axis_w.to(device=body_pos_w.device, dtype=body_pos_w.dtype)
+        delta_w = body_pos_w - target_pos_w
+        axial_error = torch.abs(torch.sum(delta_w * axis_w, dim=1))
+        lateral_error = _axis_lateral_error_w(body_pos_w, target_pos_w, axis_w)
+        return axial_error, lateral_error
+
+    delta_target = _target_frame_delta(
+        env,
+        body_asset,
+        body_id,
+        target_asset,
+        target_position_offset=target_position_offset,
+        body_position_offset=body_position_offset,
+        target_orientation_offset=target_orientation_offset,
+    )
+    axis = int(insertion_axis)
+    if axis < 0 or axis > 2:
+        raise ValueError(f"insertion_axis must be 0, 1, or 2, got {insertion_axis}")
+    return torch.abs(delta_target[:, axis]), _lateral_error_from_delta(delta_target, axis)
+
+
+def _semantic_lateral_error(
+    env: ManagerBasedRLEnv,
+    body_asset: RigidObject,
+    body_id: int,
+    target_asset: RigidObject,
+    *,
+    insertion_axis: int,
+    target_position_offset: tuple[float, float, float] | list[float] | None,
+    body_position_offset: tuple[float, float, float] | list[float] | None,
+    target_orientation_offset: tuple[float, float, float, float] | list[float] | None,
+) -> torch.Tensor:
+    axis_w = _episode_insertion_axis_w(env)
+    if axis_w is not None:
+        body_pos_w = _body_position_w(body_asset, body_id, body_position_offset)
+        target_pos_w = _target_position_w(env, target_asset, target_position_offset)
+        return _axis_lateral_error_w(body_pos_w, target_pos_w, axis_w.to(device=body_pos_w.device, dtype=body_pos_w.dtype))
+    delta_target = _target_frame_delta(
+        env,
+        body_asset,
+        body_id,
+        target_asset,
+        target_position_offset=target_position_offset,
+        body_position_offset=body_position_offset,
+        target_orientation_offset=target_orientation_offset,
+    )
+    return _lateral_error_from_delta(delta_target, insertion_axis)
+
+
+def _reset_previous_on_episode_start(
+    previous: torch.Tensor,
+    current: torch.Tensor,
+    reset_mask: torch.Tensor | None,
+) -> torch.Tensor:
+    previous = previous.to(current.device)
+    if reset_mask is None:
+        return previous
+    mask = reset_mask.to(current.device)
+    while mask.ndim < current.ndim:
+        mask = mask.unsqueeze(-1)
+    return torch.where(mask <= 1, current.detach(), previous)
+
+
+def _positive_reward_lateral_gate(
+    reward: torch.Tensor,
+    lateral_error: torch.Tensor,
+    lateral_gate_sigma: float | None,
+) -> torch.Tensor:
+    if lateral_gate_sigma is None or float(lateral_gate_sigma) <= 0.0:
+        return reward
+    gate = torch.exp(-torch.square(lateral_error / max(float(lateral_gate_sigma), 1.0e-9)))
+    return torch.where(reward > 0.0, reward * gate, reward)
+
+
+def _insertion_progress_lateral_gate(
+    reward: torch.Tensor,
+    lateral_error: torch.Tensor,
+    lateral_gate_sigma: float | None,
+) -> torch.Tensor:
+    """Gate insertion-direction progress and punish positive progress while off-center.
+
+    A pure positive gate still lets policies collect small-but-positive reward by
+    moving along the insertion axis beside the port. For insertion-specific
+    progress terms, positive progress should only stay positive when the lateral
+    error is already small. When the tip is laterally misaligned, the same
+    insertion-direction motion is treated as a bad move because it bypasses the
+    entrance rather than entering it.
+    """
+    if lateral_gate_sigma is None or float(lateral_gate_sigma) <= 0.0:
+        return reward
+    gate = torch.exp(-torch.square(lateral_error / max(float(lateral_gate_sigma), 1.0e-9)))
+    signed_gate = 2.0 * gate - 1.0
+    return torch.where(reward > 0.0, reward * signed_gate, reward)
+
+
 def body_to_object_distance_tanh(
     env: ManagerBasedRLEnv,
     std: float,
     body_cfg: SceneEntityCfg,
     target_cfg: SceneEntityCfg,
+    insertion_axis: int = 0,
+    lateral_gate_sigma: float | None = None,
     target_position_offset: tuple[float, float, float] | list[float] | None = None,
     body_position_offset: tuple[float, float, float] | list[float] | None = None,
+    target_orientation_offset: tuple[float, float, float, float] | list[float] | None = None,
 ) -> torch.Tensor:
     """Reward a body approaching a target object's root pose.
 
@@ -283,7 +454,20 @@ def body_to_object_distance_tanh(
     body_pos_w = _body_position_w(body_asset, body_cfg.body_ids[0], body_position_offset)
     target_pos_w = _target_position_w(env, target_asset, target_position_offset)
     distance = torch.norm(body_pos_w - target_pos_w, dim=1)
-    return 1.0 - torch.tanh(distance / std)
+    reward = 1.0 - torch.tanh(distance / std)
+    if lateral_gate_sigma is None or float(lateral_gate_sigma) <= 0.0:
+        return reward
+    lateral_error = _semantic_lateral_error(
+        env,
+        body_asset,
+        body_cfg.body_ids[0],
+        target_asset,
+        insertion_axis=insertion_axis,
+        target_position_offset=target_position_offset,
+        body_position_offset=body_position_offset,
+        target_orientation_offset=target_orientation_offset,
+    )
+    return _positive_reward_lateral_gate(reward, lateral_error, lateral_gate_sigma)
 
 
 def body_to_object_distance_exp(
@@ -291,8 +475,11 @@ def body_to_object_distance_exp(
     sigma: float,
     body_cfg: SceneEntityCfg,
     target_cfg: SceneEntityCfg,
+    insertion_axis: int = 0,
+    lateral_gate_sigma: float | None = None,
     target_position_offset: tuple[float, float, float] | list[float] | None = None,
     body_position_offset: tuple[float, float, float] | list[float] | None = None,
+    target_orientation_offset: tuple[float, float, float, float] | list[float] | None = None,
 ) -> torch.Tensor:
     """Reward precise body-to-target proximity using an exponential kernel."""
     body_asset: RigidObject = env.scene[body_cfg.name]
@@ -300,7 +487,20 @@ def body_to_object_distance_exp(
     body_pos_w = _body_position_w(body_asset, body_cfg.body_ids[0], body_position_offset)
     target_pos_w = _target_position_w(env, target_asset, target_position_offset)
     dist_sq = torch.sum(torch.square(body_pos_w - target_pos_w), dim=1)
-    return torch.exp(-dist_sq / (sigma**2))
+    reward = torch.exp(-dist_sq / (sigma**2))
+    if lateral_gate_sigma is None or float(lateral_gate_sigma) <= 0.0:
+        return reward
+    lateral_error = _semantic_lateral_error(
+        env,
+        body_asset,
+        body_cfg.body_ids[0],
+        target_asset,
+        insertion_axis=insertion_axis,
+        target_position_offset=target_position_offset,
+        body_position_offset=body_position_offset,
+        target_orientation_offset=target_orientation_offset,
+    )
+    return _positive_reward_lateral_gate(reward, lateral_error, lateral_gate_sigma)
 
 
 def body_to_object_distance_progress(
@@ -308,8 +508,11 @@ def body_to_object_distance_progress(
     scale: float,
     body_cfg: SceneEntityCfg,
     target_cfg: SceneEntityCfg,
+    insertion_axis: int = 0,
+    lateral_gate_sigma: float | None = None,
     target_position_offset: tuple[float, float, float] | list[float] | None = None,
     body_position_offset: tuple[float, float, float] | list[float] | None = None,
+    target_orientation_offset: tuple[float, float, float, float] | list[float] | None = None,
 ) -> torch.Tensor:
     """Reward one-step progress toward the semantic target point.
 
@@ -331,7 +534,158 @@ def body_to_object_distance_progress(
             previous = torch.where(reset_mask.to(distance.device) <= 1, distance.detach(), previous)
     progress = ((previous - distance) / max(float(scale), 1.0e-9)).clamp(min=-1.0, max=1.0)
     setattr(env, "_aic_previous_target_distance", distance.detach().clone())
-    return progress
+    if lateral_gate_sigma is None or float(lateral_gate_sigma) <= 0.0:
+        return progress
+    lateral_error = _semantic_lateral_error(
+        env,
+        body_asset,
+        body_cfg.body_ids[0],
+        target_asset,
+        insertion_axis=insertion_axis,
+        target_position_offset=target_position_offset,
+        body_position_offset=body_position_offset,
+        target_orientation_offset=target_orientation_offset,
+    )
+    return _insertion_progress_lateral_gate(progress, lateral_error, lateral_gate_sigma)
+
+
+def body_to_object_motion_projection(
+    env: ManagerBasedRLEnv,
+    scale: float,
+    body_cfg: SceneEntityCfg,
+    target_cfg: SceneEntityCfg,
+    insertion_axis: int = 0,
+    lateral_gate_sigma: float | None = None,
+    target_position_offset: tuple[float, float, float] | list[float] | None = None,
+    body_position_offset: tuple[float, float, float] | list[float] | None = None,
+    target_orientation_offset: tuple[float, float, float, float] | list[float] | None = None,
+) -> torch.Tensor:
+    """Reward actual tip motion whose realized displacement points toward the target.
+
+    This uses the measured body pose after physics, not the commanded action. It is
+    therefore useful for catching frame/sign mistakes and controller realization
+    issues: if the policy command moves the tip away from the gate, the term is
+    negative even if the action vector itself looked reasonable.
+    """
+    body_asset: RigidObject = env.scene[body_cfg.name]
+    target_asset: RigidObject = env.scene[target_cfg.name]
+    current = _body_position_w(body_asset, body_cfg.body_ids[0], body_position_offset)
+    target = _target_position_w(env, target_asset, target_position_offset)
+    previous = getattr(env, "_aic_previous_motion_projection_body_pos_w", None)
+    reset_mask = getattr(env, "episode_length_buf", None)
+    if previous is None or previous.shape != current.shape:
+        previous = current.detach().clone()
+    else:
+        previous = _reset_previous_on_episode_start(previous, current, reset_mask)
+    motion = current - previous
+    direction = target - previous
+    direction = direction / torch.linalg.norm(direction, dim=1, keepdim=True).clamp(min=1.0e-9)
+    projection = torch.sum(motion * direction, dim=1)
+    reward = (projection / max(float(scale), 1.0e-9)).clamp(min=-1.0, max=1.0)
+    setattr(env, "_aic_previous_motion_projection_body_pos_w", current.detach().clone())
+    if lateral_gate_sigma is None or float(lateral_gate_sigma) <= 0.0:
+        return reward
+    lateral_error = _semantic_lateral_error(
+        env,
+        body_asset,
+        body_cfg.body_ids[0],
+        target_asset,
+        insertion_axis=insertion_axis,
+        target_position_offset=target_position_offset,
+        body_position_offset=body_position_offset,
+        target_orientation_offset=target_orientation_offset,
+    )
+    return _insertion_progress_lateral_gate(reward, lateral_error, lateral_gate_sigma)
+
+
+def body_to_object_lateral_progress(
+    env: ManagerBasedRLEnv,
+    scale: float,
+    body_cfg: SceneEntityCfg,
+    target_cfg: SceneEntityCfg,
+    insertion_axis: int = 0,
+    target_position_offset: tuple[float, float, float] | list[float] | None = None,
+    body_position_offset: tuple[float, float, float] | list[float] | None = None,
+    target_orientation_offset: tuple[float, float, float, float] | list[float] | None = None,
+) -> torch.Tensor:
+    """Reward reduction of lateral error in the target/port frame."""
+    body_asset: RigidObject = env.scene[body_cfg.name]
+    target_asset: RigidObject = env.scene[target_cfg.name]
+    lateral_error = _semantic_lateral_error(
+        env,
+        body_asset,
+        body_cfg.body_ids[0],
+        target_asset,
+        insertion_axis=insertion_axis,
+        target_position_offset=target_position_offset,
+        body_position_offset=body_position_offset,
+        target_orientation_offset=target_orientation_offset,
+    )
+    previous = getattr(env, "_aic_previous_target_lateral_error", None)
+    reset_mask = getattr(env, "episode_length_buf", None)
+    if previous is None or previous.shape != lateral_error.shape:
+        previous = lateral_error.detach().clone()
+    else:
+        previous = _reset_previous_on_episode_start(previous, lateral_error, reset_mask)
+    reward = ((previous - lateral_error) / max(float(scale), 1.0e-9)).clamp(min=-1.0, max=1.0)
+    setattr(env, "_aic_previous_target_lateral_error", lateral_error.detach().clone())
+    return reward
+
+
+def body_to_object_axial_progress(
+    env: ManagerBasedRLEnv,
+    scale: float,
+    body_cfg: SceneEntityCfg,
+    target_cfg: SceneEntityCfg,
+    insertion_axis: int = 0,
+    lateral_gate_sigma: float | None = None,
+    target_position_offset: tuple[float, float, float] | list[float] | None = None,
+    body_position_offset: tuple[float, float, float] | list[float] | None = None,
+    target_orientation_offset: tuple[float, float, float, float] | list[float] | None = None,
+) -> torch.Tensor:
+    """Reward reducing signed gap along the insertion axis in the target frame.
+
+    Euclidean distance can improve when the tip moves diagonally toward the side
+    of the card. This term is stricter: it pays only when the absolute axial
+    gap to the target insertion point shrinks, and positive rewards are laterally
+    gated so off-center downward motion is not treated as good insertion.
+    """
+    body_asset: RigidObject = env.scene[body_cfg.name]
+    target_asset: RigidObject = env.scene[target_cfg.name]
+    axis_w = _episode_insertion_axis_w(env)
+    if axis_w is not None:
+        body_pos_w = _body_position_w(body_asset, body_cfg.body_ids[0], body_position_offset)
+        target_pos_w = _target_position_w(env, target_asset, target_position_offset)
+        delta_w = body_pos_w - target_pos_w
+        axis_w = axis_w.to(device=body_pos_w.device, dtype=body_pos_w.dtype)
+        axial_error = torch.abs(torch.sum(delta_w * axis_w, dim=1))
+        lateral_error = _axis_lateral_error_w(body_pos_w, target_pos_w, axis_w)
+    else:
+        delta_target = _target_frame_delta(
+            env,
+            body_asset,
+            body_cfg.body_ids[0],
+            target_asset,
+            target_position_offset=target_position_offset,
+            body_position_offset=body_position_offset,
+            target_orientation_offset=target_orientation_offset,
+        )
+        axis = int(insertion_axis)
+        if axis < 0 or axis > 2:
+            raise ValueError(f"insertion_axis must be 0, 1, or 2, got {insertion_axis}")
+        axial_error = torch.abs(delta_target[:, axis])
+        lateral_error = _lateral_error_from_delta(delta_target, axis)
+    previous = getattr(env, "_aic_previous_target_axial_error", None)
+    reset_mask = getattr(env, "episode_length_buf", None)
+    if previous is None or previous.shape != axial_error.shape:
+        previous = axial_error.detach().clone()
+    else:
+        previous = _reset_previous_on_episode_start(previous, axial_error, reset_mask)
+    reward = ((previous - axial_error) / max(float(scale), 1.0e-9)).clamp(min=-1.0, max=1.0)
+    setattr(env, "_aic_previous_target_axial_error", axial_error.detach().clone())
+    if lateral_gate_sigma is None or float(lateral_gate_sigma) <= 0.0:
+        return reward
+    return _insertion_progress_lateral_gate(reward, lateral_error, lateral_gate_sigma)
 
 
 def body_to_object_orientation_tanh(
@@ -399,20 +753,76 @@ def body_to_object_reaching_bonus(
     return (distance < threshold).float()
 
 
+def body_to_object_success(
+    env: ManagerBasedRLEnv,
+    threshold: float,
+    body_cfg: SceneEntityCfg,
+    target_cfg: SceneEntityCfg,
+    insertion_axis: int = 0,
+    axial_threshold: float | None = None,
+    lateral_threshold: float | None = None,
+    target_position_offset: tuple[float, float, float] | list[float] | None = None,
+    body_position_offset: tuple[float, float, float] | list[float] | None = None,
+    target_orientation_offset: tuple[float, float, float, float] | list[float] | None = None,
+) -> torch.Tensor:
+    """Terminate when the selected body is centered and seated at the semantic target."""
+    if float(threshold) <= 0.0:
+        return torch.zeros(env.num_envs, dtype=torch.bool, device=env.device)
+    body_asset: RigidObject = env.scene[body_cfg.name]
+    target_asset: RigidObject = env.scene[target_cfg.name]
+    body_pos_w = _body_position_w(body_asset, body_cfg.body_ids[0], body_position_offset)
+    target_pos_w = _target_position_w(env, target_asset, target_position_offset)
+    distance_success = torch.norm(body_pos_w - target_pos_w, dim=1) <= float(threshold)
+    if axial_threshold is None and lateral_threshold is None:
+        return distance_success
+
+    axial_error, lateral_error = _semantic_axial_lateral_errors(
+        env,
+        body_asset,
+        body_cfg.body_ids[0],
+        target_asset,
+        insertion_axis=insertion_axis,
+        target_position_offset=target_position_offset,
+        body_position_offset=body_position_offset,
+        target_orientation_offset=target_orientation_offset,
+    )
+    axial_limit = float(threshold if axial_threshold is None else axial_threshold)
+    lateral_limit = float(threshold if lateral_threshold is None else lateral_threshold)
+    return torch.logical_and(axial_error <= axial_limit, lateral_error <= lateral_limit)
+
+
 def body_to_object_success_once_bonus(
     env: ManagerBasedRLEnv,
     threshold: float,
     body_cfg: SceneEntityCfg,
     target_cfg: SceneEntityCfg,
+    insertion_axis: int = 0,
+    axial_threshold: float | None = None,
+    lateral_threshold: float | None = None,
     target_position_offset: tuple[float, float, float] | list[float] | None = None,
     body_position_offset: tuple[float, float, float] | list[float] | None = None,
+    target_orientation_offset: tuple[float, float, float, float] | list[float] | None = None,
 ) -> torch.Tensor:
-    """Emit a sparse +1 once when an episode first reaches the target threshold."""
+    """Emit a sparse +1 once when an episode first satisfies strict insertion geometry."""
     body_asset: RigidObject = env.scene[body_cfg.name]
     target_asset: RigidObject = env.scene[target_cfg.name]
     body_pos_w = _body_position_w(body_asset, body_cfg.body_ids[0], body_position_offset)
     target_pos_w = _target_position_w(env, target_asset, target_position_offset)
     success = torch.norm(body_pos_w - target_pos_w, dim=1) <= float(threshold)
+    if axial_threshold is not None or lateral_threshold is not None:
+        axial_error, lateral_error = _semantic_axial_lateral_errors(
+            env,
+            body_asset,
+            body_cfg.body_ids[0],
+            target_asset,
+            insertion_axis=insertion_axis,
+            target_position_offset=target_position_offset,
+            body_position_offset=body_position_offset,
+            target_orientation_offset=target_orientation_offset,
+        )
+        axial_limit = float(threshold if axial_threshold is None else axial_threshold)
+        lateral_limit = float(threshold if lateral_threshold is None else lateral_threshold)
+        success = torch.logical_and(axial_error <= axial_limit, lateral_error <= lateral_limit)
     achieved = getattr(env, "_aic_success_bonus_emitted", None)
     reset_mask = getattr(env, "episode_length_buf", None)
     if achieved is None or achieved.shape != success.shape:
@@ -430,29 +840,39 @@ def body_to_object_lateral_error(
     env: ManagerBasedRLEnv,
     body_cfg: SceneEntityCfg,
     target_cfg: SceneEntityCfg,
-    axis: int = 0,
+    insertion_axis: int = 0,
+    scale: float = 0.006,
     target_position_offset: tuple[float, float, float] | list[float] | None = None,
     body_position_offset: tuple[float, float, float] | list[float] | None = None,
+    target_orientation_offset: tuple[float, float, float, float] | list[float] | None = None,
 ) -> torch.Tensor:
-    """Penalize lateral error to a target object's root pose.
+    """Normalized lateral error in the target/port frame.
 
-    ``axis`` is the assumed insertion axis in world coordinates. The current
-    Isaac scene does not yet expose a semantic port insertion frame, so this is
-    kept optional and low-level until those frames are added.
+    This is intentionally target-frame based: moving diagonally toward the side
+    of a card should not look like good insertion progress simply because the
+    Euclidean distance to the entrance point got smaller.
     """
     body_asset: RigidObject = env.scene[body_cfg.name]
     target_asset: RigidObject = env.scene[target_cfg.name]
-    body_pos_w = _body_position_w(body_asset, body_cfg.body_ids[0], body_position_offset)
-    delta = body_pos_w - _target_position_w(env, target_asset, target_position_offset)
-    mask = torch.ones(3, dtype=torch.bool, device=delta.device)
-    mask[axis] = False
-    return torch.norm(delta[:, mask], dim=1)
+    lateral_error = _semantic_lateral_error(
+        env,
+        body_asset,
+        body_cfg.body_ids[0],
+        target_asset,
+        insertion_axis=insertion_axis,
+        target_position_offset=target_position_offset,
+        body_position_offset=body_position_offset,
+        target_orientation_offset=target_orientation_offset,
+    )
+    return torch.tanh(lateral_error / max(float(scale), 1.0e-9))
 
 
 def force_delta_penalty(
     env: ManagerBasedRLEnv,
-    threshold: float = 3.0,
+    threshold: float = 10.0,
     reference: float = 20.0,
+    knee_penalty_fraction: float = 0.1,
+    saturation: float | None = None,
     max_penalty: float = 1.0,
     asset_cfg: SceneEntityCfg = SceneEntityCfg("robot"),
 ) -> torch.Tensor:
@@ -460,6 +880,12 @@ def force_delta_penalty(
 
     The returned value is non-positive. Use a positive reward weight to apply
     this as a penalty, matching the offline dense reward convention.
+
+    The curve is intentionally gentle below ``reference`` and steep above it:
+    no penalty below ``threshold``, a quadratic ramp up to
+    ``knee_penalty_fraction * max_penalty`` at ``reference``, then a smoothstep
+    ramp to ``max_penalty`` at ``saturation``. This allows normal insertion
+    contact while strongly discouraging hard impacts.
     """
     asset: Articulation = env.scene[asset_cfg.name]
     wrench = getattr(asset.data, "body_incoming_wrench_w", None)
@@ -491,9 +917,14 @@ def force_delta_penalty(
         previous = torch.where(reset_mask.to(current.device).reshape(-1, 1) <= 1, current.detach(), previous)
     delta_norm = torch.norm(current - previous.to(current.device), dim=1)
     setattr(env, "_aic_previous_force_w", current.detach().clone())
-    denominator = max(float(reference) - float(threshold), 1e-6)
-    normalized = ((delta_norm - float(threshold)) / denominator).clamp(min=0.0, max=float(max_penalty))
-    return -normalized
+    return -force_delta_penalty_curve(
+        delta_norm,
+        threshold=float(threshold),
+        reference=float(reference),
+        knee_penalty_fraction=float(knee_penalty_fraction),
+        saturation=saturation,
+        max_penalty=float(max_penalty),
+    )
 
 
 # ---------------------------------------------------------------------------

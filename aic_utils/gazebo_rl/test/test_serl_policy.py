@@ -219,3 +219,34 @@ def test_lowdim_serl_gazebo_policy_appends_task_vector(tmp_path):
     policy = OfflineSERLGazeboPolicy(checkpoint, task_vector=task_vector)
 
     assert len(policy.act(_obs())) == 6
+
+
+def test_lowdim_serl_gazebo_policy_clamps_tiny_observation_std(tmp_path):
+    actor = GaussianActor(obs_dim=42, action_dim=6, hidden_dims=(16,))
+    checkpoint = tmp_path / "lowdim_task_zero_std.pt"
+    torch.save(
+        {
+            "offline_serl_config": {
+                "obs_dim": 42,
+                "action_dim": 6,
+                "hidden_dim": 16,
+                "num_layers": 1,
+                "action_horizon": 1,
+            },
+            "dataset_schema": {"action_shape": [6]},
+            "actor": actor.state_dict(),
+            "normalization_stats": {
+                "obs_mean": [0.0] * 42,
+                "obs_std": [0.0] * 42,
+                "action_mean": [0.0] * 6,
+                "action_std": [1.0] * 6,
+            },
+        },
+        checkpoint,
+    )
+
+    task_vector = encode_task_vector(task_family="sfp_to_nic", target_port_index=1, target_card_index=3)
+    policy = OfflineSERLGazeboPolicy(checkpoint, task_vector=task_vector)
+
+    assert torch.all(policy.obs_std == 1.0)
+    assert np.all(np.isfinite(policy.act(_obs())))

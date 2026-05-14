@@ -30,6 +30,13 @@ def _fixed_len(values: Iterable[float], length: int) -> list[float]:
     return out
 
 
+def _canonical_quat_xyzw(values: Iterable[float]) -> list[float]:
+    quat = _fixed_len(values, 4)
+    if quat[3] < 0.0:
+        quat = [-v for v in quat]
+    return quat
+
+
 def _stamp_to_sec(stamp: Any) -> float | None:
     if stamp is None:
         return None
@@ -50,7 +57,7 @@ def base_state_from_gazebo_observation(obs: dict[str, Any]) -> np.ndarray:
 
     values: list[float] = []
     values.extend(_fixed_len(tcp_pose.get("position") or [], 3))
-    values.extend(_fixed_len(tcp_pose.get("orientation_xyzw") or [0.0, 0.0, 0.0, 1.0], 4))
+    values.extend(_canonical_quat_xyzw(tcp_pose.get("orientation_xyzw") or [0.0, 0.0, 0.0, 1.0]))
     values.extend(_fixed_len((tcp_velocity or {}).get("linear") or [], 3))
     values.extend(_fixed_len((tcp_velocity or {}).get("angular") or [], 3))
     values.extend(_fixed_len(controller.get("tcp_error") or [], 6))
@@ -68,10 +75,14 @@ def base_state_from_ros_observation(obs_msg: Any) -> np.ndarray:
         tcp_pose.position.x,
         tcp_pose.position.y,
         tcp_pose.position.z,
-        tcp_pose.orientation.x,
-        tcp_pose.orientation.y,
-        tcp_pose.orientation.z,
-        tcp_pose.orientation.w,
+        *_canonical_quat_xyzw(
+            [
+                tcp_pose.orientation.x,
+                tcp_pose.orientation.y,
+                tcp_pose.orientation.z,
+                tcp_pose.orientation.w,
+            ]
+        ),
         tcp_vel.linear.x,
         tcp_vel.linear.y,
         tcp_vel.linear.z,

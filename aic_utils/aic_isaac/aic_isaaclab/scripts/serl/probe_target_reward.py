@@ -39,9 +39,14 @@ parser.add_argument("--orientation_weight", type=float, default=0.10)
 parser.add_argument("--orientation_std", type=float, default=0.03)
 parser.add_argument("--orientation_gate_sigma", type=float, default=0.012)
 parser.add_argument("--terminal_weight", type=float, default=1.0)
-parser.add_argument("--force_delta_penalty_weight", type=float, default=0.2)
-parser.add_argument("--force_delta_threshold", type=float, default=3.0)
+parser.add_argument("--lateral_gate_sigma", type=float, default=0.012)
+parser.add_argument("--lateral_error_scale", type=float, default=0.006)
+parser.add_argument("--insertion_axis", type=int, choices=[0, 1, 2], default=0)
+parser.add_argument("--force_delta_penalty_weight", type=float, default=0.3)
+parser.add_argument("--force_delta_threshold", type=float, default=10.0)
 parser.add_argument("--force_delta_reference", type=float, default=20.0)
+parser.add_argument("--force_delta_saturation", type=float, default=30.0)
+parser.add_argument("--force_delta_knee_penalty_fraction", type=float, default=0.1)
 parser.add_argument("--expert_dataset_root", type=Path)
 parser.add_argument("--expert_bc_weight", type=float, default=0.0)
 parser.add_argument("--expert_bc_action_horizon", type=int, default=4)
@@ -435,6 +440,16 @@ def _configure_rewards(env_cfg) -> dict[str, object]:
     rewards.force_delta_penalty.weight = float(args_cli.force_delta_penalty_weight) * reward_weight_multiplier
     rewards.force_delta_penalty.params["threshold"] = float(args_cli.force_delta_threshold)
     rewards.force_delta_penalty.params["reference"] = float(args_cli.force_delta_reference)
+    rewards.force_delta_penalty.params["saturation"] = float(args_cli.force_delta_saturation)
+    rewards.force_delta_penalty.params["knee_penalty_fraction"] = float(args_cli.force_delta_knee_penalty_fraction)
+    for name in ("target_distance_tanh", "target_distance_exp", "target_distance_progress"):
+        term = getattr(rewards, name, None)
+        if term is not None:
+            term.params["insertion_axis"] = int(args_cli.insertion_axis)
+            term.params["lateral_gate_sigma"] = float(args_cli.lateral_gate_sigma)
+    if hasattr(rewards, "target_lateral_error"):
+        rewards.target_lateral_error.params["insertion_axis"] = int(args_cli.insertion_axis)
+        rewards.target_lateral_error.params["scale"] = float(args_cli.lateral_error_scale)
     if "asset_cfg" in rewards.force_delta_penalty.params:
         rewards.force_delta_penalty.params["asset_cfg"].body_names = [FORCE_WRENCH_BODY]
     return {
@@ -466,6 +481,11 @@ def _configure_rewards(env_cfg) -> dict[str, object]:
         "force_delta_penalty_weight": float(args_cli.force_delta_penalty_weight),
         "force_delta_threshold": float(args_cli.force_delta_threshold),
         "force_delta_reference": float(args_cli.force_delta_reference),
+        "force_delta_saturation": float(args_cli.force_delta_saturation),
+        "force_delta_knee_penalty_fraction": float(args_cli.force_delta_knee_penalty_fraction),
+        "lateral_gate_sigma": float(args_cli.lateral_gate_sigma),
+        "lateral_error_scale": float(args_cli.lateral_error_scale),
+        "insertion_axis": int(args_cli.insertion_axis),
         "command_pose_rewards_disabled": True,
     }
 
@@ -861,8 +881,19 @@ def main() -> None:
             force_delta = force - previous_force.to(force.device)
         previous_force = force.detach().clone()
         force_delta_norm = torch.linalg.norm(force_delta, dim=1)
-        force_denominator = max(float(args_cli.force_delta_reference) - float(args_cli.force_delta_threshold), 1.0e-6)
-        force_penalty_unit = -((force_delta_norm - float(args_cli.force_delta_threshold)) / force_denominator).clamp(0.0, 1.0)
+        force_threshold = float(args_cli.force_delta_threshold)
+        force_reference = max(float(args_cli.force_delta_reference), force_threshold + 1.0e-6)
+        force_saturation = max(float(args_cli.force_delta_saturation), force_reference + 1.0e-6)
+        force_knee_fraction = min(max(float(args_cli.force_delta_knee_penalty_fraction), 0.0), 1.0)
+        below_knee = ((force_delta_norm - force_threshold) / (force_reference - force_threshold)).clamp(0.0, 1.0)
+        low_penalty = force_knee_fraction * torch.square(below_knee)
+        above_knee = ((force_delta_norm - force_reference) / (force_saturation - force_reference)).clamp(0.0, 1.0)
+        smooth = torch.square(above_knee) * (3.0 - 2.0 * above_knee)
+        force_penalty_unit = -torch.where(
+            force_delta_norm <= force_reference,
+            low_penalty,
+            force_knee_fraction + (1.0 - force_knee_fraction) * smooth,
+        )
         terminal_unit_value = 0.0
         if bool((distance <= float(args_cli.reaching_threshold))[0].detach().cpu()) and not success_emitted:
             terminal_unit_value = 1.0

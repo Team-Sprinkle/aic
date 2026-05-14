@@ -47,6 +47,15 @@ parser.add_argument(
 parser.add_argument("--act_only_adapter_hidden_dim", type=int, default=256)
 parser.add_argument("--act_only_adapter_num_layers", type=int, default=2)
 parser.add_argument("--act_only_adapter_activation", choices=["relu", "gelu", "tanh"], default="gelu")
+parser.add_argument(
+    "--act_only_actor_mode",
+    choices=["act_adapter", "act_direct"],
+    default="act_adapter",
+    help=(
+        "act_adapter learns a clipped residual added to ACT. act_direct initializes "
+        "from ACT but trains the full TCP action override, with only final TCP caps applied."
+    ),
+)
 parser.add_argument("--act_only_state_encoding", choices=["none", "fourier"], default="fourier")
 parser.add_argument("--act_only_state_encoding_indices", type=int, nargs="*", default=[0, 1, 2, 13, 14, 15])
 parser.add_argument("--act_only_state_encoding_num_bands", type=int, default=4)
@@ -63,9 +72,21 @@ parser.add_argument("--output_dir", type=str, default="outputs/train/isaac_onlin
 parser.add_argument("--run_name", default="isaac_online_serl")
 parser.add_argument("--steps", type=int, default=64)
 parser.add_argument("--updates", type=int, default=8)
+parser.add_argument(
+    "--update_every_steps",
+    type=int,
+    default=1,
+    help="Run one gradient update every N environment steps after warmup.",
+)
 parser.add_argument("--batch_size", type=int, default=4)
 parser.add_argument("--replay_capacity", type=int, default=10000)
 parser.add_argument("--warmup_steps", type=int, default=0)
+parser.add_argument(
+    "--actor_update_start_steps",
+    type=int,
+    default=0,
+    help="Do not update the adapter actor until this many environment steps have been collected.",
+)
 parser.add_argument(
     "--episode_length_s",
     type=float,
@@ -98,10 +119,74 @@ parser.add_argument("--tau", type=float, default=0.005)
 parser.add_argument("--adapter_lr", type=float, default=1e-4)
 parser.add_argument("--critic_lr", type=float, default=1e-4)
 parser.add_argument("--act_lr", type=float, default=1e-5)
+parser.add_argument(
+    "--actor_q_weight",
+    type=float,
+    default=1.0,
+    help="Scale the actor's -Q term. Lower values let guide/BC losses dominate early near-gate debugging.",
+)
+parser.add_argument(
+    "--actor_update_end_steps",
+    type=int,
+    default=0,
+    help="If >0, freeze actor updates after this environment step while continuing critic updates and rollouts.",
+)
+parser.add_argument("--target_action_guide_weight", type=float, default=0.0)
+parser.add_argument("--target_action_guide_step_size", type=float, default=0.001)
+parser.add_argument(
+    "--target_action_guide_lateral_switch_m",
+    type=float,
+    default=0.002,
+    help="Use pure axial guide motion at or below this lateral error.",
+)
+parser.add_argument(
+    "--target_action_guide_axial_blend_lateral_m",
+    type=float,
+    default=0.006,
+    help="Start blending axial guide motion once lateral error is below this distance.",
+)
+parser.add_argument("--target_action_guide_collect_blend", type=float, default=0.0)
+parser.add_argument("--target_action_guide_collect_steps", type=int, default=0)
+parser.add_argument(
+    "--target_action_guide_collect_decay",
+    action=argparse.BooleanOptionalAction,
+    default=False,
+    help=(
+        "If enabled with --target_action_guide_collect_steps > 0, linearly decay the "
+        "guide collection blend to zero instead of stopping abruptly."
+    ),
+)
+parser.add_argument(
+    "--target_action_guide_prefix_decay",
+    action=argparse.BooleanOptionalAction,
+    default=False,
+    help=(
+        "If enabled, the guide target for later actions in the executed chunk decays linearly. "
+        "This prevents a near-gate policy from repeating the same corrective move too long."
+    ),
+)
 parser.add_argument("--freeze_act", action=argparse.BooleanOptionalAction, default=True)
 parser.add_argument("--adapter_penalty_weight", type=float, default=1e-3)
 parser.add_argument("--act_preservation_weight", type=float, default=1e-2)
 parser.add_argument("--adapter_delta_clip", type=float, default=0.05)
+parser.add_argument(
+    "--tcp_translation_action_clip",
+    type=float,
+    default=0.0,
+    help=(
+        "Optional per-step TCP translation norm cap in meters, applied to every 3D "
+        "translation inside the predicted action chunk after ACT+adapter. 0 disables it."
+    ),
+)
+parser.add_argument(
+    "--tcp_rotation_action_clip",
+    type=float,
+    default=0.0,
+    help=(
+        "Optional per-step TCP rotation-vector norm cap in radians, applied to every 3D "
+        "rotation inside the predicted action chunk after ACT+adapter. 0 disables it."
+    ),
+)
 parser.add_argument(
     "--action_clip",
     type=float,
@@ -113,6 +198,15 @@ parser.add_argument(
     type=float,
     default=1.0,
     help="Scale applied by Isaac's IK action term. ACT/SERL actions are already physical TCP deltas.",
+)
+parser.add_argument(
+    "--act_normalized_state_clip",
+    type=float,
+    default=0.0,
+    help=(
+        "If >0, clamp the ACT-normalized state before TorchScript inference. "
+        "This is useful for Isaac runtime outliers while leaving raw replay state unchanged."
+    ),
 )
 parser.add_argument("--bc_weight", type=float, default=0.0)
 parser.add_argument(
@@ -172,13 +266,43 @@ parser.add_argument("--target_reward_orientation_std", type=float, default=0.03)
 parser.add_argument("--target_reward_orientation_gate_sigma", type=float, default=0.012)
 parser.add_argument("--target_reward_reaching_weight", type=float, default=0.0)
 parser.add_argument("--target_reward_terminal_weight", type=float, default=1.0)
-parser.add_argument("--target_reward_lateral_weight", type=float, default=0.0)
-parser.add_argument("--force_delta_penalty_weight", type=float, default=0.2)
-parser.add_argument("--force_delta_threshold", type=float, default=3.0)
+parser.add_argument("--target_reward_lateral_weight", type=float, default=-0.05)
+parser.add_argument("--target_reward_lateral_gate_sigma", type=float, default=0.012)
+parser.add_argument("--target_reward_lateral_error_scale", type=float, default=0.006)
+parser.add_argument("--target_reward_motion_projection_weight", type=float, default=0.0)
+parser.add_argument("--target_reward_motion_projection_scale", type=float, default=0.001)
+parser.add_argument("--target_reward_lateral_progress_weight", type=float, default=0.0)
+parser.add_argument("--target_reward_lateral_progress_scale", type=float, default=0.001)
+parser.add_argument("--target_reward_axial_progress_weight", type=float, default=0.0)
+parser.add_argument("--target_reward_axial_progress_scale", type=float, default=0.001)
+parser.add_argument("--target_reward_insertion_axis", type=int, choices=[0, 1, 2], default=0)
+parser.add_argument("--force_delta_penalty_weight", type=float, default=0.3)
+parser.add_argument("--force_delta_threshold", type=float, default=10.0)
 parser.add_argument("--force_delta_reference", type=float, default=20.0)
+parser.add_argument("--force_delta_saturation", type=float, default=30.0)
+parser.add_argument("--force_delta_knee_penalty_fraction", type=float, default=0.1)
+parser.add_argument(
+    "--isaac_force_observation_clip_n",
+    type=float,
+    default=35.0,
+    help=(
+        "Clamp Isaac contact-proxy force observation magnitude before filling Gazebo-compatible "
+        "state force slots. This prevents raw contact sensor spikes from dominating ACT inputs."
+    ),
+)
 parser.add_argument("--target_reward_distance_std", type=float, default=0.02)
 parser.add_argument("--target_reward_close_sigma", type=float, default=0.006)
 parser.add_argument("--target_reward_reaching_threshold", type=float, default=0.01)
+parser.add_argument("--terminate_on_target_success", action=argparse.BooleanOptionalAction, default=False)
+parser.add_argument(
+    "--target_success_termination_threshold",
+    type=float,
+    default=0.0035,
+    help=(
+        "Strict distance threshold used only for episode termination when --terminate_on_target_success is enabled. "
+        "Keep this tighter than the reward reaching threshold so near-gate resets do not count as completed insertions."
+    ),
+)
 parser.add_argument(
     "--policy_hz",
     type=float,
@@ -256,8 +380,11 @@ parser.add_argument(
 parser.add_argument(
     "--enable_contact_sensor",
     action=argparse.BooleanOptionalAction,
-    default=False,
-    help="Enable Isaac ContactSensor diagnostics. Disabled by default because contact sensors can reduce throughput.",
+    default=True,
+    help=(
+        "Enable Isaac ContactSensor diagnostics and Gazebo-compatible force observation fallback. "
+        "Keep enabled for 72D/82D contact-feature checkpoints."
+    ),
 )
 parser.add_argument(
     "--swap_rgb_channels",
@@ -282,6 +409,15 @@ parser.add_argument(
 )
 AppLauncher.add_app_launcher_args(parser)
 args_cli = parser.parse_args()
+if float(args_cli.target_reward_lateral_weight) > 0.0:
+    corrected_lateral_weight = -float(args_cli.target_reward_lateral_weight)
+    print(
+        "[AIC SERL][warning] --target_reward_lateral_weight penalizes lateral "
+        f"error; interpreting positive magnitude {args_cli.target_reward_lateral_weight:g} "
+        f"as {corrected_lateral_weight:g}.",
+        flush=True,
+    )
+    args_cli.target_reward_lateral_weight = corrected_lateral_weight
 os.environ["AIC_ISAAC_TASK_FAMILY"] = args_cli.task_family
 if args_cli.episode_config_dir:
     os.environ["AIC_ISAAC_EPISODE_CONFIG_DIR"] = args_cli.episode_config_dir
@@ -454,6 +590,7 @@ SFP_TIP_LOCAL = (0.0, -0.02365, 0.0)
 SFP_TIP_RPY = (1.5708, 0.0, 0.0)
 CONTROLLED_TCP_BODY = "gripper_tcp"
 FORCE_WRENCH_BODY = "wrist_3_link"
+FORCE_CONTACT_PROXY_BODIES = ("sfp_tip_link", "sfp_module_link", "gripper_tcp", "wrist_3_link")
 
 
 def _rpy_matrix(roll: float, pitch: float, yaw: float) -> tuple[tuple[float, float, float], ...]:
@@ -884,6 +1021,9 @@ def _configure_task_geometry_rewards(env_cfg: Any, args: argparse.Namespace) -> 
         "target_reaching_bonus",
         "target_success_once_bonus",
         "target_lateral_error",
+        "target_motion_projection",
+        "target_lateral_progress",
+        "target_axial_progress",
     ):
         term = getattr(rewards, name)
         term.params["target_cfg"].name = target_scene_name
@@ -899,8 +1039,26 @@ def _configure_task_geometry_rewards(env_cfg: Any, args: argparse.Namespace) -> 
     rewards.target_distance_tanh.params["std"] = float(args.target_reward_distance_std)
     rewards.target_distance_exp.params["sigma"] = float(args.target_reward_close_sigma)
     rewards.target_distance_progress.params["scale"] = float(args.target_reward_progress_scale)
+    for name in ("target_distance_tanh", "target_distance_exp", "target_distance_progress"):
+        term = getattr(rewards, name)
+        term.params["insertion_axis"] = int(args.target_reward_insertion_axis)
+        term.params["lateral_gate_sigma"] = float(args.target_reward_lateral_gate_sigma)
+    rewards.target_lateral_error.params["insertion_axis"] = int(args.target_reward_insertion_axis)
+    rewards.target_lateral_error.params["scale"] = float(args.target_reward_lateral_error_scale)
+    rewards.target_motion_projection.params["scale"] = float(args.target_reward_motion_projection_scale)
+    rewards.target_motion_projection.params["insertion_axis"] = int(args.target_reward_insertion_axis)
+    rewards.target_motion_projection.params["lateral_gate_sigma"] = float(args.target_reward_lateral_gate_sigma)
+    rewards.target_lateral_progress.params["scale"] = float(args.target_reward_lateral_progress_scale)
+    rewards.target_lateral_progress.params["insertion_axis"] = int(args.target_reward_insertion_axis)
+    rewards.target_axial_progress.params["scale"] = float(args.target_reward_axial_progress_scale)
+    rewards.target_axial_progress.params["insertion_axis"] = int(args.target_reward_insertion_axis)
+    rewards.target_axial_progress.params["lateral_gate_sigma"] = float(args.target_reward_lateral_gate_sigma)
     rewards.target_reaching_bonus.params["threshold"] = float(args.target_reward_reaching_threshold)
     rewards.target_success_once_bonus.params["threshold"] = float(args.target_reward_reaching_threshold)
+    rewards.target_success_once_bonus.params["insertion_axis"] = int(args.target_reward_insertion_axis)
+    rewards.target_success_once_bonus.params["axial_threshold"] = float(args.target_success_termination_threshold)
+    rewards.target_success_once_bonus.params["lateral_threshold"] = float(args.target_success_termination_threshold)
+    rewards.target_success_once_bonus.params["target_orientation_offset"] = target_orientation_offset
     rewards.target_orientation_gated_exp.params["std"] = float(args.target_reward_orientation_std)
     rewards.target_orientation_gated_exp.params["gate_sigma"] = float(args.target_reward_orientation_gate_sigma)
 
@@ -914,10 +1072,34 @@ def _configure_task_geometry_rewards(env_cfg: Any, args: argparse.Namespace) -> 
     rewards.target_reaching_bonus.weight = float(args.target_reward_reaching_weight) * reward_weight_multiplier
     rewards.target_success_once_bonus.weight = float(args.target_reward_terminal_weight) * reward_weight_multiplier
     rewards.target_lateral_error.weight = float(args.target_reward_lateral_weight) * reward_weight_multiplier
+    rewards.target_motion_projection.weight = float(args.target_reward_motion_projection_weight) * reward_weight_multiplier
+    rewards.target_lateral_progress.weight = float(args.target_reward_lateral_progress_weight) * reward_weight_multiplier
+    rewards.target_axial_progress.weight = float(args.target_reward_axial_progress_weight) * reward_weight_multiplier
     if hasattr(rewards, "force_delta_penalty"):
         rewards.force_delta_penalty.weight = float(args.force_delta_penalty_weight) * reward_weight_multiplier
         rewards.force_delta_penalty.params["threshold"] = float(args.force_delta_threshold)
         rewards.force_delta_penalty.params["reference"] = float(args.force_delta_reference)
+        rewards.force_delta_penalty.params["saturation"] = float(args.force_delta_saturation)
+        rewards.force_delta_penalty.params["knee_penalty_fraction"] = float(args.force_delta_knee_penalty_fraction)
+    terminations = getattr(env_cfg, "terminations", None)
+    if terminations is not None and hasattr(terminations, "target_success"):
+        target_success = terminations.target_success
+        target_success.params["target_cfg"].name = target_scene_name
+        target_success.params["body_cfg"].name = "robot"
+        target_success.params["body_cfg"].body_names = target_body
+        target_success.params["target_position_offset"] = target_position_offset
+        target_success.params["body_position_offset"] = body_position_offset
+        target_success.params["target_orientation_offset"] = target_orientation_offset
+        target_success.params["insertion_axis"] = int(args.target_reward_insertion_axis)
+        target_success.params["axial_threshold"] = (
+            float(args.target_success_termination_threshold) if bool(args.terminate_on_target_success) else None
+        )
+        target_success.params["lateral_threshold"] = (
+            float(args.target_success_termination_threshold) if bool(args.terminate_on_target_success) else None
+        )
+        target_success.params["threshold"] = (
+            float(args.target_success_termination_threshold) if bool(args.terminate_on_target_success) else 0.0
+        )
 
     if args.disable_command_pose_rewards:
         for name in (
@@ -945,9 +1127,21 @@ def _configure_task_geometry_rewards(env_cfg: Any, args: argparse.Namespace) -> 
         "reaching_weight": float(args.target_reward_reaching_weight),
         "terminal_weight": float(args.target_reward_terminal_weight),
         "lateral_weight": float(args.target_reward_lateral_weight),
+        "lateral_gate_sigma": float(args.target_reward_lateral_gate_sigma),
+        "lateral_error_scale": float(args.target_reward_lateral_error_scale),
+        "motion_projection_weight": float(args.target_reward_motion_projection_weight),
+        "motion_projection_scale": float(args.target_reward_motion_projection_scale),
+        "lateral_progress_weight": float(args.target_reward_lateral_progress_weight),
+        "lateral_progress_scale": float(args.target_reward_lateral_progress_scale),
+        "axial_progress_weight": float(args.target_reward_axial_progress_weight),
+        "axial_progress_scale": float(args.target_reward_axial_progress_scale),
+        "insertion_axis": int(args.target_reward_insertion_axis),
         "force_delta_penalty_weight": float(args.force_delta_penalty_weight) if hasattr(rewards, "force_delta_penalty") else 0.0,
         "force_delta_threshold": float(args.force_delta_threshold),
         "force_delta_reference": float(args.force_delta_reference),
+        "force_delta_saturation": float(args.force_delta_saturation),
+        "force_delta_knee_penalty_fraction": float(args.force_delta_knee_penalty_fraction),
+        "isaac_force_observation_clip_n": float(args.isaac_force_observation_clip_n),
         "target_position_offset": [float(v) for v in target_position_offset],
         "body_position_offset": [float(v) for v in body_position_offset],
         "target_orientation_offset": None if target_orientation_offset is None else [float(v) for v in target_orientation_offset],
@@ -955,6 +1149,15 @@ def _configure_task_geometry_rewards(env_cfg: Any, args: argparse.Namespace) -> 
         "distance_std": float(args.target_reward_distance_std),
         "close_sigma": float(args.target_reward_close_sigma),
         "reaching_threshold": float(args.target_reward_reaching_threshold),
+        "terminate_on_target_success": bool(args.terminate_on_target_success),
+        "success_termination_threshold": (
+            float(args.target_success_termination_threshold) if bool(args.terminate_on_target_success) else 0.0
+        ),
+        "success_bonus_geometry": {
+            "axial_threshold": float(args.target_success_termination_threshold),
+            "lateral_threshold": float(args.target_success_termination_threshold),
+            "insertion_axis": int(args.target_reward_insertion_axis),
+        },
         "command_pose_rewards_disabled": bool(args.disable_command_pose_rewards),
     }
 
@@ -979,13 +1182,16 @@ class ReplayBuffer:
     def sample(self, batch_size: int, device: torch.device) -> dict[str, Any]:
         indices = torch.randint(len(self.data), (batch_size,)).tolist()
         items = [self.data[i] for i in indices]
-        return {
+        batch = {
             "obs": self._stack_obs([item["obs"] for item in items], device),
             "next_obs": self._stack_obs([item["next_obs"] for item in items], device),
             "action": torch.stack([item["action"] for item in items]).to(device),
             "reward": torch.stack([item["reward"] for item in items]).to(device),
             "done": torch.stack([item["done"] for item in items]).to(device),
         }
+        if all("guide_action" in item for item in items):
+            batch["guide_action"] = torch.stack([item["guide_action"] for item in items]).to(device)
+        return batch
 
     def diagnostic_snapshot(self) -> dict[str, Any]:
         if not self.data:
@@ -1340,6 +1546,8 @@ def _state_schema_diagnostics(
     frame = {
         "tcp_error_raw_env0": _sample_vector(state[:, 13:19], limit=6) if state_dim >= 19 else None,
         "tcp_error_norm_env0": _sample_vector(normalized[:, 13:19], limit=6) if state_dim >= 19 else None,
+        "wrist_force_raw_env0": _sample_vector(state[:, 26:29], limit=3) if state_dim >= 29 else None,
+        "wrist_torque_raw_env0": _sample_vector(state[:, 29:32], limit=3) if state_dim >= 32 else None,
         "contact_recovery_raw_env0": _sample_vector(state[:, 32:72], limit=40) if state_dim >= 72 else None,
         "contact_recovery_norm_env0": _sample_vector(normalized[:, 32:72], limit=40) if state_dim >= 72 else None,
         "task_vector_raw_env0": _sample_vector(state[:, -10:], limit=10) if state_dim >= 10 else None,
@@ -1373,6 +1581,7 @@ def _state_schema_diagnostics(
     return {
         "state_dim": state_dim,
         "schema_ranges": _state_schema_ranges(state_dim),
+        "isaac_wrench_source": str(getattr(_isaac_lerobot_state, "_last_wrench_source", "unknown")),
         "feature_names": [{"index": idx, "name": name} for idx, name in enumerate(names)],
         "env0_by_dim": dim_rows,
         "top_abs_normalized_dims": top_abs_norm,
@@ -1454,12 +1663,77 @@ def _named_index(names: list[str], target: str) -> int:
         raise RuntimeError(f"Isaac robot does not expose {target!r}; available names: {names}") from exc
 
 
+def _isaac_wrench_observation(env, *, device: torch.device) -> tuple[torch.Tensor, str]:
+    """Return Gazebo-layout wrist wrench [fx, fy, fz, tx, ty, tz] for Isaac obs.
+
+    Isaac may not expose a wrist force/torque sensor tensor. In that case, use
+    the contact sensor net force on the same physical wrist/tip proxy bodies and
+    leave torque at zero. The state layout remains identical to Gazebo runtime:
+    base slots 26:29 are force xyz and 29:32 are torque xyz.
+    """
+    robot = env.unwrapped.scene["robot"]
+    data = robot.data
+    body_names = list(getattr(robot, "body_names", []))
+    batch_size = int(data.body_pos_w.shape[0])
+    force_body_index = _named_index(body_names, FORCE_WRENCH_BODY)
+    contact_force, contact_source = _isaac_contact_proxy_force(env, device=device, batch_size=batch_size)
+    for attr in ("body_incoming_wrench_w", "body_incoming_wrench_b", "body_incoming_joint_wrench_b"):
+        incoming_wrench = getattr(data, attr, None)
+        if incoming_wrench is not None:
+            wrench = incoming_wrench[:, force_body_index, :6].to(device=device, dtype=torch.float32)
+            if contact_force is not None and torch.all(torch.norm(wrench[:, :3], dim=1) <= 1.0e-6):
+                out = torch.zeros(batch_size, 6, dtype=torch.float32, device=device)
+                out[:, :3] = _clip_force_observation(contact_force)
+                return out, f"{contact_source}_because_{attr}_zero"
+            wrench = wrench.clone()
+            wrench[:, :3] = _clip_force_observation(wrench[:, :3])
+            return wrench, attr
+
+    wrench = torch.zeros(batch_size, 6, dtype=torch.float32, device=device)
+    if contact_force is not None:
+        wrench[:, :3] = _clip_force_observation(contact_force)
+        return wrench, contact_source
+    return wrench, "zeros_no_wrench_or_contact_sensor"
+
+
+def _isaac_contact_proxy_force(env, *, device: torch.device, batch_size: int) -> tuple[torch.Tensor | None, str]:
+    sensors = getattr(env.unwrapped.scene, "sensors", {})
+    force_rows = []
+    sensor_sources = []
+    for sensor_name in ("contact_forces",):
+        sensor = sensors.get(sensor_name)
+        if sensor is None:
+            continue
+        net = getattr(sensor.data, "net_forces_w", None)
+        if net is None:
+            continue
+        sensor_names = list(getattr(sensor, "body_names", []) or [])
+        ids = [idx for idx, name in enumerate(sensor_names) if name in FORCE_CONTACT_PROXY_BODIES]
+        if not ids:
+            continue
+        force_rows.append(net[:, ids, :3].sum(dim=1).to(device=device, dtype=torch.float32))
+        sensor_sources.append(f"{sensor_name}.net_forces_w")
+    if force_rows:
+        del batch_size
+        return torch.stack(force_rows, dim=0).sum(dim=0), "+".join(sensor_sources)
+    del batch_size
+    return None, "no_contact_sensor_force"
+
+
+def _clip_force_observation(force: torch.Tensor) -> torch.Tensor:
+    max_norm = float(getattr(args_cli, "isaac_force_observation_clip_n", 0.0))
+    if max_norm <= 0.0:
+        return force
+    norm = torch.norm(force, dim=1, keepdim=True).clamp(min=1.0e-9)
+    scale = torch.clamp(max_norm / norm, max=1.0)
+    return force * scale
+
+
 def _isaac_lerobot_state(env, args: argparse.Namespace, *, device: torch.device, state_dim: int) -> torch.Tensor:
     robot = env.unwrapped.scene["robot"]
     body_names = list(getattr(robot, "body_names", []))
     joint_names = list(getattr(robot, "joint_names", []))
     tcp_index = _named_index(body_names, CONTROLLED_TCP_BODY)
-    force_body_index = _named_index(body_names, FORCE_WRENCH_BODY)
     joint_indices = [_named_index(joint_names, name) for name in ARM_JOINT_NAMES]
     data = robot.data
     batch_size = int(data.body_pos_w.shape[0])
@@ -1472,6 +1746,10 @@ def _isaac_lerobot_state(env, args: argparse.Namespace, *, device: torch.device,
     # Isaac Lab returns quaternions as wxyz; the LeRobot/Gazebo observation
     # contract stores orientation fields as xyzw.
     tcp_quat_xyzw = torch.cat([tcp_quat[:, 1:4], tcp_quat[:, 0:1]], dim=-1)
+    # Quaternions q and -q represent the same pose, but the ACT normalizer was
+    # trained on a consistent positive-w convention. Canonicalize here so Isaac
+    # does not feed the frozen ACT base a sign-flipped, hundreds-of-sigma state.
+    tcp_quat_xyzw = torch.where(tcp_quat_xyzw[:, 3:4] < 0.0, -tcp_quat_xyzw, tcp_quat_xyzw)
     tcp_lin_vel = getattr(data, "body_lin_vel_w", torch.zeros(batch_size, len(body_names), 3, device=device))[
         :, tcp_index
     ]
@@ -1488,15 +1766,8 @@ def _isaac_lerobot_state(env, args: argparse.Namespace, *, device: torch.device,
         dtype=torch.float32,
         device=device,
     )
-    incoming_wrench = getattr(data, "body_incoming_wrench_w", None)
-    if incoming_wrench is None:
-        incoming_wrench = getattr(data, "body_incoming_wrench_b", None)
-    if incoming_wrench is None:
-        incoming_wrench = getattr(data, "body_incoming_joint_wrench_b", None)
-    if incoming_wrench is None:
-        wrench = torch.zeros(batch_size, 6, dtype=torch.float32, device=device)
-    else:
-        wrench = incoming_wrench[:, force_body_index, :6].to(device=device, dtype=torch.float32)
+    wrench, wrench_source = _isaac_wrench_observation(env, device=device)
+    setattr(_isaac_lerobot_state, "_last_wrench_source", wrench_source)
     base_state = torch.cat(
         [tcp_pos, tcp_quat_xyzw, tcp_lin_vel, tcp_ang_vel, tcp_error, joint_pos, gripper, wrench],
         dim=-1,
@@ -1563,43 +1834,8 @@ def _isaac_contact_recovery_features(base_state: torch.Tensor, *, env, device: t
 
 
 def _force_delta_metrics(env, *, device: torch.device) -> dict[str, torch.Tensor]:
-    robot = env.unwrapped.scene["robot"]
-    data = robot.data
-    body_names = list(getattr(robot, "body_names", []))
-    force_body_index = _named_index(body_names, FORCE_WRENCH_BODY)
-    incoming_wrench = getattr(data, "body_incoming_wrench_w", None)
-    if incoming_wrench is None:
-        incoming_wrench = getattr(data, "body_incoming_wrench_b", None)
-    if incoming_wrench is None:
-        incoming_wrench = getattr(data, "body_incoming_joint_wrench_b", None)
-    source = "body_incoming_joint_wrench_or_body_wrench"
-    if incoming_wrench is None:
-        sensors = getattr(env.unwrapped.scene, "sensors", {})
-        rows = []
-        sources = []
-        for sensor_name in ("contact_forces",):
-            sensor = sensors.get(sensor_name)
-            if sensor is None:
-                continue
-            net = sensor.data.net_forces_w.to(device=device, dtype=torch.float32)
-            sensor_names = list(getattr(sensor, "body_names", []) or [])
-            ids = [
-                idx
-                for idx, name in enumerate(sensor_names)
-                if name in {"sfp_tip_link", "sfp_module_link", "gripper_tcp", "wrist_3_link"}
-            ]
-            if not ids:
-                continue
-            rows.append(net[:, ids, :3].sum(dim=1))
-            sources.append(sensor_name)
-        if not rows:
-            force = torch.zeros(env.unwrapped.num_envs, 3, device=device)
-            source = "none"
-        else:
-            source = "+".join(f"{name}.net_forces_w" for name in sources)
-            force = torch.stack(rows, dim=0).sum(dim=0)
-    else:
-        force = incoming_wrench[:, force_body_index, :3].to(device=device, dtype=torch.float32)
+    wrench, source = _isaac_wrench_observation(env, device=device)
+    force = wrench[:, :3]
     prev = getattr(_force_delta_metrics, "_previous_force", None)
     reset_mask = getattr(env.unwrapped, "episode_length_buf", None)
     if prev is None or prev.shape != force.shape:
@@ -1609,8 +1845,15 @@ def _force_delta_metrics(env, *, device: torch.device) -> dict[str, torch.Tensor
         prev = torch.where(reset_mask.to(device).reshape(-1, 1) <= 1, force.detach(), prev)
     delta_norm = torch.norm(force - prev.to(device), dim=1)
     setattr(_force_delta_metrics, "_previous_force", force.detach().clone())
-    denominator = max(float(args_cli.force_delta_reference) - float(args_cli.force_delta_threshold), 1e-6)
-    normalized = ((delta_norm - float(args_cli.force_delta_threshold)) / denominator).clamp(min=0.0, max=1.0)
+    threshold = float(args_cli.force_delta_threshold)
+    reference = max(float(args_cli.force_delta_reference), threshold + 1.0e-6)
+    saturation = max(float(args_cli.force_delta_saturation), reference + 1.0e-6)
+    knee_fraction = min(max(float(args_cli.force_delta_knee_penalty_fraction), 0.0), 1.0)
+    below_knee = ((delta_norm - threshold) / (reference - threshold)).clamp(min=0.0, max=1.0)
+    low_penalty = knee_fraction * torch.square(below_knee)
+    above_knee = ((delta_norm - reference) / (saturation - reference)).clamp(min=0.0, max=1.0)
+    smooth = torch.square(above_knee) * (3.0 - 2.0 * above_knee)
+    normalized = torch.where(delta_norm <= reference, low_penalty, knee_fraction + (1.0 - knee_fraction) * smooth)
     return {
         "force_norm": torch.norm(force, dim=1),
         "force_delta_norm": delta_norm,
@@ -1781,6 +2024,70 @@ def _tcp_delta_action_to_isaac_base_action(
     return action
 
 
+def _target_guided_policy_action(
+    env,
+    task_geometry_reward_config: dict[str, Any],
+    *,
+    step_size: float,
+    lateral_switch_m: float,
+    axial_blend_lateral_m: float,
+    action_frame: str,
+    device: torch.device,
+) -> torch.Tensor:
+    """Small policy-space action that moves the reward body toward the target point."""
+    target_pos_w = _target_position_from_reward_config(env, task_geometry_reward_config)
+    body_name = str(task_geometry_reward_config.get("target_body") or "sfp_tip_link")
+    body_pos_w = _body_position_by_name(env, body_name)
+    robot = env.unwrapped.scene["robot"]
+    batch_size = int(robot.data.root_pos_w.shape[0])
+    guide = torch.zeros((batch_size, 6), dtype=torch.float32, device=device)
+    if target_pos_w is None or body_pos_w is None or float(step_size) <= 0.0:
+        return guide
+    delta_w = target_pos_w.to(device) - body_pos_w.to(device)
+    axis_w = _episode_insertion_axis_from_yaml(env)
+    if axis_w is not None:
+        axis_w = axis_w.to(device=device, dtype=delta_w.dtype)
+        axial_delta = torch.sum(delta_w * axis_w, dim=1, keepdim=True) * axis_w
+        lateral_delta = delta_w - axial_delta
+        lateral_distance = torch.linalg.norm(lateral_delta, dim=1, keepdim=True)
+        axial_distance = torch.linalg.norm(axial_delta, dim=1, keepdim=True)
+        lateral_direction = lateral_delta / lateral_distance.clamp(min=1.0e-9)
+        axial_direction = axial_delta / axial_distance.clamp(min=1.0e-9)
+        lateral_switch = max(float(lateral_switch_m), 0.0)
+        axial_blend_start = max(float(axial_blend_lateral_m), lateral_switch + 1.0e-6)
+        axial_blend = ((axial_blend_start - lateral_distance) / (axial_blend_start - lateral_switch)).clamp(0.0, 1.0)
+        blended_direction = (1.0 - axial_blend) * lateral_direction + axial_blend * axial_direction
+        blended_direction = blended_direction / torch.linalg.norm(blended_direction, dim=1, keepdim=True).clamp(min=1.0e-9)
+        use_lateral_only = lateral_distance > axial_blend_start
+        use_axial_only = lateral_distance <= lateral_switch
+        move_direction = torch.where(use_lateral_only, lateral_direction, blended_direction)
+        move_direction = torch.where(use_axial_only, axial_direction, move_direction)
+        remaining = torch.where(use_lateral_only, lateral_distance, torch.maximum(lateral_distance, axial_distance))
+        remaining = torch.where(use_axial_only, axial_distance, remaining)
+        move_w = move_direction * torch.minimum(remaining, torch.full_like(remaining, float(step_size)))
+    else:
+        distance = torch.linalg.norm(delta_w, dim=1, keepdim=True).clamp(min=1.0e-9)
+        move_w = delta_w / distance * torch.minimum(distance, torch.full_like(distance, float(step_size)))
+    root_quat_w = robot.data.root_quat_w.to(device)
+    desired_root_delta = math_utils.quat_apply_inverse(root_quat_w, move_w)
+    pre_sign_root_delta = desired_root_delta.clone()
+    if bool(args_cli.fix_isaac_ik_xy_sign):
+        pre_sign_root_delta[:, 0:2] *= -1.0
+    if action_frame == "root":
+        guide[:, :3] = pre_sign_root_delta
+        return guide
+    body_names = list(getattr(robot, "body_names", []))
+    frame_index = _named_index(body_names, action_frame)
+    _, frame_quat_b = math_utils.subtract_frame_transforms(
+        robot.data.root_pos_w.to(device),
+        robot.data.root_quat_w.to(device),
+        robot.data.body_pos_w[:, frame_index].to(device),
+        robot.data.body_quat_w[:, frame_index].to(device),
+    )
+    guide[:, :3] = math_utils.quat_apply_inverse(frame_quat_b, pre_sign_root_delta)
+    return guide
+
+
 def _act_obs_from_env(
     env,
     policy_obs: torch.Tensor,
@@ -1833,6 +2140,23 @@ def _episode_target_position_from_yaml(env) -> torch.Tensor | None:
         if position is None:
             return None
         rows.append(torch.tensor(position, dtype=origins.dtype, device=origins.device) + origins[env_id])
+    return torch.stack(rows, dim=0)
+
+
+def _episode_insertion_axis_from_yaml(env) -> torch.Tensor | None:
+    episodes = _current_episode_by_env(env)
+    if not episodes:
+        return None
+    origins = env.unwrapped.scene.env_origins
+    rows: list[torch.Tensor] = []
+    for env_id in range(env.unwrapped.num_envs):
+        episode = episodes.get(env_id)
+        target = ((episode or {}).get("scene") or {}).get("target") or {}
+        axis = target.get("insertion_axis_world")
+        if axis is None:
+            return None
+        axis_tensor = torch.tensor(axis, dtype=origins.dtype, device=origins.device)
+        rows.append(axis_tensor / torch.linalg.norm(axis_tensor).clamp(min=1.0e-9))
     return torch.stack(rows, dim=0)
 
 
@@ -2226,9 +2550,7 @@ def _target_source_diagnostics(env, reward_config: dict[str, Any]) -> dict[str, 
     if uses_episode_position and uses_episode_orientation:
         notes.append("target position and orientation both come from episode YAML")
     if float(reward_config.get("lateral_weight", 0.0)) > 0.0:
-        warnings.append(
-            "target_lateral_error currently uses a world-axis mask, not the target/port frame"
-        )
+        warnings.append("target_lateral_error is normally used with a negative penalty weight")
     return {
         "target_position_source": "episode_yaml" if uses_episode_position else "target_asset_root_plus_offset",
         "target_orientation_source": "episode_yaml" if uses_episode_orientation else "target_asset_root_plus_offset",
@@ -2573,6 +2895,46 @@ def _mlp(
     return nn.Sequential(*layers)
 
 
+def _straight_through_clamp(x: torch.Tensor, min_value: float, max_value: float) -> torch.Tensor:
+    """Clamp in the forward pass while keeping identity gradients for actor training."""
+    clipped = x.clamp(min_value, max_value)
+    return x + (clipped - x).detach()
+
+
+def _clip_tcp_translation_norm(action: torch.Tensor, *, single_action_dim: int, max_norm: float) -> torch.Tensor:
+    if max_norm <= 0.0:
+        return action
+    if action.shape[-1] % single_action_dim != 0:
+        raise ValueError(
+            f"Action dim {action.shape[-1]} is not divisible by single_action_dim={single_action_dim}"
+        )
+    steps = action.reshape(action.shape[0], action.shape[-1] // single_action_dim, single_action_dim)
+    translation = steps[:, :, :3]
+    norm = translation.norm(dim=-1, keepdim=True).clamp_min(1.0e-9)
+    scale = torch.clamp(float(max_norm) / norm, max=1.0)
+    clipped_translation = translation * scale
+    clipped = torch.cat([clipped_translation, steps[:, :, 3:]], dim=-1).reshape_as(action)
+    return clipped
+
+
+def _clip_tcp_rotation_norm(action: torch.Tensor, *, single_action_dim: int, max_norm: float) -> torch.Tensor:
+    if max_norm <= 0.0:
+        return action
+    if single_action_dim < 6:
+        raise ValueError(f"single_action_dim={single_action_dim} does not contain a 3D rotation component")
+    if action.shape[-1] % single_action_dim != 0:
+        raise ValueError(
+            f"Action dim {action.shape[-1]} is not divisible by single_action_dim={single_action_dim}"
+        )
+    steps = action.reshape(action.shape[0], action.shape[-1] // single_action_dim, single_action_dim)
+    rotation = steps[:, :, 3:6]
+    norm = rotation.norm(dim=-1, keepdim=True).clamp_min(1.0e-9)
+    scale = torch.clamp(float(max_norm) / norm, max=1.0)
+    clipped_rotation = rotation * scale
+    clipped = torch.cat([steps[:, :, :3], clipped_rotation, steps[:, :, 6:]], dim=-1).reshape_as(action)
+    return clipped
+
+
 class IsaacACTAdapterActor(nn.Module):
     """TorchScript ACT base plus the offline-trained adapter."""
 
@@ -2588,8 +2950,12 @@ class IsaacACTAdapterActor(nn.Module):
         num_layers: int,
         adapter_scale: float,
         adapter_delta_clip: float | None,
+        tcp_translation_action_clip: float | None,
+        tcp_rotation_action_clip: float | None,
         action_clip: float | None,
+        normalized_state_clip: float | None = None,
         adapter_activation: str = "relu",
+        actor_mode: str = "act_adapter",
         state_encoding: str = "none",
         state_encoding_indices: list[int] | tuple[int, ...] = (),
         state_encoding_num_bands: int = 4,
@@ -2610,7 +2976,15 @@ class IsaacACTAdapterActor(nn.Module):
         )
         self.adapter_scale = float(adapter_scale)
         self.adapter_delta_clip = None if adapter_delta_clip is None else float(adapter_delta_clip)
+        self.tcp_translation_action_clip = (
+            None if tcp_translation_action_clip is None else float(tcp_translation_action_clip)
+        )
+        self.tcp_rotation_action_clip = None if tcp_rotation_action_clip is None else float(tcp_rotation_action_clip)
         self.action_clip = None if action_clip is None else float(action_clip)
+        self.normalized_state_clip = None if normalized_state_clip is None else float(normalized_state_clip)
+        if actor_mode not in {"act_adapter", "act_direct"}:
+            raise ValueError(f"Unsupported ACT-backed actor mode: {actor_mode}")
+        self.actor_mode = actor_mode
         self.state_encoder, encoded_state_dim = _make_state_encoder(
             state_dim=self.state_dim,
             state_encoding=state_encoding,
@@ -2625,13 +2999,18 @@ class IsaacACTAdapterActor(nn.Module):
             num_layers,
             action_dim,
             activation=adapter_activation,
+            zero_final=True,
         )
         self.log_std = nn.Parameter(torch.full((action_dim,), -2.0))
 
     def action_components(self, obs: dict[str, Any]) -> dict[str, torch.Tensor]:
         output_device = obs["state"].device
         act_device = self.act_base_device
-        normalized_state = self.act_normalizer.normalize_state(obs["state"]).to(act_device)
+        normalized_state = self.act_normalizer.normalize_state(obs["state"])
+        if self.normalized_state_clip is not None and self.normalized_state_clip > 0.0:
+            clip = float(self.normalized_state_clip)
+            normalized_state = normalized_state.clamp(-clip, clip)
+        normalized_state = normalized_state.to(act_device)
         normalized_images = {
             key: self.act_normalizer.normalize_image(key, value).to(act_device)
             for key, value in obs["images"].items()
@@ -2646,20 +3025,44 @@ class IsaacACTAdapterActor(nn.Module):
         base_action = base_action[:, : self.action_horizon, :].reshape(obs["state"].shape[0], -1)
         encoded_state = self.state_encoder(obs["state"])
         raw_delta_action = self.adapter(torch.cat([encoded_state, base_action], dim=-1))
-        if self.adapter_delta_clip is not None and self.adapter_delta_clip > 0.0:
-            delta_action = raw_delta_action.clamp(-self.adapter_delta_clip, self.adapter_delta_clip)
+        if self.actor_mode == "act_adapter" and self.adapter_delta_clip is not None and self.adapter_delta_clip > 0.0:
+            delta_action = _straight_through_clamp(
+                raw_delta_action,
+                -self.adapter_delta_clip,
+                self.adapter_delta_clip,
+            )
         else:
             delta_action = raw_delta_action
         unclipped_final_action = base_action + self.adapter_scale * delta_action
+        translation_clipped_action = (
+            _clip_tcp_translation_norm(
+                unclipped_final_action,
+                single_action_dim=self.action_dim // self.action_horizon,
+                max_norm=self.tcp_translation_action_clip,
+            )
+            if self.tcp_translation_action_clip is not None and self.tcp_translation_action_clip > 0.0
+            else unclipped_final_action
+        )
+        rotation_clipped_action = (
+            _clip_tcp_rotation_norm(
+                translation_clipped_action,
+                single_action_dim=self.action_dim // self.action_horizon,
+                max_norm=self.tcp_rotation_action_clip,
+            )
+            if self.tcp_rotation_action_clip is not None and self.tcp_rotation_action_clip > 0.0
+            else translation_clipped_action
+        )
         if self.action_clip is not None and self.action_clip > 0.0:
-            final_action = unclipped_final_action.clamp(-self.action_clip, self.action_clip)
+            final_action = rotation_clipped_action.clamp(-self.action_clip, self.action_clip)
         else:
-            final_action = unclipped_final_action
+            final_action = rotation_clipped_action
         return {
             "base_action": base_action,
             "raw_delta_action": raw_delta_action,
             "delta_action": delta_action,
             "unclipped_final_action": unclipped_final_action,
+            "translation_clipped_action": translation_clipped_action,
+            "rotation_clipped_action": rotation_clipped_action,
             "final_action": final_action,
         }
 
@@ -2891,10 +3294,14 @@ class OnlineSERLTrainer:
         critic_lr: float,
         adapter_penalty_weight: float,
         act_preservation_weight: float,
+        actor_q_weight: float,
+        target_action_guide_weight: float,
+        target_action_guide_prefix_decay: bool,
         bc_weight: float,
         expert_prior: ExpertActionPrior | None,
         expert_bc_every: int,
         single_action_dim: int,
+        actor_update_action_steps: int,
         debug_diagnostics: bool,
         act_torchscript_device: torch.device,
         device: torch.device,
@@ -2912,16 +3319,20 @@ class OnlineSERLTrainer:
         self.tau = tau
         self.adapter_penalty_weight = adapter_penalty_weight
         self.act_preservation_weight = act_preservation_weight
+        self.actor_q_weight = float(actor_q_weight)
+        self.target_action_guide_weight = float(target_action_guide_weight)
+        self.target_action_guide_prefix_decay = bool(target_action_guide_prefix_decay)
         self.bc_weight = float(bc_weight)
         self.expert_prior = expert_prior
         self.expert_bc_every = max(1, int(expert_bc_every))
         self.single_action_dim = int(single_action_dim)
+        self.actor_update_action_steps = max(1, int(actor_update_action_steps))
         self.debug_diagnostics = bool(debug_diagnostics)
         self.update_count = 0
         self.actor_opt = torch.optim.Adam(self.actor.parameters(), lr=adapter_lr)
         self.critic_opt = torch.optim.Adam(list(self.critic1.parameters()) + list(self.critic2.parameters()), lr=critic_lr)
 
-    def train_step(self, batch: dict[str, Any]) -> dict[str, float]:
+    def train_step(self, batch: dict[str, Any], *, update_actor: bool = True) -> dict[str, float]:
         self.update_count += 1
         obs, next_obs = batch["obs"], batch["next_obs"]
         action, reward, done = batch["action"], batch["reward"], batch["done"]
@@ -2943,9 +3354,21 @@ class OnlineSERLTrainer:
         actor_action = _executed_critic_action(actor_action_full, single_action_dim=self.single_action_dim)
         base_action = components["base_action"]
         delta_action = components["delta_action"]
-        actor_q = torch.minimum(self.critic1(obs, actor_action), self.critic2(obs, actor_action))
-        adapter_penalty = delta_action.square().mean()
-        act_preservation_loss = F.mse_loss(actor_action_full, base_action)
+        raw_delta_action = components.get("raw_delta_action", delta_action)
+        q_actions = []
+        max_action_steps = min(
+            self.actor_update_action_steps,
+            max(1, actor_action_full.shape[-1] // self.single_action_dim),
+        )
+        for action_idx in range(max_action_steps):
+            start = action_idx * self.single_action_dim
+            action_i = actor_action_full[:, start : start + self.single_action_dim]
+            q_actions.append(torch.minimum(self.critic1(obs, action_i), self.critic2(obs, action_i)))
+        actor_q_all = torch.stack(q_actions, dim=0)
+        actor_q = actor_q_all.mean(dim=0)
+        adapter_penalty = raw_delta_action.norm(dim=-1).mean()
+        clipped_adapter_penalty = delta_action.norm(dim=-1).mean()
+        act_preservation_loss = (actor_action_full - base_action).norm(dim=-1).mean()
         compute_bc = (
             self.expert_prior is not None
             and self.bc_weight > 0.0
@@ -2959,21 +3382,100 @@ class OnlineSERLTrainer:
         else:
             bc_loss = torch.zeros((), dtype=actor_action_full.dtype, device=actor_action_full.device)
             bc_elapsed_ms = 0.0
+        guide_action = batch.get("guide_action")
+        if guide_action is not None and self.target_action_guide_weight > 0.0:
+            guide_prefix_steps = min(
+                max_action_steps,
+                max(1, actor_action_full.shape[-1] // self.single_action_dim),
+            )
+            actor_action_prefix = actor_action_full[:, : guide_prefix_steps * self.single_action_dim]
+            guide_action_prefix = guide_action.repeat(1, guide_prefix_steps)
+            guide_action_prefix_steps = guide_action_prefix.reshape(
+                guide_action_prefix.shape[0],
+                guide_prefix_steps,
+                self.single_action_dim,
+            )
+            if self.target_action_guide_prefix_decay and guide_prefix_steps > 1:
+                decay = torch.linspace(
+                    1.0,
+                    1.0 / float(guide_prefix_steps),
+                    guide_prefix_steps,
+                    dtype=guide_action_prefix_steps.dtype,
+                    device=guide_action_prefix_steps.device,
+                ).view(1, guide_prefix_steps, 1)
+                guide_action_prefix_steps = guide_action_prefix_steps * decay
+                guide_action_prefix = guide_action_prefix_steps.reshape_as(guide_action_prefix)
+            actor_action_prefix_steps = actor_action_prefix.reshape(
+                actor_action_prefix.shape[0],
+                guide_prefix_steps,
+                self.single_action_dim,
+            )
+            guide_translation_loss = F.l1_loss(actor_action_prefix_steps[:, :, :3], guide_action_prefix_steps[:, :, :3])
+            guide_rotation_loss = F.l1_loss(actor_action_prefix_steps[:, :, 3:], guide_action_prefix_steps[:, :, 3:])
+            guide_loss = guide_translation_loss + 0.1 * guide_rotation_loss
+        else:
+            guide_prefix_steps = 0
+            actor_action_prefix = None
+            guide_action_prefix = None
+            guide_translation_loss = None
+            guide_rotation_loss = None
+            guide_loss = torch.zeros((), dtype=actor_action_full.dtype, device=actor_action_full.device)
         bc_loss_weighted = self.bc_weight * bc_loss
+        guide_loss_weighted = self.target_action_guide_weight * guide_loss
         q_actor_loss = -actor_q.mean()
+        q_actor_loss_weighted = self.actor_q_weight * q_actor_loss
         adapter_penalty_weighted = self.adapter_penalty_weight * adapter_penalty
         act_preservation_loss_weighted = self.act_preservation_weight * act_preservation_loss
-        actor_loss = q_actor_loss + adapter_penalty_weighted + act_preservation_loss_weighted + bc_loss_weighted
-        self.actor_opt.zero_grad(set_to_none=True)
-        actor_loss.backward()
-        adapter_grad_norm = _grad_norm(self.actor.adapter.parameters())
-        self.actor_opt.step()
+        actor_loss = (
+            q_actor_loss_weighted
+            + adapter_penalty_weighted
+            + act_preservation_loss_weighted
+            + bc_loss_weighted
+            + guide_loss_weighted
+        )
+        if update_actor:
+            self.actor_opt.zero_grad(set_to_none=True)
+            actor_loss.backward()
+            adapter_grad_norm = _grad_norm(self.actor.adapter.parameters())
+            self.actor_opt.step()
+        else:
+            adapter_grad_norm = 0.0
         self._soft_update()
-        raw_delta = components.get("raw_delta_action", delta_action)
+        raw_delta = raw_delta_action
         clipped_fraction = float((raw_delta.sub(delta_action).abs() > 1.0e-9).float().mean().detach().cpu())
+        unclipped_final_action = components.get("unclipped_final_action", actor_action_full)
+        pre_translation_steps = unclipped_final_action.reshape(
+            unclipped_final_action.shape[0],
+            unclipped_final_action.shape[-1] // self.single_action_dim,
+            self.single_action_dim,
+        )[:, :, :3]
+        post_translation_steps = actor_action_full.reshape(
+            actor_action_full.shape[0],
+            actor_action_full.shape[-1] // self.single_action_dim,
+            self.single_action_dim,
+        )[:, :, :3]
+        translation_action_clipped_fraction = float(
+            (pre_translation_steps.sub(post_translation_steps).abs() > 1.0e-9).float().mean().detach().cpu()
+        )
+        rotation_clipped_action = components.get("rotation_clipped_action", actor_action_full)
+        pre_rotation_steps = components.get("translation_clipped_action", actor_action_full).reshape(
+            actor_action_full.shape[0],
+            actor_action_full.shape[-1] // self.single_action_dim,
+            self.single_action_dim,
+        )[:, :, 3:6]
+        post_rotation_steps = rotation_clipped_action.reshape(
+            actor_action_full.shape[0],
+            actor_action_full.shape[-1] // self.single_action_dim,
+            self.single_action_dim,
+        )[:, :, 3:6]
+        rotation_action_clipped_fraction = float(
+            (pre_rotation_steps.sub(post_rotation_steps).abs() > 1.0e-9).float().mean().detach().cpu()
+        )
         metrics = {
             "actor_loss": float(actor_loss.detach().cpu()),
             "actor_q_loss": float(q_actor_loss.detach().cpu()),
+            "actor_q_loss_weighted": float(q_actor_loss_weighted.detach().cpu()),
+            "actor_q_weight": float(self.actor_q_weight),
             "critic_loss": float(critic_loss.detach().cpu()),
             "batch_reward_mean": float(reward.mean().detach().cpu()),
             "batch_reward_std": float(reward.std(unbiased=False).detach().cpu()) if reward.numel() > 1 else 0.0,
@@ -2991,6 +3493,7 @@ class OnlineSERLTrainer:
             "q2_min": float(q2.min().detach().cpu()),
             "q2_max": float(q2.max().detach().cpu()),
             "actor_q_mean": float(actor_q.mean().detach().cpu()),
+            "actor_q_action_steps": float(max_action_steps),
             "critic_grad_norm": float(critic_grad_norm),
             "adapter_grad_norm": float(adapter_grad_norm),
             "base_action_norm": float(base_action.norm(dim=-1).mean().detach().cpu()),
@@ -3001,6 +3504,7 @@ class OnlineSERLTrainer:
             "final_action_abs_max": float(actor_action.abs().max().detach().cpu()),
             "adapter_delta_norm": float(delta_action.norm(dim=-1).mean().detach().cpu()),
             "adapter_delta_abs_max": float(delta_action.abs().max().detach().cpu()),
+            "clipped_adapter_penalty": float(clipped_adapter_penalty.detach().cpu()),
             "raw_adapter_delta_norm": float(
                 components.get("raw_delta_action", delta_action).norm(dim=-1).mean().detach().cpu()
             ),
@@ -3008,6 +3512,20 @@ class OnlineSERLTrainer:
                 components.get("raw_delta_action", delta_action).abs().max().detach().cpu()
             ),
             "adapter_clipped_fraction": clipped_fraction,
+            "tcp_translation_action_clip": (
+                0.0
+                if self.actor.tcp_translation_action_clip is None
+                else float(self.actor.tcp_translation_action_clip)
+            ),
+            "tcp_translation_action_clipped_fraction": translation_action_clipped_fraction,
+            "unclipped_tcp_translation_norm_mean": float(pre_translation_steps.norm(dim=-1).mean().detach().cpu()),
+            "clipped_tcp_translation_norm_mean": float(post_translation_steps.norm(dim=-1).mean().detach().cpu()),
+            "tcp_rotation_action_clip": (
+                0.0 if self.actor.tcp_rotation_action_clip is None else float(self.actor.tcp_rotation_action_clip)
+            ),
+            "tcp_rotation_action_clipped_fraction": rotation_action_clipped_fraction,
+            "unclipped_tcp_rotation_norm_mean": float(pre_rotation_steps.norm(dim=-1).mean().detach().cpu()),
+            "clipped_tcp_rotation_norm_mean": float(post_rotation_steps.norm(dim=-1).mean().detach().cpu()),
             "adapter_penalty": float(adapter_penalty.detach().cpu()),
             "adapter_penalty_weighted": float(adapter_penalty_weighted.detach().cpu()),
             "act_preservation_loss": float(act_preservation_loss.detach().cpu()),
@@ -3018,9 +3536,26 @@ class OnlineSERLTrainer:
             "bc_computed": float(compute_bc),
             "bc_every": float(self.expert_bc_every),
             "bc_lookup_ms": float(bc_elapsed_ms),
+            "target_action_guide_loss": float(guide_loss.detach().cpu()),
+            "target_action_guide_loss_weighted": float(guide_loss_weighted.detach().cpu()),
+            "target_action_guide_weight": float(self.target_action_guide_weight),
+            "target_action_guide_prefix_decay": float(self.target_action_guide_prefix_decay),
+            "target_action_guide_prefix_steps": float(guide_prefix_steps),
+            "target_action_guide_prefix_l1": (
+                float(F.l1_loss(actor_action_prefix, guide_action_prefix).detach().cpu())
+                if actor_action_prefix is not None and guide_action_prefix is not None
+                else 0.0
+            ),
+            "target_action_guide_translation_loss": (
+                float(guide_translation_loss.detach().cpu()) if guide_translation_loss is not None else 0.0
+            ),
+            "target_action_guide_rotation_loss": (
+                float(guide_rotation_loss.detach().cpu()) if guide_rotation_loss is not None else 0.0
+            ),
+            "actor_update_enabled": float(bool(update_actor)),
             "final_minus_act_norm": float((actor_action_full - base_action).norm(dim=-1).mean().detach().cpu()),
             "unclipped_final_minus_act_norm": float(
-                (components.get("unclipped_final_action", actor_action_full) - base_action)
+                (unclipped_final_action - base_action)
                 .norm(dim=-1)
                 .mean()
                 .detach()
@@ -3030,9 +3565,11 @@ class OnlineSERLTrainer:
             "critic_action_representation": "first_executed_6d",
             "loss_scale_summary": {
                 "actor_q_loss": float(q_actor_loss.detach().cpu()),
+                "actor_q_loss_weighted": float(q_actor_loss_weighted.detach().cpu()),
                 "adapter_penalty_weighted": float(adapter_penalty_weighted.detach().cpu()),
                 "act_preservation_loss_weighted": float(act_preservation_loss_weighted.detach().cpu()),
                 "bc_loss_weighted": float(bc_loss_weighted.detach().cpu()),
+                "target_action_guide_loss_weighted": float(guide_loss_weighted.detach().cpu()),
                 "critic_loss": float(critic_loss.detach().cpu()),
                 "batch_reward_mean": float(reward.mean().detach().cpu()),
             },
@@ -3075,7 +3612,10 @@ def _load_adapter_actor(
     device: torch.device,
     act_torchscript_device: torch.device,
     adapter_delta_clip: float | None,
+    tcp_translation_action_clip: float | None,
+    tcp_rotation_action_clip: float | None,
     action_clip: float | None,
+    normalized_state_clip: float | None,
 ) -> IsaacACTAdapterActor:
     actor_state = checkpoint["actor"]
     hidden_dim, num_layers = _infer_adapter_shape(actor_state)
@@ -3092,8 +3632,12 @@ def _load_adapter_actor(
         num_layers=num_layers,
         adapter_scale=adapter_scale,
         adapter_delta_clip=adapter_delta_clip,
+        tcp_translation_action_clip=tcp_translation_action_clip,
+        tcp_rotation_action_clip=tcp_rotation_action_clip,
         action_clip=action_clip,
+        normalized_state_clip=normalized_state_clip,
         adapter_activation=str(offline_cfg.get("adapter_activation", "relu")),
+        actor_mode=str(offline_cfg.get("actor_mode", "act_adapter")),
         state_encoding=str(offline_cfg.get("state_encoding", "none")),
         state_encoding_indices=tuple(int(i) for i in offline_cfg.get("state_encoding_indices", ())),
         state_encoding_num_bands=int(offline_cfg.get("state_encoding_num_bands", 4)),
@@ -3124,7 +3668,7 @@ def _act_only_training_context(args: argparse.Namespace) -> tuple[dict[str, Any]
         "action_dim": action_dim,
         "action_horizon": action_horizon,
         "camera_keys": list(CAMERA_KEYS),
-        "actor_mode": "act_adapter",
+        "actor_mode": str(args.act_only_actor_mode),
         "actor_update_mode": "online_q_from_act_only",
         "freeze_act": True,
         "critic_image_encoder": "small_conv",
@@ -3153,7 +3697,7 @@ def _act_only_training_context(args: argparse.Namespace) -> tuple[dict[str, Any]
         "camera_keys": list(CAMERA_KEYS),
     }
     warmstart = {
-        "mode": "act_only_zero_adapter",
+        "mode": "act_only_zero_adapter" if str(args.act_only_actor_mode) == "act_adapter" else "act_only_direct_init_to_act",
         "act_torchscript": str(args.act_torchscript),
         "adapter_scale": 1.0,
         "adapter_delta_clip": args.adapter_delta_clip,
@@ -3173,7 +3717,10 @@ def _init_zero_act_adapter_actor(
     device: torch.device,
     act_torchscript_device: torch.device,
     adapter_delta_clip: float | None,
+    tcp_translation_action_clip: float | None,
+    tcp_rotation_action_clip: float | None,
     action_clip: float | None,
+    normalized_state_clip: float | None,
 ) -> IsaacACTAdapterActor:
     act_base = _load_act_base(act_torchscript, act_torchscript_device)
     actor = IsaacACTAdapterActor(
@@ -3186,18 +3733,18 @@ def _init_zero_act_adapter_actor(
         num_layers=int(args.act_only_adapter_num_layers),
         adapter_scale=1.0,
         adapter_delta_clip=adapter_delta_clip,
+        tcp_translation_action_clip=tcp_translation_action_clip,
+        tcp_rotation_action_clip=tcp_rotation_action_clip,
         action_clip=action_clip,
+        normalized_state_clip=normalized_state_clip,
         adapter_activation=str(args.act_only_adapter_activation),
+        actor_mode=str(args.act_only_actor_mode),
         state_encoding=str(args.act_only_state_encoding),
         state_encoding_indices=tuple(int(i) for i in args.act_only_state_encoding_indices),
         state_encoding_num_bands=int(args.act_only_state_encoding_num_bands),
         state_encoding_max_freq=float(args.act_only_state_encoding_max_freq),
         state_encoding_scale=float(args.act_only_state_encoding_scale),
     ).to(device)
-    for module in actor.adapter.modules():
-        if isinstance(module, nn.Linear):
-            nn.init.zeros_(module.weight)
-            nn.init.zeros_(module.bias)
     with torch.no_grad():
         actor.log_std.fill_(-2.0)
     actor.act_base = _load_act_base(actor.act_torchscript_path, act_torchscript_device)
@@ -3261,13 +3808,13 @@ def _transition_payload(
     act_obs: dict[str, Any],
     next_act_obs: dict[str, Any],
     action_for_critic: torch.Tensor,
+    guide_action: torch.Tensor | None,
     reward: torch.Tensor,
     done: torch.Tensor,
     env_index: int,
     metadata: dict[str, Any],
 ) -> dict[str, Any]:
-    return _cpu_tree(
-        {
+    payload = {
             "obs": {
                 "state": act_obs["state"][env_index],
                 "images": {key: value[env_index] for key, value in act_obs["images"].items()},
@@ -3280,8 +3827,10 @@ def _transition_payload(
             "reward": reward[env_index],
             "done": done[env_index],
             "metadata": metadata,
-        }
-    )
+    }
+    if guide_action is not None:
+        payload["guide_action"] = guide_action[env_index]
+    return _cpu_tree(payload)
 
 
 def _checkpoint_training_context(checkpoint: dict[str, Any]) -> tuple[dict[str, Any], dict[str, Any], dict[str, Any]]:
@@ -3349,7 +3898,10 @@ def main() -> None:
             device=device,
             act_torchscript_device=act_torchscript_device,
             adapter_delta_clip=args_cli.adapter_delta_clip,
+            tcp_translation_action_clip=args_cli.tcp_translation_action_clip,
+            tcp_rotation_action_clip=args_cli.tcp_rotation_action_clip,
             action_clip=args_cli.action_clip,
+            normalized_state_clip=args_cli.act_normalized_state_clip,
         )
         print(f"[AIC SERL] Resumed ACT-adapter actor from checkpoint: {checkpoint_path}", flush=True)
     elif args_cli.act_only:
@@ -3362,7 +3914,10 @@ def main() -> None:
             device=device,
             act_torchscript_device=act_torchscript_device,
             adapter_delta_clip=args_cli.adapter_delta_clip,
+            tcp_translation_action_clip=args_cli.tcp_translation_action_clip,
+            tcp_rotation_action_clip=args_cli.tcp_rotation_action_clip,
             action_clip=args_cli.action_clip,
+            normalized_state_clip=args_cli.act_normalized_state_clip,
         )
     else:
         raise RuntimeError("Non-ACT-only training requires a checkpoint.")
@@ -3450,10 +4005,14 @@ def main() -> None:
         critic_lr=args_cli.critic_lr,
         adapter_penalty_weight=args_cli.adapter_penalty_weight,
         act_preservation_weight=args_cli.act_preservation_weight,
+        actor_q_weight=args_cli.actor_q_weight,
+        target_action_guide_weight=args_cli.target_action_guide_weight,
+        target_action_guide_prefix_decay=args_cli.target_action_guide_prefix_decay,
         bc_weight=expert_bc_weight,
         expert_prior=expert_prior,
         expert_bc_every=args_cli.expert_bc_every,
         single_action_dim=single_action_dim,
+        actor_update_action_steps=n_action_steps,
         debug_diagnostics=args_cli.debug_diagnostics,
         act_torchscript_device=act_torchscript_device,
         device=device,
@@ -3488,6 +4047,20 @@ def main() -> None:
         + json.dumps(_jsonable(_act_freeze_diagnostics(trainer)), sort_keys=True),
         flush=True,
     )
+    if state_dim >= 72 and not bool(args_cli.enable_contact_sensor):
+        args_cli.enable_contact_sensor = True
+        os.environ["AIC_ISAAC_ENABLE_CONTACT_SENSOR"] = "1"
+        print(
+            "[AIC SERL][diagnostic] enabling_contact_sensor_for_state_contract "
+            + json.dumps(
+                {
+                    "state_dim": state_dim,
+                    "reason": "72D/82D policy state includes contact/recovery features derived from wrist force slots",
+                },
+                sort_keys=True,
+            ),
+            flush=True,
+        )
 
     env_cfg = parse_env_cfg(
         args_cli.task,
@@ -3563,6 +4136,13 @@ def main() -> None:
                 if args_cli.state_source == "lerobot_compatible"
                 else f"first_{state_dim}_dims"
             ),
+            "force_torque_observation_contract": (
+                "Base slots 26:29 are wrist/contact-proxy force xyz and 29:32 are torque xyz. "
+                "If Isaac exposes no body incoming wrench, contact_forces.net_forces_w fills force xyz "
+                "and torque xyz remains zero; contact40 features are computed from the same slots. "
+                "Contact-proxy force magnitude is clipped by --isaac_force_observation_clip_n."
+            ),
+            "isaac_force_observation_clip_n": float(args_cli.isaac_force_observation_clip_n),
             "state_dim": state_dim,
             "state_schema_ranges": _state_schema_ranges(state_dim),
             "state_feature_names": _state_feature_names(state_dim),
@@ -3583,7 +4163,12 @@ def main() -> None:
             "n_action_steps": n_action_steps,
             "single_action_dim": single_action_dim,
             "adapter_delta_clip": args_cli.adapter_delta_clip,
+            "tcp_translation_action_clip": args_cli.tcp_translation_action_clip,
+            "tcp_rotation_action_clip": args_cli.tcp_rotation_action_clip,
             "action_clip": args_cli.action_clip,
+            "actor_q_weight": args_cli.actor_q_weight,
+            "actor_update_end_steps": args_cli.actor_update_end_steps,
+            "target_action_guide_prefix_decay": args_cli.target_action_guide_prefix_decay,
             "ppo_resnet_observation_terms_disabled": True,
             "camera_sensors_enabled": True,
             "critic_image_encoder": critic_image_encoder,
@@ -3721,11 +4306,8 @@ def main() -> None:
             "randomization": _randomization_diagnostics(env_cfg),
             "lateral_reward": {
                 "weight": float(task_geometry_reward_config.get("lateral_weight", 0.0)),
-                "warning": (
-                    "target_lateral_error uses a world-axis mask, not the target/port frame"
-                    if float(task_geometry_reward_config.get("lateral_weight", 0.0)) > 0.0
-                    else None
-                ),
+                "frame": "target/port frame",
+                "warning": "positive lateral weight rewards lateral error" if float(task_geometry_reward_config.get("lateral_weight", 0.0)) > 0.0 else None,
             },
             "observations": _observation_diagnostics(
                 obs=obs,
@@ -3864,7 +4446,36 @@ def main() -> None:
         if action_components is None or action_chunk is None:
             raise RuntimeError("Action chunk queue was empty without available action components")
         policy_tcp_action = queued_policy_actions[:, 0, :]
+        actor_policy_tcp_action = policy_tcp_action.clone()
         queued_policy_actions = queued_policy_actions[:, 1:, :]
+        guide_action_for_transition = None
+        effective_guide_collect_blend = 0.0
+        guide_needed = (
+            float(args_cli.target_action_guide_weight) > 0.0
+            or float(args_cli.target_action_guide_collect_blend) > 0.0
+        )
+        if guide_needed:
+            guide_action_for_transition = _target_guided_policy_action(
+                env,
+                task_geometry_reward_config,
+                step_size=float(args_cli.target_action_guide_step_size),
+                lateral_switch_m=float(args_cli.target_action_guide_lateral_switch_m),
+                axial_blend_lateral_m=float(args_cli.target_action_guide_axial_blend_lateral_m),
+                action_frame=str(args_cli.tcp_action_frame),
+                device=device,
+            )
+        collect_steps = int(args_cli.target_action_guide_collect_steps)
+        collect_blend = float(args_cli.target_action_guide_collect_blend)
+        if (
+            guide_action_for_transition is not None
+            and collect_blend > 0.0
+            and (collect_steps <= 0 or step <= collect_steps)
+        ):
+            blend = min(max(collect_blend, 0.0), 1.0)
+            if bool(args_cli.target_action_guide_collect_decay) and collect_steps > 0:
+                blend *= max(0.0, 1.0 - (float(step) - 1.0) / max(float(collect_steps), 1.0))
+            effective_guide_collect_blend = blend
+            policy_tcp_action = (1.0 - blend) * policy_tcp_action + blend * guide_action_for_transition
         t0 = time.monotonic()
         desired_root_action = _tcp_delta_action_to_isaac_base_action(
             env,
@@ -3926,6 +4537,7 @@ def main() -> None:
         done = done_for_bootstrap_bool.float().reshape(-1, 1).to(device)
         reward = reward.reshape(-1, 1).to(device)
         action_for_critic = policy_tcp_action
+        guide_action = guide_action_for_transition
         for env_index in range(policy_obs.shape[0]):
             metadata = _episode_metadata(env, env_index)
             metadata["inserted_env_step"] = int(step)
@@ -3941,6 +4553,7 @@ def main() -> None:
                 act_obs=act_obs,
                 next_act_obs=next_act_obs,
                 action_for_critic=action_for_critic,
+                guide_action=guide_action,
                 reward=reward,
                 done=done,
                 env_index=env_index,
@@ -3952,6 +4565,7 @@ def main() -> None:
 
         if (
             int(args_cli.debug_audit_steps) <= 0
+            and step % max(1, int(args_cli.update_every_steps)) == 0
             and len(replay) >= args_cli.batch_size
             and len(replay) >= args_cli.warmup_steps
             and updates_done < args_cli.updates
@@ -3960,7 +4574,11 @@ def main() -> None:
             batch = replay.sample(args_cli.batch_size, device)
             _timing_log(args_cli.debug_timing and step == 1, "sample_replay", t0)
             t0 = time.monotonic()
-            last_metrics = trainer.train_step(batch)
+            actor_update_end_steps = int(args_cli.actor_update_end_steps)
+            actor_update_enabled = step >= int(args_cli.actor_update_start_steps) and (
+                actor_update_end_steps <= 0 or step <= actor_update_end_steps
+            )
+            last_metrics = trainer.train_step(batch, update_actor=actor_update_enabled)
             _timing_log(args_cli.debug_timing and step == 1, "train_step", t0)
             updates_done += 1
             if diagnostics_enabled and (
@@ -4063,11 +4681,8 @@ def main() -> None:
                     "force_wrench": _force_wrench_diagnostics(env),
                     "lateral_reward": {
                         "weight": float(task_geometry_reward_config.get("lateral_weight", 0.0)),
-                        "warning": (
-                            "target_lateral_error uses a world-axis mask, not the target/port frame"
-                            if float(task_geometry_reward_config.get("lateral_weight", 0.0)) > 0.0
-                            else None
-                        ),
+                        "frame": "target/port frame",
+                        "warning": "positive lateral weight rewards lateral error" if float(task_geometry_reward_config.get("lateral_weight", 0.0)) > 0.0 else None,
                     },
                     "distance_before_after": distance_before_after,
                     "progress_off_by_one": {
@@ -4105,6 +4720,11 @@ def main() -> None:
                         "debug_audit_axis_magnitude": float(args_cli.debug_audit_axis_magnitude),
                         "debug_audit_constant_action": constant_audit_action,
                         "full_actor_action_env0_first12": _sample_vector(action_chunk, limit=12),
+                        "actor_policy_tcp_action_env0_first6": _sample_vector(actor_policy_tcp_action, limit=6),
+                        "guide_action_env0_first6": None
+                        if guide_action_for_transition is None
+                        else _sample_vector(guide_action_for_transition, limit=6),
+                        "target_action_guide_collect_blend_effective": float(effective_guide_collect_blend),
                         "env_action_env0_first6": _sample_vector(env_action, limit=6),
                         "replay_action_env0_first12": _sample_vector(action_for_critic, limit=12),
                     },
@@ -4142,6 +4762,158 @@ def main() -> None:
             "force_delta_penalty_mean": float(force_metrics["force_delta_penalty"].mean().detach().cpu()),
             "force_source": str(force_metrics.get("force_source", "unknown")),
             "force_body": str(force_metrics.get("force_body", FORCE_WRENCH_BODY)),
+            "target_action_guide_collect_blend_effective": float(effective_guide_collect_blend),
+            "actor_policy_tcp_action_norm_mean": float(torch.norm(actor_policy_tcp_action, dim=1).mean().detach().cpu()),
+            "executed_policy_tcp_action_norm_mean": float(torch.norm(policy_tcp_action, dim=1).mean().detach().cpu()),
+            "guide_action_norm_mean": (
+                None
+                if guide_action_for_transition is None
+                else float(torch.norm(guide_action_for_transition, dim=1).mean().detach().cpu())
+            ),
+            "actor_policy_tcp_action_translation_norm_mean": float(
+                torch.norm(actor_policy_tcp_action[:, :3], dim=1).mean().detach().cpu()
+            ),
+            "actor_policy_tcp_action_rotation_norm_mean": float(
+                torch.norm(actor_policy_tcp_action[:, 3:], dim=1).mean().detach().cpu()
+            ),
+            "executed_policy_tcp_action_translation_norm_mean": float(
+                torch.norm(policy_tcp_action[:, :3], dim=1).mean().detach().cpu()
+            ),
+            "executed_policy_tcp_action_rotation_norm_mean": float(
+                torch.norm(policy_tcp_action[:, 3:], dim=1).mean().detach().cpu()
+            ),
+            "guide_action_translation_norm_mean": (
+                None
+                if guide_action_for_transition is None
+                else float(torch.norm(guide_action_for_transition[:, :3], dim=1).mean().detach().cpu())
+            ),
+            "guide_action_rotation_norm_mean": (
+                None
+                if guide_action_for_transition is None
+                else float(torch.norm(guide_action_for_transition[:, 3:], dim=1).mean().detach().cpu())
+            ),
+            "actor_to_guide_l1_mean": (
+                None
+                if guide_action_for_transition is None
+                else float(torch.mean(torch.abs(actor_policy_tcp_action - guide_action_for_transition)).detach().cpu())
+            ),
+            "actor_to_guide_translation_l1_mean": (
+                None
+                if guide_action_for_transition is None
+                else float(
+                    torch.mean(torch.abs(actor_policy_tcp_action[:, :3] - guide_action_for_transition[:, :3]))
+                    .detach()
+                    .cpu()
+                )
+            ),
+            "actor_to_guide_rotation_l1_mean": (
+                None
+                if guide_action_for_transition is None
+                else float(
+                    torch.mean(torch.abs(actor_policy_tcp_action[:, 3:] - guide_action_for_transition[:, 3:]))
+                    .detach()
+                    .cpu()
+                )
+            ),
+            "actor_to_guide_dot_mean": (
+                None
+                if guide_action_for_transition is None
+                else float((actor_policy_tcp_action * guide_action_for_transition).sum(dim=1).mean().detach().cpu())
+            ),
+            "actor_to_guide_cosine_mean": (
+                None
+                if guide_action_for_transition is None
+                else float(
+                    F.cosine_similarity(
+                        actor_policy_tcp_action,
+                        guide_action_for_transition,
+                        dim=1,
+                        eps=1.0e-8,
+                    )
+                    .mean()
+                    .detach()
+                    .cpu()
+                )
+            ),
+            "actor_to_guide_translation_cosine_mean": (
+                None
+                if guide_action_for_transition is None
+                else float(
+                    F.cosine_similarity(
+                        actor_policy_tcp_action[:, :3],
+                        guide_action_for_transition[:, :3],
+                        dim=1,
+                        eps=1.0e-8,
+                    )
+                    .mean()
+                    .detach()
+                    .cpu()
+                )
+            ),
+            "actor_to_guide_rotation_cosine_mean": (
+                None
+                if guide_action_for_transition is None
+                else float(
+                    F.cosine_similarity(
+                        actor_policy_tcp_action[:, 3:],
+                        guide_action_for_transition[:, 3:],
+                        dim=1,
+                        eps=1.0e-8,
+                    )
+                    .mean()
+                    .detach()
+                    .cpu()
+                )
+            ),
+            "executed_to_guide_dot_mean": (
+                None
+                if guide_action_for_transition is None
+                else float((policy_tcp_action * guide_action_for_transition).sum(dim=1).mean().detach().cpu())
+            ),
+            "executed_to_guide_cosine_mean": (
+                None
+                if guide_action_for_transition is None
+                else float(
+                    F.cosine_similarity(policy_tcp_action, guide_action_for_transition, dim=1, eps=1.0e-8)
+                    .mean()
+                    .detach()
+                    .cpu()
+                )
+            ),
+            "executed_to_guide_translation_cosine_mean": (
+                None
+                if guide_action_for_transition is None
+                else float(
+                    F.cosine_similarity(
+                        policy_tcp_action[:, :3],
+                        guide_action_for_transition[:, :3],
+                        dim=1,
+                        eps=1.0e-8,
+                    )
+                    .mean()
+                    .detach()
+                    .cpu()
+                )
+            ),
+            "executed_to_guide_rotation_cosine_mean": (
+                None
+                if guide_action_for_transition is None
+                else float(
+                    F.cosine_similarity(policy_tcp_action[:, 3:], guide_action_for_transition[:, 3:], dim=1, eps=1.0e-8)
+                    .mean()
+                    .detach()
+                    .cpu()
+                )
+            ),
+            "executed_minus_actor_l1_mean": float(
+                torch.mean(torch.abs(policy_tcp_action - actor_policy_tcp_action)).detach().cpu()
+            ),
+            "executed_minus_actor_translation_l1_mean": float(
+                torch.mean(torch.abs(policy_tcp_action[:, :3] - actor_policy_tcp_action[:, :3])).detach().cpu()
+            ),
+            "executed_minus_actor_rotation_l1_mean": float(
+                torch.mean(torch.abs(policy_tcp_action[:, 3:] - actor_policy_tcp_action[:, 3:])).detach().cpu()
+            ),
             "episodes": [_episode_metadata(env, idx) for idx in range(policy_obs.shape[0])],
             "terminated_mean": float(terminated.float().mean().detach().cpu()),
             "truncated_mean": float(truncated.float().mean().detach().cpu()),

@@ -37,6 +37,15 @@ def test_runtime_feature_assembler_builds_82d_base_contact_task_order() -> None:
     assert state1[36] == pytest.approx(2.0)
 
 
+def test_runtime_feature_assembler_canonicalizes_negative_w_quaternion() -> None:
+    obs = _obs()
+    obs["controller"]["current_tcp_pose"]["orientation_xyzw"] = [-0.1, 0.2, -0.3, -0.9]
+
+    state = base_state_from_gazebo_observation(obs)
+
+    assert np.allclose(state[3:7], [0.1, -0.2, 0.3, 0.9])
+
+
 def test_runtime_feature_assembler_requires_task_for_task_conditioned_state() -> None:
     assembler = AICRuntimeFeatureAssembler(42)
     with pytest.raises(ValueError, match="task vector"):

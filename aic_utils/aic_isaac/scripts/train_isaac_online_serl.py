@@ -31,6 +31,8 @@ class ReplayBufferConfig:
     capacity: int = 100_000
     batch_size: int = 256
     warmup_steps: int = 1_000
+    actor_update_start_steps: int = 0
+    actor_update_end_steps: int = 0
 
 
 def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
@@ -70,6 +72,15 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser.add_argument("--act-only-adapter-hidden-dim", type=int, default=256)
     parser.add_argument("--act-only-adapter-num-layers", type=int, default=2)
     parser.add_argument("--act-only-adapter-activation", choices=["relu", "gelu", "tanh"], default="gelu")
+    parser.add_argument(
+        "--act-only-actor-mode",
+        choices=["act_adapter", "act_direct"],
+        default="act_adapter",
+        help=(
+            "act_adapter learns a residual added to ACT. act_direct initializes to ACT "
+            "but trains an unconstrained full-action override before final TCP caps."
+        ),
+    )
     parser.add_argument("--act-torchscript", type=Path, required=True)
     parser.add_argument(
         "--act-torchscript-device",
@@ -80,9 +91,27 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser.add_argument("--output-dir", type=Path, default=Path("outputs/train/isaac_online_serl"))
     parser.add_argument("--steps", type=int, default=10_000)
     parser.add_argument("--updates", type=int, default=8)
+    parser.add_argument(
+        "--update-every-steps",
+        type=int,
+        default=1,
+        help="Run one gradient update every N Isaac environment steps after warmup.",
+    )
     parser.add_argument("--replay-capacity", type=int, default=100_000)
     parser.add_argument("--batch-size", type=int, default=256)
     parser.add_argument("--warmup-steps", type=int, default=1_000)
+    parser.add_argument(
+        "--actor-update-start-steps",
+        type=int,
+        default=0,
+        help="Delay adapter actor updates until this many Isaac environment steps have been collected.",
+    )
+    parser.add_argument(
+        "--actor-update-end-steps",
+        type=int,
+        default=0,
+        help="If >0, freeze actor updates after this Isaac environment step while continuing rollouts.",
+    )
     parser.add_argument(
         "--episode-length-s",
         type=float,
@@ -121,6 +150,12 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser.add_argument("--critic-lr", type=float, default=1e-4)
     parser.add_argument("--act-lr", type=float, default=1e-5)
     parser.add_argument(
+        "--actor-q-weight",
+        type=float,
+        default=1.0,
+        help="Scale the actor -Q term. Use 0 during guide-imitation warm starts when the critic is not trustworthy yet.",
+    )
+    parser.add_argument(
         "--bc-weight",
         type=float,
         default=0.0,
@@ -138,7 +173,27 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     )
     parser.add_argument("--adapter-penalty-weight", type=float, default=1e-3)
     parser.add_argument("--act-preservation-weight", type=float, default=1e-2)
+    parser.add_argument("--target-action-guide-weight", type=float, default=0.0)
+    parser.add_argument("--target-action-guide-step-size", type=float, default=0.001)
+    parser.add_argument("--target-action-guide-lateral-switch-m", type=float, default=0.002)
+    parser.add_argument("--target-action-guide-axial-blend-lateral-m", type=float, default=0.006)
+    parser.add_argument("--target-action-guide-collect-blend", type=float, default=0.0)
+    parser.add_argument("--target-action-guide-collect-steps", type=int, default=0)
+    parser.add_argument("--target-action-guide-collect-decay", action=argparse.BooleanOptionalAction, default=False)
+    parser.add_argument("--target-action-guide-prefix-decay", action=argparse.BooleanOptionalAction, default=False)
     parser.add_argument("--adapter-delta-clip", type=float, default=0.05)
+    parser.add_argument(
+        "--tcp-translation-action-clip",
+        type=float,
+        default=0.0,
+        help="Optional per-step TCP translation norm cap in meters for each action in the predicted chunk.",
+    )
+    parser.add_argument(
+        "--tcp-rotation-action-clip",
+        type=float,
+        default=0.0,
+        help="Optional per-step TCP rotation-vector norm cap in radians for each action in the predicted chunk.",
+    )
     parser.add_argument(
         "--action-clip",
         type=float,
@@ -150,6 +205,12 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         type=float,
         default=1.0,
         help="Isaac IK action scale. Keep 1.0 for ACT/SERL physical TCP-delta actions.",
+    )
+    parser.add_argument(
+        "--act-normalized-state-clip",
+        type=float,
+        default=0.0,
+        help="If >0, clamp ACT-normalized state before TorchScript inference inside Isaac.",
     )
     parser.add_argument("--freeze-act", action=argparse.BooleanOptionalAction, default=True)
     parser.add_argument(
@@ -170,14 +231,36 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser.add_argument("--insertion-orientation-gate-sigma", type=float, default=0.012)
     parser.add_argument("--insertion-reaching-weight", type=float, default=0.0)
     parser.add_argument("--insertion-terminal-weight", type=float, default=1.0)
-    parser.add_argument("--insertion-lateral-weight", type=float, default=0.0)
-    parser.add_argument("--force-delta-penalty-weight", type=float, default=0.2)
-    parser.add_argument("--force-delta-threshold", type=float, default=3.0)
+    parser.add_argument("--insertion-lateral-weight", type=float, default=-0.05)
+    parser.add_argument("--insertion-lateral-gate-sigma", type=float, default=0.012)
+    parser.add_argument("--insertion-lateral-error-scale", type=float, default=0.006)
+    parser.add_argument("--insertion-motion-projection-weight", type=float, default=0.0)
+    parser.add_argument("--insertion-motion-projection-scale", type=float, default=0.001)
+    parser.add_argument("--insertion-lateral-progress-weight", type=float, default=0.0)
+    parser.add_argument("--insertion-lateral-progress-scale", type=float, default=0.001)
+    parser.add_argument("--insertion-axial-progress-weight", type=float, default=0.0)
+    parser.add_argument("--insertion-axial-progress-scale", type=float, default=0.001)
+    parser.add_argument("--insertion-axis", type=int, choices=[0, 1, 2], default=0)
+    parser.add_argument("--force-delta-penalty-weight", type=float, default=0.3)
+    parser.add_argument("--force-delta-threshold", type=float, default=10.0)
     parser.add_argument("--force-delta-reference", type=float, default=20.0)
+    parser.add_argument("--force-delta-saturation", type=float, default=30.0)
+    parser.add_argument("--force-delta-knee-penalty-fraction", type=float, default=0.1)
+    parser.add_argument("--isaac-force-observation-clip-n", type=float, default=35.0)
     parser.add_argument("--target-reward-body", default="sfp_tip_link")
     parser.add_argument("--target-reward-distance-std", type=float, default=0.02)
     parser.add_argument("--target-reward-close-sigma", type=float, default=0.006)
     parser.add_argument("--target-reward-reaching-threshold", type=float, default=0.01)
+    parser.add_argument("--terminate-on-target-success", action=argparse.BooleanOptionalAction, default=False)
+    parser.add_argument(
+        "--target-success-termination-threshold",
+        type=float,
+        default=0.0035,
+        help=(
+            "Strict target-distance threshold for terminating successful episodes. "
+            "This is intentionally separate from --target-reward-reaching-threshold."
+        ),
+    )
     parser.add_argument("--target-reward-position-offset", type=float, nargs=3, default=None)
     parser.add_argument("--target-reward-body-position-offset", type=float, nargs=3, default=None)
     parser.add_argument("--state-source", choices=["lerobot_compatible", "policy_prefix"], default="lerobot_compatible")
@@ -292,7 +375,12 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     )
     parser.add_argument("--debug-audit-axis-magnitude", type=float, default=0.0)
     parser.add_argument("--debug-audit-constant-action", type=float, nargs=6, default=None)
-    parser.add_argument("--enable-contact-sensor", action=argparse.BooleanOptionalAction, default=False)
+    parser.add_argument(
+        "--enable-contact-sensor",
+        action=argparse.BooleanOptionalAction,
+        default=True,
+        help="Keep Isaac contact sensor enabled so 72D/82D states populate Gazebo-compatible force/contact slots.",
+    )
     parser.add_argument(
         "--fix-isaac-ik-xy-sign",
         action=argparse.BooleanOptionalAction,
@@ -329,10 +417,12 @@ def inspect_checkpoint(path: Path, *, required: bool) -> dict[str, Any]:
 
 
 def build_plan(args: argparse.Namespace, *, inspect_required: bool = True) -> dict[str, Any]:
+    normalize_reward_sign_args(args)
     replay = ReplayBufferConfig(
         capacity=args.replay_capacity,
         batch_size=args.batch_size,
         warmup_steps=args.warmup_steps,
+        actor_update_start_steps=args.actor_update_start_steps,
     )
     act_only = bool(getattr(args, "act_only", False))
     act_only_state_dim = int(getattr(args, "act_only_state_dim", 82))
@@ -383,7 +473,10 @@ def build_plan(args: argparse.Namespace, *, inspect_required: bool = True) -> di
         "output_dir": str(args.output_dir),
         "steps": args.steps,
         "updates": args.updates,
+        "update_every_steps": int(getattr(args, "update_every_steps", 1)),
         "warmup_steps": args.warmup_steps,
+        "actor_update_start_steps": args.actor_update_start_steps,
+        "actor_update_end_steps": args.actor_update_end_steps,
         "episode_length_s": float(getattr(args, "episode_length_s", 0.0)),
         "policy_hz": float(getattr(args, "policy_hz", 20.0)),
         "max_wall_time_minutes": args.max_wall_time_minutes,
@@ -399,6 +492,7 @@ def build_plan(args: argparse.Namespace, *, inspect_required: bool = True) -> di
         "act_only_adapter_hidden_dim": act_only_adapter_hidden_dim,
         "act_only_adapter_num_layers": act_only_adapter_num_layers,
         "act_only_adapter_activation": act_only_adapter_activation,
+        "act_only_actor_mode": str(getattr(args, "act_only_actor_mode", "act_adapter")),
         "act_torchscript": str(args.act_torchscript),
         "act_torchscript_device": args.act_torchscript_device,
         "gamma": args.gamma,
@@ -406,6 +500,7 @@ def build_plan(args: argparse.Namespace, *, inspect_required: bool = True) -> di
         "adapter_lr": args.adapter_lr,
         "critic_lr": args.critic_lr,
         "act_lr": args.act_lr,
+        "actor_q_weight": args.actor_q_weight,
         "bc_weight": bc_weight,
         "expert_dataset_root": str(expert_dataset_root) if expert_dataset_root else None,
         "expert_bc_weight": expert_bc_weight,
@@ -414,9 +509,22 @@ def build_plan(args: argparse.Namespace, *, inspect_required: bool = True) -> di
         "expert_bc_every": expert_bc_every,
         "adapter_penalty_weight": args.adapter_penalty_weight,
         "act_preservation_weight": args.act_preservation_weight,
+        "target_action_guide_weight": getattr(args, "target_action_guide_weight", 0.0),
+        "target_action_guide_step_size": getattr(args, "target_action_guide_step_size", 0.001),
+        "target_action_guide_lateral_switch_m": getattr(args, "target_action_guide_lateral_switch_m", 0.002),
+        "target_action_guide_axial_blend_lateral_m": getattr(
+            args, "target_action_guide_axial_blend_lateral_m", 0.006
+        ),
+        "target_action_guide_collect_blend": getattr(args, "target_action_guide_collect_blend", 0.0),
+        "target_action_guide_collect_steps": getattr(args, "target_action_guide_collect_steps", 0),
+        "target_action_guide_collect_decay": bool(getattr(args, "target_action_guide_collect_decay", False)),
+        "target_action_guide_prefix_decay": bool(getattr(args, "target_action_guide_prefix_decay", False)),
         "adapter_delta_clip": args.adapter_delta_clip,
+        "tcp_translation_action_clip": args.tcp_translation_action_clip,
+        "tcp_rotation_action_clip": args.tcp_rotation_action_clip,
         "action_clip": args.action_clip,
         "isaac_action_scale": args.isaac_action_scale,
+        "act_normalized_state_clip": args.act_normalized_state_clip,
         "randomization_profile": args.randomization_profile,
         "insertion_distance_weight": args.insertion_distance_weight,
         "insertion_close_weight": args.insertion_close_weight,
@@ -428,13 +536,27 @@ def build_plan(args: argparse.Namespace, *, inspect_required: bool = True) -> di
         "insertion_reaching_weight": args.insertion_reaching_weight,
         "insertion_terminal_weight": insertion_terminal_weight,
         "insertion_lateral_weight": args.insertion_lateral_weight,
+        "insertion_lateral_gate_sigma": args.insertion_lateral_gate_sigma,
+        "insertion_lateral_error_scale": args.insertion_lateral_error_scale,
+        "insertion_motion_projection_weight": getattr(args, "insertion_motion_projection_weight", 0.0),
+        "insertion_motion_projection_scale": getattr(args, "insertion_motion_projection_scale", 0.001),
+        "insertion_lateral_progress_weight": getattr(args, "insertion_lateral_progress_weight", 0.0),
+        "insertion_lateral_progress_scale": getattr(args, "insertion_lateral_progress_scale", 0.001),
+        "insertion_axial_progress_weight": getattr(args, "insertion_axial_progress_weight", 0.0),
+        "insertion_axial_progress_scale": getattr(args, "insertion_axial_progress_scale", 0.001),
+        "insertion_axis": args.insertion_axis,
         "force_delta_penalty_weight": args.force_delta_penalty_weight,
         "force_delta_threshold": args.force_delta_threshold,
         "force_delta_reference": args.force_delta_reference,
+        "force_delta_saturation": args.force_delta_saturation,
+        "force_delta_knee_penalty_fraction": args.force_delta_knee_penalty_fraction,
+        "isaac_force_observation_clip_n": args.isaac_force_observation_clip_n,
         "target_reward_body": args.target_reward_body,
         "target_reward_distance_std": args.target_reward_distance_std,
         "target_reward_close_sigma": args.target_reward_close_sigma,
         "target_reward_reaching_threshold": args.target_reward_reaching_threshold,
+        "terminate_on_target_success": bool(getattr(args, "terminate_on_target_success", False)),
+        "target_success_termination_threshold": args.target_success_termination_threshold,
         "target_reward_position_offset": args.target_reward_position_offset,
         "target_reward_body_position_offset": args.target_reward_body_position_offset,
         "initial_arm_joint_pos": args.initial_arm_joint_pos,
@@ -470,7 +592,7 @@ def build_plan(args: argparse.Namespace, *, inspect_required: bool = True) -> di
         "tcp_action_frame": str(getattr(args, "tcp_action_frame", "gripper_tcp")),
         "debug_audit_axis_magnitude": float(getattr(args, "debug_audit_axis_magnitude", 0.0)),
         "debug_audit_constant_action": getattr(args, "debug_audit_constant_action", None),
-        "enable_contact_sensor": bool(getattr(args, "enable_contact_sensor", False)),
+        "enable_contact_sensor": bool(getattr(args, "enable_contact_sensor", True)),
         "fix_isaac_ik_xy_sign": bool(getattr(args, "fix_isaac_ik_xy_sign", True)),
         "force_camera_render_before_read": bool(getattr(args, "force_camera_render_before_read", False)),
         "disable_ppo_resnet_observation_terms": bool(getattr(args, "disable_ppo_resnet_observation_terms", True)),
@@ -491,6 +613,7 @@ def build_plan(args: argparse.Namespace, *, inspect_required: bool = True) -> di
 
 
 def build_command(args: argparse.Namespace) -> tuple[list[str], dict[str, str]]:
+    normalize_reward_sign_args(args)
     insertion_progress_weight = float(getattr(args, "insertion_progress_weight", 0.25))
     insertion_progress_scale = float(getattr(args, "insertion_progress_scale", 0.003))
     insertion_orientation_std = float(getattr(args, "insertion_orientation_std", 0.03))
@@ -524,12 +647,18 @@ def build_command(args: argparse.Namespace) -> tuple[list[str], dict[str, str]]:
         str(args.steps),
         "--updates",
         str(args.updates),
+        "--update_every_steps",
+        str(int(getattr(args, "update_every_steps", 1))),
         "--batch_size",
         str(args.batch_size),
         "--replay_capacity",
         str(args.replay_capacity),
         "--warmup_steps",
         str(args.warmup_steps),
+        "--actor_update_start_steps",
+        str(args.actor_update_start_steps),
+        "--actor_update_end_steps",
+        str(args.actor_update_end_steps),
         "--n_action_steps",
         str(int(getattr(args, "n_action_steps", 4))),
         "--episode_length_s",
@@ -556,18 +685,40 @@ def build_command(args: argparse.Namespace) -> tuple[list[str], dict[str, str]]:
         str(args.critic_lr),
         "--act_lr",
         str(args.act_lr),
+        "--actor_q_weight",
+        str(args.actor_q_weight),
         "--bc_weight",
         str(bc_weight),
         "--adapter_penalty_weight",
         str(args.adapter_penalty_weight),
         "--act_preservation_weight",
         str(args.act_preservation_weight),
+        "--target_action_guide_weight",
+        str(getattr(args, "target_action_guide_weight", 0.0)),
+        "--target_action_guide_step_size",
+        str(getattr(args, "target_action_guide_step_size", 0.001)),
+        "--target_action_guide_lateral_switch_m",
+        str(getattr(args, "target_action_guide_lateral_switch_m", 0.002)),
+        "--target_action_guide_axial_blend_lateral_m",
+        str(getattr(args, "target_action_guide_axial_blend_lateral_m", 0.006)),
+        "--target_action_guide_collect_blend",
+        str(getattr(args, "target_action_guide_collect_blend", 0.0)),
+        "--target_action_guide_collect_steps",
+        str(getattr(args, "target_action_guide_collect_steps", 0)),
+        "--target_action_guide_collect_decay" if getattr(args, "target_action_guide_collect_decay", False) else "--no-target_action_guide_collect_decay",
+        "--target_action_guide_prefix_decay" if getattr(args, "target_action_guide_prefix_decay", False) else "--no-target_action_guide_prefix_decay",
         "--adapter_delta_clip",
         str(args.adapter_delta_clip),
+        "--tcp_translation_action_clip",
+        str(args.tcp_translation_action_clip),
+        "--tcp_rotation_action_clip",
+        str(args.tcp_rotation_action_clip),
         "--action_clip",
         str(args.action_clip),
         "--isaac_action_scale",
         str(args.isaac_action_scale),
+        "--act_normalized_state_clip",
+        str(args.act_normalized_state_clip),
         "--state_source",
         args.state_source,
         "--task_family",
@@ -600,12 +751,36 @@ def build_command(args: argparse.Namespace) -> tuple[list[str], dict[str, str]]:
         str(insertion_terminal_weight),
         "--target_reward_lateral_weight",
         str(args.insertion_lateral_weight),
+        "--target_reward_lateral_gate_sigma",
+        str(args.insertion_lateral_gate_sigma),
+        "--target_reward_lateral_error_scale",
+        str(args.insertion_lateral_error_scale),
+        "--target_reward_motion_projection_weight",
+        str(getattr(args, "insertion_motion_projection_weight", 0.0)),
+        "--target_reward_motion_projection_scale",
+        str(getattr(args, "insertion_motion_projection_scale", 0.001)),
+        "--target_reward_lateral_progress_weight",
+        str(getattr(args, "insertion_lateral_progress_weight", 0.0)),
+        "--target_reward_lateral_progress_scale",
+        str(getattr(args, "insertion_lateral_progress_scale", 0.001)),
+        "--target_reward_axial_progress_weight",
+        str(getattr(args, "insertion_axial_progress_weight", 0.0)),
+        "--target_reward_axial_progress_scale",
+        str(getattr(args, "insertion_axial_progress_scale", 0.001)),
+        "--target_reward_insertion_axis",
+        str(args.insertion_axis),
         "--force_delta_penalty_weight",
         str(args.force_delta_penalty_weight),
         "--force_delta_threshold",
         str(args.force_delta_threshold),
         "--force_delta_reference",
         str(args.force_delta_reference),
+        "--force_delta_saturation",
+        str(args.force_delta_saturation),
+        "--force_delta_knee_penalty_fraction",
+        str(args.force_delta_knee_penalty_fraction),
+        "--isaac_force_observation_clip_n",
+        str(args.isaac_force_observation_clip_n),
         "--target_reward_body",
         args.target_reward_body,
         "--target_reward_distance_std",
@@ -614,6 +789,9 @@ def build_command(args: argparse.Namespace) -> tuple[list[str], dict[str, str]]:
         str(args.target_reward_close_sigma),
         "--target_reward_reaching_threshold",
         str(args.target_reward_reaching_threshold),
+        "--terminate_on_target_success" if getattr(args, "terminate_on_target_success", False) else "--no-terminate_on_target_success",
+        "--target_success_termination_threshold",
+        str(args.target_success_termination_threshold),
     ]
     act_only = bool(getattr(args, "act_only", False))
     if act_only:
@@ -632,6 +810,8 @@ def build_command(args: argparse.Namespace) -> tuple[list[str], dict[str, str]]:
                 str(getattr(args, "act_only_adapter_num_layers", 2)),
                 "--act_only_adapter_activation",
                 str(getattr(args, "act_only_adapter_activation", "gelu")),
+                "--act_only_actor_mode",
+                str(getattr(args, "act_only_actor_mode", "act_adapter")),
             ]
         )
         if args.checkpoint is not None:
@@ -692,7 +872,7 @@ def build_command(args: argparse.Namespace) -> tuple[list[str], dict[str, str]]:
     cmd.extend(["--debug_audit_axis_magnitude", str(getattr(args, "debug_audit_axis_magnitude", 0.0))])
     if getattr(args, "debug_audit_constant_action", None) is not None:
         cmd.extend(["--debug_audit_constant_action", *(str(v) for v in args.debug_audit_constant_action)])
-    cmd.append("--enable_contact_sensor" if bool(getattr(args, "enable_contact_sensor", False)) else "--no-enable_contact_sensor")
+    cmd.append("--enable_contact_sensor" if bool(getattr(args, "enable_contact_sensor", True)) else "--no-enable_contact_sensor")
     cmd.append("--fix_isaac_ik_xy_sign" if bool(getattr(args, "fix_isaac_ik_xy_sign", True)) else "--no-fix_isaac_ik_xy_sign")
     if args.disable_fabric:
         cmd.append("--disable_fabric")
@@ -717,6 +897,7 @@ def build_command(args: argparse.Namespace) -> tuple[list[str], dict[str, str]]:
     env["AIC_ISAAC_INSERTION_REACHING_WEIGHT"] = str(args.insertion_reaching_weight)
     env["AIC_ISAAC_INSERTION_TERMINAL_WEIGHT"] = str(insertion_terminal_weight)
     env["AIC_ISAAC_INSERTION_LATERAL_WEIGHT"] = str(args.insertion_lateral_weight)
+    env["AIC_ISAAC_INSERTION_AXIAL_PROGRESS_WEIGHT"] = str(getattr(args, "insertion_axial_progress_weight", 0.0))
     env["AIC_ISAAC_FORCE_DELTA_PENALTY_WEIGHT"] = str(args.force_delta_penalty_weight)
     if args.initial_arm_joint_pos:
         env["AIC_ISAAC_INITIAL_ARM_JOINT_POS"] = args.initial_arm_joint_pos
@@ -738,6 +919,20 @@ def validate_launch_inputs(args: argparse.Namespace) -> None:
             raise FileNotFoundError(f"Checkpoint does not exist: {args.checkpoint}")
     if args.warmup_steps < 0:
         raise ValueError("--warmup-steps must be non-negative")
+    if int(getattr(args, "actor_update_start_steps", 0)) < 0:
+        raise ValueError("--actor-update-start-steps must be non-negative")
+    if int(getattr(args, "actor_update_end_steps", 0)) < 0:
+        raise ValueError("--actor-update-end-steps must be non-negative")
+    if float(getattr(args, "actor_q_weight", 1.0)) < 0.0:
+        raise ValueError("--actor-q-weight must be non-negative")
+    if float(getattr(args, "tcp_translation_action_clip", 0.0)) < 0.0:
+        raise ValueError("--tcp-translation-action-clip must be non-negative")
+    if float(getattr(args, "tcp_rotation_action_clip", 0.0)) < 0.0:
+        raise ValueError("--tcp-rotation-action-clip must be non-negative")
+    if float(getattr(args, "target_action_guide_lateral_switch_m", 0.002)) < 0.0:
+        raise ValueError("--target-action-guide-lateral-switch-m must be non-negative")
+    if float(getattr(args, "target_action_guide_axial_blend_lateral_m", 0.006)) < 0.0:
+        raise ValueError("--target-action-guide-axial-blend-lateral-m must be non-negative")
     if args.batch_size <= 0:
         raise ValueError("--batch-size must be positive")
     if args.replay_capacity < args.batch_size:
@@ -752,6 +947,12 @@ def validate_launch_inputs(args: argparse.Namespace) -> None:
         raise ValueError("--n-action-steps must be <= --act-only-action-horizon when the latter is set")
     if float(getattr(args, "policy_hz", 20.0)) <= 0.0:
         raise ValueError("--policy-hz must be positive")
+    if float(getattr(args, "target_success_termination_threshold", 0.0)) < 0.0:
+        raise ValueError("--target-success-termination-threshold must be non-negative")
+    if bool(getattr(args, "terminate_on_target_success", False)) and float(
+        getattr(args, "target_success_termination_threshold", 0.0)
+    ) <= 0.0:
+        raise ValueError("--target-success-termination-threshold must be positive when success termination is enabled")
     if args.target_reward_position_offset is not None and len(args.target_reward_position_offset) != 3:
         raise ValueError("--target-reward-position-offset must contain exactly three values")
     if args.target_reward_body_position_offset is not None and len(args.target_reward_body_position_offset) != 3:
@@ -806,8 +1007,22 @@ def prepare_user_episode_configs(args: argparse.Namespace) -> dict[str, Any] | N
     return summary
 
 
+def normalize_reward_sign_args(args: argparse.Namespace) -> None:
+    """Keep CLI penalty magnitudes from accidentally becoming rewards."""
+    lateral_weight = float(getattr(args, "insertion_lateral_weight", 0.0))
+    if lateral_weight > 0.0:
+        corrected = -lateral_weight
+        print(
+            "[AIC SERL][warning] --insertion-lateral-weight is a lateral-error "
+            f"penalty; interpreting positive magnitude {lateral_weight:g} as {corrected:g}.",
+            flush=True,
+        )
+        args.insertion_lateral_weight = corrected
+
+
 def main() -> int:
     args = parse_args()
+    normalize_reward_sign_args(args)
     user_config_summary = prepare_user_episode_configs(args)
     plan = build_plan(args, inspect_required=not args.dry_run)
     if user_config_summary is not None:
