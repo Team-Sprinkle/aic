@@ -11,6 +11,7 @@ import omni.usd
 import torch
 import yaml
 from pxr import Gf, Sdf, UsdGeom, UsdLux
+from isaaclab.utils.math import compute_pose_error, quat_error_magnitude
 
 if TYPE_CHECKING:
     from isaaclab.envs import ManagerBasedEnv
@@ -227,6 +228,16 @@ def randomize_board_and_parts(
     USD Xform so the viewport tracks physics state. Training workloads should
     set this False to skip the per-env USD writes.
     """
+    order = list(getattr(env, "_aic_reset_event_order", []) or [])
+    order.append(
+        {
+            "event": "randomize_board_and_parts",
+            "env_ids": [int(v) for v in env_ids.detach().cpu().tolist()],
+            "index": len(order),
+        }
+    )
+    setattr(env, "_aic_reset_event_order", order[-64:])
+
     device = env.device
     n = len(env_ids)
     env_origins = env.scene.env_origins[env_ids]
@@ -329,60 +340,123 @@ def reset_robot_tcp_to_episode_start(
     ),
     max_iterations: int = 8,
     position_tolerance: float = 0.002,
+    orientation_tolerance: float = 0.05,
     damping: float = 0.05,
     max_joint_delta: float = 0.25,
 ) -> None:
-    """Move robot TCP to child-YAML near-gate reset poses.
+    """Move robot reset body to child-YAML near-gate reset poses.
 
-    Episode YAMLs store start_near_gate.tcp_start_position_world in the same
-    env-local world convention as board/part positions. This reset event adds
-    the Isaac env origin, solves a small damped positional IK problem, and
-    writes the resulting arm joint state before the episode begins.
+    New episode YAMLs store start_near_gate.body_start_position_world and
+    reset_body_name so near-gate curricula can place the plug tip itself near
+    the port entrance.  Older YAMLs with tcp_start_position_world continue to
+    work and use the function-level body_name default.
     """
+    order = list(getattr(env, "_aic_reset_event_order", []) or [])
+    order.append(
+        {
+            "event": "reset_robot_tcp_to_episode_start",
+            "env_ids": [int(v) for v in env_ids.detach().cpu().tolist()],
+            "index": len(order),
+        }
+    )
+    setattr(env, "_aic_reset_event_order", order[-64:])
+
     episode_by_env = getattr(env, "_aic_current_episode_by_env", {}) or {}
-    targets: list[tuple[int, torch.Tensor]] = []
+    targets: list[tuple[int, torch.Tensor, torch.Tensor | None, str]] = []
     for local_idx, env_id in enumerate(env_ids.tolist()):
         start = ((episode_by_env.get(int(env_id)) or {}).get("scene") or {}).get("start_near_gate") or {}
-        if start.get("reset_mode") != "tcp_start_position_world":
+        reset_mode = start.get("reset_mode")
+        if reset_mode == "body_start_position_world":
+            raw_target = start.get("body_start_position_world")
+            reset_body_name = str(start.get("reset_body_name") or body_name)
+            raw_orientation = start.get("body_start_orientation_wxyz") or start.get("tcp_start_orientation_world")
+        elif reset_mode == "tcp_start_position_world":
+            raw_target = start.get("tcp_start_position_world")
+            reset_body_name = body_name
+            raw_orientation = start.get("tcp_start_orientation_world")
+        else:
             continue
-        raw_target = start.get("tcp_start_position_world")
         if not isinstance(raw_target, (list, tuple)) or len(raw_target) != 3:
             continue
         target_local = torch.tensor(raw_target, dtype=torch.float32, device=env.device)
-        targets.append((local_idx, target_local + env.scene.env_origins[env_ids[local_idx]]))
+        target_orientation = None
+        if isinstance(raw_orientation, (list, tuple)) and len(raw_orientation) == 4:
+            target_orientation = torch.tensor(raw_orientation, dtype=torch.float32, device=env.device)
+            target_orientation = target_orientation / torch.linalg.norm(target_orientation).clamp(min=1.0e-9)
+        targets.append((local_idx, target_local + env.scene.env_origins[env_ids[local_idx]], target_orientation, reset_body_name))
     if not targets:
         return
+    reset_body_names = {name for _, _, _, name in targets}
+    if len(reset_body_names) != 1:
+        raise RuntimeError(f"Mixed near-gate reset bodies in one reset batch are not supported: {sorted(reset_body_names)}")
+    active_body_name = next(iter(reset_body_names))
 
     robot = env.scene["robot"]
-    body_ids, body_names = robot.find_bodies(body_name, preserve_order=True)
+    body_ids, body_names = robot.find_bodies(active_body_name, preserve_order=True)
     if not body_ids:
-        raise RuntimeError(f"Robot body {body_name!r} not found; available bodies: {robot.body_names}")
+        raise RuntimeError(f"Robot body {active_body_name!r} not found; available bodies: {robot.body_names}")
     joint_ids, resolved_joint_names = robot.find_joints(list(joint_names), preserve_order=True)
     if len(joint_ids) != len(joint_names):
         raise RuntimeError(
             f"Could not resolve all near-gate reset joints {joint_names}; resolved {resolved_joint_names}"
         )
 
-    local_indices = torch.tensor([idx for idx, _ in targets], dtype=torch.long, device=env.device)
+    local_indices = torch.tensor([idx for idx, _, _, _ in targets], dtype=torch.long, device=env.device)
     active_env_ids = env_ids[local_indices]
-    target_pos = torch.stack([target for _, target in targets], dim=0)
+    target_pos = torch.stack([target for _, target, _, _ in targets], dim=0)
     body_id = int(body_ids[0])
     jacobian_body_id = max(body_id - 1, 0)
     q = robot.data.joint_pos[active_env_ids][:, joint_ids].clone()
     zeros = torch.zeros_like(q)
-    eye = torch.eye(3, dtype=torch.float32, device=env.device).unsqueeze(0)
+    has_orientation = any(target_quat is not None for _, _, target_quat, _ in targets)
+    if has_orientation:
+        target_quat_rows = []
+        for row, (_, _, target_quat, _) in enumerate(targets):
+            if target_quat is None:
+                target_quat_rows.append(robot.data.body_quat_w[active_env_ids[row], body_id].to(dtype=torch.float32))
+            else:
+                target_quat_rows.append(target_quat)
+        target_quat = torch.stack(target_quat_rows, dim=0)
+    else:
+        target_quat = None
+    eye_dim = 6 if has_orientation else 3
+    eye = torch.eye(eye_dim, dtype=torch.float32, device=env.device).unsqueeze(0)
     initial_error = torch.linalg.norm(
         target_pos - robot.data.body_pos_w[active_env_ids, body_id].to(dtype=torch.float32),
         dim=1,
     )
+    initial_orientation_error = (
+        None
+        if target_quat is None
+        else quat_error_magnitude(
+            robot.data.body_quat_w[active_env_ids, body_id].to(dtype=torch.float32),
+            target_quat,
+        )
+    )
 
     for _ in range(max(1, int(max_iterations))):
-        current = robot.data.body_pos_w[active_env_ids, body_id].to(dtype=torch.float32)
-        error = target_pos - current
-        if bool((torch.linalg.norm(error, dim=1) <= float(position_tolerance)).all()):
+        current_pos = robot.data.body_pos_w[active_env_ids, body_id].to(dtype=torch.float32)
+        current_quat = robot.data.body_quat_w[active_env_ids, body_id].to(dtype=torch.float32)
+        if target_quat is None:
+            error = target_pos - current_pos
+            converged = torch.linalg.norm(error, dim=1) <= float(position_tolerance)
+        else:
+            pos_error, rot_error = compute_pose_error(
+                current_pos,
+                current_quat,
+                target_pos,
+                target_quat,
+                rot_error_type="axis_angle",
+            )
+            error = torch.cat([pos_error, rot_error], dim=1)
+            converged = (torch.linalg.norm(pos_error, dim=1) <= float(position_tolerance)) & (
+                torch.linalg.norm(rot_error, dim=1) <= float(orientation_tolerance)
+            )
+        if bool(converged.all()):
             break
         jacobians = robot.root_physx_view.get_jacobians()
-        jac = jacobians[active_env_ids, jacobian_body_id, :3, :][:, :, joint_ids].to(dtype=torch.float32)
+        jac_rows = 6 if has_orientation else 3
+        jac = jacobians[active_env_ids, jacobian_body_id, :jac_rows, :][:, :, joint_ids].to(dtype=torch.float32)
         jac_t = jac.transpose(1, 2)
         lhs = jac @ jac_t + (float(damping) ** 2) * eye
         dq = jac_t @ torch.linalg.solve(lhs, error.unsqueeze(-1))
@@ -403,14 +477,35 @@ def reset_robot_tcp_to_episode_start(
         target_pos - robot.data.body_pos_w[active_env_ids, body_id].to(dtype=torch.float32),
         dim=1,
     )
+    final_orientation_error = (
+        None
+        if target_quat is None
+        else quat_error_magnitude(
+            robot.data.body_quat_w[active_env_ids, body_id].to(dtype=torch.float32),
+            target_quat,
+        )
+    )
     report = dict(getattr(env, "_aic_tcp_reset_report_by_env", {}) or {})
     for row, env_id in enumerate(active_env_ids.tolist()):
+        episode = episode_by_env.get(int(env_id)) or {}
+        start = ((episode.get("scene") or {}).get("start_near_gate") or {})
         report[int(env_id)] = {
-            "body_name": body_name,
+            "body_name": active_body_name,
+            "episode_id": episode.get("episode_id"),
+            "start_orientation_world": start.get("body_start_orientation_wxyz") or start.get("tcp_start_orientation_world"),
+            "start_orientation_used": target_quat is not None,
+            "note": "6D damped IK reset" if target_quat is not None else "position-only damped IK reset",
             "target_position_world": [float(v) for v in target_pos[row].detach().cpu().tolist()],
             "initial_error_m": float(initial_error[row].detach().cpu()),
             "final_error_m": float(final_error[row].detach().cpu()),
+            "initial_orientation_error_rad": None
+            if initial_orientation_error is None
+            else float(initial_orientation_error[row].detach().cpu()),
+            "final_orientation_error_rad": None
+            if final_orientation_error is None
+            else float(final_orientation_error[row].detach().cpu()),
             "max_iterations": int(max_iterations),
             "position_tolerance_m": float(position_tolerance),
+            "orientation_tolerance_rad": float(orientation_tolerance),
         }
     setattr(env, "_aic_tcp_reset_report_by_env", report)

@@ -39,9 +39,22 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--max-runtime-sec", type=float, default=12.0)
     parser.add_argument("--start-delay-sec", type=float, default=0.0)
     parser.add_argument("--control-hz", type=float, default=20.0)
+    parser.add_argument("--n-action-steps", type=int, default=4)
     parser.add_argument("--policy-device", default="cuda", help="Device passed to RunACT, e.g. cuda or cpu.")
     parser.add_argument("--policy-module", default="aic_example_policies.ros.RunACT")
     parser.add_argument("--act-torchscript", type=Path, default=None)
+    parser.add_argument(
+        "--serl-adapter-delta-clip",
+        type=float,
+        default=None,
+        help="Optional runtime override for ACT-adapter SERL delta clip. Defaults unset so checkpoint metadata is used.",
+    )
+    parser.add_argument(
+        "--serl-action-clip",
+        type=float,
+        default=None,
+        help="Optional runtime override for ACT-adapter SERL final action clip. Defaults unset so checkpoint/default is used.",
+    )
     parser.add_argument("--command-mode", default="none", choices=["none", "velocity", "delta_pose"])
     parser.add_argument("--command-frame", default="base_link")
     parser.add_argument("--max-translation-delta", type=float, default=0.02)
@@ -244,6 +257,15 @@ def evaluate_checkpoint_once(
         "action_name": action_name,
         "attempt": attempt,
         "started_at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
+        "policy_module": args.policy_module,
+        "n_action_steps": args.n_action_steps,
+        "command_mode": args.command_mode,
+        "command_frame": args.command_frame,
+        "serl_adapter_delta_clip_override": args.serl_adapter_delta_clip,
+        "serl_action_clip_override": args.serl_action_clip,
+        "serl_clip_override_note": (
+            "None means the Gazebo SERL runtime uses values stored in the checkpoint config."
+        ),
     }
 
     restart_container(args, logs_dir / "container_restart_before.log")
@@ -268,6 +290,7 @@ export AIC_ACT_DEVICE={args.policy_device}
 export AIC_ACT_MAX_RUNTIME_SEC={args.max_runtime_sec}
 export AIC_ACT_START_DELAY_SEC={args.start_delay_sec}
 export AIC_ACT_CONTROL_HZ={args.control_hz}
+export AIC_ACT_N_ACTION_STEPS={args.n_action_steps}
 export AIC_ACT_COMMAND_MODE=none
 export AIC_ACT_RUNTIME_COMMAND_MODE={args.command_mode}
 export AIC_ACT_COMMAND_FRAME={args.command_frame}
@@ -279,11 +302,21 @@ export AIC_SERL_DEVICE={args.policy_device}
 export AIC_SERL_MAX_RUNTIME_SEC={args.max_runtime_sec}
 export AIC_SERL_START_DELAY_SEC={args.start_delay_sec}
 export AIC_SERL_CONTROL_HZ={args.control_hz}
+export AIC_SERL_N_ACTION_STEPS={args.n_action_steps}
 export AIC_SERL_COMMAND_MODE={args.command_mode}
 export AIC_SERL_COMMAND_FRAME={args.command_frame}
 export AIC_SERL_MAX_TRANSLATION_DELTA={args.max_translation_delta}
 export AIC_SERL_MAX_ROTATION_DELTA={args.max_rotation_delta}
-pixi run ros2 run aic_model aic_model --ros-args \\
+unset AIC_SERL_ADAPTER_DELTA_CLIP
+unset AIC_SERL_ACTION_CLIP
+{f"export AIC_SERL_ADAPTER_DELTA_CLIP={args.serl_adapter_delta_clip}" if args.serl_adapter_delta_clip is not None else ""}
+{f"export AIC_SERL_ACTION_CLIP={args.serl_action_clip}" if args.serl_action_clip is not None else ""}
+if [ -x .pixi/envs/default/bin/ros2 ]; then
+  AIC_ROS2=.pixi/envs/default/bin/ros2
+else
+  AIC_ROS2="pixi run ros2"
+fi
+$AIC_ROS2 run aic_model aic_model --ros-args \\
   -p use_sim_time:=true \\
   -p policy:={args.policy_module} \\
   -r __node:={node_name} \\

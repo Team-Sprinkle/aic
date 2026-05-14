@@ -275,18 +275,52 @@ def _mlp(
     num_layers: int,
     output_dim: int,
     *,
+    layer_norm: bool = False,
+    zero_final: bool = True,
     activation: str = "relu",
 ) -> nn.Sequential:
     layers: list[nn.Module] = []
     dim = input_dim
     for _ in range(num_layers):
-        layers.extend([nn.Linear(dim, hidden_dim), _activation(activation)])
+        layers.append(nn.Linear(dim, hidden_dim))
+        if layer_norm:
+            layers.append(nn.LayerNorm(hidden_dim))
+        layers.append(_activation(activation))
         dim = hidden_dim
     final = nn.Linear(dim, output_dim)
-    nn.init.zeros_(final.weight)
-    nn.init.zeros_(final.bias)
+    if zero_final:
+        nn.init.zeros_(final.weight)
+        nn.init.zeros_(final.bias)
     layers.append(final)
     return nn.Sequential(*layers)
+
+
+class GatedActionAdapter(nn.Module):
+    def __init__(
+        self,
+        *,
+        input_dim: int,
+        hidden_dim: int,
+        num_layers: int,
+        output_dim: int,
+        layer_norm: bool,
+        activation: str,
+    ):
+        super().__init__()
+        self.net = _mlp(
+            input_dim,
+            hidden_dim,
+            num_layers,
+            output_dim * 2,
+            layer_norm=layer_norm,
+            zero_final=True,
+            activation=activation,
+        )
+        self.output_dim = int(output_dim)
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        raw_delta, raw_gate = self.net(x).split(self.output_dim, dim=-1)
+        return torch.tanh(raw_delta) * torch.sigmoid(raw_gate)
 
 
 def _infer_adapter_shape(actor_state: dict[str, torch.Tensor]) -> tuple[int, int]:
@@ -366,6 +400,8 @@ class TorchScriptACTAdapterActor(nn.Module):
         state_encoding_num_bands: int = 4,
         state_encoding_max_freq: float = 8.0,
         state_encoding_scale: float = 1.0,
+        adapter_arch: str = "mlp",
+        adapter_layer_norm: bool = False,
     ):
         super().__init__()
         self.act_base = act_base
@@ -393,13 +429,28 @@ class TorchScriptACTAdapterActor(nn.Module):
             state_encoding_max_freq=state_encoding_max_freq,
             state_encoding_scale=state_encoding_scale,
         )
-        self.adapter = _mlp(
-            encoded_state_dim + self.action_dim,
-            hidden_dim,
-            num_layers,
-            self.action_dim,
-            activation=adapter_activation,
-        )
+        adapter_input_dim = encoded_state_dim + self.action_dim
+        if adapter_arch == "mlp":
+            self.adapter = _mlp(
+                adapter_input_dim,
+                hidden_dim,
+                num_layers,
+                self.action_dim,
+                layer_norm=adapter_layer_norm,
+                zero_final=True,
+                activation=adapter_activation,
+            )
+        elif adapter_arch == "gated":
+            self.adapter = GatedActionAdapter(
+                input_dim=adapter_input_dim,
+                hidden_dim=hidden_dim,
+                num_layers=num_layers,
+                output_dim=self.action_dim,
+                layer_norm=adapter_layer_norm,
+                activation=adapter_activation,
+            )
+        else:
+            raise ValueError(f"Unsupported adapter_arch: {adapter_arch!r}")
         self.log_std = nn.Parameter(torch.full((self.action_dim,), -2.0))
 
     def action_components(self, obs: dict[str, Any]) -> dict[str, torch.Tensor]:
@@ -473,6 +524,8 @@ def _load_adapter_actor(
         state_encoding_num_bands=int(offline_cfg.get("state_encoding_num_bands", 4)),
         state_encoding_max_freq=float(offline_cfg.get("state_encoding_max_freq", 8.0)),
         state_encoding_scale=float(offline_cfg.get("state_encoding_scale", 1.0)),
+        adapter_arch=str(offline_cfg.get("adapter_arch", "mlp")),
+        adapter_layer_norm=bool(offline_cfg.get("adapter_layer_norm", False)),
     ).to(device)
     own_state = actor.state_dict()
     compatible = {
@@ -584,12 +637,11 @@ class ACTAdapterSERLGazeboPolicy:
         cfg, self.dataset_summary, self.warmstart_report = _checkpoint_training_context(ckpt)
         online_adapter_cfg = ((ckpt.get("online_serl_config") or {}).get("isaac_adapter") or {})
         if adapter_delta_clip is None:
-            adapter_delta_clip = online_adapter_cfg.get(
-                "adapter_delta_clip",
-                self.warmstart_report.get("adapter_delta_clip"),
-            )
+            adapter_delta_clip = online_adapter_cfg.get("adapter_delta_clip")
+            if adapter_delta_clip is None:
+                adapter_delta_clip = cfg.get("adapter_delta_clip", self.warmstart_report.get("adapter_delta_clip"))
         if action_clip is None:
-            action_clip = online_adapter_cfg.get("action_clip", 0.0)
+            action_clip = online_adapter_cfg.get("action_clip") if "action_clip" in online_adapter_cfg else cfg.get("action_clip")
         self.state_dim = int(cfg["state_dim"])
         self.action_horizon = int(cfg["action_horizon"])
         self.action_dim = int(cfg["action_dim"])
@@ -632,10 +684,20 @@ class ACTAdapterSERLGazeboPolicy:
 
     def act(self, obs: dict[str, Any], *, explore: bool = False) -> list[float]:
         del explore
+        action = self.act_chunk(obs, n_action_steps=1)[0]
+        return action.astype(float).tolist()
+
+    def act_chunk(self, obs: dict[str, Any], *, n_action_steps: int) -> np.ndarray:
+        if n_action_steps < 1:
+            raise ValueError(f"n_action_steps must be >= 1, got {n_action_steps}")
+        if n_action_steps > self.action_horizon:
+            raise ValueError(f"n_action_steps={n_action_steps} exceeds action_horizon={self.action_horizon}")
         actor_obs = self._obs_to_actor(obs)
         with torch.no_grad():
             components = self.actor.action_components(actor_obs)
-            action = components["final_action"].squeeze(0)
+            action = components["final_action"].reshape(1, self.action_horizon, self.single_action_dim)[
+                0, :n_action_steps
+            ]
             self.last_action_components = {
                 "base_action_norm": float(components["base_action"].norm(dim=-1).mean().detach().cpu()),
                 "delta_action_norm": float(components["delta_action"].norm(dim=-1).mean().detach().cpu()),
@@ -651,4 +713,4 @@ class ACTAdapterSERLGazeboPolicy:
                     .cpu()
                 ),
             }
-        return action[: self.single_action_dim].detach().cpu().numpy().astype(float).tolist()
+        return action.detach().cpu().numpy().astype(np.float32)

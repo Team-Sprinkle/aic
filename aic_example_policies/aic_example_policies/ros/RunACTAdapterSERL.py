@@ -96,6 +96,9 @@ class RunACTAdapterSERL(Policy):
         self.adapter_delta_clip = self._optional_float("AIC_SERL_ADAPTER_DELTA_CLIP", None)
         self.action_clip = self._optional_float("AIC_SERL_ACTION_CLIP", None)
         self.allow_zero_images = self._bool_env("AIC_SERL_ALLOW_ZERO_IMAGES", False)
+        self.n_action_steps = int(os.environ.get("AIC_SERL_N_ACTION_STEPS", os.environ.get("AIC_ACT_N_ACTION_STEPS", "4")))
+        if self.n_action_steps < 1:
+            raise ValueError(f"AIC_SERL_N_ACTION_STEPS must be >= 1, got {self.n_action_steps}")
 
         self._current_task: Task | None = None
         self.policy = ACTAdapterSERLGazeboPolicy(
@@ -106,11 +109,17 @@ class RunACTAdapterSERL(Policy):
             adapter_delta_clip=self.adapter_delta_clip,
             action_clip=self.action_clip,
         )
+        if self.n_action_steps > self.policy.action_horizon:
+            raise ValueError(
+                f"AIC_SERL_N_ACTION_STEPS={self.n_action_steps} exceeds action_horizon={self.policy.action_horizon}"
+            )
+        self._action_queue: list[np.ndarray] = []
         self.get_logger().info(
             "ACT-adapter SERL policy loaded from "
             f"{self.checkpoint_path} with ACT base {self.act_torchscript} on {self.device}; "
             f"state_dim={self.policy.state_dim}, action_dim={self.policy.action_dim}, "
-            f"action_horizon={self.policy.action_horizon}, control_hz={self.control_hz}, "
+            f"action_horizon={self.policy.action_horizon}, n_action_steps={self.n_action_steps}, "
+            f"control_hz={self.control_hz}, "
             f"command_mode={self.command_mode}, command_frame={self.command_frame}, "
             f"adapter_delta_clip={self.adapter_delta_clip}, action_clip={self.action_clip}"
         )
@@ -227,8 +236,10 @@ class RunACTAdapterSERL(Policy):
             device=self.policy.device,
         ).reshape(1, -1)
         self.policy.feature_assembler.task_vector = self.policy.task_vector.squeeze(0).detach().cpu().numpy()
-        action = self.policy.act(self._observation_dict(obs_msg), explore=False)
-        return np.asarray(action[:6], dtype=np.float32)
+        if not self._action_queue:
+            chunk = self.policy.act_chunk(self._observation_dict(obs_msg), n_action_steps=self.n_action_steps)
+            self._action_queue = [action for action in chunk]
+        return np.asarray(self._action_queue.pop(0)[:6], dtype=np.float32)
 
     def _send_velocity_target(
         self,
@@ -310,6 +321,7 @@ class RunACTAdapterSERL(Policy):
             self.policy.feature_assembler.reset(self._task_vector(task))
         else:
             self.policy.feature_assembler.reset()
+        self._action_queue.clear()
         self.get_logger().info(f"RunACTAdapterSERL.insert_cable() enter. Task: {task}")
         if self.start_delay_sec > 0.0:
             self.get_logger().info(f"Waiting {self.start_delay_sec:.2f}s before first SERL command.")

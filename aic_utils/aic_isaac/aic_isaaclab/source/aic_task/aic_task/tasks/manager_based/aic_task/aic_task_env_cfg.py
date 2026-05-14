@@ -25,7 +25,7 @@ from isaaclab.scene import InteractiveSceneCfg
 from isaaclab.utils import configclass
 from isaaclab.utils.assets import ISAAC_NUCLEUS_DIR
 from isaaclab.utils.noise import AdditiveUniformNoiseCfg as Unoise
-from isaaclab.sensors import TiledCameraCfg
+from isaaclab.sensors import ContactSensorCfg, TiledCameraCfg
 from isaaclab.devices import DevicesCfg
 from isaaclab.devices.keyboard import Se3KeyboardCfg
 from isaaclab.devices.spacemouse import Se3SpaceMouseCfg
@@ -103,6 +103,19 @@ class AICTaskSceneCfg(InteractiveSceneCfg):
             #     damping=40.0,
             # ),
         },
+    )
+
+    contact_forces = ContactSensorCfg(
+        prim_path="{ENV_REGEX_NS}/Robot/aic_unified_robot/wrist_3_link",
+        update_period=0.0,
+        history_length=2,
+        debug_vis=False,
+        filter_prim_paths_expr=[
+            "{ENV_REGEX_NS}/task_board",
+            "{ENV_REGEX_NS}/nic_card",
+            "{ENV_REGEX_NS}/sc_port",
+            "{ENV_REGEX_NS}/sc_port_2",
+        ],
     )
 
     # cable = ArticulationCfg(
@@ -640,7 +653,10 @@ class RewardsCfg:
             "threshold": 3.0,
             "reference": 20.0,
             "max_penalty": 1.0,
-            "asset_cfg": SceneEntityCfg("robot", body_names="gripper_tcp"),
+            # gripper_tcp is a semantic frame and can report near-zero wrench even
+            # during contact. Use the physical wrist link as the Isaac proxy for
+            # the Gazebo wrist F/T sensor.
+            "asset_cfg": SceneEntityCfg("robot", body_names="wrist_3_link"),
         },
     )
 
@@ -693,12 +709,18 @@ class AICTaskEnvCfg(ManagerBasedRLEnvCfg):
     def __post_init__(self) -> None:
         super().__post_init__()
         self._apply_initial_arm_joint_override()
+        if os.environ.get("AIC_ISAAC_ENABLE_CONTACT_SENSOR", "0") not in {"1", "true", "True"}:
+            self.scene.contact_forces = None
 
-        # General settings
-        self.decimation = 4
-        self.sim.render_interval = self.decimation
+        # General settings.  Gazebo expert datasets are sampled at 20 Hz, so
+        # keep Isaac's policy/control step at 50 ms while physics runs faster.
         self.episode_length_s = 200.0
         self.sim.dt = 1.0 / 120.0
+        policy_hz = float(os.environ.get("AIC_ISAAC_POLICY_HZ", "20.0"))
+        if policy_hz <= 0.0:
+            raise ValueError(f"AIC_ISAAC_POLICY_HZ must be positive, got {policy_hz}")
+        self.decimation = max(1, int(round(1.0 / (self.sim.dt * policy_hz))))
+        self.sim.render_interval = self.decimation
         # self.sim.gravity = (0.0, 0.0, 3)
         self.viewer.eye = (8.0, 0.0, 5.0)
 

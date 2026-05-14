@@ -31,8 +31,19 @@ parser.add_argument(
     help="Initialize from ACT TorchScript only with a zero adapter and fresh critics.",
 )
 parser.add_argument("--act_only_state_dim", type=int, default=82)
-parser.add_argument("--act_only_action_horizon", type=int, default=4)
+parser.add_argument(
+    "--act_only_action_horizon",
+    type=int,
+    default=0,
+    help="ACT output chunk size for ACT-only online SERL. 0 reads chunk_size from TorchScript metadata.",
+)
 parser.add_argument("--act_only_single_action_dim", type=int, default=6)
+parser.add_argument(
+    "--n_action_steps",
+    type=int,
+    default=4,
+    help="Number of predicted chunk actions to execute before the next actor inference.",
+)
 parser.add_argument("--act_only_adapter_hidden_dim", type=int, default=256)
 parser.add_argument("--act_only_adapter_num_layers", type=int, default=2)
 parser.add_argument("--act_only_adapter_activation", choices=["relu", "gelu", "tanh"], default="gelu")
@@ -169,6 +180,12 @@ parser.add_argument("--target_reward_distance_std", type=float, default=0.02)
 parser.add_argument("--target_reward_close_sigma", type=float, default=0.006)
 parser.add_argument("--target_reward_reaching_threshold", type=float, default=0.01)
 parser.add_argument(
+    "--policy_hz",
+    type=float,
+    default=20.0,
+    help="Isaac policy/control rate in Hz. Defaults to 20 Hz to match Gazebo expert datasets.",
+)
+parser.add_argument(
     "--target_reward_position_offset",
     type=float,
     nargs=3,
@@ -196,17 +213,81 @@ parser.add_argument("--disable_fabric", action="store_true", default=False)
 parser.add_argument("--save_step_images", action=argparse.BooleanOptionalAction, default=False)
 parser.add_argument("--image_log_every", type=int, default=1)
 parser.add_argument("--max_logged_image_steps", type=int, default=200)
+parser.add_argument("--debug_diagnostics", action=argparse.BooleanOptionalAction, default=False)
+parser.add_argument("--diagnostics_every", type=int, default=100)
+parser.add_argument("--debug_audit_steps", type=int, default=0)
+parser.add_argument("--audit_act_only", action="store_true", default=False)
+parser.add_argument("--audit_zero_adapter", action="store_true", default=False)
+parser.add_argument(
+    "--treat_time_limit_truncation_as_terminal",
+    action=argparse.BooleanOptionalAction,
+    default=False,
+    help=(
+        "If true, store terminated OR truncated as replay done. Defaults false so TD bootstraps "
+        "through time-limit truncation."
+    ),
+)
+parser.add_argument(
+    "--tcp_action_frame",
+    choices=["gripper_tcp", "wrist_3_link", "root"],
+    default="gripper_tcp",
+    help="Frame convention for ACT/SERL TCP delta actions before passing them to Isaac IK.",
+)
+parser.add_argument(
+    "--debug_audit_axis_magnitude",
+    type=float,
+    default=0.0,
+    help="If positive in audit mode, bypass actor output and execute +/- x/y/z pure translation actions.",
+)
+parser.add_argument(
+    "--debug_audit_constant_action",
+    type=float,
+    nargs=6,
+    default=None,
+    metavar=("DX", "DY", "DZ", "DRX", "DRY", "DRZ"),
+    help="If set in audit mode, bypass actor output and execute this constant 6D TCP action every step.",
+)
+parser.add_argument(
+    "--fix_isaac_ik_xy_sign",
+    action=argparse.BooleanOptionalAction,
+    default=True,
+    help="Flip Isaac IK root-frame x/y translation commands to match realized TCP motion direction.",
+)
+parser.add_argument(
+    "--enable_contact_sensor",
+    action=argparse.BooleanOptionalAction,
+    default=False,
+    help="Enable Isaac ContactSensor diagnostics. Disabled by default because contact sensors can reduce throughput.",
+)
 parser.add_argument(
     "--swap_rgb_channels",
     action=argparse.BooleanOptionalAction,
     default=False,
     help="Reverse Isaac camera RGB channel order before ACT/SERL inference and debug image logging.",
 )
+parser.add_argument(
+    "--force_camera_render_before_read",
+    action=argparse.BooleanOptionalAction,
+    default=False,
+    help="Force an Isaac render before reading camera tensors. Useful only if camera freshness diagnostics show stale frames.",
+)
+parser.add_argument(
+    "--disable_ppo_resnet_observation_terms",
+    action=argparse.BooleanOptionalAction,
+    default=True,
+    help=(
+        "Disable policy observation ResNet image terms. This is faster, but camera freshness diagnostics "
+        "should be checked because some Isaac sensor paths only update when observation terms are active."
+    ),
+)
 AppLauncher.add_app_launcher_args(parser)
 args_cli = parser.parse_args()
 os.environ["AIC_ISAAC_TASK_FAMILY"] = args_cli.task_family
 if args_cli.episode_config_dir:
     os.environ["AIC_ISAAC_EPISODE_CONFIG_DIR"] = args_cli.episode_config_dir
+os.environ["AIC_ISAAC_POLICY_HZ"] = str(float(args_cli.policy_hz))
+if args_cli.enable_contact_sensor:
+    os.environ["AIC_ISAAC_ENABLE_CONTACT_SENSOR"] = "1"
 args_cli.enable_cameras = True
 PROCESS_START_TIME = time.monotonic()
 STOP_REQUESTED: str | None = None
@@ -255,7 +336,11 @@ if LEROBOT_AIC_PACKAGE_DIR.exists() and str(LEROBOT_AIC_PACKAGE_DIR) not in sys.
 if LEROBOT_AIC_MODULE_DIR.exists() and str(LEROBOT_AIC_MODULE_DIR) not in sys.path:
     sys.path.insert(0, str(LEROBOT_AIC_MODULE_DIR))
 
-from contact_recovery_features import CONTACT_RECOVERY_FEATURE_DIM, ContactRecoveryFeatureComputer
+from contact_recovery_features import (
+    CONTACT_RECOVERY_FEATURE_DIM,
+    CONTACT_RECOVERY_FEATURE_NAMES,
+    ContactRecoveryFeatureComputer,
+)
 
 
 def _stack_vector_column(series: pd.Series, key: str) -> np.ndarray:
@@ -307,6 +392,8 @@ def _load_lerobot_expert_arrays(
     df = df.sort_values(sort_keys).reset_index(drop=True)
     full_count = int(len(df))
     episode = df["episode_index"].to_numpy(dtype=np.int64)
+    terminal_repeated_slots = 0
+    terminal_total_slots = 0
     if max_samples > 0 and full_count > int(max_samples):
         row_indices = np.linspace(0, full_count - 1, num=int(max_samples), dtype=np.int64)
         obs = _stack_vector_column(df["observation.state"].iloc[row_indices], "observation.state")
@@ -318,8 +405,11 @@ def _load_lerobot_expert_arrays(
             last_valid = np.asarray(action_series.iloc[int(row_idx)], dtype=np.float32).reshape(-1)
             for offset in range(int(action_horizon)):
                 src = int(row_idx) + offset
+                terminal_total_slots += 1
                 if src < full_count and episode[src] == episode[int(row_idx)]:
                     last_valid = np.asarray(action_series.iloc[src], dtype=np.float32).reshape(-1)
+                else:
+                    terminal_repeated_slots += 1
                 values.append(last_valid)
             action[out_idx] = np.concatenate(values, axis=0)
         single_action_dim = int(first_action.shape[0])
@@ -328,6 +418,12 @@ def _load_lerobot_expert_arrays(
         single_action = _stack_vector_column(df["action"], "action")
         action = _action_chunks(single_action, episode, int(action_horizon))
         single_action_dim = int(single_action.shape[1])
+        for row_idx in range(full_count):
+            for offset in range(int(action_horizon)):
+                terminal_total_slots += 1
+                src = row_idx + offset
+                if src >= full_count or episode[src] != episode[row_idx]:
+                    terminal_repeated_slots += 1
     schema = {
         "dataset_root": str(dataset_root),
         "num_frames": full_count,
@@ -337,6 +433,9 @@ def _load_lerobot_expert_arrays(
         "single_action_dim": single_action_dim,
         "action_horizon": int(action_horizon),
         "action_dim": int(action.shape[1]),
+        "terminal_repeated_action_slots": int(terminal_repeated_slots),
+        "terminal_total_action_slots": int(terminal_total_slots),
+        "terminal_repeated_action_slot_fraction": float(terminal_repeated_slots / max(terminal_total_slots, 1)),
     }
     return obs, action, schema
 
@@ -354,6 +453,7 @@ SFP_PORT_SEATED_TARGET_ROOT_LOCAL = {
 SFP_TIP_LOCAL = (0.0, -0.02365, 0.0)
 SFP_TIP_RPY = (1.5708, 0.0, 0.0)
 CONTROLLED_TCP_BODY = "gripper_tcp"
+FORCE_WRENCH_BODY = "wrist_3_link"
 
 
 def _rpy_matrix(roll: float, pitch: float, yaw: float) -> tuple[tuple[float, float, float], ...]:
@@ -887,6 +987,53 @@ class ReplayBuffer:
             "done": torch.stack([item["done"] for item in items]).to(device),
         }
 
+    def diagnostic_snapshot(self) -> dict[str, Any]:
+        if not self.data:
+            return {"size": 0}
+        latest = self.data[-1]
+        out: dict[str, Any] = {
+            "size": len(self.data),
+            "latest_action": _tensor_stats(latest["action"]),
+            "latest_reward": _jsonable(latest["reward"]),
+            "latest_done_for_bootstrap": _jsonable(latest["done"]),
+            "latest_metadata": latest.get("metadata"),
+        }
+        if len(self.data) > 1:
+            sample = self.data[len(self.data) // 2]
+            out["middle_sample_action"] = _tensor_stats(sample["action"])
+            out["middle_sample_reward"] = _jsonable(sample["reward"])
+            out["middle_sample_done_for_bootstrap"] = _jsonable(sample["done"])
+            out["middle_sample_metadata"] = sample.get("metadata")
+        return out
+
+    def age_diagnostics(self, current_step: int | None = None) -> dict[str, Any]:
+        if not self.data:
+            return {"size": 0}
+        rows = []
+        for label, index in (("oldest", 0), ("middle", len(self.data) // 2), ("latest", len(self.data) - 1)):
+            item = self.data[index]
+            metadata = item.get("metadata") or {}
+            inserted_step = metadata.get("inserted_env_step")
+            age = None
+            if current_step is not None and inserted_step is not None:
+                age = int(current_step) - int(inserted_step)
+            state = item.get("obs", {}).get("state")
+            target_distance = None
+            if isinstance(state, torch.Tensor) and state.numel() >= 3:
+                target_distance = metadata.get("distance_to_target_after")
+            rows.append(
+                {
+                    "label": label,
+                    "buffer_index": int(index),
+                    "age_steps": age,
+                    "reward": _jsonable(item.get("reward")),
+                    "done_for_bootstrap": _jsonable(item.get("done")),
+                    "episode_id": metadata.get("episode_id"),
+                    "target_distance_after": target_distance,
+                }
+            )
+        return {"size": len(self.data), "samples": rows}
+
     def _stack_obs(self, obs_items: list[dict[str, Any]], device: torch.device) -> dict[str, Any]:
         return {
             "state": torch.stack([item["state"] for item in obs_items]).to(device),
@@ -939,6 +1086,7 @@ class ExpertActionPrior:
         self.sampled_count = int(indices.shape[0])
         self.state_indices = selected_indices
         self.neighbor_chunk = int(max(1, neighbor_chunk))
+        self.raw_obs_selected = torch.as_tensor(obs, dtype=torch.float32, device=device)
         self.obs = torch.as_tensor((obs - mean) / std, dtype=torch.float32, device=device)
         self.action = torch.as_tensor(action_all[indices], dtype=torch.float32, device=device)
         self.mean = torch.as_tensor(mean.reshape(-1), dtype=torch.float32, device=device)
@@ -962,6 +1110,36 @@ class ExpertActionPrior:
         if best_index is None:
             raise RuntimeError("Expert prior has no actions")
         return self.action[best_index]
+
+    def nearest_debug(self, state: torch.Tensor) -> dict[str, Any]:
+        if state.numel() == 0:
+            return {"available": False, "reason": "empty_state"}
+        query_raw = state[:1, self.state_indices]
+        query = (query_raw - self.mean) / self.std
+        best_dist: torch.Tensor | None = None
+        best_index: torch.Tensor | None = None
+        for start in range(0, self.obs.shape[0], self.neighbor_chunk):
+            ref = self.obs[start : start + self.neighbor_chunk]
+            dist = torch.cdist(query, ref, p=2.0)
+            chunk_dist, chunk_index = dist.min(dim=1)
+            if best_dist is None or bool((chunk_dist < best_dist).item()):
+                best_dist = chunk_dist
+                best_index = chunk_index + start
+        if best_index is None or best_dist is None:
+            return {"available": False, "reason": "empty_prior"}
+        idx = int(best_index[0].detach().cpu())
+        return {
+            "available": True,
+            "dataset_root": str(self.dataset_root),
+            "state_indices": self.state_indices,
+            "nearest_index": idx,
+            "nn_distance_normalized": float(best_dist[0].detach().cpu()),
+            "query_selected_raw": _sample_vector(query_raw, limit=min(24, len(self.state_indices))),
+            "query_selected_normalized": _sample_vector(query, limit=min(24, len(self.state_indices))),
+            "nearest_expert_selected_raw": _sample_vector(self.raw_obs_selected[idx : idx + 1], limit=min(24, len(self.state_indices))),
+            "nearest_expert_action_first12": _sample_vector(self.action[idx : idx + 1], limit=12),
+            "schema": self.schema,
+        }
 
     def report(self) -> dict[str, Any]:
         return {
@@ -1006,11 +1184,262 @@ def _camera_tensor(env, sensor_name: str, *, device: torch.device) -> torch.Tens
 
 
 def _raw_camera_images(env, *, device: torch.device) -> dict[str, torch.Tensor]:
+    if bool(getattr(args_cli, "force_camera_render_before_read", True)):
+        sim = getattr(env.unwrapped, "sim", None)
+        if sim is not None and hasattr(sim, "render"):
+            sim.render()
+        step_dt = float(getattr(env.unwrapped, "step_dt", 0.0) or 0.0)
+        for sensor_name in ("center_camera", "left_camera", "right_camera"):
+            sensor = env.unwrapped.scene.sensors.get(sensor_name)
+            if sensor is not None and hasattr(sensor, "update"):
+                try:
+                    sensor.update(step_dt, force_recompute=True)
+                except TypeError:
+                    sensor.update(step_dt)
     return {
         "observation.images.center_camera": _camera_tensor(env, "center_camera", device=device),
         "observation.images.left_camera": _camera_tensor(env, "left_camera", device=device),
         "observation.images.right_camera": _camera_tensor(env, "right_camera", device=device),
     }
+
+
+def _tensor_stats(value: torch.Tensor) -> dict[str, Any]:
+    detached = value.detach()
+    finite = torch.isfinite(detached)
+    if detached.numel() == 0:
+        return {"shape": list(detached.shape), "numel": 0}
+    finite_values = detached[finite]
+    out: dict[str, Any] = {
+        "shape": list(detached.shape),
+        "dtype": str(detached.dtype),
+        "finite": bool(finite.all().detach().cpu()),
+        "nan_count": int(torch.isnan(detached).sum().detach().cpu()),
+        "inf_count": int(torch.isinf(detached).sum().detach().cpu()),
+    }
+    if finite_values.numel() > 0:
+        out.update(
+            {
+                "mean": float(finite_values.mean().detach().cpu()),
+                "std": float(finite_values.std(unbiased=False).detach().cpu()) if finite_values.numel() > 1 else 0.0,
+                "min": float(finite_values.min().detach().cpu()),
+                "max": float(finite_values.max().detach().cpu()),
+                "abs_max": float(finite_values.abs().max().detach().cpu()),
+            }
+        )
+    return out
+
+
+def _sample_vector(value: torch.Tensor, *, row: int = 0, limit: int = 12) -> list[float]:
+    if value.ndim == 0:
+        return [float(value.detach().cpu())]
+    sample = value.detach().flatten(start_dim=1)[row, :limit] if value.ndim > 1 else value.detach().flatten()[:limit]
+    return [float(v) for v in sample.cpu().tolist()]
+
+
+BASE_STATE_FEATURE_NAMES = [
+    "tcp_position.x",
+    "tcp_position.y",
+    "tcp_position.z",
+    "tcp_orientation_xyzw.x",
+    "tcp_orientation_xyzw.y",
+    "tcp_orientation_xyzw.z",
+    "tcp_orientation_xyzw.w",
+    "tcp_linear_velocity.x",
+    "tcp_linear_velocity.y",
+    "tcp_linear_velocity.z",
+    "tcp_angular_velocity.x",
+    "tcp_angular_velocity.y",
+    "tcp_angular_velocity.z",
+    "tcp_error.x",
+    "tcp_error.y",
+    "tcp_error.z",
+    "tcp_error.rx",
+    "tcp_error.ry",
+    "tcp_error.rz",
+    "joint_position.shoulder_pan",
+    "joint_position.shoulder_lift",
+    "joint_position.elbow",
+    "joint_position.wrist_1",
+    "joint_position.wrist_2",
+    "joint_position.wrist_3",
+    "joint_position.gripper",
+    "wrist_force.x",
+    "wrist_force.y",
+    "wrist_force.z",
+    "wrist_torque.x",
+    "wrist_torque.y",
+    "wrist_torque.z",
+]
+
+TASK_VECTOR_FEATURE_NAMES = [
+    "task.family_sfp_to_nic",
+    "task.family_sc_to_sc",
+    "task.target_card_index_norm",
+    "task.target_card_valid",
+    "task.target_port_index_norm",
+    "task.sc_to_sc_source_port_norm",
+    "task.sc_to_sc_target_port_norm",
+    "task.num_ports_norm",
+    "task.num_nic_cards_norm",
+    "task.reserved",
+]
+
+
+def _state_feature_names(state_dim: int) -> list[str]:
+    if state_dim in {32, 42}:
+        names = BASE_STATE_FEATURE_NAMES + TASK_VECTOR_FEATURE_NAMES
+    elif state_dim in {72, 82}:
+        names = BASE_STATE_FEATURE_NAMES + list(CONTACT_RECOVERY_FEATURE_NAMES) + TASK_VECTOR_FEATURE_NAMES
+    else:
+        names = [f"state.{idx}" for idx in range(state_dim)]
+    return names[:state_dim]
+
+
+def _state_schema_ranges(state_dim: int) -> list[dict[str, Any]]:
+    ranges = [{"name": "base32", "start": 0, "end_exclusive": min(32, state_dim)}]
+    if state_dim in {72, 82}:
+        ranges.append({"name": "contact_recovery40", "start": 32, "end_exclusive": min(72, state_dim)})
+    if state_dim in {42, 82}:
+        ranges.append({"name": "task_vector10", "start": state_dim - 10, "end_exclusive": state_dim})
+    return ranges
+
+
+def _state_schema_diagnostics(
+    state: torch.Tensor,
+    actor: "IsaacACTAdapterActor",
+    *,
+    env=None,
+    expert_prior: "ExpertActionPrior | None" = None,
+) -> dict[str, Any]:
+    state_dim = int(state.shape[-1])
+    normalized = actor.act_normalizer.normalize_state(state)
+    mean = actor.act_normalizer.state_mean[:, :state_dim].detach().to(state.device)
+    std = actor.act_normalizer.state_std[:, :state_dim].detach().to(state.device)
+    names = _state_feature_names(state_dim)
+    row_raw = state[0].detach()
+    row_norm = normalized[0].detach()
+    row_mean = mean[0].detach()
+    row_std = std[0].detach()
+    dim_rows = []
+    bad_norm = []
+    for idx, name in enumerate(names):
+        raw = float(row_raw[idx].cpu())
+        norm = float(row_norm[idx].cpu())
+        item = {
+            "index": idx,
+            "name": name,
+            "raw": raw,
+            "mean": float(row_mean[idx].cpu()),
+            "std": float(row_std[idx].cpu()),
+            "normalized": norm,
+        }
+        dim_rows.append(item)
+        if abs(norm) > 10.0:
+            bad_norm.append(item)
+    top_abs_norm = sorted(dim_rows, key=lambda item: abs(float(item["normalized"])), reverse=True)[:12]
+    frame = {
+        "tcp_error_raw_env0": _sample_vector(state[:, 13:19], limit=6) if state_dim >= 19 else None,
+        "tcp_error_norm_env0": _sample_vector(normalized[:, 13:19], limit=6) if state_dim >= 19 else None,
+        "contact_recovery_raw_env0": _sample_vector(state[:, 32:72], limit=40) if state_dim >= 72 else None,
+        "contact_recovery_norm_env0": _sample_vector(normalized[:, 32:72], limit=40) if state_dim >= 72 else None,
+        "task_vector_raw_env0": _sample_vector(state[:, -10:], limit=10) if state_dim >= 10 else None,
+        "task_vector_norm_env0": _sample_vector(normalized[:, -10:], limit=10) if state_dim >= 10 else None,
+    }
+    env_origin_rows = []
+    if env is not None:
+        try:
+            origins = env.unwrapped.scene.env_origins.detach().cpu()
+            root = env.unwrapped.scene["robot"].data.root_pos_w.detach().cpu()
+            for env_id in range(min(int(origins.shape[0]), 8)):
+                env_origin_rows.append(
+                    {
+                        "env_id": env_id,
+                        "env_origin_world": [float(v) for v in origins[env_id].tolist()],
+                        "robot_root_pos_world": [float(v) for v in root[env_id].tolist()],
+                        "state_tcp_position_root_frame": _sample_vector(state[env_id : env_id + 1, 0:3], limit=3),
+                        "root_minus_env_origin": [float(v) for v in (root[env_id] - origins[env_id]).tolist()],
+                    }
+                )
+        except Exception as exc:  # noqa: BLE001 - diagnostics should not break training.
+            env_origin_rows.append({"error": str(exc)})
+    warnings = []
+    if state_dim >= 19 and float(state[:, 13:19].abs().max().detach().cpu()) == 0.0:
+        warnings.append(
+            "tcp_error features are all zero in this Isaac sample. Expert Gazebo datasets record controller tcp_error; "
+            "verify this is intentional or replace with a compatible Isaac signal."
+        )
+    if bad_norm:
+        warnings.append("Some normalized state dimensions exceed abs(value)>10; inspect top_abs_normalized_dims.")
+    return {
+        "state_dim": state_dim,
+        "schema_ranges": _state_schema_ranges(state_dim),
+        "feature_names": [{"index": idx, "name": name} for idx, name in enumerate(names)],
+        "env0_by_dim": dim_rows,
+        "top_abs_normalized_dims": top_abs_norm,
+        "abs_normalized_gt_10": bad_norm[:24],
+        "frame_blocks": frame,
+        "env_origin_audit": env_origin_rows,
+        "expert_nearest_neighbor": None if expert_prior is None else expert_prior.nearest_debug(state),
+        "warnings": warnings,
+    }
+
+
+def _jsonable(value: Any) -> Any:
+    if isinstance(value, torch.Tensor):
+        if value.numel() == 1:
+            return float(value.detach().cpu())
+        return value.detach().cpu().flatten()[:32].tolist()
+    if isinstance(value, np.ndarray):
+        return value.flatten()[:32].tolist()
+    if isinstance(value, (np.floating, np.integer)):
+        return value.item()
+    if isinstance(value, dict):
+        return {str(key): _jsonable(item) for key, item in value.items()}
+    if isinstance(value, (list, tuple)):
+        return [_jsonable(item) for item in value]
+    if isinstance(value, (str, int, float, bool)) or value is None:
+        return value
+    return str(value)
+
+
+def _ids_jsonable(value: Any) -> Any:
+    if value is None:
+        return None
+    if isinstance(value, slice):
+        return str(value)
+    try:
+        return [int(v) for v in value]
+    except TypeError:
+        return str(value)
+
+
+def _norm_stats(value: torch.Tensor) -> dict[str, float]:
+    if value.ndim <= 1:
+        norm = value.detach().reshape(1, -1).norm(dim=-1)
+    else:
+        norm = value.detach().flatten(start_dim=1).norm(dim=-1)
+    return {
+        "norm_mean": float(norm.mean().detach().cpu()),
+        "norm_max": float(norm.max().detach().cpu()),
+        "abs_max": float(value.detach().abs().max().detach().cpu()) if value.numel() else 0.0,
+        "mean": float(value.detach().mean().detach().cpu()) if value.numel() else 0.0,
+        "std": float(value.detach().std(unbiased=False).detach().cpu()) if value.numel() > 1 else 0.0,
+    }
+
+
+def _grad_norm(parameters) -> float:
+    total = 0.0
+    for param in parameters:
+        if param.grad is None:
+            continue
+        grad = param.grad.detach()
+        total += float(torch.sum(grad * grad).detach().cpu())
+    return math.sqrt(total)
+
+
+def _executed_critic_action(action: torch.Tensor, *, single_action_dim: int) -> torch.Tensor:
+    """Return the 6D action actually executed by Isaac for critic training."""
+    return action[:, :single_action_dim]
 
 
 def _to_act_obs(policy_obs: torch.Tensor, images: dict[str, torch.Tensor], *, state_dim: int) -> dict[str, Any]:
@@ -1029,24 +1458,25 @@ def _isaac_lerobot_state(env, args: argparse.Namespace, *, device: torch.device,
     robot = env.unwrapped.scene["robot"]
     body_names = list(getattr(robot, "body_names", []))
     joint_names = list(getattr(robot, "joint_names", []))
-    wrist_index = _named_index(body_names, CONTROLLED_TCP_BODY)
+    tcp_index = _named_index(body_names, CONTROLLED_TCP_BODY)
+    force_body_index = _named_index(body_names, FORCE_WRENCH_BODY)
     joint_indices = [_named_index(joint_names, name) for name in ARM_JOINT_NAMES]
     data = robot.data
     batch_size = int(data.body_pos_w.shape[0])
 
     root_pos_w = data.root_pos_w
     root_quat_w = data.root_quat_w
-    tcp_pos_w = data.body_pos_w[:, wrist_index]
-    tcp_quat_w = data.body_quat_w[:, wrist_index]
+    tcp_pos_w = data.body_pos_w[:, tcp_index]
+    tcp_quat_w = data.body_quat_w[:, tcp_index]
     tcp_pos, tcp_quat = math_utils.subtract_frame_transforms(root_pos_w, root_quat_w, tcp_pos_w, tcp_quat_w)
     # Isaac Lab returns quaternions as wxyz; the LeRobot/Gazebo observation
     # contract stores orientation fields as xyzw.
     tcp_quat_xyzw = torch.cat([tcp_quat[:, 1:4], tcp_quat[:, 0:1]], dim=-1)
     tcp_lin_vel = getattr(data, "body_lin_vel_w", torch.zeros(batch_size, len(body_names), 3, device=device))[
-        :, wrist_index
+        :, tcp_index
     ]
     tcp_ang_vel = getattr(data, "body_ang_vel_w", torch.zeros(batch_size, len(body_names), 3, device=device))[
-        :, wrist_index
+        :, tcp_index
     ]
     tcp_lin_vel = math_utils.quat_apply_inverse(root_quat_w, tcp_lin_vel)
     tcp_ang_vel = math_utils.quat_apply_inverse(root_quat_w, tcp_ang_vel)
@@ -1062,9 +1492,11 @@ def _isaac_lerobot_state(env, args: argparse.Namespace, *, device: torch.device,
     if incoming_wrench is None:
         incoming_wrench = getattr(data, "body_incoming_wrench_b", None)
     if incoming_wrench is None:
+        incoming_wrench = getattr(data, "body_incoming_joint_wrench_b", None)
+    if incoming_wrench is None:
         wrench = torch.zeros(batch_size, 6, dtype=torch.float32, device=device)
     else:
-        wrench = incoming_wrench[:, wrist_index, :6].to(device=device, dtype=torch.float32)
+        wrench = incoming_wrench[:, force_body_index, :6].to(device=device, dtype=torch.float32)
     base_state = torch.cat(
         [tcp_pos, tcp_quat_xyzw, tcp_lin_vel, tcp_ang_vel, tcp_error, joint_pos, gripper, wrench],
         dim=-1,
@@ -1134,17 +1566,47 @@ def _force_delta_metrics(env, *, device: torch.device) -> dict[str, torch.Tensor
     robot = env.unwrapped.scene["robot"]
     data = robot.data
     body_names = list(getattr(robot, "body_names", []))
-    wrist_index = _named_index(body_names, CONTROLLED_TCP_BODY)
+    force_body_index = _named_index(body_names, FORCE_WRENCH_BODY)
     incoming_wrench = getattr(data, "body_incoming_wrench_w", None)
     if incoming_wrench is None:
         incoming_wrench = getattr(data, "body_incoming_wrench_b", None)
     if incoming_wrench is None:
-        force = torch.zeros(env.unwrapped.num_envs, 3, device=device)
+        incoming_wrench = getattr(data, "body_incoming_joint_wrench_b", None)
+    source = "body_incoming_joint_wrench_or_body_wrench"
+    if incoming_wrench is None:
+        sensors = getattr(env.unwrapped.scene, "sensors", {})
+        rows = []
+        sources = []
+        for sensor_name in ("contact_forces",):
+            sensor = sensors.get(sensor_name)
+            if sensor is None:
+                continue
+            net = sensor.data.net_forces_w.to(device=device, dtype=torch.float32)
+            sensor_names = list(getattr(sensor, "body_names", []) or [])
+            ids = [
+                idx
+                for idx, name in enumerate(sensor_names)
+                if name in {"sfp_tip_link", "sfp_module_link", "gripper_tcp", "wrist_3_link"}
+            ]
+            if not ids:
+                continue
+            rows.append(net[:, ids, :3].sum(dim=1))
+            sources.append(sensor_name)
+        if not rows:
+            force = torch.zeros(env.unwrapped.num_envs, 3, device=device)
+            source = "none"
+        else:
+            source = "+".join(f"{name}.net_forces_w" for name in sources)
+            force = torch.stack(rows, dim=0).sum(dim=0)
     else:
-        force = incoming_wrench[:, wrist_index, :3].to(device=device, dtype=torch.float32)
+        force = incoming_wrench[:, force_body_index, :3].to(device=device, dtype=torch.float32)
     prev = getattr(_force_delta_metrics, "_previous_force", None)
+    reset_mask = getattr(env.unwrapped, "episode_length_buf", None)
     if prev is None or prev.shape != force.shape:
         prev = force.detach().clone()
+    elif reset_mask is not None:
+        prev = prev.to(device)
+        prev = torch.where(reset_mask.to(device).reshape(-1, 1) <= 1, force.detach(), prev)
     delta_norm = torch.norm(force - prev.to(device), dim=1)
     setattr(_force_delta_metrics, "_previous_force", force.detach().clone())
     denominator = max(float(args_cli.force_delta_reference) - float(args_cli.force_delta_threshold), 1e-6)
@@ -1153,6 +1615,8 @@ def _force_delta_metrics(env, *, device: torch.device) -> dict[str, torch.Tensor
         "force_norm": torch.norm(force, dim=1),
         "force_delta_norm": delta_norm,
         "force_delta_penalty": -float(args_cli.force_delta_penalty_weight) * normalized,
+        "force_source": source,
+        "force_body": FORCE_WRENCH_BODY,
     }
 
 
@@ -1234,21 +1698,87 @@ def _save_images(images: dict[str, torch.Tensor], *, run_dir: Path, step: int, m
             save_image(tensor[env_idx].detach().cpu().clamp(0.0, 1.0), image_dir / f"env_{env_idx:04d}_{camera}.png")
 
 
-def _tcp_delta_action_to_isaac_base_action(env, tcp_action: torch.Tensor) -> torch.Tensor:
+def _camera_freshness_diagnostics(
+    previous: dict[str, torch.Tensor],
+    current: dict[str, torch.Tensor],
+) -> dict[str, Any]:
+    out: dict[str, Any] = {}
+    for key in sorted(set(previous) | set(current)):
+        before = previous.get(key)
+        after = current.get(key)
+        if before is None or after is None or before.shape != after.shape:
+            out[key] = {
+                "previous_shape": None if before is None else list(before.shape),
+                "current_shape": None if after is None else list(after.shape),
+                "warning": "missing camera tensor or shape changed",
+            }
+            continue
+        diff = (after - before).detach()
+        out[key] = {
+            "mean_abs_frame_delta": float(diff.abs().mean().cpu()),
+            "max_abs_frame_delta": float(diff.abs().max().cpu()),
+            "unchanged_fraction": float((diff.abs() < 1.0e-6).float().mean().cpu()),
+            "likely_stale": bool(float(diff.abs().max().cpu()) < 1.0e-6),
+        }
+    return out
+
+
+def _selected_body_orientations(env) -> dict[str, torch.Tensor | None]:
+    return {
+        body_name: _body_orientation_by_name(env, body_name)
+        for body_name in ("wrist_3_link", "gripper_tcp", "sfp_tip_link", CONTROLLED_TCP_BODY)
+    }
+
+
+def _realized_rotation_diagnostics(
+    *,
+    before: dict[str, torch.Tensor | None],
+    after: dict[str, torch.Tensor | None],
+) -> dict[str, Any]:
+    out: dict[str, Any] = {}
+    for body_name, before_quat in before.items():
+        after_quat = after.get(body_name)
+        if before_quat is None or after_quat is None:
+            out[body_name] = None
+            continue
+        error = math_utils.quat_error_magnitude(after_quat, before_quat)
+        out[body_name] = {
+            "before_quat_wxyz_env0": _sample_vector(before_quat, limit=4),
+            "after_quat_wxyz_env0": _sample_vector(after_quat, limit=4),
+            "realized_orientation_delta_rad_env0": float(error[0].detach().cpu()),
+            "realized_orientation_delta_rad_mean": float(error.mean().detach().cpu()),
+        }
+    return out
+
+
+def _tcp_delta_action_to_isaac_base_action(
+    env,
+    tcp_action: torch.Tensor,
+    *,
+    action_frame: str = "gripper_tcp",
+    apply_ik_sign_fix: bool = True,
+) -> torch.Tensor:
     """Convert Gazebo/LeRobot gripper-tcp delta actions to Isaac IK root-frame deltas."""
-    robot = env.unwrapped.scene["robot"]
-    body_names = list(getattr(robot, "body_names", []))
-    wrist_index = _named_index(body_names, CONTROLLED_TCP_BODY)
-    data = robot.data
-    _, tcp_quat_b = math_utils.subtract_frame_transforms(
-        data.root_pos_w,
-        data.root_quat_w,
-        data.body_pos_w[:, wrist_index],
-        data.body_quat_w[:, wrist_index],
-    )
-    delta_pos_b = math_utils.quat_apply(tcp_quat_b, tcp_action[:, :3])
-    delta_rot_b = math_utils.quat_apply(tcp_quat_b, tcp_action[:, 3:6])
-    return torch.cat([delta_pos_b, delta_rot_b], dim=-1)
+    if action_frame == "root":
+        action = tcp_action.clone()
+    else:
+        robot = env.unwrapped.scene["robot"]
+        body_names = list(getattr(robot, "body_names", []))
+        frame_index = _named_index(body_names, action_frame)
+        data = robot.data
+        _, frame_quat_b = math_utils.subtract_frame_transforms(
+            data.root_pos_w,
+            data.root_quat_w,
+            data.body_pos_w[:, frame_index],
+            data.body_quat_w[:, frame_index],
+        )
+        delta_pos_b = math_utils.quat_apply(frame_quat_b, tcp_action[:, :3])
+        delta_rot_b = math_utils.quat_apply(frame_quat_b, tcp_action[:, 3:6])
+        action = torch.cat([delta_pos_b, delta_rot_b], dim=-1)
+    if bool(apply_ik_sign_fix) and bool(args_cli.fix_isaac_ik_xy_sign):
+        action = action.clone()
+        action[:, 0:2] *= -1.0
+    return action
 
 
 def _act_obs_from_env(
@@ -1265,9 +1795,751 @@ def _act_obs_from_env(
     return {"state": _isaac_lerobot_state(env, args, device=device, state_dim=state_dim), "images": images}
 
 
-def _repeat_first_action(action: torch.Tensor, *, action_horizon: int, single_action_dim: int) -> torch.Tensor:
-    first = action[:, :single_action_dim]
-    return first.repeat(1, action_horizon)
+def _offset_position_w(pos_w: torch.Tensor, quat_w: torch.Tensor, offset: Any) -> torch.Tensor:
+    if offset is None:
+        return pos_w
+    offset_tensor = torch.tensor(offset, dtype=pos_w.dtype, device=pos_w.device).view(1, 3)
+    return pos_w + math_utils.quat_apply(quat_w, offset_tensor.expand(pos_w.shape[0], -1))
+
+
+def _target_position_from_reward_config(env, reward_config: dict[str, Any]) -> torch.Tensor | None:
+    episode_positions = _episode_target_position_from_yaml(env)
+    if episode_positions is not None:
+        return episode_positions
+    scene_name = reward_config.get("target_scene_name")
+    if not scene_name:
+        return None
+    try:
+        target = env.unwrapped.scene[scene_name]
+    except Exception:
+        return None
+    return _offset_position_w(
+        target.data.root_pos_w,
+        target.data.root_quat_w,
+        reward_config.get("target_position_offset"),
+    )
+
+
+def _episode_target_position_from_yaml(env) -> torch.Tensor | None:
+    episodes = _current_episode_by_env(env)
+    if not episodes:
+        return None
+    rows: list[torch.Tensor] = []
+    origins = env.unwrapped.scene.env_origins
+    for env_id in range(env.unwrapped.num_envs):
+        episode = episodes.get(env_id)
+        target = (((episode or {}).get("scene") or {}).get("target") or {}).get("target_pose_world") or {}
+        position = target.get("position")
+        if position is None:
+            return None
+        rows.append(torch.tensor(position, dtype=origins.dtype, device=origins.device) + origins[env_id])
+    return torch.stack(rows, dim=0)
+
+
+def _episode_target_orientation_from_yaml(env) -> torch.Tensor | None:
+    episodes = _current_episode_by_env(env)
+    if not episodes:
+        return None
+    origins = env.unwrapped.scene.env_origins
+    rows: list[torch.Tensor] = []
+    for env_id in range(env.unwrapped.num_envs):
+        episode = episodes.get(env_id)
+        target = (((episode or {}).get("scene") or {}).get("target") or {}).get("target_pose_world") or {}
+        orientation = target.get("orientation_wxyz")
+        if orientation is None:
+            return None
+        quat = torch.tensor(orientation, dtype=origins.dtype, device=origins.device)
+        rows.append(quat / torch.linalg.norm(quat).clamp(min=1.0e-9))
+    return torch.stack(rows, dim=0)
+
+
+def _offset_quat_w(quat_w: torch.Tensor, offset: Any) -> torch.Tensor:
+    if offset is None:
+        return quat_w
+    offset_tensor = torch.tensor(offset, dtype=quat_w.dtype, device=quat_w.device).view(1, 4)
+    return math_utils.quat_mul(quat_w, offset_tensor.expand(quat_w.shape[0], -1))
+
+
+def _target_orientation_from_reward_config(env, reward_config: dict[str, Any]) -> torch.Tensor | None:
+    episode_orientations = _episode_target_orientation_from_yaml(env)
+    if episode_orientations is not None:
+        return episode_orientations
+    scene_name = reward_config.get("target_scene_name")
+    if not scene_name:
+        return None
+    try:
+        target = env.unwrapped.scene[scene_name]
+    except Exception:
+        return None
+    return _offset_quat_w(target.data.root_quat_w, reward_config.get("target_orientation_offset"))
+
+
+def _body_position_by_name(env, body_name: str, body_offset: Any = None) -> torch.Tensor | None:
+    robot = env.unwrapped.scene["robot"]
+    body_names = list(getattr(robot, "body_names", []))
+    if body_name not in body_names:
+        return None
+    body_idx = body_names.index(body_name)
+    return _offset_position_w(
+        robot.data.body_pos_w[:, body_idx],
+        robot.data.body_quat_w[:, body_idx],
+        body_offset,
+    )
+
+
+def _body_orientation_by_name(env, body_name: str, body_offset: Any = None) -> torch.Tensor | None:
+    robot = env.unwrapped.scene["robot"]
+    body_names = list(getattr(robot, "body_names", []))
+    if body_name not in body_names:
+        return None
+    body_idx = body_names.index(body_name)
+    return _offset_quat_w(robot.data.body_quat_w[:, body_idx], body_offset)
+
+
+def _resolved_reward_terms(env) -> dict[str, Any]:
+    manager = getattr(env.unwrapped, "reward_manager", None)
+    names = list(getattr(manager, "_term_names", None) or getattr(manager, "active_terms", []) or [])
+    cfgs = list(getattr(manager, "_term_cfgs", None) or getattr(manager, "term_cfgs", None) or [])
+    out: dict[str, Any] = {}
+    for idx, cfg in enumerate(cfgs):
+        name = names[idx] if idx < len(names) else getattr(cfg, "name", None)
+        params = getattr(cfg, "params", {}) or {}
+        if not name:
+            continue
+        body_cfg = params.get("body_cfg")
+        target_cfg = params.get("target_cfg")
+        asset_cfg = params.get("asset_cfg")
+        out[str(name)] = {
+            "weight": float(getattr(cfg, "weight", 0.0)),
+            "asset_cfg_name": None if asset_cfg is None else getattr(asset_cfg, "name", None),
+            "asset_body_names": None if asset_cfg is None else list(getattr(asset_cfg, "body_names", []) or []),
+            "asset_body_ids": None if asset_cfg is None else _ids_jsonable(getattr(asset_cfg, "body_ids", None)),
+            "body_cfg_name": None if body_cfg is None else getattr(body_cfg, "name", None),
+            "body_names": None if body_cfg is None else list(getattr(body_cfg, "body_names", []) or []),
+            "body_ids": None if body_cfg is None else _ids_jsonable(getattr(body_cfg, "body_ids", None)),
+            "target_cfg_name": None if target_cfg is None else getattr(target_cfg, "name", None),
+            "target_body_names": None if target_cfg is None else list(getattr(target_cfg, "body_names", []) or []),
+            "target_body_ids": None if target_cfg is None else _ids_jsonable(getattr(target_cfg, "body_ids", None)),
+            "target_position_offset": params.get("target_position_offset"),
+            "body_position_offset": params.get("body_position_offset"),
+            "target_orientation_offset": params.get("target_orientation_offset"),
+            "body_orientation_offset": params.get("body_orientation_offset"),
+        }
+    return out
+
+
+def _reward_weight_diagnostics(env) -> dict[str, Any]:
+    manager = getattr(env.unwrapped, "reward_manager", None)
+    names = list(getattr(manager, "_term_names", None) or getattr(manager, "active_terms", []) or [])
+    cfgs = list(getattr(manager, "_term_cfgs", None) or getattr(manager, "term_cfgs", None) or [])
+    return {
+        str(names[idx] if idx < len(names) else getattr(cfg, "name", f"term_{idx}")): float(getattr(cfg, "weight", 0.0))
+        for idx, cfg in enumerate(cfgs)
+    }
+
+
+def _action_manager_diagnostics(env) -> dict[str, Any]:
+    manager = getattr(env.unwrapped, "action_manager", None)
+    out: dict[str, Any] = {
+        "manager_type": None if manager is None else type(manager).__name__,
+        "configured_body": None,
+        "configured_scale": None,
+        "terms": {},
+    }
+    if manager is None:
+        return out
+    names = list(getattr(manager, "_term_names", None) or getattr(manager, "active_terms", []) or [])
+    cfgs = list(getattr(manager, "_term_cfgs", None) or getattr(manager, "term_cfgs", None) or [])
+    for idx, cfg in enumerate(cfgs):
+        name = str(names[idx] if idx < len(names) else getattr(cfg, "name", "unknown"))
+        out["terms"][name] = {
+            "body_name": getattr(cfg, "body_name", None),
+            "scale": getattr(cfg, "scale", None),
+            "asset_name": getattr(cfg, "asset_name", None),
+        }
+        if name == "arm_action":
+            out["configured_body"] = getattr(cfg, "body_name", None)
+            out["configured_scale"] = getattr(cfg, "scale", None)
+    terms = getattr(manager, "_terms", None) or {}
+    if isinstance(terms, dict) and "arm_action" in terms:
+        term = terms["arm_action"]
+        cfg = getattr(term, "cfg", None)
+        out["runtime_arm_action"] = {
+            "type": type(term).__name__,
+            "body_name": getattr(cfg, "body_name", None) if cfg is not None else None,
+            "scale": getattr(cfg, "scale", None) if cfg is not None else None,
+        }
+    return out
+
+
+def _pose_reward_diagnostics(env, reward_config: dict[str, Any]) -> dict[str, Any]:
+    target_pos = _target_position_from_reward_config(env, reward_config)
+    target_quat = _target_orientation_from_reward_config(env, reward_config)
+    body_offset = reward_config.get("body_position_offset")
+    body_orientation_offset = reward_config.get("body_orientation_offset")
+    out: dict[str, Any] = {
+        "target_scene_name": reward_config.get("target_scene_name"),
+        "target_reward_body_arg": reward_config.get("target_body"),
+        "target_position_offset": reward_config.get("target_position_offset"),
+        "body_position_offset": body_offset,
+        "target_orientation_offset": reward_config.get("target_orientation_offset"),
+        "body_orientation_offset": body_orientation_offset,
+        "target_position_world_env0": None if target_pos is None else _sample_vector(target_pos, limit=3),
+        "target_orientation_wxyz_env0": None if target_quat is None else _sample_vector(target_quat, limit=4),
+        "target_asset_root_world_env0": None,
+        "target_asset_root_quat_wxyz_env0": None,
+        "body_positions_world_env0": {},
+        "body_quats_wxyz_env0": {},
+        "body_distances_to_target_env0": {},
+        "body_orientation_error_rad_env0": {},
+    }
+    scene_name = reward_config.get("target_scene_name")
+    if scene_name:
+        try:
+            target_asset = env.unwrapped.scene[scene_name]
+            root_pos = target_asset.data.root_pos_w
+            out["target_asset_root_world_env0"] = _sample_vector(root_pos, limit=3)
+            out["target_asset_root_quat_wxyz_env0"] = _sample_vector(target_asset.data.root_quat_w, limit=4)
+        except Exception:
+            out["target_asset_root_world_env0"] = None
+    for body_name in ("wrist_3_link", "gripper_tcp", "sfp_tip_link", CONTROLLED_TCP_BODY):
+        body_pos = _body_position_by_name(env, body_name, body_offset if body_name == reward_config.get("target_body") else None)
+        body_quat = _body_orientation_by_name(
+            env,
+            body_name,
+            body_orientation_offset if body_name == reward_config.get("target_body") else None,
+        )
+        if body_pos is None:
+            out["body_positions_world_env0"][body_name] = None
+            out["body_distances_to_target_env0"][body_name] = None
+            out["body_quats_wxyz_env0"][body_name] = None
+            out["body_orientation_error_rad_env0"][body_name] = None
+            continue
+        out["body_positions_world_env0"][body_name] = _sample_vector(body_pos, limit=3)
+        out["body_quats_wxyz_env0"][body_name] = None if body_quat is None else _sample_vector(body_quat, limit=4)
+        if target_pos is not None:
+            out["body_distances_to_target_env0"][body_name] = float(
+                torch.norm(body_pos[0] - target_pos[0]).detach().cpu()
+            )
+        if target_quat is not None and body_quat is not None:
+            out["body_orientation_error_rad_env0"][body_name] = float(
+                math_utils.quat_error_magnitude(body_quat[0:1], target_quat[0:1]).detach().cpu().reshape(-1)[0]
+            )
+    if reward_config.get("target_body") not in ("wrist_3_link", "gripper_tcp", "sfp_tip_link"):
+        out["warnings"] = [f"target_reward_body {reward_config.get('target_body')!r} is not one of common audit bodies"]
+    return out
+
+
+def _scene_asset_pose_diagnostics(env, reward_config: dict[str, Any]) -> dict[str, Any]:
+    out: dict[str, Any] = {}
+    for name in ("task_board", "nic_card", "sc_port", "sc_port_2"):
+        try:
+            asset = env.unwrapped.scene[name]
+        except Exception:
+            out[name] = None
+            continue
+        out[name] = {
+            "root_position_world_env0": _sample_vector(asset.data.root_pos_w, limit=3),
+            "root_quat_wxyz_env0": _sample_vector(asset.data.root_quat_w, limit=4),
+            "target_position_with_current_offset_env0": None,
+        }
+        if name in ("nic_card", "sc_port", "sc_port_2"):
+            out[name]["target_position_with_current_offset_env0"] = _sample_vector(
+                _offset_position_w(
+                    asset.data.root_pos_w,
+                    asset.data.root_quat_w,
+                    reward_config.get("target_position_offset"),
+                ),
+                limit=3,
+            )
+    return out
+
+
+def _episode_scene_diagnostics(env, reward_config: dict[str, Any], *, device: torch.device) -> dict[str, Any]:
+    episodes = _current_episode_by_env(env)
+    rows: list[dict[str, Any]] = []
+    target_pos = _target_position_from_reward_config(env, reward_config)
+    target_quat = _target_orientation_from_reward_config(env, reward_config)
+    for env_id in range(min(env.unwrapped.num_envs, 8)):
+        episode = episodes.get(env_id)
+        context = (episode or {}).get("task_context") or {}
+        scene = (episode or {}).get("scene") or {}
+        target = (scene.get("target") or {}).get("target_pose_world") or {}
+        if context:
+            vector = _task_vector_from_contexts([_episode_context_tuple(episode)], device=device)[0].detach().cpu().tolist()
+        else:
+            vector = _task_vector_from_contexts(
+                [(
+                    str(args_cli.task_family),
+                    int(args_cli.target_port_index),
+                    int(args_cli.target_card_index),
+                    int(args_cli.target_card_valid),
+                )],
+                device=device,
+            )[0].detach().cpu().tolist()
+        rows.append(
+            {
+                "env_id": env_id,
+                "episode_id": None if episode is None else episode.get("episode_id"),
+                "uses_current_episode_assignment": episode is not None,
+                "decoded_context": context or None,
+                "task_vector": [float(v) for v in vector],
+                "episode_target_position_local": target.get("position"),
+                "episode_target_orientation_wxyz": target.get("orientation_wxyz"),
+                "reward_target_position_world": None if target_pos is None else _sample_vector(target_pos[env_id : env_id + 1], limit=3),
+                "reward_target_orientation_wxyz": None if target_quat is None else _sample_vector(target_quat[env_id : env_id + 1], limit=4),
+                "start_near_gate": scene.get("start_near_gate"),
+                "tcp_reset_report": (getattr(env.unwrapped, "_aic_tcp_reset_report_by_env", {}) or {}).get(env_id),
+            }
+        )
+    return {
+        "episode_config_dir": args_cli.episode_config_dir,
+        "episode_count_loaded": len(EPISODE_CONFIGS),
+        "rows": rows,
+    }
+
+
+def _reset_control_body_diagnostics(env, reward_config: dict[str, Any]) -> dict[str, Any]:
+    action_diag = _action_manager_diagnostics(env)
+    reset_reports = getattr(env.unwrapped, "_aic_tcp_reset_report_by_env", {}) or {}
+    reset_body = None
+    if reset_reports:
+        first_report = next(iter(reset_reports.values()))
+        if isinstance(first_report, dict):
+            reset_body = first_report.get("body_name")
+    body_positions = {
+        name: _body_position_by_name(env, name)
+        for name in ("wrist_3_link", "gripper_tcp", "sfp_tip_link")
+    }
+    distances: dict[str, Any] = {}
+    names = list(body_positions)
+    for i, lhs in enumerate(names):
+        for rhs in names[i + 1 :]:
+            a, b = body_positions[lhs], body_positions[rhs]
+            distances[f"{lhs}__{rhs}"] = None if a is None or b is None else float(torch.norm(a[0] - b[0]).detach().cpu())
+    return {
+        "reset_reports_by_env": reset_reports,
+        "reset_event_order_tail": getattr(env.unwrapped, "_aic_reset_event_order", []) or [],
+        "near_gate_reset_body": reset_body or "gripper_tcp",
+        "controlled_ik_body": action_diag.get("configured_body") or (action_diag.get("runtime_arm_action") or {}).get("body_name"),
+        "act_tcp_action_frame": args_cli.tcp_action_frame,
+        "reward_body": reward_config.get("target_body"),
+        "body_distances_at_reset_env0": distances,
+    }
+
+
+def _quaternion_convention_diagnostics(env, reward_config: dict[str, Any]) -> dict[str, Any]:
+    out = {
+        "robot_root_quat_wxyz_env0": None,
+        "target_frame_quat_wxyz_env0": None,
+        "assets": {},
+        "warnings": [],
+    }
+    try:
+        robot = env.unwrapped.scene["robot"]
+        out["robot_root_quat_wxyz_env0"] = _sample_vector(robot.data.root_quat_w, limit=4)
+    except Exception:
+        pass
+    target_quat = _target_orientation_from_reward_config(env, reward_config)
+    if target_quat is not None:
+        out["target_frame_quat_wxyz_env0"] = _sample_vector(target_quat, limit=4)
+    for name in ("task_board", "nic_card", "sc_port", "sc_port_2"):
+        try:
+            asset = env.unwrapped.scene[name]
+        except Exception:
+            continue
+        quat = asset.data.root_quat_w
+        sample = _sample_vector(quat, limit=4)
+        out["assets"][name] = sample
+        if len(sample) == 4 and abs(sample[3] - 1.0) < 1.0e-3 and abs(sample[0]) < 1.0e-3:
+            out["warnings"].append(
+                f"{name} quaternion looks like xyzw identity [0,0,0,1] in Isaac wxyz storage"
+            )
+    return out
+
+
+def _force_wrench_diagnostics(env) -> dict[str, Any]:
+    robot = env.unwrapped.scene["robot"]
+    body_names = list(getattr(robot, "body_names", []))
+    data = robot.data
+    wrench = getattr(data, "body_incoming_wrench_w", None)
+    source = "body_incoming_wrench_w"
+    if wrench is None:
+        wrench = getattr(data, "body_incoming_wrench_b", None)
+        source = "body_incoming_wrench_b" if wrench is not None else None
+    if wrench is None:
+        wrench = getattr(data, "body_incoming_joint_wrench_b", None)
+        source = "body_incoming_joint_wrench_b" if wrench is not None else None
+    out: dict[str, Any] = {
+        "body_names": body_names,
+        "wrench_source": source,
+        "selected_reward_force_body_default": "all bodies unless reward asset_cfg body_names is set",
+        "norms_env0": {},
+        "contact_sensor": None,
+        "warnings": [],
+    }
+    contact_sensors = {}
+    for sensor_name in ("contact_forces",):
+        sensor = getattr(env.unwrapped.scene, "sensors", {}).get(sensor_name)
+        if sensor is None:
+            continue
+        sensor_names = list(getattr(sensor, "body_names", []) or [])
+        sensor_net = getattr(sensor.data, "net_forces_w", None)
+        contact_info: dict[str, Any] = {
+            "name": sensor_name,
+            "body_names": sensor_names,
+            "net_forces_shape": None if sensor_net is None else list(sensor_net.shape),
+            "net_force_norms_env0": {},
+        }
+        if sensor_net is not None and sensor_net.numel() > 0:
+            norms = torch.norm(sensor_net[0, :, :3], dim=-1).detach().cpu().tolist()
+            for idx, name in enumerate(sensor_names):
+                contact_info["net_force_norms_env0"][name] = float(norms[idx])
+        contact_sensors[sensor_name] = contact_info
+    out["contact_sensor"] = contact_sensors or None
+    if wrench is None:
+        out["warnings"].append("robot data exposes no body incoming wrench tensor; falling back to contact_forces sensor if present")
+        return out
+    norms = torch.norm(wrench[0, :, :3], dim=-1).detach().cpu().tolist()
+    for idx, name in enumerate(body_names):
+        out["norms_env0"][name] = float(norms[idx])
+    for required in ("wrist_3_link", "gripper_tcp", "sfp_tip_link"):
+        if required not in body_names:
+            out["warnings"].append(f"{required} body missing from robot")
+    if "gripper_tcp" in body_names and out["norms_env0"].get("gripper_tcp", 0.0) == 0.0:
+        out["warnings"].append("gripper_tcp wrench norm is zero at this instant; this is normal without contact")
+    return out
+
+
+def _target_source_diagnostics(env, reward_config: dict[str, Any]) -> dict[str, Any]:
+    episodes = _current_episode_by_env(env)
+    episode = episodes.get(0)
+    episode_target = (((episode or {}).get("scene") or {}).get("target") or {}).get("target_pose_world") or {}
+    uses_episode_position = episode is not None and episode_target.get("position") is not None
+    uses_episode_orientation = episode is not None and episode_target.get("orientation_wxyz") is not None
+    warnings: list[str] = []
+    notes: list[str] = []
+    if uses_episode_position and not uses_episode_orientation and reward_config.get("orientation_weight", 0.0) > 0.0:
+        warnings.append(
+            "target position comes from episode YAML, but orientation reward uses target asset root plus offset"
+        )
+    if uses_episode_position and uses_episode_orientation:
+        notes.append("target position and orientation both come from episode YAML")
+    if float(reward_config.get("lateral_weight", 0.0)) > 0.0:
+        warnings.append(
+            "target_lateral_error currently uses a world-axis mask, not the target/port frame"
+        )
+    return {
+        "target_position_source": "episode_yaml" if uses_episode_position else "target_asset_root_plus_offset",
+        "target_orientation_source": "episode_yaml" if uses_episode_orientation else "target_asset_root_plus_offset",
+        "episode_target_pose_world_env0": episode_target or None,
+        "notes": notes,
+        "warnings": warnings,
+    }
+
+
+def _observation_diagnostics(
+    *,
+    obs: Any,
+    policy_obs: torch.Tensor,
+    act_obs: dict[str, Any],
+    actor: IsaacACTAdapterActor,
+    images: dict[str, torch.Tensor],
+    env=None,
+    expert_prior: ExpertActionPrior | None = None,
+) -> dict[str, Any]:
+    state = act_obs["state"]
+    normalized_state = actor.act_normalizer.normalize_state(state)
+    image_stats: dict[str, Any] = {}
+    for key, image in images.items():
+        normalized = actor.act_normalizer.normalize_image(key, image)
+        image_stats[key] = {
+            "raw": _tensor_stats(image),
+            "normalized": _tensor_stats(normalized),
+        }
+    raw_task = state[:, -10:] if state.shape[-1] >= 10 else state[:, 0:0]
+    normalized_task = normalized_state[:, -10:] if normalized_state.shape[-1] >= 10 else normalized_state[:, 0:0]
+    return {
+        "obs_type": type(obs).__name__,
+        "obs_keys": list(obs.keys()) if isinstance(obs, dict) else None,
+        "policy_obs": _tensor_stats(policy_obs),
+        "act_state": _tensor_stats(state),
+        "normalized_state": _tensor_stats(normalized_state),
+        "raw_task_vector_env0": _sample_vector(raw_task, limit=10),
+        "normalized_task_vector_env0": _sample_vector(normalized_task, limit=10),
+        "task_vector_normalizer_mean_tail": _sample_vector(actor.act_normalizer.state_mean[:, -10:], limit=10),
+        "task_vector_normalizer_std_tail": _sample_vector(actor.act_normalizer.state_std[:, -10:], limit=10),
+        "state_dim": int(state.shape[-1]),
+        "actor_state_dim": int(actor.state_dim),
+        "actor_action_dim": int(actor.action_dim),
+        "actor_action_horizon": int(actor.action_horizon),
+        "image_keys": list(images.keys()),
+        "images": image_stats,
+        "swap_rgb_channels": bool(getattr(args_cli, "swap_rgb_channels", False)),
+        "state_schema": _state_schema_diagnostics(state, actor, env=env, expert_prior=expert_prior),
+    }
+
+
+def _previous_action_diagnostics(
+    *,
+    state: torch.Tensor,
+    policy_tcp_action: torch.Tensor,
+    env_action: torch.Tensor,
+    env,
+) -> dict[str, Any]:
+    manager = getattr(env.unwrapped, "action_manager", None)
+    manager_action = None
+    manager_prev_action = None
+    if manager is not None:
+        manager_action = getattr(manager, "action", None)
+        manager_prev_action = getattr(manager, "prev_action", None)
+    return {
+        "state_contract": (
+            "82D state is base32 + contact_recovery40 + task10. It has force-delta memory features, "
+            "but no previous-action feature block."
+        ),
+        "state_dim": int(state.shape[-1]),
+        "state_contact_feature_slice_32_72_env0": _sample_vector(state[:, 32:72], limit=16) if state.shape[-1] >= 72 else None,
+        "state_task_slice_tail10_env0": _sample_vector(state[:, -10:], limit=10) if state.shape[-1] >= 10 else None,
+        "actual_previous_policy_tcp_action_first6_env0": _sample_vector(policy_tcp_action, limit=6),
+        "actual_env_action_after_frame_conversion_first6_env0": _sample_vector(env_action, limit=6),
+        "env_action_manager_action": None if manager_action is None else _tensor_stats(manager_action),
+        "env_action_manager_action_env0": None if manager_action is None else _sample_vector(manager_action, limit=12),
+        "env_action_manager_prev_action": None if manager_prev_action is None else _tensor_stats(manager_prev_action),
+        "env_action_manager_prev_action_env0": None if manager_prev_action is None else _sample_vector(manager_prev_action, limit=12),
+        "action_scale_note": "policy_tcp_action is before Isaac frame conversion/IK action scale; env_action is what env.step receives.",
+    }
+
+
+def _frequency_diagnostics(env_cfg: Any, env: Any, *, action_horizon: int, single_action_dim: int) -> dict[str, Any]:
+    sim_dt = float(getattr(getattr(env_cfg, "sim", None), "dt", float("nan")))
+    decimation = int(getattr(env_cfg, "decimation", 0))
+    policy_dt = float(getattr(env.unwrapped, "step_dt", sim_dt * decimation if decimation else float("nan")))
+    expert_fps = 20.0
+    return {
+        "sim_dt": sim_dt,
+        "decimation": decimation,
+        "policy_dt": policy_dt,
+        "policy_hz": None if policy_dt <= 0.0 else 1.0 / policy_dt,
+        "expert_dataset_fps": expert_fps,
+        "expert_action_dt": 1.0 / expert_fps,
+        "action_horizon": int(action_horizon),
+        "single_action_dim": int(single_action_dim),
+        "physical_chunk_duration_isaac_s": policy_dt * int(action_horizon),
+        "physical_chunk_duration_expert_s": int(action_horizon) / expert_fps,
+        "warning": (
+            None
+            if abs(policy_dt - 1.0 / expert_fps) < 1.0e-6
+            else "Isaac policy step duration differs from 20 Hz expert dataset action duration."
+        ),
+    }
+
+
+def _act_chunk_inference_diagnostics(offline_cfg: dict[str, Any]) -> dict[str, Any]:
+    return {
+        "gazebo_RunACT_path": "aic_example_policies/aic_example_policies/ros/RunACT.py",
+        "gazebo_runtime": "RunACT overrides ACTPolicy.config.n_action_steps from AIC_ACT_N_ACTION_STEPS, default 4.",
+        "gazebo_torchscript_runtime": "RunACTTorchScript queues the first AIC_ACT_N_ACTION_STEPS actions from each predicted chunk, default 4.",
+        "isaac_online_runtime": "Isaac online SERL queues the first --n_action_steps actions from each predicted chunk, default 4.",
+        "offline_cfg_chunk_size_or_action_horizon": offline_cfg.get("action_horizon"),
+        "offline_cfg_action_dim": offline_cfg.get("action_dim"),
+        "warning": (
+            "All current ACT/SERL runtime paths should use chunk queue execution; confirm n_action_steps in logs."
+        ),
+    }
+
+
+def _checkpoint_compatibility_diagnostics(
+    *,
+    actor: IsaacACTAdapterActor,
+    offline_cfg: dict[str, Any],
+    dataset_summary: dict[str, Any],
+    state_dim: int,
+    action_horizon: int,
+    single_action_dim: int,
+) -> dict[str, Any]:
+    normalizer = actor.act_normalizer
+    out = {
+        "runtime_state_dim": int(state_dim),
+        "runtime_action_dim": int(actor.action_dim),
+        "runtime_action_horizon": int(action_horizon),
+        "runtime_single_action_dim": int(single_action_dim),
+        "actor_state_dim": int(actor.state_dim),
+        "actor_action_dim": int(actor.action_dim),
+        "actor_action_horizon": int(actor.action_horizon),
+        "act_torchscript": str(actor.act_torchscript_path),
+        "normalizer_state_dim": int(normalizer.state_mean.shape[-1]),
+        "normalizer_single_action_dim": int(normalizer.action_mean.shape[-1]),
+        "camera_keys_runtime_order": list(CAMERA_KEYS),
+        "camera_keys_offline_cfg": offline_cfg.get("camera_keys"),
+        "camera_keys_dataset_summary": dataset_summary.get("camera_keys"),
+        "state_encoding": offline_cfg.get("state_encoding"),
+        "state_encoding_indices": offline_cfg.get("state_encoding_indices"),
+        "task_vector_layout": "last 10 dims, canonical task_encoding.py order",
+        "warnings": [],
+    }
+    if int(normalizer.state_mean.shape[-1]) != int(state_dim):
+        out["warnings"].append("ACT normalizer state dim does not match online runtime state dim")
+    if int(normalizer.action_mean.shape[-1]) != int(single_action_dim):
+        out["warnings"].append("ACT normalizer single action dim does not match online executed action dim")
+    if list(offline_cfg.get("camera_keys") or CAMERA_KEYS) != list(CAMERA_KEYS):
+        out["warnings"].append("Offline camera key order differs from Isaac runtime camera key order")
+    return out
+
+
+def _act_freeze_diagnostics(trainer: OnlineSERLTrainer) -> dict[str, Any]:
+    act_params = list(trainer.actor.act_base.parameters())
+    adapter_params = list(trainer.actor.adapter.parameters())
+    optimizer_param_ids = {id(param) for group in trainer.actor_opt.param_groups for param in group["params"]}
+    act_in_optimizer = sum(1 for param in act_params if id(param) in optimizer_param_ids)
+    return {
+        "actor_training_mode": bool(trainer.actor.training),
+        "act_base_training_mode": bool(trainer.actor.act_base.training),
+        "act_base_param_count": sum(param.numel() for param in act_params),
+        "act_base_requires_grad_count": sum(param.numel() for param in act_params if param.requires_grad),
+        "act_base_params_in_optimizer": int(act_in_optimizer),
+        "adapter_param_count": sum(param.numel() for param in adapter_params),
+        "adapter_requires_grad_count": sum(param.numel() for param in adapter_params if param.requires_grad),
+        "freeze_act_arg": bool(args_cli.freeze_act),
+        "warning": (
+            "ACT parameters are present in actor.parameters() but require_grad=False; Adam will not update them."
+            if act_in_optimizer > 0
+            else None
+        ),
+    }
+
+
+def _gripper_cable_state_diagnostics(env) -> dict[str, Any]:
+    robot = env.unwrapped.scene["robot"]
+    joint_names = list(getattr(robot, "joint_names", []))
+    joint_pos = getattr(robot.data, "joint_pos", None)
+    joints: dict[str, Any] = {}
+    if joint_pos is not None:
+        for name in joint_names:
+            if "finger" in name or "gripper" in name:
+                idx = joint_names.index(name)
+                joints[name] = float(joint_pos[0, idx].detach().cpu())
+    return {
+        "gripper_joint_positions_env0": joints,
+        "configured_gripper_joint_position": float(args_cli.gripper_joint_position),
+        "body_pose": {
+            name: {
+                "position": None if _body_position_by_name(env, name) is None else _sample_vector(_body_position_by_name(env, name), limit=3),
+                "quat_wxyz": None if _body_orientation_by_name(env, name) is None else _sample_vector(_body_orientation_by_name(env, name), limit=4),
+            }
+            for name in ("gripper_tcp", "sfp_tip_link", "wrist_3_link")
+        },
+    }
+
+
+def _randomization_diagnostics(env_cfg: Any) -> dict[str, Any]:
+    events = getattr(env_cfg, "events", None)
+    randomize_parts = getattr(events, "randomize_board_and_parts", None) if events is not None else None
+    randomize_light = getattr(events, "randomize_light", None) if events is not None else None
+    reset_joints = getattr(events, "reset_robot_joints", None) if events is not None else None
+    return {
+        "AIC_ISAAC_RANDOMIZATION_PROFILE": os.environ.get("AIC_ISAAC_RANDOMIZATION_PROFILE", "light"),
+        "board_and_parts_params": None if randomize_parts is None else _jsonable(getattr(randomize_parts, "params", {})),
+        "light_params": None if randomize_light is None else _jsonable(getattr(randomize_light, "params", {})),
+        "reset_joints_params": None if reset_joints is None else _jsonable(getattr(reset_joints, "params", {})),
+        "fixed_no_randomization_audit_hint": "Set AIC_ISAAC_RANDOMIZATION_PROFILE=none for easiest fixed-scene diagnostics.",
+    }
+
+
+def _action_components_diagnostics(
+    components: dict[str, torch.Tensor],
+    *,
+    single_action_dim: int,
+) -> dict[str, Any]:
+    base = components["base_action"]
+    raw = components["raw_delta_action"]
+    clipped = components["delta_action"]
+    final = components["final_action"]
+    eps = 1.0e-9
+    clipped_fraction = float((raw.sub(clipped).abs() > eps).float().mean().detach().cpu())
+    return {
+        "base_action_first6": _norm_stats(base[:, :single_action_dim]),
+        "raw_adapter_delta_first6": _norm_stats(raw[:, :single_action_dim]),
+        "clipped_adapter_delta_first6": _norm_stats(clipped[:, :single_action_dim]),
+        "final_action_first6": _norm_stats(final[:, :single_action_dim]),
+        "base_action_env0_first12": _sample_vector(base, limit=12),
+        "raw_adapter_delta_env0_first12": _sample_vector(raw, limit=12),
+        "clipped_adapter_delta_env0_first12": _sample_vector(clipped, limit=12),
+        "final_action_env0_first12": _sample_vector(final, limit=12),
+        "adapter_clipped_fraction": clipped_fraction,
+        "final_minus_base_norm": float((final - base).norm(dim=-1).mean().detach().cpu()),
+        "adapter_delta_clip": None if args_cli.adapter_delta_clip is None else float(args_cli.adapter_delta_clip),
+        "adapter_scale": float(getattr(args_cli, "adapter_scale", 1.0)) if hasattr(args_cli, "adapter_scale") else None,
+    }
+
+
+def _realized_delta_diagnostics(
+    *,
+    before: dict[str, torch.Tensor],
+    after: dict[str, torch.Tensor],
+    requested_tcp_action: torch.Tensor,
+    desired_root_action: torch.Tensor | None = None,
+    env_action: torch.Tensor,
+) -> dict[str, Any]:
+    out: dict[str, Any] = {
+        "requested_tcp_delta_env0": _sample_vector(requested_tcp_action[:, :3], limit=3),
+        "requested_tcp_rot_env0": _sample_vector(requested_tcp_action[:, 3:6], limit=3),
+        "desired_root_delta_env0": None
+        if desired_root_action is None
+        else _sample_vector(desired_root_action[:, :3], limit=3),
+        "env_action_first6_env0": _sample_vector(env_action[:, :6], limit=6),
+        "bodies": {},
+    }
+    for body_name, before_pos in before.items():
+        after_pos = after.get(body_name)
+        if before_pos is None or after_pos is None:
+            out["bodies"][body_name] = None
+            continue
+        realized = after_pos - before_pos
+        requested = requested_tcp_action[:, :3]
+        desired_root = desired_root_action[:, :3] if desired_root_action is not None else None
+        ratio = realized / torch.where(requested.abs() < 1.0e-9, torch.full_like(requested, float("nan")), requested)
+        root_ratio = (
+            None
+            if desired_root is None
+            else realized / torch.where(desired_root.abs() < 1.0e-9, torch.full_like(desired_root, float("nan")), desired_root)
+        )
+        out["bodies"][body_name] = {
+            "before_env0": _sample_vector(before_pos, limit=3),
+            "after_env0": _sample_vector(after_pos, limit=3),
+            "realized_delta_env0": _sample_vector(realized, limit=3),
+            "realized_delta_norm_mean": float(realized.norm(dim=-1).mean().detach().cpu()),
+            "requested_delta_norm_mean": float(requested.norm(dim=-1).mean().detach().cpu()),
+            "realized_over_requested_xyz_env0": _sample_vector(ratio, limit=3),
+            "realized_over_desired_root_xyz_env0": None if root_ratio is None else _sample_vector(root_ratio, limit=3),
+        }
+    return out
+
+
+def _selected_body_positions(env) -> dict[str, torch.Tensor | None]:
+    return {
+        body_name: _body_position_by_name(env, body_name)
+        for body_name in ("wrist_3_link", "gripper_tcp", "sfp_tip_link", CONTROLLED_TCP_BODY)
+    }
+
+
+def _debug_axis_action(
+    *,
+    step: int,
+    batch_size: int,
+    action_dim: int,
+    single_action_dim: int,
+    magnitude: float,
+    device: torch.device,
+) -> torch.Tensor:
+    action = torch.zeros((batch_size, action_dim), dtype=torch.float32, device=device)
+    axis_index = (int(step) - 1) % 6
+    sign = 1.0 if axis_index < 3 else -1.0
+    coord = axis_index % 3
+    action[:, coord] = sign * float(magnitude)
+    if action_dim > single_action_dim:
+        action[:, single_action_dim:] = 0.0
+    return action
 
 
 def _timing_log(enabled: bool, label: str, start_time: float) -> None:
@@ -1622,6 +2894,8 @@ class OnlineSERLTrainer:
         bc_weight: float,
         expert_prior: ExpertActionPrior | None,
         expert_bc_every: int,
+        single_action_dim: int,
+        debug_diagnostics: bool,
         act_torchscript_device: torch.device,
         device: torch.device,
     ):
@@ -1641,6 +2915,8 @@ class OnlineSERLTrainer:
         self.bc_weight = float(bc_weight)
         self.expert_prior = expert_prior
         self.expert_bc_every = max(1, int(expert_bc_every))
+        self.single_action_dim = int(single_action_dim)
+        self.debug_diagnostics = bool(debug_diagnostics)
         self.update_count = 0
         self.actor_opt = torch.optim.Adam(self.actor.parameters(), lr=adapter_lr)
         self.critic_opt = torch.optim.Adam(list(self.critic1.parameters()) + list(self.critic2.parameters()), lr=critic_lr)
@@ -1650,7 +2926,8 @@ class OnlineSERLTrainer:
         obs, next_obs = batch["obs"], batch["next_obs"]
         action, reward, done = batch["action"], batch["reward"], batch["done"]
         with torch.no_grad():
-            next_action = self.actor.mean_action(next_obs)
+            next_action_full = self.actor.mean_action(next_obs)
+            next_action = _executed_critic_action(next_action_full, single_action_dim=self.single_action_dim)
             target_q = torch.minimum(self.target_critic1(next_obs, next_action), self.target_critic2(next_obs, next_action))
             td_target = reward + self.gamma * (1.0 - done) * target_q
         q1 = self.critic1(obs, action)
@@ -1658,15 +2935,17 @@ class OnlineSERLTrainer:
         critic_loss = F.mse_loss(q1, td_target) + F.mse_loss(q2, td_target)
         self.critic_opt.zero_grad(set_to_none=True)
         critic_loss.backward()
+        critic_grad_norm = _grad_norm(list(self.critic1.parameters()) + list(self.critic2.parameters()))
         self.critic_opt.step()
 
         components = self.actor.action_components(obs)
-        actor_action = components["final_action"]
+        actor_action_full = components["final_action"]
+        actor_action = _executed_critic_action(actor_action_full, single_action_dim=self.single_action_dim)
         base_action = components["base_action"]
         delta_action = components["delta_action"]
         actor_q = torch.minimum(self.critic1(obs, actor_action), self.critic2(obs, actor_action))
         adapter_penalty = delta_action.square().mean()
-        act_preservation_loss = F.mse_loss(actor_action, base_action)
+        act_preservation_loss = F.mse_loss(actor_action_full, base_action)
         compute_bc = (
             self.expert_prior is not None
             and self.bc_weight > 0.0
@@ -1675,10 +2954,10 @@ class OnlineSERLTrainer:
         if compute_bc:
             bc_t0 = time.monotonic()
             expert_action = self.expert_prior.nearest_actions(obs["state"]).detach()
-            bc_loss = F.smooth_l1_loss(actor_action, expert_action)
+            bc_loss = F.smooth_l1_loss(actor_action_full, expert_action)
             bc_elapsed_ms = (time.monotonic() - bc_t0) * 1000.0
         else:
-            bc_loss = torch.zeros((), dtype=actor_action.dtype, device=actor_action.device)
+            bc_loss = torch.zeros((), dtype=actor_action_full.dtype, device=actor_action_full.device)
             bc_elapsed_ms = 0.0
         bc_loss_weighted = self.bc_weight * bc_loss
         q_actor_loss = -actor_q.mean()
@@ -1687,13 +2966,33 @@ class OnlineSERLTrainer:
         actor_loss = q_actor_loss + adapter_penalty_weighted + act_preservation_loss_weighted + bc_loss_weighted
         self.actor_opt.zero_grad(set_to_none=True)
         actor_loss.backward()
+        adapter_grad_norm = _grad_norm(self.actor.adapter.parameters())
         self.actor_opt.step()
         self._soft_update()
-        return {
+        raw_delta = components.get("raw_delta_action", delta_action)
+        clipped_fraction = float((raw_delta.sub(delta_action).abs() > 1.0e-9).float().mean().detach().cpu())
+        metrics = {
             "actor_loss": float(actor_loss.detach().cpu()),
             "actor_q_loss": float(q_actor_loss.detach().cpu()),
             "critic_loss": float(critic_loss.detach().cpu()),
+            "batch_reward_mean": float(reward.mean().detach().cpu()),
+            "batch_reward_std": float(reward.std(unbiased=False).detach().cpu()) if reward.numel() > 1 else 0.0,
+            "batch_reward_min": float(reward.min().detach().cpu()),
+            "batch_reward_max": float(reward.max().detach().cpu()),
             "q_mean": float(torch.minimum(q1, q2).mean().detach().cpu()),
+            "td_target_mean": float(td_target.mean().detach().cpu()),
+            "td_target_std": float(td_target.std(unbiased=False).detach().cpu()) if td_target.numel() > 1 else 0.0,
+            "q1_mean": float(q1.mean().detach().cpu()),
+            "q1_std": float(q1.std(unbiased=False).detach().cpu()) if q1.numel() > 1 else 0.0,
+            "q1_min": float(q1.min().detach().cpu()),
+            "q1_max": float(q1.max().detach().cpu()),
+            "q2_mean": float(q2.mean().detach().cpu()),
+            "q2_std": float(q2.std(unbiased=False).detach().cpu()) if q2.numel() > 1 else 0.0,
+            "q2_min": float(q2.min().detach().cpu()),
+            "q2_max": float(q2.max().detach().cpu()),
+            "actor_q_mean": float(actor_q.mean().detach().cpu()),
+            "critic_grad_norm": float(critic_grad_norm),
+            "adapter_grad_norm": float(adapter_grad_norm),
             "base_action_norm": float(base_action.norm(dim=-1).mean().detach().cpu()),
             "base_action_abs_max": float(base_action.abs().max().detach().cpu()),
             "base_action_min": float(base_action.min().detach().cpu()),
@@ -1708,6 +3007,7 @@ class OnlineSERLTrainer:
             "raw_adapter_delta_abs_max": float(
                 components.get("raw_delta_action", delta_action).abs().max().detach().cpu()
             ),
+            "adapter_clipped_fraction": clipped_fraction,
             "adapter_penalty": float(adapter_penalty.detach().cpu()),
             "adapter_penalty_weighted": float(adapter_penalty_weighted.detach().cpu()),
             "act_preservation_loss": float(act_preservation_loss.detach().cpu()),
@@ -1718,16 +3018,37 @@ class OnlineSERLTrainer:
             "bc_computed": float(compute_bc),
             "bc_every": float(self.expert_bc_every),
             "bc_lookup_ms": float(bc_elapsed_ms),
-            "final_minus_act_norm": float((actor_action - base_action).norm(dim=-1).mean().detach().cpu()),
+            "final_minus_act_norm": float((actor_action_full - base_action).norm(dim=-1).mean().detach().cpu()),
             "unclipped_final_minus_act_norm": float(
-                (components.get("unclipped_final_action", actor_action) - base_action)
+                (components.get("unclipped_final_action", actor_action_full) - base_action)
                 .norm(dim=-1)
                 .mean()
                 .detach()
                 .cpu()
             ),
             "log_std_mean": float(self.actor.log_std.mean().detach().cpu()),
+            "critic_action_representation": "first_executed_6d",
+            "loss_scale_summary": {
+                "actor_q_loss": float(q_actor_loss.detach().cpu()),
+                "adapter_penalty_weighted": float(adapter_penalty_weighted.detach().cpu()),
+                "act_preservation_loss_weighted": float(act_preservation_loss_weighted.detach().cpu()),
+                "bc_loss_weighted": float(bc_loss_weighted.detach().cpu()),
+                "critic_loss": float(critic_loss.detach().cpu()),
+                "batch_reward_mean": float(reward.mean().detach().cpu()),
+            },
         }
+        if self.debug_diagnostics:
+            metrics["diagnostic_action_representations"] = {
+                "full_actor_action_shape": list(actor_action_full.shape),
+                "critic_actor_action_shape": list(actor_action.shape),
+                "replay_action_shape": list(action.shape),
+                "target_next_action_shape": list(next_action.shape),
+                "full_actor_action_env0_first12": _sample_vector(actor_action_full, limit=12),
+                "critic_actor_action_env0_first12": _sample_vector(actor_action, limit=12),
+                "replay_action_env0_first12": _sample_vector(action, limit=12),
+                "target_next_action_env0_first12": _sample_vector(next_action, limit=12),
+            }
+        return metrics
 
     def _soft_update(self) -> None:
         for target, source in ((self.target_critic1, self.critic1), (self.target_critic2, self.critic2)):
@@ -1791,7 +3112,11 @@ def _load_adapter_actor(
 
 
 def _act_only_training_context(args: argparse.Namespace) -> tuple[dict[str, Any], dict[str, Any], dict[str, Any]]:
-    action_horizon = int(args.act_only_action_horizon)
+    if int(args.act_only_action_horizon) > 0:
+        action_horizon = int(args.act_only_action_horizon)
+    else:
+        metadata = _torchscript_metadata(Path(args.act_torchscript))
+        action_horizon = int(metadata.get("chunk_size") or 1)
     single_action_dim = int(args.act_only_single_action_dim)
     action_dim = action_horizon * single_action_dim
     offline_cfg = {
@@ -2000,6 +3325,12 @@ def main() -> None:
     state_dim = int(offline_cfg["state_dim"])
     action_horizon = int(offline_cfg["action_horizon"])
     single_action_dim = int(offline_cfg["action_dim"] // action_horizon)
+    critic_action_dim = single_action_dim
+    n_action_steps = int(args_cli.n_action_steps)
+    if n_action_steps < 1:
+        raise ValueError(f"--n_action_steps must be >= 1, got {n_action_steps}")
+    if n_action_steps > action_horizon:
+        raise ValueError(f"--n_action_steps={n_action_steps} exceeds action_horizon/chunk_size={action_horizon}")
 
     device = torch.device(args_cli.device)
     act_torchscript_path = Path(args_cli.act_torchscript)
@@ -2051,7 +3382,7 @@ def main() -> None:
     critic1 = VisionCritic(
         state_dim=state_dim,
         camera_keys=CAMERA_KEYS,
-        action_dim=int(offline_cfg["action_dim"]),
+        action_dim=critic_action_dim,
         feature_dim=critic_feature_dim,
         image_encoder=critic_image_encoder,
         arch=critic_arch,
@@ -2069,7 +3400,7 @@ def main() -> None:
     critic2 = VisionCritic(
         state_dim=state_dim,
         camera_keys=CAMERA_KEYS,
-        action_dim=int(offline_cfg["action_dim"]),
+        action_dim=critic_action_dim,
         feature_dim=critic_feature_dim,
         image_encoder=critic_image_encoder,
         arch=critic_arch,
@@ -2085,9 +3416,12 @@ def main() -> None:
         state_encoding_scale=state_encoding_scale,
     )
     if checkpoint is not None:
-        critic1.load_state_dict(checkpoint["critic1"], strict=True)
-        critic2.load_state_dict(checkpoint["critic2"], strict=True)
-        print(f"[AIC SERL] Resumed critics from checkpoint: {checkpoint_path}", flush=True)
+        print(
+            "[AIC SERL][diagnostic] Initializing fresh online critics. "
+            "Online SERL critic always consumes the executed first 6D action, "
+            f"while checkpoint critics were trained with action_dim={offline_cfg['action_dim']}.",
+            flush=True,
+        )
     expert_bc_weight = float(args_cli.expert_bc_weight if args_cli.expert_bc_weight is not None else args_cli.bc_weight)
     expert_prior = None
     if args_cli.expert_dataset_root and expert_bc_weight > 0.0:
@@ -2119,19 +3453,41 @@ def main() -> None:
         bc_weight=expert_bc_weight,
         expert_prior=expert_prior,
         expert_bc_every=args_cli.expert_bc_every,
+        single_action_dim=single_action_dim,
+        debug_diagnostics=args_cli.debug_diagnostics,
         act_torchscript_device=act_torchscript_device,
         device=device,
     )
-    if checkpoint is not None:
-        if "target_critic1" in checkpoint:
-            trainer.target_critic1.load_state_dict(checkpoint["target_critic1"], strict=True)
-        if "target_critic2" in checkpoint:
-            trainer.target_critic2.load_state_dict(checkpoint["target_critic2"], strict=True)
-        if "actor_optimizer" in checkpoint:
-            trainer.actor_opt.load_state_dict(checkpoint["actor_optimizer"])
-        if "critic_optimizer" in checkpoint:
-            trainer.critic_opt.load_state_dict(checkpoint["critic_optimizer"])
-        print(f"[AIC SERL] Resumed target critics and optimizer state from checkpoint: {checkpoint_path}", flush=True)
+    if checkpoint is not None and (
+        "actor_optimizer" in checkpoint
+        or "critic_optimizer" in checkpoint
+        or "target_critic1" in checkpoint
+        or "target_critic2" in checkpoint
+    ):
+        print(
+            "[AIC SERL][diagnostic] Preserving actor weights only; optimizer and target critic state are fresh "
+            "because online Q uses the executed first 6D action.",
+            flush=True,
+        )
+
+    checkpoint_compatibility = _checkpoint_compatibility_diagnostics(
+        actor=trainer.actor,
+        offline_cfg=offline_cfg,
+        dataset_summary=dataset_summary,
+        state_dim=state_dim,
+        action_horizon=action_horizon,
+        single_action_dim=single_action_dim,
+    )
+    print(
+        "[AIC SERL][diagnostic] checkpoint_compatibility "
+        + json.dumps(_jsonable(checkpoint_compatibility), sort_keys=True),
+        flush=True,
+    )
+    print(
+        "[AIC SERL][diagnostic] act_freeze "
+        + json.dumps(_jsonable(_act_freeze_diagnostics(trainer)), sort_keys=True),
+        flush=True,
+    )
 
     env_cfg = parse_env_cfg(
         args_cli.task,
@@ -2145,17 +3501,51 @@ def main() -> None:
     # The SERL actor consumes raw camera tensors directly from the sensors. Avoid
     # computing the PPO-specific ResNet feature observation terms, but keep the
     # camera sensors enabled and rendered.
-    env_cfg.observations.policy.center_rgb = None
-    env_cfg.observations.policy.left_rgb = None
-    env_cfg.observations.policy.right_rgb = None
+    if bool(args_cli.disable_ppo_resnet_observation_terms):
+        env_cfg.observations.policy.center_rgb = None
+        env_cfg.observations.policy.left_rgb = None
+        env_cfg.observations.policy.right_rgb = None
+    env_cfg_arm_action_scale_before = getattr(env_cfg.actions.arm_action, "scale", None)
     env_cfg.actions.arm_action.scale = args_cli.isaac_action_scale
     task_geometry_reward_config = _configure_task_geometry_rewards(env_cfg, args_cli)
+    print(
+        "[AIC SERL][diagnostic] action_scale_config "
+        + json.dumps(
+            {
+                "args_cli.isaac_action_scale": float(args_cli.isaac_action_scale),
+                "env_cfg.actions.arm_action.scale_before_override": env_cfg_arm_action_scale_before,
+                "env_cfg.actions.arm_action.scale_after_override": getattr(env_cfg.actions.arm_action, "scale", None),
+                "env_cfg.actions.arm_action.body_name": getattr(env_cfg.actions.arm_action, "body_name", None),
+            },
+            sort_keys=True,
+            default=str,
+        ),
+        flush=True,
+    )
+    print(
+        "[AIC SERL][diagnostic] target_reward_config "
+        + json.dumps(_jsonable(task_geometry_reward_config), sort_keys=True),
+        flush=True,
+    )
     print("[AIC SERL] Creating Isaac env", flush=True)
     env = gym.make(args_cli.task, cfg=env_cfg)
     print("[AIC SERL] Isaac env created", flush=True)
+    print(
+        "[AIC SERL][diagnostic] action_manager "
+        + json.dumps(_jsonable(_action_manager_diagnostics(env)), sort_keys=True),
+        flush=True,
+    )
+    print(
+        "[AIC SERL][diagnostic] reward_terms "
+        + json.dumps(_jsonable(_resolved_reward_terms(env)), sort_keys=True),
+        flush=True,
+    )
     replay = ReplayBuffer(args_cli.replay_capacity)
 
-    run_dir = Path(args_cli.output_dir) / f"{datetime.now().strftime('%Y-%m-%d_%H-%M-%S')}_{args_cli.run_name}"
+    if int(args_cli.debug_audit_steps) > 0:
+        run_dir = Path(args_cli.output_dir) / f"{datetime.now().strftime('%Y-%m-%d_%H-%M-%S')}_{args_cli.run_name}"
+    else:
+        run_dir = Path(args_cli.output_dir) / f"{datetime.now().strftime('%Y-%m-%d_%H-%M-%S')}_{args_cli.run_name}"
     run_dir.mkdir(parents=True, exist_ok=True)
     metrics_path = run_dir / "metrics.jsonl"
     train_config = {
@@ -2173,16 +3563,25 @@ def main() -> None:
                 if args_cli.state_source == "lerobot_compatible"
                 else f"first_{state_dim}_dims"
             ),
+            "state_dim": state_dim,
+            "state_schema_ranges": _state_schema_ranges(state_dim),
+            "state_feature_names": _state_feature_names(state_dim),
             "image_source": "raw_isaac_camera_sensor_rgb_resized_to_3x256x288",
             "swap_rgb_channels": bool(args_cli.swap_rgb_channels),
             "act_torchscript": str(args_cli.act_torchscript),
             "act_torchscript_device": str(act_torchscript_device),
-            "action_executed": "first_action_from_flattened_chunk",
+            "action_executed": "chunk_queue_prefix",
             "action_frame_contract": (
                 "actor outputs LeRobot/Gazebo gripper-tcp deltas; Isaac execution converts them "
                 "to robot-base deltas for DifferentialInverseKinematicsAction"
             ),
             "isaac_action_scale": args_cli.isaac_action_scale,
+            "critic_action_representation": "first_executed_6d",
+            "critic_action_dim": critic_action_dim,
+            "actor_action_dim": int(offline_cfg["action_dim"]),
+            "action_horizon": action_horizon,
+            "n_action_steps": n_action_steps,
+            "single_action_dim": single_action_dim,
             "adapter_delta_clip": args_cli.adapter_delta_clip,
             "action_clip": args_cli.action_clip,
             "ppo_resnet_observation_terms_disabled": True,
@@ -2224,6 +3623,22 @@ def main() -> None:
                 "max_logged_image_steps": args_cli.max_logged_image_steps,
                 "note": "Replay stores image tensors in memory for training; PNG logging is for audit/debug artifacts.",
             },
+            "terminal_handling": {
+                "treat_time_limit_truncation_as_terminal": bool(args_cli.treat_time_limit_truncation_as_terminal),
+                "td_bootstrap_done": (
+                    "terminated_or_truncated"
+                    if args_cli.treat_time_limit_truncation_as_terminal
+                    else "terminated_only"
+                ),
+            },
+            "frequency": _frequency_diagnostics(
+                env_cfg,
+                env,
+                action_horizon=action_horizon,
+                single_action_dim=single_action_dim,
+            ),
+            "act_chunk_inference": _act_chunk_inference_diagnostics(offline_cfg),
+            "checkpoint_compatibility": checkpoint_compatibility,
             "checkpointing": {
                 "save_every_steps": args_cli.save_every_steps,
                 "periodic_dir": "checkpoints",
@@ -2251,10 +3666,103 @@ def main() -> None:
             every=max(args_cli.image_log_every, 1),
         )
     print("[AIC SERL] Initial raw camera read complete", flush=True)
+    diagnostics_enabled = bool(args_cli.debug_diagnostics or int(args_cli.debug_audit_steps) > 0)
+    diagnostics_every = max(1, int(args_cli.diagnostics_every))
+    audit_log_path = run_dir / "audit_log.jsonl"
+    diagnostics_summary_path = run_dir / "diagnostics_summary.json"
+    if diagnostics_enabled:
+        initial_act_obs = _act_obs_from_env(
+            env,
+            policy_obs,
+            current_images,
+            args_cli,
+            device=device,
+            state_dim=state_dim,
+        )
+        initial_summary = {
+            "mode": "initial",
+            "debug_audit_steps": int(args_cli.debug_audit_steps),
+            "audit_act_only": bool(args_cli.audit_act_only),
+            "audit_zero_adapter": bool(args_cli.audit_zero_adapter),
+            "critic_action_representation": "first_executed_6d",
+            "action_scale": {
+                "args_cli.isaac_action_scale": float(args_cli.isaac_action_scale),
+                "env_cfg_before_override": env_cfg_arm_action_scale_before,
+                "env_cfg_after_override": getattr(env_cfg.actions.arm_action, "scale", None),
+                "action_manager": _action_manager_diagnostics(env),
+            },
+            "reward_resolution": {
+                "target_reward_arg": task_geometry_reward_config,
+                "reward_weights_before_env_creation": _jsonable({
+                    name: getattr(getattr(env_cfg.rewards, name), "weight", None)
+                    for name in vars(env_cfg.rewards)
+                    if not name.startswith("_") and hasattr(getattr(env_cfg.rewards, name), "weight")
+                }),
+                "resolved_terms": _resolved_reward_terms(env),
+                "all_reward_weights_after_env_creation": _reward_weight_diagnostics(env),
+                "pose_distances": _pose_reward_diagnostics(env, task_geometry_reward_config),
+                "scene_assets": _scene_asset_pose_diagnostics(env, task_geometry_reward_config),
+                "target_source": _target_source_diagnostics(env, task_geometry_reward_config),
+            },
+            "reset_control_body": _reset_control_body_diagnostics(env, task_geometry_reward_config),
+            "task_vector_scene_match": _episode_scene_diagnostics(env, task_geometry_reward_config, device=device),
+            "quaternion_convention": _quaternion_convention_diagnostics(env, task_geometry_reward_config),
+            "force_wrench": _force_wrench_diagnostics(env),
+            "frequency": _frequency_diagnostics(
+                env_cfg,
+                env,
+                action_horizon=action_horizon,
+                single_action_dim=single_action_dim,
+            ),
+            "act_chunk_inference": _act_chunk_inference_diagnostics(offline_cfg),
+            "checkpoint_compatibility": checkpoint_compatibility,
+            "act_freeze": _act_freeze_diagnostics(trainer),
+            "gripper_cable_state": _gripper_cable_state_diagnostics(env),
+            "randomization": _randomization_diagnostics(env_cfg),
+            "lateral_reward": {
+                "weight": float(task_geometry_reward_config.get("lateral_weight", 0.0)),
+                "warning": (
+                    "target_lateral_error uses a world-axis mask, not the target/port frame"
+                    if float(task_geometry_reward_config.get("lateral_weight", 0.0)) > 0.0
+                    else None
+                ),
+            },
+            "observations": _observation_diagnostics(
+                obs=obs,
+                policy_obs=policy_obs,
+                act_obs=initial_act_obs,
+                actor=trainer.actor,
+                images=current_images,
+                env=env,
+                expert_prior=expert_prior,
+            ),
+            "stage_c_process": {
+                "CUDA_VISIBLE_DEVICES": os.environ.get("CUDA_VISIBLE_DEVICES"),
+                "torch_device": str(device),
+                "torch_cuda_current_device": torch.cuda.current_device() if torch.cuda.is_available() else None,
+                "seed": int(args_cli.seed),
+                "output_dir": str(run_dir),
+                "checkpoint_latest_path": str(run_dir / "checkpoint_latest.pt"),
+                "periodic_checkpoint_dir": str(run_dir / "checkpoints"),
+                "run_name": str(args_cli.run_name),
+            },
+        }
+        diagnostics_summary_path.write_text(
+            json.dumps(_jsonable(initial_summary), indent=2, sort_keys=True),
+            encoding="utf-8",
+        )
+        print(
+            "[AIC SERL][diagnostic] initial_summary " + json.dumps(_jsonable(initial_summary), sort_keys=True),
+            flush=True,
+        )
     updates_done = 0
     last_metrics: dict[str, float] = {}
     stop_reason = "max_steps"
-    for step in range(1, args_cli.steps + 1):
+    max_loop_steps = int(args_cli.debug_audit_steps) if int(args_cli.debug_audit_steps) > 0 else int(args_cli.steps)
+    queued_policy_actions = torch.empty((policy_obs.shape[0], 0, single_action_dim), dtype=torch.float32, device=device)
+    queued_action_components: dict[str, torch.Tensor] | None = None
+    queued_action_chunk: torch.Tensor | None = None
+    for step in range(1, max_loop_steps + 1):
         step_start_time = time.monotonic()
         if STOP_REQUESTED is not None:
             stop_reason = STOP_REQUESTED
@@ -2291,15 +3799,100 @@ def main() -> None:
         )
         _timing_log(args_cli.debug_timing and step == 1, "build_act_obs", t0)
         t0 = time.monotonic()
-        with torch.no_grad():
-            action_chunk = trainer.actor.mean_action(act_obs)
+        constant_audit_action = getattr(args_cli, "debug_audit_constant_action", None)
+        constant_audit_enabled = int(args_cli.debug_audit_steps) > 0 and constant_audit_action is not None
+        axis_audit_enabled = (
+            int(args_cli.debug_audit_steps) > 0
+            and not constant_audit_enabled
+            and float(args_cli.debug_audit_axis_magnitude) > 0.0
+        )
+        recompute_chunk = queued_policy_actions.shape[1] == 0
+        if recompute_chunk:
+            with torch.no_grad():
+                if constant_audit_enabled:
+                    axis_action = torch.zeros(
+                        (policy_obs.shape[0], int(offline_cfg["action_dim"])),
+                        dtype=torch.float32,
+                        device=device,
+                    )
+                    constant = torch.tensor(
+                        constant_audit_action,
+                        dtype=torch.float32,
+                        device=device,
+                    ).view(1, single_action_dim)
+                    for action_idx in range(n_action_steps):
+                        start = action_idx * single_action_dim
+                        axis_action[:, start : start + single_action_dim] = constant
+                    action_components = {
+                        "base_action": axis_action,
+                        "raw_delta_action": torch.zeros_like(axis_action),
+                        "delta_action": torch.zeros_like(axis_action),
+                        "final_action": axis_action,
+                    }
+                    action_chunk = axis_action
+                elif axis_audit_enabled:
+                    axis_action = _debug_axis_action(
+                        step=step,
+                        batch_size=policy_obs.shape[0],
+                        action_dim=int(offline_cfg["action_dim"]),
+                        single_action_dim=single_action_dim,
+                        magnitude=float(args_cli.debug_audit_axis_magnitude),
+                        device=device,
+                    )
+                    action_components = {
+                        "base_action": axis_action,
+                        "raw_delta_action": torch.zeros_like(axis_action),
+                        "delta_action": torch.zeros_like(axis_action),
+                        "final_action": axis_action,
+                    }
+                    action_chunk = axis_action
+                else:
+                    action_components = trainer.actor.action_components(act_obs)
+                    if args_cli.audit_act_only or args_cli.audit_zero_adapter:
+                        action_chunk = action_components["base_action"]
+                    else:
+                        action_chunk = action_components["final_action"]
+            queued_action_components = action_components
+            queued_action_chunk = action_chunk
+            queued_policy_actions = action_chunk.reshape(policy_obs.shape[0], action_horizon, single_action_dim)[
+                :, :n_action_steps
+            ].clone()
+        else:
+            action_components = queued_action_components
+            action_chunk = queued_action_chunk
         _timing_log(args_cli.debug_timing and step == 1, "actor_forward", t0)
-        policy_tcp_action = action_chunk[:, :single_action_dim]
+        if action_components is None or action_chunk is None:
+            raise RuntimeError("Action chunk queue was empty without available action components")
+        policy_tcp_action = queued_policy_actions[:, 0, :]
+        queued_policy_actions = queued_policy_actions[:, 1:, :]
         t0 = time.monotonic()
-        env_action = _tcp_delta_action_to_isaac_base_action(env, policy_tcp_action)
+        desired_root_action = _tcp_delta_action_to_isaac_base_action(
+            env,
+            policy_tcp_action,
+            action_frame=str(args_cli.tcp_action_frame),
+            apply_ik_sign_fix=False,
+        )
+        env_action = _tcp_delta_action_to_isaac_base_action(
+            env,
+            policy_tcp_action,
+            action_frame=str(args_cli.tcp_action_frame),
+            apply_ik_sign_fix=True,
+        )
         _timing_log(args_cli.debug_timing and step == 1, "tcp_to_isaac_action", t0)
         t0 = time.monotonic()
+        before_positions = _selected_body_positions(env) if diagnostics_enabled and (step == 1 or step % diagnostics_every == 0) else {}
+        before_orientations = _selected_body_orientations(env) if before_positions else {}
+        before_target = _target_position_from_reward_config(env, task_geometry_reward_config) if before_positions else None
+        episode_metadata_before = [_episode_metadata(env, idx) for idx in range(policy_obs.shape[0])]
+        episode_length_before = getattr(env.unwrapped, "episode_length_buf", None)
+        episode_length_before_cpu = None if episode_length_before is None else episode_length_before.detach().cpu().clone()
+        previous_images_for_diag = current_images
         next_obs, reward, terminated, truncated, _ = env.step(env_action)
+        after_positions = _selected_body_positions(env) if before_positions else {}
+        after_orientations = _selected_body_orientations(env) if before_positions else {}
+        after_target = _target_position_from_reward_config(env, task_geometry_reward_config) if before_positions else None
+        episode_length_after = getattr(env.unwrapped, "episode_length_buf", None)
+        episode_length_after_cpu = None if episode_length_after is None else episode_length_after.detach().cpu().clone()
         force_metrics = _force_delta_metrics(env, device=device)
         reward_term_metrics = _reward_term_metrics(env, device=device)
         _timing_log(args_cli.debug_timing and step == 1, "env_step", t0)
@@ -2325,14 +3918,25 @@ def main() -> None:
             state_dim=state_dim,
         )
         _timing_log(args_cli.debug_timing and step == 1, "build_next_act_obs", t0)
-        done = torch.logical_or(terminated, truncated).float().reshape(-1, 1).to(device)
-        reward = reward.reshape(-1, 1).to(device)
-        action_for_critic = _repeat_first_action(
-            policy_tcp_action,
-            action_horizon=action_horizon,
-            single_action_dim=single_action_dim,
+        done_for_bootstrap_bool = (
+            torch.logical_or(terminated, truncated)
+            if args_cli.treat_time_limit_truncation_as_terminal
+            else terminated
         )
+        done = done_for_bootstrap_bool.float().reshape(-1, 1).to(device)
+        reward = reward.reshape(-1, 1).to(device)
+        action_for_critic = policy_tcp_action
         for env_index in range(policy_obs.shape[0]):
+            metadata = _episode_metadata(env, env_index)
+            metadata["inserted_env_step"] = int(step)
+            metadata["episode_before_step"] = episode_metadata_before[env_index]
+            metadata["terminated"] = bool(terminated[env_index].detach().cpu())
+            metadata["truncated"] = bool(truncated[env_index].detach().cpu())
+            metadata["done_for_bootstrap"] = bool(done_for_bootstrap_bool[env_index].detach().cpu())
+            if after_target is not None and after_positions.get(CONTROLLED_TCP_BODY) is not None:
+                metadata["distance_to_target_after"] = float(
+                    torch.norm(after_positions[CONTROLLED_TCP_BODY][env_index] - after_target[env_index]).detach().cpu()
+                )
             transition = _transition_payload(
                 act_obs=act_obs,
                 next_act_obs=next_act_obs,
@@ -2340,14 +3944,15 @@ def main() -> None:
                 reward=reward,
                 done=done,
                 env_index=env_index,
-                metadata=_episode_metadata(env, env_index),
+                metadata=metadata,
             )
             replay.append(transition)
         policy_obs = next_policy_obs
         current_images = next_images
 
         if (
-            len(replay) >= args_cli.batch_size
+            int(args_cli.debug_audit_steps) <= 0
+            and len(replay) >= args_cli.batch_size
             and len(replay) >= args_cli.warmup_steps
             and updates_done < args_cli.updates
         ):
@@ -2358,6 +3963,174 @@ def main() -> None:
             last_metrics = trainer.train_step(batch)
             _timing_log(args_cli.debug_timing and step == 1, "train_step", t0)
             updates_done += 1
+            if diagnostics_enabled and (
+                float(last_metrics.get("adapter_clipped_fraction", 0.0)) > 0.5
+                or (
+                    updates_done < 500
+                    and float(last_metrics.get("final_minus_act_norm", 0.0)) > max(float(args_cli.adapter_delta_clip), 1.0e-6) * 3.0
+                )
+                or abs(float(last_metrics.get("q_mean", 0.0))) > 50.0
+            ):
+                print(
+                    "[AIC SERL][diagnostic][warning] "
+                    + json.dumps(
+                        {
+                            "step": step,
+                            "updates_done": updates_done,
+                            "adapter_clipped_fraction": last_metrics.get("adapter_clipped_fraction"),
+                            "final_minus_act_norm": last_metrics.get("final_minus_act_norm"),
+                            "q_mean": last_metrics.get("q_mean"),
+                            "reward_mean": float(reward.mean().detach().cpu()),
+                            "replay_size": len(replay),
+                        },
+                        sort_keys=True,
+                        default=str,
+                    ),
+                    flush=True,
+                )
+
+        diagnostic_row: dict[str, Any] = {}
+        if diagnostics_enabled and (step == 1 or step % diagnostics_every == 0):
+            distance_before_after: dict[str, Any] = {}
+            if before_target is not None and after_target is not None:
+                for body_name, before_pos in before_positions.items():
+                    after_pos = after_positions.get(body_name)
+                    if before_pos is None or after_pos is None:
+                        continue
+                    distance_before_after[body_name] = {
+                        "before_distance_env0": float(torch.norm(before_pos[0] - before_target[0]).detach().cpu()),
+                        "after_distance_env0": float(torch.norm(after_pos[0] - after_target[0]).detach().cpu()),
+                        "delta_distance_env0": float(
+                            (torch.norm(after_pos[0] - after_target[0]) - torch.norm(before_pos[0] - before_target[0]))
+                            .detach()
+                            .cpu()
+                        ),
+                    }
+            multi_env_rows: list[dict[str, Any]] = []
+            for env_index in range(min(int(policy_obs.shape[0]), 8)):
+                multi_env_rows.append(
+                    {
+                        "env_id": env_index,
+                        "episode_before_step": episode_metadata_before[env_index],
+                        "episode": _episode_metadata(env, env_index),
+                        "task_vector_tail10": _sample_vector(next_act_obs["state"][env_index : env_index + 1, -10:], limit=10),
+                        "reward_target_pose": (
+                            None
+                            if after_target is None
+                            else _sample_vector(after_target[env_index : env_index + 1], limit=3)
+                        ),
+                        "action_first6": _sample_vector(policy_tcp_action[env_index : env_index + 1], limit=6),
+                        "env_action_first6": _sample_vector(env_action[env_index : env_index + 1], limit=6),
+                        "reward": float(reward[env_index].detach().cpu()),
+                        "terminated": bool(terminated[env_index].detach().cpu()),
+                        "truncated": bool(truncated[env_index].detach().cpu()),
+                        "done_for_bootstrap": bool(done_for_bootstrap_bool[env_index].detach().cpu()),
+                        "episode_changed_after_step": episode_metadata_before[env_index].get("episode_id")
+                        != _episode_metadata(env, env_index).get("episode_id"),
+                    }
+                )
+            diagnostic_row = {
+                "diagnostics": {
+                    "action_components": _action_components_diagnostics(
+                        action_components,
+                        single_action_dim=single_action_dim,
+                    ),
+                    "action_scale_realization": _realized_delta_diagnostics(
+                        before=before_positions,
+                        after=after_positions,
+                        requested_tcp_action=policy_tcp_action,
+                        desired_root_action=desired_root_action,
+                        env_action=env_action,
+                    )
+                    if before_positions
+                    else {},
+                    "rotation_realization": _realized_rotation_diagnostics(
+                        before=before_orientations,
+                        after=after_orientations,
+                    )
+                    if before_orientations
+                    else {},
+                    "reward_pose": _pose_reward_diagnostics(env, task_geometry_reward_config),
+                    "reward_resolution": {
+                        "resolved_terms": _resolved_reward_terms(env),
+                        "all_reward_weights_after_env_creation": _reward_weight_diagnostics(env),
+                        "scene_assets": _scene_asset_pose_diagnostics(env, task_geometry_reward_config),
+                        "target_source": _target_source_diagnostics(env, task_geometry_reward_config),
+                    },
+                    "reset_control_body": _reset_control_body_diagnostics(env, task_geometry_reward_config),
+                    "task_vector_scene_match": _episode_scene_diagnostics(env, task_geometry_reward_config, device=device),
+                    "quaternion_convention": _quaternion_convention_diagnostics(env, task_geometry_reward_config),
+                    "force_wrench": _force_wrench_diagnostics(env),
+                    "lateral_reward": {
+                        "weight": float(task_geometry_reward_config.get("lateral_weight", 0.0)),
+                        "warning": (
+                            "target_lateral_error uses a world-axis mask, not the target/port frame"
+                            if float(task_geometry_reward_config.get("lateral_weight", 0.0)) > 0.0
+                            else None
+                        ),
+                    },
+                    "distance_before_after": distance_before_after,
+                    "progress_off_by_one": {
+                        "episode_length_before_env0": None
+                        if episode_length_before_cpu is None
+                        else int(episode_length_before_cpu[0].item()),
+                        "episode_length_after_env0": None
+                        if episode_length_after_cpu is None
+                        else int(episode_length_after_cpu[0].item()),
+                        "reset_flag_after_step_env0": None
+                        if episode_length_after_cpu is None
+                        else bool(int(episode_length_after_cpu[0].item()) <= 1),
+                        "body_distance_delta_to_target": distance_before_after,
+                        "target_distance_progress_term": reward_term_metrics.get("reward_terms_mean", {}).get(
+                            "target_distance_progress"
+                        ),
+                    },
+                    "previous_action": _previous_action_diagnostics(
+                        state=next_act_obs["state"],
+                        policy_tcp_action=policy_tcp_action,
+                        env_action=env_action,
+                        env=env,
+                    ),
+                    "camera_freshness": _camera_freshness_diagnostics(previous_images_for_diag, next_images),
+                    "action_representations": {
+                        "full_actor_action_shape": list(action_chunk.shape),
+                        "env_action_shape": list(env_action.shape),
+                        "replay_action_shape": list(action_for_critic.shape),
+                        "critic_action_representation": "first_executed_6d",
+                        "chunk_size": action_horizon,
+                        "n_action_steps": n_action_steps,
+                        "chunk_recomputed_this_step": recompute_chunk,
+                        "queued_actions_remaining_after_step": int(queued_policy_actions.shape[1]),
+                        "tcp_action_frame": args_cli.tcp_action_frame,
+                        "debug_audit_axis_magnitude": float(args_cli.debug_audit_axis_magnitude),
+                        "debug_audit_constant_action": constant_audit_action,
+                        "full_actor_action_env0_first12": _sample_vector(action_chunk, limit=12),
+                        "env_action_env0_first6": _sample_vector(env_action, limit=6),
+                        "replay_action_env0_first12": _sample_vector(action_for_critic, limit=12),
+                    },
+                    "replay_storage": replay.diagnostic_snapshot(),
+                    "replay_age_distribution": replay.age_diagnostics(current_step=step),
+                    "multi_env_episode_metadata": multi_env_rows,
+                    "gripper_cable_state": _gripper_cable_state_diagnostics(env),
+                    "observations": _observation_diagnostics(
+                        obs=next_obs,
+                        policy_obs=next_policy_obs,
+                        act_obs=next_act_obs,
+                        actor=trainer.actor,
+                        images=next_images,
+                        env=env,
+                        expert_prior=expert_prior,
+                    ),
+                    "done_mean": float(done.mean().detach().cpu()),
+                    "done_for_bootstrap_mean": float(done.mean().detach().cpu()),
+                    "terminated_mean": float(terminated.float().mean().detach().cpu()),
+                    "truncated_mean": float(truncated.float().mean().detach().cpu()),
+                    "treat_time_limit_truncation_as_terminal": bool(args_cli.treat_time_limit_truncation_as_terminal),
+                }
+            }
+            if args_cli.debug_audit_steps > 0:
+                with audit_log_path.open("a", encoding="utf-8") as f:
+                    f.write(json.dumps(_jsonable({"step": step, **diagnostic_row}), sort_keys=True) + "\n")
 
         row = {
             "step": step,
@@ -2367,14 +4140,21 @@ def main() -> None:
             "force_norm_mean": float(force_metrics["force_norm"].mean().detach().cpu()),
             "force_delta_norm_mean": float(force_metrics["force_delta_norm"].mean().detach().cpu()),
             "force_delta_penalty_mean": float(force_metrics["force_delta_penalty"].mean().detach().cpu()),
+            "force_source": str(force_metrics.get("force_source", "unknown")),
+            "force_body": str(force_metrics.get("force_body", FORCE_WRENCH_BODY)),
             "episodes": [_episode_metadata(env, idx) for idx in range(policy_obs.shape[0])],
+            "terminated_mean": float(terminated.float().mean().detach().cpu()),
+            "truncated_mean": float(truncated.float().mean().detach().cpu()),
+            "done_for_bootstrap_mean": float(done.mean().detach().cpu()),
+            "treat_time_limit_truncation_as_terminal": bool(args_cli.treat_time_limit_truncation_as_terminal),
             "step_wall_s": time.monotonic() - step_start_time,
             "env_steps_per_s": float(policy_obs.shape[0]) / max(time.monotonic() - step_start_time, 1.0e-9),
             **reward_term_metrics,
             **last_metrics,
+            **diagnostic_row,
         }
         with metrics_path.open("a", encoding="utf-8") as f:
-            f.write(json.dumps(row, sort_keys=True) + "\n")
+            f.write(json.dumps(_jsonable(row), sort_keys=True) + "\n")
         if args_cli.log_every > 0 and (step == 1 or step % args_cli.log_every == 0):
             print(
                 f"[AIC SERL] step={step} updates={updates_done} replay={len(replay)} "
@@ -2396,10 +4176,12 @@ def main() -> None:
             }
             _save_checkpoint(run_dir / "checkpoint_latest.pt", trainer, latest_config, step)
             print(f"Wrote latest online SERL checkpoint: {run_dir / 'checkpoint_latest.pt'}", flush=True)
-        if updates_done >= args_cli.updates:
+        if int(args_cli.debug_audit_steps) <= 0 and updates_done >= args_cli.updates:
             stop_reason = "target_updates"
             break
 
+    if int(args_cli.debug_audit_steps) > 0 and stop_reason == "max_steps":
+        stop_reason = "debug_audit_complete"
     final_step = step if stop_reason != "max_wall_time" else max(step - 1, 0)
     train_config["result"] = _progress_result(stop_reason, final_step, updates_done)
     (run_dir / "train_config.json").write_text(json.dumps(train_config, indent=2, sort_keys=True), encoding="utf-8")

@@ -375,6 +375,93 @@ def _validate(trainer: VisionOfflineSERLTrainer, loader: DataLoader, *, max_batc
         trainer.critic2 = original_critic2
 
 
+def _as_int_tuple(value: Any) -> tuple[int, ...] | None:
+    if value is None:
+        return None
+    try:
+        return tuple(int(v) for v in value)
+    except TypeError:
+        return None
+
+
+def _action_contract(
+    *,
+    args: argparse.Namespace,
+    dataset_summary: dict[str, Any],
+    warmstart: dict[str, Any],
+    camera_keys: list[str],
+) -> dict[str, Any]:
+    """Validate the ACT warm start can supply the SERL action chunk contract."""
+    errors: list[str] = []
+    warnings: list[str] = []
+    act_chunk_size = warmstart.get("chunk_size")
+    act_n_action_steps = warmstart.get("n_action_steps")
+    act_state_shape = _as_int_tuple(warmstart.get("state_shape"))
+    act_action_shape = _as_int_tuple(warmstart.get("action_shape"))
+    act_camera_keys = list(warmstart.get("camera_keys") or [])
+
+    if act_chunk_size is None:
+        warnings.append("ACT checkpoint metadata did not expose chunk_size; cannot verify chunk >= action_horizon.")
+    elif int(act_chunk_size) < int(args.action_horizon):
+        errors.append(
+            f"ACT chunk_size={act_chunk_size} is smaller than offline SERL action_horizon={args.action_horizon}."
+        )
+
+    if act_n_action_steps is not None and int(act_n_action_steps) != int(args.action_horizon):
+        warnings.append(
+            "ACT checkpoint n_action_steps is an execution setting, not the model output size; "
+            f"offline SERL will train on the first {args.action_horizon} actions from ACT chunk_size={act_chunk_size} "
+            f"even though ACT was trained/evaluated with n_action_steps={act_n_action_steps}."
+        )
+
+    dataset_state_dim = int(dataset_summary["state_dim"])
+    if act_state_shape is not None and act_state_shape and int(act_state_shape[0]) != dataset_state_dim:
+        errors.append(
+            f"ACT observation.state dim={act_state_shape[0]} does not match dataset state_dim={dataset_state_dim}."
+        )
+
+    dataset_single_action_dim = int(dataset_summary["single_action_dim"])
+    if act_action_shape is not None and act_action_shape and int(act_action_shape[0]) != dataset_single_action_dim:
+        errors.append(
+            f"ACT per-step action dim={act_action_shape[0]} does not match dataset single_action_dim={dataset_single_action_dim}."
+        )
+
+    missing_cameras = sorted(set(camera_keys) - set(act_camera_keys))
+    extra_cameras = sorted(set(act_camera_keys) - set(camera_keys))
+    if missing_cameras or extra_cameras:
+        errors.append(
+            "ACT camera keys do not match offline SERL camera keys: "
+            f"missing_from_act={missing_cameras}, extra_in_act={extra_cameras}."
+        )
+
+    expected_action_dim = dataset_single_action_dim * int(args.action_horizon)
+    if int(dataset_summary["action_dim"]) != expected_action_dim:
+        errors.append(
+            f"Dataset action_dim={dataset_summary['action_dim']} does not equal "
+            f"single_action_dim({dataset_single_action_dim}) * action_horizon({args.action_horizon})={expected_action_dim}."
+        )
+
+    contract = {
+        "act_chunk_size": act_chunk_size,
+        "act_n_action_steps": act_n_action_steps,
+        "offline_serl_action_horizon": int(args.action_horizon),
+        "runtime_n_action_steps_required": int(args.action_horizon),
+        "dataset_state_dim": dataset_state_dim,
+        "dataset_single_action_dim": dataset_single_action_dim,
+        "offline_serl_action_dim": int(dataset_summary["action_dim"]),
+        "act_state_shape": list(act_state_shape) if act_state_shape is not None else None,
+        "act_action_shape": list(act_action_shape) if act_action_shape is not None else None,
+        "camera_keys": list(camera_keys),
+        "act_camera_keys": act_camera_keys,
+        "uses_first_n_actions_from_act_chunk": int(args.action_horizon),
+        "warnings": warnings,
+        "errors": errors,
+    }
+    if errors:
+        raise ValueError("Offline SERL/ACT contract check failed:\n- " + "\n- ".join(errors))
+    return contract
+
+
 def main() -> int:
     args = parse_args()
     distributed, device, distributed_summary = _setup_distributed(args.device)
@@ -410,6 +497,15 @@ def main() -> int:
         adapter_delta_clip=args.adapter_delta_clip,
         action_clip=args.action_clip,
     )
+    contract = _action_contract(
+        args=args,
+        dataset_summary=dataset_summary,
+        warmstart=warmstart,
+        camera_keys=camera_keys,
+    )
+    warmstart["action_contract"] = contract
+    if _is_rank0():
+        print(json.dumps({"offline_serl_action_contract": contract}, indent=2, sort_keys=True))
     config = VisionOfflineSERLConfig(
         state_dim=dataset.state_dim,
         action_dim=dataset.action_dim,

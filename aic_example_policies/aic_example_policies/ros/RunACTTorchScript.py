@@ -65,12 +65,20 @@ class RunACTTorchScript(Policy):
         self.translation_deadband = float(os.environ.get("AIC_ACT_TRANSLATION_DEADBAND", 5e-4))
         self.rotation_deadband = float(os.environ.get("AIC_ACT_ROTATION_DEADBAND", 1e-3))
         self.log_every_n_commands = max(1, int(os.environ.get("AIC_ACT_LOG_EVERY_N_COMMANDS", 20)))
+        self.n_action_steps = int(os.environ.get("AIC_ACT_N_ACTION_STEPS", "4"))
+        if self.n_action_steps < 1:
+            raise ValueError(f"AIC_ACT_N_ACTION_STEPS must be >= 1, got {self.n_action_steps}")
 
         self.torchscript_path = self._required_path("AIC_ACT_TORCHSCRIPT")
         self.metadata = self._load_metadata(self.torchscript_path)
         self.model = torch.jit.load(str(self.torchscript_path), map_location=self.device).eval()
         self.state_dim = int((self.metadata.get("state_shape") or [42])[0])
         self.action_dim = int((self.metadata.get("action_shape") or [6])[0])
+        self.chunk_size = int(self.metadata.get("chunk_size") or 1)
+        if self.n_action_steps > self.chunk_size:
+            raise ValueError(
+                f"AIC_ACT_N_ACTION_STEPS={self.n_action_steps} exceeds TorchScript chunk_size={self.chunk_size}"
+            )
         self.camera_shapes = {
             "observation.images.center_camera": (3, 256, 288),
             "observation.images.left_camera": (3, 256, 288),
@@ -93,11 +101,13 @@ class RunACTTorchScript(Policy):
         self.action_std = self._stat(stats, "action.std", (1, -1))
         self._current_task: Task | None = None
         self.feature_assembler = AICRuntimeFeatureAssembler(self.state_dim, fps=self.control_hz)
+        self._action_queue: list[np.ndarray] = []
 
         self.get_logger().info(
             "TorchScript ACT policy loaded from "
             f"{self.torchscript_path} on {self.device}; state_dim={self.state_dim}, "
             f"action_dim={self.action_dim}, control_hz={self.control_hz}, "
+            f"chunk_size={self.chunk_size}, n_action_steps={self.n_action_steps}, "
             f"start_delay_sec={self.start_delay_sec}, command_mode={self.command_mode}, "
             f"command_frame={self.command_frame}"
         )
@@ -201,7 +211,7 @@ class RunACTTorchScript(Policy):
             ),
         }
 
-    def select_delta_action(self, obs_msg: Observation) -> np.ndarray:
+    def _predict_action_chunk(self, obs_msg: Observation) -> np.ndarray:
         obs = self.prepare_observations(obs_msg)
         with torch.no_grad():
             chunk = self.model(
@@ -210,9 +220,21 @@ class RunACTTorchScript(Policy):
                 obs["observation.images.left_camera"],
                 obs["observation.images.right_camera"],
             )
-        normalized_action = chunk[:, 0, : self.action_dim]
-        raw_action = normalized_action * self.action_std[:, : self.action_dim] + self.action_mean[:, : self.action_dim]
-        return raw_action[0, :6].detach().cpu().numpy()
+        if chunk.ndim != 3 or chunk.shape[1] < self.n_action_steps or chunk.shape[2] < self.action_dim:
+            raise ValueError(
+                "TorchScript ACT returned incompatible chunk shape "
+                f"{tuple(chunk.shape)} for n_action_steps={self.n_action_steps}, action_dim={self.action_dim}"
+            )
+        normalized = chunk[:, : self.n_action_steps, : self.action_dim]
+        raw = normalized * self.action_std[:, : self.action_dim].unsqueeze(1) + self.action_mean[
+            :, : self.action_dim
+        ].unsqueeze(1)
+        return raw[0, :, :6].detach().cpu().numpy()
+
+    def select_delta_action(self, obs_msg: Observation) -> np.ndarray:
+        if not self._action_queue:
+            self._action_queue = [action for action in self._predict_action_chunk(obs_msg)]
+        return self._action_queue.pop(0)
 
     def _finite_action_or_none(self, action: np.ndarray, command_count: int) -> np.ndarray | None:
         if np.all(np.isfinite(action[:6])):
@@ -272,6 +294,7 @@ class RunACTTorchScript(Policy):
     ) -> bool:
         self._current_task = task
         self.feature_assembler.reset(self._task_vector(task) if self.feature_assembler.uses_task_vector else None)
+        self._action_queue.clear()
         self.get_logger().info(f"RunACTTorchScript.insert_cable() enter. Task: {task}")
         if self.start_delay_sec > 0.0:
             self.get_logger().info(f"Waiting {self.start_delay_sec:.2f}s before first ACT TorchScript command.")

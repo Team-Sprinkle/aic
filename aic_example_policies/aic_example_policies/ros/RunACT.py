@@ -94,6 +94,14 @@ class RunACT(Policy):
         config_dict = self._load_config_dict(self.policy_path)
         config = draccus.decode(ACTConfig, config_dict)
         config.device = str(self.device)
+        requested_n_action_steps = int(os.environ.get("AIC_ACT_N_ACTION_STEPS", "4"))
+        if requested_n_action_steps < 1:
+            raise ValueError(f"AIC_ACT_N_ACTION_STEPS must be >= 1, got {requested_n_action_steps}")
+        if requested_n_action_steps > int(config.chunk_size):
+            raise ValueError(
+                f"AIC_ACT_N_ACTION_STEPS={requested_n_action_steps} exceeds chunk_size={config.chunk_size}"
+            )
+        config.n_action_steps = requested_n_action_steps
 
         self.policy = ACTPolicy(config)
         self.policy.load_state_dict(load_file(self.policy_path / "model.safetensors"))

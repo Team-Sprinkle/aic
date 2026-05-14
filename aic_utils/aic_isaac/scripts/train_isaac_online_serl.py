@@ -59,8 +59,14 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         help="Start from ACT TorchScript only with zero adapter and fresh critics.",
     )
     parser.add_argument("--act-only-state-dim", type=int, default=82)
-    parser.add_argument("--act-only-action-horizon", type=int, default=4)
+    parser.add_argument(
+        "--act-only-action-horizon",
+        type=int,
+        default=0,
+        help="ACT output chunk size for ACT-only mode. 0 lets trainer read TorchScript chunk_size metadata.",
+    )
     parser.add_argument("--act-only-single-action-dim", type=int, default=6)
+    parser.add_argument("--n-action-steps", type=int, default=4)
     parser.add_argument("--act-only-adapter-hidden-dim", type=int, default=256)
     parser.add_argument("--act-only-adapter-num-layers", type=int, default=2)
     parser.add_argument("--act-only-adapter-activation", choices=["relu", "gelu", "tanh"], default="gelu")
@@ -82,6 +88,12 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         type=float,
         default=0.0,
         help="Optional Isaac episode timeout in seconds. 0 keeps the task default.",
+    )
+    parser.add_argument(
+        "--policy-hz",
+        type=float,
+        default=20.0,
+        help="Isaac policy/control rate in Hz. Defaults to 20 Hz to match Gazebo expert datasets.",
     )
     parser.add_argument("--max-wall-time-minutes", type=float, default=0.0)
     parser.add_argument("--log-every", type=int, default=10)
@@ -249,6 +261,44 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         default=False,
         help="Reverse Isaac camera RGB channel order before ACT/SERL inference and debug image logging.",
     )
+    parser.add_argument(
+        "--force-camera-render-before-read",
+        action=argparse.BooleanOptionalAction,
+        default=False,
+        help="Force an Isaac render before reading camera tensors if freshness diagnostics show stale visual observations.",
+    )
+    parser.add_argument(
+        "--disable-ppo-resnet-observation-terms",
+        action=argparse.BooleanOptionalAction,
+        default=True,
+        help="Disable Isaac policy ResNet image observation terms; raw camera tensors are still read by SERL.",
+    )
+    parser.add_argument("--debug-diagnostics", action=argparse.BooleanOptionalAction, default=False)
+    parser.add_argument("--diagnostics-every", type=int, default=100)
+    parser.add_argument("--debug-audit-steps", type=int, default=0)
+    parser.add_argument("--audit-act-only", action="store_true", default=False)
+    parser.add_argument("--audit-zero-adapter", action="store_true", default=False)
+    parser.add_argument(
+        "--treat-time-limit-truncation-as-terminal",
+        action=argparse.BooleanOptionalAction,
+        default=False,
+        help="Forwarded to trainer. Defaults false so TD bootstraps through time-limit truncation.",
+    )
+    parser.add_argument(
+        "--tcp-action-frame",
+        choices=["gripper_tcp", "wrist_3_link", "root"],
+        default="gripper_tcp",
+        help="Frame convention for ACT/SERL TCP delta actions before passing them to Isaac IK.",
+    )
+    parser.add_argument("--debug-audit-axis-magnitude", type=float, default=0.0)
+    parser.add_argument("--debug-audit-constant-action", type=float, nargs=6, default=None)
+    parser.add_argument("--enable-contact-sensor", action=argparse.BooleanOptionalAction, default=False)
+    parser.add_argument(
+        "--fix-isaac-ik-xy-sign",
+        action=argparse.BooleanOptionalAction,
+        default=True,
+        help="Flip Isaac IK root-frame x/y translation commands to match realized TCP motion direction.",
+    )
     parser.add_argument("--dry-run", action="store_true")
     parser.add_argument("--extra-arg", action="append", default=[])
     return parser.parse_args(argv)
@@ -286,7 +336,7 @@ def build_plan(args: argparse.Namespace, *, inspect_required: bool = True) -> di
     )
     act_only = bool(getattr(args, "act_only", False))
     act_only_state_dim = int(getattr(args, "act_only_state_dim", 82))
-    act_only_action_horizon = int(getattr(args, "act_only_action_horizon", 4))
+    act_only_action_horizon = int(getattr(args, "act_only_action_horizon", 0))
     act_only_single_action_dim = int(getattr(args, "act_only_single_action_dim", 6))
     act_only_adapter_hidden_dim = int(getattr(args, "act_only_adapter_hidden_dim", 256))
     act_only_adapter_num_layers = int(getattr(args, "act_only_adapter_num_layers", 2))
@@ -335,6 +385,7 @@ def build_plan(args: argparse.Namespace, *, inspect_required: bool = True) -> di
         "updates": args.updates,
         "warmup_steps": args.warmup_steps,
         "episode_length_s": float(getattr(args, "episode_length_s", 0.0)),
+        "policy_hz": float(getattr(args, "policy_hz", 20.0)),
         "max_wall_time_minutes": args.max_wall_time_minutes,
         "save_every_steps": getattr(args, "save_every_steps", 0),
         "save_latest_every_steps": getattr(args, "save_latest_every_steps", 0),
@@ -344,6 +395,7 @@ def build_plan(args: argparse.Namespace, *, inspect_required: bool = True) -> di
         "act_only_state_dim": act_only_state_dim,
         "act_only_action_horizon": act_only_action_horizon,
         "act_only_single_action_dim": act_only_single_action_dim,
+        "n_action_steps": int(getattr(args, "n_action_steps", 4)),
         "act_only_adapter_hidden_dim": act_only_adapter_hidden_dim,
         "act_only_adapter_num_layers": act_only_adapter_num_layers,
         "act_only_adapter_activation": act_only_adapter_activation,
@@ -406,6 +458,22 @@ def build_plan(args: argparse.Namespace, *, inspect_required: bool = True) -> di
         "save_step_images": args.save_step_images,
         "image_log_every": args.image_log_every,
         "max_logged_image_steps": args.max_logged_image_steps,
+        "critic_action_representation": "first_executed_6d",
+        "debug_diagnostics": bool(getattr(args, "debug_diagnostics", False)),
+        "diagnostics_every": int(getattr(args, "diagnostics_every", 100)),
+        "debug_audit_steps": int(getattr(args, "debug_audit_steps", 0)),
+        "audit_act_only": bool(getattr(args, "audit_act_only", False)),
+        "audit_zero_adapter": bool(getattr(args, "audit_zero_adapter", False)),
+        "treat_time_limit_truncation_as_terminal": bool(
+            getattr(args, "treat_time_limit_truncation_as_terminal", False)
+        ),
+        "tcp_action_frame": str(getattr(args, "tcp_action_frame", "gripper_tcp")),
+        "debug_audit_axis_magnitude": float(getattr(args, "debug_audit_axis_magnitude", 0.0)),
+        "debug_audit_constant_action": getattr(args, "debug_audit_constant_action", None),
+        "enable_contact_sensor": bool(getattr(args, "enable_contact_sensor", False)),
+        "fix_isaac_ik_xy_sign": bool(getattr(args, "fix_isaac_ik_xy_sign", True)),
+        "force_camera_render_before_read": bool(getattr(args, "force_camera_render_before_read", False)),
+        "disable_ppo_resnet_observation_terms": bool(getattr(args, "disable_ppo_resnet_observation_terms", True)),
         "replay_buffer": asdict(replay),
         "checkpoint": checkpoint,
         "implemented": [
@@ -462,8 +530,12 @@ def build_command(args: argparse.Namespace) -> tuple[list[str], dict[str, str]]:
         str(args.replay_capacity),
         "--warmup_steps",
         str(args.warmup_steps),
+        "--n_action_steps",
+        str(int(getattr(args, "n_action_steps", 4))),
         "--episode_length_s",
         str(float(getattr(args, "episode_length_s", 0.0))),
+        "--policy_hz",
+        str(float(getattr(args, "policy_hz", 20.0))),
         "--max_wall_time_minutes",
         str(args.max_wall_time_minutes),
         "--log_every",
@@ -551,7 +623,7 @@ def build_command(args: argparse.Namespace) -> tuple[list[str], dict[str, str]]:
                 "--act_only_state_dim",
                 str(getattr(args, "act_only_state_dim", 82)),
                 "--act_only_action_horizon",
-                str(getattr(args, "act_only_action_horizon", 4)),
+                str(getattr(args, "act_only_action_horizon", 0)),
                 "--act_only_single_action_dim",
                 str(getattr(args, "act_only_single_action_dim", 6)),
                 "--act_only_adapter_hidden_dim",
@@ -594,6 +666,34 @@ def build_command(args: argparse.Namespace) -> tuple[list[str], dict[str, str]]:
     cmd.extend(["--image_log_every", str(args.image_log_every)])
     cmd.extend(["--max_logged_image_steps", str(args.max_logged_image_steps)])
     cmd.append("--swap_rgb_channels" if bool(getattr(args, "swap_rgb_channels", False)) else "--no-swap_rgb_channels")
+    cmd.append(
+        "--force_camera_render_before_read"
+        if bool(getattr(args, "force_camera_render_before_read", False))
+        else "--no-force_camera_render_before_read"
+    )
+    cmd.append(
+        "--disable_ppo_resnet_observation_terms"
+        if bool(getattr(args, "disable_ppo_resnet_observation_terms", True))
+        else "--no-disable_ppo_resnet_observation_terms"
+    )
+    cmd.append("--debug_diagnostics" if bool(getattr(args, "debug_diagnostics", False)) else "--no-debug_diagnostics")
+    cmd.extend(["--diagnostics_every", str(getattr(args, "diagnostics_every", 100))])
+    cmd.extend(["--debug_audit_steps", str(getattr(args, "debug_audit_steps", 0))])
+    if getattr(args, "audit_act_only", False):
+        cmd.append("--audit_act_only")
+    if getattr(args, "audit_zero_adapter", False):
+        cmd.append("--audit_zero_adapter")
+    cmd.append(
+        "--treat_time_limit_truncation_as_terminal"
+        if bool(getattr(args, "treat_time_limit_truncation_as_terminal", False))
+        else "--no-treat_time_limit_truncation_as_terminal"
+    )
+    cmd.extend(["--tcp_action_frame", str(getattr(args, "tcp_action_frame", "gripper_tcp"))])
+    cmd.extend(["--debug_audit_axis_magnitude", str(getattr(args, "debug_audit_axis_magnitude", 0.0))])
+    if getattr(args, "debug_audit_constant_action", None) is not None:
+        cmd.extend(["--debug_audit_constant_action", *(str(v) for v in args.debug_audit_constant_action)])
+    cmd.append("--enable_contact_sensor" if bool(getattr(args, "enable_contact_sensor", False)) else "--no-enable_contact_sensor")
+    cmd.append("--fix_isaac_ik_xy_sign" if bool(getattr(args, "fix_isaac_ik_xy_sign", True)) else "--no-fix_isaac_ik_xy_sign")
     if args.disable_fabric:
         cmd.append("--disable_fabric")
     if args.headless:
@@ -607,6 +707,7 @@ def build_command(args: argparse.Namespace) -> tuple[list[str], dict[str, str]]:
     cmd.extend(args.extra_arg)
     env = os.environ.copy()
     env["AIC_ISAAC_DISABLE_CAMERAS"] = "0"
+    env["AIC_ISAAC_POLICY_HZ"] = str(float(getattr(args, "policy_hz", 20.0)))
     env["AIC_ISAAC_RANDOMIZATION_PROFILE"] = args.randomization_profile
     env["AIC_ISAAC_INSERTION_DISTANCE_WEIGHT"] = str(args.insertion_distance_weight)
     env["AIC_ISAAC_INSERTION_CLOSE_WEIGHT"] = str(args.insertion_close_weight)
@@ -643,6 +744,14 @@ def validate_launch_inputs(args: argparse.Namespace) -> None:
         raise ValueError("--replay-capacity must be at least --batch-size")
     if args.isaac_action_scale <= 0.0:
         raise ValueError("--isaac-action-scale must be positive")
+    if int(getattr(args, "n_action_steps", 4)) < 1:
+        raise ValueError("--n-action-steps must be >= 1")
+    if int(getattr(args, "act_only_action_horizon", 0)) > 0 and int(getattr(args, "n_action_steps", 4)) > int(
+        args.act_only_action_horizon
+    ):
+        raise ValueError("--n-action-steps must be <= --act-only-action-horizon when the latter is set")
+    if float(getattr(args, "policy_hz", 20.0)) <= 0.0:
+        raise ValueError("--policy-hz must be positive")
     if args.target_reward_position_offset is not None and len(args.target_reward_position_offset) != 3:
         raise ValueError("--target-reward-position-offset must contain exactly three values")
     if args.target_reward_body_position_offset is not None and len(args.target_reward_body_position_offset) != 3:
@@ -657,7 +766,8 @@ def validate_launch_inputs(args: argparse.Namespace) -> None:
         raise FileNotFoundError(f"--episode-config-dir does not exist: {args.episode_config_dir}")
     if args.episode_config_count is not None and args.episode_config_count <= 0:
         raise ValueError("--episode-config-count must be positive")
-    if args.warmup_steps > args.steps * args.num_envs:
+    is_audit = int(getattr(args, "debug_audit_steps", 0)) > 0
+    if not is_audit and args.warmup_steps > args.steps * args.num_envs:
         raise ValueError(
             "--warmup-steps is larger than the maximum transitions collected by "
             "--steps * --num-envs, so no online updates would run"

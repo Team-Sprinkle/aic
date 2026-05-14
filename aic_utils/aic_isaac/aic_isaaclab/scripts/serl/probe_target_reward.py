@@ -135,6 +135,7 @@ ARM_JOINT_NAMES = (
     "wrist_3_joint",
 )
 CONTROLLED_TCP_BODY = "gripper_tcp"
+FORCE_WRENCH_BODY = "wrist_3_link"
 EXPERT_BC_STATE_INDICES = (0, 1, 2, 13, 14, 15, 72, 73, 74, 75, 76, 77, 78, 79, 80, 81)
 SFP_PORT_LOCAL = {
     0: (0.01295, -0.031572, 0.00501),
@@ -434,6 +435,8 @@ def _configure_rewards(env_cfg) -> dict[str, object]:
     rewards.force_delta_penalty.weight = float(args_cli.force_delta_penalty_weight) * reward_weight_multiplier
     rewards.force_delta_penalty.params["threshold"] = float(args_cli.force_delta_threshold)
     rewards.force_delta_penalty.params["reference"] = float(args_cli.force_delta_reference)
+    if "asset_cfg" in rewards.force_delta_penalty.params:
+        rewards.force_delta_penalty.params["asset_cfg"].body_names = [FORCE_WRENCH_BODY]
     return {
         "target_scene": target_scene,
         "target_body": args_cli.target_body,
@@ -685,7 +688,7 @@ def main() -> None:
     target = unwrapped.scene[reward_config["target_scene"]]
     body_names = list(robot.body_names)
     body_index = _named_index(body_names, args_cli.target_body)
-    force_body_index = _named_index(body_names, "gripper_tcp")
+    force_body_index = _named_index(body_names, FORCE_WRENCH_BODY)
     controlled_tcp_index = _named_index(body_names, CONTROLLED_TCP_BODY)
     wrist_index = _named_index(body_names, "wrist_3_link")
     joint_names = list(getattr(robot, "joint_names", []))
@@ -719,6 +722,8 @@ def main() -> None:
         if incoming_wrench is None:
             incoming_wrench = getattr(robot.data, "body_incoming_wrench_b", None)
         if incoming_wrench is None:
+            incoming_wrench = getattr(robot.data, "body_incoming_joint_wrench_b", None)
+        if incoming_wrench is None:
             return torch.zeros((args_cli.num_envs, 3), dtype=robot.data.root_pos_w.dtype, device=unwrapped.device)
         return incoming_wrench[:, force_body_index, :3]
 
@@ -742,8 +747,10 @@ def main() -> None:
         incoming_wrench = getattr(data, "body_incoming_wrench_w", None)
         if incoming_wrench is None:
             incoming_wrench = getattr(data, "body_incoming_wrench_b", None)
+        if incoming_wrench is None:
+            incoming_wrench = getattr(data, "body_incoming_joint_wrench_b", None)
         if incoming_wrench is not None:
-            wrench = incoming_wrench[:, controlled_tcp_index, :6]
+            wrench = incoming_wrench[:, force_body_index, :6]
         base_state = torch.cat(
             [
                 tcp_pos,

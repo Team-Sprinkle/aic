@@ -26,6 +26,29 @@ if TYPE_CHECKING:
     from isaaclab.envs import ManagerBasedRLEnv
 
 
+def _contact_sensor_force(
+    env: ManagerBasedRLEnv,
+    preferred_body_names: list[str],
+) -> torch.Tensor | None:
+    sensors = getattr(env.scene, "sensors", {})
+    rows = []
+    for sensor_name in ("contact_forces",):
+        sensor = sensors.get(sensor_name)
+        if sensor is None:
+            continue
+        net = getattr(sensor.data, "net_forces_w", None)
+        if net is None:
+            continue
+        sensor_body_names = list(getattr(sensor, "body_names", []) or [])
+        body_ids = [idx for idx, name in enumerate(sensor_body_names) if name in preferred_body_names]
+        if not body_ids:
+            continue
+        rows.append(net[:, body_ids, :3].sum(dim=1))
+    if rows:
+        return torch.stack(rows, dim=0).sum(dim=0)
+    return None
+
+
 # ---------------------------------------------------------------------------
 # Command-pose tracking (position)
 # ---------------------------------------------------------------------------
@@ -178,6 +201,26 @@ def _episode_target_position_w(env: ManagerBasedRLEnv) -> torch.Tensor | None:
     return torch.stack(rows, dim=0)
 
 
+def _episode_target_orientation_w(env: ManagerBasedRLEnv) -> torch.Tensor | None:
+    episode_by_env = getattr(env, "_aic_current_episode_by_env", None)
+    if not episode_by_env:
+        return None
+    rows: list[torch.Tensor] = []
+    device = env.scene.env_origins.device
+    dtype = env.scene.env_origins.dtype
+    for env_id in range(env.num_envs):
+        episode = episode_by_env.get(env_id)
+        if not episode:
+            return None
+        target = ((episode.get("scene") or {}).get("target") or {}).get("target_pose_world") or {}
+        orientation = target.get("orientation_wxyz")
+        if orientation is None:
+            return None
+        rows.append(torch.tensor(orientation, dtype=dtype, device=device))
+    out = torch.stack(rows, dim=0)
+    return out / torch.linalg.norm(out, dim=1, keepdim=True).clamp(min=1.0e-9)
+
+
 def _body_position_w(
     body_asset: RigidObject,
     body_id: int,
@@ -207,6 +250,17 @@ def _offset_quat_w(
         device=base_quat_w.device,
     ).reshape(1, 4)
     return quat_mul(base_quat_w, offset.expand_as(base_quat_w))
+
+
+def _target_orientation_w(
+    env: ManagerBasedRLEnv,
+    target_asset: RigidObject,
+    target_orientation_offset: tuple[float, float, float, float] | list[float] | None,
+) -> torch.Tensor:
+    episode_orientations = _episode_target_orientation_w(env)
+    if episode_orientations is not None:
+        return episode_orientations.to(device=target_asset.data.root_quat_w.device, dtype=target_asset.data.root_quat_w.dtype)
+    return _offset_quat_w(target_asset.data.root_quat_w, target_orientation_offset)
 
 
 def body_to_object_distance_tanh(
@@ -295,7 +349,7 @@ def body_to_object_orientation_tanh(
         body_asset.data.body_quat_w[:, body_cfg.body_ids[0]],  # type: ignore
         body_orientation_offset,
     )
-    target_quat_w = _offset_quat_w(target_asset.data.root_quat_w, target_orientation_offset)
+    target_quat_w = _target_orientation_w(env, target_asset, target_orientation_offset)
     ang_error = quat_error_magnitude(body_quat_w, target_quat_w)
     return 1.0 - torch.tanh(ang_error / std)
 
@@ -318,7 +372,7 @@ def body_to_object_orientation_gated_exp(
         body_asset.data.body_quat_w[:, body_cfg.body_ids[0]],  # type: ignore
         body_orientation_offset,
     )
-    target_quat_w = _offset_quat_w(target_asset.data.root_quat_w, target_orientation_offset)
+    target_quat_w = _target_orientation_w(env, target_asset, target_orientation_offset)
     ang_error = quat_error_magnitude(body_quat_w, target_quat_w)
     orientation_alignment = torch.exp(-torch.square(ang_error / max(float(std), 1.0e-9)))
     body_pos_w = _body_position_w(body_asset, body_cfg.body_ids[0], body_position_offset)
@@ -412,14 +466,29 @@ def force_delta_penalty(
     if wrench is None:
         wrench = getattr(asset.data, "body_incoming_wrench_b", None)
     if wrench is None:
-        current = torch.zeros(env.num_envs, 3, device=env.device)
+        wrench = getattr(asset.data, "body_incoming_joint_wrench_b", None)
+    if wrench is None:
+        requested_names = getattr(asset_cfg, "body_names", None)
+        preferred = [requested_names] if isinstance(requested_names, str) else list(requested_names or [])
+        # gripper_tcp/sfp_tip_link can be fixed frames without contact reports; these are the closest
+        # physical contact-reporting proxies available in the current Isaac asset.
+        preferred.extend(["sfp_tip_link", "sfp_module_link", "gripper_tcp", "wrist_3_link"])
+        contact_force = _contact_sensor_force(env, preferred)
+        if contact_force is None:
+            current = torch.zeros(env.num_envs, 3, device=env.device)
+        else:
+            current = contact_force
     else:
         body_ids = asset_cfg.body_ids
         selected = wrench if body_ids is None or body_ids == slice(None) else wrench[:, body_ids, :]
         current = selected[..., :3].sum(dim=1)
     previous = getattr(env, "_aic_previous_force_w", None)
+    reset_mask = getattr(env, "episode_length_buf", None)
     if previous is None or previous.shape != current.shape:
         previous = current.detach().clone()
+    elif reset_mask is not None:
+        previous = previous.to(current.device)
+        previous = torch.where(reset_mask.to(current.device).reshape(-1, 1) <= 1, current.detach(), previous)
     delta_norm = torch.norm(current - previous.to(current.device), dim=1)
     setattr(env, "_aic_previous_force_w", current.detach().clone())
     denominator = max(float(reference) - float(threshold), 1e-6)

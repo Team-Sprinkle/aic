@@ -23,12 +23,18 @@ DEFAULT_PARTS = {
     "sc_port_2": {"scene_name": "sc_port_2", "offset": (0.0076, -0.0783, 0.005), "pose_range": {}},
     "nic_card": {"scene_name": "nic_card", "offset": (-0.03235, 0.02329, 0.0743), "pose_range": {}, "snap_step": {"y": 0.04}},
 }
+NIC_CARD_ROT_WXYZ = (0.0, 0.0, -0.7068252, 0.7073883)
 SFP_PORT_SEATED_TARGET_ROOT_LOCAL = {
     0: (0.01059, -0.07594, 0.01540),
     1: (-0.01261, -0.07594, 0.01540),
 }
+SFP_PORT_LOCAL = {
+    0: (0.01295, -0.031572, 0.00501),
+    1: (-0.01025, -0.031572, 0.00501),
+}
+SFP_PORT_RPY = (4.69895, 0.0, 0.0)
+SFP_PORT_ENTRANCE_LOCAL = (0.0, 0.0, -0.0458)
 SC_PORT_TARGET_LOCAL = (0.093, 0.140, 0.020)
-SFP_INSERTION_AXIS_WORLD = (0.0, -1.0, 0.0)
 SC_INSERTION_AXIS_WORLD = (0.0, 1.0, 0.0)
 
 
@@ -141,6 +147,75 @@ def _cross(a: tuple[float, float, float], b: tuple[float, float, float]) -> tupl
     )
 
 
+def _rpy_matrix(roll: float, pitch: float, yaw: float) -> tuple[tuple[float, float, float], ...]:
+    cr, sr = math.cos(roll), math.sin(roll)
+    cp, sp = math.cos(pitch), math.sin(pitch)
+    cy, sy = math.cos(yaw), math.sin(yaw)
+    return (
+        (cy * cp, cy * sp * sr - sy * cr, cy * sp * cr + sy * sr),
+        (sy * cp, sy * sp * sr + cy * cr, sy * sp * cr - cy * sr),
+        (-sp, cp * sr, cp * cr),
+    )
+
+
+def _matvec(
+    mat: tuple[tuple[float, float, float], ...],
+    vec: tuple[float, float, float],
+) -> tuple[float, float, float]:
+    return tuple(sum(mat[i][j] * vec[j] for j in range(3)) for i in range(3))  # type: ignore[return-value]
+
+
+def _quat_conj_wxyz(q: tuple[float, float, float, float]) -> tuple[float, float, float, float]:
+    return (q[0], -q[1], -q[2], -q[3])
+
+
+def _quat_normalize_wxyz(q: tuple[float, float, float, float]) -> tuple[float, float, float, float]:
+    norm = math.sqrt(sum(float(v) * float(v) for v in q))
+    if norm < 1e-12:
+        raise ValueError("Cannot normalize near-zero quaternion")
+    return tuple(float(v) / norm for v in q)  # type: ignore[return-value]
+
+
+def _quat_mul_wxyz(
+    lhs: tuple[float, float, float, float],
+    rhs: tuple[float, float, float, float],
+) -> tuple[float, float, float, float]:
+    lw, lx, ly, lz = lhs
+    rw, rx, ry, rz = rhs
+    return (
+        lw * rw - lx * rx - ly * ry - lz * rz,
+        lw * rx + lx * rw + ly * rz - lz * ry,
+        lw * ry - lx * rz + ly * rw + lz * rx,
+        lw * rz + lx * ry - ly * rx + lz * rw,
+    )
+
+
+def _quat_from_rpy(roll: float, pitch: float, yaw: float) -> tuple[float, float, float, float]:
+    cr, sr = math.cos(roll * 0.5), math.sin(roll * 0.5)
+    cp, sp = math.cos(pitch * 0.5), math.sin(pitch * 0.5)
+    cy, sy = math.cos(yaw * 0.5), math.sin(yaw * 0.5)
+    return _quat_normalize_wxyz(
+        (
+            cy * cr * cp + sy * sr * sp,
+            cy * sr * cp - sy * cr * sp,
+            cy * cr * sp + sy * sr * cp,
+            sy * cr * cp - cy * sr * sp,
+        )
+    )
+
+
+def _round4(value: tuple[float, float, float, float]) -> list[float]:
+    return [round(float(v), 6) for v in _quat_normalize_wxyz(value)]
+
+
+def _quat_apply_wxyz(
+    quat: tuple[float, float, float, float],
+    vec: tuple[float, float, float],
+) -> tuple[float, float, float]:
+    rotated = _quat_mul_wxyz(_quat_mul_wxyz(quat, (0.0, vec[0], vec[1], vec[2])), _quat_conj_wxyz(quat))
+    return (rotated[1], rotated[2], rotated[3])
+
+
 def _perpendicular(axis: tuple[float, float, float], rng: random.Random) -> tuple[float, float, float]:
     axis = _normalize(axis)
     seed = (0.0, 0.0, 1.0) if abs(axis[2]) < 0.9 else (1.0, 0.0, 0.0)
@@ -194,15 +269,29 @@ def _sample_context(request: dict[str, Any], rng: random.Random) -> dict[str, An
 def _target_spec(context: dict[str, Any], board_pos: tuple[float, float, float]) -> dict[str, Any]:
     if context["task_family"] == "sfp_to_nic":
         part = DEFAULT_PARTS["nic_card"]
-        target_offset = SFP_PORT_SEATED_TARGET_ROOT_LOCAL[int(context["target_port_index"])]
-        position = _vadd(_vadd(board_pos, part["offset"]), target_offset)
+        target_port_index = int(context["target_port_index"])
+        target_offset = SFP_PORT_SEATED_TARGET_ROOT_LOCAL[target_port_index]
+        root_position = _vadd(board_pos, part["offset"])
+        position = _vadd(root_position, _quat_apply_wxyz(NIC_CARD_ROT_WXYZ, target_offset))
+        port_rotation = _rpy_matrix(*SFP_PORT_RPY)
+        target_orientation = _quat_mul_wxyz(NIC_CARD_ROT_WXYZ, _quat_from_rpy(*SFP_PORT_RPY))
+        body_orientation = _quat_mul_wxyz(target_orientation, _quat_conj_wxyz(_quat_from_rpy(0.0, math.pi, 0.0)))
+        entrance_offset_local = _vadd(
+            SFP_PORT_LOCAL[target_port_index],
+            _matvec(port_rotation, SFP_PORT_ENTRANCE_LOCAL),
+        )
+        entrance_position = _vadd(root_position, _quat_apply_wxyz(NIC_CARD_ROT_WXYZ, entrance_offset_local))
+        entrance_axis = _normalize(_quat_apply_wxyz(NIC_CARD_ROT_WXYZ, _matvec(port_rotation, (0.0, 0.0, 1.0))))
         return {
             "scene_name": "nic_card",
             "target_reward_body": "sfp_tip_link",
             "target_position_offset": _round3(target_offset),
             "body_position_offset": [0.0, 0.0, 0.0],
-            "target_pose_world": {"position": _round3(position), "orientation_wxyz": None},
-            "insertion_axis_world": _round3(SFP_INSERTION_AXIS_WORLD),
+            "target_pose_world": {"position": _round3(position), "orientation_wxyz": _round4(target_orientation)},
+            "entrance_pose_world": {"position": _round3(entrance_position), "orientation_wxyz": _round4(target_orientation)},
+            "body_start_orientation_wxyz": _round4(body_orientation),
+            "entrance_position_offset": _round3(entrance_offset_local),
+            "insertion_axis_world": _round3(entrance_axis),
         }
     scene_name = "sc_port" if int(context["target_port_index"]) == 0 else "sc_port_2"
     part = DEFAULT_PARTS[scene_name]
@@ -224,48 +313,59 @@ def _apply_start_near_gate(
     board_pos: tuple[float, float, float],
     rng: random.Random,
 ) -> tuple[tuple[float, float, float], dict[str, Any] | None]:
-    """Compute near-gate TCP-start metadata without moving the target scene.
+    """Compute near-gate body-start metadata without moving the target scene.
 
-    Earlier logic moved the board/target so the unchanged robot TCP appeared to
-    be near the gate. For online RL that is the wrong curriculum: the scene
-    should stay as specified, and the robot/cable reset should move near the
-    target. The child YAML therefore records tcp_start_position_world while
-    leaving board_pos unchanged.
+    Near-gate curricula should place the plug tip just outside the port
+    entrance.  The child YAML therefore records the reset body and desired body
+    start position while leaving the board/target scene unchanged.
     """
     start = (request.get("scene") or {}).get("start_near_gate")
     if not isinstance(start, dict):
         return board_pos, None
     target = _target_spec(context, board_pos)
-    current_target = tuple(float(v) for v in target["target_pose_world"]["position"])
+    gate_position = tuple(
+        float(v)
+        for v in (target.get("entrance_pose_world") or target["target_pose_world"])["position"]
+    )
     axis = tuple(float(v) for v in target["insertion_axis_world"])
+    reset_body_name = str(start.get("reset_body_name") or target.get("target_reward_body") or "sfp_tip_link")
     min_clearance = float(start.get("min_clearance_m", 0.02))
     if "distance" in start:
         distance = float(start["distance"])
+        if distance < 0.0:
+            raise ValueError("scene.start_near_gate.distance must be non-negative")
         if distance < min_clearance:
             raise ValueError("scene.start_near_gate.distance must be at least min_clearance_m")
-        reference_raw = start.get("reference_tcp_position")
+        reference_raw = start.get("reference_body_position") or start.get("reference_tcp_position")
         if reference_raw is None:
-            reference = _vadd(current_target, (distance, 0.0, 0.0))
+            reference = _vadd(gate_position, _vscale(axis, distance))
         else:
             if not isinstance(reference_raw, (list, tuple)) or len(reference_raw) != 3:
-                raise ValueError("scene.start_near_gate.reference_tcp_position must be a 3-value list")
+                raise ValueError("scene.start_near_gate.reference_body_position must be a 3-value list")
             reference = (float(reference_raw[0]), float(reference_raw[1]), float(reference_raw[2]))
-        direction = _vsub(current_target, reference)
+        direction = _vsub(gate_position, reference)
         if _vnorm(direction) < 1e-6:
             direction = _perpendicular(axis, rng)
         requested = {"distance": distance}
     else:
         axial = float(start["axial_distance_m"])
         lateral = float(start["lateral_distance_m"])
+        if axial < 0.0:
+            raise ValueError(
+                "scene.start_near_gate.axial_distance_m must be non-negative so the tip starts outside "
+                "the entrance plane, not already past it."
+            )
+        if lateral < 0.0:
+            raise ValueError("scene.start_near_gate.lateral_distance_m must be non-negative")
         if math.sqrt(axial * axial + lateral * lateral) < min_clearance:
             raise ValueError("scene.start_near_gate combined distance must be at least min_clearance_m")
         lateral_dir = _perpendicular(axis, rng)
-        reference_raw = start.get("reference_tcp_position")
+        reference_raw = start.get("reference_body_position") or start.get("reference_tcp_position")
         if reference_raw is None:
-            reference = _vadd(current_target, _vadd(_vscale(axis, axial), _vscale(lateral_dir, lateral)))
+            reference = _vadd(gate_position, _vadd(_vscale(axis, axial), _vscale(lateral_dir, lateral)))
         else:
             if not isinstance(reference_raw, (list, tuple)) or len(reference_raw) != 3:
-                raise ValueError("scene.start_near_gate.reference_tcp_position must be a 3-value list")
+                raise ValueError("scene.start_near_gate.reference_body_position must be a 3-value list")
             reference = (float(reference_raw[0]), float(reference_raw[1]), float(reference_raw[2]))
         requested = {
             "axial_distance_m": axial,
@@ -275,17 +375,23 @@ def _apply_start_near_gate(
     axes = str(start.get("axes", "xyz")).lower()
     if axes not in {"xyz", "xy"}:
         raise ValueError("scene.start_near_gate.axes must be 'xyz' or 'xy'")
-    achieved_target = current_target
-    ref_delta = _vsub(reference, achieved_target)
+    ref_delta = _vsub(reference, gate_position)
     axial_component = abs(_vdot(ref_delta, axis))
     lateral_component = math.sqrt(max(0.0, _vnorm(ref_delta) ** 2 - axial_component * axial_component))
     return board_pos, {
         **requested,
-        "reset_mode": "tcp_start_position_world",
+        "reset_mode": "body_start_position_world",
+        "reset_body_name": reset_body_name,
+        "body_start_position_world": _round3(reference),
+        "body_start_orientation_wxyz": target.get("body_start_orientation_wxyz"),
+        "reference_body_position": _round3(reference),
+        # Backward-compatible aliases for older diagnostics.
         "tcp_start_position_world": _round3(reference),
+        "tcp_start_orientation_world": target.get("body_start_orientation_wxyz"),
         "reference_tcp_position": _round3(reference),
-        "target_gate_position": _round3(achieved_target),
+        "target_gate_position": _round3(gate_position),
         "target_gate_axis_world": _round3(axis),
+        "target_gate_source": "entrance_pose_world" if target.get("entrance_pose_world") else "target_pose_world",
         "achieved_distance": round(_vnorm(ref_delta), 6),
         "achieved_axial_distance_m": round(axial_component, 6),
         "achieved_lateral_distance_m": round(lateral_component, 6),
