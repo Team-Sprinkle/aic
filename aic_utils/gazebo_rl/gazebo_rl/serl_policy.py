@@ -108,7 +108,8 @@ class OfflineSERLGazeboPolicy:
         self.actor.eval()
         stats = ckpt.get("normalization_stats") or {}
         self.obs_mean = torch.as_tensor(stats["obs_mean"], dtype=torch.float32, device=self.device)
-        self.obs_std = torch.as_tensor(stats["obs_std"], dtype=torch.float32, device=self.device)
+        obs_std = torch.as_tensor(stats["obs_std"], dtype=torch.float32, device=self.device)
+        self.obs_std = torch.where(torch.abs(obs_std) < 1.0e-8, torch.ones_like(obs_std), obs_std)
         self.action_mean = torch.as_tensor(stats["action_mean"], dtype=torch.float32, device=self.device)
         self.action_std = torch.as_tensor(stats["action_std"], dtype=torch.float32, device=self.device)
 

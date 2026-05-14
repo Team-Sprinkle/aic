@@ -46,6 +46,8 @@ def test_isaac_serl_plan_inspects_adapter_checkpoint(tmp_path: Path) -> None:
         replay_capacity=100,
         batch_size=4,
         warmup_steps=2,
+        actor_update_start_steps=80,
+        actor_update_end_steps=400,
         max_wall_time_minutes=30.0,
         log_every=5,
         gamma=0.99,
@@ -53,9 +55,15 @@ def test_isaac_serl_plan_inspects_adapter_checkpoint(tmp_path: Path) -> None:
         adapter_lr=1e-4,
         critic_lr=1e-4,
         act_lr=1e-5,
+        actor_q_weight=0.25,
         adapter_penalty_weight=1e-2,
         act_preservation_weight=1e-1,
         adapter_delta_clip=0.05,
+        tcp_translation_action_clip=0.002,
+        tcp_rotation_action_clip=0.003,
+        target_action_guide_lateral_switch_m=0.002,
+        target_action_guide_axial_blend_lateral_m=0.006,
+        target_action_guide_prefix_decay=True,
         action_clip=0.05,
         isaac_action_scale=1.0,
         freeze_act=True,
@@ -65,13 +73,22 @@ def test_isaac_serl_plan_inspects_adapter_checkpoint(tmp_path: Path) -> None:
         insertion_orientation_weight=0.0,
         insertion_reaching_weight=1.0,
         insertion_lateral_weight=-0.1,
-        force_delta_penalty_weight=0.2,
-        force_delta_threshold=3.0,
+        insertion_lateral_gate_sigma=0.012,
+        insertion_lateral_error_scale=0.006,
+        insertion_axis=0,
+        force_delta_penalty_weight=0.3,
+        force_delta_threshold=10.0,
         force_delta_reference=20.0,
+        force_delta_saturation=30.0,
+        force_delta_knee_penalty_fraction=0.1,
+        isaac_force_observation_clip_n=35.0,
+        act_normalized_state_clip=10.0,
         target_reward_body="sfp_tip_link",
         target_reward_distance_std=0.02,
         target_reward_close_sigma=0.01,
         target_reward_reaching_threshold=0.01,
+        target_success_termination_threshold=0.0035,
+        terminate_on_target_success=True,
         target_reward_position_offset=None,
         target_reward_body_position_offset=None,
         state_source="lerobot_compatible",
@@ -95,6 +112,7 @@ def test_isaac_serl_plan_inspects_adapter_checkpoint(tmp_path: Path) -> None:
         save_step_images=False,
         image_log_every=1,
         max_logged_image_steps=200,
+        enable_contact_sensor=True,
         dry_run=True,
         extra_arg=[],
     )
@@ -116,6 +134,8 @@ def test_isaac_serl_plan_inspects_adapter_checkpoint(tmp_path: Path) -> None:
     assert "auto" in cmd
     assert "--updates" in cmd
     assert "2" in cmd
+    assert "--actor_update_start_steps" in cmd
+    assert "80" in cmd
     assert "--rendering_mode" in cmd
     assert "performance" in cmd
     assert "--max_wall_time_minutes" in cmd
@@ -124,10 +144,31 @@ def test_isaac_serl_plan_inspects_adapter_checkpoint(tmp_path: Path) -> None:
     assert "0.01" in cmd
     assert "--act_preservation_weight" in cmd
     assert "0.1" in cmd
+    assert "--actor_q_weight" in cmd
+    assert "0.25" in cmd
+    assert "--actor_update_end_steps" in cmd
+    assert "400" in cmd
     assert "--adapter_delta_clip" in cmd
     assert "0.05" in cmd
+    assert "--tcp_translation_action_clip" in cmd
+    assert "0.002" in cmd
+    assert "--tcp_rotation_action_clip" in cmd
+    assert "0.003" in cmd
+    assert "--target_action_guide_lateral_switch_m" in cmd
+    assert "--target_action_guide_axial_blend_lateral_m" in cmd
+    assert "--target_action_guide_prefix_decay" in cmd
     assert "--force_delta_penalty_weight" in cmd
-    assert "0.2" in cmd
+    assert "0.3" in cmd
+    assert "--force_delta_saturation" in cmd
+    assert "30.0" in cmd
+    assert "--force_delta_knee_penalty_fraction" in cmd
+    assert "--isaac_force_observation_clip_n" in cmd
+    assert "--enable_contact_sensor" in cmd
+    assert "--target_reward_lateral_gate_sigma" in cmd
+    assert "--target_reward_insertion_axis" in cmd
+    assert "--terminate_on_target_success" in cmd
+    assert "--target_success_termination_threshold" in cmd
+    assert "0.0035" in cmd
     assert "--action_clip" in cmd
     assert "--isaac_action_scale" in cmd
     assert "1.0" in cmd
@@ -139,7 +180,7 @@ def test_isaac_serl_plan_inspects_adapter_checkpoint(tmp_path: Path) -> None:
     assert env["AIC_ISAAC_RANDOMIZATION_PROFILE"] == "none"
     assert env["AIC_ISAAC_INSERTION_DISTANCE_WEIGHT"] == "0.2"
     assert env["AIC_ISAAC_INSERTION_LATERAL_WEIGHT"] == "-0.1"
-    assert env["AIC_ISAAC_FORCE_DELTA_PENALTY_WEIGHT"] == "0.2"
+    assert env["AIC_ISAAC_FORCE_DELTA_PENALTY_WEIGHT"] == "0.3"
     assert env["AIC_ISAAC_INITIAL_ARM_JOINT_POS"] == "-0.37,-1.62,-1.75,-1.43,1.93,1.31"
 
 
@@ -157,6 +198,28 @@ def test_isaac_serl_dry_run_does_not_require_checkpoint(tmp_path: Path) -> None:
     plan = isaac_online_serl.build_plan(args, inspect_required=False)
     assert plan["checkpoint"]["exists"] is False
     assert plan["checkpoint"]["inspect_skipped"] is True
+
+
+def test_positive_lateral_weight_is_treated_as_penalty_magnitude(tmp_path: Path) -> None:
+    args = isaac_online_serl.parse_args(
+        [
+            "--checkpoint",
+            str(tmp_path / "missing.pt"),
+            "--act-torchscript",
+            str(tmp_path / "missing_ts.pt"),
+            "--insertion-lateral-weight",
+            "0.08",
+            "--dry-run",
+        ]
+    )
+
+    plan = isaac_online_serl.build_plan(args, inspect_required=False)
+    cmd, env = isaac_online_serl.build_command(args)
+
+    assert plan["insertion_lateral_weight"] == -0.08
+    assert env["AIC_ISAAC_INSERTION_LATERAL_WEIGHT"] == "-0.08"
+    idx = cmd.index("--target_reward_lateral_weight")
+    assert cmd[idx + 1] == "-0.08"
 
 
 def test_isaac_user_config_materializes_episode_yamls(tmp_path: Path) -> None:

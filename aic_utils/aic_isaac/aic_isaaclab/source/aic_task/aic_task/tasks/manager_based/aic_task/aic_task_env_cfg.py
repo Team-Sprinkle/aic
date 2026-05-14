@@ -394,6 +394,14 @@ class TerminationsCfg:
     """Termination terms for the MDP."""
 
     time_out = DoneTerm(func=mdp.time_out, time_out=True)
+    target_success = DoneTerm(
+        func=mdp.body_to_object_success,
+        params={
+            "threshold": float(os.environ.get("AIC_ISAAC_TERMINATE_ON_TARGET_SUCCESS_THRESHOLD", "0.0")),
+            "body_cfg": SceneEntityCfg("robot", body_names="wrist_3_link"),
+            "target_cfg": SceneEntityCfg("task_board"),
+        },
+    )
 
 
 @configclass
@@ -562,8 +570,11 @@ class RewardsCfg:
             "body_cfg": SceneEntityCfg("robot", body_names=MISSING),
             "target_cfg": SceneEntityCfg("sc_port"),
             "std": 0.02,
+            "insertion_axis": 0,
+            "lateral_gate_sigma": 0.012,
             "target_position_offset": (0.093, 0.140, 0.020),
             "body_position_offset": (0.0, 0.0, 0.0),
+            "target_orientation_offset": None,
         },
     )
     target_distance_exp = RewTerm(
@@ -573,8 +584,11 @@ class RewardsCfg:
             "body_cfg": SceneEntityCfg("robot", body_names=MISSING),
             "target_cfg": SceneEntityCfg("sc_port"),
             "sigma": 0.01,
+            "insertion_axis": 0,
+            "lateral_gate_sigma": 0.012,
             "target_position_offset": (0.093, 0.140, 0.020),
             "body_position_offset": (0.0, 0.0, 0.0),
+            "target_orientation_offset": None,
         },
     )
     target_distance_progress = RewTerm(
@@ -584,8 +598,11 @@ class RewardsCfg:
             "body_cfg": SceneEntityCfg("robot", body_names=MISSING),
             "target_cfg": SceneEntityCfg("sc_port"),
             "scale": 0.003,
+            "insertion_axis": 0,
+            "lateral_gate_sigma": 0.012,
             "target_position_offset": (0.093, 0.140, 0.020),
             "body_position_offset": (0.0, 0.0, 0.0),
+            "target_orientation_offset": None,
         },
     )
     target_orientation_tanh = RewTerm(
@@ -641,17 +658,62 @@ class RewardsCfg:
         params={
             "body_cfg": SceneEntityCfg("robot", body_names=MISSING),
             "target_cfg": SceneEntityCfg("sc_port"),
-            "axis": 0,
+            "insertion_axis": 0,
+            "scale": 0.006,
             "target_position_offset": (0.093, 0.140, 0.020),
             "body_position_offset": (0.0, 0.0, 0.0),
+            "target_orientation_offset": None,
+        },
+    )
+    target_motion_projection = RewTerm(
+        func=mdp.body_to_object_motion_projection,
+        weight=0.0,
+        params={
+            "body_cfg": SceneEntityCfg("robot", body_names=MISSING),
+            "target_cfg": SceneEntityCfg("sc_port"),
+            "scale": 0.001,
+            "insertion_axis": 0,
+            "lateral_gate_sigma": 0.012,
+            "target_position_offset": (0.093, 0.140, 0.020),
+            "body_position_offset": (0.0, 0.0, 0.0),
+            "target_orientation_offset": None,
+        },
+    )
+    target_lateral_progress = RewTerm(
+        func=mdp.body_to_object_lateral_progress,
+        weight=0.0,
+        params={
+            "body_cfg": SceneEntityCfg("robot", body_names=MISSING),
+            "target_cfg": SceneEntityCfg("sc_port"),
+            "scale": 0.001,
+            "insertion_axis": 0,
+            "target_position_offset": (0.093, 0.140, 0.020),
+            "body_position_offset": (0.0, 0.0, 0.0),
+            "target_orientation_offset": None,
+        },
+    )
+    target_axial_progress = RewTerm(
+        func=mdp.body_to_object_axial_progress,
+        weight=0.0,
+        params={
+            "body_cfg": SceneEntityCfg("robot", body_names=MISSING),
+            "target_cfg": SceneEntityCfg("sc_port"),
+            "scale": 0.001,
+            "insertion_axis": 0,
+            "lateral_gate_sigma": 0.012,
+            "target_position_offset": (0.093, 0.140, 0.020),
+            "body_position_offset": (0.0, 0.0, 0.0),
+            "target_orientation_offset": None,
         },
     )
     force_delta_penalty = RewTerm(
         func=mdp.force_delta_penalty,
         weight=0.0,
         params={
-            "threshold": 3.0,
+            "threshold": 10.0,
             "reference": 20.0,
+            "knee_penalty_fraction": 0.1,
+            "saturation": 30.0,
             "max_penalty": 1.0,
             # gripper_tcp is a semantic frame and can report near-zero wrench even
             # during contact. Use the physical wrist link as the Isaac proxy for
@@ -964,6 +1026,7 @@ class AICTaskEnvCfg(ManagerBasedRLEnvCfg):
             "target_reaching_bonus",
             "target_success_once_bonus",
             "target_lateral_error",
+            "target_axial_progress",
         ):
             term = getattr(self.rewards, term_name)
             term.params["target_cfg"].name = target_scene_name
@@ -1004,6 +1067,9 @@ class AICTaskEnvCfg(ManagerBasedRLEnvCfg):
         self.rewards.target_reaching_bonus.weight = reaching_weight * reward_weight_multiplier
         self.rewards.target_success_once_bonus.weight = terminal_weight * reward_weight_multiplier
         self.rewards.target_lateral_error.weight = lateral_weight * reward_weight_multiplier
+        self.rewards.target_axial_progress.weight = float(
+            os.environ.get("AIC_ISAAC_INSERTION_AXIAL_PROGRESS_WEIGHT", "0.0")
+        ) * reward_weight_multiplier
         self.rewards.force_delta_penalty.weight = force_delta_weight * reward_weight_multiplier
 
     def _apply_initial_arm_joint_override(self) -> None:

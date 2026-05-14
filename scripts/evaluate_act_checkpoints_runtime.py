@@ -282,7 +282,8 @@ cd {args.workspace_container}
 source /ws_aic/install/setup.bash
 export RMW_IMPLEMENTATION=rmw_zenoh_cpp
 cd {args.workspace_container}
-export PYTHONPATH={args.workspace_container}/aic_model:{args.workspace_container}/scripts/pythonpath_bootstrap:$PYTHONPATH
+export LD_LIBRARY_PATH={args.workspace_container}/.pixi/envs/default/lib:$LD_LIBRARY_PATH
+export PYTHONPATH={args.workspace_container}/.pixi/envs/default/lib/python3.12/site-packages:{args.workspace_container}/aic_model:{args.workspace_container}/scripts/pythonpath_bootstrap:$PYTHONPATH
 export AIC_CHECKOUT_PYTHONPATH={args.workspace_container}/aic_example_policies
 export AIC_ACT_POLICY_PATH={checkpoint_container}
 export AIC_ACT_TORCHSCRIPT={host_to_container(args.act_torchscript, args) if args.act_torchscript else ""}
