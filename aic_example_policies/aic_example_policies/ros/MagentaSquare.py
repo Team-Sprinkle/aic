@@ -137,6 +137,7 @@ class MagentaSquare(Policy):
         1: 0.0705,
     }
     SC_RAIL_APPROACH_Z = 0.133476
+    SC_PORT_ENTRANCE_Z = 0.03014
 
     MAGENTA_SQUARE_SIZE = 0.095
     MAGENTA_CENTER_BOARD = np.array([-0.075, 0.150, 0.011], dtype=np.float64)
@@ -233,6 +234,28 @@ class MagentaSquare(Policy):
         )
         self.magenta_linear_view_hold_sec = float(
             os.getenv("AIC_MAGENTA_LINEAR_VIEW_HOLD_SEC", "0.15")
+        )
+        self.magenta_sc_circular_view_enabled = self._env_flag(
+            "AIC_MAGENTA_SC_CIRCULAR_VIEW_ENABLED",
+            default=True,
+        )
+        self.magenta_sc_circular_view_radius_m = float(
+            os.getenv("AIC_MAGENTA_SC_CIRCULAR_VIEW_RADIUS_M", "0.15")
+        )
+        self.magenta_sc_circular_view_steps = int(
+            os.getenv("AIC_MAGENTA_SC_CIRCULAR_VIEW_STEPS", "12")
+        )
+        self.magenta_sc_circular_view_move_duration_sec = float(
+            os.getenv(
+                "AIC_MAGENTA_SC_CIRCULAR_VIEW_MOVE_DURATION_SEC",
+                str(self.magenta_linear_view_move_duration_sec),
+            )
+        )
+        self.magenta_sc_circular_view_hold_sec = float(
+            os.getenv(
+                "AIC_MAGENTA_SC_CIRCULAR_VIEW_HOLD_SEC",
+                str(self.magenta_linear_view_hold_sec),
+            )
         )
         self.extend_visible_edge_toward_top = self._env_flag(
             "AIC_TRANSPORT_EXTEND_EDGE_TOWARD_TOP",
@@ -354,6 +377,9 @@ class MagentaSquare(Policy):
                 "AIC_TRANSPORT_SC_DESCEND_MAX_DISTANCE_M",
                 str(max(self.z_offset + self.sc_rail_approach_z + 0.02, 0.0)),
             )
+        )
+        self.sc_descend_stop_z = float(
+            os.getenv("AIC_TRANSPORT_SC_DESCEND_STOP_Z", str(self.SC_PORT_ENTRANCE_Z))
         )
         self.descend_wait_for_insertion_sec = float(
             os.getenv("AIC_TRANSPORT_DESCEND_WAIT_FOR_INSERTION_SEC", "5.0")
@@ -704,6 +730,18 @@ class MagentaSquare(Policy):
             if task_family == "sc_to_sc"
             else self.descend_max_distance_m
         )
+        stop_z = None
+        if task_family == "sc_to_sc":
+            stop_z = self.board_plane_z + self.sc_descend_stop_z
+            distance_to_stop_z = max(float(start_pose.position.z) - stop_z, 0.0)
+            if distance_to_stop_z <= 0.0:
+                self.get_logger().info(
+                    "TransportToMean SC descent skipped because TCP is already at or below "
+                    f"the SC port stop z: current_z={start_pose.position.z:.5f}, "
+                    f"stop_z={stop_z:.5f}"
+                )
+                return start_pose
+            max_distance_m = min(max_distance_m, distance_to_stop_z)
         if step_m <= 0.0 or self.descend_dt_sec <= 0.0 or max_distance_m <= 0.0:
             self.get_logger().info(
                 "TransportToMean descent skipped because descent step, dt, or max "
@@ -719,6 +757,7 @@ class MagentaSquare(Policy):
             f"speed_multiplier={speed_multiplier:.3f}, "
             f"step={step_m:.5f} m, dt={self.descend_dt_sec:.3f} s, "
             f"max_distance={max_distance_m:.5f} m, "
+            f"stop_z={stop_z if stop_z is not None else 'none'}, "
             f"rate={step_m / self.descend_dt_sec:.5f} m/s"
         )
         for step in range(1, max_steps + 1):
@@ -978,6 +1017,127 @@ class MagentaSquare(Policy):
         if fallback_target is not None:
             self.get_logger().info(
                 "MagentaSquare detection selected: short-edge fallback after linear +y "
+                "magenta search did not produce a valid geometry-fit marker target."
+            )
+        return fallback_target, fallback_source
+
+    def _detect_target_from_sc_circular_view_search(
+        self,
+        task: Task,
+        get_observation: GetObservationCallback,
+        move_robot: MoveRobotCallback,
+        center_pose: Pose,
+    ) -> tuple[tuple[float, float, float] | None, str]:
+        if (
+            not self.magenta_sc_circular_view_enabled
+            or self.magenta_sc_circular_view_steps <= 0
+            or self.magenta_sc_circular_view_radius_m <= 0.0
+        ):
+            self.get_logger().info(
+                "MagentaSquare detection method: SC high-view single-view magenta attempt; "
+                "circular XY search disabled, falling back to short-edge if needed."
+            )
+            obs = get_observation()
+            target_xyz = self._multicamera_magenta_target_xyz(task, obs)
+            if target_xyz is not None:
+                self.get_logger().info(
+                    "MagentaSquare detection selected: SC magenta ROI + board +y edge fit "
+                    "from high view."
+                )
+                return target_xyz, "SC magenta ROI + board +y edge fit"
+            target_xyz = self._multicamera_short_edge_target_xyz(task, obs)
+            if target_xyz is not None:
+                self.get_logger().info(
+                    "MagentaSquare detection selected: SC short-edge fallback from high view."
+                )
+                return target_xyz, "multi-camera short-edge fit"
+            return None, ""
+
+        fallback_target = None
+        fallback_source = ""
+        current_pose = center_pose
+        obs = get_observation()
+        target_xyz = self._multicamera_magenta_target_xyz(task, obs)
+        if target_xyz is not None:
+            self.get_logger().info(
+                "MagentaSquare detection selected: SC magenta ROI + board +y edge fit "
+                "at high view center; skipping circular XY search."
+            )
+            return target_xyz, "SC magenta ROI + board +y edge fit"
+
+        candidate = self._multicamera_short_edge_target_xyz(task, obs)
+        if candidate is not None:
+            fallback_target = candidate
+            fallback_source = "multi-camera short-edge fit"
+            self.get_logger().info(
+                "MagentaSquare detection fallback candidate stored: SC short-edge fit "
+                "from high view center; continuing circular magenta search."
+            )
+
+        step_count = max(1, self.magenta_sc_circular_view_steps)
+        radius_m = self.magenta_sc_circular_view_radius_m
+        self.get_logger().info(
+            "MagentaSquare sampling SC circular XY view search at fixed z/orientation: "
+            f"center_xyz={[round(center_pose.position.x, 5), round(center_pose.position.y, 5), round(center_pose.position.z, 5)]}, "
+            f"radius={radius_m:.4f}, "
+            f"samples={step_count}, "
+            f"move_duration={self.magenta_sc_circular_view_move_duration_sec:.3f}, "
+            f"hold_sec={self.magenta_sc_circular_view_hold_sec:.3f}"
+        )
+        for step_index in range(step_count):
+            theta = 2.0 * np.pi * float(step_index) / float(step_count)
+            target_xyz = (
+                center_pose.position.x + radius_m * float(np.cos(theta)),
+                center_pose.position.y + radius_m * float(np.sin(theta)),
+                center_pose.position.z,
+            )
+            current_pose = self._move_to_pose(
+                move_robot,
+                current_pose,
+                target_xyz,
+                duration_sec=self.magenta_sc_circular_view_move_duration_sec,
+            )
+            hold_until = self.time_now() + Duration(
+                seconds=max(self.magenta_sc_circular_view_hold_sec, 0.0)
+            )
+            while self.time_now() < hold_until:
+                self.set_pose_target(move_robot=move_robot, pose=current_pose)
+                self.sleep_for(min(self.dt, self.magenta_sc_circular_view_hold_sec))
+
+            obs = get_observation()
+            target_xyz = self._multicamera_magenta_target_xyz(task, obs)
+            if target_xyz is not None:
+                self.get_logger().info(
+                    "MagentaSquare SC circular view sample accepted magenta-guided edge target: "
+                    f"sample={step_index + 1}/{step_count}, "
+                    f"theta={theta:.3f} rad, "
+                    f"xy_offset={[round(radius_m * float(np.cos(theta)), 5), round(radius_m * float(np.sin(theta)), 5)]}"
+                )
+                return target_xyz, "SC magenta ROI + board +y edge fit"
+
+            if fallback_target is None:
+                candidate = self._multicamera_short_edge_target_xyz(task, obs)
+                if candidate is not None:
+                    fallback_target = candidate
+                    fallback_source = "multi-camera short-edge fit"
+                    self.get_logger().info(
+                        "MagentaSquare detection fallback candidate stored: "
+                        "SC short-edge fit during circular XY search; continuing magenta search."
+                    )
+
+        current_pose = self._move_to_pose(
+            move_robot,
+            current_pose,
+            (
+                center_pose.position.x,
+                center_pose.position.y,
+                center_pose.position.z,
+            ),
+            duration_sec=self.magenta_sc_circular_view_move_duration_sec,
+        )
+        if fallback_target is not None:
+            self.get_logger().info(
+                "MagentaSquare detection selected: SC short-edge fallback after circular XY "
                 "magenta search did not produce a valid geometry-fit marker target."
             )
         return fallback_target, fallback_source
@@ -2755,6 +2915,7 @@ class MagentaSquare(Policy):
         self.get_logger().info(f"MagentaSquare.insert_cable() task: {task}")
         self._latest_insertion_event_namespace = ""
         try:
+            task_family = self._task_family(task)
             self.get_logger().info(
                 "MagentaSquare parsed task target: "
                 f"{self._task_target_summary(task)}"
@@ -2768,45 +2929,67 @@ class MagentaSquare(Policy):
         if self.detect_board:
             view_pose = self._tcp_pose_from_observation(get_observation)
             short_edge_scan_done = False
-            spawn_obs = get_observation()
-            spawn_magenta_observations = self._spawn_magenta_observations(spawn_obs)
-            if not spawn_magenta_observations:
+            detected_board = False
+            if task_family == "sc_to_sc":
                 self.get_logger().info(
-                    "MagentaSquare detection route selected: spawn magenta gate failed; "
-                    "skipping aerial magenta search and scanning -y for short-edge board estimation."
-                )
-                self._move_to_short_edge_view(get_observation, move_robot)
-                short_edge_scan_done = True
-                obs = get_observation()
-                target_xyz = self._multicamera_short_edge_target_xyz(task, obs)
-                detected_board = target_xyz is not None
-                if detected_board:
-                    target_source = "multi-camera short-edge fit"
-                    self.get_logger().info(
-                        "MagentaSquare detection selected: short-edge fit after spawn-gated "
-                        "-y scan."
-                    )
-            else:
-                self.get_logger().info(
-                    "MagentaSquare detection route selected: spawn magenta gate passed; "
-                    "using aerial magenta-guided board search: "
-                    f"cameras={[observation.camera_name for observation in spawn_magenta_observations]}"
+                    "MagentaSquare detection route selected: SC-to-SC high aerial "
+                    "circular magenta-guided board search; bypassing spawn magenta gate."
                 )
                 if self.move_to_view_first:
                     view_pose = self._move_to_view_pose(get_observation, move_robot)
                 else:
                     self.get_logger().info(
                         "MagentaSquare movement method: high aerial view move disabled; "
-                        "running magenta-guided search from current pose."
+                        "running SC circular magenta-guided search from current pose."
                     )
 
-                target_xyz, target_source = self._detect_target_from_linear_view_search(
+                target_xyz, target_source = self._detect_target_from_sc_circular_view_search(
                     task,
                     get_observation,
                     move_robot,
                     view_pose,
                 )
                 detected_board = target_xyz is not None
+            else:
+                spawn_obs = get_observation()
+                spawn_magenta_observations = self._spawn_magenta_observations(spawn_obs)
+                if not spawn_magenta_observations:
+                    self.get_logger().info(
+                        "MagentaSquare detection route selected: spawn magenta gate failed; "
+                        "skipping aerial magenta search and scanning -y for short-edge board estimation."
+                    )
+                    self._move_to_short_edge_view(get_observation, move_robot)
+                    short_edge_scan_done = True
+                    obs = get_observation()
+                    target_xyz = self._multicamera_short_edge_target_xyz(task, obs)
+                    detected_board = target_xyz is not None
+                    if detected_board:
+                        target_source = "multi-camera short-edge fit"
+                        self.get_logger().info(
+                            "MagentaSquare detection selected: short-edge fit after spawn-gated "
+                            "-y scan."
+                        )
+                else:
+                    self.get_logger().info(
+                        "MagentaSquare detection route selected: spawn magenta gate passed; "
+                        "using aerial magenta-guided board search: "
+                        f"cameras={[observation.camera_name for observation in spawn_magenta_observations]}"
+                    )
+                    if self.move_to_view_first:
+                        view_pose = self._move_to_view_pose(get_observation, move_robot)
+                    else:
+                        self.get_logger().info(
+                            "MagentaSquare movement method: high aerial view move disabled; "
+                            "running magenta-guided search from current pose."
+                        )
+
+                    target_xyz, target_source = self._detect_target_from_linear_view_search(
+                        task,
+                        get_observation,
+                        move_robot,
+                        view_pose,
+                    )
+                    detected_board = target_xyz is not None
 
             if not detected_board:
                 send_feedback(
