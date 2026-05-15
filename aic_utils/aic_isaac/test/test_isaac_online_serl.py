@@ -179,6 +179,7 @@ def test_isaac_serl_plan_inspects_adapter_checkpoint(tmp_path: Path) -> None:
     assert cmd[idx + 1] == "0.4"
     assert "--target_reward_insertion_corridor_sigma" in cmd
     assert "--target_reward_insertion_bypass_penalty_scale" in cmd
+    assert "--target_reward_insertion_orientation_gate_std" in cmd
     assert "--target_reward_insertion_axis" in cmd
     assert "--terminate_on_target_success" in cmd
     assert "--target_success_termination_threshold" in cmd
@@ -234,6 +235,39 @@ def test_positive_lateral_weight_is_treated_as_penalty_magnitude(tmp_path: Path)
     assert env["AIC_ISAAC_INSERTION_LATERAL_WEIGHT"] == "-0.08"
     idx = cmd.index("--target_reward_lateral_weight")
     assert cmd[idx + 1] == "-0.08"
+
+
+def test_reward_preset_keeps_explicit_cli_overrides(tmp_path: Path) -> None:
+    args = isaac_online_serl.parse_args(
+        [
+            "--checkpoint",
+            str(tmp_path / "missing.pt"),
+            "--act-torchscript",
+            str(tmp_path / "missing_ts.pt"),
+            "--reward-preset",
+            "near_gate_corridor_v1",
+            "--insertion-axial-progress-weight",
+            "0.5",
+            "--insertion-corridor-weight",
+            "1.0",
+            "--dry-run",
+        ]
+    )
+
+    isaac_online_serl.apply_reward_preset(args)
+    cmd, _ = isaac_online_serl.build_command(args)
+
+    assert args.insertion_axial_progress_weight == 0.5
+    assert args.insertion_corridor_weight == 1.0
+    assert args.insertion_lateral_progress_weight == 0.25
+    assert args.insertion_bypass_penalty_scale == 2.0
+    assert args.insertion_corridor_orientation_gate_std == 0.10
+    axial_idx = cmd.index("--target_reward_axial_progress_weight")
+    corridor_idx = cmd.index("--target_reward_insertion_corridor_weight")
+    orientation_gate_idx = cmd.index("--target_reward_insertion_orientation_gate_std")
+    assert cmd[axial_idx + 1] == "0.5"
+    assert cmd[corridor_idx + 1] == "1.0"
+    assert cmd[orientation_gate_idx + 1] == "0.1"
 
 
 def test_isaac_user_config_materializes_episode_yamls(tmp_path: Path) -> None:
@@ -352,6 +386,82 @@ scene:
     ]
     assert start["reference_body_position"] == reference
     assert start["tcp_start_position_world"] == body
+
+
+def test_near_gate_distances_are_to_semantic_tip_center_with_body_offset(tmp_path: Path) -> None:
+    request = tmp_path / "request.yaml"
+    request.write_text(
+        """
+task_family: sfp_to_nic
+generation:
+  target_accepted_trajectories: 1
+  seed: 11
+scene:
+  end_effector_tip:
+    body_name: sfp_module_link
+    body_position_offset: [0.0, 0.02365, 0.0]
+  start_near_gate:
+    axial_distance_m: 0.006
+    lateral_distance_m: 0.006
+    min_clearance_m: 0.004
+  nic_cards:
+    count: 1
+    target_card: 0
+    target_port: sfp_port_0
+""",
+        encoding="utf-8",
+    )
+
+    summary = isaac_online_serl.materialize_episode_configs(request, tmp_path / "episodes")
+    episode = yaml.safe_load((Path(summary["episodes_dir"]) / "episode_000001.yaml").read_text(encoding="utf-8"))
+    target = episode["scene"]["target"]
+    start = episode["scene"]["start_near_gate"]
+
+    assert target["target_reward_body"] == "sfp_module_link"
+    assert target["body_position_offset"] == [0.0, 0.02365, 0.0]
+    assert start["reference_reward_body_name"] == "sfp_module_link"
+    assert start["reference_reward_body_position_offset"] == [0.0, 0.02365, 0.0]
+    assert start["reference_tip_center_position_world"] == start["reference_body_position"]
+    assert start["body_start_position_world"] != start["reference_tip_center_position_world"]
+    gate = start["target_gate_position"]
+    tip = start["reference_tip_center_position_world"]
+    axis = start["target_gate_axis_world"]
+    signed_depth = sum((float(tip[i]) - float(gate[i])) * float(axis[i]) for i in range(3))
+    assert signed_depth < 0.0
+    assert abs(abs(signed_depth) - 0.006) < 1e-4
+    assert start["achieved_lateral_distance_m"] == 0.006
+
+
+def test_sc_near_gate_uses_sc_tip_link_by_default(tmp_path: Path) -> None:
+    request = tmp_path / "request.yaml"
+    request.write_text(
+        """
+task_family: sc_to_sc
+generation:
+  target_accepted_trajectories: 1
+  seed: 7
+scene:
+  start_near_gate:
+    axial_distance_m: 0.006
+    lateral_distance_m: 0.006
+    min_clearance_m: 0.004
+  sc_ports:
+    count: 1
+    target_port: sc_port_0
+""",
+        encoding="utf-8",
+    )
+
+    summary = isaac_online_serl.materialize_episode_configs(request, tmp_path / "episodes")
+    episode = yaml.safe_load((Path(summary["episodes_dir"]) / "episode_000001.yaml").read_text(encoding="utf-8"))
+    target = episode["scene"]["target"]
+    start = episode["scene"]["start_near_gate"]
+
+    assert target["target_reward_body"] == "sc_tip_link"
+    assert target["body_position_offset"] == [0.0, 0.0, 0.0]
+    assert start["reference_reward_body_name"] == "sc_tip_link"
+    assert start["achieved_axial_distance_m"] == 0.006
+    assert start["achieved_lateral_distance_m"] == 0.006
 
 
 def test_sfp_entrance_axis_offset_shifts_semantic_gate(tmp_path: Path) -> None:

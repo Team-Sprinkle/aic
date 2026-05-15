@@ -53,8 +53,9 @@ parser.add_argument(
     choices=["act_adapter", "act_direct"],
     default="act_adapter",
     help=(
-        "act_adapter learns a clipped residual added to ACT. act_direct initializes "
-        "from ACT but trains the full TCP action override, with only final TCP caps applied."
+        "act_adapter learns a clipped residual added to ACT. act_direct feeds the "
+        "frozen ACT action into the trainable head as context, but the head output "
+        "is the full TCP delta action, not an ACT correction."
     ),
 )
 parser.add_argument("--act_only_state_encoding", choices=["none", "fourier"], default="fourier")
@@ -340,7 +341,7 @@ parser.add_argument(
     default=None,
     help="Directory containing generated Isaac per-episode YAML configs.",
 )
-parser.add_argument("--target_reward_body", default="sfp_tip_link")
+parser.add_argument("--target_reward_body", default="auto")
 parser.add_argument("--target_reward_progress_weight", type=float, default=0.25)
 parser.add_argument("--target_reward_progress_scale", type=float, default=0.003)
 parser.add_argument("--target_reward_distance_weight", type=float, default=0.25)
@@ -362,6 +363,15 @@ parser.add_argument("--target_reward_axial_progress_scale", type=float, default=
 parser.add_argument("--target_reward_insertion_corridor_weight", type=float, default=0.0)
 parser.add_argument("--target_reward_insertion_corridor_sigma", type=float, default=0.0025)
 parser.add_argument("--target_reward_insertion_bypass_penalty_scale", type=float, default=1.0)
+parser.add_argument(
+    "--target_reward_insertion_orientation_gate_std",
+    type=float,
+    default=0.0,
+    help=(
+        "If >0, gate axial/corridor insertion rewards by tip orientation error using "
+        "exp(-(error/std)^2). Forward progress with poor orientation becomes negative."
+    ),
+)
 parser.add_argument("--target_reward_insertion_axis", type=int, choices=[0, 1, 2], default=0)
 parser.add_argument(
     "--reward_preset",
@@ -428,6 +438,24 @@ parser.add_argument(
 )
 parser.add_argument("--disable_command_pose_rewards", action=argparse.BooleanOptionalAction, default=True)
 parser.add_argument("--gripper_joint_position", type=float, default=0.0035405)
+parser.add_argument(
+    "--near_gate_reset_max_iterations",
+    type=int,
+    default=0,
+    help="If >0, override the IK iteration count for reset_robot_tcp_to_episode_start.",
+)
+parser.add_argument(
+    "--near_gate_reset_position_tolerance",
+    type=float,
+    default=0.0,
+    help="If >0, override the near-gate reset body position tolerance in meters.",
+)
+parser.add_argument(
+    "--near_gate_reset_orientation_tolerance",
+    type=float,
+    default=0.0,
+    help="If >0, override the near-gate reset body orientation tolerance in radians.",
+)
 parser.add_argument("--disable_fabric", action="store_true", default=False)
 parser.add_argument("--save_step_images", action=argparse.BooleanOptionalAction, default=False)
 parser.add_argument(
@@ -521,29 +549,49 @@ parser.add_argument(
     ),
 )
 AppLauncher.add_app_launcher_args(parser)
+def _preset_flag_explicit(flag: str) -> bool:
+    return flag in globals().get("_explicit_cli_flags", set())
+
+
+def _set_preset_default(args: argparse.Namespace, attr: str, flag: str, value: object) -> None:
+    if not _preset_flag_explicit(flag):
+        setattr(args, attr, value)
+
+
 def _apply_reward_preset(args: argparse.Namespace) -> None:
     if args.reward_preset == "default":
         return
     if args.reward_preset != "near_gate_corridor_v1":
         raise ValueError(f"Unsupported reward preset: {args.reward_preset}")
-    args.target_reward_distance_weight = 0.02
-    args.target_reward_close_weight = 0.05
-    args.target_reward_progress_weight = 0.0
-    args.target_reward_lateral_weight = -0.10
-    args.target_reward_lateral_error_scale = 0.006
-    args.target_reward_lateral_progress_weight = 0.25
-    args.target_reward_lateral_progress_scale = 0.001
-    args.target_reward_axial_progress_weight = 0.25
-    args.target_reward_axial_progress_scale = 0.001
-    args.target_reward_lateral_gate_sigma = 0.004
-    args.target_reward_insertion_corridor_weight = 0.50
-    args.target_reward_insertion_corridor_sigma = 0.0025
-    args.target_reward_insertion_bypass_penalty_scale = 2.0
-    args.target_reward_orientation_weight = 0.05
-    args.target_reward_orientation_std = 0.10
-    args.target_reward_orientation_gate_sigma = 0.010
-    args.force_delta_penalty_weight = 0.05
-    args.terminate_on_target_success = True
+    _set_preset_default(args, "target_reward_distance_weight", "--target_reward_distance_weight", 0.02)
+    _set_preset_default(args, "target_reward_close_weight", "--target_reward_close_weight", 0.05)
+    _set_preset_default(args, "target_reward_progress_weight", "--target_reward_progress_weight", 0.0)
+    _set_preset_default(args, "target_reward_lateral_weight", "--target_reward_lateral_weight", -0.10)
+    _set_preset_default(args, "target_reward_lateral_error_scale", "--target_reward_lateral_error_scale", 0.006)
+    _set_preset_default(args, "target_reward_lateral_progress_weight", "--target_reward_lateral_progress_weight", 0.25)
+    _set_preset_default(args, "target_reward_lateral_progress_scale", "--target_reward_lateral_progress_scale", 0.001)
+    _set_preset_default(args, "target_reward_axial_progress_weight", "--target_reward_axial_progress_weight", 0.25)
+    _set_preset_default(args, "target_reward_axial_progress_scale", "--target_reward_axial_progress_scale", 0.001)
+    _set_preset_default(args, "target_reward_lateral_gate_sigma", "--target_reward_lateral_gate_sigma", 0.004)
+    _set_preset_default(args, "target_reward_insertion_corridor_weight", "--target_reward_insertion_corridor_weight", 0.50)
+    _set_preset_default(args, "target_reward_insertion_corridor_sigma", "--target_reward_insertion_corridor_sigma", 0.0025)
+    _set_preset_default(
+        args,
+        "target_reward_insertion_bypass_penalty_scale",
+        "--target_reward_insertion_bypass_penalty_scale",
+        2.0,
+    )
+    _set_preset_default(
+        args,
+        "target_reward_insertion_orientation_gate_std",
+        "--target_reward_insertion_orientation_gate_std",
+        0.10,
+    )
+    _set_preset_default(args, "target_reward_orientation_weight", "--target_reward_orientation_weight", 0.05)
+    _set_preset_default(args, "target_reward_orientation_std", "--target_reward_orientation_std", 0.10)
+    _set_preset_default(args, "target_reward_orientation_gate_sigma", "--target_reward_orientation_gate_sigma", 0.010)
+    _set_preset_default(args, "force_delta_penalty_weight", "--force_delta_penalty_weight", 0.05)
+    _set_preset_default(args, "terminate_on_target_success", "--terminate_on_target_success", True)
     if not bool(getattr(args, "_target_success_axial_threshold_explicit", False)):
         args.target_success_axial_threshold = 0.00025
     if not bool(getattr(args, "_target_success_lateral_threshold_explicit", False)):
@@ -1144,7 +1192,7 @@ def _target_reward_body_position_offset(args: argparse.Namespace) -> tuple[float
     if args.target_reward_body_position_offset is not None:
         return tuple(float(v) for v in args.target_reward_body_position_offset)
     if args.task_family == "sfp_to_nic":
-        if args.target_reward_body == "sfp_tip_link":
+        if _resolved_target_reward_body(args) == "sfp_tip_link":
             return (0.0, 0.0, 0.0)
         return SFP_TIP_LOCAL
     return (0.0, 0.0, 0.0)
@@ -1152,16 +1200,23 @@ def _target_reward_body_position_offset(args: argparse.Namespace) -> tuple[float
 
 def _target_reward_body_orientation_offset(args: argparse.Namespace) -> tuple[float, float, float, float] | None:
     if args.task_family == "sfp_to_nic":
-        if args.target_reward_body == "sfp_tip_link":
+        if _resolved_target_reward_body(args) == "sfp_tip_link":
             return _quat_from_rpy(0.0, math.pi, 0.0)
         return _quat_from_rpy(*SFP_TIP_RPY)
     return None
 
 
+def _resolved_target_reward_body(args: argparse.Namespace) -> str:
+    raw = str(getattr(args, "target_reward_body", "auto"))
+    if raw != "auto":
+        return raw
+    return "sc_tip_link" if args.task_family == "sc_to_sc" else "sfp_tip_link"
+
+
 def _configure_task_geometry_rewards(env_cfg: Any, args: argparse.Namespace) -> dict[str, Any]:
     rewards = env_cfg.rewards
     target_scene_name = _isaac_target_scene_name(args)
-    target_body = [str(args.target_reward_body)]
+    target_body = [_resolved_target_reward_body(args)]
     target_position_offset = _target_reward_position_offset(args)
     body_position_offset = _target_reward_body_position_offset(args)
     target_orientation_offset = _target_reward_orientation_offset(args)
@@ -1208,6 +1263,10 @@ def _configure_task_geometry_rewards(env_cfg: Any, args: argparse.Namespace) -> 
     rewards.target_axial_progress.params["scale"] = float(args.target_reward_axial_progress_scale)
     rewards.target_axial_progress.params["insertion_axis"] = int(args.target_reward_insertion_axis)
     rewards.target_axial_progress.params["lateral_gate_sigma"] = float(args.target_reward_lateral_gate_sigma)
+    rewards.target_axial_progress.params["orientation_gate_std"] = float(
+        args.target_reward_insertion_orientation_gate_std
+    )
+    rewards.target_axial_progress.params["body_orientation_offset"] = body_orientation_offset
     rewards.target_insertion_corridor.params["insertion_axis"] = int(args.target_reward_insertion_axis)
     rewards.target_insertion_corridor.params["lateral_gate_sigma"] = float(
         args.target_reward_insertion_corridor_sigma
@@ -1215,6 +1274,10 @@ def _configure_task_geometry_rewards(env_cfg: Any, args: argparse.Namespace) -> 
     rewards.target_insertion_corridor.params["bypass_penalty_scale"] = float(
         args.target_reward_insertion_bypass_penalty_scale
     )
+    rewards.target_insertion_corridor.params["orientation_gate_std"] = float(
+        args.target_reward_insertion_orientation_gate_std
+    )
+    rewards.target_insertion_corridor.params["body_orientation_offset"] = body_orientation_offset
     success_axial_threshold = (
         float(args.target_success_termination_threshold)
         if args.target_success_axial_threshold is None
@@ -1313,6 +1376,7 @@ def _configure_task_geometry_rewards(env_cfg: Any, args: argparse.Namespace) -> 
         "insertion_corridor_weight": float(args.target_reward_insertion_corridor_weight),
         "insertion_corridor_sigma": float(args.target_reward_insertion_corridor_sigma),
         "insertion_bypass_penalty_scale": float(args.target_reward_insertion_bypass_penalty_scale),
+        "insertion_orientation_gate_std": float(args.target_reward_insertion_orientation_gate_std),
         "insertion_axis": int(args.target_reward_insertion_axis),
         "force_delta_penalty_weight": float(args.force_delta_penalty_weight) if hasattr(rewards, "force_delta_penalty") else 0.0,
         "force_delta_threshold": float(args.force_delta_threshold),
@@ -1340,6 +1404,22 @@ def _configure_task_geometry_rewards(env_cfg: Any, args: argparse.Namespace) -> 
         },
         "command_pose_rewards_disabled": bool(args.disable_command_pose_rewards),
     }
+
+
+def _configure_near_gate_reset(env_cfg: Any, args: argparse.Namespace) -> dict[str, Any]:
+    events = getattr(env_cfg, "events", None)
+    term = None if events is None else getattr(events, "reset_robot_tcp_to_episode_start", None)
+    params = None if term is None else getattr(term, "params", None)
+    if params is None:
+        return {"configured": False, "reason": "missing reset_robot_tcp_to_episode_start event"}
+    before = dict(params)
+    if int(getattr(args, "near_gate_reset_max_iterations", 0)) > 0:
+        params["max_iterations"] = int(args.near_gate_reset_max_iterations)
+    if float(getattr(args, "near_gate_reset_position_tolerance", 0.0)) > 0.0:
+        params["position_tolerance"] = float(args.near_gate_reset_position_tolerance)
+    if float(getattr(args, "near_gate_reset_orientation_tolerance", 0.0)) > 0.0:
+        params["orientation_tolerance"] = float(args.near_gate_reset_orientation_tolerance)
+    return {"configured": True, "before": before, "after": dict(params)}
 
 
 class ReplayBuffer:
@@ -2417,6 +2497,9 @@ def _cheatcode_transform_guided_policy_action(
     *,
     step_size: float,
     rotation_step_size: float,
+    axial_step_size: float | None,
+    lateral_switch_m: float,
+    axial_blend_lateral_m: float,
     action_frame: str,
     device: torch.device,
 ) -> torch.Tensor:
@@ -2452,7 +2535,39 @@ def _cheatcode_transform_guided_policy_action(
         body_quat_w,
         task_geometry_reward_config.get("body_position_offset"),
     )
-    desired_controlled_pos_w = target_pos_w + (controlled_pos_w - body_point_w)
+    rotation_gate = torch.ones((batch_size, 1), dtype=guide.dtype, device=device)
+    entrance_w = _episode_entrance_position_from_yaml(env)
+    axis_w = _episode_insertion_axis_from_yaml(env)
+    if entrance_w is not None and axis_w is not None:
+        entrance_w = entrance_w.to(device=device, dtype=guide.dtype)
+        axis_w = axis_w.to(device=device, dtype=guide.dtype)
+        target_depth = torch.sum((target_pos_w - entrance_w) * axis_w, dim=1, keepdim=True)
+        tip_delta = body_point_w - entrance_w
+        axial_depth = torch.sum(tip_delta * axis_w, dim=1, keepdim=True)
+        lateral_vec = tip_delta - axial_depth * axis_w
+        lateral_distance = torch.linalg.norm(lateral_vec, dim=1, keepdim=True)
+        lateral_correction = -lateral_vec
+        lateral_direction = lateral_correction / lateral_distance.clamp(min=1.0e-9)
+        lateral_step = max(float(step_size), 0.0)
+        axial_step = lateral_step if axial_step_size is None or float(axial_step_size) <= 0.0 else float(axial_step_size)
+        lateral_move = lateral_direction * torch.minimum(lateral_distance, torch.full_like(lateral_distance, lateral_step))
+        axial_delta = (target_depth - axial_depth).clamp(min=0.0) * axis_w
+        axial_distance = torch.linalg.norm(axial_delta, dim=1, keepdim=True)
+        axial_direction = axial_delta / axial_distance.clamp(min=1.0e-9)
+        axial_move = axial_direction * torch.minimum(axial_distance, torch.full_like(axial_distance, max(axial_step, 0.0)))
+        lateral_switch = max(float(lateral_switch_m), 0.0)
+        blend_width = max(float(axial_blend_lateral_m), 1.0e-9)
+        lateral_blend = (lateral_distance / blend_width).clamp(min=0.0, max=1.0)
+        use_lateral_only = lateral_distance > lateral_switch
+        move_w = torch.where(use_lateral_only, lateral_move, axial_move + lateral_move * lateral_blend)
+        rotation_gate = torch.where(
+            use_lateral_only,
+            torch.zeros_like(lateral_distance),
+            (1.0 - lateral_distance / blend_width).clamp(min=0.0, max=1.0),
+        )
+        desired_controlled_pos_w = controlled_pos_w + move_w
+    else:
+        desired_controlled_pos_w = target_pos_w + (controlled_pos_w - body_point_w)
     delta_pos_w = desired_controlled_pos_w - controlled_pos_w
 
     if target_quat_w is None or float(rotation_step_size) <= 0.0:
@@ -2497,7 +2612,7 @@ def _cheatcode_transform_guided_policy_action(
         ),
     )
     delta_rot_frame = math_utils.axis_angle_from_quat(delta_quat_frame)
-    guide[:, 3:6] = _clip_vector_norm(delta_rot_frame, rotation_step_size)
+    guide[:, 3:6] = _clip_vector_norm(delta_rot_frame, rotation_step_size) * rotation_gate
     return guide
 
 
@@ -2521,6 +2636,9 @@ def _target_guided_policy_action(
             task_geometry_reward_config,
             step_size=step_size,
             rotation_step_size=rotation_step_size,
+            axial_step_size=axial_step_size,
+            lateral_switch_m=lateral_switch_m,
+            axial_blend_lateral_m=axial_blend_lateral_m,
             action_frame=action_frame,
             device=device,
         )
@@ -3169,7 +3287,17 @@ def _insertion_geometry_diagnostics(env, reward_config: dict[str, Any]) -> dict[
     lateral_error = geometry.lateral_error
     lateral_gate = geometry.lateral_gate
     depth_fraction = geometry.depth_fraction
-    centered_depth_fraction = depth_fraction * lateral_gate
+    target_quat = _target_orientation_from_reward_config(env, reward_config)
+    body_quat = _body_orientation_by_name(env, body_name, reward_config.get("body_orientation_offset"))
+    orientation_error = None
+    orientation_gate = None
+    orientation_gate_std = float(reward_config.get("insertion_orientation_gate_std", 0.0) or 0.0)
+    if target_quat is not None and body_quat is not None:
+        orientation_error = math_utils.quat_error_magnitude(body_quat, target_quat)
+        if orientation_gate_std > 0.0:
+            orientation_gate = torch.exp(-torch.square(orientation_error / max(orientation_gate_std, 1.0e-9)))
+    semantic_gate = lateral_gate if orientation_gate is None else lateral_gate * orientation_gate
+    centered_depth_fraction = depth_fraction * semantic_gate
     out.update(
         {
             "has_entrance": True,
@@ -3200,6 +3328,16 @@ def _insertion_geometry_diagnostics(env, reward_config: dict[str, Any]) -> dict[
             "lateral_gate_mean": float(lateral_gate.mean().detach().cpu()),
             "lateral_gate_env0": float(lateral_gate[0].detach().cpu()),
             "lateral_gate_by_env": _tensor_1d_list(lateral_gate),
+            "orientation_error_rad_mean": None if orientation_error is None else float(orientation_error.mean().detach().cpu()),
+            "orientation_error_rad_env0": None if orientation_error is None else float(orientation_error[0].detach().cpu()),
+            "orientation_error_rad_by_env": None if orientation_error is None else _tensor_1d_list(orientation_error),
+            "orientation_gate_std": orientation_gate_std,
+            "orientation_gate_mean": None if orientation_gate is None else float(orientation_gate.mean().detach().cpu()),
+            "orientation_gate_env0": None if orientation_gate is None else float(orientation_gate[0].detach().cpu()),
+            "orientation_gate_by_env": None if orientation_gate is None else _tensor_1d_list(orientation_gate),
+            "semantic_gate_mean": float(semantic_gate.mean().detach().cpu()),
+            "semantic_gate_env0": float(semantic_gate[0].detach().cpu()),
+            "semantic_gate_by_env": _tensor_1d_list(semantic_gate),
             "distance_to_target_m_mean": float(torch.linalg.norm(body_pos - target_pos, dim=1).mean().detach().cpu()),
             "distance_to_target_m_env0": float(torch.linalg.norm(body_pos[0] - target_pos[0]).detach().cpu()),
             "distance_to_target_m_by_env": _tensor_1d_list(torch.linalg.norm(body_pos - target_pos, dim=1)),
@@ -4090,15 +4228,21 @@ class IsaacACTAdapterActor(nn.Module):
         base_action = base_action[:, : self.action_horizon, :].reshape(obs["state"].shape[0], -1)
         encoded_state = self.state_encoder(obs["state"])
         raw_delta_action = self.adapter(torch.cat([encoded_state, base_action], dim=-1))
-        if self.actor_mode == "act_adapter" and self.adapter_delta_clip is not None and self.adapter_delta_clip > 0.0:
-            delta_action = _straight_through_clamp(
-                raw_delta_action,
-                -self.adapter_delta_clip,
-                self.adapter_delta_clip,
-            )
+        if self.actor_mode == "act_adapter":
+            if self.adapter_delta_clip is not None and self.adapter_delta_clip > 0.0:
+                delta_action = _straight_through_clamp(
+                    raw_delta_action,
+                    -self.adapter_delta_clip,
+                    self.adapter_delta_clip,
+                )
+            else:
+                delta_action = raw_delta_action
+            unclipped_final_action = base_action + self.adapter_scale * delta_action
         else:
+            # Direct mode trains the head to emit the executed TCP delta pose itself.
+            # ACT remains a frozen contextual input, but is not added as a residual.
             delta_action = raw_delta_action
-        unclipped_final_action = base_action + self.adapter_scale * delta_action
+            unclipped_final_action = delta_action
         translation_clipped_action = (
             _clip_tcp_translation_norm(
                 unclipped_final_action,
@@ -4761,13 +4905,14 @@ def _act_only_training_context(args: argparse.Namespace) -> tuple[dict[str, Any]
         "action_horizon": action_horizon,
         "camera_keys": list(CAMERA_KEYS),
     }
+    direct_mode = str(args.act_only_actor_mode) == "act_direct"
     warmstart = {
-        "mode": "act_only_zero_adapter" if str(args.act_only_actor_mode) == "act_adapter" else "act_only_direct_init_to_act",
+        "mode": "act_only_zero_adapter" if not direct_mode else "act_only_direct_zero_head_with_act_context",
         "act_torchscript": str(args.act_torchscript),
         "adapter_scale": 1.0,
         "adapter_delta_clip": args.adapter_delta_clip,
         "initial_delta_norm": 0.0,
-        "initial_final_minus_act_norm": 0.0,
+        "initial_final_minus_act_norm": None if direct_mode else 0.0,
     }
     return offline_cfg, dataset_summary, warmstart
 
@@ -5171,6 +5316,7 @@ def main() -> None:
         env_cfg.observations.policy.right_rgb = None
     env_cfg_arm_action_scale_before = getattr(env_cfg.actions.arm_action, "scale", None)
     env_cfg.actions.arm_action.scale = args_cli.isaac_action_scale
+    near_gate_reset_config = _configure_near_gate_reset(env_cfg, args_cli)
     task_geometry_reward_config = _configure_task_geometry_rewards(env_cfg, args_cli)
     print(
         "[AIC SERL][diagnostic] action_scale_config "
@@ -5189,6 +5335,11 @@ def main() -> None:
     print(
         "[AIC SERL][diagnostic] target_reward_config "
         + json.dumps(_jsonable(task_geometry_reward_config), sort_keys=True),
+        flush=True,
+    )
+    print(
+        "[AIC SERL][diagnostic] near_gate_reset_config "
+        + json.dumps(_jsonable(near_gate_reset_config), sort_keys=True),
         flush=True,
     )
     print("[AIC SERL] Creating Isaac env", flush=True)

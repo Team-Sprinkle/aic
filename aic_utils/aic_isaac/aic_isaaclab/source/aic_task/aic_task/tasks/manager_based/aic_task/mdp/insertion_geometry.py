@@ -83,10 +83,11 @@ def insertion_corridor_reward(
     geometry: InsertionGeometry,
     *,
     bypass_penalty_scale: float,
+    semantic_gate: torch.Tensor | None = None,
 ) -> torch.Tensor:
     """Reward centered seated depth and penalize deep off-center bypass."""
     depth_fraction = geometry.depth_fraction
-    gate = geometry.lateral_gate
+    gate = geometry.lateral_gate if semantic_gate is None else geometry.lateral_gate * semantic_gate.to(geometry.lateral_gate.device)
     centered_depth_reward = depth_fraction * gate
     bypass_penalty = depth_fraction * (1.0 - gate) * max(float(bypass_penalty_scale), 0.0)
     return centered_depth_reward - bypass_penalty
@@ -98,6 +99,7 @@ def signed_axial_progress_reward(
     current_depth: torch.Tensor,
     lateral_gate: torch.Tensor,
     scale: float,
+    semantic_gate: torch.Tensor | None = None,
 ) -> torch.Tensor:
     """Reward signed progress from entrance toward seated depth.
 
@@ -106,7 +108,8 @@ def signed_axial_progress_reward(
     not pay the policy for retreating beside the port.
     """
     progress = ((current_depth - previous_depth) / max(float(scale), 1.0e-9)).clamp(min=-1.0, max=1.0)
-    signed_gate = 2.0 * lateral_gate - 1.0
+    gate = lateral_gate if semantic_gate is None else lateral_gate * semantic_gate.to(lateral_gate.device)
+    signed_gate = 2.0 * gate - 1.0
     return torch.where(progress > 0.0, progress * signed_gate, progress)
 
 

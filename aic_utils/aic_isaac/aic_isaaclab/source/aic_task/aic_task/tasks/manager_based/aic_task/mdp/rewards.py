@@ -292,6 +292,28 @@ def _target_orientation_w(
     return _offset_quat_w(target_asset.data.root_quat_w, target_orientation_offset)
 
 
+def _orientation_gate(
+    env: ManagerBasedRLEnv,
+    body_asset: RigidObject,
+    body_id: int,
+    target_asset: RigidObject,
+    *,
+    orientation_gate_std: float | None,
+    body_orientation_offset: tuple[float, float, float, float] | list[float] | None,
+    target_orientation_offset: tuple[float, float, float, float] | list[float] | None,
+) -> torch.Tensor | None:
+    if orientation_gate_std is None or float(orientation_gate_std) <= 0.0:
+        return None
+    body_quat_w = _offset_quat_w(
+        body_asset.data.body_quat_w[:, body_id],  # type: ignore
+        body_orientation_offset,
+    )
+    target_quat_w = _target_orientation_w(env, target_asset, target_orientation_offset)
+    error = quat_error_magnitude(body_quat_w, target_quat_w)
+    std = max(float(orientation_gate_std), 1.0e-9)
+    return torch.exp(-torch.square(error / std))
+
+
 def _quat_conjugate_wxyz(quat: torch.Tensor) -> torch.Tensor:
     return torch.cat([quat[:, 0:1], -quat[:, 1:4]], dim=1)
 
@@ -676,8 +698,10 @@ def body_to_object_axial_progress(
     target_cfg: SceneEntityCfg,
     insertion_axis: int = 0,
     lateral_gate_sigma: float | None = None,
+    orientation_gate_std: float | None = None,
     target_position_offset: tuple[float, float, float] | list[float] | None = None,
     body_position_offset: tuple[float, float, float] | list[float] | None = None,
+    body_orientation_offset: tuple[float, float, float, float] | list[float] | None = None,
     target_orientation_offset: tuple[float, float, float, float] | list[float] | None = None,
 ) -> torch.Tensor:
     """Reward reducing signed gap along the insertion axis in the target frame.
@@ -717,6 +741,15 @@ def body_to_object_axial_progress(
             current_depth=current_depth,
             lateral_gate=geometry.lateral_gate,
             scale=scale,
+            semantic_gate=_orientation_gate(
+                env,
+                body_asset,
+                body_cfg.body_ids[0],
+                target_asset,
+                orientation_gate_std=orientation_gate_std,
+                body_orientation_offset=body_orientation_offset,
+                target_orientation_offset=target_orientation_offset,
+            ),
         )
         setattr(env, "_aic_previous_target_axial_depth", current_depth.detach().clone())
         return reward
@@ -762,8 +795,10 @@ def body_to_object_insertion_corridor(
     insertion_axis: int = 0,
     lateral_gate_sigma: float = 0.0025,
     bypass_penalty_scale: float = 1.0,
+    orientation_gate_std: float | None = None,
     target_position_offset: tuple[float, float, float] | list[float] | None = None,
     body_position_offset: tuple[float, float, float] | list[float] | None = None,
+    body_orientation_offset: tuple[float, float, float, float] | list[float] | None = None,
     target_orientation_offset: tuple[float, float, float, float] | list[float] | None = None,
 ) -> torch.Tensor:
     """Reward being seated along the entrance corridor and punish off-axis bypass.
@@ -787,7 +822,19 @@ def body_to_object_insertion_corridor(
             axis_w=axis_w,
             lateral_gate_sigma=lateral_gate_sigma,
         )
-        return insertion_corridor_reward(geometry, bypass_penalty_scale=bypass_penalty_scale)
+        return insertion_corridor_reward(
+            geometry,
+            bypass_penalty_scale=bypass_penalty_scale,
+            semantic_gate=_orientation_gate(
+                env,
+                body_asset,
+                body_cfg.body_ids[0],
+                target_asset,
+                orientation_gate_std=orientation_gate_std,
+                body_orientation_offset=body_orientation_offset,
+                target_orientation_offset=target_orientation_offset,
+            ),
+        )
     else:
         delta_target = _target_frame_delta(
             env,
@@ -809,6 +856,19 @@ def body_to_object_insertion_corridor(
     gate = torch.exp(-torch.square(lateral_error / max(float(lateral_gate_sigma), 1.0e-9)))
     centered_depth_reward = depth_fraction * gate
     bypass_penalty = depth_fraction * (1.0 - gate) * max(float(bypass_penalty_scale), 0.0)
+    orientation_gate = _orientation_gate(
+        env,
+        body_asset,
+        body_cfg.body_ids[0],
+        target_asset,
+        orientation_gate_std=orientation_gate_std,
+        body_orientation_offset=body_orientation_offset,
+        target_orientation_offset=target_orientation_offset,
+    )
+    if orientation_gate is not None:
+        gate = gate * orientation_gate
+        centered_depth_reward = depth_fraction * gate
+        bypass_penalty = depth_fraction * (1.0 - gate) * max(float(bypass_penalty_scale), 0.0)
     return centered_depth_reward - bypass_penalty
 
 

@@ -34,6 +34,7 @@ SFP_PORT_LOCAL = {
 }
 SFP_PORT_RPY = (4.69895, 0.0, 0.0)
 SFP_PORT_ENTRANCE_LOCAL = (0.0, 0.0, -0.0458)
+SFP_TIP_LOCAL = (0.0, 0.02365, 0.0)
 SC_PORT_TARGET_LOCAL = (0.093, 0.140, 0.020)
 SC_INSERTION_AXIS_WORLD = (0.0, 1.0, 0.0)
 
@@ -277,8 +278,21 @@ def _target_spec(
     board_pos: tuple[float, float, float],
     request: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
+    scene = (request or {}).get("scene") or {}
+    tip_cfg = scene.get("end_effector_tip") or {}
+    if tip_cfg and not isinstance(tip_cfg, dict):
+        raise ValueError("scene.end_effector_tip must be a mapping")
+
+    def _tip_body(default_body: str) -> str:
+        return str(tip_cfg.get("body_name") or default_body)
+
+    def _tip_offset(default_offset: tuple[float, float, float]) -> tuple[float, float, float]:
+        raw = tip_cfg.get("body_position_offset", default_offset)
+        if not isinstance(raw, (list, tuple)) or len(raw) != 3:
+            raise ValueError("scene.end_effector_tip.body_position_offset must be a 3-value list")
+        return (float(raw[0]), float(raw[1]), float(raw[2]))
+
     if context["task_family"] == "sfp_to_nic":
-        scene = (request or {}).get("scene") or {}
         target_cfg = scene.get("target") or {}
         entrance_axis_offset_m = float(target_cfg.get("entrance_axis_offset_m", 0.0))
         part = DEFAULT_PARTS["nic_card"]
@@ -303,11 +317,15 @@ def _target_spec(
             if seated_depth <= 0.0:
                 raise ValueError("scene.target.seated_depth_m must be positive")
             position = _vadd(entrance_position, _vscale(entrance_axis, seated_depth))
+        tip_body = _tip_body("sfp_tip_link")
+        tip_offset = _tip_offset((0.0, 0.0, 0.0) if tip_body == "sfp_tip_link" else SFP_TIP_LOCAL)
         return {
             "scene_name": "nic_card",
-            "target_reward_body": "sfp_tip_link",
+            "target_reward_body": tip_body,
             "target_position_offset": _round3(target_offset),
-            "body_position_offset": [0.0, 0.0, 0.0],
+            "body_position_offset": _round3(tip_offset),
+            "end_effector_tip_body": tip_body,
+            "end_effector_tip_body_position_offset": _round3(tip_offset),
             "target_pose_world": {"position": _round3(position), "orientation_wxyz": _round4(target_orientation)},
             "entrance_pose_world": {"position": _round3(entrance_position), "orientation_wxyz": _round4(target_orientation)},
             "body_start_orientation_wxyz": _round4(body_orientation),
@@ -319,11 +337,15 @@ def _target_spec(
     scene_name = "sc_port" if int(context["target_port_index"]) == 0 else "sc_port_2"
     part = DEFAULT_PARTS[scene_name]
     position = _vadd(_vadd(board_pos, part["offset"]), SC_PORT_TARGET_LOCAL)
+    tip_body = _tip_body("sc_tip_link")
+    tip_offset = _tip_offset((0.0, 0.0, 0.0))
     return {
         "scene_name": scene_name,
-        "target_reward_body": "sfp_tip_link",
+        "target_reward_body": tip_body,
         "target_position_offset": _round3(SC_PORT_TARGET_LOCAL),
-        "body_position_offset": [0.0, 0.0, 0.0],
+        "body_position_offset": _round3(tip_offset),
+        "end_effector_tip_body": tip_body,
+        "end_effector_tip_body_position_offset": _round3(tip_offset),
         "target_pose_world": {"position": _round3(position), "orientation_wxyz": None},
         "insertion_axis_world": _round3(SC_INSERTION_AXIS_WORLD),
     }
@@ -351,7 +373,9 @@ def _apply_start_near_gate(
         for v in (target.get("entrance_pose_world") or target["target_pose_world"])["position"]
     )
     axis = tuple(float(v) for v in target["insertion_axis_world"])
-    reset_body_name = str(start.get("reset_body_name") or target.get("target_reward_body") or "sfp_tip_link")
+    tip_body_name = str(target.get("end_effector_tip_body") or target.get("target_reward_body") or "sfp_tip_link")
+    tip_body_offset = tuple(float(v) for v in target.get("end_effector_tip_body_position_offset", [0.0, 0.0, 0.0]))
+    reset_body_name = str(start.get("reset_body_name") or tip_body_name)
     min_clearance = float(start.get("min_clearance_m", 0.02))
     if "distance" in start:
         distance = float(start["distance"])
@@ -407,13 +431,25 @@ def _apply_start_near_gate(
         if not isinstance(offset_raw, (list, tuple)) or len(offset_raw) != 3:
             raise ValueError("scene.start_near_gate.reset_body_offset_from_reference_world must be a 3-value list")
         reset_body_offset = (float(offset_raw[0]), float(offset_raw[1]), float(offset_raw[2]))
-    reset_body_position = _vadd(reference, reset_body_offset)
     orientation_raw = start.get("reset_body_orientation_wxyz")
     reset_body_orientation = target.get("body_start_orientation_wxyz")
     if orientation_raw is not None:
         if not isinstance(orientation_raw, (list, tuple)) or len(orientation_raw) != 4:
             raise ValueError("scene.start_near_gate.reset_body_orientation_wxyz must be a 4-value list")
         reset_body_orientation = [round(float(v), 6) for v in orientation_raw]
+    if (
+        offset_raw is None
+        and reset_body_name == tip_body_name
+        and _vnorm(tip_body_offset) > 0.0
+    ):
+        if not isinstance(reset_body_orientation, (list, tuple)) or len(reset_body_orientation) != 4:
+            raise ValueError(
+                "scene.start_near_gate requires reset_body_orientation_wxyz or a target body orientation "
+                "when end_effector_tip.body_position_offset is non-zero"
+            )
+        offset_world = _quat_apply_wxyz(tuple(float(v) for v in reset_body_orientation), tip_body_offset)
+        reset_body_offset = _vscale(offset_world, -1.0)
+    reset_body_position = _vadd(reference, reset_body_offset)
     ref_delta = _vsub(reference, gate_position)
     axial_component = abs(_vdot(ref_delta, axis))
     lateral_component = math.sqrt(max(0.0, _vnorm(ref_delta) ** 2 - axial_component * axial_component))
@@ -423,7 +459,9 @@ def _apply_start_near_gate(
         "reset_body_name": reset_body_name,
         "body_start_position_world": _round3(reset_body_position),
         "body_start_orientation_wxyz": reset_body_orientation,
-        "reference_reward_body_name": target.get("target_reward_body") or "sfp_tip_link",
+        "reference_reward_body_name": tip_body_name,
+        "reference_reward_body_position_offset": _round3(tip_body_offset),
+        "reference_tip_center_position_world": _round3(reference),
         "reference_reward_body_start_position_world": _round3(reference),
         "reference_reward_body_start_orientation_wxyz": target.get("body_start_orientation_wxyz"),
         "reset_body_offset_from_reference_world": _round3(reset_body_offset),

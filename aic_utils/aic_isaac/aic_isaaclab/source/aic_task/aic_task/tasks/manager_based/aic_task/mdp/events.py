@@ -343,6 +343,7 @@ def reset_robot_tcp_to_episode_start(
     orientation_tolerance: float = 0.05,
     damping: float = 0.05,
     max_joint_delta: float = 0.25,
+    sync_action_term_after_reset: bool = True,
 ) -> None:
     """Move robot reset body to child-YAML near-gate reset poses.
 
@@ -482,6 +483,25 @@ def reset_robot_tcp_to_episode_start(
     if hasattr(env, "sim"):
         env.sim.forward()
     robot.update(0.0)
+    if sync_action_term_after_reset:
+        action_manager = getattr(env, "action_manager", None)
+        if action_manager is not None:
+            try:
+                action_term = action_manager.get_term("arm_action")
+            except Exception:
+                action_term = None
+            if action_term is not None and hasattr(action_term, "process_actions"):
+                zeros_action = torch.zeros(
+                    (getattr(env, "num_envs", robot.data.joint_pos.shape[0]), action_term.action_dim),
+                    dtype=robot.data.joint_pos.dtype,
+                    device=env.device,
+                )
+                action_term.process_actions(zeros_action)
+                try:
+                    action_manager._action[active_env_ids] = 0.0
+                    action_manager._prev_action[active_env_ids] = 0.0
+                except Exception:
+                    pass
 
     final_error = torch.linalg.norm(
         target_pos - robot.data.body_pos_w[active_env_ids, body_id].to(dtype=torch.float32),
@@ -518,5 +538,6 @@ def reset_robot_tcp_to_episode_start(
             "position_tolerance_m": float(position_tolerance),
             "orientation_tolerance_rad": float(orientation_tolerance),
             "full_joint_velocities_zeroed": True,
+            "action_term_synced_after_reset": bool(sync_action_term_after_reset),
         }
     setattr(env, "_aic_tcp_reset_report_by_env", report)

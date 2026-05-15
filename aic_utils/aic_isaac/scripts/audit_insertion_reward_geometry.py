@@ -36,12 +36,20 @@ def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--run-name", default=None)
     parser.add_argument("--output-root", type=Path, default=Path("outputs/reward_audits"))
-    parser.add_argument("--target-depth-m", type=float, default=0.0012963)
+    parser.add_argument(
+        "--target-depth-m",
+        type=float,
+        default=0.008,
+        help=(
+            "Seated depth from entrance along the insertion axis. The reward helper "
+            "intentionally rejects collapsed geometry below 3 mm."
+        ),
+    )
     parser.add_argument("--sigma-r", type=float, default=0.0025)
     parser.add_argument("--bypass-penalty-scale", type=float, default=2.0)
     parser.add_argument("--axial-progress-scale", type=float, default=0.001)
     parser.add_argument("--axial-min-m", type=float, default=-0.004)
-    parser.add_argument("--axial-max-m", type=float, default=0.004)
+    parser.add_argument("--axial-max-m", type=float, default=0.012)
     parser.add_argument("--lateral-max-m", type=float, default=0.012)
     parser.add_argument("--grid", type=int, default=161)
     return parser.parse_args()
