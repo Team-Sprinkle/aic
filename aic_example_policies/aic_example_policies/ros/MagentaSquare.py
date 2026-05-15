@@ -137,6 +137,7 @@ class SfpNicPortImageScore:
     score: float
     rectangular_edge_score: float
     axis_edge_score: float
+    rail_parallel_score: float
     rectangle_dark_score: float
     center_dark_score: float
     scale_score: float
@@ -193,7 +194,35 @@ class MagentaSquare(Policy):
     )
     SFP_NIC_PORT_OPENING_HALF_WIDTH = 0.008112
     SFP_NIC_PORT_OPENING_HALF_HEIGHT = 0.0056
-    SFP_NIC_MAX_RECOVERY_RETRIES = 2
+    SFP_NIC_MAX_RECOVERY_RETRIES = 3
+    SFP_NIC_FRONT_RIDGE_LINES_CARD = (
+        (
+            np.array([-0.06435, -0.074646, 0.01352], dtype=np.float64),
+            np.array([0.04905, -0.074646, 0.01352], dtype=np.float64),
+        ),
+        (
+            np.array([-0.06435, -0.074646, -0.000751], dtype=np.float64),
+            np.array([0.04905, -0.074646, -0.000751], dtype=np.float64),
+        ),
+        (
+            np.array([-0.04485, -0.073499, 0.015586], dtype=np.float64),
+            np.array([0.03215, -0.073499, 0.015586], dtype=np.float64),
+        ),
+    )
+    SFP_NIC_CAGE_CENTER_X_CARD = {
+        0: 0.012963,
+        1: -0.010237,
+    }
+    SFP_NIC_CAGE_SIDE_HALF_WIDTH_M = 0.007806
+    SFP_NIC_CAGE_Y_BACK = -0.077314
+    SFP_NIC_CAGE_Y_FRONT = -0.028738
+    SFP_NIC_CAGE_Z_MID = 0.00547
+    SFP_NIC_CAGE_Z_TOP = 0.010484
+    SFP_NIC_CAGE_Z_BOTTOM = 0.000046
+    SFP_NIC_CIRCULAR_FEATURES_CARD = (
+        (np.array([0.03175, -0.063, -0.000988], dtype=np.float64), 0.00268),
+        (np.array([-0.02225, -0.0675, -0.000986], dtype=np.float64), 0.00268),
+    )
     SC_RAIL_X = -0.075
     SC_RAIL_Y = {
         0: 0.0295,
@@ -377,6 +406,9 @@ class MagentaSquare(Policy):
         self.short_edge_scan_max_steps = int(
             os.getenv("AIC_TRANSPORT_SHORT_EDGE_SCAN_MAX_STEPS", "10")
         )
+        self.sfp_nic_short_edge_scan_max_distance_m = float(
+            os.getenv("AIC_SFP_NIC_SHORT_EDGE_SCAN_MAX_DISTANCE_M", "0.3")
+        )
         self.short_edge_scan_duration_sec = float(
             os.getenv("AIC_TRANSPORT_SHORT_EDGE_SCAN_DURATION_SEC", "0.8")
         )
@@ -476,6 +508,62 @@ class MagentaSquare(Policy):
             "AIC_SFP_NIC_PAIR_LOCALIZER_ENABLED",
             default=True,
         )
+        self.sfp_nic_front_geometry_localizer_enabled = self._env_flag(
+            "AIC_SFP_NIC_FRONT_GEOMETRY_LOCALIZER_ENABLED",
+            default=True,
+        )
+        self.sfp_nic_front_geometry_score_weight = float(
+            os.getenv("AIC_SFP_NIC_FRONT_GEOMETRY_SCORE_WEIGHT", "0.50")
+        )
+        self.sfp_nic_rail_parallel_score_enabled = self._env_flag(
+            "AIC_SFP_NIC_RAIL_PARALLEL_SCORE_ENABLED",
+            default=True,
+        )
+        self.sfp_nic_rail_parallel_port_weight = float(
+            os.getenv("AIC_SFP_NIC_RAIL_PARALLEL_PORT_WEIGHT", "0.14")
+        )
+        self.sfp_nic_rail_parallel_pair_weight = float(
+            os.getenv("AIC_SFP_NIC_RAIL_PARALLEL_PAIR_WEIGHT", "0.12")
+        )
+        self.sfp_nic_rail_parallel_angle_window_rad = float(
+            os.getenv(
+                "AIC_SFP_NIC_RAIL_PARALLEL_ANGLE_WINDOW_RAD",
+                str(np.deg2rad(35.0)),
+            )
+        )
+        self.sfp_nic_rail_parallel_tolerance_rad = float(
+            os.getenv(
+                "AIC_SFP_NIC_RAIL_PARALLEL_TOLERANCE_RAD",
+                str(np.deg2rad(12.0)),
+            )
+        )
+        self.sfp_nic_debug_overlay_enabled = self._env_flag(
+            "AIC_SFP_NIC_DEBUG_OVERLAY_ENABLED",
+            default=False,
+        )
+        self.sfp_nic_debug_overlay_save = self._env_flag(
+            "AIC_SFP_NIC_DEBUG_OVERLAY_SAVE",
+            default=True,
+        )
+        self.sfp_nic_debug_overlay_stream = self._env_flag(
+            "AIC_SFP_NIC_DEBUG_OVERLAY_STREAM",
+            default=False,
+        )
+        self.sfp_nic_debug_overlay_dir = Path(
+            os.getenv(
+                "AIC_SFP_NIC_DEBUG_OVERLAY_DIR",
+                "outputs/debug/sfp_nic_port_pair",
+            )
+        )
+        self.sfp_nic_debug_overlay_topic = os.getenv(
+            "AIC_SFP_NIC_DEBUG_OVERLAY_TOPIC",
+            "/debug/sfp_nic_port_pair_overlay",
+        )
+        self._sfp_nic_debug_overlay_seq = 0
+        self._sfp_nic_debug_overlay_pub = None
+        self._sfp_nic_debug_image_msg_type = None
+        if self.sfp_nic_debug_overlay_enabled and self.sfp_nic_debug_overlay_stream:
+            self._setup_sfp_nic_debug_overlay_stream()
         self.sfp_nic_allow_prior_fallback = self._env_flag(
             "AIC_SFP_NIC_ALLOW_PRIOR_FALLBACK",
             default=True,
@@ -526,10 +614,81 @@ class MagentaSquare(Policy):
         )
         self.sfp_nic_force_stop_n = float(os.getenv("AIC_SFP_NIC_FORCE_STOP_N", "30.0"))
         self.sfp_nic_axial_force_delta_stop_n = float(
-            os.getenv("AIC_SFP_NIC_AXIAL_FORCE_DELTA_STOP_N", "5.0")
+            os.getenv("AIC_SFP_NIC_AXIAL_FORCE_DELTA_STOP_N", "2.0")
         )
         self.sfp_nic_axial_force_delta_min_distance_m = float(
             os.getenv("AIC_SFP_NIC_AXIAL_FORCE_DELTA_MIN_DISTANCE_M", "0.001")
+        )
+        self.sfp_nic_offset_exploration_enabled = self._env_flag(
+            "AIC_SFP_NIC_OFFSET_EXPLORATION_ENABLED",
+            default=True,
+        )
+        self.sfp_nic_offset_exploration_steps_x = int(
+            os.getenv("AIC_SFP_NIC_OFFSET_EXPLORATION_STEPS_X", "1")
+        )
+        self.sfp_nic_offset_exploration_steps_y = int(
+            os.getenv("AIC_SFP_NIC_OFFSET_EXPLORATION_STEPS_Y", "1")
+        )
+        self.sfp_nic_offset_exploration_max_probes = int(
+            os.getenv("AIC_SFP_NIC_OFFSET_EXPLORATION_MAX_PROBES", "3")
+        )
+        self.sfp_nic_offset_exploration_max_x_m = float(
+            os.getenv(
+                "AIC_SFP_NIC_OFFSET_EXPLORATION_MAX_X_M",
+                str(self.SFP_NIC_PORT_OPENING_HALF_WIDTH),
+            )
+        )
+        self.sfp_nic_offset_exploration_max_y_m = float(
+            os.getenv(
+                "AIC_SFP_NIC_OFFSET_EXPLORATION_MAX_Y_M",
+                str(self.SFP_NIC_PORT_OPENING_HALF_HEIGHT),
+            )
+        )
+        self.sfp_nic_offset_exploration_backoff_m = float(
+            os.getenv("AIC_SFP_NIC_OFFSET_EXPLORATION_BACKOFF_M", "0.0005")
+        )
+        self.sfp_nic_offset_exploration_descent_m = float(
+            os.getenv("AIC_SFP_NIC_OFFSET_EXPLORATION_DESCENT_M", "0.030")
+        )
+        self.sfp_nic_offset_exploration_insertion_check_depth_m = float(
+            os.getenv(
+                "AIC_SFP_NIC_OFFSET_EXPLORATION_INSERTION_CHECK_DEPTH_M",
+                "0.004",
+            )
+        )
+        self.sfp_nic_offset_exploration_slide_in_enabled = self._env_flag(
+            "AIC_SFP_NIC_OFFSET_EXPLORATION_SLIDE_IN_ENABLED",
+            default=True,
+        )
+        self.sfp_nic_offset_exploration_slide_force_min_n = float(
+            os.getenv("AIC_SFP_NIC_OFFSET_EXPLORATION_SLIDE_FORCE_MIN_N", "0.10")
+        )
+        self.sfp_nic_offset_exploration_slide_gain_m_per_n = float(
+            os.getenv("AIC_SFP_NIC_OFFSET_EXPLORATION_SLIDE_GAIN_M_PER_N", "0.00015")
+        )
+        self.sfp_nic_offset_exploration_slide_step_max_m = float(
+            os.getenv("AIC_SFP_NIC_OFFSET_EXPLORATION_SLIDE_STEP_MAX_M", "0.00075")
+        )
+        self.sfp_nic_offset_exploration_slide_total_max_m = float(
+            os.getenv("AIC_SFP_NIC_OFFSET_EXPLORATION_SLIDE_TOTAL_MAX_M", "0.00400")
+        )
+        self.sfp_nic_offset_exploration_slide_direction_tracking_enabled = (
+            self._env_flag(
+                "AIC_SFP_NIC_OFFSET_EXPLORATION_SLIDE_DIRECTION_TRACKING_ENABLED",
+                default=True,
+            )
+        )
+        self.sfp_nic_offset_exploration_slide_direction_memory_alpha = float(
+            os.getenv(
+                "AIC_SFP_NIC_OFFSET_EXPLORATION_SLIDE_DIRECTION_MEMORY_ALPHA",
+                "0.95",
+            )
+        )
+        self.sfp_nic_offset_exploration_slide_direction_step_m = float(
+            os.getenv(
+                "AIC_SFP_NIC_OFFSET_EXPLORATION_SLIDE_DIRECTION_STEP_M",
+                "0.00075",
+            )
         )
         self.sfp_nic_recovery_enabled = self._env_flag(
             "AIC_SFP_NIC_RECOVERY_ENABLED",
@@ -560,6 +719,31 @@ class MagentaSquare(Policy):
         if raw is None:
             return default
         return raw.strip().lower() in ("1", "true", "yes", "on")
+
+    def _setup_sfp_nic_debug_overlay_stream(self) -> None:
+        try:
+            from sensor_msgs.msg import Image
+        except ImportError as ex:
+            self.get_logger().warn(
+                "SFP/NIC debug overlay streaming disabled because sensor_msgs "
+                f"Image is unavailable: {ex}"
+            )
+            return
+
+        try:
+            self._sfp_nic_debug_image_msg_type = Image
+            self._sfp_nic_debug_overlay_pub = self._parent_node.create_publisher(
+                Image,
+                self.sfp_nic_debug_overlay_topic,
+                10,
+            )
+        except Exception as ex:
+            self._sfp_nic_debug_image_msg_type = None
+            self._sfp_nic_debug_overlay_pub = None
+            self.get_logger().warn(
+                "SFP/NIC debug overlay streaming disabled because publisher "
+                f"creation failed: {ex}"
+            )
 
     def _configured_tip_position_tcp(self) -> np.ndarray:
         keys = (
@@ -732,6 +916,206 @@ class MagentaSquare(Policy):
             port_axis_board=port_axis_board,
             width_axis_board=width_axis_board,
             height_axis_board=height_axis_board,
+        )
+
+    def _sfp_nic_card_points_to_board(
+        self,
+        points_card: np.ndarray,
+        *,
+        card_index: int,
+        rail_translation_m: float,
+        rail_yaw_rad: float,
+    ) -> np.ndarray:
+        points_card = np.asarray(points_card, dtype=np.float64).reshape(-1, 3)
+        mount_translation_board = np.array(
+            [
+                self.NIC_RAIL_X + float(rail_translation_m),
+                self.NIC_RAIL_Y0 + self.NIC_RAIL_Y_SPACING * card_index,
+                0.012,
+            ],
+            dtype=np.float64,
+        )
+        mount_rot_board = self._rot_z(float(rail_yaw_rad))
+        card_rot_mount = self._rot_x(self.SFP_NIC_CARD_LINK_ROLL)
+        points_mount = (
+            self.SFP_NIC_CARD_LINK_TRANSLATION_MOUNT.reshape(1, 3)
+            + (card_rot_mount @ points_card.T).T
+        )
+        return mount_translation_board.reshape(1, 3) + (mount_rot_board @ points_mount.T).T
+
+    def _sfp_nic_card_points_to_base(
+        self,
+        points_card: np.ndarray,
+        *,
+        card_index: int,
+        rail_translation_m: float,
+        rail_yaw_rad: float,
+        localized_target: LocalizedTransportTarget,
+    ) -> np.ndarray:
+        points_board = self._sfp_nic_card_points_to_board(
+            points_card,
+            card_index=card_index,
+            rail_translation_m=rail_translation_m,
+            rail_yaw_rad=rail_yaw_rad,
+        )
+        return np.asarray(
+            [
+                self._board_xyz_to_base_xyz(
+                    point_board,
+                    localized_target.board_origin,
+                    localized_target.board_x_axis,
+                    localized_target.board_y_axis,
+                )
+                for point_board in points_board
+            ],
+            dtype=np.float64,
+        )
+
+    @staticmethod
+    def _line_segments_to_model_points(
+        line_segments: list[tuple[np.ndarray, np.ndarray]],
+    ) -> tuple[np.ndarray, list[tuple[int, int]]]:
+        points: list[np.ndarray] = []
+        edge_indices: list[tuple[int, int]] = []
+        for p0, p1 in line_segments:
+            edge_start = len(points)
+            points.extend([p0, p1])
+            edge_indices.append((edge_start, edge_start + 1))
+        return np.asarray(points, dtype=np.float64), edge_indices
+
+    def _sfp_nic_front_ridge_lines_card(self) -> list[tuple[np.ndarray, np.ndarray]]:
+        return [
+            (p0.copy(), p1.copy())
+            for p0, p1 in self.SFP_NIC_FRONT_RIDGE_LINES_CARD
+        ]
+
+    def _sfp_nic_cage_lines_card(self) -> list[tuple[np.ndarray, np.ndarray]]:
+        line_segments: list[tuple[np.ndarray, np.ndarray]] = []
+        for center_x in self.SFP_NIC_CAGE_CENTER_X_CARD.values():
+            x_left = center_x - self.SFP_NIC_CAGE_SIDE_HALF_WIDTH_M
+            x_right = center_x + self.SFP_NIC_CAGE_SIDE_HALF_WIDTH_M
+            line_segments.extend(
+                [
+                    (
+                        np.array(
+                            [
+                                x_left,
+                                self.SFP_NIC_CAGE_Y_BACK,
+                                self.SFP_NIC_CAGE_Z_MID,
+                            ],
+                            dtype=np.float64,
+                        ),
+                        np.array(
+                            [
+                                x_left,
+                                self.SFP_NIC_CAGE_Y_FRONT,
+                                self.SFP_NIC_CAGE_Z_MID,
+                            ],
+                            dtype=np.float64,
+                        ),
+                    ),
+                    (
+                        np.array(
+                            [
+                                x_right,
+                                self.SFP_NIC_CAGE_Y_BACK,
+                                self.SFP_NIC_CAGE_Z_MID,
+                            ],
+                            dtype=np.float64,
+                        ),
+                        np.array(
+                            [
+                                x_right,
+                                self.SFP_NIC_CAGE_Y_FRONT,
+                                self.SFP_NIC_CAGE_Z_MID,
+                            ],
+                            dtype=np.float64,
+                        ),
+                    ),
+                    (
+                        np.array(
+                            [
+                                center_x,
+                                self.SFP_NIC_CAGE_Y_BACK,
+                                self.SFP_NIC_CAGE_Z_TOP,
+                            ],
+                            dtype=np.float64,
+                        ),
+                        np.array(
+                            [
+                                center_x,
+                                self.SFP_NIC_CAGE_Y_FRONT,
+                                self.SFP_NIC_CAGE_Z_TOP,
+                            ],
+                            dtype=np.float64,
+                        ),
+                    ),
+                    (
+                        np.array(
+                            [
+                                center_x,
+                                self.SFP_NIC_CAGE_Y_BACK,
+                                self.SFP_NIC_CAGE_Z_BOTTOM,
+                            ],
+                            dtype=np.float64,
+                        ),
+                        np.array(
+                            [
+                                center_x,
+                                self.SFP_NIC_CAGE_Y_FRONT,
+                                self.SFP_NIC_CAGE_Z_BOTTOM,
+                            ],
+                            dtype=np.float64,
+                        ),
+                    ),
+                    (
+                        np.array(
+                            [
+                                x_left,
+                                self.SFP_NIC_CAGE_Y_FRONT,
+                                self.SFP_NIC_CAGE_Z_MID,
+                            ],
+                            dtype=np.float64,
+                        ),
+                        np.array(
+                            [
+                                x_right,
+                                self.SFP_NIC_CAGE_Y_FRONT,
+                                self.SFP_NIC_CAGE_Z_MID,
+                            ],
+                            dtype=np.float64,
+                        ),
+                    ),
+                ]
+            )
+        return line_segments
+
+    def _sfp_nic_circular_feature_lines_card(self) -> list[tuple[np.ndarray, np.ndarray]]:
+        line_segments: list[tuple[np.ndarray, np.ndarray]] = []
+        ring_samples = 12
+        for center, radius in self.SFP_NIC_CIRCULAR_FEATURES_CARD:
+            ring_points = [
+                center
+                + radius
+                * np.array(
+                    [
+                        float(np.cos(theta)),
+                        float(np.sin(theta)),
+                        0.0,
+                    ],
+                    dtype=np.float64,
+                )
+                for theta in np.linspace(0.0, 2.0 * np.pi, ring_samples, endpoint=False)
+            ]
+            for index, point in enumerate(ring_points):
+                line_segments.append((point, ring_points[(index + 1) % ring_samples]))
+        return line_segments
+
+    def _sfp_nic_front_geometry_lines_card(self) -> list[tuple[np.ndarray, np.ndarray]]:
+        return (
+            self._sfp_nic_front_ridge_lines_card()
+            + self._sfp_nic_cage_lines_card()
+            + self._sfp_nic_circular_feature_lines_card()
         )
 
     def _sfp_nic_port_localization_for_indices(
@@ -1255,6 +1639,520 @@ class MagentaSquare(Policy):
     def _wrist_force_norm(obs) -> float:
         return float(np.linalg.norm(MagentaSquare._wrist_force_vector(obs)))
 
+    def _sfp_nic_lateral_force_component(
+        self,
+        force_delta_base: np.ndarray,
+        localization: SfpNicPortLocalization,
+    ) -> np.ndarray:
+        force_delta = np.asarray(force_delta_base, dtype=np.float64).reshape(3)
+        axis = self._normalized_vector(localization.port_axis_base)
+        if axis is None:
+            return force_delta
+        return force_delta - float(np.dot(force_delta, axis)) * axis
+
+    def _record_sfp_nic_contact_force(
+        self,
+        force_delta_base: np.ndarray,
+        localization: SfpNicPortLocalization,
+        observed_distance_m: float,
+    ) -> None:
+        force_delta = np.asarray(force_delta_base, dtype=np.float64).reshape(3)
+        lateral_force = self._sfp_nic_lateral_force_component(force_delta, localization)
+        self._last_sfp_nic_force_delta_base = force_delta
+        self._last_sfp_nic_lateral_force_base = lateral_force
+        self._last_sfp_nic_contact_distance_m = float(observed_distance_m)
+
+    @staticmethod
+    def _append_unique_offsets(
+        offsets: list[np.ndarray],
+        candidate: np.ndarray | None,
+        *,
+        min_separation_m: float = 1e-6,
+    ) -> None:
+        if candidate is None:
+            return
+        candidate = np.asarray(candidate, dtype=np.float64).reshape(3)
+        if any(np.linalg.norm(candidate - offset) < min_separation_m for offset in offsets):
+            return
+        offsets.append(candidate)
+
+    def _sfp_nic_board_offset_exploration_offsets(
+        self,
+        localized_target: LocalizedTransportTarget,
+    ) -> list[np.ndarray]:
+        board_x_axis = self._normalized_vector(localized_target.board_x_axis)
+        board_y_axis = self._normalized_vector(localized_target.board_y_axis)
+        if board_x_axis is None or board_y_axis is None:
+            return []
+
+        max_x_m = max(
+            float(
+                getattr(
+                    self,
+                    "sfp_nic_offset_exploration_max_x_m",
+                    self.SFP_NIC_PORT_OPENING_HALF_WIDTH,
+                )
+            ),
+            0.0,
+        )
+        max_y_m = max(
+            float(
+                getattr(
+                    self,
+                    "sfp_nic_offset_exploration_max_y_m",
+                    self.SFP_NIC_PORT_OPENING_HALF_HEIGHT,
+                )
+            ),
+            0.0,
+        )
+        steps_x = max(
+            int(getattr(self, "sfp_nic_offset_exploration_steps_x", 0)),
+            0,
+        )
+        steps_y = max(
+            int(getattr(self, "sfp_nic_offset_exploration_steps_y", 0)),
+            0,
+        )
+        if (max_x_m <= 0.0 or steps_x <= 0) and (max_y_m <= 0.0 or steps_y <= 0):
+            return []
+
+        offsets: list[np.ndarray] = []
+        x_indices = range(steps_x + 1) if max_x_m > 0.0 and steps_x > 0 else range(1)
+        y_indices = range(steps_y + 1) if max_y_m > 0.0 and steps_y > 0 else range(1)
+        for ix in x_indices:
+            for iy in y_indices:
+                if ix == 0 and iy == 0:
+                    continue
+                dx = max_x_m * ix / steps_x if steps_x > 0 else 0.0
+                dy = max_y_m * iy / steps_y if steps_y > 0 else 0.0
+                offset = dx * board_x_axis - dy * board_y_axis
+                self._append_unique_offsets(offsets, offset)
+
+        return sorted(
+            offsets,
+            key=lambda offset: (
+                float(np.linalg.norm(offset)),
+                -float(np.dot(offset, board_x_axis)),
+                float(np.dot(offset, board_y_axis)),
+            ),
+        )
+
+    def _sfp_nic_clamped_board_exploration_offset(
+        self,
+        offset_base: np.ndarray,
+        localized_target: LocalizedTransportTarget,
+        *,
+        max_x_m: float,
+        max_y_m: float,
+    ) -> np.ndarray:
+        board_x_axis = self._normalized_vector(localized_target.board_x_axis)
+        board_y_axis = self._normalized_vector(localized_target.board_y_axis)
+        if board_x_axis is None or board_y_axis is None:
+            return np.asarray(offset_base, dtype=np.float64).reshape(3)
+
+        offset = np.asarray(offset_base, dtype=np.float64).reshape(3)
+        board_x_offset_m = float(np.dot(offset, board_x_axis))
+        board_y_offset_m = float(np.dot(offset, board_y_axis))
+        board_x_offset_m = min(max(board_x_offset_m, 0.0), max(max_x_m, 0.0))
+        board_y_offset_m = min(max(board_y_offset_m, -max(max_y_m, 0.0)), 0.0)
+        return board_x_offset_m * board_x_axis + board_y_offset_m * board_y_axis
+
+    def _sfp_nic_slide_in_step_from_force_delta(
+        self,
+        force_delta_base: np.ndarray,
+        localization: SfpNicPortLocalization,
+    ) -> np.ndarray | None:
+        if not getattr(self, "sfp_nic_offset_exploration_slide_in_enabled", True):
+            return None
+
+        lateral_force = self._sfp_nic_lateral_force_component(
+            force_delta_base,
+            localization,
+        )
+        lateral_force_norm = float(np.linalg.norm(lateral_force))
+        min_force_n = max(
+            float(
+                getattr(
+                    self,
+                    "sfp_nic_offset_exploration_slide_force_min_n",
+                    0.25,
+                )
+            ),
+            0.0,
+        )
+        if lateral_force_norm < min_force_n:
+            return None
+
+        gain_m_per_n = max(
+            float(
+                getattr(
+                    self,
+                    "sfp_nic_offset_exploration_slide_gain_m_per_n",
+                    0.0001,
+                )
+            ),
+            0.0,
+        )
+        step_max_m = max(
+            float(
+                getattr(
+                    self,
+                    "sfp_nic_offset_exploration_slide_step_max_m",
+                    0.0005,
+                )
+            ),
+            0.0,
+        )
+        if gain_m_per_n <= 0.0 or step_max_m <= 0.0:
+            return None
+
+        slide_step = -gain_m_per_n * lateral_force
+        slide_step_norm = float(np.linalg.norm(slide_step))
+        if slide_step_norm <= 1e-12:
+            return None
+        if slide_step_norm > step_max_m:
+            slide_step *= step_max_m / slide_step_norm
+        return slide_step
+
+    def _run_sfp_nic_board_offset_exploration(
+        self,
+        task: Task,
+        get_observation: GetObservationCallback,
+        move_robot: MoveRobotCallback,
+        current_pose: Pose,
+        localization: SfpNicPortLocalization,
+        q_target: Quaternion,
+        *,
+        localized_target: LocalizedTransportTarget | None,
+    ) -> tuple[Pose, bool, bool]:
+        if not getattr(self, "sfp_nic_offset_exploration_enabled", True):
+            return current_pose, False, True
+        if localized_target is None:
+            self.get_logger().warn(
+                "SFP/NIC offset exploration skipped because no board pose was provided."
+            )
+            return current_pose, False, True
+
+        step_m = abs(self.descend_step_m)
+        if step_m <= 0.0 or self.descend_dt_sec <= 0.0:
+            return current_pose, False, True
+
+        exploration_offsets = self._sfp_nic_board_offset_exploration_offsets(
+            localized_target,
+        )
+        max_probes = max(
+            int(getattr(self, "sfp_nic_offset_exploration_max_probes", 0)),
+            0,
+        )
+        if max_probes > 0:
+            exploration_offsets = exploration_offsets[:max_probes]
+        if not exploration_offsets:
+            return current_pose, False, True
+
+        exploration_backoff_m = max(
+            float(getattr(self, "sfp_nic_offset_exploration_backoff_m", 0.0)),
+            0.0,
+        )
+        exploration_descent_m = max(
+            float(getattr(self, "sfp_nic_offset_exploration_descent_m", 0.0)),
+            0.0,
+        )
+        insertion_check_depth_m = max(
+            float(
+                getattr(
+                    self,
+                    "sfp_nic_offset_exploration_insertion_check_depth_m",
+                    0.004,
+                )
+            ),
+            0.0,
+        )
+        exploration_max_x_m = max(
+            float(
+                getattr(
+                    self,
+                    "sfp_nic_offset_exploration_max_x_m",
+                    self.SFP_NIC_PORT_OPENING_HALF_WIDTH,
+                )
+            ),
+            0.0,
+        )
+        exploration_max_y_m = max(
+            float(
+                getattr(
+                    self,
+                    "sfp_nic_offset_exploration_max_y_m",
+                    self.SFP_NIC_PORT_OPENING_HALF_HEIGHT,
+                )
+            ),
+            0.0,
+        )
+        slide_total_max_m = max(
+            float(
+                getattr(
+                    self,
+                    "sfp_nic_offset_exploration_slide_total_max_m",
+                    0.002,
+                )
+            ),
+            0.0,
+        )
+        slide_direction_tracking_enabled = getattr(
+            self,
+            "sfp_nic_offset_exploration_slide_direction_tracking_enabled",
+            True,
+        )
+        slide_direction_memory_alpha = min(
+            max(
+                float(
+                    getattr(
+                        self,
+                        "sfp_nic_offset_exploration_slide_direction_memory_alpha",
+                        0.80,
+                    )
+                ),
+                0.0,
+            ),
+            1.0,
+        )
+        slide_direction_step_max_m = max(
+            float(
+                getattr(
+                    self,
+                    "sfp_nic_offset_exploration_slide_direction_step_m",
+                    0.00050,
+                )
+            ),
+            0.0,
+        )
+        slide_gain_m_per_n = max(
+            float(
+                getattr(
+                    self,
+                    "sfp_nic_offset_exploration_slide_gain_m_per_n",
+                    0.0001,
+                )
+            ),
+            0.0,
+        )
+        if exploration_backoff_m <= 0.0 or exploration_descent_m <= 0.0:
+            return current_pose, False, True
+        probe_distance_limit_m = max(
+            exploration_descent_m,
+            exploration_backoff_m + insertion_check_depth_m,
+        )
+
+        self.get_logger().info(
+            "SFP/NIC running board-frame offset exploration after contact: "
+            f"attempts={len(exploration_offsets)}, shift_candidates="
+            f"{[np.round(offset, 5).tolist() for offset in exploration_offsets]}, "
+            f"backoff={exploration_backoff_m:.5f} m, "
+            f"probe_descent={probe_distance_limit_m:.5f} m, "
+            f"insertion_check_depth={insertion_check_depth_m:.5f} m, "
+            f"slide_in={getattr(self, 'sfp_nic_offset_exploration_slide_in_enabled', True)}, "
+            f"slide_total_max={slide_total_max_m:.5f} m, "
+            f"slide_direction_tracking={slide_direction_tracking_enabled}"
+        )
+
+        axial_delta_stop_n = max(self.sfp_nic_axial_force_delta_stop_n, 0.0)
+        insertion_check_tcp_z = (
+            float(localization.entrance_base[2]) - insertion_check_depth_m
+        )
+        tracked_slide_direction_base: np.ndarray | None = None
+        tracked_slide_force_n = 0.0
+        for attempt, exploration_offset in enumerate(exploration_offsets, start=1):
+            if self._task_completed_in_simulation(task):
+                return current_pose, True, False
+
+            start_tip_base = (
+                localization.entrance_base
+                - exploration_backoff_m * localization.port_axis_base
+                + exploration_offset
+            )
+            start_probe_pose = self._pose_for_sfp_tip_target(start_tip_base, q_target)
+            current_pose = self._move_to_pose(
+                move_robot,
+                current_pose,
+                (
+                    start_probe_pose.position.x,
+                    start_probe_pose.position.y,
+                    start_probe_pose.position.z,
+                ),
+                duration_sec=self.sfp_nic_view_search_duration_sec,
+                target_orientation=q_target,
+            )
+
+            max_probe_steps = int(np.ceil(probe_distance_limit_m / step_m))
+            force_baseline_base: np.ndarray | None = None
+            probe_force_stop = False
+            reached_insertion_check_depth = False
+            slide_offset_base = np.zeros(3, dtype=np.float64)
+            for step in range(1, max_probe_steps + 1):
+                if self._task_completed_in_simulation(task):
+                    return current_pose, True, False
+
+                obs = get_observation()
+                force_base = self._wrist_force_vector(obs)
+                if force_baseline_base is None:
+                    force_baseline_base = force_base.copy()
+                force_norm = float(np.linalg.norm(force_base))
+                force_delta = force_base - force_baseline_base
+                axial_force_delta = float(
+                    np.dot(force_delta, localization.port_axis_base)
+                )
+                axial_force_delta_abs = abs(axial_force_delta)
+                lateral_force = self._sfp_nic_lateral_force_component(
+                    force_delta,
+                    localization,
+                )
+                lateral_force_norm = float(np.linalg.norm(lateral_force))
+                probe_distance = min(step * step_m, probe_distance_limit_m)
+                slide_step_applied = False
+                force_slide_step = self._sfp_nic_slide_in_step_from_force_delta(
+                    force_delta,
+                    localization,
+                )
+                if force_slide_step is not None and slide_direction_tracking_enabled:
+                    force_slide_direction = self._normalized_vector(force_slide_step)
+                    if force_slide_direction is not None:
+                        if tracked_slide_direction_base is None:
+                            tracked_slide_direction_base = force_slide_direction
+                            tracked_slide_force_n = lateral_force_norm
+                        else:
+                            blended_direction = (
+                                slide_direction_memory_alpha
+                                * tracked_slide_direction_base
+                                + (1.0 - slide_direction_memory_alpha)
+                                * force_slide_direction
+                            )
+                            blended_direction = self._normalized_vector(
+                                blended_direction
+                            )
+                            tracked_slide_direction_base = (
+                                force_slide_direction
+                                if blended_direction is None
+                                else blended_direction
+                            )
+                            tracked_slide_force_n = (
+                                slide_direction_memory_alpha * tracked_slide_force_n
+                                + (1.0 - slide_direction_memory_alpha)
+                                * lateral_force_norm
+                            )
+                elif slide_direction_tracking_enabled and tracked_slide_force_n > 0.0:
+                    tracked_slide_force_n *= slide_direction_memory_alpha
+
+                slide_step = force_slide_step
+                if (
+                    slide_step is None
+                    and slide_direction_tracking_enabled
+                    and tracked_slide_direction_base is not None
+                    and slide_direction_step_max_m > 0.0
+                    and slide_gain_m_per_n > 0.0
+                    and tracked_slide_force_n > 0.0
+                ):
+                    remembered_step_m = min(
+                        slide_gain_m_per_n * tracked_slide_force_n,
+                        slide_direction_step_max_m,
+                    )
+                    slide_step = remembered_step_m * tracked_slide_direction_base
+
+                if slide_step is not None:
+                    proposed_slide_offset = slide_offset_base + slide_step
+                    proposed_slide_norm = float(np.linalg.norm(proposed_slide_offset))
+                    if (
+                        slide_total_max_m > 0.0
+                        and proposed_slide_norm > slide_total_max_m
+                    ):
+                        proposed_slide_offset *= (
+                            slide_total_max_m / proposed_slide_norm
+                        )
+                    proposed_total_offset = exploration_offset + proposed_slide_offset
+                    clamped_total_offset = self._sfp_nic_clamped_board_exploration_offset(
+                        proposed_total_offset,
+                        localized_target,
+                        max_x_m=exploration_max_x_m,
+                        max_y_m=exploration_max_y_m,
+                    )
+                    applied_slide_offset = clamped_total_offset - exploration_offset
+                    applied_delta_norm = float(
+                        np.linalg.norm(applied_slide_offset - slide_offset_base)
+                    )
+                    if applied_delta_norm > 1e-9:
+                        slide_offset_base = applied_slide_offset
+                        slide_step_applied = True
+
+                axial_delta_stop = (
+                    axial_delta_stop_n > 0.0
+                    and axial_force_delta_abs > axial_delta_stop_n
+                )
+                if force_norm > self.sfp_nic_force_stop_n or (
+                    axial_delta_stop and not slide_step_applied
+                ):
+                    self._record_sfp_nic_contact_force(
+                        force_delta,
+                        localization,
+                        probe_distance,
+                    )
+                    self.get_logger().warn(
+                        "SFP/NIC offset exploration probe hit force threshold: "
+                        f"attempt={attempt}/{len(exploration_offsets)}, "
+                        f"force={force_norm:.2f} N, axial_delta={axial_force_delta:.2f} N, "
+                        f"offset={np.round(exploration_offset, 5).tolist()}, "
+                        f"slide_offset={np.round(slide_offset_base, 5).tolist()}"
+                    )
+                    probe_force_stop = True
+                    break
+
+                desired_tip_base = (
+                    start_tip_base
+                    + probe_distance * localization.port_axis_base
+                    + slide_offset_base
+                )
+                current_pose = self._pose_for_sfp_tip_target(
+                    desired_tip_base,
+                    q_target,
+                )
+                if slide_step_applied and (step == 1 or step % 10 == 0):
+                    self.get_logger().info(
+                        "SFP/NIC offset exploration slide-in correction: "
+                        f"attempt={attempt}/{len(exploration_offsets)}, "
+                        f"step={step}/{max_probe_steps}, "
+                        f"force_delta={np.round(force_delta, 3).tolist()}, "
+                        f"tracked_force={tracked_slide_force_n:.3f} N, "
+                        f"slide_offset={np.round(slide_offset_base, 5).tolist()}, "
+                        f"tracked_direction="
+                        f"{None if tracked_slide_direction_base is None else np.round(tracked_slide_direction_base, 4).tolist()}"
+                    )
+                self.set_pose_target(move_robot=move_robot, pose=current_pose)
+                self.sleep_for(self.descend_dt_sec)
+                if self._task_completed_in_simulation(task):
+                    return current_pose, True, False
+                if float(current_pose.position.z) < insertion_check_tcp_z:
+                    self.get_logger().info(
+                        "SFP/NIC offset exploration reached insertion-check depth "
+                        "without insertion; trying next grid point: "
+                        f"attempt={attempt}/{len(exploration_offsets)}, "
+                        f"tcp_z={current_pose.position.z:.5f}, "
+                        f"check_z={insertion_check_tcp_z:.5f}, "
+                        f"offset={np.round(exploration_offset, 5).tolist()}, "
+                        f"slide_offset={np.round(slide_offset_base, 5).tolist()}"
+                    )
+                    reached_insertion_check_depth = True
+                    break
+
+            if probe_force_stop:
+                continue
+            if reached_insertion_check_depth:
+                continue
+
+            self.get_logger().info(
+                "SFP/NIC offset exploration probe finished without insertion: "
+                f"attempt={attempt}/{len(exploration_offsets)}, "
+                f"offset={np.round(exploration_offset, 5).tolist()}"
+            )
+
+        return current_pose, self._task_completed_in_simulation(task), True
+
     def _descend_sfp_nic_along_port_axis(
         self,
         task: Task,
@@ -1265,6 +2163,8 @@ class MagentaSquare(Policy):
         *,
         lateral_offset_base: np.ndarray | None = None,
         descent_distance_m: float | None = None,
+        localized_target: LocalizedTransportTarget | None = None,
+        allow_offset_exploration: bool = True,
     ) -> tuple[Pose, bool, bool]:
         step_m = abs(self.descend_step_m)
         max_distance_m = (
@@ -1297,7 +2197,11 @@ class MagentaSquare(Policy):
         max_steps = int(np.ceil(max_distance_m / step_m))
         current_pose = start_pose
         force_stop = False
+        contact_force_delta_base: np.ndarray | None = None
         force_baseline_base: np.ndarray | None = None
+        self._last_sfp_nic_force_delta_base = None
+        self._last_sfp_nic_lateral_force_base = None
+        self._last_sfp_nic_contact_distance_m = None
         axial_delta_stop_n = max(self.sfp_nic_axial_force_delta_stop_n, 0.0)
         axial_delta_min_distance_m = max(
             self.sfp_nic_axial_force_delta_min_distance_m,
@@ -1331,6 +2235,12 @@ class MagentaSquare(Policy):
                     "SFP/NIC axis descent stopped on force threshold: "
                     f"force={force_norm:.2f} N, threshold={self.sfp_nic_force_stop_n:.2f} N"
                 )
+                contact_force_delta_base = force_delta_base
+                self._record_sfp_nic_contact_force(
+                    force_delta_base,
+                    localization,
+                    observed_distance,
+                )
                 force_stop = True
                 break
             if (
@@ -1344,6 +2254,12 @@ class MagentaSquare(Policy):
                     f"abs_axial_delta={axial_force_delta_abs:.2f} N, "
                     f"threshold={axial_delta_stop_n:.2f} N, "
                     f"observed_distance={observed_distance:.5f} m"
+                )
+                contact_force_delta_base = force_delta_base
+                self._record_sfp_nic_contact_force(
+                    force_delta_base,
+                    localization,
+                    observed_distance,
                 )
                 force_stop = True
                 break
@@ -1364,6 +2280,21 @@ class MagentaSquare(Policy):
             self.sleep_for(self.descend_dt_sec)
 
         if force_stop:
+            if allow_offset_exploration and contact_force_delta_base is not None:
+                exploration_pose, exploration_inserted, exploration_force_stop = (
+                    self._run_sfp_nic_board_offset_exploration(
+                        task,
+                        get_observation,
+                        move_robot,
+                        current_pose,
+                        localization,
+                        q_target,
+                        localized_target=localized_target,
+                    )
+                )
+                current_pose = exploration_pose
+                if exploration_inserted:
+                    return exploration_pose, True, exploration_force_stop
             return current_pose, self._task_completed_in_simulation(task), force_stop
 
         if self.descend_wait_for_insertion_sec > 0.0:
@@ -1386,14 +2317,16 @@ class MagentaSquare(Policy):
         )
         if radius <= 0.0 or recovery_attempts <= 0:
             return []
-        candidates = [
+        candidates: list[np.ndarray] = []
+        for candidate in [
             radius * localization.width_axis_base,
             -radius * localization.width_axis_base,
             radius * localization.height_axis_base,
             -radius * localization.height_axis_base,
             radius * (localization.width_axis_base + localization.height_axis_base) / np.sqrt(2.0),
             radius * (-localization.width_axis_base + localization.height_axis_base) / np.sqrt(2.0),
-        ]
+        ]:
+            self._append_unique_offsets(candidates, candidate)
         return candidates[:recovery_attempts]
 
     def _run_sfp_nic_insertion(
@@ -1435,6 +2368,7 @@ class MagentaSquare(Policy):
             move_robot,
             current_pose,
             localization,
+            localized_target=localized_target,
         )
         if inserted or not self.sfp_nic_recovery_enabled:
             return current_pose
@@ -1521,6 +2455,7 @@ class MagentaSquare(Policy):
                 current_pose,
                 localization,
                 descent_distance_m=min(self.sfp_nic_descent_distance_m, 0.030),
+                localized_target=localized_target,
             )
             if inserted:
                 return current_pose
@@ -1678,22 +2613,37 @@ class MagentaSquare(Policy):
         self,
         get_observation: GetObservationCallback,
         move_robot: MoveRobotCallback,
-    ) -> None:
+        *,
+        max_scan_distance_m: float | None = None,
+        return_to_start_on_failure: bool = False,
+    ) -> bool:
         start_pose = self._tcp_pose_from_observation(get_observation)
         scan_z = max(start_pose.position.z + self.short_edge_scan_z_offset, self.view_z)
         current_pose = start_pose
+        y_step = float(self.short_edge_scan_y_step)
+        max_steps = max(int(self.short_edge_scan_max_steps), 0)
+        max_travel_m = abs(y_step) * float(max_steps)
+        if max_scan_distance_m is not None:
+            max_travel_m = min(max_travel_m, max(float(max_scan_distance_m), 0.0))
+        scan_moves = (
+            0
+            if abs(y_step) <= 1e-9 or max_travel_m <= 0.0
+            else int(np.ceil(max_travel_m / abs(y_step)))
+        )
         self.get_logger().info(
             "TransportToMean scanning for full short-edge view "
-            f"start_y={start_pose.position.y:.4f}, y_step={self.short_edge_scan_y_step:.4f}, "
-            f"max_steps={self.short_edge_scan_max_steps}, "
-            f"total_y={self.short_edge_scan_y_step * self.short_edge_scan_max_steps:.4f}, "
+            f"start_y={start_pose.position.y:.4f}, y_step={y_step:.4f}, "
+            f"max_steps={scan_moves}, "
+            f"total_y={np.sign(y_step) * max_travel_m:.4f}, "
+            f"max_scan_distance={max_scan_distance_m}, "
+            f"return_to_start_on_failure={return_to_start_on_failure}, "
             f"z={scan_z:.4f}, "
             f"z_offset={self.short_edge_scan_z_offset:.4f}, "
             f"min_width={self.short_edge_min_width:.4f}, "
             f"min_endpoint_margin_px={self.short_edge_min_endpoint_margin_px:.1f}"
         )
 
-        for step in range(self.short_edge_scan_max_steps + 1):
+        for step in range(scan_moves + 1):
             obs = get_observation()
             observations, clear_count, widest, best_margin = self._short_edge_visibility(obs)
             camera_names = [observation.camera_name for observation in observations]
@@ -1707,14 +2657,15 @@ class MagentaSquare(Policy):
                 self.get_logger().info(
                     "TransportToMean short-edge scan accepted current view."
                 )
-                return
+                return True
 
-            if step == self.short_edge_scan_max_steps:
+            if step == scan_moves:
                 break
 
+            travel_m = min(abs(y_step) * float(step + 1), max_travel_m)
             target_xyz = (
                 current_pose.position.x,
-                start_pose.position.y + self.short_edge_scan_y_step * float(step + 1),
+                start_pose.position.y + np.sign(y_step) * travel_m,
                 scan_z,
             )
             current_pose = self._move_to_pose(
@@ -1730,8 +2681,33 @@ class MagentaSquare(Policy):
 
         self.get_logger().warn(
             "TransportToMean short-edge scan did not get a fully clear edge; "
-            "continuing with the best available view."
+            + (
+                "returning to the scan start pose."
+                if return_to_start_on_failure
+                else "continuing with the best available view."
+            )
         )
+        if return_to_start_on_failure:
+            self.get_logger().info(
+                "TransportToMean returning to original short-edge scan start pose "
+                "before switching detection strategies."
+            )
+            current_pose = self._move_to_pose(
+                move_robot,
+                current_pose,
+                (
+                    start_pose.position.x,
+                    start_pose.position.y,
+                    start_pose.position.z,
+                ),
+                duration_sec=self.short_edge_scan_duration_sec,
+                target_orientation=start_pose.orientation,
+            )
+            hold_steps = max(0, int(self.short_edge_scan_hold_sec / self.dt))
+            for _ in range(hold_steps):
+                self.set_pose_target(move_robot=move_robot, pose=current_pose)
+                self.sleep_for(self.dt)
+        return False
 
     def _detect_target_from_linear_view_search(
         self,
@@ -1853,7 +2829,7 @@ class MagentaSquare(Policy):
             )
         return fallback_target, fallback_source
 
-    def _detect_target_from_sc_circular_view_search(
+    def _detect_target_from_circular_view_search(
         self,
         task: Task,
         get_observation: GetObservationCallback,
@@ -1866,21 +2842,21 @@ class MagentaSquare(Policy):
             or self.magenta_sc_circular_view_radius_m <= 0.0
         ):
             self.get_logger().info(
-                "MagentaSquare detection method: SC high-view single-view magenta attempt; "
+                "MagentaSquare detection method: high-view single-view magenta attempt; "
                 "circular XY search disabled, falling back to short-edge if needed."
             )
             obs = get_observation()
             target_xyz = self._multicamera_magenta_target_xyz(task, obs)
             if target_xyz is not None:
                 self.get_logger().info(
-                    "MagentaSquare detection selected: SC magenta ROI + board +y edge fit "
+                    "MagentaSquare detection selected: magenta ROI + board +y edge fit "
                     "from high view."
                 )
-                return target_xyz, "SC magenta ROI + board +y edge fit"
+                return target_xyz, "magenta ROI + board +y edge fit"
             target_xyz = self._multicamera_short_edge_target_xyz(task, obs)
             if target_xyz is not None:
                 self.get_logger().info(
-                    "MagentaSquare detection selected: SC short-edge fallback from high view."
+                    "MagentaSquare detection selected: short-edge fallback from high view."
                 )
                 return target_xyz, "multi-camera short-edge fit"
             return None, ""
@@ -1892,24 +2868,24 @@ class MagentaSquare(Policy):
         target_xyz = self._multicamera_magenta_target_xyz(task, obs)
         if target_xyz is not None:
             self.get_logger().info(
-                "MagentaSquare detection selected: SC magenta ROI + board +y edge fit "
+                "MagentaSquare detection selected: magenta ROI + board +y edge fit "
                 "at high view center; skipping circular XY search."
             )
-            return target_xyz, "SC magenta ROI + board +y edge fit"
+            return target_xyz, "magenta ROI + board +y edge fit"
 
         candidate = self._multicamera_short_edge_target_xyz(task, obs)
         if candidate is not None:
             fallback_target = candidate
             fallback_source = "multi-camera short-edge fit"
             self.get_logger().info(
-                "MagentaSquare detection fallback candidate stored: SC short-edge fit "
+                "MagentaSquare detection fallback candidate stored: short-edge fit "
                 "from high view center; continuing circular magenta search."
             )
 
         step_count = max(1, self.magenta_sc_circular_view_steps)
         radius_m = self.magenta_sc_circular_view_radius_m
         self.get_logger().info(
-            "MagentaSquare sampling SC circular XY view search at fixed z/orientation: "
+            "MagentaSquare sampling circular XY view search at fixed z/orientation: "
             f"center_xyz={[round(center_pose.position.x, 5), round(center_pose.position.y, 5), round(center_pose.position.z, 5)]}, "
             f"radius={radius_m:.4f}, "
             f"samples={step_count}, "
@@ -1940,12 +2916,12 @@ class MagentaSquare(Policy):
             target_xyz = self._multicamera_magenta_target_xyz(task, obs)
             if target_xyz is not None:
                 self.get_logger().info(
-                    "MagentaSquare SC circular view sample accepted magenta-guided edge target: "
+                    "MagentaSquare circular view sample accepted magenta-guided edge target: "
                     f"sample={step_index + 1}/{step_count}, "
                     f"theta={theta:.3f} rad, "
                     f"xy_offset={[round(radius_m * float(np.cos(theta)), 5), round(radius_m * float(np.sin(theta)), 5)]}"
                 )
-                return target_xyz, "SC magenta ROI + board +y edge fit"
+                return target_xyz, "magenta ROI + board +y edge fit"
 
             if fallback_target is None:
                 candidate = self._multicamera_short_edge_target_xyz(task, obs)
@@ -1954,7 +2930,7 @@ class MagentaSquare(Policy):
                     fallback_source = "multi-camera short-edge fit"
                     self.get_logger().info(
                         "MagentaSquare detection fallback candidate stored: "
-                        "SC short-edge fit during circular XY search; continuing magenta search."
+                        "short-edge fit during circular XY search; continuing magenta search."
                     )
 
         current_pose = self._move_to_pose(
@@ -1969,7 +2945,7 @@ class MagentaSquare(Policy):
         )
         if fallback_target is not None:
             self.get_logger().info(
-                "MagentaSquare detection selected: SC short-edge fallback after circular XY "
+                "MagentaSquare detection selected: short-edge fallback after circular XY "
                 "magenta search did not produce a valid geometry-fit marker target."
             )
         return fallback_target, fallback_source
@@ -2586,6 +3562,125 @@ class MagentaSquare(Policy):
             + 0.25 * paired_closure_score
         )
 
+    @staticmethod
+    def _undirected_angle_diff_rad(angle_a: float, angle_b: float) -> float:
+        diff = (float(angle_a) - float(angle_b) + 0.5 * np.pi) % np.pi - 0.5 * np.pi
+        return abs(float(diff))
+
+    @staticmethod
+    def _line_angle_rad(p0_px: np.ndarray, p1_px: np.ndarray) -> float | None:
+        vector = np.asarray(p1_px, dtype=np.float64) - np.asarray(
+            p0_px,
+            dtype=np.float64,
+        )
+        if float(np.linalg.norm(vector)) <= 1e-6:
+            return None
+        return float(np.arctan2(vector[1], vector[0]))
+
+    def _sfp_nic_candidate_long_edge_angle_rad(
+        self,
+        rectangle_pixels: np.ndarray,
+    ) -> float | None:
+        rectangle_pixels = np.asarray(rectangle_pixels, dtype=np.float64).reshape(4, 2)
+        long_edge_angles = [
+            self._line_angle_rad(rectangle_pixels[0], rectangle_pixels[1]),
+            self._line_angle_rad(rectangle_pixels[3], rectangle_pixels[2]),
+        ]
+        valid_angles = [angle for angle in long_edge_angles if angle is not None]
+        if not valid_angles:
+            return None
+        if len(valid_angles) == 1:
+            return valid_angles[0]
+        sin_sum = float(sum(np.sin(2.0 * angle) for angle in valid_angles))
+        cos_sum = float(sum(np.cos(2.0 * angle) for angle in valid_angles))
+        return 0.5 * float(np.arctan2(sin_sum, cos_sum))
+
+    @staticmethod
+    def _sfp_nic_image_line_segments(
+        edge_mask: np.ndarray,
+        image_shape: tuple[int, int],
+    ) -> list[tuple[float, float]]:
+        image_h, image_w = image_shape
+        min_line_length = max(28, int(min(image_h, image_w) * 0.035))
+        lines = cv2.HoughLinesP(
+            edge_mask,
+            rho=1.0,
+            theta=np.pi / 180.0,
+            threshold=35,
+            minLineLength=min_line_length,
+            maxLineGap=10,
+        )
+        if lines is None:
+            return []
+
+        segments: list[tuple[float, float]] = []
+        for line in lines.reshape(-1, 4):
+            x0, y0, x1, y1 = [float(value) for value in line]
+            dx = x1 - x0
+            dy = y1 - y0
+            length = float(np.hypot(dx, dy))
+            if length < min_line_length:
+                continue
+            segments.append((float(np.arctan2(dy, dx)), length))
+        return segments
+
+    def _sfp_nic_rail_parallel_score_for_angle(
+        self,
+        long_edge_angle_rad: float | None,
+        image_line_segments: list[tuple[float, float]],
+    ) -> float:
+        if long_edge_angle_rad is None or not image_line_segments:
+            return 0.0
+
+        angle_window = max(
+            float(
+                getattr(
+                    self,
+                    "sfp_nic_rail_parallel_angle_window_rad",
+                    np.deg2rad(35.0),
+                )
+            ),
+            1e-6,
+        )
+        nearby_segments = [
+            (angle, length)
+            for angle, length in image_line_segments
+            if self._undirected_angle_diff_rad(angle, long_edge_angle_rad) <= angle_window
+        ]
+        if not nearby_segments:
+            return 0.0
+
+        weights = np.asarray([length for _, length in nearby_segments], dtype=np.float64)
+        angles = np.asarray([angle for angle, _ in nearby_segments], dtype=np.float64)
+        sin_sum = float(np.sum(weights * np.sin(2.0 * angles)))
+        cos_sum = float(np.sum(weights * np.cos(2.0 * angles)))
+        dominant_angle = 0.5 * float(np.arctan2(sin_sum, cos_sum))
+        angle_error = self._undirected_angle_diff_rad(
+            long_edge_angle_rad,
+            dominant_angle,
+        )
+        tolerance = max(
+            float(
+                getattr(
+                    self,
+                    "sfp_nic_rail_parallel_tolerance_rad",
+                    np.deg2rad(12.0),
+                )
+            ),
+            1e-6,
+        )
+        return float(np.exp(-0.5 * (angle_error / tolerance) ** 2))
+
+    def _sfp_nic_rail_parallel_score_from_pixels(
+        self,
+        rectangle_pixels: np.ndarray,
+        image_line_segments: list[tuple[float, float]],
+    ) -> float:
+        return self._sfp_nic_rail_parallel_score_for_angle(
+            self._sfp_nic_candidate_long_edge_angle_rad(rectangle_pixels),
+            image_line_segments,
+        )
+
     def _sfp_nic_localization_image_score_from_masks(
         self,
         localization: SfpNicPortLocalization,
@@ -2593,6 +3688,7 @@ class MagentaSquare(Policy):
         dark_mask: np.ndarray,
         edge_mask: np.ndarray,
         camera_info,
+        image_line_segments: list[tuple[float, float]] | None = None,
     ) -> SfpNicPortImageScore | None:
         image_h, image_w = image_shape
         model_points, _, edge_indices = self._sfp_nic_candidate_model_points(
@@ -2618,6 +3714,17 @@ class MagentaSquare(Policy):
         rectangular_edge_score = self._sfp_nic_rectangular_edge_score(
             rectangle_edge_scores
         )
+        rail_parallel_score = 0.0
+        if getattr(self, "sfp_nic_rail_parallel_score_enabled", True):
+            if image_line_segments is None:
+                image_line_segments = self._sfp_nic_image_line_segments(
+                    edge_mask,
+                    image_shape,
+                )
+            rail_parallel_score = self._sfp_nic_rail_parallel_score_from_pixels(
+                pixels[:4],
+                image_line_segments,
+            )
         rectangle_dark_score = self._sample_mask_polygon(dark_mask, pixels[:4])
         center_dark_score = self._sample_mask_line(
             dark_mask,
@@ -2629,9 +3736,15 @@ class MagentaSquare(Policy):
         projected_height_px = float(np.linalg.norm(pixels[2] - pixels[1]))
         scale_score = min(max(min(projected_width_px, projected_height_px) / 6.0, 0.0), 1.0)
         rectangularity_gate = min(max(rectangular_edge_score / 0.20, 0.0), 1.0)
+        rail_parallel_weight = min(
+            max(float(getattr(self, "sfp_nic_rail_parallel_port_weight", 0.14)), 0.0),
+            0.30,
+        )
+        rectangular_weight = 0.82 - rail_parallel_weight
         score = (
-            0.82 * rectangular_edge_score
+            rectangular_weight * rectangular_edge_score
             + 0.08 * axis_edge_score
+            + rail_parallel_weight * rail_parallel_score
             + rectangularity_gate
             * (
                 0.06 * rectangle_dark_score
@@ -2643,6 +3756,7 @@ class MagentaSquare(Policy):
             score=score,
             rectangular_edge_score=rectangular_edge_score,
             axis_edge_score=axis_edge_score,
+            rail_parallel_score=rail_parallel_score,
             rectangle_dark_score=rectangle_dark_score,
             center_dark_score=center_dark_score,
             scale_score=scale_score,
@@ -2658,12 +3772,18 @@ class MagentaSquare(Policy):
             return None
         rgb = self._image_msg_to_rgb(image_msg)
         dark_mask, edge_mask = self._nic_port_detection_masks(rgb)
+        image_line_segments = (
+            self._sfp_nic_image_line_segments(edge_mask, rgb.shape[:2])
+            if getattr(self, "sfp_nic_rail_parallel_score_enabled", True)
+            else []
+        )
         image_score = self._sfp_nic_localization_image_score_from_masks(
             localization,
             rgb.shape[:2],
             dark_mask,
             edge_mask,
             camera_info,
+            image_line_segments=image_line_segments,
         )
         if image_score is None:
             return None
@@ -2678,18 +3798,44 @@ class MagentaSquare(Policy):
     ) -> float | None:
         if not camera_info.header.frame_id:
             return None
-        if 0 not in localizations or 1 not in localizations:
-            return None
         rgb = self._image_msg_to_rgb(image_msg)
         dark_mask, edge_mask = self._nic_port_detection_masks(rgb)
+        return self._score_sfp_nic_port_pair_localization_from_masks(
+            target_port_index,
+            localizations,
+            rgb.shape[:2],
+            dark_mask,
+            edge_mask,
+            camera_info,
+        )
+
+    def _score_sfp_nic_port_pair_localization_from_masks(
+        self,
+        target_port_index: int,
+        localizations: dict[int, SfpNicPortLocalization],
+        image_shape: tuple[int, int],
+        dark_mask: np.ndarray,
+        edge_mask: np.ndarray,
+        camera_info,
+        image_line_segments: list[tuple[float, float]] | None = None,
+    ) -> float | None:
+        if 0 not in localizations or 1 not in localizations:
+            return None
+        if image_line_segments is None:
+            image_line_segments = (
+                self._sfp_nic_image_line_segments(edge_mask, image_shape)
+                if getattr(self, "sfp_nic_rail_parallel_score_enabled", True)
+                else []
+            )
         image_scores: dict[int, SfpNicPortImageScore] = {}
         for port_index, localization in localizations.items():
             image_score = self._sfp_nic_localization_image_score_from_masks(
                 localization,
-                rgb.shape[:2],
+                image_shape,
                 dark_mask,
                 edge_mask,
                 camera_info,
+                image_line_segments=image_line_segments,
             )
             if image_score is None:
                 return None
@@ -2721,15 +3867,637 @@ class MagentaSquare(Policy):
         pair_axis_score = float(
             np.mean([target_score.axis_edge_score, peer_score.axis_edge_score])
         )
+        pair_rail_parallel_score = (
+            0.50
+            * float(
+                np.mean(
+                    [target_score.rail_parallel_score, peer_score.rail_parallel_score]
+                )
+            )
+            + 0.30
+            * float(min(target_score.rail_parallel_score, peer_score.rail_parallel_score))
+            + 0.20 * target_score.rail_parallel_score
+        )
         pair_scale_score = float(
             np.mean([target_score.scale_score, peer_score.scale_score])
         )
+        rail_parallel_weight = min(
+            max(float(getattr(self, "sfp_nic_rail_parallel_pair_weight", 0.12)), 0.0),
+            0.30,
+        )
+        rectangular_weight = 0.72 - rail_parallel_weight
         return (
-            0.72 * pair_rectangular_score
+            rectangular_weight * pair_rectangular_score
             + 0.18 * port_score_support
+            + rail_parallel_weight * pair_rail_parallel_score
             + 0.07 * pair_axis_score
             + 0.03 * pair_scale_score
         )
+
+    @staticmethod
+    def _projected_line_overlaps_image(
+        p0_px: np.ndarray,
+        p1_px: np.ndarray,
+        image_shape: tuple[int, int],
+        *,
+        margin_px: float = 8.0,
+    ) -> bool:
+        image_h, image_w = image_shape
+        p0_px = np.asarray(p0_px, dtype=np.float64).reshape(2)
+        p1_px = np.asarray(p1_px, dtype=np.float64).reshape(2)
+        return not (
+            max(p0_px[0], p1_px[0]) < -margin_px
+            or min(p0_px[0], p1_px[0]) > image_w - 1.0 + margin_px
+            or max(p0_px[1], p1_px[1]) < -margin_px
+            or min(p0_px[1], p1_px[1]) > image_h - 1.0 + margin_px
+        )
+
+    def _score_projected_model_lines_from_masks(
+        self,
+        points_base: np.ndarray,
+        edge_indices: list[tuple[int, int]],
+        image_shape: tuple[int, int],
+        edge_mask: np.ndarray,
+        camera_info,
+        *,
+        min_visible_lines: int = 1,
+    ) -> float | None:
+        pixels = self._project_base_points_to_pixels(points_base, camera_info)
+        if pixels is None:
+            return None
+
+        line_scores: list[float] = []
+        for i0, i1 in edge_indices:
+            p0_px = pixels[i0]
+            p1_px = pixels[i1]
+            if not self._projected_line_overlaps_image(p0_px, p1_px, image_shape):
+                continue
+            projected_length_px = float(np.linalg.norm(p1_px - p0_px))
+            samples = max(8, min(96, int(projected_length_px / 3.0) + 1))
+            line_scores.append(
+                self._sample_mask_line(
+                    edge_mask,
+                    p0_px,
+                    p1_px,
+                    samples=samples,
+                )
+            )
+
+        if len(line_scores) < min_visible_lines:
+            return None
+
+        scores = np.clip(np.asarray(line_scores, dtype=np.float64), 0.0, 1.0)
+        return float(
+            0.45 * np.mean(scores)
+            + 0.35 * np.median(scores)
+            + 0.20 * np.max(scores)
+        )
+
+    def _score_sfp_nic_card_line_group_from_masks(
+        self,
+        line_segments_card: list[tuple[np.ndarray, np.ndarray]],
+        *,
+        card_index: int,
+        rail_translation_m: float,
+        rail_yaw_rad: float,
+        localized_target: LocalizedTransportTarget,
+        image_shape: tuple[int, int],
+        edge_mask: np.ndarray,
+        camera_info,
+        min_visible_lines: int = 1,
+    ) -> float | None:
+        if not line_segments_card:
+            return None
+        model_points_card, edge_indices = self._line_segments_to_model_points(
+            line_segments_card
+        )
+        model_points_base = self._sfp_nic_card_points_to_base(
+            model_points_card,
+            card_index=card_index,
+            rail_translation_m=rail_translation_m,
+            rail_yaw_rad=rail_yaw_rad,
+            localized_target=localized_target,
+        )
+        return self._score_projected_model_lines_from_masks(
+            model_points_base,
+            edge_indices,
+            image_shape,
+            edge_mask,
+            camera_info,
+            min_visible_lines=min_visible_lines,
+        )
+
+    def _score_sfp_nic_front_geometry_from_masks(
+        self,
+        *,
+        card_index: int,
+        rail_translation_m: float,
+        rail_yaw_rad: float,
+        localized_target: LocalizedTransportTarget,
+        image_shape: tuple[int, int],
+        edge_mask: np.ndarray,
+        camera_info,
+    ) -> float | None:
+        component_scores: list[tuple[float, float]] = []
+
+        ridge_score = self._score_sfp_nic_card_line_group_from_masks(
+            self._sfp_nic_front_ridge_lines_card(),
+            card_index=card_index,
+            rail_translation_m=rail_translation_m,
+            rail_yaw_rad=rail_yaw_rad,
+            localized_target=localized_target,
+            image_shape=image_shape,
+            edge_mask=edge_mask,
+            camera_info=camera_info,
+            min_visible_lines=1,
+        )
+        if ridge_score is not None:
+            component_scores.append((0.50, ridge_score))
+
+        cage_score = self._score_sfp_nic_card_line_group_from_masks(
+            self._sfp_nic_cage_lines_card(),
+            card_index=card_index,
+            rail_translation_m=rail_translation_m,
+            rail_yaw_rad=rail_yaw_rad,
+            localized_target=localized_target,
+            image_shape=image_shape,
+            edge_mask=edge_mask,
+            camera_info=camera_info,
+            min_visible_lines=2,
+        )
+        if cage_score is not None:
+            component_scores.append((0.50, cage_score))
+
+        circular_feature_score = self._score_sfp_nic_card_line_group_from_masks(
+            self._sfp_nic_circular_feature_lines_card(),
+            card_index=card_index,
+            rail_translation_m=rail_translation_m,
+            rail_yaw_rad=rail_yaw_rad,
+            localized_target=localized_target,
+            image_shape=image_shape,
+            edge_mask=edge_mask,
+            camera_info=camera_info,
+            min_visible_lines=3,
+        )
+        if circular_feature_score is not None:
+            component_scores.append((0.0, circular_feature_score))
+
+        if not component_scores:
+            return None
+        total_weight = sum(weight for weight, _ in component_scores)
+        if total_weight <= 0.0:
+            return None
+        return float(
+            sum(weight * score for weight, score in component_scores) / total_weight
+        )
+
+    def _score_sfp_nic_front_geometry_in_camera(
+        self,
+        *,
+        card_index: int,
+        rail_translation_m: float,
+        rail_yaw_rad: float,
+        localized_target: LocalizedTransportTarget,
+        image_msg,
+        camera_info,
+    ) -> float | None:
+        if not camera_info.header.frame_id:
+            return None
+        rgb = self._image_msg_to_rgb(image_msg)
+        _, edge_mask = self._nic_port_detection_masks(rgb)
+        return self._score_sfp_nic_front_geometry_from_masks(
+            card_index=card_index,
+            rail_translation_m=rail_translation_m,
+            rail_yaw_rad=rail_yaw_rad,
+            localized_target=localized_target,
+            image_shape=rgb.shape[:2],
+            edge_mask=edge_mask,
+            camera_info=camera_info,
+        )
+
+    @staticmethod
+    def _combine_sfp_nic_visual_scores(
+        port_score: float | None,
+        front_geometry_score: float | None,
+        front_geometry_weight: float,
+    ) -> float | None:
+        if port_score is None:
+            return front_geometry_score
+        if front_geometry_score is None:
+            return port_score
+        weight = min(max(float(front_geometry_weight), 0.0), 0.95)
+        return float((1.0 - weight) * port_score + weight * front_geometry_score)
+
+    @staticmethod
+    def _debug_overlay_safe_token(value: str) -> str:
+        token = "".join(
+            char if char.isalnum() or char in ("-", "_") else "_"
+            for char in str(value)
+        ).strip("_")
+        return token or "unknown"
+
+    @staticmethod
+    def _pixel_tuple(pixel: np.ndarray) -> tuple[int, int] | None:
+        pixel = np.asarray(pixel, dtype=np.float64).reshape(2)
+        if not np.isfinite(pixel).all():
+            return None
+        return (
+            int(round(float(np.clip(pixel[0], -1.0e6, 1.0e6)))),
+            int(round(float(np.clip(pixel[1], -1.0e6, 1.0e6)))),
+        )
+
+    def _draw_debug_line(
+        self,
+        overlay_rgb: np.ndarray,
+        p0_px: np.ndarray,
+        p1_px: np.ndarray,
+        color_rgb: tuple[int, int, int],
+        *,
+        thickness: int = 2,
+    ) -> None:
+        p0 = self._pixel_tuple(p0_px)
+        p1 = self._pixel_tuple(p1_px)
+        if p0 is None or p1 is None:
+            return
+        cv2.line(overlay_rgb, p0, p1, color_rgb, thickness, lineType=cv2.LINE_AA)
+
+    def _draw_debug_text_block(
+        self,
+        overlay_rgb: np.ndarray,
+        lines: list[str],
+        *,
+        origin_px: tuple[int, int] = (10, 22),
+    ) -> None:
+        x, y = origin_px
+        line_height = 18
+        for index, line in enumerate(lines):
+            text_origin = (x, y + index * line_height)
+            cv2.putText(
+                overlay_rgb,
+                line,
+                text_origin,
+                cv2.FONT_HERSHEY_SIMPLEX,
+                0.48,
+                (0, 0, 0),
+                3,
+                cv2.LINE_AA,
+            )
+            cv2.putText(
+                overlay_rgb,
+                line,
+                text_origin,
+                cv2.FONT_HERSHEY_SIMPLEX,
+                0.48,
+                (255, 255, 255),
+                1,
+                cv2.LINE_AA,
+            )
+
+    def _draw_sfp_nic_port_overlay(
+        self,
+        overlay_rgb: np.ndarray,
+        camera_info,
+        port_index: int,
+        localization: SfpNicPortLocalization,
+        *,
+        target_port_index: int,
+    ) -> None:
+        image_shape = overlay_rgb.shape[:2]
+        model_points, _, edge_indices = self._sfp_nic_candidate_model_points(
+            localization
+        )
+        pixels = self._project_base_points_to_pixels(model_points, camera_info)
+        if pixels is None:
+            return
+
+        is_target = port_index == target_port_index
+        color = (0, 220, 255) if port_index == 0 else (255, 170, 0)
+        thickness = 3 if is_target else 2
+        for i0, i1 in edge_indices[:4]:
+            if self._projected_line_overlaps_image(
+                pixels[i0],
+                pixels[i1],
+                image_shape,
+                margin_px=24.0,
+            ):
+                self._draw_debug_line(
+                    overlay_rgb,
+                    pixels[i0],
+                    pixels[i1],
+                    color,
+                    thickness=thickness,
+                )
+
+        label_point = self._pixel_tuple(pixels[0] + np.array([3.0, -4.0]))
+        if label_point is not None:
+            cv2.putText(
+                overlay_rgb,
+                f"P{port_index}",
+                label_point,
+                cv2.FONT_HERSHEY_SIMPLEX,
+                0.55,
+                color,
+                2,
+                cv2.LINE_AA,
+            )
+
+        if not is_target:
+            return
+
+        entrance_px = self._pixel_tuple(pixels[4])
+        if entrance_px is not None:
+            cv2.drawMarker(
+                overlay_rgb,
+                entrance_px,
+                (0, 255, 0),
+                cv2.MARKER_CROSS,
+                18,
+                2,
+                cv2.LINE_AA,
+            )
+            cv2.circle(overlay_rgb, entrance_px, 5, (0, 255, 0), 2, cv2.LINE_AA)
+
+        axis_start = self._pixel_tuple(pixels[4])
+        axis_end = self._pixel_tuple(pixels[5])
+        if axis_start is not None and axis_end is not None:
+            cv2.arrowedLine(
+                overlay_rgb,
+                axis_start,
+                axis_end,
+                (255, 0, 255),
+                2,
+                cv2.LINE_AA,
+                tipLength=0.25,
+            )
+
+    def _draw_sfp_nic_ground_truth_port_overlay(
+        self,
+        overlay_rgb: np.ndarray,
+        camera_info,
+        port_index: int,
+        localization: SfpNicPortLocalization,
+    ) -> None:
+        image_shape = overlay_rgb.shape[:2]
+        model_points, _, edge_indices = self._sfp_nic_candidate_model_points(
+            localization
+        )
+        pixels = self._project_base_points_to_pixels(model_points, camera_info)
+        if pixels is None:
+            return
+
+        color = (255, 40, 40)
+        for i0, i1 in edge_indices[:4]:
+            if self._projected_line_overlaps_image(
+                pixels[i0],
+                pixels[i1],
+                image_shape,
+                margin_px=24.0,
+            ):
+                self._draw_debug_line(
+                    overlay_rgb,
+                    pixels[i0],
+                    pixels[i1],
+                    color,
+                    thickness=2,
+                )
+
+        entrance_px = self._pixel_tuple(pixels[4])
+        if entrance_px is not None:
+            cv2.drawMarker(
+                overlay_rgb,
+                entrance_px,
+                color,
+                cv2.MARKER_TILTED_CROSS,
+                20,
+                2,
+                cv2.LINE_AA,
+            )
+            cv2.circle(overlay_rgb, entrance_px, 6, color, 2, cv2.LINE_AA)
+
+        axis_start = self._pixel_tuple(pixels[4])
+        axis_end = self._pixel_tuple(pixels[5])
+        if axis_start is not None and axis_end is not None:
+            cv2.arrowedLine(
+                overlay_rgb,
+                axis_start,
+                axis_end,
+                (255, 255, 0),
+                2,
+                cv2.LINE_AA,
+                tipLength=0.25,
+            )
+
+        label_point = self._pixel_tuple(pixels[2] + np.array([3.0, -4.0]))
+        if label_point is not None:
+            cv2.putText(
+                overlay_rgb,
+                f"GT P{port_index}",
+                label_point,
+                cv2.FONT_HERSHEY_SIMPLEX,
+                0.55,
+                color,
+                2,
+                cv2.LINE_AA,
+            )
+
+    def _publish_sfp_nic_debug_overlay(
+        self,
+        overlay_rgb: np.ndarray,
+        camera_info,
+    ) -> None:
+        publisher = getattr(self, "_sfp_nic_debug_overlay_pub", None)
+        image_msg_type = getattr(self, "_sfp_nic_debug_image_msg_type", None)
+        if publisher is None or image_msg_type is None:
+            return
+
+        overlay_rgb = np.ascontiguousarray(overlay_rgb, dtype=np.uint8)
+        msg = image_msg_type()
+        msg.height = int(overlay_rgb.shape[0])
+        msg.width = int(overlay_rgb.shape[1])
+        msg.encoding = "rgb8"
+        msg.is_bigendian = 0
+        msg.step = int(overlay_rgb.shape[1] * 3)
+        msg.data = overlay_rgb.tobytes()
+        try:
+            msg.header.frame_id = camera_info.header.frame_id
+            msg.header.stamp = self._parent_node.get_clock().now().to_msg()
+        except AttributeError:
+            pass
+        publisher.publish(msg)
+
+    def _save_sfp_nic_debug_overlay(
+        self,
+        overlay_rgb: np.ndarray,
+        *,
+        camera_name: str,
+        task: Task,
+        used_visual_detection: bool,
+    ) -> None:
+        if not getattr(self, "sfp_nic_debug_overlay_save", False):
+            return
+
+        debug_dir = Path(
+            getattr(
+                self,
+                "sfp_nic_debug_overlay_dir",
+                Path("outputs/debug/sfp_nic_port_pair"),
+            )
+        )
+        try:
+            debug_dir.mkdir(parents=True, exist_ok=True)
+        except OSError as ex:
+            self.get_logger().warn(
+                f"SFP/NIC debug overlay directory could not be created: {ex}"
+            )
+            return
+
+        seq = int(getattr(self, "_sfp_nic_debug_overlay_seq", 0))
+        mode = "visual" if used_visual_detection else "geometry_fallback"
+        filename = (
+            f"{seq:05d}_"
+            f"{self._debug_overlay_safe_token(task.target_module_name)}_"
+            f"{self._debug_overlay_safe_token(task.port_name)}_"
+            f"{self._debug_overlay_safe_token(camera_name)}_"
+            f"{mode}.png"
+        )
+        path = debug_dir / filename
+        bgr = cv2.cvtColor(overlay_rgb, cv2.COLOR_RGB2BGR)
+        if not cv2.imwrite(str(path), bgr):
+            self.get_logger().warn(f"SFP/NIC debug overlay write failed: {path}")
+            return
+        self.get_logger().info(f"SFP/NIC debug overlay saved: {path}")
+
+    def _sfp_nic_pair_localizations_for_overlay(
+        self,
+        task: Task,
+        localized_target: LocalizedTransportTarget,
+        localization: SfpNicPortLocalization,
+    ) -> tuple[int, dict[int, SfpNicPortLocalization]]:
+        return self._sfp_nic_port_pair_localizations_from_board_pose(
+            task,
+            localized_target,
+            rail_translation_m=localization.rail_translation_m,
+            rail_yaw_rad=localization.rail_yaw_rad,
+            score=localization.score,
+            confidence=localization.confidence,
+            observed_camera_count=localization.observed_camera_count,
+            source=localization.source,
+            accepted=localization.accepted,
+        )
+
+    def _save_sfp_nic_port_pair_debug_overlays(
+        self,
+        task: Task,
+        obs,
+        localized_target: LocalizedTransportTarget,
+        localization: SfpNicPortLocalization,
+        *,
+        localizer_mode: str,
+        used_visual_detection: bool,
+        fallback_reason: str = "",
+        visual_confidence: float | None = None,
+        camera_scores: list[float] | None = None,
+        port_scores: list[float] | None = None,
+        front_geometry_scores: list[float] | None = None,
+    ) -> None:
+        if not getattr(self, "sfp_nic_debug_overlay_enabled", False):
+            return
+        if not (
+            getattr(self, "sfp_nic_debug_overlay_save", False)
+            or getattr(self, "sfp_nic_debug_overlay_stream", False)
+        ):
+            return
+
+        target_port_index, localizations = self._sfp_nic_pair_localizations_for_overlay(
+            task,
+            localized_target,
+            localization,
+        )
+        selected = localizations.get(target_port_index, localization)
+        ground_truth = self._true_sfp_nic_port_localization_from_trial_config(task)
+        ground_truth_localization = None
+        ground_truth_source = ""
+        if ground_truth is not None:
+            ground_truth_localization, path, trial_id = ground_truth
+            ground_truth_source = f"{path.name}:{trial_id}"
+        camera_inputs = (
+            ("left", obs.left_image, obs.left_camera_info),
+            ("center", obs.center_image, obs.center_camera_info),
+            ("right", obs.right_image, obs.right_camera_info),
+        )
+        scores_text = (
+            f"scores all={np.round(camera_scores or [], 3).tolist()} "
+            f"port={np.round(port_scores or [], 3).tolist()} "
+            f"front={np.round(front_geometry_scores or [], 3).tolist()}"
+        )
+        confidence_text = f"conf={localization.confidence:.3f}"
+        if visual_confidence is not None:
+            confidence_text += f" visual_conf={visual_confidence:.3f}"
+
+        for camera_name, image_msg, camera_info in camera_inputs:
+            if not getattr(camera_info.header, "frame_id", ""):
+                continue
+            try:
+                rgb = self._image_msg_to_rgb(image_msg)
+            except Exception as ex:
+                self.get_logger().warn(
+                    f"SFP/NIC debug overlay skipped {camera_name}: image decode failed: {ex}"
+                )
+                continue
+
+            overlay = np.ascontiguousarray(rgb.copy())
+            for port_index in sorted(localizations):
+                self._draw_sfp_nic_port_overlay(
+                    overlay,
+                    camera_info,
+                    port_index,
+                    localizations[port_index],
+                    target_port_index=target_port_index,
+                )
+
+            gt_error_text = ""
+            if ground_truth_localization is not None:
+                self._draw_sfp_nic_ground_truth_port_overlay(
+                    overlay,
+                    camera_info,
+                    target_port_index,
+                    ground_truth_localization,
+                )
+                det_minus_gt = selected.entrance_base - ground_truth_localization.entrance_base
+                gt_error_text = (
+                    f"gt={ground_truth_source} "
+                    f"det_minus_gt={np.round(det_minus_gt, 5).tolist()} "
+                    f"|err|={float(np.linalg.norm(det_minus_gt)):.5f}m"
+                )
+
+            status = "visual detection" if used_visual_detection else "geometry fallback"
+            text_lines = [
+                f"SFP/NIC {status} | {localizer_mode} | target P{target_port_index}",
+                confidence_text,
+                f"source={localization.source}",
+                f"rail_t={localization.rail_translation_m:.5f} yaw={np.degrees(localization.rail_yaw_rad):.2f}deg",
+                f"entrance={np.round(selected.entrance_base, 5).tolist()}",
+                f"axis={np.round(selected.port_axis_base, 4).tolist()}",
+                scores_text,
+            ]
+            if gt_error_text:
+                text_lines.insert(6, gt_error_text)
+            if fallback_reason:
+                text_lines.insert(2, f"fallback={fallback_reason}")
+            self._draw_debug_text_block(overlay, text_lines)
+
+            self._save_sfp_nic_debug_overlay(
+                overlay,
+                camera_name=camera_name,
+                task=task,
+                used_visual_detection=used_visual_detection,
+            )
+            if getattr(self, "sfp_nic_debug_overlay_stream", False):
+                self._publish_sfp_nic_debug_overlay(overlay, camera_info)
+
+        self._sfp_nic_debug_overlay_seq = int(
+            getattr(self, "_sfp_nic_debug_overlay_seq", 0)
+        ) + 1
 
     @staticmethod
     def _grid_with_zero(min_value: float, max_value: float, steps: int) -> np.ndarray:
@@ -2765,11 +4533,21 @@ class MagentaSquare(Policy):
         localized_target: LocalizedTransportTarget,
     ) -> SfpNicPortLocalization | None:
         if not self.sfp_nic_localizer_enabled:
-            return self._prior_sfp_nic_port_localization(
+            prior = self._prior_sfp_nic_port_localization(
                 task,
                 localized_target,
                 source="SFP/NIC geometry prior (localizer disabled)",
             )
+            self._save_sfp_nic_port_pair_debug_overlays(
+                task,
+                obs,
+                localized_target,
+                prior,
+                localizer_mode="disabled",
+                used_visual_detection=False,
+                fallback_reason="localizer disabled",
+            )
+            return prior
 
         translations = self._grid_with_zero(
             self.sfp_nic_rail_translation_min,
@@ -2781,13 +4559,37 @@ class MagentaSquare(Policy):
             self.sfp_nic_rail_yaw_max,
             self.sfp_nic_yaw_grid_steps,
         )
-        camera_inputs = (
+        raw_camera_inputs = (
             ("left", obs.left_image, obs.left_camera_info),
             ("center", obs.center_image, obs.center_camera_info),
             ("right", obs.right_image, obs.right_camera_info),
         )
+        camera_inputs = []
+        for camera_name, image_msg, camera_info in raw_camera_inputs:
+            if not camera_info.header.frame_id:
+                continue
+            rgb = self._image_msg_to_rgb(image_msg)
+            dark_mask, edge_mask = self._nic_port_detection_masks(rgb)
+            image_shape = rgb.shape[:2]
+            image_line_segments = (
+                self._sfp_nic_image_line_segments(edge_mask, image_shape)
+                if getattr(self, "sfp_nic_rail_parallel_score_enabled", True)
+                else []
+            )
+            camera_inputs.append(
+                (
+                    camera_name,
+                    image_shape,
+                    dark_mask,
+                    edge_mask,
+                    camera_info,
+                    image_line_segments,
+                )
+            )
         best: SfpNicPortLocalization | None = None
         best_camera_scores: list[float] = []
+        best_port_camera_scores: list[float] = []
+        best_front_geometry_camera_scores: list[float] = []
         translation_scale = max(
             abs(self.sfp_nic_rail_translation_min),
             abs(self.sfp_nic_rail_translation_max),
@@ -2803,9 +4605,25 @@ class MagentaSquare(Policy):
             "sfp_nic_pair_localizer_enabled",
             True,
         )
+        front_geometry_enabled = getattr(
+            self,
+            "sfp_nic_front_geometry_localizer_enabled",
+            True,
+        )
+        front_geometry_weight = getattr(
+            self,
+            "sfp_nic_front_geometry_score_weight",
+            0.40,
+        )
+        card_index, _ = self._task_indices(task)
         for rail_translation_m in translations:
             for rail_yaw_rad in yaws:
                 if pair_localizer_enabled:
+                    source = (
+                        "SFP/NIC projected port-pair + front-geometry localizer"
+                        if front_geometry_enabled
+                        else "SFP/NIC projected port-pair localizer"
+                    )
                     target_port_index, port_localizations = (
                         self._sfp_nic_port_pair_localizations_from_board_pose(
                             task,
@@ -2815,12 +4633,17 @@ class MagentaSquare(Policy):
                             score=0.0,
                             confidence=0.0,
                             observed_camera_count=0,
-                            source="SFP/NIC projected port-pair localizer",
+                            source=source,
                             accepted=False,
                         )
                     )
                     localization = port_localizations[target_port_index]
                 else:
+                    source = (
+                        "SFP/NIC projected port + front-geometry localizer"
+                        if front_geometry_enabled
+                        else "SFP/NIC projected port localizer"
+                    )
                     target_port_index = -1
                     port_localizations = {}
                     localization = self._sfp_nic_port_localization_from_board_pose(
@@ -2831,26 +4654,68 @@ class MagentaSquare(Policy):
                         score=0.0,
                         confidence=0.0,
                         observed_camera_count=0,
-                        source="SFP/NIC projected port localizer",
+                        source=source,
                         accepted=False,
                     )
                 camera_scores = []
-                for _, image_msg, camera_info in camera_inputs:
+                port_camera_scores = []
+                front_geometry_camera_scores = []
+                for (
+                    _,
+                    image_shape,
+                    dark_mask,
+                    edge_mask,
+                    camera_info,
+                    image_line_segments,
+                ) in camera_inputs:
                     if pair_localizer_enabled:
-                        score = self._score_sfp_nic_port_pair_localization_in_camera(
-                            target_port_index,
-                            port_localizations,
-                            image_msg,
-                            camera_info,
+                        port_score = (
+                            self._score_sfp_nic_port_pair_localization_from_masks(
+                                target_port_index,
+                                port_localizations,
+                                image_shape,
+                                dark_mask,
+                                edge_mask,
+                                camera_info,
+                                image_line_segments=image_line_segments,
+                            )
                         )
                     else:
-                        score = self._score_sfp_nic_localization_in_camera(
+                        image_score = self._sfp_nic_localization_image_score_from_masks(
                             localization,
-                            image_msg,
+                            image_shape,
+                            dark_mask,
+                            edge_mask,
                             camera_info,
+                            image_line_segments=image_line_segments,
                         )
+                        port_score = None if image_score is None else image_score.score
+
+                    front_geometry_score = None
+                    if front_geometry_enabled:
+                        front_geometry_score = (
+                            self._score_sfp_nic_front_geometry_from_masks(
+                                card_index=card_index,
+                                rail_translation_m=float(rail_translation_m),
+                                rail_yaw_rad=float(rail_yaw_rad),
+                                localized_target=localized_target,
+                                image_shape=image_shape,
+                                edge_mask=edge_mask,
+                                camera_info=camera_info,
+                            )
+                        )
+
+                    score = self._combine_sfp_nic_visual_scores(
+                        port_score,
+                        front_geometry_score,
+                        front_geometry_weight,
+                    )
                     if score is not None:
                         camera_scores.append(score)
+                    if port_score is not None:
+                        port_camera_scores.append(port_score)
+                    if front_geometry_score is not None:
+                        front_geometry_camera_scores.append(front_geometry_score)
                 if not camera_scores:
                     continue
                 image_score = float(np.mean(camera_scores))
@@ -2865,6 +4730,8 @@ class MagentaSquare(Policy):
                 if best is None or total_score > best.score:
                     best = localization
                     best_camera_scores = camera_scores
+                    best_port_camera_scores = port_camera_scores
+                    best_front_geometry_camera_scores = front_geometry_camera_scores
 
         if best is None:
             self.get_logger().warn(
@@ -2872,20 +4739,36 @@ class MagentaSquare(Policy):
                 "any wrist camera; using prior fallback."
             )
             if self.sfp_nic_allow_prior_fallback:
-                return self._prior_sfp_nic_port_localization(
+                prior = self._prior_sfp_nic_port_localization(
                     task,
                     localized_target,
                     source="SFP/NIC geometry prior (no projected camera evidence)",
                 )
+                self._save_sfp_nic_port_pair_debug_overlays(
+                    task,
+                    obs,
+                    localized_target,
+                    prior,
+                    localizer_mode="no_projection",
+                    used_visual_detection=False,
+                    fallback_reason="no projected camera evidence",
+                )
+                return prior
             return None
 
         best.accepted = best.confidence >= self.sfp_nic_localizer_min_confidence
+        localizer_mode = "pair" if pair_localizer_enabled else "single"
+        if front_geometry_enabled:
+            localizer_mode += "+front_geometry"
         self.get_logger().info(
             "SFP/NIC port localizer result: "
-            f"mode={'pair' if pair_localizer_enabled else 'single'}, "
+            f"mode={localizer_mode}, "
             f"accepted={best.accepted}, "
             f"confidence={best.confidence:.3f}, score={best.score:.3f}, "
             f"camera_scores={[round(score, 3) for score in best_camera_scores]}, "
+            f"port_scores={[round(score, 3) for score in best_port_camera_scores]}, "
+            f"front_geometry_scores="
+            f"{[round(score, 3) for score in best_front_geometry_camera_scores]}, "
             f"observed_cameras={best.observed_camera_count}, "
             f"rail_translation={best.rail_translation_m:.5f}, "
             f"rail_yaw={best.rail_yaw_rad:.5f}, "
@@ -2893,20 +4776,58 @@ class MagentaSquare(Policy):
             f"axis_base={np.round(best.port_axis_base, 5).tolist()}"
         )
         if best.accepted:
+            self._save_sfp_nic_port_pair_debug_overlays(
+                task,
+                obs,
+                localized_target,
+                best,
+                localizer_mode=localizer_mode,
+                used_visual_detection=True,
+                camera_scores=best_camera_scores,
+                port_scores=best_port_camera_scores,
+                front_geometry_scores=best_front_geometry_camera_scores,
+            )
             return best
         if self.sfp_nic_allow_prior_fallback:
             self.get_logger().warn(
                 "SFP/NIC port localizer confidence is below threshold; using the "
                 "SDF-derived geometry prior for this insertion attempt."
             )
-            return self._prior_sfp_nic_port_localization(
+            prior = self._prior_sfp_nic_port_localization(
                 task,
                 localized_target,
                 source="SFP/NIC geometry prior (weak visual evidence)",
             )
+            self._save_sfp_nic_port_pair_debug_overlays(
+                task,
+                obs,
+                localized_target,
+                prior,
+                localizer_mode=localizer_mode,
+                used_visual_detection=False,
+                fallback_reason="weak visual evidence",
+                visual_confidence=best.confidence,
+                camera_scores=best_camera_scores,
+                port_scores=best_port_camera_scores,
+                front_geometry_scores=best_front_geometry_camera_scores,
+            )
+            return prior
         self.get_logger().warn(
             "SFP/NIC port localizer rejected weak visual evidence and prior fallback "
             "is disabled."
+        )
+        self._save_sfp_nic_port_pair_debug_overlays(
+            task,
+            obs,
+            localized_target,
+            best,
+            localizer_mode=localizer_mode,
+            used_visual_detection=False,
+            fallback_reason="weak visual evidence rejected; prior fallback disabled",
+            visual_confidence=best.confidence,
+            camera_scores=best_camera_scores,
+            port_scores=best_port_camera_scores,
+            front_geometry_scores=best_front_geometry_camera_scores,
         )
         return None
 
@@ -3040,6 +4961,19 @@ class MagentaSquare(Policy):
 
         return matches
 
+    def _matching_trial_entry(self, task: Task) -> tuple[Path, str, dict] | None:
+        matches = self._matching_trial_entries(task)
+        if not matches:
+            return None
+        if len(matches) > 1 and not self.trial_config_path:
+            self.get_logger().warn(
+                "TransportToMean found multiple matching trial configs for "
+                f"{task.target_module_name}/{task.port_name}; set "
+                "AIC_TRANSPORT_TRIAL_CONFIG to the active trial YAML for exact debug error."
+            )
+            return None
+        return matches[0]
+
     def _true_target_xy_from_trial_config(
         self,
         task: Task,
@@ -3073,18 +5007,10 @@ class MagentaSquare(Policy):
         self,
         task: Task,
     ) -> tuple[np.ndarray, np.ndarray, np.ndarray, float, Path, str] | None:
-        matches = self._matching_trial_entries(task)
-        if not matches:
+        matching_entry = self._matching_trial_entry(task)
+        if matching_entry is None:
             return None
-        if len(matches) > 1 and not self.trial_config_path:
-            self.get_logger().warn(
-                "TransportToMean found multiple matching trial configs for "
-                f"{task.target_module_name}/{task.port_name}; set "
-                "AIC_TRANSPORT_TRIAL_CONFIG to the active trial YAML for exact debug error."
-            )
-            return None
-
-        path, trial_id, trial_config = matches[0]
+        path, trial_id, trial_config = matching_entry
         try:
             board_pose = trial_config["scene"]["task_board"]["pose"]
             board_x = float(board_pose["x"])
@@ -3115,6 +5041,63 @@ class MagentaSquare(Policy):
         board_y_axis = board_y_axis / max(float(np.linalg.norm(board_y_axis)), 1e-9)
         yaw_base = float(np.arctan2(board_x_axis[1], board_x_axis[0]))
         return origin_base, board_x_axis, board_y_axis, yaw_base, path, trial_id
+
+    def _true_sfp_nic_port_localization_from_trial_config(
+        self,
+        task: Task,
+    ) -> tuple[SfpNicPortLocalization, Path, str] | None:
+        try:
+            card_index, port_index = self._task_indices(task)
+        except ValueError:
+            return None
+
+        matching_entry = self._matching_trial_entry(task)
+        true_board_pose = self._true_board_pose_from_trial_config(task)
+        if matching_entry is None or true_board_pose is None:
+            return None
+
+        path, trial_id, trial_config = matching_entry
+        true_origin, true_x_axis, true_y_axis, _, _, _ = true_board_pose
+        rail_key = f"nic_rail_{card_index}"
+        try:
+            rail_config = trial_config["scene"]["task_board"][rail_key]
+            if not bool(rail_config.get("entity_present", False)):
+                self.get_logger().warn(
+                    f"TransportToMean trial debug config {path}:{trial_id} has "
+                    f"{rail_key} marked absent; cannot draw SFP/NIC ground truth."
+                )
+                return None
+            entity_pose = rail_config["entity_pose"]
+            rail_translation_m = float(entity_pose.get("translation", 0.0))
+            rail_yaw_rad = float(entity_pose.get("yaw", 0.0))
+        except (KeyError, TypeError, ValueError) as ex:
+            self.get_logger().warn(
+                f"TransportToMean trial debug config {path}:{trial_id} is missing "
+                f"{rail_key} ground-truth pose: {ex}"
+            )
+            return None
+
+        localized_target = LocalizedTransportTarget(
+            target_xyz=(0.0, 0.0, 0.0),
+            board_origin=true_origin,
+            board_x_axis=true_x_axis,
+            board_y_axis=true_y_axis,
+            target_board_xyz=np.zeros(3, dtype=np.float64),
+            source=f"trial-config ground truth {path}:{trial_id}",
+        )
+        localization = self._sfp_nic_port_localization_for_indices(
+            localized_target,
+            card_index=card_index,
+            port_index=port_index,
+            rail_translation_m=rail_translation_m,
+            rail_yaw_rad=rail_yaw_rad,
+            score=1.0,
+            confidence=1.0,
+            observed_camera_count=0,
+            source=f"SFP/NIC trial-config ground truth {path}:{trial_id}",
+            accepted=True,
+        )
+        return localization, path, trial_id
 
     def _log_trial_config_board_pose_error(
         self,
@@ -4554,7 +6537,7 @@ class MagentaSquare(Policy):
                         "running SC circular magenta-guided search from current pose."
                     )
 
-                target_xyz, target_source = self._detect_target_from_sc_circular_view_search(
+                target_xyz, target_source = self._detect_target_from_circular_view_search(
                     task,
                     get_observation,
                     move_robot,
@@ -4567,19 +6550,40 @@ class MagentaSquare(Policy):
                 if not spawn_magenta_observations:
                     self.get_logger().info(
                         "MagentaSquare detection route selected: spawn magenta gate failed; "
-                        "skipping aerial magenta search and scanning -y for short-edge board estimation."
+                        "running capped -y short-edge scan before aerial circular search."
                     )
-                    self._move_to_short_edge_view(get_observation, move_robot)
+                    short_edge_found = self._move_to_short_edge_view(
+                        get_observation,
+                        move_robot,
+                        max_scan_distance_m=self.sfp_nic_short_edge_scan_max_distance_m,
+                        return_to_start_on_failure=True,
+                    )
                     short_edge_scan_done = True
-                    obs = get_observation()
-                    target_xyz = self._multicamera_short_edge_target_xyz(task, obs)
-                    detected_board = target_xyz is not None
-                    if detected_board:
-                        target_source = "multi-camera short-edge fit"
+                    if short_edge_found:
+                        obs = get_observation()
+                        target_xyz = self._multicamera_short_edge_target_xyz(task, obs)
+                        detected_board = target_xyz is not None
+                        if detected_board:
+                            target_source = "multi-camera short-edge fit"
+                            self.get_logger().info(
+                                "MagentaSquare detection selected: short-edge fit after "
+                                "spawn-gated capped -y scan."
+                            )
+                    if not detected_board:
                         self.get_logger().info(
-                            "MagentaSquare detection selected: short-edge fit after spawn-gated "
-                            "-y scan."
+                            "MagentaSquare capped -y short-edge scan did not localize the "
+                            "board; moving to aerial view for circular search."
                         )
+                        view_pose = self._move_to_view_pose(get_observation, move_robot)
+                        target_xyz, target_source = (
+                            self._detect_target_from_circular_view_search(
+                                task,
+                                get_observation,
+                                move_robot,
+                                view_pose,
+                            )
+                        )
+                        detected_board = target_xyz is not None
                 else:
                     self.get_logger().info(
                         "MagentaSquare detection route selected: spawn magenta gate passed; "
@@ -4612,12 +6616,37 @@ class MagentaSquare(Policy):
                         "MagentaSquare detection fallback route: running -y short-edge scan "
                         "before final board fit."
                     )
-                    self._move_to_short_edge_view(get_observation, move_robot)
+                    short_edge_found = self._move_to_short_edge_view(
+                        get_observation,
+                        move_robot,
+                        max_scan_distance_m=(
+                            self.sfp_nic_short_edge_scan_max_distance_m
+                            if task_family == "sfp_to_nic"
+                            else None
+                        ),
+                        return_to_start_on_failure=task_family == "sfp_to_nic",
+                    )
                     short_edge_scan_done = True
+                    if task_family == "sfp_to_nic" and not short_edge_found:
+                        self.get_logger().info(
+                            "MagentaSquare final capped -y short-edge scan did not "
+                            "find a clear edge; moving to aerial view for circular search."
+                        )
+                        view_pose = self._move_to_view_pose(get_observation, move_robot)
+                        target_xyz, target_source = (
+                            self._detect_target_from_circular_view_search(
+                                task,
+                                get_observation,
+                                move_robot,
+                                view_pose,
+                            )
+                        )
+                        detected_board = target_xyz is not None
                 obs = get_observation()
-                target_xyz = self._multicamera_short_edge_target_xyz(task, obs)
-                detected_board = target_xyz is not None
-                if detected_board:
+                if not detected_board:
+                    target_xyz = self._multicamera_short_edge_target_xyz(task, obs)
+                    detected_board = target_xyz is not None
+                if detected_board and not target_source:
                     target_source = "multi-camera short-edge fit"
                     self.get_logger().info(
                         "MagentaSquare detection selected: final short-edge fallback."
