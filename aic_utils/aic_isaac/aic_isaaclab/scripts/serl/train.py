@@ -133,6 +133,15 @@ parser.add_argument(
     help="If >0, freeze actor updates after this environment step while continuing critic updates and rollouts.",
 )
 parser.add_argument("--target_action_guide_weight", type=float, default=0.0)
+parser.add_argument(
+    "--target_action_guide_mode",
+    choices=["axis", "cheatcode_transform"],
+    default="axis",
+    help=(
+        "Guide-action geometry. 'axis' keeps the conservative lateral/axial guide; "
+        "'cheatcode_transform' mirrors the ROS CheatCode rigid transform from reward body to target."
+    ),
+)
 parser.add_argument("--target_action_guide_step_size", type=float, default=0.001)
 parser.add_argument("--target_action_guide_rotation_step_size", type=float, default=0.0)
 parser.add_argument(
@@ -2394,6 +2403,104 @@ def _isaac_ik_xy_sign_fix_mask(env, batch_size: int, *, device: torch.device) ->
     return mask
 
 
+def _clip_vector_norm(vec: torch.Tensor, max_norm: float) -> torch.Tensor:
+    if float(max_norm) <= 0.0:
+        return torch.zeros_like(vec)
+    norm = torch.linalg.norm(vec, dim=1, keepdim=True).clamp(min=1.0e-9)
+    scale = torch.clamp(float(max_norm) / norm, max=1.0)
+    return vec * scale
+
+
+def _cheatcode_transform_guided_policy_action(
+    env,
+    task_geometry_reward_config: dict[str, Any],
+    *,
+    step_size: float,
+    rotation_step_size: float,
+    action_frame: str,
+    device: torch.device,
+) -> torch.Tensor:
+    """Policy-space delta from the same rigid-body transform used by ROS CheatCode.
+
+    Compute the transform that aligns the configured reward body frame to the
+    target frame, apply that transform to the controlled gripper TCP frame, then
+    express the clipped delta in the requested policy action frame.
+    """
+    robot = env.unwrapped.scene["robot"]
+    body_names = list(getattr(robot, "body_names", []))
+    batch_size = int(robot.data.root_pos_w.shape[0])
+    guide = torch.zeros((batch_size, 6), dtype=torch.float32, device=device)
+    body_name = str(task_geometry_reward_config.get("target_body") or "sfp_tip_link")
+    if body_name not in body_names or CONTROLLED_TCP_BODY not in body_names:
+        return guide
+
+    target_pos_w = _target_position_from_reward_config(env, task_geometry_reward_config)
+    target_quat_w = _target_orientation_from_reward_config(env, task_geometry_reward_config)
+    if target_pos_w is None:
+        return guide
+
+    body_idx = _named_index(body_names, body_name)
+    controlled_idx = _named_index(body_names, CONTROLLED_TCP_BODY)
+    body_pos_w = robot.data.body_pos_w[:, body_idx].to(device=device, dtype=guide.dtype)
+    body_quat_w = robot.data.body_quat_w[:, body_idx].to(device=device, dtype=guide.dtype)
+    controlled_pos_w = robot.data.body_pos_w[:, controlled_idx].to(device=device, dtype=guide.dtype)
+    controlled_quat_w = robot.data.body_quat_w[:, controlled_idx].to(device=device, dtype=guide.dtype)
+    target_pos_w = target_pos_w.to(device=device, dtype=guide.dtype)
+
+    body_point_w = _offset_position_w(
+        body_pos_w,
+        body_quat_w,
+        task_geometry_reward_config.get("body_position_offset"),
+    )
+    desired_controlled_pos_w = target_pos_w + (controlled_pos_w - body_point_w)
+    delta_pos_w = desired_controlled_pos_w - controlled_pos_w
+
+    if target_quat_w is None or float(rotation_step_size) <= 0.0:
+        desired_controlled_quat_w = controlled_quat_w
+    else:
+        body_frame_quat_w = _offset_quat_w(
+            body_quat_w,
+            task_geometry_reward_config.get("body_orientation_offset"),
+        )
+        target_quat_w = target_quat_w.to(device=device, dtype=guide.dtype)
+        q_diff_w = math_utils.quat_mul(target_quat_w, math_utils.quat_inv(body_frame_quat_w))
+        desired_controlled_quat_w = math_utils.quat_mul(q_diff_w, controlled_quat_w)
+
+    if action_frame == "root":
+        frame_pos_w = robot.data.root_pos_w.to(device=device, dtype=guide.dtype)
+        frame_quat_w = robot.data.root_quat_w.to(device=device, dtype=guide.dtype)
+    else:
+        frame_idx = _named_index(body_names, action_frame)
+        frame_pos_w = robot.data.body_pos_w[:, frame_idx].to(device=device, dtype=guide.dtype)
+        frame_quat_w = robot.data.body_quat_w[:, frame_idx].to(device=device, dtype=guide.dtype)
+
+    _, frame_quat_b = math_utils.subtract_frame_transforms(
+        robot.data.root_pos_w.to(device=device, dtype=guide.dtype),
+        robot.data.root_quat_w.to(device=device, dtype=guide.dtype),
+        frame_pos_w,
+        frame_quat_w,
+    )
+    delta_pos_b = math_utils.quat_apply_inverse(
+        robot.data.root_quat_w.to(device=device, dtype=guide.dtype),
+        delta_pos_w,
+    )
+    if action_frame == "root":
+        guide[:, :3] = _clip_vector_norm(delta_pos_b, step_size)
+    else:
+        guide[:, :3] = _clip_vector_norm(math_utils.quat_apply_inverse(frame_quat_b, delta_pos_b), step_size)
+
+    delta_quat_frame = math_utils.quat_mul(
+        math_utils.quat_inv(frame_quat_w),
+        math_utils.quat_mul(
+            math_utils.quat_mul(desired_controlled_quat_w, math_utils.quat_inv(controlled_quat_w)),
+            frame_quat_w,
+        ),
+    )
+    delta_rot_frame = math_utils.axis_angle_from_quat(delta_quat_frame)
+    guide[:, 3:6] = _clip_vector_norm(delta_rot_frame, rotation_step_size)
+    return guide
+
+
 def _target_guided_policy_action(
     env,
     task_geometry_reward_config: dict[str, Any],
@@ -2404,9 +2511,20 @@ def _target_guided_policy_action(
     lateral_switch_m: float,
     axial_blend_lateral_m: float,
     action_frame: str,
+    mode: str,
     device: torch.device,
 ) -> torch.Tensor:
     """Small policy-space action that moves the reward body toward the target frame."""
+    if mode == "cheatcode_transform":
+        return _cheatcode_transform_guided_policy_action(
+            env,
+            task_geometry_reward_config,
+            step_size=step_size,
+            rotation_step_size=rotation_step_size,
+            action_frame=action_frame,
+            device=device,
+        )
+
     target_pos_w = _target_position_from_reward_config(env, task_geometry_reward_config)
     body_name = str(task_geometry_reward_config.get("target_body") or "sfp_tip_link")
     body_pos_w = _body_position_by_name(
@@ -5153,6 +5271,7 @@ def main() -> None:
             "action_clip": args_cli.action_clip,
             "actor_q_weight": args_cli.actor_q_weight,
             "actor_update_end_steps": args_cli.actor_update_end_steps,
+            "target_action_guide_mode": args_cli.target_action_guide_mode,
             "target_action_guide_prefix_decay": args_cli.target_action_guide_prefix_decay,
             "ppo_resnet_observation_terms_disabled": True,
             "camera_sensors_enabled": True,
@@ -5489,6 +5608,7 @@ def main() -> None:
                 lateral_switch_m=float(args_cli.target_action_guide_lateral_switch_m),
                 axial_blend_lateral_m=float(args_cli.target_action_guide_axial_blend_lateral_m),
                 action_frame=str(args_cli.tcp_action_frame),
+                mode=str(args_cli.target_action_guide_mode),
                 device=device,
             )
         collect_steps = int(args_cli.target_action_guide_collect_steps)

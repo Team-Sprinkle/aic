@@ -63,6 +63,7 @@ def test_isaac_serl_plan_inspects_adapter_checkpoint(tmp_path: Path) -> None:
         adapter_delta_clip=0.05,
         tcp_translation_action_clip=0.002,
         tcp_rotation_action_clip=0.003,
+        target_action_guide_mode="cheatcode_transform",
         target_action_guide_lateral_switch_m=0.002,
         target_action_guide_axial_blend_lateral_m=0.006,
         target_action_guide_prefix_decay=True,
@@ -160,6 +161,9 @@ def test_isaac_serl_plan_inspects_adapter_checkpoint(tmp_path: Path) -> None:
     assert "--tcp_rotation_action_clip" in cmd
     assert "0.003" in cmd
     assert "--target_action_guide_lateral_switch_m" in cmd
+    assert "--target_action_guide_mode" in cmd
+    mode_idx = cmd.index("--target_action_guide_mode")
+    assert cmd[mode_idx + 1] == "cheatcode_transform"
     assert "--target_action_guide_axial_blend_lateral_m" in cmd
     assert "--target_action_guide_prefix_decay" in cmd
     assert "--force_delta_penalty_weight" in cmd
