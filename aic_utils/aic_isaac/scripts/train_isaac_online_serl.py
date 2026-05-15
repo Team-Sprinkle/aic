@@ -174,6 +174,15 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser.add_argument("--adapter-penalty-weight", type=float, default=1e-3)
     parser.add_argument("--act-preservation-weight", type=float, default=1e-2)
     parser.add_argument("--target-action-guide-weight", type=float, default=0.0)
+    parser.add_argument(
+        "--target-action-guide-mode",
+        choices=["axis", "cheatcode_transform"],
+        default="axis",
+        help=(
+            "Guide-action geometry. 'axis' keeps the conservative lateral/axial guide; "
+            "'cheatcode_transform' mirrors the ROS CheatCode rigid transform."
+        ),
+    )
     parser.add_argument("--target-action-guide-step-size", type=float, default=0.001)
     parser.add_argument("--target-action-guide-rotation-step-size", type=float, default=0.0)
     parser.add_argument("--target-action-guide-axial-step-size", type=float, default=0.0)
@@ -564,6 +573,7 @@ def build_plan(args: argparse.Namespace, *, inspect_required: bool = True) -> di
         "adapter_penalty_weight": args.adapter_penalty_weight,
         "act_preservation_weight": args.act_preservation_weight,
         "target_action_guide_weight": getattr(args, "target_action_guide_weight", 0.0),
+        "target_action_guide_mode": getattr(args, "target_action_guide_mode", "axis"),
         "target_action_guide_step_size": getattr(args, "target_action_guide_step_size", 0.001),
         "target_action_guide_rotation_step_size": getattr(args, "target_action_guide_rotation_step_size", 0.0),
         "target_action_guide_axial_step_size": getattr(args, "target_action_guide_axial_step_size", 0.0),
@@ -760,6 +770,8 @@ def build_command(args: argparse.Namespace) -> tuple[list[str], dict[str, str]]:
         str(args.act_preservation_weight),
         "--target_action_guide_weight",
         str(getattr(args, "target_action_guide_weight", 0.0)),
+        "--target_action_guide_mode",
+        str(getattr(args, "target_action_guide_mode", "axis")),
         "--target_action_guide_step_size",
         str(getattr(args, "target_action_guide_step_size", 0.001)),
         "--target_action_guide_rotation_step_size",

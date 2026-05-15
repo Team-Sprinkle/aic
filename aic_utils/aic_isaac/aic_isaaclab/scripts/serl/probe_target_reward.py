@@ -422,6 +422,10 @@ def _configure_rewards(env_cfg) -> dict[str, object]:
         "target_reaching_bonus",
         "target_success_once_bonus",
         "target_lateral_error",
+        "target_motion_projection",
+        "target_lateral_progress",
+        "target_axial_progress",
+        "target_insertion_corridor",
     ):
         term = getattr(rewards, name)
         term.params["body_cfg"].body_names = [args_cli.target_body]
@@ -445,6 +449,10 @@ def _configure_rewards(env_cfg) -> dict[str, object]:
     rewards.target_reaching_bonus.weight = 0.0
     rewards.target_success_once_bonus.weight = float(args_cli.terminal_weight) * reward_weight_multiplier
     rewards.target_lateral_error.weight = 0.0
+    rewards.target_motion_projection.weight = 0.0
+    rewards.target_lateral_progress.weight = 0.0
+    rewards.target_axial_progress.weight = 0.0
+    rewards.target_insertion_corridor.weight = 0.0
     rewards.target_distance_tanh.params["std"] = float(args_cli.distance_std)
     rewards.target_distance_exp.params["sigma"] = float(args_cli.close_sigma)
     rewards.target_distance_progress.params["scale"] = float(args_cli.progress_scale)
@@ -465,6 +473,17 @@ def _configure_rewards(env_cfg) -> dict[str, object]:
     if hasattr(rewards, "target_lateral_error"):
         rewards.target_lateral_error.params["insertion_axis"] = int(args_cli.insertion_axis)
         rewards.target_lateral_error.params["scale"] = float(args_cli.lateral_error_scale)
+    for name in (
+        "target_motion_projection",
+        "target_lateral_progress",
+        "target_axial_progress",
+        "target_insertion_corridor",
+    ):
+        term = getattr(rewards, name, None)
+        if term is not None:
+            term.params["insertion_axis"] = int(args_cli.insertion_axis)
+            if "lateral_gate_sigma" in term.params:
+                term.params["lateral_gate_sigma"] = float(args_cli.lateral_gate_sigma)
     if "asset_cfg" in rewards.force_delta_penalty.params:
         rewards.force_delta_penalty.params["asset_cfg"].body_names = [FORCE_WRENCH_BODY]
     return {
@@ -536,17 +555,22 @@ def _isaac_ik_xy_sign_fix_mask(env, batch_size: int, *, device: torch.device) ->
     return mask
 
 
-def _tcp_delta_action_to_isaac_base_action(env, tcp_action: torch.Tensor) -> torch.Tensor:
+def _tcp_delta_action_to_isaac_base_action(
+    env,
+    tcp_action: torch.Tensor,
+    *,
+    action_frame: str = CONTROLLED_TCP_BODY,
+) -> torch.Tensor:
     """Convert Gazebo/LeRobot gripper-tcp delta actions to Isaac IK root-frame deltas."""
     robot = env.unwrapped.scene["robot"]
     body_names = list(getattr(robot, "body_names", []))
-    wrist_index = _named_index(body_names, "wrist_3_link")
+    frame_index = _named_index(body_names, action_frame)
     data = robot.data
     _, tcp_quat_b = math_utils.subtract_frame_transforms(
         data.root_pos_w,
         data.root_quat_w,
-        data.body_pos_w[:, wrist_index],
-        data.body_quat_w[:, wrist_index],
+        data.body_pos_w[:, frame_index],
+        data.body_quat_w[:, frame_index],
     )
     delta_pos_b = math_utils.quat_apply(tcp_quat_b, tcp_action[:, :3])
     delta_rot_b = math_utils.quat_apply(tcp_quat_b, tcp_action[:, 3:6])
@@ -754,7 +778,6 @@ def main() -> None:
     body_index = _named_index(body_names, args_cli.target_body)
     force_body_index = _named_index(body_names, FORCE_WRENCH_BODY)
     controlled_tcp_index = _named_index(body_names, CONTROLLED_TCP_BODY)
-    wrist_index = _named_index(body_names, "wrist_3_link")
     joint_names = list(getattr(robot, "joint_names", []))
     arm_joint_indices = [_named_index(joint_names, name) for name in ARM_JOINT_NAMES]
     feature_computer = ContactRecoveryFeatureComputer()
@@ -1026,12 +1049,12 @@ def main() -> None:
             tcp_action, diagnostics = _cheatcode_tcp_action(
                 robot=robot,
                 target=target,
-                wrist_index=wrist_index,
+                wrist_index=controlled_tcp_index,
                 body_index=body_index,
                 controller_target_offset=controller_target_offset,
             )
             pending_bc_action_chunk = tcp_action.reshape(-1).repeat(args_cli.expert_bc_action_horizon).detach()
-            action = _tcp_delta_action_to_isaac_base_action(env, tcp_action)
+            action = _tcp_delta_action_to_isaac_base_action(env, tcp_action, action_frame=CONTROLLED_TCP_BODY)
         _, reward, terminated, truncated, _ = env.step(action)
         if video_recorder is not None:
             video_recorder.add_scene(env)
