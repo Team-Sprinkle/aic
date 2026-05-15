@@ -87,6 +87,9 @@ def validate_request(request: dict[str, Any]) -> None:
             "axial_distance_m" not in start or "lateral_distance_m" not in start
         ):
             raise ValueError("scene.start_near_gate requires distance or axial_distance_m/lateral_distance_m")
+        offset = start.get("reset_body_offset_from_reference_world")
+        if offset is not None and (not isinstance(offset, (list, tuple)) or len(offset) != 3):
+            raise ValueError("scene.start_near_gate.reset_body_offset_from_reference_world must be a 3-value list")
 
 
 def _choices(value: Any, default: list[Any]) -> list[Any]:
@@ -378,6 +381,13 @@ def _apply_start_near_gate(
     axes = str(start.get("axes", "xyz")).lower()
     if axes not in {"xyz", "xy"}:
         raise ValueError("scene.start_near_gate.axes must be 'xyz' or 'xy'")
+    offset_raw = start.get("reset_body_offset_from_reference_world")
+    reset_body_offset = (0.0, 0.0, 0.0)
+    if offset_raw is not None:
+        if not isinstance(offset_raw, (list, tuple)) or len(offset_raw) != 3:
+            raise ValueError("scene.start_near_gate.reset_body_offset_from_reference_world must be a 3-value list")
+        reset_body_offset = (float(offset_raw[0]), float(offset_raw[1]), float(offset_raw[2]))
+    reset_body_position = _vadd(reference, reset_body_offset)
     ref_delta = _vsub(reference, gate_position)
     axial_component = abs(_vdot(ref_delta, axis))
     lateral_component = math.sqrt(max(0.0, _vnorm(ref_delta) ** 2 - axial_component * axial_component))
@@ -385,11 +395,14 @@ def _apply_start_near_gate(
         **requested,
         "reset_mode": "body_start_position_world",
         "reset_body_name": reset_body_name,
-        "body_start_position_world": _round3(reference),
+        "body_start_position_world": _round3(reset_body_position),
         "body_start_orientation_wxyz": target.get("body_start_orientation_wxyz"),
+        "reference_reward_body_name": target.get("target_reward_body") or "sfp_tip_link",
+        "reference_reward_body_start_position_world": _round3(reference),
+        "reset_body_offset_from_reference_world": _round3(reset_body_offset),
         "reference_body_position": _round3(reference),
         # Backward-compatible aliases for older diagnostics.
-        "tcp_start_position_world": _round3(reference),
+        "tcp_start_position_world": _round3(reset_body_position),
         "tcp_start_orientation_world": target.get("body_start_orientation_wxyz"),
         "reference_tcp_position": _round3(reference),
         "target_gate_position": _round3(gate_position),

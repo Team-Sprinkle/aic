@@ -32,7 +32,7 @@ def parse_args() -> argparse.Namespace:
         default="C",
         help="Only Stage C is supported: one independent Isaac trainer per GPU shard.",
     )
-    parser.add_argument("--num-envs", type=int, default=4)
+    parser.add_argument("--num-envs", type=int, default=2)
     parser.add_argument("--steps", type=int, default=100)
     parser.add_argument("--updates", type=int, default=8)
     parser.add_argument("--batch-size", type=int, default=32)

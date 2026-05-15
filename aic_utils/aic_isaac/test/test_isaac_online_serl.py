@@ -305,6 +305,47 @@ scene:
     assert start["achieved_axial_distance_m"] == 0.006
 
 
+def test_near_gate_can_reset_controlled_body_with_reference_offset(tmp_path: Path) -> None:
+    request = tmp_path / "request.yaml"
+    request.write_text(
+        """
+task_family: sfp_to_nic
+generation:
+  target_accepted_trajectories: 1
+  seed: 11
+scene:
+  start_near_gate:
+    axial_distance_m: 0.004
+    lateral_distance_m: 0.0005
+    min_clearance_m: 0.004
+    reset_body_name: gripper_tcp
+    reset_body_offset_from_reference_world: [-0.007149, 0.002556, 0.059066]
+  nic_cards:
+    count: 1
+    target_card: 0
+    target_port: sfp_port_0
+""",
+        encoding="utf-8",
+    )
+
+    summary = isaac_online_serl.materialize_episode_configs(request, tmp_path / "episodes")
+    episode = yaml.safe_load((Path(summary["episodes_dir"]) / "episode_000001.yaml").read_text(encoding="utf-8"))
+    start = episode["scene"]["start_near_gate"]
+    reference = start["reference_reward_body_start_position_world"]
+    body = start["body_start_position_world"]
+
+    assert start["reset_body_name"] == "gripper_tcp"
+    assert start["reference_reward_body_name"] == "sfp_tip_link"
+    assert start["reset_body_offset_from_reference_world"] == [-0.007149, 0.002556, 0.059066]
+    assert body == [
+        round(reference[0] - 0.007149, 6),
+        round(reference[1] + 0.002556, 6),
+        round(reference[2] + 0.059066, 6),
+    ]
+    assert start["reference_body_position"] == reference
+    assert start["tcp_start_position_world"] == body
+
+
 def test_isaac_user_config_wrapper_sets_episode_config_dir(tmp_path: Path) -> None:
     request = tmp_path / "request.yaml"
     request.write_text(

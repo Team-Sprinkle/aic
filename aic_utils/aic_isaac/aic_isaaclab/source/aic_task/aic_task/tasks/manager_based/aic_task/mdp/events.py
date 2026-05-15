@@ -347,9 +347,10 @@ def reset_robot_tcp_to_episode_start(
     """Move robot reset body to child-YAML near-gate reset poses.
 
     New episode YAMLs store start_near_gate.body_start_position_world and
-    reset_body_name so near-gate curricula can place the plug tip itself near
-    the port entrance.  Older YAMLs with tcp_start_position_world continue to
-    work and use the function-level body_name default.
+    reset_body_name so near-gate curricula can place either the reward body or
+    a physically controlled proxy near the port entrance. Older YAMLs with
+    tcp_start_position_world continue to work and use the function-level
+    body_name default.
     """
     order = list(getattr(env, "_aic_reset_event_order", []) or [])
     order.append(
@@ -473,6 +474,15 @@ def reset_robot_tcp_to_episode_start(
             env.sim.forward()
         robot.update(0.0)
 
+    full_q = robot.data.joint_pos[active_env_ids].clone()
+    full_q[:, joint_ids] = q
+    full_qd = torch.zeros_like(full_q)
+    robot.write_joint_state_to_sim(full_q, full_qd, env_ids=active_env_ids)
+    robot.set_joint_position_target(q, joint_ids=joint_ids, env_ids=active_env_ids)
+    if hasattr(env, "sim"):
+        env.sim.forward()
+    robot.update(0.0)
+
     final_error = torch.linalg.norm(
         target_pos - robot.data.body_pos_w[active_env_ids, body_id].to(dtype=torch.float32),
         dim=1,
@@ -507,5 +517,6 @@ def reset_robot_tcp_to_episode_start(
             "max_iterations": int(max_iterations),
             "position_tolerance_m": float(position_tolerance),
             "orientation_tolerance_rad": float(orientation_tolerance),
+            "full_joint_velocities_zeroed": True,
         }
     setattr(env, "_aic_tcp_reset_report_by_env", report)

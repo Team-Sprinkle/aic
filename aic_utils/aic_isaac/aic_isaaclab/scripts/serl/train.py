@@ -23,7 +23,7 @@ from isaaclab.app import AppLauncher
 
 parser = argparse.ArgumentParser(description=__doc__)
 parser.add_argument("--task", default="AIC-Task-v0")
-parser.add_argument("--num_envs", type=int, default=1)
+parser.add_argument("--num_envs", type=int, default=2)
 parser.add_argument("--seed", type=int, default=1)
 parser.add_argument("--checkpoint", type=str, default=None)
 parser.add_argument(
@@ -310,7 +310,7 @@ parser.add_argument("--terminate_on_target_success", action=argparse.BooleanOpti
 parser.add_argument(
     "--target_success_termination_threshold",
     type=float,
-    default=0.0035,
+    default=0.0005,
     help=(
         "Strict distance threshold used only for episode termination when --terminate_on_target_success is enabled. "
         "Keep this tighter than the reward reaching threshold so near-gate resets do not count as completed insertions."
@@ -2081,21 +2081,22 @@ def _target_guided_policy_action(
         axial_distance = torch.linalg.norm(axial_delta, dim=1, keepdim=True)
         lateral_direction = lateral_delta / lateral_distance.clamp(min=1.0e-9)
         axial_direction = axial_delta / axial_distance.clamp(min=1.0e-9)
-        lateral_switch = max(float(lateral_switch_m), 0.0)
-        # Keep the guide insertion-safe: first remove lateral error, then insert.
-        # Blending axial motion while off-axis let the policy reduce Euclidean
-        # distance by descending beside the port instead of entering it.
-        use_lateral_only = lateral_distance > lateral_switch
-        move_direction = torch.where(use_lateral_only, lateral_direction, axial_direction)
-        remaining = torch.where(use_lateral_only, lateral_distance, axial_distance)
         lateral_step = max(float(step_size), 0.0)
         axial_step = lateral_step if axial_step_size is None or float(axial_step_size) <= 0.0 else float(axial_step_size)
-        step_limit = torch.where(
-            use_lateral_only,
-            torch.full_like(remaining, lateral_step),
-            torch.full_like(remaining, max(axial_step, 0.0)),
+        lateral_switch = max(float(lateral_switch_m), 0.0)
+        blend_width = max(float(axial_blend_lateral_m), 1.0e-9)
+        use_lateral_only = lateral_distance > lateral_switch
+        lateral_move = lateral_direction * torch.minimum(lateral_distance, torch.full_like(lateral_distance, lateral_step))
+        axial_move = axial_direction * torch.minimum(
+            axial_distance,
+            torch.full_like(axial_distance, max(axial_step, 0.0)),
         )
-        move_w = move_direction * torch.minimum(remaining, step_limit)
+        # Outside the switch zone, stay conservative and remove lateral error only.
+        # Inside it, keep a bounded lateral correction while inserting so small
+        # residual offsets do not make the tip skate along the port face.
+        lateral_blend = (lateral_distance / blend_width).clamp(min=0.0, max=1.0)
+        blended_insert_move = axial_move + lateral_move * lateral_blend
+        move_w = torch.where(use_lateral_only, lateral_move, blended_insert_move)
     else:
         distance = torch.linalg.norm(delta_w, dim=1, keepdim=True).clamp(min=1.0e-9)
         move_w = delta_w / distance * torch.minimum(distance, torch.full_like(distance, float(step_size)))
@@ -4608,6 +4609,20 @@ def main() -> None:
                 blend *= max(0.0, 1.0 - (float(step) - 1.0) / max(float(collect_steps), 1.0))
             effective_guide_collect_blend = blend
             policy_tcp_action = (1.0 - blend) * policy_tcp_action + blend * guide_action_for_transition
+        if float(args_cli.tcp_translation_action_clip) > 0.0:
+            policy_tcp_action = _clip_tcp_translation_norm(
+                policy_tcp_action,
+                single_action_dim=single_action_dim,
+                max_norm=float(args_cli.tcp_translation_action_clip),
+            )
+        if float(args_cli.tcp_rotation_action_clip) > 0.0:
+            policy_tcp_action = _clip_tcp_rotation_norm(
+                policy_tcp_action,
+                single_action_dim=single_action_dim,
+                max_norm=float(args_cli.tcp_rotation_action_clip),
+            )
+        if float(args_cli.action_clip) > 0.0:
+            policy_tcp_action = policy_tcp_action.clamp(-float(args_cli.action_clip), float(args_cli.action_clip))
         t0 = time.monotonic()
         desired_root_action = _tcp_delta_action_to_isaac_base_action(
             env,
