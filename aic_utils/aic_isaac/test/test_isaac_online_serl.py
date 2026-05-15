@@ -5,6 +5,7 @@ import importlib.util
 import sys
 from pathlib import Path
 
+import pytest
 import torch
 import yaml
 
@@ -320,6 +321,7 @@ scene:
     min_clearance_m: 0.004
     reset_body_name: gripper_tcp
     reset_body_offset_from_reference_world: [-0.007149, 0.002556, 0.059066]
+    reset_body_orientation_wxyz: [0.026548, 0.013188, 0.991236, 0.128732]
   nic_cards:
     count: 1
     target_card: 0
@@ -337,6 +339,8 @@ scene:
     assert start["reset_body_name"] == "gripper_tcp"
     assert start["reference_reward_body_name"] == "sfp_tip_link"
     assert start["reset_body_offset_from_reference_world"] == [-0.007149, 0.002556, 0.059066]
+    assert start["body_start_orientation_wxyz"] == [0.026548, 0.013188, 0.991236, 0.128732]
+    assert start["tcp_start_orientation_world"] == [0.026548, 0.013188, 0.991236, 0.128732]
     assert body == [
         round(reference[0] - 0.007149, 6),
         round(reference[1] + 0.002556, 6),
@@ -344,6 +348,84 @@ scene:
     ]
     assert start["reference_body_position"] == reference
     assert start["tcp_start_position_world"] == body
+
+
+def test_sfp_entrance_axis_offset_shifts_semantic_gate(tmp_path: Path) -> None:
+    request = tmp_path / "request.yaml"
+    request.write_text(
+        """
+task_family: sfp_to_nic
+generation:
+  target_accepted_trajectories: 1
+  seed: 11
+scene:
+  target:
+    entrance_axis_offset_m: -0.0009
+  start_near_gate:
+    axial_distance_m: 0.002
+    lateral_distance_m: 0.0005
+    min_clearance_m: 0.001
+  nic_cards:
+    count: 1
+    target_card: 0
+    target_port: sfp_port_0
+""",
+        encoding="utf-8",
+    )
+
+    summary = isaac_online_serl.materialize_episode_configs(request, tmp_path / "episodes")
+    episode = yaml.safe_load((Path(summary["episodes_dir"]) / "episode_000001.yaml").read_text(encoding="utf-8"))
+    target = episode["scene"]["target"]
+    start = episode["scene"]["start_near_gate"]
+    entrance = target["entrance_pose_world"]["position"]
+    start_gate = start["target_gate_position"]
+    axis = target["insertion_axis_world"]
+    signed_depth_to_target = sum(
+        (float(target["target_pose_world"]["position"][i]) - float(entrance[i])) * float(axis[i])
+        for i in range(3)
+    )
+
+    assert target["entrance_axis_offset_m"] == -0.0009
+    assert entrance == start_gate
+    assert signed_depth_to_target > 0.002
+
+
+def test_sfp_seated_depth_override_places_target_along_entrance_axis(tmp_path: Path) -> None:
+    request = tmp_path / "request.yaml"
+    request.write_text(
+        """
+task_family: sfp_to_nic
+generation:
+  target_accepted_trajectories: 1
+  seed: 11
+scene:
+  target:
+    entrance_axis_offset_m: -0.0009
+    seated_depth_m: 0.008
+  start_near_gate:
+    axial_distance_m: 0.002
+    lateral_distance_m: 0.0005
+    min_clearance_m: 0.001
+  nic_cards:
+    count: 1
+    target_card: 0
+    target_port: sfp_port_0
+""",
+        encoding="utf-8",
+    )
+
+    summary = isaac_online_serl.materialize_episode_configs(request, tmp_path / "episodes")
+    episode = yaml.safe_load((Path(summary["episodes_dir"]) / "episode_000001.yaml").read_text(encoding="utf-8"))
+    target = episode["scene"]["target"]
+    entrance = target["entrance_pose_world"]["position"]
+    axis = target["insertion_axis_world"]
+    signed_depth_to_target = sum(
+        (float(target["target_pose_world"]["position"][i]) - float(entrance[i])) * float(axis[i])
+        for i in range(3)
+    )
+
+    assert target["seated_depth_m"] == 0.008
+    assert signed_depth_to_target == pytest.approx(0.008, abs=5e-6)
 
 
 def test_isaac_user_config_wrapper_sets_episode_config_dir(tmp_path: Path) -> None:

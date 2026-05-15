@@ -28,6 +28,21 @@ parser.add_argument("--insert_offset", type=float, nargs=3, default=None)
 parser.add_argument("--record_cameras", action="store_true")
 parser.add_argument("--video_dir", type=Path)
 parser.add_argument("--video_fps", type=float, default=20.0)
+parser.add_argument(
+    "--fix_isaac_ik_xy_sign",
+    action=argparse.BooleanOptionalAction,
+    default=True,
+    help="Flip Isaac IK root-frame x/y translation commands to match realized TCP motion direction.",
+)
+parser.add_argument(
+    "--isaac_ik_xy_sign_by_target_card",
+    action=argparse.BooleanOptionalAction,
+    default=False,
+    help=(
+        "Apply the Isaac IK x/y sign fix only for even target-card indices. "
+        "Default false applies the sign fix globally, matching current smoke-test evidence."
+    ),
+)
 parser.add_argument("--distance_std", type=float, default=0.02)
 parser.add_argument("--close_sigma", type=float, default=0.006)
 parser.add_argument("--reaching_threshold", type=float, default=0.01)
@@ -497,6 +512,30 @@ def _named_index(names: list[str], name: str) -> int:
         raise ValueError(f"{name!r} not found in available names: {names}") from exc
 
 
+def _isaac_ik_xy_sign_fix_mask(env, batch_size: int, *, device: torch.device) -> torch.Tensor:
+    if not bool(args_cli.fix_isaac_ik_xy_sign):
+        return torch.zeros((batch_size, 1), dtype=torch.bool, device=device)
+    if not bool(args_cli.isaac_ik_xy_sign_by_target_card):
+        return torch.ones((batch_size, 1), dtype=torch.bool, device=device)
+    mask = torch.ones((batch_size, 1), dtype=torch.bool, device=device)
+    episode_manager = getattr(env.unwrapped, "episode_manager", None)
+    episodes = getattr(episode_manager, "_active_episodes", None)
+    if not isinstance(episodes, dict):
+        return mask
+    for env_id, episode in episodes.items():
+        if env_id < 0 or env_id >= batch_size:
+            continue
+        context = episode.get("task_context") or {}
+        if str(context.get("task_family", "sfp_to_nic")) != "sfp_to_nic":
+            continue
+        try:
+            card_index = int(context.get("target_card_index", 0))
+        except (TypeError, ValueError):
+            card_index = 0
+        mask[env_id, 0] = (card_index % 2) == 0
+    return mask
+
+
 def _tcp_delta_action_to_isaac_base_action(env, tcp_action: torch.Tensor) -> torch.Tensor:
     """Convert Gazebo/LeRobot gripper-tcp delta actions to Isaac IK root-frame deltas."""
     robot = env.unwrapped.scene["robot"]
@@ -511,7 +550,12 @@ def _tcp_delta_action_to_isaac_base_action(env, tcp_action: torch.Tensor) -> tor
     )
     delta_pos_b = math_utils.quat_apply(tcp_quat_b, tcp_action[:, :3])
     delta_rot_b = math_utils.quat_apply(tcp_quat_b, tcp_action[:, 3:6])
-    return torch.cat([delta_pos_b, delta_rot_b], dim=-1)
+    action = torch.cat([delta_pos_b, delta_rot_b], dim=-1)
+    if bool(args_cli.fix_isaac_ik_xy_sign):
+        action = action.clone()
+        sign_mask = _isaac_ik_xy_sign_fix_mask(env, action.shape[0], device=action.device)
+        action[:, 0:2] = torch.where(sign_mask, -action[:, 0:2], action[:, 0:2])
+    return action
 
 
 def _clip_by_norm(vec: torch.Tensor, max_norm: float) -> torch.Tensor:

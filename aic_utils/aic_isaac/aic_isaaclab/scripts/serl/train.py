@@ -134,6 +134,7 @@ parser.add_argument(
 )
 parser.add_argument("--target_action_guide_weight", type=float, default=0.0)
 parser.add_argument("--target_action_guide_step_size", type=float, default=0.001)
+parser.add_argument("--target_action_guide_rotation_step_size", type=float, default=0.0)
 parser.add_argument(
     "--target_action_guide_axial_step_size",
     type=float,
@@ -175,6 +176,15 @@ parser.add_argument(
         "This prevents a near-gate policy from repeating the same corrective move too long."
     ),
 )
+parser.add_argument(
+    "--target_action_guide_train_executed",
+    action=argparse.BooleanOptionalAction,
+    default=False,
+    help=(
+        "When guide collection is active, train the adapter toward the final executed TCP action "
+        "after insertion guard and TCP clipping instead of the raw pre-guard guide action."
+    ),
+)
 parser.add_argument("--freeze_act", action=argparse.BooleanOptionalAction, default=True)
 parser.add_argument("--adapter_penalty_weight", type=float, default=1e-3)
 parser.add_argument("--act_preservation_weight", type=float, default=1e-2)
@@ -195,6 +205,61 @@ parser.add_argument(
     help=(
         "Optional per-step TCP rotation-vector norm cap in radians, applied to every 3D "
         "rotation inside the predicted action chunk after ACT+adapter. 0 disables it."
+    ),
+)
+parser.add_argument(
+    "--insertion_action_guard",
+    action=argparse.BooleanOptionalAction,
+    default=False,
+    help=(
+        "Opt-in near-gate safety transform: when episode insertion metadata is available, "
+        "replace translation with a centerline correction and suppress inward axial motion "
+        "while the reward body is laterally off-center."
+    ),
+)
+parser.add_argument("--insertion_action_guard_lateral_threshold_m", type=float, default=0.002)
+parser.add_argument("--insertion_action_guard_lateral_step_m", type=float, default=0.0005)
+parser.add_argument(
+    "--insertion_action_guard_adaptive_lateral_sign",
+    action=argparse.BooleanOptionalAction,
+    default=False,
+)
+parser.add_argument("--insertion_action_guard_adaptive_lateral_flip_margin_m", type=float, default=0.00005)
+parser.add_argument(
+    "--insertion_action_guard_centered_axial_step_m",
+    type=float,
+    default=0.0,
+    help="If >0, enforce at least this inward axial translation while inside the action-guard lateral threshold.",
+)
+parser.add_argument(
+    "--insertion_action_guard_retention",
+    action=argparse.BooleanOptionalAction,
+    default=False,
+    help=(
+        "If enabled, remember when each env has crossed the entrance plane and suppress outward axial "
+        "motion while the reward body remains near the centerline."
+    ),
+)
+parser.add_argument("--insertion_action_guard_retention_entry_depth_m", type=float, default=0.0)
+parser.add_argument("--insertion_action_guard_retention_lateral_threshold_m", type=float, default=0.0015)
+parser.add_argument(
+    "--insertion_action_guard_retention_ignore_lateral_threshold",
+    action=argparse.BooleanOptionalAction,
+    default=False,
+    help=(
+        "Once retention has entered, keep the axial retention constraint active even if the "
+        "tip drifts outside the retention lateral threshold. This is intended for near-gate "
+        "insertion experiments where backing out after partial entry is a known failure mode."
+    ),
+)
+parser.add_argument("--insertion_action_guard_retention_min_axial_step_m", type=float, default=0.0)
+parser.add_argument(
+    "--insertion_action_guard_retention_lateral_scale",
+    type=float,
+    default=1.0,
+    help=(
+        "Scale lateral translation while retention is active. Values below 1 reduce lateral "
+        "rubbing after the plug has crossed the entrance plane; 0 freezes lateral motion."
     ),
 )
 parser.add_argument(
@@ -289,6 +354,12 @@ parser.add_argument("--target_reward_insertion_corridor_weight", type=float, def
 parser.add_argument("--target_reward_insertion_corridor_sigma", type=float, default=0.0025)
 parser.add_argument("--target_reward_insertion_bypass_penalty_scale", type=float, default=1.0)
 parser.add_argument("--target_reward_insertion_axis", type=int, choices=[0, 1, 2], default=0)
+parser.add_argument(
+    "--reward_preset",
+    choices=["default", "near_gate_corridor_v1"],
+    default="default",
+    help="Apply a named reward-shaping preset before env creation.",
+)
 parser.add_argument("--force_delta_penalty_weight", type=float, default=0.3)
 parser.add_argument("--force_delta_threshold", type=float, default=10.0)
 parser.add_argument("--force_delta_reference", type=float, default=20.0)
@@ -316,6 +387,8 @@ parser.add_argument(
         "Keep this tighter than the reward reaching threshold so near-gate resets do not count as completed insertions."
     ),
 )
+parser.add_argument("--target_success_axial_threshold", type=float, default=None)
+parser.add_argument("--target_success_lateral_threshold", type=float, default=None)
 parser.add_argument(
     "--policy_hz",
     type=float,
@@ -348,6 +421,15 @@ parser.add_argument("--disable_command_pose_rewards", action=argparse.BooleanOpt
 parser.add_argument("--gripper_joint_position", type=float, default=0.0035405)
 parser.add_argument("--disable_fabric", action="store_true", default=False)
 parser.add_argument("--save_step_images", action=argparse.BooleanOptionalAction, default=False)
+parser.add_argument(
+    "--debug_visual_overlays",
+    action=argparse.BooleanOptionalAction,
+    default=True,
+    help=(
+        "When saving step images, overlay projected insertion geometry markers and numeric "
+        "body metrics for visual frame audits. This affects debug artifacts only."
+    ),
+)
 parser.add_argument("--image_log_every", type=int, default=1)
 parser.add_argument("--max_logged_image_steps", type=int, default=200)
 parser.add_argument("--debug_diagnostics", action=argparse.BooleanOptionalAction, default=False)
@@ -391,6 +473,15 @@ parser.add_argument(
     help="Flip Isaac IK root-frame x/y translation commands to match realized TCP motion direction.",
 )
 parser.add_argument(
+    "--isaac_ik_xy_sign_by_target_card",
+    action=argparse.BooleanOptionalAction,
+    default=False,
+    help=(
+        "Apply the Isaac IK x/y sign fix per episode for SFP-to-NIC card parity. "
+        "This is a near-gate diagnostic/control mode for mirrored NIC-card starts."
+    ),
+)
+parser.add_argument(
     "--enable_contact_sensor",
     action=argparse.BooleanOptionalAction,
     default=True,
@@ -421,7 +512,47 @@ parser.add_argument(
     ),
 )
 AppLauncher.add_app_launcher_args(parser)
+def _apply_reward_preset(args: argparse.Namespace) -> None:
+    if args.reward_preset == "default":
+        return
+    if args.reward_preset != "near_gate_corridor_v1":
+        raise ValueError(f"Unsupported reward preset: {args.reward_preset}")
+    args.target_reward_distance_weight = 0.02
+    args.target_reward_close_weight = 0.05
+    args.target_reward_progress_weight = 0.0
+    args.target_reward_lateral_weight = -0.10
+    args.target_reward_lateral_error_scale = 0.006
+    args.target_reward_lateral_progress_weight = 0.25
+    args.target_reward_lateral_progress_scale = 0.001
+    args.target_reward_axial_progress_weight = 0.25
+    args.target_reward_axial_progress_scale = 0.001
+    args.target_reward_lateral_gate_sigma = 0.004
+    args.target_reward_insertion_corridor_weight = 0.50
+    args.target_reward_insertion_corridor_sigma = 0.0025
+    args.target_reward_insertion_bypass_penalty_scale = 2.0
+    args.target_reward_orientation_weight = 0.05
+    args.target_reward_orientation_std = 0.10
+    args.target_reward_orientation_gate_sigma = 0.010
+    args.force_delta_penalty_weight = 0.05
+    args.terminate_on_target_success = True
+    if not bool(getattr(args, "_target_success_axial_threshold_explicit", False)):
+        args.target_success_axial_threshold = 0.00025
+    if not bool(getattr(args, "_target_success_lateral_threshold_explicit", False)):
+        args.target_success_lateral_threshold = 0.0005
+
+
+_explicit_cli_flags = set()
+for _arg in sys.argv[1:]:
+    if _arg.startswith("--"):
+        _explicit_cli_flags.add(_arg.split("=", 1)[0])
 args_cli = parser.parse_args()
+args_cli._target_success_axial_threshold_explicit = (
+    "--target_success_axial_threshold" in _explicit_cli_flags
+)
+args_cli._target_success_lateral_threshold_explicit = (
+    "--target_success_lateral_threshold" in _explicit_cli_flags
+)
+_apply_reward_preset(args_cli)
 if float(args_cli.target_reward_lateral_weight) > 0.0:
     corrected_lateral_weight = -float(args_cli.target_reward_lateral_weight)
     print(
@@ -466,6 +597,7 @@ from isaaclab_tasks.utils import parse_env_cfg
 from isaaclab.utils import math as math_utils
 
 import aic_task.tasks  # noqa: F401
+from aic_task.tasks.manager_based.aic_task.mdp.insertion_geometry import compute_insertion_geometry
 
 
 from torch import nn
@@ -1074,11 +1206,21 @@ def _configure_task_geometry_rewards(env_cfg: Any, args: argparse.Namespace) -> 
     rewards.target_insertion_corridor.params["bypass_penalty_scale"] = float(
         args.target_reward_insertion_bypass_penalty_scale
     )
+    success_axial_threshold = (
+        float(args.target_success_termination_threshold)
+        if args.target_success_axial_threshold is None
+        else float(args.target_success_axial_threshold)
+    )
+    success_lateral_threshold = (
+        float(args.target_success_termination_threshold)
+        if args.target_success_lateral_threshold is None
+        else float(args.target_success_lateral_threshold)
+    )
     rewards.target_reaching_bonus.params["threshold"] = float(args.target_reward_reaching_threshold)
     rewards.target_success_once_bonus.params["threshold"] = float(args.target_reward_reaching_threshold)
     rewards.target_success_once_bonus.params["insertion_axis"] = int(args.target_reward_insertion_axis)
-    rewards.target_success_once_bonus.params["axial_threshold"] = float(args.target_success_termination_threshold)
-    rewards.target_success_once_bonus.params["lateral_threshold"] = float(args.target_success_termination_threshold)
+    rewards.target_success_once_bonus.params["axial_threshold"] = success_axial_threshold
+    rewards.target_success_once_bonus.params["lateral_threshold"] = success_lateral_threshold
     rewards.target_success_once_bonus.params["target_orientation_offset"] = target_orientation_offset
     rewards.target_orientation_gated_exp.params["std"] = float(args.target_reward_orientation_std)
     rewards.target_orientation_gated_exp.params["gate_sigma"] = float(args.target_reward_orientation_gate_sigma)
@@ -1116,10 +1258,10 @@ def _configure_task_geometry_rewards(env_cfg: Any, args: argparse.Namespace) -> 
         target_success.params["target_orientation_offset"] = target_orientation_offset
         target_success.params["insertion_axis"] = int(args.target_reward_insertion_axis)
         target_success.params["axial_threshold"] = (
-            float(args.target_success_termination_threshold) if bool(args.terminate_on_target_success) else None
+            success_axial_threshold if bool(args.terminate_on_target_success) else None
         )
         target_success.params["lateral_threshold"] = (
-            float(args.target_success_termination_threshold) if bool(args.terminate_on_target_success) else None
+            success_lateral_threshold if bool(args.terminate_on_target_success) else None
         )
         target_success.params["threshold"] = (
             float(args.target_success_termination_threshold) if bool(args.terminate_on_target_success) else 0.0
@@ -1180,9 +1322,11 @@ def _configure_task_geometry_rewards(env_cfg: Any, args: argparse.Namespace) -> 
         "success_termination_threshold": (
             float(args.target_success_termination_threshold) if bool(args.terminate_on_target_success) else 0.0
         ),
+        "success_axial_threshold": success_axial_threshold,
+        "success_lateral_threshold": success_lateral_threshold,
         "success_bonus_geometry": {
-            "axial_threshold": float(args.target_success_termination_threshold),
-            "lateral_threshold": float(args.target_success_termination_threshold),
+            "axial_threshold": success_axial_threshold,
+            "lateral_threshold": success_lateral_threshold,
             "insertion_axis": int(args.target_reward_insertion_axis),
         },
         "command_pose_rewards_disabled": bool(args.disable_command_pose_rewards),
@@ -1467,6 +1611,14 @@ def _sample_vector(value: torch.Tensor, *, row: int = 0, limit: int = 12) -> lis
         return [float(value.detach().cpu())]
     sample = value.detach().flatten(start_dim=1)[row, :limit] if value.ndim > 1 else value.detach().flatten()[:limit]
     return [float(v) for v in sample.cpu().tolist()]
+
+
+def _tensor_1d_list(value: torch.Tensor) -> list[float]:
+    return [float(v) for v in value.detach().reshape(-1).cpu().tolist()]
+
+
+def _tensor_bool_list(value: torch.Tensor) -> list[bool]:
+    return [bool(v) for v in value.detach().reshape(-1).cpu().tolist()]
 
 
 BASE_STATE_FEATURE_NAMES = [
@@ -1953,19 +2105,185 @@ def _episode_metadata(env, env_index: int) -> dict[str, Any]:
     }
 
 
-def _save_images(images: dict[str, torch.Tensor], *, run_dir: Path, step: int, max_steps: int, every: int) -> None:
+def _project_world_point_to_image(
+    env,
+    *,
+    camera_name: str,
+    env_idx: int,
+    point_w: torch.Tensor,
+    output_width: int,
+    output_height: int,
+) -> tuple[float, float] | None:
+    try:
+        sensor = env.unwrapped.scene.sensors[camera_name]
+        data = sensor.data
+        cam_pos = data.pos_w[env_idx].to(device=point_w.device, dtype=point_w.dtype)
+        cam_quat = data.quat_w_world[env_idx].to(device=point_w.device, dtype=point_w.dtype)
+        intrinsic = data.intrinsic_matrices[env_idx].to(device=point_w.device, dtype=point_w.dtype)
+        image_shape = data.image_shape
+    except Exception:
+        return None
+    cam_point = math_utils.quat_apply_inverse(cam_quat.unsqueeze(0), (point_w - cam_pos).unsqueeze(0))[0]
+    forward = float(cam_point[0].detach().cpu())
+    if forward <= 1.0e-5:
+        return None
+    raw_height = float(image_shape[0]) if image_shape is not None else float(output_height)
+    raw_width = float(image_shape[1]) if image_shape is not None else float(output_width)
+    scale_x = float(output_width) / max(raw_width, 1.0)
+    scale_y = float(output_height) / max(raw_height, 1.0)
+    # Isaac camera "world" convention is +X forward and +Z up.
+    u = (float(intrinsic[0, 2].detach().cpu()) + float(intrinsic[0, 0].detach().cpu()) * float(cam_point[1].detach().cpu()) / forward) * scale_x
+    v = (float(intrinsic[1, 2].detach().cpu()) - float(intrinsic[1, 1].detach().cpu()) * float(cam_point[2].detach().cpu()) / forward) * scale_y
+    if u < -0.25 * output_width or u > 1.25 * output_width or v < -0.25 * output_height or v > 1.25 * output_height:
+        return None
+    return u, v
+
+
+def _overlay_insertion_debug(
+    image,
+    *,
+    env,
+    reward_config: dict[str, Any],
+    camera_name: str,
+    env_idx: int,
+) -> None:
+    from PIL import ImageDraw
+
+    draw = ImageDraw.Draw(image)
+    width, height = image.size
+    episodes = _current_episode_by_env(env)
+    episode = episodes.get(env_idx) or {}
+    scene = episode.get("scene") or {}
+    target_meta = scene.get("target") or {}
+    origins = env.unwrapped.scene.env_origins
+    device = origins.device
+    dtype = origins.dtype
+    entrance_local = (target_meta.get("entrance_pose_world") or {}).get("position")
+    if entrance_local is None:
+        draw.rectangle([0, 0, min(width, 420), 18], fill=(255, 255, 255))
+        draw.text((4, 3), f"env{env_idx}: missing entrance_pose_world", fill=(220, 0, 0))
+        return
+    entrance = torch.tensor(entrance_local, device=device, dtype=dtype) + origins[env_idx].to(device=device, dtype=dtype)
+    target_pos_all = _target_position_from_reward_config(env, reward_config)
+    axis_all = _episode_insertion_axis_from_yaml(env)
+    if target_pos_all is None or axis_all is None:
+        draw.rectangle([0, 0, min(width, 420), 18], fill=(255, 255, 255))
+        draw.text((4, 3), f"env{env_idx}: missing target/axis", fill=(220, 0, 0))
+        return
+    target_pos = target_pos_all[env_idx]
+    axis = axis_all[env_idx]
+    axis_end = entrance + axis * 0.012
+    points: list[tuple[str, torch.Tensor, tuple[int, int, int], int]] = [
+        ("entrance", entrance, (255, 40, 40), 5),
+        ("target", target_pos, (40, 220, 40), 5),
+        ("axis", axis_end, (255, 220, 40), 4),
+    ]
+    for body_name, color in (
+        ("sfp_tip_link", (60, 140, 255)),
+        ("sfp_module_link", (255, 160, 40)),
+        ("gripper_tcp", (240, 40, 240)),
+    ):
+        pos = _body_position_by_name(env, body_name)
+        if pos is not None:
+            points.append((body_name, pos[env_idx], color, 4))
+    projected: dict[str, tuple[float, float]] = {}
+    for name, point, color, radius in points:
+        xy = _project_world_point_to_image(
+            env,
+            camera_name=camera_name,
+            env_idx=env_idx,
+            point_w=point,
+            output_width=width,
+            output_height=height,
+        )
+        if xy is None:
+            continue
+        projected[name] = xy
+        x, y = xy
+        draw.ellipse([x - radius, y - radius, x + radius, y + radius], fill=color, outline=(0, 0, 0))
+        draw.text((x + radius + 2, y - radius - 2), name, fill=color)
+    if "entrance" in projected and "target" in projected:
+        draw.line([projected["entrance"], projected["target"]], fill=(255, 255, 255), width=2)
+    if "entrance" in projected and "axis" in projected:
+        draw.line([projected["entrance"], projected["axis"]], fill=(255, 220, 40), width=2)
+
+    all_geometry = _all_body_insertion_geometry_diagnostics(env, reward_config)
+    target_quat = _target_orientation_from_reward_config(env, reward_config)
+    lines = [f"env{env_idx} {camera_name}"]
+    for body_name in ("sfp_tip_link", "sfp_module_link"):
+        geom = all_geometry.get(body_name) or {}
+        depth = (geom.get("signed_depth_m_by_env") or [None] * (env_idx + 1))[env_idx]
+        lateral = (geom.get("lateral_error_m_by_env") or [None] * (env_idx + 1))[env_idx]
+        centered = (geom.get("centered_depth_fraction_by_env") or [None] * (env_idx + 1))[env_idx]
+        body_quat = _body_orientation_by_name(env, body_name)
+        orient = None
+        if target_quat is not None and body_quat is not None:
+            orient = float(
+                math_utils.quat_error_magnitude(body_quat[env_idx : env_idx + 1], target_quat[env_idx : env_idx + 1])
+                .detach()
+                .cpu()
+                .reshape(-1)[0]
+            )
+        if depth is not None and lateral is not None:
+            lines.append(
+                f"{body_name}: s={depth * 1000:+.1f}mm r={lateral * 1000:.1f}mm c={float(centered or 0.0):.2f}"
+                + ("" if orient is None else f" o={orient:.2f}rad")
+            )
+    target_depth = (all_geometry.get("sfp_tip_link") or {}).get("target_depth_m_by_env")
+    if target_depth:
+        lines.append(f"target_depth={target_depth[env_idx] * 1000:.1f}mm")
+    pad = 4
+    line_h = 14
+    box_w = min(width, 540)
+    box_h = pad * 2 + line_h * len(lines)
+    draw.rectangle([0, 0, box_w, box_h], fill=(255, 255, 255))
+    for idx, line in enumerate(lines):
+        draw.text((pad, pad + idx * line_h), line, fill=(0, 0, 0))
+
+
+def _save_images(
+    images: dict[str, torch.Tensor],
+    *,
+    run_dir: Path,
+    step: int,
+    max_steps: int,
+    every: int,
+    env=None,
+    reward_config: dict[str, Any] | None = None,
+) -> None:
     if max_steps >= 0 and step > max_steps:
         return
     if every <= 0 or step % every != 0:
         return
-    from torchvision.utils import save_image
+    from torchvision.transforms.functional import to_pil_image
 
     image_dir = run_dir / "step_images" / f"step_{step:06d}"
     image_dir.mkdir(parents=True, exist_ok=True)
     for key, tensor in images.items():
         camera = key.rsplit(".", 1)[-1]
         for env_idx in range(tensor.shape[0]):
-            save_image(tensor[env_idx].detach().cpu().clamp(0.0, 1.0), image_dir / f"env_{env_idx:04d}_{camera}.png")
+            image = to_pil_image(tensor[env_idx].detach().cpu().clamp(0.0, 1.0))
+            if (
+                bool(getattr(args_cli, "debug_visual_overlays", True))
+                and env is not None
+                and reward_config is not None
+                and camera == "center_camera"
+            ):
+                try:
+                    _overlay_insertion_debug(
+                        image,
+                        env=env,
+                        reward_config=reward_config,
+                        camera_name=camera,
+                        env_idx=env_idx,
+                    )
+                except Exception as exc:
+                    from PIL import ImageDraw
+
+                    draw = ImageDraw.Draw(image)
+                    draw.rectangle([0, 0, min(image.size[0], 520), 20], fill=(255, 255, 255))
+                    draw.text((4, 4), f"overlay failed: {type(exc).__name__}: {exc}", fill=(220, 0, 0))
+            image.save(image_dir / f"env_{env_idx:04d}_{camera}.png")
 
 
 def _camera_freshness_diagnostics(
@@ -2047,8 +2365,33 @@ def _tcp_delta_action_to_isaac_base_action(
         action = torch.cat([delta_pos_b, delta_rot_b], dim=-1)
     if bool(apply_ik_sign_fix) and bool(args_cli.fix_isaac_ik_xy_sign):
         action = action.clone()
-        action[:, 0:2] *= -1.0
+        sign_mask = _isaac_ik_xy_sign_fix_mask(env, action.shape[0], device=action.device)
+        action[:, 0:2] = torch.where(sign_mask, -action[:, 0:2], action[:, 0:2])
     return action
+
+
+def _isaac_ik_xy_sign_fix_mask(env, batch_size: int, *, device: torch.device) -> torch.Tensor:
+    """Return per-env mask for the Isaac IK x/y sign correction."""
+    if not bool(args_cli.fix_isaac_ik_xy_sign):
+        return torch.zeros((batch_size, 1), dtype=torch.bool, device=device)
+    if not bool(args_cli.isaac_ik_xy_sign_by_target_card):
+        return torch.ones((batch_size, 1), dtype=torch.bool, device=device)
+    mask = torch.ones((batch_size, 1), dtype=torch.bool, device=device)
+    for env_id, episode in _current_episode_by_env(env).items():
+        if env_id < 0 or env_id >= batch_size:
+            continue
+        context = episode.get("task_context") or {}
+        if str(context.get("task_family", "sfp_to_nic")) != "sfp_to_nic":
+            continue
+        try:
+            card_index = int(context.get("target_card_index", 0))
+        except (TypeError, ValueError):
+            card_index = 0
+        # Mirrored NIC-card starts have opposite realized x/y IK signs. The
+        # fixed near-gate configs alternate cards by index; even cards keep the
+        # historical sign fix, odd cards use the raw IK direction.
+        mask[env_id, 0] = (card_index % 2) == 0
+    return mask
 
 
 def _target_guided_policy_action(
@@ -2056,16 +2399,21 @@ def _target_guided_policy_action(
     task_geometry_reward_config: dict[str, Any],
     *,
     step_size: float,
+    rotation_step_size: float,
     axial_step_size: float | None,
     lateral_switch_m: float,
     axial_blend_lateral_m: float,
     action_frame: str,
     device: torch.device,
 ) -> torch.Tensor:
-    """Small policy-space action that moves the reward body toward the target point."""
+    """Small policy-space action that moves the reward body toward the target frame."""
     target_pos_w = _target_position_from_reward_config(env, task_geometry_reward_config)
     body_name = str(task_geometry_reward_config.get("target_body") or "sfp_tip_link")
-    body_pos_w = _body_position_by_name(env, body_name)
+    body_pos_w = _body_position_by_name(
+        env,
+        body_name,
+        task_geometry_reward_config.get("body_position_offset"),
+    )
     robot = env.unwrapped.scene["robot"]
     batch_size = int(robot.data.root_pos_w.shape[0])
     guide = torch.zeros((batch_size, 6), dtype=torch.float32, device=device)
@@ -2102,22 +2450,276 @@ def _target_guided_policy_action(
         move_w = delta_w / distance * torch.minimum(distance, torch.full_like(distance, float(step_size)))
     root_quat_w = robot.data.root_quat_w.to(device)
     desired_root_delta = math_utils.quat_apply_inverse(root_quat_w, move_w)
-    pre_sign_root_delta = desired_root_delta.clone()
-    if bool(args_cli.fix_isaac_ik_xy_sign):
-        pre_sign_root_delta[:, 0:2] *= -1.0
     if action_frame == "root":
-        guide[:, :3] = pre_sign_root_delta
-        return guide
+        guide[:, :3] = desired_root_delta
+    else:
+        body_names = list(getattr(robot, "body_names", []))
+        frame_index = _named_index(body_names, action_frame)
+        _, frame_quat_b = math_utils.subtract_frame_transforms(
+            robot.data.root_pos_w.to(device),
+            robot.data.root_quat_w.to(device),
+            robot.data.body_pos_w[:, frame_index].to(device),
+            robot.data.body_quat_w[:, frame_index].to(device),
+        )
+        guide[:, :3] = math_utils.quat_apply_inverse(frame_quat_b, desired_root_delta)
+    if float(rotation_step_size) > 0.0:
+        target_quat_w = _target_orientation_from_reward_config(env, task_geometry_reward_config)
+        body_quat_w = _body_orientation_by_name(
+            env,
+            body_name,
+            task_geometry_reward_config.get("body_orientation_offset"),
+        )
+        if target_quat_w is not None and body_quat_w is not None:
+            if action_frame == "root":
+                frame_quat_w = robot.data.root_quat_w.to(device=device, dtype=guide.dtype)
+            else:
+                frame_quat_w = robot.data.body_quat_w[:, frame_index].to(device=device, dtype=guide.dtype)
+            target_quat_w = target_quat_w.to(device=device, dtype=guide.dtype)
+            body_quat_w = body_quat_w.to(device=device, dtype=guide.dtype)
+            q_diff_w = math_utils.quat_mul(target_quat_w, math_utils.quat_inv(body_quat_w))
+            desired_frame_quat_w = math_utils.quat_mul(q_diff_w, frame_quat_w)
+            delta_quat_frame = math_utils.quat_mul(math_utils.quat_inv(frame_quat_w), desired_frame_quat_w)
+            delta_rot_frame = math_utils.axis_angle_from_quat(delta_quat_frame)
+            rot_norm = torch.linalg.norm(delta_rot_frame, dim=1, keepdim=True).clamp(min=1.0e-9)
+            rot_step = torch.full_like(rot_norm, max(float(rotation_step_size), 0.0))
+            guide[:, 3:6] = delta_rot_frame / rot_norm * torch.minimum(rot_norm, rot_step)
+    return guide
+
+
+def _root_translation_delta_to_policy_frame(
+    env,
+    root_delta: torch.Tensor,
+    *,
+    action_frame: str,
+) -> torch.Tensor:
+    robot = env.unwrapped.scene["robot"]
+    pre_sign_root_delta = root_delta.clone()
+    if bool(args_cli.fix_isaac_ik_xy_sign):
+        sign_mask = _isaac_ik_xy_sign_fix_mask(env, pre_sign_root_delta.shape[0], device=root_delta.device)
+        pre_sign_root_delta[:, 0:2] = torch.where(
+            sign_mask,
+            -pre_sign_root_delta[:, 0:2],
+            pre_sign_root_delta[:, 0:2],
+        )
+    if action_frame == "root":
+        return pre_sign_root_delta
     body_names = list(getattr(robot, "body_names", []))
     frame_index = _named_index(body_names, action_frame)
     _, frame_quat_b = math_utils.subtract_frame_transforms(
-        robot.data.root_pos_w.to(device),
-        robot.data.root_quat_w.to(device),
-        robot.data.body_pos_w[:, frame_index].to(device),
-        robot.data.body_quat_w[:, frame_index].to(device),
+        robot.data.root_pos_w.to(root_delta.device),
+        robot.data.root_quat_w.to(root_delta.device),
+        robot.data.body_pos_w[:, frame_index].to(root_delta.device),
+        robot.data.body_quat_w[:, frame_index].to(root_delta.device),
     )
-    guide[:, :3] = math_utils.quat_apply_inverse(frame_quat_b, pre_sign_root_delta)
-    return guide
+    return math_utils.quat_apply_inverse(frame_quat_b, pre_sign_root_delta)
+
+
+def _apply_insertion_action_guard(
+    env,
+    task_geometry_reward_config: dict[str, Any],
+    policy_tcp_action: torch.Tensor,
+    *,
+    action_frame: str,
+    lateral_threshold_m: float,
+    lateral_step_m: float,
+    adaptive_lateral_sign: bool = False,
+    adaptive_lateral_flip_margin_m: float = 0.00005,
+    lateral_sign_state: torch.Tensor | None = None,
+    previous_lateral_error: torch.Tensor | None = None,
+    centered_axial_step_m: float = 0.0,
+    retention_entered: torch.Tensor | None = None,
+    retention_enabled: bool = False,
+    retention_entry_depth_m: float = 0.0,
+    retention_lateral_threshold_m: float = 0.0015,
+    retention_ignore_lateral_threshold: bool = False,
+    retention_min_axial_step_m: float = 0.0,
+    retention_lateral_scale: float = 1.0,
+) -> tuple[torch.Tensor, dict[str, float]]:
+    body_name = str(task_geometry_reward_config.get("target_body") or "sfp_tip_link")
+    body_pos_w = _body_position_by_name(env, body_name, task_geometry_reward_config.get("body_position_offset"))
+    entrance_w = _episode_entrance_position_from_yaml(env)
+    axis_w = _episode_insertion_axis_from_yaml(env)
+    if body_pos_w is None or entrance_w is None or axis_w is None:
+        return policy_tcp_action, {
+            "insertion_action_guard_applied_fraction": 0.0,
+            "insertion_action_guard_centered_axial_fraction": 0.0,
+            "insertion_action_guard_retention_active_fraction": 0.0,
+            "insertion_action_guard_retention_entered_fraction": (
+                0.0
+                if retention_entered is None
+                else float(retention_entered.float().mean().detach().cpu())
+            ),
+            "insertion_action_guard_correction_norm_mean": 0.0,
+            "insertion_action_guard_raw_axial_command_m_mean": 0.0,
+            "insertion_action_guard_guarded_axial_command_m_mean": 0.0,
+            "insertion_action_guard_guarded_lateral_command_m_mean": 0.0,
+            "insertion_action_guard_missing_geometry": 1.0,
+        }
+    device = policy_tcp_action.device
+    dtype = policy_tcp_action.dtype
+    body_pos_w = body_pos_w.to(device=device, dtype=dtype)
+    entrance_w = entrance_w.to(device=device, dtype=dtype)
+    axis_w = axis_w.to(device=device, dtype=dtype)
+    axis_w = axis_w / torch.linalg.norm(axis_w, dim=1, keepdim=True).clamp(min=1.0e-9)
+    rel = body_pos_w - entrance_w
+    axial_depth = torch.sum(rel * axis_w, dim=1, keepdim=True)
+    centerline = entrance_w + axial_depth * axis_w
+    lateral_vec = centerline - body_pos_w
+    lateral_error = torch.linalg.norm(lateral_vec, dim=1, keepdim=True)
+    if lateral_sign_state is not None:
+        if lateral_sign_state.shape != lateral_error.shape:
+            raise ValueError(
+                "insertion action guard lateral sign state shape does not match env count: "
+                f"{tuple(lateral_sign_state.shape)} vs {tuple(lateral_error.shape)}"
+            )
+        reset_mask = getattr(env.unwrapped, "episode_length_buf", None)
+        if reset_mask is not None:
+            reset = reset_mask.to(device=device).view(-1, 1) <= 1
+            lateral_sign_state[reset] = 1.0
+    threshold = max(float(lateral_threshold_m), 0.0)
+    off_center = lateral_error > threshold
+    lateral_sign_flip_fraction = 0.0
+    if (
+        bool(adaptive_lateral_sign)
+        and lateral_sign_state is not None
+        and previous_lateral_error is not None
+        and previous_lateral_error.shape == lateral_error.shape
+    ):
+        prev_error = previous_lateral_error.to(device=device, dtype=dtype)
+        worsen = off_center & torch.isfinite(prev_error) & (
+            lateral_error > prev_error + max(float(adaptive_lateral_flip_margin_m), 0.0)
+        )
+        if bool(worsen.any().detach().cpu()):
+            lateral_sign_state[worsen] *= -1.0
+        lateral_sign_flip_fraction = float(worsen.float().mean().detach().cpu())
+    centered = ~off_center
+    retention_active = torch.zeros_like(centered)
+    if bool(retention_enabled) and retention_entered is not None:
+        if retention_entered.shape[0] != axial_depth.shape[0]:
+            raise ValueError(
+                "insertion action guard retention state shape does not match env count: "
+                f"{tuple(retention_entered.shape)} vs {tuple(axial_depth.shape)}"
+            )
+        retention_entered |= (axial_depth.squeeze(1) >= float(retention_entry_depth_m)).detach()
+        retention_active = retention_entered.view(-1, 1).to(device=device)
+        if not bool(retention_ignore_lateral_threshold):
+            retention_active = retention_active & (lateral_error <= max(float(retention_lateral_threshold_m), 0.0))
+    enforce_centered_axial = centered & (float(centered_axial_step_m) > 0.0)
+    if not bool((off_center | enforce_centered_axial | retention_active).any().detach().cpu()):
+        if previous_lateral_error is not None and previous_lateral_error.shape == lateral_error.shape:
+            previous_lateral_error.copy_(lateral_error.detach())
+        return policy_tcp_action, {
+            "insertion_action_guard_applied_fraction": 0.0,
+            "insertion_action_guard_centered_axial_fraction": 0.0,
+            "insertion_action_guard_retention_active_fraction": 0.0,
+            "insertion_action_guard_retention_entered_fraction": (
+                0.0
+                if retention_entered is None
+                else float(retention_entered.float().mean().detach().cpu())
+            ),
+            "insertion_action_guard_correction_norm_mean": 0.0,
+            "insertion_action_guard_raw_axial_command_m_mean": 0.0,
+            "insertion_action_guard_guarded_axial_command_m_mean": 0.0,
+            "insertion_action_guard_guarded_lateral_command_m_mean": 0.0,
+            "insertion_action_guard_missing_geometry": 0.0,
+            "insertion_action_guard_lateral_error_m_mean": float(lateral_error.mean().detach().cpu()),
+            "insertion_action_guard_axial_depth_m_mean": float(axial_depth.mean().detach().cpu()),
+            "insertion_action_guard_lateral_sign_flip_fraction": lateral_sign_flip_fraction,
+            "insertion_action_guard_lateral_sign_mean": (
+                1.0
+                if lateral_sign_state is None
+                else float(lateral_sign_state.float().mean().detach().cpu())
+            ),
+        }
+
+    root_delta = _tcp_delta_action_to_isaac_base_action(
+        env,
+        policy_tcp_action,
+        action_frame=action_frame,
+        apply_ik_sign_fix=True,
+    )[:, :3]
+    robot = env.unwrapped.scene["robot"]
+    world_delta = math_utils.quat_apply(robot.data.root_quat_w.to(device=device, dtype=dtype), root_delta)
+    axial_component = torch.sum(world_delta * axis_w, dim=1, keepdim=True)
+    # While off-center, do not keep pushing into the port. A negative axial
+    # component is allowed so the controller can back out of a bad approach.
+    guarded_axial = torch.minimum(axial_component, torch.zeros_like(axial_component)) * axis_w
+    retention_axial_component = torch.maximum(
+        axial_component,
+        torch.full_like(axial_component, max(float(retention_min_axial_step_m), 0.0)),
+    )
+    guarded_axial = torch.where(
+        retention_active.expand_as(guarded_axial),
+        retention_axial_component * axis_w,
+        guarded_axial,
+    )
+    lateral_dir = lateral_vec / lateral_error.clamp(min=1.0e-9)
+    if bool(adaptive_lateral_sign) and lateral_sign_state is not None:
+        lateral_dir = lateral_dir * lateral_sign_state.to(device=device, dtype=dtype)
+    lateral_step = torch.minimum(
+        lateral_error,
+        torch.full_like(lateral_error, max(float(lateral_step_m), 0.0)),
+    )
+    guarded_world_delta = lateral_dir * lateral_step + guarded_axial
+    lateral_component = world_delta - axial_component * axis_w
+    centered_axial = torch.maximum(
+        axial_component,
+        torch.full_like(axial_component, max(float(centered_axial_step_m), 0.0)),
+    ) * axis_w
+    centered_world_delta = lateral_component + centered_axial
+    guarded_world_delta = torch.where(enforce_centered_axial.expand_as(guarded_world_delta), centered_world_delta, guarded_world_delta)
+    retention_lateral = lateral_component * min(max(float(retention_lateral_scale), 0.0), 1.0)
+    retention_world_delta = retention_lateral + retention_axial_component * axis_w
+    guarded_world_delta = torch.where(
+        (retention_active & ~off_center).expand_as(guarded_world_delta),
+        retention_world_delta,
+        guarded_world_delta,
+    )
+    guarded_root_delta = math_utils.quat_apply_inverse(
+        robot.data.root_quat_w.to(device=device, dtype=dtype),
+        guarded_world_delta,
+    )
+    guarded_axial_component = torch.sum(guarded_world_delta * axis_w, dim=1)
+    guarded_lateral_component = torch.linalg.norm(
+        guarded_world_delta - guarded_axial_component.unsqueeze(1) * axis_w,
+        dim=1,
+    )
+    guarded_policy_translation = _root_translation_delta_to_policy_frame(
+        env,
+        guarded_root_delta,
+        action_frame=action_frame,
+    )
+    guarded_action = policy_tcp_action.clone()
+    apply_mask = (off_center | enforce_centered_axial | retention_active).expand_as(guarded_policy_translation)
+    guarded_action[:, :3] = torch.where(apply_mask, guarded_policy_translation, guarded_action[:, :3])
+    correction_norm = torch.linalg.norm(guarded_action[:, :3] - policy_tcp_action[:, :3], dim=1)
+    if previous_lateral_error is not None and previous_lateral_error.shape == lateral_error.shape:
+        previous_lateral_error.copy_(lateral_error.detach())
+    return guarded_action, {
+        "insertion_action_guard_applied_fraction": float((off_center | enforce_centered_axial | retention_active).float().mean().detach().cpu()),
+        "insertion_action_guard_centered_axial_fraction": float(enforce_centered_axial.float().mean().detach().cpu()),
+        "insertion_action_guard_retention_active_fraction": float(retention_active.float().mean().detach().cpu()),
+        "insertion_action_guard_retention_entered_fraction": (
+            0.0
+            if retention_entered is None
+            else float(retention_entered.float().mean().detach().cpu())
+        ),
+        "insertion_action_guard_correction_norm_mean": float(correction_norm.mean().detach().cpu()),
+        "insertion_action_guard_raw_axial_command_m_mean": float(axial_component.mean().detach().cpu()),
+        "insertion_action_guard_guarded_axial_command_m_mean": float(guarded_axial_component.mean().detach().cpu()),
+        "insertion_action_guard_guarded_lateral_command_m_mean": float(
+            guarded_lateral_component.mean().detach().cpu()
+        ),
+        "insertion_action_guard_missing_geometry": 0.0,
+        "insertion_action_guard_lateral_error_m_mean": float(lateral_error.mean().detach().cpu()),
+        "insertion_action_guard_axial_depth_m_mean": float(axial_depth.mean().detach().cpu()),
+        "insertion_action_guard_lateral_sign_flip_fraction": lateral_sign_flip_fraction,
+        "insertion_action_guard_lateral_sign_mean": (
+            1.0
+            if lateral_sign_state is None
+            else float(lateral_sign_state.float().mean().detach().cpu())
+        ),
+    }
 
 
 def _act_obs_from_env(
@@ -2173,14 +2775,6 @@ def _episode_target_position_from_yaml(env) -> torch.Tensor | None:
         if position is None:
             return None
         position_tensor = torch.tensor(position, dtype=origins.dtype, device=origins.device)
-        entrance = (target.get("entrance_pose_world") or {}).get("position")
-        axis = target.get("insertion_axis_world")
-        if entrance is not None and axis is not None:
-            entrance_tensor = torch.tensor(entrance, dtype=origins.dtype, device=origins.device)
-            axis_tensor = torch.tensor(axis, dtype=origins.dtype, device=origins.device)
-            axis_tensor = axis_tensor / torch.linalg.norm(axis_tensor).clamp(min=1.0e-9)
-            seated_depth = torch.sum((position_tensor - entrance_tensor) * axis_tensor).clamp(min=0.0)
-            position_tensor = entrance_tensor + seated_depth * axis_tensor
         rows.append(position_tensor + origins[env_id])
     return torch.stack(rows, dim=0)
 
@@ -2199,6 +2793,22 @@ def _episode_insertion_axis_from_yaml(env) -> torch.Tensor | None:
             return None
         axis_tensor = torch.tensor(axis, dtype=origins.dtype, device=origins.device)
         rows.append(axis_tensor / torch.linalg.norm(axis_tensor).clamp(min=1.0e-9))
+    return torch.stack(rows, dim=0)
+
+
+def _episode_entrance_position_from_yaml(env) -> torch.Tensor | None:
+    episodes = _current_episode_by_env(env)
+    if not episodes:
+        return None
+    origins = env.unwrapped.scene.env_origins
+    rows: list[torch.Tensor] = []
+    for env_id in range(env.unwrapped.num_envs):
+        episode = episodes.get(env_id)
+        target = ((episode or {}).get("scene") or {}).get("target") or {}
+        entrance = (target.get("entrance_pose_world") or {}).get("position")
+        if entrance is None:
+            return None
+        rows.append(torch.tensor(entrance, dtype=origins.dtype, device=origins.device) + origins[env_id])
     return torch.stack(rows, dim=0)
 
 
@@ -2425,15 +3035,23 @@ def _insertion_geometry_diagnostics(env, reward_config: dict[str, Any]) -> dict[
             + origins[env_id].to(device=body_pos.device, dtype=body_pos.dtype)
         )
     entrance_w = torch.stack(entrance_rows, dim=0)
-    axis_w = axis_w.to(device=body_pos.device, dtype=body_pos.dtype)
-    delta_from_entrance = body_pos - entrance_w
-    signed_depth = torch.sum(delta_from_entrance * axis_w, dim=1)
-    target_depth = torch.sum((target_pos - entrance_w) * axis_w, dim=1).clamp(min=1.0e-9)
-    axial_component = signed_depth.unsqueeze(1) * axis_w
-    lateral_error = torch.linalg.norm(delta_from_entrance - axial_component, dim=1)
     corridor_sigma = float(reward_config.get("insertion_corridor_sigma", 0.0025))
-    lateral_gate = torch.exp(-torch.square(lateral_error / max(corridor_sigma, 1.0e-9)))
-    depth_fraction = (signed_depth / target_depth).clamp(min=0.0, max=1.0)
+    geometry = compute_insertion_geometry(
+        body_pos_w=body_pos,
+        entrance_pos_w=entrance_w,
+        target_pos_w=target_pos,
+        axis_w=axis_w,
+        lateral_gate_sigma=corridor_sigma,
+    )
+    signed_depth = geometry.axial_depth
+    target_depth = geometry.target_depth
+    target_lateral_residual = geometry.target_lateral_residual
+    projected_target = entrance_w + target_depth.unsqueeze(1) * geometry.axis
+    target_projection_delta = torch.linalg.norm(projected_target - target_pos, dim=1)
+    lateral_error = geometry.lateral_error
+    lateral_gate = geometry.lateral_gate
+    depth_fraction = geometry.depth_fraction
+    centered_depth_fraction = depth_fraction * lateral_gate
     out.update(
         {
             "has_entrance": True,
@@ -2441,21 +3059,208 @@ def _insertion_geometry_diagnostics(env, reward_config: dict[str, Any]) -> dict[
             "axis_world_env0": _sample_vector(axis_w, limit=3),
             "signed_depth_m_mean": float(signed_depth.mean().detach().cpu()),
             "signed_depth_m_env0": float(signed_depth[0].detach().cpu()),
+            "signed_depth_m_by_env": _tensor_1d_list(signed_depth),
             "target_depth_m_mean": float(target_depth.mean().detach().cpu()),
             "target_depth_m_env0": float(target_depth[0].detach().cpu()),
+            "target_depth_m_by_env": _tensor_1d_list(target_depth),
+            "target_lateral_residual_m_mean": float(target_lateral_residual.mean().detach().cpu()),
+            "target_lateral_residual_m_env0": float(target_lateral_residual[0].detach().cpu()),
+            "target_lateral_residual_m_by_env": _tensor_1d_list(target_lateral_residual),
+            "raw_target_world_env0": _sample_vector(target_pos, limit=3),
+            "projected_target_world_env0": _sample_vector(projected_target, limit=3),
+            "target_projection_delta_m_mean": float(target_projection_delta.mean().detach().cpu()),
+            "target_projection_delta_m_by_env": _tensor_1d_list(target_projection_delta),
             "depth_fraction_mean": float(depth_fraction.mean().detach().cpu()),
             "depth_fraction_env0": float(depth_fraction[0].detach().cpu()),
+            "depth_fraction_by_env": _tensor_1d_list(depth_fraction),
+            "centered_depth_fraction_mean": float(centered_depth_fraction.mean().detach().cpu()),
+            "centered_depth_fraction_env0": float(centered_depth_fraction[0].detach().cpu()),
+            "centered_depth_fraction_by_env": _tensor_1d_list(centered_depth_fraction),
             "lateral_error_m_mean": float(lateral_error.mean().detach().cpu()),
             "lateral_error_m_env0": float(lateral_error[0].detach().cpu()),
+            "lateral_error_m_by_env": _tensor_1d_list(lateral_error),
             "lateral_gate_mean": float(lateral_gate.mean().detach().cpu()),
             "lateral_gate_env0": float(lateral_gate[0].detach().cpu()),
+            "lateral_gate_by_env": _tensor_1d_list(lateral_gate),
+            "distance_to_target_m_mean": float(torch.linalg.norm(body_pos - target_pos, dim=1).mean().detach().cpu()),
+            "distance_to_target_m_env0": float(torch.linalg.norm(body_pos[0] - target_pos[0]).detach().cpu()),
+            "distance_to_target_m_by_env": _tensor_1d_list(torch.linalg.norm(body_pos - target_pos, dim=1)),
             "inside_2mm_fraction": float((lateral_error <= 0.002).float().mean().detach().cpu()),
             "inside_3mm_fraction": float((lateral_error <= 0.003).float().mean().detach().cpu()),
+            "inside_success_lateral_threshold_by_env": _tensor_bool_list(
+                lateral_error
+                <= float(
+                    reward_config.get(
+                        "success_lateral_threshold",
+                        reward_config.get("success_termination_threshold", 0.0005),
+                    )
+                )
+            ),
+            "inside_success_axial_threshold_by_env": _tensor_bool_list(
+                (target_depth - signed_depth).abs()
+                <= float(
+                    reward_config.get(
+                        "success_axial_threshold",
+                        reward_config.get("success_termination_threshold", 0.0005),
+                    )
+                )
+            ),
+            "success_geometry_by_env": _tensor_bool_list(
+                torch.logical_and(
+                    lateral_error
+                    <= float(
+                        reward_config.get(
+                            "success_lateral_threshold",
+                            reward_config.get("success_termination_threshold", 0.0005),
+                        )
+                    ),
+                    (target_depth - signed_depth).abs()
+                    <= float(
+                        reward_config.get(
+                            "success_axial_threshold",
+                            reward_config.get("success_termination_threshold", 0.0005),
+                        )
+                    ),
+                )
+            ),
+            "strict_partial_insertion_by_env": _tensor_bool_list(
+                torch.logical_and(
+                    torch.logical_and(signed_depth > 0.0, signed_depth < target_depth + 0.0005),
+                    lateral_error <= 0.0025,
+                )
+            ),
             "bypass_risk_fraction": float(
                 torch.logical_and(signed_depth > 0.0, lateral_error > corridor_sigma).float().mean().detach().cpu()
             ),
+            "bypass_risk_by_env": _tensor_bool_list(torch.logical_and(signed_depth > 0.0, lateral_error > corridor_sigma)),
         }
     )
+    return out
+
+
+def _insertion_geometry_for_body_diagnostics(
+    env,
+    reward_config: dict[str, Any],
+    *,
+    body_name: str,
+    body_offset: Any = None,
+) -> dict[str, Any]:
+    target_pos = _target_position_from_reward_config(env, reward_config)
+    body_pos = _body_position_by_name(env, body_name, body_offset)
+    axis_w = _episode_insertion_axis_from_yaml(env)
+    out: dict[str, Any] = {
+        "has_target": target_pos is not None,
+        "has_body": body_pos is not None,
+        "has_episode_axis": axis_w is not None,
+        "world_env0": None if body_pos is None else _sample_vector(body_pos, limit=3),
+    }
+    if target_pos is None or body_pos is None or axis_w is None:
+        return out
+    episodes = _current_episode_by_env(env)
+    origins = env.unwrapped.scene.env_origins
+    entrance_rows: list[torch.Tensor] = []
+    for env_id in range(env.unwrapped.num_envs):
+        target = (((episodes.get(env_id) or {}).get("scene") or {}).get("target") or {})
+        entrance = (target.get("entrance_pose_world") or {}).get("position")
+        if entrance is None:
+            out["has_entrance"] = False
+            return out
+        entrance_rows.append(
+            torch.tensor(entrance, dtype=body_pos.dtype, device=body_pos.device)
+            + origins[env_id].to(device=body_pos.device, dtype=body_pos.dtype)
+        )
+    entrance_w = torch.stack(entrance_rows, dim=0)
+    geometry = compute_insertion_geometry(
+        body_pos_w=body_pos,
+        entrance_pos_w=entrance_w,
+        target_pos_w=target_pos,
+        axis_w=axis_w,
+        lateral_gate_sigma=float(reward_config.get("insertion_corridor_sigma", 0.0025)),
+    )
+    distance = torch.linalg.norm(body_pos - target_pos, dim=1)
+    axial_error = (geometry.target_depth - geometry.axial_depth).abs()
+    out.update(
+        {
+            "has_entrance": True,
+            "signed_depth_m_mean": float(geometry.axial_depth.mean().detach().cpu()),
+            "signed_depth_m_by_env": _tensor_1d_list(geometry.axial_depth),
+            "target_depth_m_mean": float(geometry.target_depth.mean().detach().cpu()),
+            "target_depth_m_by_env": _tensor_1d_list(geometry.target_depth),
+            "target_lateral_residual_m_mean": float(geometry.target_lateral_residual.mean().detach().cpu()),
+            "target_lateral_residual_m_by_env": _tensor_1d_list(geometry.target_lateral_residual),
+            "axial_error_m_mean": float(axial_error.mean().detach().cpu()),
+            "axial_error_m_by_env": _tensor_1d_list(axial_error),
+            "depth_fraction_mean": float(geometry.depth_fraction.mean().detach().cpu()),
+            "depth_fraction_by_env": _tensor_1d_list(geometry.depth_fraction),
+            "centered_depth_fraction_mean": float(
+                (geometry.depth_fraction * geometry.lateral_gate).mean().detach().cpu()
+            ),
+            "centered_depth_fraction_by_env": _tensor_1d_list(geometry.depth_fraction * geometry.lateral_gate),
+            "lateral_error_m_mean": float(geometry.lateral_error.mean().detach().cpu()),
+            "lateral_error_m_by_env": _tensor_1d_list(geometry.lateral_error),
+            "distance_to_target_m_mean": float(distance.mean().detach().cpu()),
+            "distance_to_target_m_by_env": _tensor_1d_list(distance),
+        }
+    )
+    return out
+
+
+def _all_body_insertion_geometry_diagnostics(env, reward_config: dict[str, Any]) -> dict[str, Any]:
+    target_body = str(reward_config.get("target_body") or "sfp_tip_link")
+    body_offset = reward_config.get("body_position_offset")
+    names = ["wrist_3_link", "gripper_tcp", "sfp_tip_link"]
+    try:
+        robot = env.unwrapped.scene["robot"]
+        for name in getattr(robot, "body_names", []):
+            lowered = str(name).lower()
+            if any(token in lowered for token in ("sfp", "plug", "module", "tip", "cable")) and name not in names:
+                names.append(str(name))
+    except Exception:
+        pass
+    return {
+        name: _insertion_geometry_for_body_diagnostics(
+            env,
+            reward_config,
+            body_name=name,
+            body_offset=body_offset if name == target_body else None,
+        )
+        for name in names
+    }
+
+
+def _body_frame_offset_diagnostics(env) -> dict[str, Any]:
+    body_names = ("wrist_3_link", "gripper_tcp", "sfp_module_link", "sfp_tip_link")
+    positions: dict[str, torch.Tensor] = {}
+    quats: dict[str, torch.Tensor] = {}
+    for body_name in body_names:
+        pos = _body_position_by_name(env, body_name)
+        quat = _body_orientation_by_name(env, body_name)
+        if pos is not None:
+            positions[body_name] = pos
+        if quat is not None:
+            quats[body_name] = quat
+    out: dict[str, Any] = {
+        "world_position_by_env": {name: [_sample_vector(value, row=i, limit=3) for i in range(min(value.shape[0], 8))] for name, value in positions.items()},
+        "world_quat_wxyz_by_env": {name: [_sample_vector(value, row=i, limit=4) for i in range(min(value.shape[0], 8))] for name, value in quats.items()},
+        "pairwise_offsets": {},
+    }
+    for source_name, source_pos in positions.items():
+        source_quat = quats.get(source_name)
+        for target_name, target_pos in positions.items():
+            if source_name == target_name:
+                continue
+            key = f"{source_name}->{target_name}"
+            delta_w = target_pos - source_pos
+            entry: dict[str, Any] = {
+                "world_delta_m_by_env": [_sample_vector(delta_w, row=i, limit=3) for i in range(min(delta_w.shape[0], 8))],
+                "world_delta_norm_m_by_env": _tensor_1d_list(torch.linalg.norm(delta_w, dim=1)),
+            }
+            if source_quat is not None:
+                delta_source = math_utils.quat_apply_inverse(source_quat, delta_w)
+                entry["source_local_delta_m_by_env"] = [
+                    _sample_vector(delta_source, row=i, limit=3) for i in range(min(delta_source.shape[0], 8))
+                ]
+            out["pairwise_offsets"][key] = entry
     return out
 
 
@@ -2553,6 +3358,11 @@ def _reset_control_body_diagnostics(env, reward_config: dict[str, Any]) -> dict[
         "controlled_ik_body": action_diag.get("configured_body") or (action_diag.get("runtime_arm_action") or {}).get("body_name"),
         "act_tcp_action_frame": args_cli.tcp_action_frame,
         "reward_body": reward_config.get("target_body"),
+        "robot_body_names_matching_sfp_plug_module_tip": [
+            str(name)
+            for name in getattr(env.unwrapped.scene["robot"], "body_names", [])
+            if any(token in str(name).lower() for token in ("sfp", "plug", "module", "tip", "cable"))
+        ],
         "body_distances_at_reset_env0": distances,
     }
 
@@ -2643,9 +3453,12 @@ def _force_wrench_diagnostics(env) -> dict[str, Any]:
 def _target_source_diagnostics(env, reward_config: dict[str, Any]) -> dict[str, Any]:
     episodes = _current_episode_by_env(env)
     episode = episodes.get(0)
-    episode_target = (((episode or {}).get("scene") or {}).get("target") or {}).get("target_pose_world") or {}
+    target = (((episode or {}).get("scene") or {}).get("target") or {})
+    episode_target = target.get("target_pose_world") or {}
     uses_episode_position = episode is not None and episode_target.get("position") is not None
     uses_episode_orientation = episode is not None and episode_target.get("orientation_wxyz") is not None
+    uses_entrance = episode is not None and (target.get("entrance_pose_world") or {}).get("position") is not None
+    uses_axis = episode is not None and target.get("insertion_axis_world") is not None
     warnings: list[str] = []
     notes: list[str] = []
     if uses_episode_position and not uses_episode_orientation and reward_config.get("orientation_weight", 0.0) > 0.0:
@@ -2656,9 +3469,22 @@ def _target_source_diagnostics(env, reward_config: dict[str, Any]) -> dict[str, 
         notes.append("target position and orientation both come from episode YAML")
     if float(reward_config.get("lateral_weight", 0.0)) > 0.0:
         warnings.append("target_lateral_error is normally used with a negative penalty weight")
+    insertion_weight = max(
+        abs(float(reward_config.get("axial_progress_weight", 0.0))),
+        abs(float(reward_config.get("lateral_progress_weight", 0.0))),
+        abs(float(reward_config.get("insertion_corridor_weight", 0.0))),
+        abs(float(reward_config.get("motion_projection_weight", 0.0))),
+    )
+    if insertion_weight > 0.0 and (not uses_episode_position or not uses_entrance or not uses_axis):
+        warnings.append(
+            "insertion reward terms are enabled without complete episode metadata "
+            "(target_pose_world, entrance_pose_world, insertion_axis_world); fallback object offsets may be approximate"
+        )
     return {
         "target_position_source": "episode_yaml" if uses_episode_position else "target_asset_root_plus_offset",
         "target_orientation_source": "episode_yaml" if uses_episode_orientation else "target_asset_root_plus_offset",
+        "has_episode_entrance_pose_world": uses_entrance,
+        "has_episode_insertion_axis_world": uses_axis,
         "episode_target_pose_world_env0": episode_target or None,
         "notes": notes,
         "warnings": warnings,
@@ -2908,13 +3734,24 @@ def _realized_delta_diagnostics(
     desired_root_action: torch.Tensor | None = None,
     env_action: torch.Tensor,
 ) -> dict[str, Any]:
+    max_envs = min(int(requested_tcp_action.shape[0]), 8)
+
+    def sample_by_env(value: torch.Tensor, *, limit: int) -> list[list[float]]:
+        return [_sample_vector(value, row=env_index, limit=limit) for env_index in range(max_envs)]
+
     out: dict[str, Any] = {
         "requested_tcp_delta_env0": _sample_vector(requested_tcp_action[:, :3], limit=3),
         "requested_tcp_rot_env0": _sample_vector(requested_tcp_action[:, 3:6], limit=3),
+        "requested_tcp_delta_by_env": sample_by_env(requested_tcp_action[:, :3], limit=3),
+        "requested_tcp_rot_by_env": sample_by_env(requested_tcp_action[:, 3:6], limit=3),
         "desired_root_delta_env0": None
         if desired_root_action is None
         else _sample_vector(desired_root_action[:, :3], limit=3),
+        "desired_root_delta_by_env": None
+        if desired_root_action is None
+        else sample_by_env(desired_root_action[:, :3], limit=3),
         "env_action_first6_env0": _sample_vector(env_action[:, :6], limit=6),
+        "env_action_first6_by_env": sample_by_env(env_action[:, :6], limit=6),
         "bodies": {},
     }
     for body_name, before_pos in before.items():
@@ -2935,10 +3772,15 @@ def _realized_delta_diagnostics(
             "before_env0": _sample_vector(before_pos, limit=3),
             "after_env0": _sample_vector(after_pos, limit=3),
             "realized_delta_env0": _sample_vector(realized, limit=3),
+            "before_by_env": sample_by_env(before_pos, limit=3),
+            "after_by_env": sample_by_env(after_pos, limit=3),
+            "realized_delta_by_env": sample_by_env(realized, limit=3),
             "realized_delta_norm_mean": float(realized.norm(dim=-1).mean().detach().cpu()),
             "requested_delta_norm_mean": float(requested.norm(dim=-1).mean().detach().cpu()),
             "realized_over_requested_xyz_env0": _sample_vector(ratio, limit=3),
+            "realized_over_requested_xyz_by_env": sample_by_env(ratio, limit=3),
             "realized_over_desired_root_xyz_env0": None if root_ratio is None else _sample_vector(root_ratio, limit=3),
+            "realized_over_desired_root_xyz_by_env": None if root_ratio is None else sample_by_env(root_ratio, limit=3),
         }
     return out
 
@@ -2946,7 +3788,7 @@ def _realized_delta_diagnostics(
 def _selected_body_positions(env) -> dict[str, torch.Tensor | None]:
     return {
         body_name: _body_position_by_name(env, body_name)
-        for body_name in ("wrist_3_link", "gripper_tcp", "sfp_tip_link", CONTROLLED_TCP_BODY)
+        for body_name in ("wrist_3_link", "gripper_tcp", "sfp_module_link", "sfp_tip_link", CONTROLLED_TCP_BODY)
     }
 
 
@@ -4296,6 +5138,18 @@ def main() -> None:
             "adapter_delta_clip": args_cli.adapter_delta_clip,
             "tcp_translation_action_clip": args_cli.tcp_translation_action_clip,
             "tcp_rotation_action_clip": args_cli.tcp_rotation_action_clip,
+            "fix_isaac_ik_xy_sign": bool(args_cli.fix_isaac_ik_xy_sign),
+            "isaac_ik_xy_sign_by_target_card": bool(args_cli.isaac_ik_xy_sign_by_target_card),
+            "insertion_action_guard": bool(args_cli.insertion_action_guard),
+            "insertion_action_guard_lateral_threshold_m": float(args_cli.insertion_action_guard_lateral_threshold_m),
+            "insertion_action_guard_lateral_step_m": float(args_cli.insertion_action_guard_lateral_step_m),
+            "insertion_action_guard_adaptive_lateral_sign": bool(
+                args_cli.insertion_action_guard_adaptive_lateral_sign
+            ),
+            "insertion_action_guard_adaptive_lateral_flip_margin_m": float(
+                args_cli.insertion_action_guard_adaptive_lateral_flip_margin_m
+            ),
+            "insertion_action_guard_centered_axial_step_m": float(args_cli.insertion_action_guard_centered_axial_step_m),
             "action_clip": args_cli.action_clip,
             "actor_q_weight": args_cli.actor_q_weight,
             "actor_update_end_steps": args_cli.actor_update_end_steps,
@@ -4380,6 +5234,8 @@ def main() -> None:
             step=0,
             max_steps=args_cli.max_logged_image_steps,
             every=max(args_cli.image_log_every, 1),
+            env=env,
+            reward_config=task_geometry_reward_config,
         )
     print("[AIC SERL] Initial raw camera read complete", flush=True)
     diagnostics_enabled = bool(args_cli.debug_diagnostics or int(args_cli.debug_audit_steps) > 0)
@@ -4473,9 +5329,38 @@ def main() -> None:
     last_metrics: dict[str, float] = {}
     stop_reason = "max_steps"
     max_loop_steps = int(args_cli.debug_audit_steps) if int(args_cli.debug_audit_steps) > 0 else int(args_cli.steps)
+    if int(args_cli.debug_audit_steps) > 0 and int(args_cli.updates) > 0:
+        print(
+            "[AIC SERL][diagnostic][warning] "
+            + json.dumps(
+                {
+                    "debug_audit_steps": int(args_cli.debug_audit_steps),
+                    "message": "debug_audit_steps > 0 disables gradient updates; use --debug-audit-steps 0 for training.",
+                    "updates": int(args_cli.updates),
+                },
+                sort_keys=True,
+            ),
+            flush=True,
+        )
     queued_policy_actions = torch.empty((policy_obs.shape[0], 0, single_action_dim), dtype=torch.float32, device=device)
     queued_action_components: dict[str, torch.Tensor] | None = None
     queued_action_chunk: torch.Tensor | None = None
+    insertion_action_guard_retention_entered = torch.zeros(
+        (policy_obs.shape[0],),
+        dtype=torch.bool,
+        device=device,
+    )
+    insertion_action_guard_lateral_sign = torch.ones(
+        (policy_obs.shape[0], 1),
+        dtype=torch.float32,
+        device=device,
+    )
+    insertion_action_guard_previous_lateral_error = torch.full(
+        (policy_obs.shape[0], 1),
+        float("nan"),
+        dtype=torch.float32,
+        device=device,
+    )
     for step in range(1, max_loop_steps + 1):
         step_start_time = time.monotonic()
         if STOP_REQUESTED is not None:
@@ -4582,6 +5467,14 @@ def main() -> None:
         queued_policy_actions = queued_policy_actions[:, 1:, :]
         guide_action_for_transition = None
         effective_guide_collect_blend = 0.0
+        insertion_action_guard_metrics = {
+            "insertion_action_guard_applied_fraction": 0.0,
+            "insertion_action_guard_centered_axial_fraction": 0.0,
+            "insertion_action_guard_retention_active_fraction": 0.0,
+            "insertion_action_guard_retention_entered_fraction": 0.0,
+            "insertion_action_guard_correction_norm_mean": 0.0,
+            "insertion_action_guard_missing_geometry": 0.0,
+        }
         guide_needed = (
             float(args_cli.target_action_guide_weight) > 0.0
             or float(args_cli.target_action_guide_collect_blend) > 0.0
@@ -4591,6 +5484,7 @@ def main() -> None:
                 env,
                 task_geometry_reward_config,
                 step_size=float(args_cli.target_action_guide_step_size),
+                rotation_step_size=float(args_cli.target_action_guide_rotation_step_size),
                 axial_step_size=float(args_cli.target_action_guide_axial_step_size),
                 lateral_switch_m=float(args_cli.target_action_guide_lateral_switch_m),
                 axial_blend_lateral_m=float(args_cli.target_action_guide_axial_blend_lateral_m),
@@ -4609,6 +5503,31 @@ def main() -> None:
                 blend *= max(0.0, 1.0 - (float(step) - 1.0) / max(float(collect_steps), 1.0))
             effective_guide_collect_blend = blend
             policy_tcp_action = (1.0 - blend) * policy_tcp_action + blend * guide_action_for_transition
+        if bool(args_cli.insertion_action_guard):
+            policy_tcp_action, insertion_action_guard_metrics = _apply_insertion_action_guard(
+                env,
+                task_geometry_reward_config,
+                policy_tcp_action,
+                action_frame=str(args_cli.tcp_action_frame),
+                lateral_threshold_m=float(args_cli.insertion_action_guard_lateral_threshold_m),
+                lateral_step_m=float(args_cli.insertion_action_guard_lateral_step_m),
+                adaptive_lateral_sign=bool(args_cli.insertion_action_guard_adaptive_lateral_sign),
+                adaptive_lateral_flip_margin_m=float(
+                    args_cli.insertion_action_guard_adaptive_lateral_flip_margin_m
+                ),
+                lateral_sign_state=insertion_action_guard_lateral_sign,
+                previous_lateral_error=insertion_action_guard_previous_lateral_error,
+                centered_axial_step_m=float(args_cli.insertion_action_guard_centered_axial_step_m),
+                retention_entered=insertion_action_guard_retention_entered,
+                retention_enabled=bool(args_cli.insertion_action_guard_retention),
+                retention_entry_depth_m=float(args_cli.insertion_action_guard_retention_entry_depth_m),
+                retention_lateral_threshold_m=float(args_cli.insertion_action_guard_retention_lateral_threshold_m),
+                retention_ignore_lateral_threshold=bool(
+                    args_cli.insertion_action_guard_retention_ignore_lateral_threshold
+                ),
+                retention_min_axial_step_m=float(args_cli.insertion_action_guard_retention_min_axial_step_m),
+                retention_lateral_scale=float(args_cli.insertion_action_guard_retention_lateral_scale),
+            )
         if float(args_cli.tcp_translation_action_clip) > 0.0:
             policy_tcp_action = _clip_tcp_translation_norm(
                 policy_tcp_action,
@@ -4641,6 +5560,12 @@ def main() -> None:
         before_positions = _selected_body_positions(env) if diagnostics_enabled and (step == 1 or step % diagnostics_every == 0) else {}
         before_orientations = _selected_body_orientations(env) if before_positions else {}
         before_target = _target_position_from_reward_config(env, task_geometry_reward_config) if before_positions else None
+        pre_step_insertion_geometry = (
+            _insertion_geometry_diagnostics(env, task_geometry_reward_config) if diagnostics_enabled else None
+        )
+        pre_step_all_body_insertion_geometry = (
+            _all_body_insertion_geometry_diagnostics(env, task_geometry_reward_config) if diagnostics_enabled else None
+        )
         episode_metadata_before = [_episode_metadata(env, idx) for idx in range(policy_obs.shape[0])]
         episode_length_before = getattr(env.unwrapped, "episode_length_buf", None)
         episode_length_before_cpu = None if episode_length_before is None else episode_length_before.detach().cpu().clone()
@@ -4664,6 +5589,8 @@ def main() -> None:
                 step=step,
                 max_steps=args_cli.max_logged_image_steps,
                 every=args_cli.image_log_every,
+                env=env,
+                reward_config=task_geometry_reward_config,
             )
         _timing_log(args_cli.debug_timing and step == 1, "next_camera_read", t0)
         t0 = time.monotonic()
@@ -4682,9 +5609,25 @@ def main() -> None:
             else terminated
         )
         done = done_for_bootstrap_bool.float().reshape(-1, 1).to(device)
+        if bool(args_cli.insertion_action_guard_retention):
+            insertion_action_guard_retention_entered &= ~done_for_bootstrap_bool.to(device=device, dtype=torch.bool)
+        if bool(args_cli.insertion_action_guard_adaptive_lateral_sign):
+            done_mask = done_for_bootstrap_bool.to(device=device, dtype=torch.bool).view(-1, 1)
+            insertion_action_guard_lateral_sign = torch.where(
+                done_mask,
+                torch.ones_like(insertion_action_guard_lateral_sign),
+                insertion_action_guard_lateral_sign,
+            )
+            insertion_action_guard_previous_lateral_error = torch.where(
+                done_mask,
+                torch.full_like(insertion_action_guard_previous_lateral_error, float("nan")),
+                insertion_action_guard_previous_lateral_error,
+            )
         reward = reward.reshape(-1, 1).to(device)
         action_for_critic = policy_tcp_action
         guide_action = guide_action_for_transition
+        if guide_action is not None and bool(args_cli.target_action_guide_train_executed):
+            guide_action = policy_tcp_action.detach().clone()
         for env_index in range(policy_obs.shape[0]):
             metadata = _episode_metadata(env, env_index)
             metadata["inserted_env_step"] = int(step)
@@ -4817,6 +5760,11 @@ def main() -> None:
                     else {},
                     "reward_pose": _pose_reward_diagnostics(env, task_geometry_reward_config),
                     "insertion_geometry": _insertion_geometry_diagnostics(env, task_geometry_reward_config),
+                    "all_body_insertion_geometry": _all_body_insertion_geometry_diagnostics(
+                        env,
+                        task_geometry_reward_config,
+                    ),
+                    "body_frame_offsets": _body_frame_offset_diagnostics(env),
                     "reward_resolution": {
                         "resolved_terms": _resolved_reward_terms(env),
                         "all_reward_weights_after_env_creation": _reward_weight_diagnostics(env),
@@ -4873,6 +5821,7 @@ def main() -> None:
                         if guide_action_for_transition is None
                         else _sample_vector(guide_action_for_transition, limit=6),
                         "target_action_guide_collect_blend_effective": float(effective_guide_collect_blend),
+                        "insertion_action_guard": insertion_action_guard_metrics,
                         "env_action_env0_first6": _sample_vector(env_action, limit=6),
                         "replay_action_env0_first12": _sample_vector(action_for_critic, limit=12),
                     },
@@ -4911,6 +5860,7 @@ def main() -> None:
             "force_source": str(force_metrics.get("force_source", "unknown")),
             "force_body": str(force_metrics.get("force_body", FORCE_WRENCH_BODY)),
             "target_action_guide_collect_blend_effective": float(effective_guide_collect_blend),
+            **insertion_action_guard_metrics,
             "actor_policy_tcp_action_norm_mean": float(torch.norm(actor_policy_tcp_action, dim=1).mean().detach().cpu()),
             "executed_policy_tcp_action_norm_mean": float(torch.norm(policy_tcp_action, dim=1).mean().detach().cpu()),
             "guide_action_norm_mean": (
@@ -5064,8 +6014,13 @@ def main() -> None:
             ),
             "episodes": [_episode_metadata(env, idx) for idx in range(policy_obs.shape[0])],
             "terminated_mean": float(terminated.float().mean().detach().cpu()),
+            "terminated_by_env": _tensor_bool_list(terminated),
             "truncated_mean": float(truncated.float().mean().detach().cpu()),
+            "truncated_by_env": _tensor_bool_list(truncated),
             "done_for_bootstrap_mean": float(done.mean().detach().cpu()),
+            "done_for_bootstrap_by_env": _tensor_bool_list(done_for_bootstrap_bool),
+            "pre_step_insertion_geometry": pre_step_insertion_geometry,
+            "pre_step_all_body_insertion_geometry": pre_step_all_body_insertion_geometry,
             "treat_time_limit_truncation_as_terminal": bool(args_cli.treat_time_limit_truncation_as_terminal),
             "step_wall_s": time.monotonic() - step_start_time,
             "env_steps_per_s": float(policy_obs.shape[0]) / max(time.monotonic() - step_start_time, 1.0e-9),

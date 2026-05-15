@@ -797,6 +797,20 @@ class AICTaskEnvCfg(ManagerBasedRLEnvCfg):
             raise ValueError(f"AIC_ISAAC_POLICY_HZ must be positive, got {policy_hz}")
         self.decimation = max(1, int(round(1.0 / (self.sim.dt * policy_hz))))
         self.sim.render_interval = self.decimation
+        if os.environ.get("AIC_ISAAC_ENABLE_EXTERNAL_FORCES_EVERY_ITERATION", "0") in {"1", "true", "True"}:
+            self.sim.physx.enable_external_forces_every_iteration = True
+        solver_position_iterations = os.environ.get("AIC_ISAAC_SOLVER_POSITION_ITERATIONS")
+        if solver_position_iterations:
+            self.scene.robot.spawn.articulation_props.solver_position_iteration_count = int(solver_position_iterations)
+        solver_velocity_iterations = os.environ.get("AIC_ISAAC_SOLVER_VELOCITY_ITERATIONS")
+        if solver_velocity_iterations:
+            self.scene.robot.spawn.articulation_props.solver_velocity_iteration_count = int(solver_velocity_iterations)
+        actuator_stiffness = os.environ.get("AIC_ISAAC_ARM_ACTUATOR_STIFFNESS")
+        if actuator_stiffness:
+            self.scene.robot.actuators["arm"].stiffness = float(actuator_stiffness)
+        actuator_damping = os.environ.get("AIC_ISAAC_ARM_ACTUATOR_DAMPING")
+        if actuator_damping:
+            self.scene.robot.actuators["arm"].damping = float(actuator_damping)
         # self.sim.gravity = (0.0, 0.0, 3)
         self.viewer.eye = (8.0, 0.0, 5.0)
 
