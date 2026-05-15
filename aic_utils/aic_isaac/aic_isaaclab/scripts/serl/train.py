@@ -166,6 +166,15 @@ parser.add_argument(
     default=0.006,
     help="Start blending axial guide motion once lateral error is below this distance.",
 )
+parser.add_argument(
+    "--target_action_guide_orientation_switch_rad",
+    type=float,
+    default=0.0,
+    help=(
+        "If >0, suppress guide axial insertion while semantic tip orientation error exceeds this threshold. "
+        "This lets near-gate runs align coaxially before pushing into the port."
+    ),
+)
 parser.add_argument("--target_action_guide_collect_blend", type=float, default=0.0)
 parser.add_argument("--target_action_guide_collect_steps", type=int, default=0)
 parser.add_argument(
@@ -363,6 +372,13 @@ parser.add_argument("--target_reward_axial_progress_scale", type=float, default=
 parser.add_argument("--target_reward_insertion_corridor_weight", type=float, default=0.0)
 parser.add_argument("--target_reward_insertion_corridor_sigma", type=float, default=0.0025)
 parser.add_argument("--target_reward_insertion_bypass_penalty_scale", type=float, default=1.0)
+parser.add_argument("--target_reward_cheatcode_phase_weight", type=float, default=0.0)
+parser.add_argument("--target_reward_cheatcode_sigma_lat_pre", type=float, default=0.0025)
+parser.add_argument("--target_reward_cheatcode_sigma_lat_insert", type=float, default=0.0015)
+parser.add_argument("--target_reward_cheatcode_sigma_theta_pre", type=float, default=0.10)
+parser.add_argument("--target_reward_cheatcode_sigma_theta_insert", type=float, default=0.06)
+parser.add_argument("--target_reward_cheatcode_orientation_progress_scale", type=float, default=0.02)
+parser.add_argument("--target_reward_cheatcode_hover_depth", type=float, default=-0.004)
 parser.add_argument(
     "--target_reward_insertion_orientation_gate_std",
     type=float,
@@ -372,10 +388,22 @@ parser.add_argument(
         "exp(-(error/std)^2). Forward progress with poor orientation becomes negative."
     ),
 )
+parser.add_argument(
+    "--target_reward_consistency_body",
+    default="auto",
+    help=(
+        "Optional trailing plug body used to gate insertion rewards/success. "
+        "'auto' uses sfp_module_link for sfp_tip_link and disables the gate otherwise."
+    ),
+)
+parser.add_argument("--target_reward_consistency_axial_std", type=float, default=0.0)
+parser.add_argument("--target_reward_consistency_lateral_sigma", type=float, default=0.0)
+parser.add_argument("--target_success_consistency_axial_threshold", type=float, default=0.0)
+parser.add_argument("--target_success_consistency_lateral_threshold", type=float, default=0.0)
 parser.add_argument("--target_reward_insertion_axis", type=int, choices=[0, 1, 2], default=0)
 parser.add_argument(
     "--reward_preset",
-    choices=["default", "near_gate_corridor_v1"],
+    choices=["default", "near_gate_corridor_v1", "cheatcode_insertion_v1"],
     default="default",
     help="Apply a named reward-shaping preset before env creation.",
 )
@@ -408,6 +436,7 @@ parser.add_argument(
 )
 parser.add_argument("--target_success_axial_threshold", type=float, default=None)
 parser.add_argument("--target_success_lateral_threshold", type=float, default=None)
+parser.add_argument("--target_success_orientation_threshold", type=float, default=None)
 parser.add_argument(
     "--policy_hz",
     type=float,
@@ -561,8 +590,42 @@ def _set_preset_default(args: argparse.Namespace, attr: str, flag: str, value: o
 def _apply_reward_preset(args: argparse.Namespace) -> None:
     if args.reward_preset == "default":
         return
-    if args.reward_preset != "near_gate_corridor_v1":
+    if args.reward_preset not in {"near_gate_corridor_v1", "cheatcode_insertion_v1"}:
         raise ValueError(f"Unsupported reward preset: {args.reward_preset}")
+    if args.reward_preset == "cheatcode_insertion_v1":
+        _set_preset_default(args, "target_reward_distance_weight", "--target_reward_distance_weight", 0.0)
+        _set_preset_default(args, "target_reward_close_weight", "--target_reward_close_weight", 0.0)
+        _set_preset_default(args, "target_reward_progress_weight", "--target_reward_progress_weight", 0.0)
+        _set_preset_default(args, "target_reward_reaching_weight", "--target_reward_reaching_weight", 0.0)
+        _set_preset_default(args, "target_reward_lateral_weight", "--target_reward_lateral_weight", -0.20)
+        _set_preset_default(args, "target_reward_lateral_error_scale", "--target_reward_lateral_error_scale", 0.003)
+        _set_preset_default(args, "target_reward_lateral_progress_weight", "--target_reward_lateral_progress_weight", 0.0)
+        _set_preset_default(args, "target_reward_lateral_progress_scale", "--target_reward_lateral_progress_scale", 0.001)
+        _set_preset_default(args, "target_reward_axial_progress_weight", "--target_reward_axial_progress_weight", 0.0)
+        _set_preset_default(args, "target_reward_axial_progress_scale", "--target_reward_axial_progress_scale", 0.001)
+        _set_preset_default(args, "target_reward_lateral_gate_sigma", "--target_reward_lateral_gate_sigma", 0.0020)
+        _set_preset_default(args, "target_reward_insertion_corridor_weight", "--target_reward_insertion_corridor_weight", 0.0)
+        _set_preset_default(args, "target_reward_insertion_corridor_sigma", "--target_reward_insertion_corridor_sigma", 0.0015)
+        _set_preset_default(args, "target_reward_insertion_bypass_penalty_scale", "--target_reward_insertion_bypass_penalty_scale", 6.0)
+        _set_preset_default(args, "target_reward_insertion_orientation_gate_std", "--target_reward_insertion_orientation_gate_std", 0.05)
+        _set_preset_default(args, "target_reward_orientation_weight", "--target_reward_orientation_weight", 0.20)
+        _set_preset_default(args, "target_reward_orientation_std", "--target_reward_orientation_std", 0.08)
+        _set_preset_default(args, "target_reward_orientation_gate_sigma", "--target_reward_orientation_gate_sigma", 0.006)
+        _set_preset_default(args, "target_reward_cheatcode_phase_weight", "--target_reward_cheatcode_phase_weight", 1.0)
+        _set_preset_default(args, "target_reward_consistency_body", "--target_reward_consistency_body", "auto")
+        _set_preset_default(args, "target_reward_consistency_axial_std", "--target_reward_consistency_axial_std", 0.004)
+        _set_preset_default(args, "target_reward_consistency_lateral_sigma", "--target_reward_consistency_lateral_sigma", 0.003)
+        _set_preset_default(args, "target_success_consistency_axial_threshold", "--target_success_consistency_axial_threshold", 0.001)
+        _set_preset_default(args, "target_success_consistency_lateral_threshold", "--target_success_consistency_lateral_threshold", 0.0015)
+        _set_preset_default(args, "force_delta_penalty_weight", "--force_delta_penalty_weight", 0.02)
+        _set_preset_default(args, "terminate_on_target_success", "--terminate_on_target_success", True)
+        if not bool(getattr(args, "_target_success_axial_threshold_explicit", False)):
+            args.target_success_axial_threshold = 0.0005
+        if not bool(getattr(args, "_target_success_lateral_threshold_explicit", False)):
+            args.target_success_lateral_threshold = 0.0005
+        if not bool(getattr(args, "_target_success_orientation_threshold_explicit", False)):
+            args.target_success_orientation_threshold = 0.03
+        return
     _set_preset_default(args, "target_reward_distance_weight", "--target_reward_distance_weight", 0.02)
     _set_preset_default(args, "target_reward_close_weight", "--target_reward_close_weight", 0.05)
     _set_preset_default(args, "target_reward_progress_weight", "--target_reward_progress_weight", 0.0)
@@ -587,6 +650,26 @@ def _apply_reward_preset(args: argparse.Namespace) -> None:
         "--target_reward_insertion_orientation_gate_std",
         0.10,
     )
+    _set_preset_default(args, "target_reward_consistency_body", "--target_reward_consistency_body", "auto")
+    _set_preset_default(args, "target_reward_consistency_axial_std", "--target_reward_consistency_axial_std", 0.004)
+    _set_preset_default(
+        args,
+        "target_reward_consistency_lateral_sigma",
+        "--target_reward_consistency_lateral_sigma",
+        0.003,
+    )
+    _set_preset_default(
+        args,
+        "target_success_consistency_axial_threshold",
+        "--target_success_consistency_axial_threshold",
+        0.001,
+    )
+    _set_preset_default(
+        args,
+        "target_success_consistency_lateral_threshold",
+        "--target_success_consistency_lateral_threshold",
+        0.0015,
+    )
     _set_preset_default(args, "target_reward_orientation_weight", "--target_reward_orientation_weight", 0.05)
     _set_preset_default(args, "target_reward_orientation_std", "--target_reward_orientation_std", 0.10)
     _set_preset_default(args, "target_reward_orientation_gate_sigma", "--target_reward_orientation_gate_sigma", 0.010)
@@ -608,6 +691,9 @@ args_cli._target_success_axial_threshold_explicit = (
 )
 args_cli._target_success_lateral_threshold_explicit = (
     "--target_success_lateral_threshold" in _explicit_cli_flags
+)
+args_cli._target_success_orientation_threshold_explicit = (
+    "--target_success_orientation_threshold" in _explicit_cli_flags
 )
 _apply_reward_preset(args_cli)
 if float(args_cli.target_reward_lateral_weight) > 0.0:
@@ -1213,10 +1299,23 @@ def _resolved_target_reward_body(args: argparse.Namespace) -> str:
     return "sc_tip_link" if args.task_family == "sc_to_sc" else "sfp_tip_link"
 
 
+def _resolved_consistency_body(args: argparse.Namespace, target_body: str) -> str | None:
+    raw = str(getattr(args, "target_reward_consistency_body", "auto") or "")
+    if raw.lower() in {"", "none", "off", "false", "0"}:
+        return None
+    if raw != "auto":
+        return raw
+    if target_body == "sfp_tip_link":
+        return "sfp_module_link"
+    return None
+
+
 def _configure_task_geometry_rewards(env_cfg: Any, args: argparse.Namespace) -> dict[str, Any]:
     rewards = env_cfg.rewards
     target_scene_name = _isaac_target_scene_name(args)
-    target_body = [_resolved_target_reward_body(args)]
+    resolved_target_body = _resolved_target_reward_body(args)
+    consistency_body = _resolved_consistency_body(args, resolved_target_body)
+    target_body = [resolved_target_body]
     target_position_offset = _target_reward_position_offset(args)
     body_position_offset = _target_reward_body_position_offset(args)
     target_orientation_offset = _target_reward_orientation_offset(args)
@@ -1234,6 +1333,7 @@ def _configure_task_geometry_rewards(env_cfg: Any, args: argparse.Namespace) -> 
         "target_lateral_progress",
         "target_axial_progress",
         "target_insertion_corridor",
+        "target_cheatcode_phase_reward",
     ):
         term = getattr(rewards, name)
         term.params["target_cfg"].name = target_scene_name
@@ -1267,6 +1367,13 @@ def _configure_task_geometry_rewards(env_cfg: Any, args: argparse.Namespace) -> 
         args.target_reward_insertion_orientation_gate_std
     )
     rewards.target_axial_progress.params["body_orientation_offset"] = body_orientation_offset
+    rewards.target_axial_progress.params["consistency_body_name"] = consistency_body
+    rewards.target_axial_progress.params["consistency_axial_std"] = float(args.target_reward_consistency_axial_std)
+    rewards.target_axial_progress.params["consistency_lateral_sigma"] = (
+        None
+        if float(args.target_reward_consistency_lateral_sigma) <= 0.0
+        else float(args.target_reward_consistency_lateral_sigma)
+    )
     rewards.target_insertion_corridor.params["insertion_axis"] = int(args.target_reward_insertion_axis)
     rewards.target_insertion_corridor.params["lateral_gate_sigma"] = float(
         args.target_reward_insertion_corridor_sigma
@@ -1278,6 +1385,37 @@ def _configure_task_geometry_rewards(env_cfg: Any, args: argparse.Namespace) -> 
         args.target_reward_insertion_orientation_gate_std
     )
     rewards.target_insertion_corridor.params["body_orientation_offset"] = body_orientation_offset
+    rewards.target_insertion_corridor.params["consistency_body_name"] = consistency_body
+    rewards.target_insertion_corridor.params["consistency_axial_std"] = float(
+        args.target_reward_consistency_axial_std
+    )
+    rewards.target_insertion_corridor.params["consistency_lateral_sigma"] = (
+        None
+        if float(args.target_reward_consistency_lateral_sigma) <= 0.0
+        else float(args.target_reward_consistency_lateral_sigma)
+    )
+    rewards.target_cheatcode_phase_reward.params["insertion_axis"] = int(args.target_reward_insertion_axis)
+    rewards.target_cheatcode_phase_reward.params["sigma_lat_pre"] = float(args.target_reward_cheatcode_sigma_lat_pre)
+    rewards.target_cheatcode_phase_reward.params["sigma_lat_insert"] = float(
+        args.target_reward_cheatcode_sigma_lat_insert
+    )
+    rewards.target_cheatcode_phase_reward.params["sigma_theta_pre"] = float(
+        args.target_reward_cheatcode_sigma_theta_pre
+    )
+    rewards.target_cheatcode_phase_reward.params["sigma_theta_insert"] = float(
+        args.target_reward_cheatcode_sigma_theta_insert
+    )
+    rewards.target_cheatcode_phase_reward.params["lateral_progress_scale"] = float(
+        args.target_reward_lateral_progress_scale
+    )
+    rewards.target_cheatcode_phase_reward.params["orientation_progress_scale"] = float(
+        args.target_reward_cheatcode_orientation_progress_scale
+    )
+    rewards.target_cheatcode_phase_reward.params["axial_progress_scale"] = float(args.target_reward_axial_progress_scale)
+    rewards.target_cheatcode_phase_reward.params["hover_depth"] = float(args.target_reward_cheatcode_hover_depth)
+    rewards.target_cheatcode_phase_reward.params["bypass_penalty_scale"] = float(
+        args.target_reward_insertion_bypass_penalty_scale
+    )
     success_axial_threshold = (
         float(args.target_success_termination_threshold)
         if args.target_success_axial_threshold is None
@@ -1288,12 +1426,28 @@ def _configure_task_geometry_rewards(env_cfg: Any, args: argparse.Namespace) -> 
         if args.target_success_lateral_threshold is None
         else float(args.target_success_lateral_threshold)
     )
+    rewards.target_cheatcode_phase_reward.params["success_lateral_threshold"] = success_lateral_threshold
     rewards.target_reaching_bonus.params["threshold"] = float(args.target_reward_reaching_threshold)
     rewards.target_success_once_bonus.params["threshold"] = float(args.target_reward_reaching_threshold)
     rewards.target_success_once_bonus.params["insertion_axis"] = int(args.target_reward_insertion_axis)
     rewards.target_success_once_bonus.params["axial_threshold"] = success_axial_threshold
     rewards.target_success_once_bonus.params["lateral_threshold"] = success_lateral_threshold
+    rewards.target_success_once_bonus.params["orientation_threshold"] = (
+        None if args.target_success_orientation_threshold is None else float(args.target_success_orientation_threshold)
+    )
+    rewards.target_success_once_bonus.params["body_orientation_offset"] = body_orientation_offset
     rewards.target_success_once_bonus.params["target_orientation_offset"] = target_orientation_offset
+    rewards.target_success_once_bonus.params["consistency_body_name"] = consistency_body
+    rewards.target_success_once_bonus.params["consistency_axial_threshold"] = (
+        None
+        if consistency_body is None or float(args.target_success_consistency_axial_threshold) <= 0.0
+        else float(args.target_success_consistency_axial_threshold)
+    )
+    rewards.target_success_once_bonus.params["consistency_lateral_threshold"] = (
+        None
+        if consistency_body is None or float(args.target_success_consistency_lateral_threshold) <= 0.0
+        else float(args.target_success_consistency_lateral_threshold)
+    )
     rewards.target_orientation_gated_exp.params["std"] = float(args.target_reward_orientation_std)
     rewards.target_orientation_gated_exp.params["gate_sigma"] = float(args.target_reward_orientation_gate_sigma)
 
@@ -1313,6 +1467,9 @@ def _configure_task_geometry_rewards(env_cfg: Any, args: argparse.Namespace) -> 
     rewards.target_insertion_corridor.weight = (
         float(args.target_reward_insertion_corridor_weight) * reward_weight_multiplier
     )
+    rewards.target_cheatcode_phase_reward.weight = (
+        float(args.target_reward_cheatcode_phase_weight) * reward_weight_multiplier
+    )
     if hasattr(rewards, "force_delta_penalty"):
         rewards.force_delta_penalty.weight = float(args.force_delta_penalty_weight) * reward_weight_multiplier
         rewards.force_delta_penalty.params["threshold"] = float(args.force_delta_threshold)
@@ -1328,7 +1485,28 @@ def _configure_task_geometry_rewards(env_cfg: Any, args: argparse.Namespace) -> 
         target_success.params["target_position_offset"] = target_position_offset
         target_success.params["body_position_offset"] = body_position_offset
         target_success.params["target_orientation_offset"] = target_orientation_offset
+        target_success.params["body_orientation_offset"] = body_orientation_offset
+        target_success.params["orientation_threshold"] = (
+            None
+            if not bool(args.terminate_on_target_success) or args.target_success_orientation_threshold is None
+            else float(args.target_success_orientation_threshold)
+        )
         target_success.params["insertion_axis"] = int(args.target_reward_insertion_axis)
+        target_success.params["consistency_body_name"] = consistency_body
+        target_success.params["consistency_axial_threshold"] = (
+            None
+            if not bool(args.terminate_on_target_success)
+            or consistency_body is None
+            or float(args.target_success_consistency_axial_threshold) <= 0.0
+            else float(args.target_success_consistency_axial_threshold)
+        )
+        target_success.params["consistency_lateral_threshold"] = (
+            None
+            if not bool(args.terminate_on_target_success)
+            or consistency_body is None
+            or float(args.target_success_consistency_lateral_threshold) <= 0.0
+            else float(args.target_success_consistency_lateral_threshold)
+        )
         target_success.params["axial_threshold"] = (
             success_axial_threshold if bool(args.terminate_on_target_success) else None
         )
@@ -1377,6 +1555,18 @@ def _configure_task_geometry_rewards(env_cfg: Any, args: argparse.Namespace) -> 
         "insertion_corridor_sigma": float(args.target_reward_insertion_corridor_sigma),
         "insertion_bypass_penalty_scale": float(args.target_reward_insertion_bypass_penalty_scale),
         "insertion_orientation_gate_std": float(args.target_reward_insertion_orientation_gate_std),
+        "cheatcode_phase_weight": float(args.target_reward_cheatcode_phase_weight),
+        "cheatcode_sigma_lat_pre": float(args.target_reward_cheatcode_sigma_lat_pre),
+        "cheatcode_sigma_lat_insert": float(args.target_reward_cheatcode_sigma_lat_insert),
+        "cheatcode_sigma_theta_pre": float(args.target_reward_cheatcode_sigma_theta_pre),
+        "cheatcode_sigma_theta_insert": float(args.target_reward_cheatcode_sigma_theta_insert),
+        "cheatcode_orientation_progress_scale": float(args.target_reward_cheatcode_orientation_progress_scale),
+        "cheatcode_hover_depth": float(args.target_reward_cheatcode_hover_depth),
+        "consistency_body": consistency_body,
+        "consistency_axial_std": float(args.target_reward_consistency_axial_std),
+        "consistency_lateral_sigma": float(args.target_reward_consistency_lateral_sigma),
+        "success_consistency_axial_threshold": float(args.target_success_consistency_axial_threshold),
+        "success_consistency_lateral_threshold": float(args.target_success_consistency_lateral_threshold),
         "insertion_axis": int(args.target_reward_insertion_axis),
         "force_delta_penalty_weight": float(args.force_delta_penalty_weight) if hasattr(rewards, "force_delta_penalty") else 0.0,
         "force_delta_threshold": float(args.force_delta_threshold),
@@ -1397,6 +1587,9 @@ def _configure_task_geometry_rewards(env_cfg: Any, args: argparse.Namespace) -> 
         ),
         "success_axial_threshold": success_axial_threshold,
         "success_lateral_threshold": success_lateral_threshold,
+        "success_orientation_threshold": (
+            None if args.target_success_orientation_threshold is None else float(args.target_success_orientation_threshold)
+        ),
         "success_bonus_geometry": {
             "axial_threshold": success_axial_threshold,
             "lateral_threshold": success_lateral_threshold,
@@ -2500,6 +2693,7 @@ def _cheatcode_transform_guided_policy_action(
     axial_step_size: float | None,
     lateral_switch_m: float,
     axial_blend_lateral_m: float,
+    orientation_switch_rad: float,
     action_frame: str,
     device: torch.device,
 ) -> torch.Tensor:
@@ -2535,6 +2729,20 @@ def _cheatcode_transform_guided_policy_action(
         body_quat_w,
         task_geometry_reward_config.get("body_position_offset"),
     )
+    orientation_aligned = torch.ones((batch_size, 1), dtype=torch.bool, device=device)
+    desired_controlled_quat_w = controlled_quat_w
+    if target_quat_w is not None and float(rotation_step_size) > 0.0:
+        body_frame_quat_w = _offset_quat_w(
+            body_quat_w,
+            task_geometry_reward_config.get("body_orientation_offset"),
+        )
+        target_quat_w = target_quat_w.to(device=device, dtype=guide.dtype)
+        orientation_error = math_utils.quat_error_magnitude(body_frame_quat_w, target_quat_w).view(batch_size, 1)
+        if float(orientation_switch_rad) > 0.0:
+            orientation_aligned = orientation_error <= float(orientation_switch_rad)
+        q_diff_w = math_utils.quat_mul(target_quat_w, math_utils.quat_inv(body_frame_quat_w))
+        desired_controlled_quat_w = math_utils.quat_mul(q_diff_w, controlled_quat_w)
+
     rotation_gate = torch.ones((batch_size, 1), dtype=guide.dtype, device=device)
     entrance_w = _episode_entrance_position_from_yaml(env)
     axis_w = _episode_insertion_axis_from_yaml(env)
@@ -2555,6 +2763,7 @@ def _cheatcode_transform_guided_policy_action(
         axial_distance = torch.linalg.norm(axial_delta, dim=1, keepdim=True)
         axial_direction = axial_delta / axial_distance.clamp(min=1.0e-9)
         axial_move = axial_direction * torch.minimum(axial_distance, torch.full_like(axial_distance, max(axial_step, 0.0)))
+        axial_move = torch.where(orientation_aligned, axial_move, torch.zeros_like(axial_move))
         lateral_switch = max(float(lateral_switch_m), 0.0)
         blend_width = max(float(axial_blend_lateral_m), 1.0e-9)
         lateral_blend = (lateral_distance / blend_width).clamp(min=0.0, max=1.0)
@@ -2572,14 +2781,6 @@ def _cheatcode_transform_guided_policy_action(
 
     if target_quat_w is None or float(rotation_step_size) <= 0.0:
         desired_controlled_quat_w = controlled_quat_w
-    else:
-        body_frame_quat_w = _offset_quat_w(
-            body_quat_w,
-            task_geometry_reward_config.get("body_orientation_offset"),
-        )
-        target_quat_w = target_quat_w.to(device=device, dtype=guide.dtype)
-        q_diff_w = math_utils.quat_mul(target_quat_w, math_utils.quat_inv(body_frame_quat_w))
-        desired_controlled_quat_w = math_utils.quat_mul(q_diff_w, controlled_quat_w)
 
     if action_frame == "root":
         frame_pos_w = robot.data.root_pos_w.to(device=device, dtype=guide.dtype)
@@ -2625,6 +2826,7 @@ def _target_guided_policy_action(
     axial_step_size: float | None,
     lateral_switch_m: float,
     axial_blend_lateral_m: float,
+    orientation_switch_rad: float,
     action_frame: str,
     mode: str,
     device: torch.device,
@@ -2639,6 +2841,7 @@ def _target_guided_policy_action(
             axial_step_size=axial_step_size,
             lateral_switch_m=lateral_switch_m,
             axial_blend_lateral_m=axial_blend_lateral_m,
+            orientation_switch_rad=orientation_switch_rad,
             action_frame=action_frame,
             device=device,
         )
@@ -3297,6 +3500,53 @@ def _insertion_geometry_diagnostics(env, reward_config: dict[str, Any]) -> dict[
         if orientation_gate_std > 0.0:
             orientation_gate = torch.exp(-torch.square(orientation_error / max(orientation_gate_std, 1.0e-9)))
     semantic_gate = lateral_gate if orientation_gate is None else lateral_gate * orientation_gate
+    consistency_body = reward_config.get("consistency_body")
+    consistency_gate = None
+    consistency_axial_error = None
+    consistency_expected_depth = None
+    consistency_signed_depth = None
+    consistency_lateral_error = None
+    if consistency_body:
+        consistency_pos = _body_position_by_name(env, str(consistency_body))
+        if consistency_pos is not None:
+            consistency_geometry = compute_insertion_geometry(
+                body_pos_w=consistency_pos,
+                entrance_pos_w=entrance_w,
+                target_pos_w=target_pos,
+                axis_w=axis_w,
+                lateral_gate_sigma=float(
+                    reward_config.get(
+                        "consistency_lateral_sigma",
+                        reward_config.get("insertion_corridor_sigma", 0.0025),
+                    )
+                    or reward_config.get("insertion_corridor_sigma", 0.0025)
+                ),
+            )
+            current_gap = signed_depth - consistency_geometry.axial_depth
+            attr_name = f"_aic_plug_consistency_reference_gap_{str(consistency_body).replace('/', '_')}"
+            reference_gap = getattr(env, attr_name, None)
+            if reference_gap is None or reference_gap.shape != current_gap.shape:
+                reference_gap = current_gap.detach().clone()
+            reset_mask = getattr(env, "episode_length_buf", None)
+            if reset_mask is not None:
+                reference_gap = torch.where(
+                    reset_mask.to(current_gap.device) <= 1,
+                    current_gap.detach(),
+                    reference_gap.to(current_gap.device),
+                )
+            setattr(env, attr_name, reference_gap.detach().clone())
+            consistency_expected_depth = target_depth - reference_gap.to(target_depth.device)
+            consistency_signed_depth = consistency_geometry.axial_depth
+            consistency_lateral_error = consistency_geometry.lateral_error
+            consistency_axial_error = torch.abs(consistency_signed_depth - consistency_expected_depth)
+            consistency_gate = torch.exp(
+                -torch.square(
+                    consistency_axial_error
+                    / max(float(reward_config.get("consistency_axial_std", 0.0) or 0.0), 1.0e-9)
+                )
+            ) * consistency_geometry.lateral_gate
+            if float(reward_config.get("consistency_axial_std", 0.0) or 0.0) > 0.0:
+                semantic_gate = semantic_gate * consistency_gate
     centered_depth_fraction = depth_fraction * semantic_gate
     out.update(
         {
@@ -3338,6 +3588,22 @@ def _insertion_geometry_diagnostics(env, reward_config: dict[str, Any]) -> dict[
             "semantic_gate_mean": float(semantic_gate.mean().detach().cpu()),
             "semantic_gate_env0": float(semantic_gate[0].detach().cpu()),
             "semantic_gate_by_env": _tensor_1d_list(semantic_gate),
+            "consistency_body": consistency_body,
+            "consistency_gate_mean": None if consistency_gate is None else float(consistency_gate.mean().detach().cpu()),
+            "consistency_gate_env0": None if consistency_gate is None else float(consistency_gate[0].detach().cpu()),
+            "consistency_gate_by_env": None if consistency_gate is None else _tensor_1d_list(consistency_gate),
+            "consistency_signed_depth_m_env0": None
+            if consistency_signed_depth is None
+            else float(consistency_signed_depth[0].detach().cpu()),
+            "consistency_expected_depth_m_env0": None
+            if consistency_expected_depth is None
+            else float(consistency_expected_depth[0].detach().cpu()),
+            "consistency_axial_error_m_env0": None
+            if consistency_axial_error is None
+            else float(consistency_axial_error[0].detach().cpu()),
+            "consistency_lateral_error_m_env0": None
+            if consistency_lateral_error is None
+            else float(consistency_lateral_error[0].detach().cpu()),
             "distance_to_target_m_mean": float(torch.linalg.norm(body_pos - target_pos, dim=1).mean().detach().cpu()),
             "distance_to_target_m_env0": float(torch.linalg.norm(body_pos[0] - target_pos[0]).detach().cpu()),
             "distance_to_target_m_by_env": _tensor_1d_list(torch.linalg.norm(body_pos - target_pos, dim=1)),
@@ -3391,6 +3657,16 @@ def _insertion_geometry_diagnostics(env, reward_config: dict[str, Any]) -> dict[
             "bypass_risk_by_env": _tensor_bool_list(torch.logical_and(signed_depth > 0.0, lateral_error > corridor_sigma)),
         }
     )
+    phase_components = getattr(env.unwrapped, "_aic_cheatcode_phase_reward_components", None)
+    if isinstance(phase_components, dict):
+        phase_out: dict[str, Any] = {}
+        for name, value in phase_components.items():
+            if torch.is_tensor(value):
+                phase_out[f"{name}_mean"] = float(value.mean().detach().cpu())
+                phase_out[f"{name}_env0"] = float(value.reshape(-1)[0].detach().cpu())
+            else:
+                phase_out[name] = value
+        out["cheatcode_phase_reward"] = phase_out
     return out
 
 
@@ -5423,6 +5699,7 @@ def main() -> None:
             "actor_q_weight": args_cli.actor_q_weight,
             "actor_update_end_steps": args_cli.actor_update_end_steps,
             "target_action_guide_mode": args_cli.target_action_guide_mode,
+            "target_action_guide_orientation_switch_rad": float(args_cli.target_action_guide_orientation_switch_rad),
             "target_action_guide_prefix_decay": args_cli.target_action_guide_prefix_decay,
             "ppo_resnet_observation_terms_disabled": True,
             "camera_sensors_enabled": True,
@@ -5758,6 +6035,7 @@ def main() -> None:
                 axial_step_size=float(args_cli.target_action_guide_axial_step_size),
                 lateral_switch_m=float(args_cli.target_action_guide_lateral_switch_m),
                 axial_blend_lateral_m=float(args_cli.target_action_guide_axial_blend_lateral_m),
+                orientation_switch_rad=float(args_cli.target_action_guide_orientation_switch_rad),
                 action_frame=str(args_cli.tcp_action_frame),
                 mode=str(args_cli.target_action_guide_mode),
                 device=device,

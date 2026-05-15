@@ -140,3 +140,85 @@ Next concrete experiment:
 3. Add or inspect collision geometry/contact pair diagnostics for the SFP module and NIC port.
 4. Calibrate `entrance_axis_offset_m` outward until centered axial-6mm reset has low force and does not eject under zero action.
 5. Once stable, rerun the 6 mm lateral curriculum with the best r105 setting, direct actor mode, actor updates delayed, and the insertion action guard enabled.
+
+## CheatCode Phase Reward v1
+
+After stopping the guide-tuning experiments, I implemented a new `cheatcode_insertion_v1` reward preset that encodes the Gazebo `CheatCode` phase logic directly:
+
+- align laterally and orientationally before insertion,
+- keep a safe pre-insertion hover depth while misaligned,
+- make inward axial motion negative outside a tight alignment tube,
+- reward centered depth only inside the tight tube,
+- penalize inside-port lateral/orientation drift and retreat,
+- require axial, lateral, orientation, and SFP body-consistency checks for success.
+
+Changed code:
+
+- `aic_utils/aic_isaac/aic_isaaclab/source/aic_task/aic_task/tasks/manager_based/aic_task/mdp/insertion_geometry.py`
+- `aic_utils/aic_isaac/aic_isaaclab/source/aic_task/aic_task/tasks/manager_based/aic_task/mdp/rewards.py`
+- `aic_utils/aic_isaac/aic_isaaclab/source/aic_task/aic_task/tasks/manager_based/aic_task/aic_task_env_cfg.py`
+- `aic_utils/aic_isaac/aic_isaaclab/scripts/serl/train.py`
+- `aic_utils/aic_isaac/scripts/train_isaac_online_serl.py`
+- `aic_utils/aic_isaac/scripts/audit_insertion_reward_geometry.py`
+- `aic_utils/aic_isaac/test/test_insertion_reward_geometry.py`
+
+Formula audit:
+
+- output: `outputs/reward_audits/cheatcode_insertion_v1/`
+- plots:
+  - `cheatcode_phase_total_theta_0.00.png`
+  - `cheatcode_phase_total_theta_0.05.png`
+  - `cheatcode_phase_total_theta_0.10.png`
+  - `cheatcode_phase_total_theta_0.15.png`
+- summary: `outputs/reward_audits/cheatcode_insertion_v1/summary.json`
+
+Key formula checks:
+
+| Theta | 6 mm lateral inward axial reward | 0.5 mm lateral pre-entry inward reward |
+| --- | ---: | ---: |
+| `0.00 rad` | `-0.500` | `+0.488` |
+| `0.05 rad` | `-0.500` | `+0.110` |
+| `0.10 rad` | `-0.500` | `-0.500` |
+| `0.15 rad` | `-0.500` | `-0.500` |
+
+The first audit with `sigma_theta_insert=0.05` was too strict: exactly `theta=0.05 rad` still made aligned inward motion negative. I changed the default to `0.06 rad`, still within the suggested range, and regenerated the plots above.
+
+Tests:
+
+```text
+.pixi/envs/default/bin/python -m pytest \
+  aic_utils/aic_isaac/test/test_insertion_reward_geometry.py \
+  aic_utils/aic_isaac/test/test_isaac_online_serl.py -q
+
+33 passed
+```
+
+Short Isaac no-learning smoke:
+
+- run: `outputs/train/isaac_online_serl_near_gate/audit/2026-05-15_14-38-58_audit_cheatcode_phase_v1_actonly_30_20260515_143835`
+- command: `serl/train.py --reward_preset cheatcode_insertion_v1 --steps 30 --updates 30 --update_every_steps 100000 --warmup_steps 30 --actor_update_start_steps 100000 --act_only --act_only_actor_mode act_direct --target_reward_body sfp_tip_link --episode_config_dir outputs/analysis/isaac_near_gate_6mm_orientation_gate/episode_configs/episodes`
+- videos:
+  - `videos/env0_center_h264.mp4`
+  - `videos/env0_left_h264.mp4`
+  - `videos/env0_right_h264.mp4`
+
+Smoke metrics:
+
+| Step | Reward | s mm | r mm | theta rad | phase term | success |
+| --- | ---: | ---: | ---: | ---: | ---: | --- |
+| 1 | `-1.017` | `-5.918` | `5.999` | `0.078` | `-0.812` | false |
+| 10 | `-0.874` | `-4.931` | `4.939` | `0.081` | `-0.689` | false |
+| 20 | `-0.818` | `-4.245` | `4.522` | `0.083` | `-0.637` | false |
+| 30 | `-0.795` | `-3.576` | `3.901` | `0.084` | `-0.620` | false |
+
+Interpretation:
+
+- The runtime reward plumbing works.
+- The reward no longer gives a success bonus or positive insertion reward from axial depth alone.
+- At the 6 mm start, the phase reward is negative and dominated by the near-misalignment penalty.
+- As ACT reduces lateral error, the penalty becomes less negative, which is intended.
+- Axial progress remains negative because the tip is still outside the strict alignment tube.
+
+Next recommended short run:
+
+Use `cheatcode_insertion_v1` for an alignment-only diagnostic by explicitly setting axial/corridor terms to zero through the phase reward weights in code or by adding CLI knobs for the subweights, then run 100-300 no-learning or delayed-learning steps. Only turn on learning after the logged `r` and `theta` improve before `s` increases.

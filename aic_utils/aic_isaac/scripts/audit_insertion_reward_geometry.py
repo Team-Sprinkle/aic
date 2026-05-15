@@ -29,13 +29,19 @@ MDP_DIR = (
 if str(MDP_DIR) not in sys.path:
     sys.path.insert(0, str(MDP_DIR))
 
-from insertion_geometry import compute_insertion_geometry, insertion_corridor_reward, signed_axial_progress_reward
+from insertion_geometry import (
+    cheatcode_insertion_phase_reward,
+    compute_insertion_geometry,
+    insertion_corridor_reward,
+    signed_axial_progress_reward,
+)
 
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--run-name", default=None)
     parser.add_argument("--output-root", type=Path, default=Path("outputs/reward_audits"))
+    parser.add_argument("--mode", choices=["corridor", "cheatcode"], default="corridor")
     parser.add_argument(
         "--target-depth-m",
         type=float,
@@ -73,7 +79,9 @@ def _geometry_for_grid(axial: torch.Tensor, lateral: torch.Tensor, *, target_dep
 
 def main() -> int:
     args = parse_args()
-    run_name = args.run_name or datetime.utcnow().strftime("%Y%m%d_%H%M%S_corridor_audit")
+    run_name = args.run_name or (
+        "cheatcode_insertion_v1" if args.mode == "cheatcode" else datetime.utcnow().strftime("%Y%m%d_%H%M%S_corridor_audit")
+    )
     output_dir = args.output_root / run_name
     output_dir.mkdir(parents=True, exist_ok=True)
 
@@ -88,6 +96,89 @@ def main() -> int:
         target_depth=float(args.target_depth_m),
         sigma=float(args.sigma_r),
     )
+    if args.mode == "cheatcode":
+        import matplotlib
+
+        matplotlib.use("Agg")
+        import matplotlib.pyplot as plt
+
+        extent = [
+            0.0,
+            float(args.lateral_max_m) * 1000.0,
+            float(args.axial_min_m) * 1000.0,
+            float(args.axial_max_m) * 1000.0,
+        ]
+        theta_outputs: dict[str, str] = {}
+        theta_summaries: dict[str, dict[str, float | bool]] = {}
+        for theta in (0.0, 0.05, 0.10, 0.15):
+            theta_tensor = torch.full_like(geometry.axial_depth, float(theta))
+            comp = cheatcode_insertion_phase_reward(
+                geometry=geometry,
+                previous_depth=geometry.axial_depth - 0.0005,
+                previous_lateral_error=geometry.lateral_error,
+                orientation_error=theta_tensor,
+                previous_orientation_error=theta_tensor,
+            )
+            total_grid = comp.total.reshape(axial_grid.shape).numpy()
+            axial_grid_reward = comp.axial_progress.reshape(axial_grid.shape).numpy()
+            key = f"theta_{theta:.2f}"
+            fig, ax = plt.subplots(figsize=(8, 6))
+            im = ax.imshow(total_grid, origin="lower", aspect="auto", extent=extent, cmap="coolwarm")
+            ax.axhline(0.0, color="black", linewidth=0.8)
+            ax.axhline(float(args.target_depth_m) * 1000.0, color="black", linewidth=0.8, linestyle="--")
+            ax.set_xlabel("lateral error r (mm)")
+            ax.set_ylabel("axial depth s (mm)")
+            ax.set_title(f"CheatCode Phase Reward, theta={theta:.2f} rad")
+            fig.colorbar(im, ax=ax)
+            fig.tight_layout()
+            out_path = output_dir / f"cheatcode_phase_total_{key}.png"
+            fig.savefig(out_path, dpi=160)
+            plt.close(fig)
+            theta_outputs[key] = str(out_path)
+            start_like = cheatcode_insertion_phase_reward(
+                geometry=_geometry_for_grid(
+                    torch.tensor([-0.006], dtype=torch.float32),
+                    torch.tensor([0.006], dtype=torch.float32),
+                    target_depth=float(args.target_depth_m),
+                    sigma=float(args.sigma_r),
+                ),
+                previous_depth=torch.tensor([-0.0065], dtype=torch.float32),
+                previous_lateral_error=torch.tensor([0.006], dtype=torch.float32),
+                orientation_error=torch.tensor([theta], dtype=torch.float32),
+                previous_orientation_error=torch.tensor([theta], dtype=torch.float32),
+            )
+            aligned = cheatcode_insertion_phase_reward(
+                geometry=_geometry_for_grid(
+                    torch.tensor([-0.004], dtype=torch.float32),
+                    torch.tensor([0.0005], dtype=torch.float32),
+                    target_depth=float(args.target_depth_m),
+                    sigma=float(args.sigma_r),
+                ),
+                previous_depth=torch.tensor([-0.0045], dtype=torch.float32),
+                previous_lateral_error=torch.tensor([0.0005], dtype=torch.float32),
+                orientation_error=torch.tensor([theta], dtype=torch.float32),
+                previous_orientation_error=torch.tensor([theta], dtype=torch.float32),
+            )
+            theta_summaries[key] = {
+                "start_like_inward_axial_reward": float(start_like.axial_progress[0]),
+                "aligned_preentry_inward_axial_reward": float(aligned.axial_progress[0]),
+                "inward_at_6mm_lateral_penalized": bool(start_like.axial_progress[0] < 0.0),
+                "aligned_inward_positive": bool(aligned.axial_progress[0] > 0.0),
+                "max_total_reward": float(np.max(total_grid)),
+                "min_total_reward": float(np.min(total_grid)),
+                "inward_reward_negative_cells": int(np.sum(axial_grid_reward < 0.0)),
+                "inward_reward_positive_cells": int(np.sum(axial_grid_reward > 0.0)),
+            }
+        summary = {
+            "mode": "cheatcode",
+            "settings": {key: str(value) if isinstance(value, Path) else value for key, value in vars(args).items()},
+            "outputs": theta_outputs,
+            "theta_summaries": theta_summaries,
+        }
+        (output_dir / "summary.json").write_text(json.dumps(summary, indent=2, sort_keys=True), encoding="utf-8")
+        print(json.dumps(summary, indent=2, sort_keys=True))
+        return 0
+
     corridor = insertion_corridor_reward(geometry, bypass_penalty_scale=float(args.bypass_penalty_scale))
     forward_progress = signed_axial_progress_reward(
         previous_depth=geometry.axial_depth - 0.0005,
