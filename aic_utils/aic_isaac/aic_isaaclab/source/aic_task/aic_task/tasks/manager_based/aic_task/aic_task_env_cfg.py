@@ -706,6 +706,20 @@ class RewardsCfg:
             "target_orientation_offset": None,
         },
     )
+    target_insertion_corridor = RewTerm(
+        func=mdp.body_to_object_insertion_corridor,
+        weight=0.0,
+        params={
+            "body_cfg": SceneEntityCfg("robot", body_names=MISSING),
+            "target_cfg": SceneEntityCfg("sc_port"),
+            "insertion_axis": 0,
+            "lateral_gate_sigma": 0.0025,
+            "bypass_penalty_scale": 1.0,
+            "target_position_offset": (0.093, 0.140, 0.020),
+            "body_position_offset": (0.0, 0.0, 0.0),
+            "target_orientation_offset": None,
+        },
+    )
     force_delta_penalty = RewTerm(
         func=mdp.force_delta_penalty,
         weight=0.0,
@@ -1027,6 +1041,7 @@ class AICTaskEnvCfg(ManagerBasedRLEnvCfg):
             "target_success_once_bonus",
             "target_lateral_error",
             "target_axial_progress",
+            "target_insertion_corridor",
         ):
             term = getattr(self.rewards, term_name)
             term.params["target_cfg"].name = target_scene_name
@@ -1069,6 +1084,9 @@ class AICTaskEnvCfg(ManagerBasedRLEnvCfg):
         self.rewards.target_lateral_error.weight = lateral_weight * reward_weight_multiplier
         self.rewards.target_axial_progress.weight = float(
             os.environ.get("AIC_ISAAC_INSERTION_AXIAL_PROGRESS_WEIGHT", "0.0")
+        ) * reward_weight_multiplier
+        self.rewards.target_insertion_corridor.weight = float(
+            os.environ.get("AIC_ISAAC_INSERTION_CORRIDOR_WEIGHT", "0.0")
         ) * reward_weight_multiplier
         self.rewards.force_delta_penalty.weight = force_delta_weight * reward_weight_multiplier
 

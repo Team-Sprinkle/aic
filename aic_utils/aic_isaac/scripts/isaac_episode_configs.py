@@ -362,7 +362,10 @@ def _apply_start_near_gate(
         lateral_dir = _perpendicular(axis, rng)
         reference_raw = start.get("reference_body_position") or start.get("reference_tcp_position")
         if reference_raw is None:
-            reference = _vadd(gate_position, _vadd(_vscale(axis, axial), _vscale(lateral_dir, lateral)))
+            # ``axis`` points from the entrance into the port.  Near-gate
+            # resets should start outside the entrance plane and then insert
+            # along +axis, so the axial offset is opposite the insertion axis.
+            reference = _vadd(gate_position, _vadd(_vscale(axis, -axial), _vscale(lateral_dir, lateral)))
         else:
             if not isinstance(reference_raw, (list, tuple)) or len(reference_raw) != 3:
                 raise ValueError("scene.start_near_gate.reference_body_position must be a 3-value list")

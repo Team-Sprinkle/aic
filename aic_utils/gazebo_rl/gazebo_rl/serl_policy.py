@@ -396,6 +396,7 @@ class TorchScriptACTAdapterActor(nn.Module):
         adapter_delta_clip: float | None,
         action_clip: float | None,
         adapter_activation: str = "relu",
+        actor_mode: str = "act_adapter",
         state_encoding: str = "none",
         state_encoding_indices: list[int] | tuple[int, ...] = (),
         state_encoding_num_bands: int = 4,
@@ -422,6 +423,9 @@ class TorchScriptACTAdapterActor(nn.Module):
         self.adapter_scale = float(adapter_scale)
         self.adapter_delta_clip = None if adapter_delta_clip is None else float(adapter_delta_clip)
         self.action_clip = None if action_clip is None else float(action_clip)
+        self.actor_mode = str(actor_mode)
+        if self.actor_mode not in {"act_adapter", "act_direct"}:
+            raise ValueError(f"Unsupported actor_mode: {self.actor_mode!r}")
         self.state_encoder, encoded_state_dim = _make_state_encoder(
             state_dim=self.state_dim,
             state_encoding=state_encoding,
@@ -470,7 +474,7 @@ class TorchScriptACTAdapterActor(nn.Module):
         base_action = base_action[:, : self.action_horizon, :].reshape(obs["state"].shape[0], -1)
         encoded_state = self.state_encoder(obs["state"])
         raw_delta_action = self.adapter(torch.cat([encoded_state, base_action], dim=-1))
-        if self.adapter_delta_clip is not None and self.adapter_delta_clip > 0.0:
+        if self.actor_mode == "act_adapter" and self.adapter_delta_clip is not None and self.adapter_delta_clip > 0.0:
             delta_action = raw_delta_action.clamp(-self.adapter_delta_clip, self.adapter_delta_clip)
         else:
             delta_action = raw_delta_action
@@ -520,6 +524,7 @@ def _load_adapter_actor(
         adapter_delta_clip=adapter_delta_clip,
         action_clip=action_clip,
         adapter_activation=str(offline_cfg.get("adapter_activation", "relu")),
+        actor_mode=str(offline_cfg.get("actor_mode", "act_adapter")),
         state_encoding=str(offline_cfg.get("state_encoding", "none")),
         state_encoding_indices=tuple(int(i) for i in offline_cfg.get("state_encoding_indices", ())),
         state_encoding_num_bands=int(offline_cfg.get("state_encoding_num_bands", 4)),

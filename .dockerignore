@@ -1,1 +1,13 @@
 .pixi
+.git
+.pytest_cache
+outputs
+notes
+__pycache__
+**/__pycache__
+*.pyc
+AGENTS.md
+aic_utils/aic_isaac
+aic_utils/aic_teleoperation
+aic_utils/aic_training_interfaces
+aic_utils/mujoco_task

@@ -1,0 +1,41 @@
+name: aic-submission-local
+services:
+  eval:
+    image: ghcr.io/intrinsic-dev/aic/aic_eval
+    build:
+      dockerfile: docker/aic_eval/Dockerfile
+      context: ..
+    command: gazebo_gui:=false launch_rviz:=false ground_truth:=false start_aic_engine:=true shutdown_on_aic_engine_exit:=true model_discovery_timeout_seconds:=600
+    gpus: all
+    networks:
+      - default
+    environment:
+      AIC_EVAL_PASSWD: CHANGE_IN_PROD
+      AIC_MODEL_PASSWD: CHANGE_IN_PROD
+  model:
+    image: aic-submission-candidate:local
+    build:
+      dockerfile: docker/aic_submission/Dockerfile
+      context: ..
+    gpus: all
+    networks:
+      - default
+    environment:
+      RMW_IMPLEMENTATION: rmw_zenoh_cpp
+      ZENOH_ROUTER_CHECK_ATTEMPTS: -1
+      AIC_ROUTER_ADDR: eval:7447
+      AIC_MODEL_PASSWD: CHANGE_IN_PROD
+      AIC_SERL_CHECKPOINT: /opt/aic_policy/submission_candidate/online_serl/checkpoint_000300.pt
+      AIC_SERL_ACT_TORCHSCRIPT: /opt/aic_policy/submission_candidate/act_policy_ts_175000_cuda0.pt
+      AIC_SERL_DEVICE: cuda
+      AIC_SERL_CONTROL_HZ: "20"
+      AIC_SERL_N_ACTION_STEPS: "4"
+      AIC_SERL_COMMAND_MODE: delta_pose
+      AIC_SERL_COMMAND_FRAME: gripper/tcp
+      AIC_SERL_MAX_TRANSLATION_DELTA: "0.0007"
+      AIC_SERL_MAX_ROTATION_DELTA: "0.0001"
+      AIC_SERL_TRANSLATION_DEADBAND: "0.0"
+      AIC_SERL_ROTATION_DEADBAND: "0.0"
+networks:
+  default:
+    internal: true

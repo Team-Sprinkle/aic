@@ -25,3 +25,5 @@ outputs
 *.db3
 *.mcap
 pixi.lock
+generated_videos/
+isaac_visible_debug/

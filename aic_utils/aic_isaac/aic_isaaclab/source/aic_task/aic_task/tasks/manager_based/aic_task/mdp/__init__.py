@@ -27,6 +27,7 @@ from .rewards import (  # noqa: F401
     body_to_object_distance_progress,
     body_to_object_distance_tanh,
     body_to_object_axial_progress,
+    body_to_object_insertion_corridor,
     body_to_object_lateral_error,
     body_to_object_lateral_progress,
     body_to_object_motion_projection,
