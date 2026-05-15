@@ -9,6 +9,7 @@ import glob
 import json
 import math
 import os
+import random
 import shlex
 import signal
 import subprocess
@@ -19,10 +20,13 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
+import yaml
+
 
 REPO = Path(__file__).resolve().parents[3]
 INNER_TRAIN = "aic/aic_utils/aic_isaac/aic_isaaclab/scripts/serl/train.py"
 AUDIT_SCRIPT = REPO / "aic_utils/aic_isaac/scripts/audit_insertion_reward_geometry.py"
+EPISODE_CONFIG_SCRIPT = REPO / "aic_utils/aic_isaac/scripts/isaac_episode_configs.py"
 DEFAULT_ACT = REPO / "outputs/train/clean_sfp_sc/act/bc/20260510_clean_act_nact8_400k/act_policy_ts_175000_cuda0.pt"
 DEFAULT_EPISODES = REPO / "outputs/analysis/isaac_near_gate_6mm_orientation_gate/episode_configs/episodes"
 
@@ -45,6 +49,26 @@ class Running:
     log_path: Path
     process: subprocess.Popen
     launched_at: float
+
+
+@dataclass(frozen=True)
+class CurriculumStage:
+    key: str
+    label: str
+    axial_min_m: float
+    axial_max_m: float
+    lateral_min_m: float
+    lateral_max_m: float
+    reward_preset: str
+    hover_weight: float
+    hover_depth: float
+    axial_weight: float
+    corridor_weight: float
+    inside_weight: float
+    retreat_weight: float
+    alignment_r_pass_m: float
+    alignment_theta_pass_rad: float
+    max_lateral_explosion_m: float
 
 
 def _now() -> str:
@@ -89,6 +113,252 @@ def _load_json(path: Path) -> dict[str, Any]:
         return json.loads(path.read_text(encoding="utf-8"))
     except Exception:
         return {}
+
+
+def _load_yaml(path: Path) -> dict[str, Any]:
+    try:
+        data = yaml.safe_load(path.read_text(encoding="utf-8"))
+    except Exception:
+        return {}
+    return data if isinstance(data, dict) else {}
+
+
+def _safe_dump_yaml(data: dict[str, Any]) -> str:
+    return yaml.safe_dump(data, sort_keys=False)
+
+
+def _stage_slug(stage: CurriculumStage) -> str:
+    return stage.label.replace(" ", "_").replace("/", "_")
+
+
+def _linspace_samples(min_v: float, max_v: float, count: int) -> list[float]:
+    if count <= 1 or abs(max_v - min_v) < 1.0e-12:
+        return [float((min_v + max_v) * 0.5)]
+    return [float(min_v + (max_v - min_v) * i / (count - 1)) for i in range(count)]
+
+
+def _episode_signed_geometry(episode: dict[str, Any]) -> dict[str, float]:
+    scene = episode.get("scene") or {}
+    target = scene.get("target") or {}
+    start = scene.get("start_near_gate") or {}
+    entrance = (target.get("entrance_pose_world") or {}).get("position")
+    tip = start.get("reference_tip_center_position_world") or start.get("reference_reward_body_start_position_world")
+    axis = target.get("insertion_axis_world")
+    seated = (target.get("target_pose_world") or {}).get("position")
+    if not (isinstance(entrance, list) and isinstance(tip, list) and isinstance(axis, list) and isinstance(seated, list)):
+        return {}
+    delta = [float(tip[i]) - float(entrance[i]) for i in range(3)]
+    axis_f = [float(v) for v in axis]
+    signed_s = sum(delta[i] * axis_f[i] for i in range(3))
+    lateral_sq = max(0.0, sum(v * v for v in delta) - signed_s * signed_s)
+    target_delta = [float(seated[i]) - float(entrance[i]) for i in range(3)]
+    target_depth = sum(target_delta[i] * axis_f[i] for i in range(3))
+    return {
+        "s_start_m": signed_s,
+        "r_start_m": math.sqrt(lateral_sq),
+        "target_depth_m": target_depth,
+        "requested_axial_m": _float(start.get("axial_distance_m")) or float("nan"),
+        "requested_lateral_m": _float(start.get("lateral_distance_m")) or float("nan"),
+    }
+
+
+def _curriculum_stage_specs(args: argparse.Namespace) -> list[CurriculumStage]:
+    return [
+        CurriculumStage(
+            key="stage_a",
+            label="stage_a_20mm_align",
+            axial_min_m=float(args.stage_a_axial_m),
+            axial_max_m=float(args.stage_a_axial_m),
+            lateral_min_m=float(args.stage_a_lateral_min_m),
+            lateral_max_m=float(args.stage_a_lateral_max_m),
+            reward_preset="cheatcode_alignment_v1",
+            hover_weight=0.0,
+            hover_depth=-0.020,
+            axial_weight=0.0,
+            corridor_weight=0.0,
+            inside_weight=0.0,
+            retreat_weight=0.0,
+            alignment_r_pass_m=0.0020,
+            alignment_theta_pass_rad=0.08,
+            max_lateral_explosion_m=0.030,
+        ),
+        CurriculumStage(
+            key="stage_b",
+            label="stage_b_12mm_approach",
+            axial_min_m=float(args.stage_b_axial_m),
+            axial_max_m=float(args.stage_b_axial_m),
+            lateral_min_m=float(args.stage_b_lateral_min_m),
+            lateral_max_m=float(args.stage_b_lateral_max_m),
+            reward_preset="cheatcode_alignment_v1",
+            hover_weight=0.05,
+            hover_depth=-0.009,
+            axial_weight=0.0,
+            corridor_weight=0.0,
+            inside_weight=0.0,
+            retreat_weight=0.0,
+            alignment_r_pass_m=0.0018,
+            alignment_theta_pass_rad=0.08,
+            max_lateral_explosion_m=0.030,
+        ),
+        CurriculumStage(
+            key="stage_c",
+            label="stage_c_6_8mm_entry",
+            axial_min_m=float(args.stage_c_axial_min_m),
+            axial_max_m=float(args.stage_c_axial_max_m),
+            lateral_min_m=float(args.stage_c_lateral_min_m),
+            lateral_max_m=float(args.stage_c_lateral_max_m),
+            reward_preset="cheatcode_insertion_v1",
+            hover_weight=0.10,
+            hover_depth=-0.004,
+            axial_weight=0.10,
+            corridor_weight=0.25,
+            inside_weight=0.10,
+            retreat_weight=0.10,
+            alignment_r_pass_m=0.0015,
+            alignment_theta_pass_rad=0.06,
+            max_lateral_explosion_m=0.010,
+        ),
+        CurriculumStage(
+            key="stage_d",
+            label="stage_d_3_6mm_final",
+            axial_min_m=float(args.stage_d_axial_min_m),
+            axial_max_m=float(args.stage_d_axial_max_m),
+            lateral_min_m=float(args.stage_d_lateral_min_m),
+            lateral_max_m=float(args.stage_d_lateral_max_m),
+            reward_preset="cheatcode_insertion_v1",
+            hover_weight=0.10,
+            hover_depth=-0.003,
+            axial_weight=0.25,
+            corridor_weight=1.00,
+            inside_weight=0.20,
+            retreat_weight=0.20,
+            alignment_r_pass_m=0.0010,
+            alignment_theta_pass_rad=0.06,
+            max_lateral_explosion_m=0.010,
+        ),
+    ]
+
+
+def _stage_reward_args(stage: CurriculumStage) -> dict[str, Any]:
+    return {
+        "reward_preset": stage.reward_preset,
+        "target_reward_cheatcode_hover_depth": stage.hover_depth,
+        "target_reward_cheatcode_hover_weight": stage.hover_weight,
+        "target_reward_cheatcode_axial_progress_weight": stage.axial_weight,
+        "target_reward_cheatcode_corridor_weight": stage.corridor_weight,
+        "target_reward_cheatcode_inside_alignment_weight": stage.inside_weight,
+        "target_reward_cheatcode_retreat_weight": stage.retreat_weight,
+        "target_reward_consistency_body": "auto",
+        "target_reward_consistency_axial_std": 0.004,
+        "target_reward_consistency_lateral_sigma": 0.003,
+        "target_success_consistency_axial_threshold": 0.001,
+        "target_success_consistency_lateral_threshold": 0.0015,
+    }
+
+
+def _make_stage_request(axial: float, lateral: float, seed: int) -> dict[str, Any]:
+    return {
+        "task_family": "sfp_to_nic",
+        "generation": {"target_accepted_trajectories": 1, "seed": seed},
+        "scene": {
+            "target": {"entrance_axis_offset_m": -0.0009, "seated_depth_m": 0.008},
+            "start_near_gate": {
+                "axial_distance_m": round(float(axial), 6),
+                "lateral_distance_m": round(float(lateral), 6),
+                "min_clearance_m": 0.0,
+                "reset_body_name": "gripper_tcp",
+                "reset_body_offset_from_reference_world": [-0.007149, 0.002556, 0.059066],
+                "reset_body_orientation_wxyz": [0.026548, 0.013188, 0.991236, 0.128732],
+            },
+            "nic_cards": {"count": 1, "target_card": 0, "target_port": "sfp_port_0"},
+        },
+    }
+
+
+def _materialize_curriculum_stage(args: argparse.Namespace, stage: CurriculumStage) -> dict[str, Any]:
+    base = REPO / f"outputs/analysis/curriculum_insertion_{datetime.now(timezone.utc).strftime('%Y%m%d')}"
+    output_dir = base / _stage_slug(stage) / "episode_configs"
+    episodes_dir = output_dir / "episodes"
+    if args.reuse_existing_stage_configs and episodes_dir.exists() and list(episodes_dir.glob("episode_*.yaml")):
+        return _validate_stage_episodes(stage, episodes_dir, output_dir)
+
+    requests_dir = output_dir / "requests"
+    requests_dir.mkdir(parents=True, exist_ok=True)
+    for old in requests_dir.glob("*.yaml"):
+        old.unlink()
+
+    count = max(1, int(args.episodes_per_stage))
+    axial_values = _linspace_samples(stage.axial_min_m, stage.axial_max_m, count)
+    lateral_values = _linspace_samples(stage.lateral_min_m, stage.lateral_max_m, count)
+    rng = random.Random(1000 + sum(ord(c) for c in stage.key))
+    request_paths: list[str] = []
+    for idx in range(count):
+        axial = axial_values[idx % len(axial_values)]
+        lateral = lateral_values[idx % len(lateral_values)]
+        if count > 2:
+            # Shuffle lateral side direction through the generator RNG while keeping
+            # requested magnitudes deterministic and easy to audit.
+            seed = rng.randint(1, 10_000_000)
+        else:
+            seed = 1000 + idx
+        req = _make_stage_request(axial, lateral, seed)
+        path = requests_dir / f"{stage.key}_{idx + 1:03d}_a{round(axial * 1000):03d}_l{round(lateral * 1000):03d}.yaml"
+        path.write_text(_safe_dump_yaml(req), encoding="utf-8")
+        request_paths.append(str(path))
+
+    output_dir.mkdir(parents=True, exist_ok=True)
+    cmd = [
+        _repo_python(),
+        str(EPISODE_CONFIG_SCRIPT),
+        "--multi",
+        "--output-dir", str(output_dir),
+        "--max-gpus", str(max(1, len(args.gpus))),
+    ]
+    for path in request_paths:
+        cmd.extend(["--input-yaml", path])
+    rc = _run_checked(cmd, log=output_dir / "materialize.log")
+    if rc != 0:
+        raise RuntimeError(f"Failed to materialize {stage.key} episode configs; see {output_dir / 'materialize.log'}")
+    return _validate_stage_episodes(stage, episodes_dir, output_dir)
+
+
+def _validate_stage_episodes(stage: CurriculumStage, episodes_dir: Path, output_dir: Path) -> dict[str, Any]:
+    rows: list[dict[str, Any]] = []
+    failures: list[str] = []
+    for ep_path in sorted(episodes_dir.glob("episode_*.yaml")):
+        episode = _load_yaml(ep_path)
+        geom = _episode_signed_geometry(episode)
+        if not geom:
+            failures.append(f"{ep_path.name}: missing geometry")
+            continue
+        row = {"episode": ep_path.name, **geom}
+        rows.append(row)
+        s = geom["s_start_m"]
+        r = geom["r_start_m"]
+        if not (-stage.axial_max_m - 0.001 <= s <= -stage.axial_min_m + 0.001):
+            failures.append(f"{ep_path.name}: s_start {s:.6f} outside expected negative axial range")
+        if not (stage.lateral_min_m - 0.001 <= r <= stage.lateral_max_m + 0.001):
+            failures.append(f"{ep_path.name}: r_start {r:.6f} outside expected lateral range")
+        if not (0.003 <= geom["target_depth_m"] <= 0.030):
+            failures.append(f"{ep_path.name}: target depth {geom['target_depth_m']:.6f} invalid")
+    _write_csv(output_dir / "stage_geometry_validation.csv", rows)
+    summary = {
+        "stage": stage.key,
+        "label": stage.label,
+        "episodes_dir": str(episodes_dir),
+        "episode_count": len(rows),
+        "failures": failures,
+        "s_start_min_m": min((r["s_start_m"] for r in rows), default=None),
+        "s_start_max_m": max((r["s_start_m"] for r in rows), default=None),
+        "r_start_min_m": min((r["r_start_m"] for r in rows), default=None),
+        "r_start_max_m": max((r["r_start_m"] for r in rows), default=None),
+        "target_depth_min_m": min((r["target_depth_m"] for r in rows), default=None),
+        "target_depth_max_m": max((r["target_depth_m"] for r in rows), default=None),
+    }
+    (output_dir / "stage_geometry_summary.json").write_text(json.dumps(summary, indent=2, sort_keys=True), encoding="utf-8")
+    if failures:
+        raise RuntimeError(f"{stage.key} geometry validation failed: {failures[:3]}")
+    return summary
 
 
 def _iter_metrics(metrics_path: Path) -> list[dict[str, Any]]:
@@ -274,6 +544,7 @@ def _write_csv(path: Path, rows: list[dict[str, Any]]) -> None:
 
 
 def _base_inner_args(args: argparse.Namespace, exp: Experiment, run_name: str, output_dir: Path) -> list[str]:
+    episode_config_dir = Path(exp.args.get("episode_config_dir") or args.episode_config_dir)
     cmd = [
         INNER_TRAIN,
         "--headless",
@@ -313,7 +584,7 @@ def _base_inner_args(args: argparse.Namespace, exp: Experiment, run_name: str, o
         "--target_reward_orientation_axis_local", *[
             str(v) for v in exp.args.get("target_reward_orientation_axis_local", (0.0, 0.0, 1.0))
         ],
-        "--episode_config_dir", _rel_to_container(args.episode_config_dir),
+        "--episode_config_dir", _rel_to_container(episode_config_dir),
         "--near_gate_reset_max_iterations", str(exp.args.get("near_gate_reset_max_iterations", 8)),
         "--near_gate_reset_position_tolerance", str(exp.args.get("near_gate_reset_position_tolerance", 0.002)),
         "--near_gate_reset_orientation_tolerance", str(exp.args.get("near_gate_reset_orientation_tolerance", 0.05)),
@@ -351,10 +622,20 @@ def _base_inner_args(args: argparse.Namespace, exp: Experiment, run_name: str, o
     else:
         cmd.append("--no-insertion_action_guard")
     for key, flag in [
+        ("target_reward_cheatcode_lateral_progress_weight", "--target_reward_cheatcode_lateral_progress_weight"),
+        ("target_reward_cheatcode_orientation_progress_weight", "--target_reward_cheatcode_orientation_progress_weight"),
+        ("target_reward_cheatcode_near_misaligned_weight", "--target_reward_cheatcode_near_misaligned_weight"),
+        ("target_reward_cheatcode_hover_weight", "--target_reward_cheatcode_hover_weight"),
+        ("target_reward_cheatcode_hover_depth", "--target_reward_cheatcode_hover_depth"),
         ("target_reward_cheatcode_axial_progress_weight", "--target_reward_cheatcode_axial_progress_weight"),
         ("target_reward_cheatcode_corridor_weight", "--target_reward_cheatcode_corridor_weight"),
         ("target_reward_cheatcode_inside_alignment_weight", "--target_reward_cheatcode_inside_alignment_weight"),
         ("target_reward_cheatcode_retreat_weight", "--target_reward_cheatcode_retreat_weight"),
+        ("target_reward_consistency_body", "--target_reward_consistency_body"),
+        ("target_reward_consistency_axial_std", "--target_reward_consistency_axial_std"),
+        ("target_reward_consistency_lateral_sigma", "--target_reward_consistency_lateral_sigma"),
+        ("target_success_consistency_axial_threshold", "--target_success_consistency_axial_threshold"),
+        ("target_success_consistency_lateral_threshold", "--target_success_consistency_lateral_threshold"),
     ]:
         if key in exp.args:
             cmd.extend([flag, str(exp.args[key])])
@@ -453,11 +734,27 @@ def _run_wave(
             if code is None and run_dir is not None:
                 metrics = _metrics_for_run(run_dir)
                 if metrics.get("status") == "ok":
+                    lateral_limit = float(item.exp.args.get("max_lateral_explosion_m", 0.12))
                     if metrics.get("max_abs_q") is not None and float(metrics["max_abs_q"]) > 100.0:
                         print(f"[pipeline] early-stop Q explosion: {item.exp.name}", flush=True)
                         _terminate(item)
-                    if metrics.get("final_r_m") is not None and float(metrics["final_r_m"]) > 0.12:
+                    if metrics.get("final_r_m") is not None and float(metrics["final_r_m"]) > lateral_limit:
                         print(f"[pipeline] early-stop lateral explosion: {item.exp.name}", flush=True)
+                        _terminate(item)
+                    if metrics.get("force_clipped_fraction") is not None and float(metrics["force_clipped_fraction"]) > 0.8:
+                        print(f"[pipeline] early-stop sustained force clipping: {item.exp.name}", flush=True)
+                        _terminate(item)
+                    max_s_allowed = _float(item.exp.args.get("max_s_allowed_m"))
+                    if (
+                        max_s_allowed is not None
+                        and metrics.get("max_s_m") is not None
+                        and float(metrics["max_s_m"]) > max_s_allowed
+                    ):
+                        print(
+                            f"[pipeline] early-stop stage axial guard: {item.exp.name} "
+                            f"max_s={metrics['max_s_m']} limit={max_s_allowed}",
+                            flush=True,
+                        )
                         _terminate(item)
             if code is not None:
                 running.remove(item)
@@ -473,6 +770,7 @@ def _run_wave(
                         "returncode": code,
                         "log_path": str(item.log_path),
                         "run_name": item.exp.args["run_name"],
+                        "episode_config_dir": str(item.exp.args.get("episode_config_dir", args.episode_config_dir)),
                         "videos": ";".join(videos),
                         "command": item.exp.args.get("command"),
                         "exp_args_json": json.dumps(
@@ -496,7 +794,13 @@ def _run_wave(
     return results
 
 
-def _guide_candidates(steps: int) -> list[Experiment]:
+def _guide_candidates(
+    steps: int,
+    *,
+    stage_name: str = "stage2",
+    episode_config_dir: Path | None = None,
+    stage_args: dict[str, Any] | None = None,
+) -> list[Experiment]:
     specs = [
         # step, rot_step, rot_sign, lateral_switch, orientation_switch, trans_clip,
         # rot_clip, rotate_while_lateral, fix_ik_xy_sign, insertion_guard, hover_depth
@@ -513,13 +817,15 @@ def _guide_candidates(steps: int) -> list[Experiment]:
     for idx, (step, rot, rot_sign, lat_switch, ori_switch, tclip, rclip, rotate, fix_sign, guard, hover_depth) in enumerate(specs, start=1):
         out.append(
             Experiment(
-                stage="stage2",
+                stage=stage_name,
                 name=f"guide_w1_{idx}",
                 steps=steps,
                 updates=steps,
                 args={
+                    **(stage_args or {}),
                     "seed": 100 + idx,
-                    "reward_preset": "cheatcode_alignment_v1",
+                    "episode_config_dir": episode_config_dir,
+                    "reward_preset": (stage_args or {}).get("reward_preset", "cheatcode_alignment_v1"),
                     "act_only_actor_mode": "act_direct",
                     "target_action_guide_collect_blend": 1.0,
                     "target_action_guide_collect_steps": steps,
@@ -529,7 +835,10 @@ def _guide_candidates(steps: int) -> list[Experiment]:
                     "target_action_guide_lateral_switch_m": lat_switch,
                     "target_action_guide_orientation_switch_rad": ori_switch,
                     "target_action_guide_rotate_while_lateral": rotate,
-                    "target_action_guide_preinsert_hover_depth": hover_depth,
+                    "target_action_guide_preinsert_hover_depth": (stage_args or {}).get(
+                        "target_action_guide_preinsert_hover_depth",
+                        hover_depth,
+                    ),
                     "fix_isaac_ik_xy_sign": fix_sign,
                     "insertion_action_guard": guard,
                     "tcp_translation_action_clip": tclip,
@@ -702,7 +1011,39 @@ def _passed_alignment(row: dict[str, Any]) -> bool:
     )
 
 
-def _write_report(path: Path, args: argparse.Namespace, rows: list[dict[str, Any]]) -> None:
+def _passed_curriculum_stage(row: dict[str, Any], stage: CurriculumStage) -> bool:
+    if int(_float(row.get("returncode")) or 0) != 0:
+        return False
+    best_r = _float(row.get("best_r_m"))
+    best_theta = _float(row.get("best_theta_rad"))
+    initial_r = _float(row.get("initial_r_m"))
+    final_r = _float(row.get("final_r_m"))
+    max_s = _float(row.get("max_s_m"))
+    bad_r = _float(row.get("bad_delta_s_r_frac")) or 0.0
+    force_clip = _float(row.get("force_clipped_fraction")) or 0.0
+    if best_r is None or best_theta is None or initial_r is None or final_r is None or max_s is None:
+        return False
+    base_ok = (
+        best_r <= stage.alignment_r_pass_m
+        and best_theta <= stage.alignment_theta_pass_rad
+        and final_r < initial_r
+        and force_clip < 0.5
+    )
+    if stage.key in {"stage_a", "stage_b"}:
+        return bool(base_ok and max_s < -0.001 and bad_r < 0.75)
+    if stage.key == "stage_c":
+        return bool(base_ok and (bad_r < 0.20 or max_s < 0.0))
+    success_count = int(_float(row.get("success_candidate_count")) or 0)
+    return bool(base_ok and (success_count > 0 or (max_s > 0.0 and bad_r < 0.10)))
+
+
+def _write_report(
+    path: Path,
+    args: argparse.Namespace,
+    rows: list[dict[str, Any]],
+    *,
+    stage_summaries: list[dict[str, Any]] | None = None,
+) -> None:
     by_stage: dict[str, list[dict[str, Any]]] = {}
     for row in rows:
         by_stage.setdefault(str(row.get("stage")), []).append(row)
@@ -715,6 +1056,7 @@ def _write_report(path: Path, args: argparse.Namespace, rows: list[dict[str, Any
         f"GPUs: `{','.join(args.gpus)}`",
         f"ACT: `{args.act_torchscript}`",
         f"Episodes: `{args.episode_config_dir}`",
+        f"Curriculum mode: `{getattr(args, 'curriculum_mode', 'single')}`",
         "",
         "## Summary",
         "",
@@ -727,6 +1069,22 @@ def _write_report(path: Path, args: argparse.Namespace, rows: list[dict[str, Any
         "| stage | name | score | final r mm | best r mm | final theta | max s mm | bad inward r frac | force clip frac | run |",
         "| --- | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | --- |",
     ]
+    if stage_summaries:
+        lines.extend(["", "## Curriculum Episode Configs", ""])
+        for summary in stage_summaries:
+            s_min = _float(summary.get("s_start_min_m"))
+            s_max = _float(summary.get("s_start_max_m"))
+            r_min = _float(summary.get("r_start_min_m"))
+            r_max = _float(summary.get("r_start_max_m"))
+            def fmt_mm(value: float | None) -> str:
+                return "" if value is None else f"{value * 1000.0:.2f}"
+            lines.append(
+                f"- `{summary.get('stage')}` episodes: `{summary.get('episodes_dir')}` "
+                f"({summary.get('episode_count')} eps, "
+                f"s {fmt_mm(s_min)}..{fmt_mm(s_max)} mm, "
+                f"r {fmt_mm(r_min)}..{fmt_mm(r_max)} mm)"
+            )
+        lines.append("")
     for row in sorted(rows, key=lambda r: (str(r.get("stage")), -float(r.get("alignment_score") or -1e9))):
         def mm(key: str) -> str:
             v = _float(row.get(key))
@@ -763,6 +1121,205 @@ def _write_report(path: Path, args: argparse.Namespace, rows: list[dict[str, Any
     path.write_text("\n".join(lines), encoding="utf-8")
 
 
+def _zero_action_experiments_for_stage(args: argparse.Namespace, stage: CurriculumStage, episodes_dir: Path) -> list[Experiment]:
+    base = {
+        **_stage_reward_args(stage),
+        "episode_config_dir": episodes_dir,
+        "max_lateral_explosion_m": stage.max_lateral_explosion_m,
+        "act_only_actor_mode": "act_direct",
+        "target_action_guide_collect_blend": 0.0,
+        "target_action_guide_collect_steps": 0,
+        "target_action_guide_weight": 0.0,
+        "tcp_translation_action_clip": 0.0,
+        "tcp_rotation_action_clip": 0.0,
+        "diagnostics_every": 1,
+        "image_log_every": 1,
+        "max_logged_image_steps": min(int(args.stage1_steps), 50),
+    }
+    return [
+        Experiment(stage.key, "zero_stability", args.stage1_steps, args.stage1_steps, {**base, "seed": 10}),
+        Experiment(
+            stage.key,
+            "zero_tight_reset",
+            args.stage1_steps,
+            args.stage1_steps,
+            {**base, "seed": 11, "near_gate_reset_position_tolerance": 0.0005},
+        ),
+    ]
+
+
+def _stage_guided_args(stage: CurriculumStage, episodes_dir: Path) -> dict[str, Any]:
+    out = {
+        **_stage_reward_args(stage),
+        "episode_config_dir": episodes_dir,
+        "max_lateral_explosion_m": stage.max_lateral_explosion_m,
+        "target_action_guide_rotation_sign": -1.0,
+        "fix_isaac_ik_xy_sign": False,
+    }
+    if stage.key == "stage_a":
+        out["target_action_guide_preinsert_hover_depth"] = "nan"
+        out["max_s_allowed_m"] = -0.001
+    elif stage.key == "stage_b":
+        out["target_action_guide_preinsert_hover_depth"] = -0.009
+        out["max_s_allowed_m"] = -0.0005
+    elif stage.key == "stage_c":
+        out["target_action_guide_preinsert_hover_depth"] = -0.004
+    else:
+        out["target_action_guide_preinsert_hover_depth"] = -0.003
+    return out
+
+
+def _run_staged_curriculum(
+    args: argparse.Namespace,
+    *,
+    run_output: Path,
+    log_dir: Path,
+    deadline: float,
+) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
+    stage_summaries: list[dict[str, Any]] = []
+    stage_dirs: dict[str, Path] = {}
+    for stage in _curriculum_stage_specs(args):
+        summary = _materialize_curriculum_stage(args, stage)
+        stage_summaries.append(summary)
+        stage_dirs[stage.key] = Path(str(summary["episodes_dir"]))
+        print(
+            f"[pipeline] {stage.key} episodes {summary['episodes_dir']} "
+            f"s={summary.get('s_start_min_m')}..{summary.get('s_start_max_m')} "
+            f"r={summary.get('r_start_min_m')}..{summary.get('r_start_max_m')}",
+            flush=True,
+        )
+
+    rows: list[dict[str, Any]] = []
+    promoted: list[dict[str, Any]] = []
+    for stage in _curriculum_stage_specs(args):
+        if time.monotonic() >= deadline:
+            break
+        episodes_dir = stage_dirs[stage.key]
+        stage_args = _stage_guided_args(stage, episodes_dir)
+
+        print(f"[pipeline] {stage.key} zero-action stability", flush=True)
+        zero_rows = _run_wave(
+            args,
+            _zero_action_experiments_for_stage(args, stage, episodes_dir),
+            output_dir=run_output,
+            log_dir=log_dir,
+            stage_deadline=min(deadline, time.monotonic() + 30 * 60),
+        )
+        rows.extend(zero_rows)
+        _write_csv(args.output_root / f"metrics_after_{stage.key}_zero.csv", rows)
+        stable = sorted(
+            zero_rows,
+            key=lambda r: (
+                float(r.get("force_clipped_fraction") or 1.0),
+                float(r.get("final_r_m") or 1.0),
+            ),
+        )
+        if stable:
+            best_zero = stable[0]
+            force_clip = _float(best_zero.get("force_clipped_fraction")) or 0.0
+            final_r = _float(best_zero.get("final_r_m")) or 0.0
+            if force_clip > 0.75 or final_r > stage.max_lateral_explosion_m:
+                print(
+                    f"[pipeline] {stage.key} reset is unstable; continuing with least-bad config "
+                    f"force_clip={force_clip} final_r={final_r}",
+                    flush=True,
+                )
+
+        print(f"[pipeline] {stage.key} guide sweep", flush=True)
+        wave1 = _guide_candidates(
+            args.stage2_wave1_steps,
+            stage_name=stage.key,
+            episode_config_dir=episodes_dir,
+            stage_args=stage_args,
+        )
+        wave1_rows = _run_wave(
+            args,
+            wave1,
+            output_dir=run_output,
+            log_dir=log_dir,
+            stage_deadline=min(deadline, time.monotonic() + 60 * 60),
+        )
+        rows.extend(wave1_rows)
+        _write_csv(args.output_root / f"metrics_after_{stage.key}_wave1.csv", rows)
+        ranked = sorted(wave1_rows, key=lambda r: float(r.get("alignment_score") or -1e9), reverse=True)
+
+        wave2: list[Experiment] = []
+        for idx, parent in enumerate(ranked[:4], start=1):
+            p_args = {**stage_args, **_args_from_parent(parent)}
+            p_args["episode_config_dir"] = episodes_dir
+            p_args["max_lateral_explosion_m"] = stage.max_lateral_explosion_m
+            wave2.append(
+                Experiment(
+                    stage.key,
+                    f"guide_w2_from_{idx}",
+                    args.stage2_wave2_steps,
+                    args.stage2_wave2_steps,
+                    {
+                        **p_args,
+                        "seed": 200 + idx,
+                        "reward_preset": stage.reward_preset,
+                        "act_only_actor_mode": "act_direct",
+                        "target_action_guide_collect_blend": 1.0,
+                        "target_action_guide_collect_steps": args.stage2_wave2_steps,
+                        "diagnostics_every": 10,
+                    },
+                    parent=str(parent.get("run_dir")),
+                )
+            )
+        wave2_rows = _run_wave(
+            args,
+            wave2,
+            output_dir=run_output,
+            log_dir=log_dir,
+            stage_deadline=min(deadline, time.monotonic() + 60 * 60),
+        )
+        rows.extend(wave2_rows)
+        _write_csv(args.output_root / f"metrics_after_{stage.key}_wave2.csv", rows)
+        ranked = sorted(wave2_rows or wave1_rows, key=lambda r: float(r.get("alignment_score") or -1e9), reverse=True)
+        passed_ranked = [r for r in ranked if _passed_curriculum_stage(r, stage)]
+        if not passed_ranked:
+            print(f"[pipeline] {stage.key} did not pass promotion criteria; stopping staged curriculum", flush=True)
+            break
+        promoted = passed_ranked[:2]
+
+        if stage.key in {"stage_a", "stage_b"} and time.monotonic() < deadline:
+            stage3 = _alignment_imitation_candidates(promoted, args.stage3_steps)
+            for exp in stage3:
+                exp.stage = stage.key
+                exp.args.update({"episode_config_dir": episodes_dir, **_stage_reward_args(stage)})
+                exp.args["max_lateral_explosion_m"] = stage.max_lateral_explosion_m
+            stage3_rows = _run_wave(
+                args,
+                stage3,
+                output_dir=run_output,
+                log_dir=log_dir,
+                stage_deadline=min(deadline, time.monotonic() + 75 * 60),
+            )
+            rows.extend(stage3_rows)
+            _write_csv(args.output_root / f"metrics_after_{stage.key}_imitation.csv", rows)
+            stage3_ranked = sorted(stage3_rows or promoted, key=lambda r: float(r.get("alignment_score") or -1e9), reverse=True)
+            stage3_passed = [r for r in stage3_ranked if _passed_curriculum_stage(r, stage)]
+            if stage3_passed:
+                promoted = stage3_passed[:2]
+        elif stage.key in {"stage_c", "stage_d"} and time.monotonic() < deadline:
+            stage5 = _weak_insertion_candidates(promoted, args.stage5_steps)
+            for exp in stage5:
+                exp.stage = stage.key
+                exp.args.update({"episode_config_dir": episodes_dir, **_stage_reward_args(stage)})
+                exp.args["max_lateral_explosion_m"] = stage.max_lateral_explosion_m
+            stage5_rows = _run_wave(
+                args,
+                stage5,
+                output_dir=run_output,
+                log_dir=log_dir,
+                stage_deadline=min(deadline, time.monotonic() + 90 * 60),
+            )
+            rows.extend(stage5_rows)
+            _write_csv(args.output_root / f"metrics_after_{stage.key}_insertion.csv", rows)
+
+    return rows, stage_summaries
+
+
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--act-torchscript", type=Path, default=DEFAULT_ACT)
@@ -779,6 +1336,23 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--stage5-steps", type=int, default=1200)
     parser.add_argument("--container-name", default="isaac-lab-base")
     parser.add_argument("--skip-preflight", action="store_true")
+    parser.add_argument("--curriculum-mode", choices=["single", "staged"], default="single")
+    parser.add_argument("--stage-a-axial-m", type=float, default=0.020)
+    parser.add_argument("--stage-a-lateral-min-m", type=float, default=0.004)
+    parser.add_argument("--stage-a-lateral-max-m", type=float, default=0.008)
+    parser.add_argument("--stage-b-axial-m", type=float, default=0.012)
+    parser.add_argument("--stage-b-lateral-min-m", type=float, default=0.002)
+    parser.add_argument("--stage-b-lateral-max-m", type=float, default=0.006)
+    parser.add_argument("--stage-c-axial-min-m", type=float, default=0.006)
+    parser.add_argument("--stage-c-axial-max-m", type=float, default=0.008)
+    parser.add_argument("--stage-c-lateral-min-m", type=float, default=0.000)
+    parser.add_argument("--stage-c-lateral-max-m", type=float, default=0.003)
+    parser.add_argument("--stage-d-axial-min-m", type=float, default=0.003)
+    parser.add_argument("--stage-d-axial-max-m", type=float, default=0.006)
+    parser.add_argument("--stage-d-lateral-min-m", type=float, default=0.000)
+    parser.add_argument("--stage-d-lateral-max-m", type=float, default=0.0015)
+    parser.add_argument("--episodes-per-stage", type=int, default=8)
+    parser.add_argument("--reuse-existing-stage-configs", action="store_true")
     parser.add_argument("--dry-run", action="store_true")
     args = parser.parse_args()
     args.gpus = [x.strip() for x in str(args.gpus).split(",") if x.strip()]
@@ -790,7 +1364,11 @@ def main() -> int:
     args.output_root = args.output_root.resolve()
     run_output = args.output_root / "runs"
     log_dir = args.output_root / "logs"
-    report_path = REPO / "docs/one_day_insertion_pipeline_20260515.md"
+    report_path = (
+        REPO / "docs/curriculum_insertion_pipeline_20260515.md"
+        if args.curriculum_mode == "staged"
+        else REPO / "docs/one_day_insertion_pipeline_20260515.md"
+    )
     args.output_root.mkdir(parents=True, exist_ok=True)
     (args.output_root / "pipeline_args.json").write_text(json.dumps({k: str(v) for k, v in vars(args).items()}, indent=2), encoding="utf-8")
 
@@ -816,6 +1394,17 @@ def main() -> int:
         )
         if tests_rc != 0 or audit_rc != 0:
             raise SystemExit(f"Stage0 failed: tests_rc={tests_rc} audit_rc={audit_rc}")
+
+    if args.curriculum_mode == "staged":
+        if args.dry_run:
+            summaries = [_materialize_curriculum_stage(args, stage) for stage in _curriculum_stage_specs(args)]
+            print(json.dumps(summaries, indent=2, default=str))
+            return 0
+        rows, stage_summaries = _run_staged_curriculum(args, run_output=run_output, log_dir=log_dir, deadline=deadline)
+        _write_csv(args.output_root / "metrics_all.csv", rows)
+        _write_report(report_path, args, rows, stage_summaries=stage_summaries)
+        print(f"[pipeline] wrote {report_path}", flush=True)
+        return 0
 
     stage1 = [
         Experiment("stage1", "zero_act_direct", args.stage1_steps, args.stage1_steps, {"seed": 11, "act_only_actor_mode": "act_direct", "reward_preset": "cheatcode_alignment_v1", "tcp_translation_action_clip": 0.0, "tcp_rotation_action_clip": 0.0, "diagnostics_every": 1}),
