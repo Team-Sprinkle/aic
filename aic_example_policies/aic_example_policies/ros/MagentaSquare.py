@@ -458,6 +458,9 @@ class MagentaSquare(Policy):
         self.sc_descend_stop_z = float(
             os.getenv("AIC_TRANSPORT_SC_DESCEND_STOP_Z", str(self.SC_PORT_ENTRANCE_Z))
         )
+        self.sc_descend_stop_z_margin = float(
+            os.getenv("AIC_TRANSPORT_SC_DESCEND_STOP_Z_MARGIN", "0.01")
+        )
         self.descend_wait_for_insertion_sec = float(
             os.getenv("AIC_TRANSPORT_DESCEND_WAIT_FOR_INSERTION_SEC", "5.0")
         )
@@ -1556,7 +1559,11 @@ class MagentaSquare(Policy):
         )
         stop_z = None
         if task_family == "sc_to_sc":
-            stop_z = self.board_plane_z + self.sc_descend_stop_z
+            stop_z = (
+                self.board_plane_z
+                + self.sc_descend_stop_z
+                + self.sc_descend_stop_z_margin
+            )
             distance_to_stop_z = max(float(start_pose.position.z) - stop_z, 0.0)
             if distance_to_stop_z <= 0.0:
                 self.get_logger().info(
@@ -1582,6 +1589,7 @@ class MagentaSquare(Policy):
             f"step={step_m:.5f} m, dt={self.descend_dt_sec:.3f} s, "
             f"max_distance={max_distance_m:.5f} m, "
             f"stop_z={stop_z if stop_z is not None else 'none'}, "
+            f"sc_stop_margin={self.sc_descend_stop_z_margin:.5f} m, "
             f"rate={step_m / self.descend_dt_sec:.5f} m/s"
         )
         for step in range(1, max_steps + 1):
