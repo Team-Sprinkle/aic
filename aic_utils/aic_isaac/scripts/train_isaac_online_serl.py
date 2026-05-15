@@ -38,7 +38,7 @@ class ReplayBufferConfig:
 def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--task", default="AIC-Task-v0")
-    parser.add_argument("--num-envs", type=int, default=4)
+    parser.add_argument("--num-envs", type=int, default=2)
     parser.add_argument("--seed", type=int, default=1)
     parser.add_argument("--device", default="cuda")
     parser.add_argument("--headless", action="store_true", default=True)
@@ -259,7 +259,7 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser.add_argument(
         "--target-success-termination-threshold",
         type=float,
-        default=0.0035,
+        default=0.0005,
         help=(
             "Strict target-distance threshold for terminating successful episodes. "
             "This is intentionally separate from --target-reward-reaching-threshold."
