@@ -132,6 +132,16 @@ class SfpNicPortLocalization:
     accepted: bool
 
 
+@dataclass
+class SfpNicPortImageScore:
+    score: float
+    rectangular_edge_score: float
+    axis_edge_score: float
+    rectangle_dark_score: float
+    center_dark_score: float
+    scale_score: float
+
+
 class MagentaSquare(Policy):
     """Transport the TCP using a board pose estimated from the magenta marker.
 
@@ -183,6 +193,7 @@ class MagentaSquare(Policy):
     )
     SFP_NIC_PORT_OPENING_HALF_WIDTH = 0.008112
     SFP_NIC_PORT_OPENING_HALF_HEIGHT = 0.0056
+    SFP_NIC_MAX_RECOVERY_RETRIES = 2
     SC_RAIL_X = -0.075
     SC_RAIL_Y = {
         0: 0.0295,
@@ -458,6 +469,10 @@ class MagentaSquare(Policy):
             "AIC_SFP_NIC_LOCALIZER_ENABLED",
             default=True,
         )
+        self.sfp_nic_pair_localizer_enabled = self._env_flag(
+            "AIC_SFP_NIC_PAIR_LOCALIZER_ENABLED",
+            default=True,
+        )
         self.sfp_nic_allow_prior_fallback = self._env_flag(
             "AIC_SFP_NIC_ALLOW_PRIOR_FALLBACK",
             default=True,
@@ -507,6 +522,12 @@ class MagentaSquare(Policy):
             os.getenv("AIC_SFP_NIC_DESCENT_DISTANCE_M", "0.065")
         )
         self.sfp_nic_force_stop_n = float(os.getenv("AIC_SFP_NIC_FORCE_STOP_N", "30.0"))
+        self.sfp_nic_axial_force_delta_stop_n = float(
+            os.getenv("AIC_SFP_NIC_AXIAL_FORCE_DELTA_STOP_N", "5.0")
+        )
+        self.sfp_nic_axial_force_delta_min_distance_m = float(
+            os.getenv("AIC_SFP_NIC_AXIAL_FORCE_DELTA_MIN_DISTANCE_M", "0.001")
+        )
         self.sfp_nic_recovery_enabled = self._env_flag(
             "AIC_SFP_NIC_RECOVERY_ENABLED",
             default=True,
@@ -514,8 +535,9 @@ class MagentaSquare(Policy):
         self.sfp_nic_recovery_radius_m = float(
             os.getenv("AIC_SFP_NIC_RECOVERY_RADIUS_M", "0.0015")
         )
-        self.sfp_nic_recovery_attempts = int(
-            os.getenv("AIC_SFP_NIC_RECOVERY_ATTEMPTS", "4")
+        self.sfp_nic_recovery_attempts = min(
+            max(int(os.getenv("AIC_SFP_NIC_RECOVERY_ATTEMPTS", "3")), 0),
+            self.SFP_NIC_MAX_RECOVERY_RETRIES,
         )
         self.trial_config_path = os.getenv("AIC_TRANSPORT_TRIAL_CONFIG", "").strip()
         self.trial_config_search_glob = os.getenv(
@@ -709,11 +731,12 @@ class MagentaSquare(Policy):
             height_axis_board=height_axis_board,
         )
 
-    def _sfp_nic_port_localization_from_board_pose(
+    def _sfp_nic_port_localization_for_indices(
         self,
-        task: Task,
         localized_target: LocalizedTransportTarget,
         *,
+        card_index: int,
+        port_index: int,
         rail_translation_m: float,
         rail_yaw_rad: float,
         score: float,
@@ -722,7 +745,6 @@ class MagentaSquare(Policy):
         source: str,
         accepted: bool,
     ) -> SfpNicPortLocalization:
-        card_index, port_index = self._task_indices(task)
         port_pose_board = self._sfp_nic_port_pose_board(
             card_index=card_index,
             port_index=port_index,
@@ -784,6 +806,94 @@ class MagentaSquare(Policy):
             source=source,
             accepted=accepted,
         )
+
+    def _sfp_nic_port_localization_from_board_pose(
+        self,
+        task: Task,
+        localized_target: LocalizedTransportTarget,
+        *,
+        rail_translation_m: float,
+        rail_yaw_rad: float,
+        score: float,
+        confidence: float,
+        observed_camera_count: int,
+        source: str,
+        accepted: bool,
+    ) -> SfpNicPortLocalization:
+        card_index, port_index = self._task_indices(task)
+        return self._sfp_nic_port_localization_for_indices(
+            localized_target,
+            card_index=card_index,
+            port_index=port_index,
+            rail_translation_m=rail_translation_m,
+            rail_yaw_rad=rail_yaw_rad,
+            score=score,
+            confidence=confidence,
+            observed_camera_count=observed_camera_count,
+            source=source,
+            accepted=accepted,
+        )
+
+    def _sfp_nic_label_pair_by_board_x_zero_line(
+        self,
+        localizations: dict[int, SfpNicPortLocalization],
+        localized_target: LocalizedTransportTarget,
+    ) -> dict[int, SfpNicPortLocalization]:
+        if len(localizations) != 2:
+            return localizations
+
+        def board_x_zero_line_distance(localization: SfpNicPortLocalization) -> float:
+            board_xy = self._base_point_to_board_xy(
+                localization.entrance_base,
+                localized_target.board_origin,
+                localized_target.board_x_axis,
+                localized_target.board_y_axis,
+            )
+            return abs(float(board_xy[0]))
+
+        ordered_localizations = sorted(
+            localizations.values(),
+            key=board_x_zero_line_distance,
+        )
+        return {
+            0: ordered_localizations[0],
+            1: ordered_localizations[1],
+        }
+
+    def _sfp_nic_port_pair_localizations_from_board_pose(
+        self,
+        task: Task,
+        localized_target: LocalizedTransportTarget,
+        *,
+        rail_translation_m: float,
+        rail_yaw_rad: float,
+        score: float,
+        confidence: float,
+        observed_camera_count: int,
+        source: str,
+        accepted: bool,
+    ) -> tuple[int, dict[int, SfpNicPortLocalization]]:
+        card_index, target_port_index = self._task_indices(task)
+        raw_localizations = {
+            port_index: self._sfp_nic_port_localization_for_indices(
+                localized_target,
+                card_index=card_index,
+                port_index=port_index,
+                rail_translation_m=rail_translation_m,
+                rail_yaw_rad=rail_yaw_rad,
+                score=score,
+                confidence=confidence,
+                observed_camera_count=observed_camera_count,
+                source=source,
+                accepted=accepted,
+            )
+            for port_index in sorted(self.SFP_NIC_PORT_TRANSLATION_CARD)
+        }
+        localizations = self._sfp_nic_label_pair_by_board_x_zero_line(
+            raw_localizations,
+            localized_target,
+        )
+        return target_port_index, localizations
 
     @staticmethod
     def _tcp_pose_from_observation(get_observation: GetObservationCallback) -> Pose:
@@ -1131,12 +1241,16 @@ class MagentaSquare(Policy):
         )
 
     @staticmethod
-    def _wrist_force_norm(obs) -> float:
+    def _wrist_force_vector(obs) -> np.ndarray:
         try:
             force = obs.wrist_wrench.wrench.force
         except AttributeError:
-            return 0.0
-        return float(np.linalg.norm([force.x, force.y, force.z]))
+            return np.zeros(3, dtype=np.float64)
+        return np.array([force.x, force.y, force.z], dtype=np.float64)
+
+    @staticmethod
+    def _wrist_force_norm(obs) -> float:
+        return float(np.linalg.norm(MagentaSquare._wrist_force_vector(obs)))
 
     def _descend_sfp_nic_along_port_axis(
         self,
@@ -1180,23 +1294,53 @@ class MagentaSquare(Policy):
         max_steps = int(np.ceil(max_distance_m / step_m))
         current_pose = start_pose
         force_stop = False
+        force_baseline_base: np.ndarray | None = None
+        axial_delta_stop_n = max(self.sfp_nic_axial_force_delta_stop_n, 0.0)
+        axial_delta_min_distance_m = max(
+            self.sfp_nic_axial_force_delta_min_distance_m,
+            0.0,
+        )
         self.get_logger().info(
             "SFP/NIC descending along detected port axis: "
             f"step={step_m:.5f} m, dt={self.descend_dt_sec:.3f} s, "
             f"max_distance={max_distance_m:.5f} m, "
             f"axis={np.round(localization.port_axis_base, 5).tolist()}, "
-            f"lateral_offset={np.round(lateral_offset, 5).tolist()}"
+            f"lateral_offset={np.round(lateral_offset, 5).tolist()}, "
+            f"axial_force_delta_stop={axial_delta_stop_n:.2f} N"
         )
         for step in range(1, max_steps + 1):
             if self._task_completed_in_simulation(task):
                 return current_pose, True, force_stop
 
             obs = get_observation()
-            force_norm = self._wrist_force_norm(obs)
+            force_base = self._wrist_force_vector(obs)
+            if force_baseline_base is None:
+                force_baseline_base = force_base.copy()
+            force_norm = float(np.linalg.norm(force_base))
+            observed_distance = min((step - 1) * step_m, max_distance_m)
+            force_delta_base = force_base - force_baseline_base
+            axial_force_delta = float(
+                np.dot(force_delta_base, localization.port_axis_base)
+            )
+            axial_force_delta_abs = abs(axial_force_delta)
             if force_norm > self.sfp_nic_force_stop_n:
                 self.get_logger().warn(
                     "SFP/NIC axis descent stopped on force threshold: "
                     f"force={force_norm:.2f} N, threshold={self.sfp_nic_force_stop_n:.2f} N"
+                )
+                force_stop = True
+                break
+            if (
+                axial_delta_stop_n > 0.0
+                and observed_distance >= axial_delta_min_distance_m
+                and axial_force_delta_abs > axial_delta_stop_n
+            ):
+                self.get_logger().warn(
+                    "SFP/NIC axis descent stopped on axial force delta spike: "
+                    f"axial_delta={axial_force_delta:.2f} N, "
+                    f"abs_axial_delta={axial_force_delta_abs:.2f} N, "
+                    f"threshold={axial_delta_stop_n:.2f} N, "
+                    f"observed_distance={observed_distance:.5f} m"
                 )
                 force_stop = True
                 break
@@ -1211,9 +1355,13 @@ class MagentaSquare(Policy):
                     f"step={step}/{max_steps}, distance={distance:.5f} m, "
                     f"desired_tip={np.round(desired_tip_base, 5).tolist()}, "
                     f"tcp_target={[round(current_pose.position.x, 5), round(current_pose.position.y, 5), round(current_pose.position.z, 5)]}, "
-                    f"force={force_norm:.2f} N"
+                    f"force={force_norm:.2f} N, "
+                    f"axial_delta={axial_force_delta:.2f} N"
                 )
             self.sleep_for(self.descend_dt_sec)
+
+        if force_stop:
+            return current_pose, self._task_completed_in_simulation(task), force_stop
 
         if self.descend_wait_for_insertion_sec > 0.0:
             wait_started = self.time_now()
@@ -1229,7 +1377,11 @@ class MagentaSquare(Policy):
         localization: SfpNicPortLocalization,
     ) -> list[np.ndarray]:
         radius = max(self.sfp_nic_recovery_radius_m, 0.0)
-        if radius <= 0.0 or self.sfp_nic_recovery_attempts <= 0:
+        recovery_attempts = min(
+            max(self.sfp_nic_recovery_attempts, 0),
+            self.SFP_NIC_MAX_RECOVERY_RETRIES,
+        )
+        if radius <= 0.0 or recovery_attempts <= 0:
             return []
         candidates = [
             radius * localization.width_axis_base,
@@ -1239,7 +1391,7 @@ class MagentaSquare(Policy):
             radius * (localization.width_axis_base + localization.height_axis_base) / np.sqrt(2.0),
             radius * (-localization.width_axis_base + localization.height_axis_base) / np.sqrt(2.0),
         ]
-        return candidates[: self.sfp_nic_recovery_attempts]
+        return candidates[:recovery_attempts]
 
     def _run_sfp_nic_insertion(
         self,
@@ -1284,17 +1436,24 @@ class MagentaSquare(Policy):
         if inserted or not self.sfp_nic_recovery_enabled:
             return current_pose
 
-        recovery_offsets = self._sfp_nic_recovery_offsets(localization)
-        if not recovery_offsets:
+        recovery_attempts = min(
+            len(self._sfp_nic_recovery_offsets(localization)),
+            self.SFP_NIC_MAX_RECOVERY_RETRIES,
+        )
+        if recovery_attempts <= 0:
             return current_pose
 
         self.get_logger().info(
-            "SFP/NIC insertion did not complete; running bounded lateral recovery: "
-            f"attempts={len(recovery_offsets)}, force_stop={force_stop}"
+            "SFP/NIC insertion did not complete; running bounded backoff/redetect "
+            f"recovery: attempts={recovery_attempts}, force_stop={force_stop}"
         )
-        for attempt, lateral_offset in enumerate(recovery_offsets, start=1):
+        for attempt in range(1, recovery_attempts + 1):
             if self._task_completed_in_simulation(task):
                 return current_pose
+            recovery_offsets = self._sfp_nic_recovery_offsets(localization)
+            if not recovery_offsets:
+                return current_pose
+            lateral_offset = recovery_offsets[min(attempt - 1, len(recovery_offsets) - 1)]
             desired_tip_base = (
                 localization.entrance_base
                 - self.sfp_nic_preinsert_clearance_m * localization.port_axis_base
@@ -1316,9 +1475,41 @@ class MagentaSquare(Policy):
                 target_orientation=preinsert_pose.orientation,
             )
             self.get_logger().info(
-                "SFP/NIC recovery attempt: "
-                f"attempt={attempt}/{len(recovery_offsets)}, "
+                "SFP/NIC recovery backed off for redetection: "
+                f"attempt={attempt}/{recovery_attempts}, "
+                f"backoff_tip={np.round(desired_tip_base, 5).tolist()}, "
                 f"lateral_offset={np.round(lateral_offset, 5).tolist()}"
+            )
+
+            refreshed_localization, current_pose = (
+                self._localize_sfp_nic_port_entrance_with_view_search(
+                    task,
+                    get_observation,
+                    move_robot,
+                    localized_target,
+                    current_pose,
+                )
+            )
+            if refreshed_localization is None:
+                self.get_logger().warn(
+                    "SFP/NIC recovery redetection failed; skipping this descent attempt."
+                )
+                continue
+
+            previous_entrance = localization.entrance_base
+            localization = refreshed_localization
+            self.get_logger().info(
+                "SFP/NIC recovery redetected port entrance: "
+                f"attempt={attempt}/{recovery_attempts}, "
+                f"source={localization.source}, accepted={localization.accepted}, "
+                f"confidence={localization.confidence:.3f}, "
+                f"previous_entrance={np.round(previous_entrance, 5).tolist()}, "
+                f"new_entrance={np.round(localization.entrance_base, 5).tolist()}"
+            )
+            current_pose = self._move_to_sfp_nic_preinsert_pose(
+                move_robot,
+                self._tcp_pose_from_observation(get_observation),
+                localization,
             )
             current_pose, inserted, force_stop = self._descend_sfp_nic_along_port_axis(
                 task,
@@ -1326,14 +1517,21 @@ class MagentaSquare(Policy):
                 move_robot,
                 current_pose,
                 localization,
-                lateral_offset_base=lateral_offset,
                 descent_distance_m=min(self.sfp_nic_descent_distance_m, 0.030),
             )
             if inserted:
                 return current_pose
             if force_stop:
-                self.get_logger().warn("SFP/NIC recovery stopped after force threshold.")
-                return current_pose
+                if attempt < recovery_attempts:
+                    self.get_logger().warn(
+                        "SFP/NIC recovery descent stopped on force threshold; backing off "
+                        "and redetecting again if attempts remain."
+                    )
+                else:
+                    self.get_logger().warn(
+                        "SFP/NIC recovery descent stopped on force threshold; retry "
+                        "limit reached, stopping at final pose."
+                    )
         return current_pose
 
     def _descend_until_inserted(
@@ -2364,16 +2562,31 @@ class MagentaSquare(Policy):
         edge_indices = [(0, 1), (1, 2), (2, 3), (3, 0), (4, 5)]
         return points, corners, edge_indices
 
-    def _score_sfp_nic_localization_in_camera(
+    @staticmethod
+    def _sfp_nic_rectangular_edge_score(rectangle_edge_scores: list[float]) -> float:
+        if len(rectangle_edge_scores) != 4:
+            return 0.0
+        scores = np.clip(np.asarray(rectangle_edge_scores, dtype=np.float64), 0.0, 1.0)
+        mean_score = float(np.mean(scores))
+        second_lowest_score = float(np.sort(scores)[1])
+        paired_closure_score = float(
+            min(min(scores[0], scores[2]), min(scores[1], scores[3]))
+        )
+        return (
+            0.30 * mean_score
+            + 0.45 * second_lowest_score
+            + 0.25 * paired_closure_score
+        )
+
+    def _sfp_nic_localization_image_score_from_masks(
         self,
         localization: SfpNicPortLocalization,
-        image_msg,
+        image_shape: tuple[int, int],
+        dark_mask: np.ndarray,
+        edge_mask: np.ndarray,
         camera_info,
-    ) -> float | None:
-        if not camera_info.header.frame_id:
-            return None
-        rgb = self._image_msg_to_rgb(image_msg)
-        image_h, image_w = rgb.shape[:2]
+    ) -> SfpNicPortImageScore | None:
+        image_h, image_w = image_shape
         model_points, _, edge_indices = self._sfp_nic_candidate_model_points(
             localization
         )
@@ -2388,11 +2601,15 @@ class MagentaSquare(Policy):
             or center_px[1] > 1.1 * image_h
         ):
             return None
-        dark_mask, edge_mask = self._nic_port_detection_masks(rgb)
         edge_scores = [
             self._sample_mask_line(edge_mask, pixels[i0], pixels[i1])
             for i0, i1 in edge_indices
         ]
+        rectangle_edge_scores = edge_scores[:4]
+        axis_edge_score = edge_scores[4] if len(edge_scores) > 4 else 0.0
+        rectangular_edge_score = self._sfp_nic_rectangular_edge_score(
+            rectangle_edge_scores
+        )
         rectangle_dark_score = self._sample_mask_polygon(dark_mask, pixels[:4])
         center_dark_score = self._sample_mask_line(
             dark_mask,
@@ -2403,12 +2620,107 @@ class MagentaSquare(Policy):
         projected_width_px = float(np.linalg.norm(pixels[1] - pixels[0]))
         projected_height_px = float(np.linalg.norm(pixels[2] - pixels[1]))
         scale_score = min(max(min(projected_width_px, projected_height_px) / 6.0, 0.0), 1.0)
-        edge_score = float(np.mean(edge_scores)) if edge_scores else 0.0
+        rectangularity_gate = min(max(rectangular_edge_score / 0.20, 0.0), 1.0)
+        score = (
+            0.82 * rectangular_edge_score
+            + 0.08 * axis_edge_score
+            + rectangularity_gate
+            * (
+                0.06 * rectangle_dark_score
+                + 0.02 * center_dark_score
+                + 0.02 * scale_score
+            )
+        )
+        return SfpNicPortImageScore(
+            score=score,
+            rectangular_edge_score=rectangular_edge_score,
+            axis_edge_score=axis_edge_score,
+            rectangle_dark_score=rectangle_dark_score,
+            center_dark_score=center_dark_score,
+            scale_score=scale_score,
+        )
+
+    def _score_sfp_nic_localization_in_camera(
+        self,
+        localization: SfpNicPortLocalization,
+        image_msg,
+        camera_info,
+    ) -> float | None:
+        if not camera_info.header.frame_id:
+            return None
+        rgb = self._image_msg_to_rgb(image_msg)
+        dark_mask, edge_mask = self._nic_port_detection_masks(rgb)
+        image_score = self._sfp_nic_localization_image_score_from_masks(
+            localization,
+            rgb.shape[:2],
+            dark_mask,
+            edge_mask,
+            camera_info,
+        )
+        if image_score is None:
+            return None
+        return image_score.score
+
+    def _score_sfp_nic_port_pair_localization_in_camera(
+        self,
+        target_port_index: int,
+        localizations: dict[int, SfpNicPortLocalization],
+        image_msg,
+        camera_info,
+    ) -> float | None:
+        if not camera_info.header.frame_id:
+            return None
+        if 0 not in localizations or 1 not in localizations:
+            return None
+        rgb = self._image_msg_to_rgb(image_msg)
+        dark_mask, edge_mask = self._nic_port_detection_masks(rgb)
+        image_scores: dict[int, SfpNicPortImageScore] = {}
+        for port_index, localization in localizations.items():
+            image_score = self._sfp_nic_localization_image_score_from_masks(
+                localization,
+                rgb.shape[:2],
+                dark_mask,
+                edge_mask,
+                camera_info,
+            )
+            if image_score is None:
+                return None
+            image_scores[port_index] = image_score
+
+        target_score = image_scores[target_port_index]
+        peer_score = image_scores[1 - target_port_index]
+        rectangle_scores = np.array(
+            [
+                target_score.rectangular_edge_score,
+                peer_score.rectangular_edge_score,
+            ],
+            dtype=np.float64,
+        )
+        port_scores = np.array(
+            [target_score.score, peer_score.score],
+            dtype=np.float64,
+        )
+        pair_rectangular_score = (
+            0.45 * float(np.mean(rectangle_scores))
+            + 0.35 * float(np.min(rectangle_scores))
+            + 0.20 * target_score.rectangular_edge_score
+        )
+        port_score_support = (
+            0.50 * float(np.mean(port_scores))
+            + 0.30 * float(np.min(port_scores))
+            + 0.20 * target_score.score
+        )
+        pair_axis_score = float(
+            np.mean([target_score.axis_edge_score, peer_score.axis_edge_score])
+        )
+        pair_scale_score = float(
+            np.mean([target_score.scale_score, peer_score.scale_score])
+        )
         return (
-            0.50 * rectangle_dark_score
-            + 0.35 * edge_score
-            + 0.10 * center_dark_score
-            + 0.05 * scale_score
+            0.72 * pair_rectangular_score
+            + 0.18 * port_score_support
+            + 0.07 * pair_axis_score
+            + 0.03 * pair_scale_score
         )
 
     @staticmethod
@@ -2478,26 +2790,57 @@ class MagentaSquare(Policy):
             abs(self.sfp_nic_rail_yaw_max),
             1e-6,
         )
+        pair_localizer_enabled = getattr(
+            self,
+            "sfp_nic_pair_localizer_enabled",
+            True,
+        )
         for rail_translation_m in translations:
             for rail_yaw_rad in yaws:
-                localization = self._sfp_nic_port_localization_from_board_pose(
-                    task,
-                    localized_target,
-                    rail_translation_m=float(rail_translation_m),
-                    rail_yaw_rad=float(rail_yaw_rad),
-                    score=0.0,
-                    confidence=0.0,
-                    observed_camera_count=0,
-                    source="SFP/NIC projected port localizer",
-                    accepted=False,
-                )
+                if pair_localizer_enabled:
+                    target_port_index, port_localizations = (
+                        self._sfp_nic_port_pair_localizations_from_board_pose(
+                            task,
+                            localized_target,
+                            rail_translation_m=float(rail_translation_m),
+                            rail_yaw_rad=float(rail_yaw_rad),
+                            score=0.0,
+                            confidence=0.0,
+                            observed_camera_count=0,
+                            source="SFP/NIC projected port-pair localizer",
+                            accepted=False,
+                        )
+                    )
+                    localization = port_localizations[target_port_index]
+                else:
+                    target_port_index = -1
+                    port_localizations = {}
+                    localization = self._sfp_nic_port_localization_from_board_pose(
+                        task,
+                        localized_target,
+                        rail_translation_m=float(rail_translation_m),
+                        rail_yaw_rad=float(rail_yaw_rad),
+                        score=0.0,
+                        confidence=0.0,
+                        observed_camera_count=0,
+                        source="SFP/NIC projected port localizer",
+                        accepted=False,
+                    )
                 camera_scores = []
                 for _, image_msg, camera_info in camera_inputs:
-                    score = self._score_sfp_nic_localization_in_camera(
-                        localization,
-                        image_msg,
-                        camera_info,
-                    )
+                    if pair_localizer_enabled:
+                        score = self._score_sfp_nic_port_pair_localization_in_camera(
+                            target_port_index,
+                            port_localizations,
+                            image_msg,
+                            camera_info,
+                        )
+                    else:
+                        score = self._score_sfp_nic_localization_in_camera(
+                            localization,
+                            image_msg,
+                            camera_info,
+                        )
                     if score is not None:
                         camera_scores.append(score)
                 if not camera_scores:
@@ -2531,6 +2874,7 @@ class MagentaSquare(Policy):
         best.accepted = best.confidence >= self.sfp_nic_localizer_min_confidence
         self.get_logger().info(
             "SFP/NIC port localizer result: "
+            f"mode={'pair' if pair_localizer_enabled else 'single'}, "
             f"accepted={best.accepted}, "
             f"confidence={best.confidence:.3f}, score={best.score:.3f}, "
             f"camera_scores={[round(score, 3) for score in best_camera_scores]}, "
