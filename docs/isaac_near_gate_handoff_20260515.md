@@ -30,6 +30,296 @@ The experiments focused on whether Isaac could produce physically visible insert
 - Ran short near-gate / cheatcode probes with debug overlays and videos under:
   - `outputs/debug/isaac_cheatcode_fix_20260515/`
 
+## Experiment Setup Details
+
+The concrete settings below are the useful starting point for recreating these probes on a new machine. They are intentionally short-horizon diagnostics, not final training settings.
+
+Primary scripts and code paths:
+
+- Episode materializer: `aic_utils/aic_isaac/scripts/isaac_episode_configs.py`
+- Host launcher: `aic_utils/aic_isaac/scripts/train_isaac_online_serl.py`
+- Isaac trainer: `aic_utils/aic_isaac/aic_isaaclab/scripts/serl/train.py`
+- Reward code: `aic_utils/aic_isaac/aic_isaaclab/source/aic_task/aic_task/tasks/manager_based/aic_task/mdp/rewards.py`
+- Reset consumer: `aic_utils/aic_isaac/aic_isaaclab/source/aic_task/aic_task/tasks/manager_based/aic_task/mdp/events.py`
+
+The run directory was:
+
+```text
+outputs/debug/isaac_cheatcode_fix_20260515/
+```
+
+The generated diagnostic episode request was:
+
+```yaml
+task_family: sfp_to_nic
+generation:
+  target_accepted_trajectories: 2
+  seed: 236
+scene:
+  target:
+    entrance_axis_offset_m: -0.0009
+    seated_depth_m: 0.008
+  start_near_gate:
+    axial_distance_m: 0.0005
+    lateral_distance_m: 0.0002
+    min_clearance_m: 0.0002
+    reset_body_name: gripper_tcp
+    reset_body_offset_from_reference_world: [-0.007149, 0.002556, 0.059066]
+    reset_body_orientation_wxyz: [0.026548, 0.013188, 0.991236, 0.128732]
+  nic_cards:
+    count: 1
+    target_card: 0
+    target_port: sfp_port_0
+```
+
+The materialized episodes live at:
+
+```text
+outputs/debug/isaac_cheatcode_fix_20260515/episode_configs/episodes/
+```
+
+Near-gate reset semantics:
+
+- `start_near_gate.reset_mode` is `body_start_position_world`.
+- Reset body is `gripper_tcp`, but the reference reward body for the generated request is `sfp_tip_link`.
+- The materializer places the reference body relative to the port entrance, not the seated target.
+- For the probe episodes, achieved offsets were approximately `0.5 mm` axial and `0.2 mm` lateral from the entrance gate.
+- The gate axis recorded in diagnostics was approximately `[-0.0, 0.012642, -0.99992]`.
+- The seated target depth was `0.008 m`; the gate came from `entrance_pose_world`.
+- `events.reset_robot_tcp_to_episode_start()` used 6D damped IK with up to `8` iterations. In the r105 diagnostic, reset final error was about `0.64 mm` position and `0.00054 rad` orientation.
+
+## Reward Designs Tried
+
+The first pass used the default target reward weights from the trainer:
+
+```text
+target_reward_body=sfp_tip_link
+distance_weight=0.25
+close_weight=0.35
+progress_weight=0.25
+orientation_weight=0.10
+reaching_weight=0.0
+terminal_weight=1.0
+lateral_weight=-0.05
+motion_projection_weight=0.0
+lateral_progress_weight=0.0
+axial_progress_weight=0.0
+insertion_corridor_weight=0.0
+force_delta_penalty_weight=0.3 in the wrapper dry-run plan, later 0.05 in short probes
+```
+
+For the actual 2026-05-15 short probes r101-r107, use `--reward-preset near_gate_corridor_v1`. That preset overrides the target reward knobs to:
+
+```text
+target_reward_distance_weight=0.02
+target_reward_close_weight=0.05
+target_reward_progress_weight=0.0
+target_reward_lateral_weight=-0.10
+target_reward_lateral_progress_weight=0.25
+target_reward_axial_progress_weight=0.25
+target_reward_insertion_corridor_weight=0.50
+target_reward_orientation_weight=0.05
+target_reward_reaching_weight=0.0
+target_reward_terminal_weight=1.0
+force_delta_penalty_weight=0.05
+```
+
+Other reward geometry/scales in those probes:
+
+```text
+target_reward_distance_std=0.02
+target_reward_close_sigma=0.006
+target_reward_progress_scale=0.003
+target_reward_lateral_error_scale=0.006
+target_reward_lateral_progress_scale=0.001
+target_reward_axial_progress_scale=0.001
+target_reward_lateral_gate_sigma=0.004
+target_reward_orientation_gate_sigma=0.01
+target_reward_orientation_std=0.1
+target_reward_insertion_corridor_sigma=0.0025
+target_reward_insertion_bypass_penalty_scale=2.0
+target_reward_insertion_axis=0
+target_success_axial_threshold=0.00025
+target_success_lateral_threshold=0.0005
+target_success_termination_threshold=0.0005
+terminate_on_target_success=true
+```
+
+Important Isaac scaling detail: `_configure_task_geometry_rewards()` multiplies CLI reward weights by `1 / env_step_dt`. With `policy_hz=20`, resolved Isaac weights were 20x the CLI values. For example, the r105 resolved weights were:
+
+```text
+target_distance_tanh=0.4
+target_distance_exp=1.0
+target_distance_progress=0.0
+target_lateral_error=-2.0
+target_lateral_progress=5.0
+target_axial_progress=5.0
+target_insertion_corridor=10.0
+target_orientation_gated_exp=1.0
+target_reaching_bonus=0.0
+target_success_once_bonus=20.0
+force_delta_penalty=1.0
+```
+
+Command-pose PPO rewards were disabled/zeroed in the SERL trainer for these probes; the active insertion signal was the target-geometry reward stack above plus the standard small regularizers.
+
+## Guide / Cheatcode Settings Tried
+
+All r101-r107 probes used:
+
+```text
+act_only=true
+act_torchscript=outputs/debug/isaac_cheatcode_fix_20260515/dummy_act/act_ts.pt
+act_only_state_dim=82
+act_only_single_action_dim=6
+act_only_actor_mode=act_adapter
+freeze_act=true
+policy_hz=20
+n_action_steps=1
+isaac_action_scale=1.0
+tcp_action_frame=root unless noted
+enable_cameras=true
+enable_contact_sensor=true
+debug_diagnostics=true
+debug_visual_overlays=true
+save_step_images=true
+diagnostics_every=1
+image_log_every=2
+max_logged_image_steps=80
+headless=true
+rendering_mode=performance
+```
+
+The dummy ACT TorchScript produced zero base actions. During guide-collection probes, the executed env action came from the guide path, not from a learned adapter.
+
+Guide settings for the cheatcode probes. The saved r103-r107 configs record this mode as `cheatcode_tcp`; in the current launcher/trainer CLI the same rigid-transform guide is exposed as `cheatcode_transform`.
+
+```text
+target_action_guide_mode=cheatcode_tcp / cheatcode_transform
+target_action_guide_collect_blend=1.0
+target_action_guide_collect_steps=80
+target_action_guide_step_size=0.0015
+target_action_guide_rotation_step_size=0.02
+target_action_guide_axial_step_size=0.0
+target_action_guide_lateral_switch_m=0.002
+target_action_guide_axial_blend_lateral_m=0.006
+target_action_guide_collect_decay=false
+target_action_guide_prefix_decay=false
+target_action_guide_train_executed=false
+target_action_guide_weight=0.0
+```
+
+The meaning of `target_action_guide_weight=0.0` is easy to miss: it disables an actor imitation loss toward the guide. It does not disable guide collection. The guide still replaces/blends the action during collection because `target_action_guide_collect_blend=1.0` and `target_action_guide_collect_steps=80`.
+
+Trainer modes tried:
+
+- r101: no guide collection, `target_reward_body=sfp_tip_link`, `fix_isaac_ik_xy_sign=true`, 50 steps, 2 envs.
+- r102: same as r101 but `fix_isaac_ik_xy_sign=false`.
+- r103: `cheatcode_tcp` / `cheatcode_transform`, root action frame, `target_reward_body=sfp_tip_link`, `fix_isaac_ik_xy_sign=false`, 80 steps, 2 envs.
+- r104: same as r103 but `tcp_action_frame=gripper_tcp`.
+- r105: `cheatcode_tcp` / `cheatcode_transform`, root action frame, `target_reward_body=sfp_tip_link`, IK-body/action-scale diagnostics enabled, `fix_isaac_ik_xy_sign=false`, 80 steps, 2 envs.
+- r106: short asset visual probe, `cheatcode_tcp` / `cheatcode_transform`, `target_reward_body=sfp_tip_link`, 4 steps, 1 env.
+- r107: same guide family as r105 but `target_reward_body=sfp_module_link`, `batch_size=4`, `update_every_steps=1`, 80 steps, 2 envs.
+
+r105 is the best diagnostic template from this server. r107 is useful only as a warning that changing the reward/guide body from `sfp_tip_link` to `sfp_module_link` did not automatically produce physical insertion here.
+
+## Starter Commands For A New Machine
+
+First regenerate a tiny pure SFP near-gate episode set:
+
+```bash
+mkdir -p outputs/debug/isaac_near_gate_restart/episode_configs
+cat > outputs/debug/isaac_near_gate_restart/episode_configs/request.yaml <<'YAML'
+task_family: sfp_to_nic
+generation:
+  target_accepted_trajectories: 2
+  seed: 236
+scene:
+  target:
+    entrance_axis_offset_m: -0.0009
+    seated_depth_m: 0.008
+  start_near_gate:
+    axial_distance_m: 0.0005
+    lateral_distance_m: 0.0002
+    min_clearance_m: 0.0002
+    reset_body_name: gripper_tcp
+    reset_body_offset_from_reference_world: [-0.007149, 0.002556, 0.059066]
+    reset_body_orientation_wxyz: [0.026548, 0.013188, 0.991236, 0.128732]
+  nic_cards:
+    count: 1
+    target_card: 0
+    target_port: sfp_port_0
+YAML
+
+python3 aic_utils/aic_isaac/scripts/isaac_episode_configs.py \
+  --request-yaml outputs/debug/isaac_near_gate_restart/episode_configs/request.yaml \
+  --output-dir outputs/debug/isaac_near_gate_restart/episode_configs
+```
+
+Then run an r105-style no-learning cheatcode/guide probe. Update `--act-torchscript` to a real ACT TorchScript if you want ACT+guide behavior; keep the dummy/zero ACT only if you are isolating guide geometry.
+
+```bash
+python3 aic_utils/aic_isaac/scripts/train_isaac_online_serl.py \
+  --act-only \
+  --act-torchscript outputs/debug/isaac_cheatcode_fix_20260515/dummy_act/act_ts.pt \
+  --episode-config-dir outputs/debug/isaac_near_gate_restart/episode_configs/episodes \
+  --output-dir outputs/debug/isaac_near_gate_restart/train_runs \
+  --run-name r105_restart_cheatcode_tip \
+  --num-envs 2 \
+  --steps 80 \
+  --update-every-steps 100000 \
+  --policy-hz 20 \
+  --n-action-steps 1 \
+  --isaac-action-scale 1.0 \
+  --no-fix-isaac-ik-xy-sign \
+  --tcp-action-frame root \
+  --reward-preset near_gate_corridor_v1 \
+  --target-reward-body sfp_tip_link \
+  --target-success-axial-threshold 0.00025 \
+  --target-success-lateral-threshold 0.0005 \
+  --target-success-termination-threshold 0.0005 \
+  --force-delta-penalty-weight 0.05 \
+  --target-action-guide-mode cheatcode_transform \
+  --target-action-guide-collect-blend 1.0 \
+  --target-action-guide-collect-steps 80 \
+  --target-action-guide-step-size 0.0015 \
+  --target-action-guide-rotation-step-size 0.02 \
+  --target-action-guide-lateral-switch-m 0.002 \
+  --target-action-guide-axial-blend-lateral-m 0.006 \
+  --no-target-action-guide-collect-decay \
+  --no-target-action-guide-prefix-decay \
+  --no-target-action-guide-train-executed \
+  --debug-diagnostics \
+  --debug-visual-overlays \
+  --diagnostics-every 1 \
+  --debug-audit-steps 80 \
+  --save-step-images \
+  --image-log-every 2 \
+  --max-logged-image-steps 80 \
+  --enable-contact-sensor \
+  --headless \
+  --rendering-mode performance
+```
+
+If physical video and semantic metrics agree on the new machine, the next online-learning starting point from the 2026-05-14 root-cause work was:
+
+```text
+ACT warm start
+pure SFP 6 mm near-gate episode shard, not the full mixed 24-episode shard
+policy_hz=20
+act_only_action_horizon=8
+n_action_steps=4
+isaac_action_scale=0.5
+adapter_delta_clip=0.001
+adapter_lr=1e-4
+adapter_penalty_weight=1.0
+act_preservation_weight=1.0
+update_every_steps=4
+target reward preset/geometry rechecked against visible insertion before long runs
+```
+
+That setting produced the best short online result on this host: last-100 reward `0.0231`, last step reward `0.0957`, last-100 progress `0.0381`, no adapter clipping, but last-500 reward still slightly negative and force spikes persisted. It was not strong enough to justify launching a 6-hour mixed SFP+SC run without a longer single-task confirmation.
+
 Important video artifacts from this server:
 
 - Missing/asset visual probe:
