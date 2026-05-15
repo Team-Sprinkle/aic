@@ -256,6 +256,11 @@ def observation_to_dict(
                 if target_module and port_name
                 else None
             ),
+            "target_port_entrance_pose_base_link": (
+                f"task_board/{target_module}/{port_name}_link_entrance"
+                if target_module and port_name
+                else None
+            ),
             "plug_pose_base_link": (
                 f"{cable_name}/{plug_name}_link" if cable_name and plug_name else None
             ),
