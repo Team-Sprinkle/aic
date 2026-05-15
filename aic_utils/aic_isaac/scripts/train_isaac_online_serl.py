@@ -278,6 +278,14 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser.add_argument("--insertion-corridor-sigma", type=float, default=0.0025)
     parser.add_argument("--insertion-bypass-penalty-scale", type=float, default=1.0)
     parser.add_argument("--insertion-cheatcode-phase-weight", type=float, default=0.0)
+    parser.add_argument("--insertion-cheatcode-lateral-progress-weight", type=float, default=0.40)
+    parser.add_argument("--insertion-cheatcode-orientation-progress-weight", type=float, default=0.30)
+    parser.add_argument("--insertion-cheatcode-near-misaligned-weight", type=float, default=0.25)
+    parser.add_argument("--insertion-cheatcode-hover-weight", type=float, default=0.15)
+    parser.add_argument("--insertion-cheatcode-axial-progress-weight", type=float, default=0.30)
+    parser.add_argument("--insertion-cheatcode-corridor-weight", type=float, default=1.50)
+    parser.add_argument("--insertion-cheatcode-inside-alignment-weight", type=float, default=0.20)
+    parser.add_argument("--insertion-cheatcode-retreat-weight", type=float, default=0.20)
     parser.add_argument(
         "--insertion-corridor-orientation-gate-std",
         type=float,
@@ -295,7 +303,7 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser.add_argument("--insertion-axis", type=int, choices=[0, 1, 2], default=0)
     parser.add_argument(
         "--reward-preset",
-        choices=["default", "near_gate_corridor_v1", "cheatcode_insertion_v1"],
+        choices=["default", "near_gate_corridor_v1", "cheatcode_insertion_v1", "cheatcode_alignment_v1"],
         default="default",
         help="Apply a named online SERL reward-shaping preset before launch.",
     )
@@ -665,6 +673,24 @@ def build_plan(args: argparse.Namespace, *, inspect_required: bool = True) -> di
         "insertion_corridor_sigma": getattr(args, "insertion_corridor_sigma", 0.0025),
         "insertion_bypass_penalty_scale": getattr(args, "insertion_bypass_penalty_scale", 1.0),
         "insertion_cheatcode_phase_weight": getattr(args, "insertion_cheatcode_phase_weight", 0.0),
+        "insertion_cheatcode_lateral_progress_weight": getattr(
+            args, "insertion_cheatcode_lateral_progress_weight", 0.40
+        ),
+        "insertion_cheatcode_orientation_progress_weight": getattr(
+            args, "insertion_cheatcode_orientation_progress_weight", 0.30
+        ),
+        "insertion_cheatcode_near_misaligned_weight": getattr(
+            args, "insertion_cheatcode_near_misaligned_weight", 0.25
+        ),
+        "insertion_cheatcode_hover_weight": getattr(args, "insertion_cheatcode_hover_weight", 0.15),
+        "insertion_cheatcode_axial_progress_weight": getattr(
+            args, "insertion_cheatcode_axial_progress_weight", 0.30
+        ),
+        "insertion_cheatcode_corridor_weight": getattr(args, "insertion_cheatcode_corridor_weight", 1.50),
+        "insertion_cheatcode_inside_alignment_weight": getattr(
+            args, "insertion_cheatcode_inside_alignment_weight", 0.20
+        ),
+        "insertion_cheatcode_retreat_weight": getattr(args, "insertion_cheatcode_retreat_weight", 0.20),
         "insertion_axis": args.insertion_axis,
         "force_delta_penalty_weight": args.force_delta_penalty_weight,
         "force_delta_threshold": args.force_delta_threshold,
@@ -947,6 +973,22 @@ def build_command(args: argparse.Namespace) -> tuple[list[str], dict[str, str]]:
         str(getattr(args, "insertion_bypass_penalty_scale", 1.0)),
         "--target_reward_cheatcode_phase_weight",
         str(getattr(args, "insertion_cheatcode_phase_weight", 0.0)),
+        "--target_reward_cheatcode_lateral_progress_weight",
+        str(getattr(args, "insertion_cheatcode_lateral_progress_weight", 0.40)),
+        "--target_reward_cheatcode_orientation_progress_weight",
+        str(getattr(args, "insertion_cheatcode_orientation_progress_weight", 0.30)),
+        "--target_reward_cheatcode_near_misaligned_weight",
+        str(getattr(args, "insertion_cheatcode_near_misaligned_weight", 0.25)),
+        "--target_reward_cheatcode_hover_weight",
+        str(getattr(args, "insertion_cheatcode_hover_weight", 0.15)),
+        "--target_reward_cheatcode_axial_progress_weight",
+        str(getattr(args, "insertion_cheatcode_axial_progress_weight", 0.30)),
+        "--target_reward_cheatcode_corridor_weight",
+        str(getattr(args, "insertion_cheatcode_corridor_weight", 1.50)),
+        "--target_reward_cheatcode_inside_alignment_weight",
+        str(getattr(args, "insertion_cheatcode_inside_alignment_weight", 0.20)),
+        "--target_reward_cheatcode_retreat_weight",
+        str(getattr(args, "insertion_cheatcode_retreat_weight", 0.20)),
         "--target_reward_insertion_orientation_gate_std",
         str(getattr(args, "insertion_corridor_orientation_gate_std", 0.0)),
         "--target_reward_consistency_body",
@@ -1149,6 +1191,18 @@ def validate_launch_inputs(args: argparse.Namespace) -> None:
         raise ValueError("--target-action-guide-axial-blend-lateral-m must be non-negative")
     if float(getattr(args, "target_action_guide_orientation_switch_rad", 0.0)) < 0.0:
         raise ValueError("--target-action-guide-orientation-switch-rad must be non-negative")
+    for attr, flag in [
+        ("insertion_cheatcode_lateral_progress_weight", "--insertion-cheatcode-lateral-progress-weight"),
+        ("insertion_cheatcode_orientation_progress_weight", "--insertion-cheatcode-orientation-progress-weight"),
+        ("insertion_cheatcode_near_misaligned_weight", "--insertion-cheatcode-near-misaligned-weight"),
+        ("insertion_cheatcode_hover_weight", "--insertion-cheatcode-hover-weight"),
+        ("insertion_cheatcode_axial_progress_weight", "--insertion-cheatcode-axial-progress-weight"),
+        ("insertion_cheatcode_corridor_weight", "--insertion-cheatcode-corridor-weight"),
+        ("insertion_cheatcode_inside_alignment_weight", "--insertion-cheatcode-inside-alignment-weight"),
+        ("insertion_cheatcode_retreat_weight", "--insertion-cheatcode-retreat-weight"),
+    ]:
+        if float(getattr(args, attr, 0.0)) < 0.0:
+            raise ValueError(f"{flag} must be non-negative")
     if args.batch_size <= 0:
         raise ValueError("--batch-size must be positive")
     if args.replay_capacity < args.batch_size:
@@ -1256,7 +1310,7 @@ def normalize_reward_sign_args(args: argparse.Namespace) -> None:
 def apply_reward_preset(args: argparse.Namespace) -> None:
     if getattr(args, "reward_preset", "default") == "default":
         return
-    if args.reward_preset not in {"near_gate_corridor_v1", "cheatcode_insertion_v1"}:
+    if args.reward_preset not in {"near_gate_corridor_v1", "cheatcode_insertion_v1", "cheatcode_alignment_v1"}:
         raise ValueError(f"Unsupported reward preset: {args.reward_preset}")
     explicit = getattr(args, "_explicit_cli_flags", set())
 
@@ -1264,7 +1318,7 @@ def apply_reward_preset(args: argparse.Namespace) -> None:
         if flag not in explicit:
             setattr(args, attr, value)
 
-    if args.reward_preset == "cheatcode_insertion_v1":
+    if args.reward_preset in {"cheatcode_insertion_v1", "cheatcode_alignment_v1"}:
         set_default("insertion_distance_weight", "--insertion-distance-weight", 0.0)
         set_default("insertion_close_weight", "--insertion-close-weight", 0.0)
         set_default("insertion_progress_weight", "--insertion-progress-weight", 0.0)
@@ -1282,6 +1336,23 @@ def apply_reward_preset(args: argparse.Namespace) -> None:
         set_default("insertion_orientation_std", "--insertion-orientation-std", 0.08)
         set_default("insertion_orientation_gate_sigma", "--insertion-orientation-gate-sigma", 0.006)
         set_default("insertion_cheatcode_phase_weight", "--insertion-cheatcode-phase-weight", 1.0)
+        if args.reward_preset == "cheatcode_alignment_v1":
+            set_default(
+                "insertion_cheatcode_axial_progress_weight",
+                "--insertion-cheatcode-axial-progress-weight",
+                0.0,
+            )
+            set_default(
+                "insertion_cheatcode_corridor_weight",
+                "--insertion-cheatcode-corridor-weight",
+                0.0,
+            )
+            set_default(
+                "insertion_cheatcode_inside_alignment_weight",
+                "--insertion-cheatcode-inside-alignment-weight",
+                0.0,
+            )
+            set_default("insertion_cheatcode_retreat_weight", "--insertion-cheatcode-retreat-weight", 0.0)
         set_default("insertion_consistency_body", "--insertion-consistency-body", "auto")
         set_default("insertion_consistency_axial_std", "--insertion-consistency-axial-std", 0.004)
         set_default("insertion_consistency_lateral_sigma", "--insertion-consistency-lateral-sigma", 0.003)

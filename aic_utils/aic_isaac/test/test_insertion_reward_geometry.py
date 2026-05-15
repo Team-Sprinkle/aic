@@ -169,6 +169,15 @@ def test_cheatcode_start_like_lateral_improvement_is_positive() -> None:
     assert reward.lateral_progress.item() > 0.0
 
 
+def test_cheatcode_far_outside_retreat_is_not_reward_escape() -> None:
+    start = _phase(-0.006, 0.006, 0.10, prev_depth=-0.006, prev_lateral=0.006, prev_theta=0.10)
+    far_outside = _phase(-0.025, 0.020, 0.10, prev_depth=-0.024, prev_lateral=0.020, prev_theta=0.10)
+    very_far_outside = _phase(-0.075, 0.060, 0.13, prev_depth=-0.074, prev_lateral=0.060, prev_theta=0.13)
+    assert far_outside.preinsert_hover.item() < start.preinsert_hover.item()
+    assert far_outside.total.item() < start.total.item()
+    assert very_far_outside.total.item() < start.total.item()
+
+
 def test_cheatcode_start_like_orientation_improvement_is_positive() -> None:
     reward = _phase(-0.006, 0.006, 0.08, prev_depth=-0.006, prev_lateral=0.006, prev_theta=0.10)
     assert reward.orientation_progress.item() > 0.0

@@ -379,6 +379,14 @@ parser.add_argument("--target_reward_cheatcode_sigma_theta_pre", type=float, def
 parser.add_argument("--target_reward_cheatcode_sigma_theta_insert", type=float, default=0.06)
 parser.add_argument("--target_reward_cheatcode_orientation_progress_scale", type=float, default=0.02)
 parser.add_argument("--target_reward_cheatcode_hover_depth", type=float, default=-0.004)
+parser.add_argument("--target_reward_cheatcode_lateral_progress_weight", type=float, default=0.40)
+parser.add_argument("--target_reward_cheatcode_orientation_progress_weight", type=float, default=0.30)
+parser.add_argument("--target_reward_cheatcode_near_misaligned_weight", type=float, default=0.25)
+parser.add_argument("--target_reward_cheatcode_hover_weight", type=float, default=0.15)
+parser.add_argument("--target_reward_cheatcode_axial_progress_weight", type=float, default=0.30)
+parser.add_argument("--target_reward_cheatcode_corridor_weight", type=float, default=1.50)
+parser.add_argument("--target_reward_cheatcode_inside_alignment_weight", type=float, default=0.20)
+parser.add_argument("--target_reward_cheatcode_retreat_weight", type=float, default=0.20)
 parser.add_argument(
     "--target_reward_insertion_orientation_gate_std",
     type=float,
@@ -403,7 +411,7 @@ parser.add_argument("--target_success_consistency_lateral_threshold", type=float
 parser.add_argument("--target_reward_insertion_axis", type=int, choices=[0, 1, 2], default=0)
 parser.add_argument(
     "--reward_preset",
-    choices=["default", "near_gate_corridor_v1", "cheatcode_insertion_v1"],
+    choices=["default", "near_gate_corridor_v1", "cheatcode_insertion_v1", "cheatcode_alignment_v1"],
     default="default",
     help="Apply a named reward-shaping preset before env creation.",
 )
@@ -590,9 +598,9 @@ def _set_preset_default(args: argparse.Namespace, attr: str, flag: str, value: o
 def _apply_reward_preset(args: argparse.Namespace) -> None:
     if args.reward_preset == "default":
         return
-    if args.reward_preset not in {"near_gate_corridor_v1", "cheatcode_insertion_v1"}:
+    if args.reward_preset not in {"near_gate_corridor_v1", "cheatcode_insertion_v1", "cheatcode_alignment_v1"}:
         raise ValueError(f"Unsupported reward preset: {args.reward_preset}")
-    if args.reward_preset == "cheatcode_insertion_v1":
+    if args.reward_preset in {"cheatcode_insertion_v1", "cheatcode_alignment_v1"}:
         _set_preset_default(args, "target_reward_distance_weight", "--target_reward_distance_weight", 0.0)
         _set_preset_default(args, "target_reward_close_weight", "--target_reward_close_weight", 0.0)
         _set_preset_default(args, "target_reward_progress_weight", "--target_reward_progress_weight", 0.0)
@@ -612,6 +620,31 @@ def _apply_reward_preset(args: argparse.Namespace) -> None:
         _set_preset_default(args, "target_reward_orientation_std", "--target_reward_orientation_std", 0.08)
         _set_preset_default(args, "target_reward_orientation_gate_sigma", "--target_reward_orientation_gate_sigma", 0.006)
         _set_preset_default(args, "target_reward_cheatcode_phase_weight", "--target_reward_cheatcode_phase_weight", 1.0)
+        if args.reward_preset == "cheatcode_alignment_v1":
+            _set_preset_default(
+                args,
+                "target_reward_cheatcode_axial_progress_weight",
+                "--target_reward_cheatcode_axial_progress_weight",
+                0.0,
+            )
+            _set_preset_default(
+                args,
+                "target_reward_cheatcode_corridor_weight",
+                "--target_reward_cheatcode_corridor_weight",
+                0.0,
+            )
+            _set_preset_default(
+                args,
+                "target_reward_cheatcode_inside_alignment_weight",
+                "--target_reward_cheatcode_inside_alignment_weight",
+                0.0,
+            )
+            _set_preset_default(
+                args,
+                "target_reward_cheatcode_retreat_weight",
+                "--target_reward_cheatcode_retreat_weight",
+                0.0,
+            )
         _set_preset_default(args, "target_reward_consistency_body", "--target_reward_consistency_body", "auto")
         _set_preset_default(args, "target_reward_consistency_axial_std", "--target_reward_consistency_axial_std", 0.004)
         _set_preset_default(args, "target_reward_consistency_lateral_sigma", "--target_reward_consistency_lateral_sigma", 0.003)
@@ -1416,6 +1449,24 @@ def _configure_task_geometry_rewards(env_cfg: Any, args: argparse.Namespace) -> 
     rewards.target_cheatcode_phase_reward.params["bypass_penalty_scale"] = float(
         args.target_reward_insertion_bypass_penalty_scale
     )
+    rewards.target_cheatcode_phase_reward.params["lateral_progress_weight"] = float(
+        args.target_reward_cheatcode_lateral_progress_weight
+    )
+    rewards.target_cheatcode_phase_reward.params["orientation_progress_weight"] = float(
+        args.target_reward_cheatcode_orientation_progress_weight
+    )
+    rewards.target_cheatcode_phase_reward.params["near_misaligned_weight"] = float(
+        args.target_reward_cheatcode_near_misaligned_weight
+    )
+    rewards.target_cheatcode_phase_reward.params["hover_weight"] = float(args.target_reward_cheatcode_hover_weight)
+    rewards.target_cheatcode_phase_reward.params["axial_progress_weight"] = float(
+        args.target_reward_cheatcode_axial_progress_weight
+    )
+    rewards.target_cheatcode_phase_reward.params["corridor_weight"] = float(args.target_reward_cheatcode_corridor_weight)
+    rewards.target_cheatcode_phase_reward.params["inside_alignment_weight"] = float(
+        args.target_reward_cheatcode_inside_alignment_weight
+    )
+    rewards.target_cheatcode_phase_reward.params["retreat_weight"] = float(args.target_reward_cheatcode_retreat_weight)
     success_axial_threshold = (
         float(args.target_success_termination_threshold)
         if args.target_success_axial_threshold is None
@@ -1562,6 +1613,14 @@ def _configure_task_geometry_rewards(env_cfg: Any, args: argparse.Namespace) -> 
         "cheatcode_sigma_theta_insert": float(args.target_reward_cheatcode_sigma_theta_insert),
         "cheatcode_orientation_progress_scale": float(args.target_reward_cheatcode_orientation_progress_scale),
         "cheatcode_hover_depth": float(args.target_reward_cheatcode_hover_depth),
+        "cheatcode_lateral_progress_weight": float(args.target_reward_cheatcode_lateral_progress_weight),
+        "cheatcode_orientation_progress_weight": float(args.target_reward_cheatcode_orientation_progress_weight),
+        "cheatcode_near_misaligned_weight": float(args.target_reward_cheatcode_near_misaligned_weight),
+        "cheatcode_hover_weight": float(args.target_reward_cheatcode_hover_weight),
+        "cheatcode_axial_progress_weight": float(args.target_reward_cheatcode_axial_progress_weight),
+        "cheatcode_corridor_weight": float(args.target_reward_cheatcode_corridor_weight),
+        "cheatcode_inside_alignment_weight": float(args.target_reward_cheatcode_inside_alignment_weight),
+        "cheatcode_retreat_weight": float(args.target_reward_cheatcode_retreat_weight),
         "consistency_body": consistency_body,
         "consistency_axial_std": float(args.target_reward_consistency_axial_std),
         "consistency_lateral_sigma": float(args.target_reward_consistency_lateral_sigma),
@@ -3794,6 +3853,143 @@ def _body_frame_offset_diagnostics(env) -> dict[str, Any]:
                 ]
             out["pairwise_offsets"][key] = entry
     return out
+
+
+def _finite_summary(values: list[float]) -> dict[str, Any]:
+    finite = [float(v) for v in values if math.isfinite(float(v))]
+    if not finite:
+        return {"count": 0, "min": None, "mean": None, "max": None}
+    return {
+        "count": len(finite),
+        "min": min(finite),
+        "mean": sum(finite) / len(finite),
+        "max": max(finite),
+    }
+
+
+def _fraction(numerator: int, denominator: int) -> float | None:
+    if denominator <= 0:
+        return None
+    return float(numerator) / float(denominator)
+
+
+def _as_float_or_none(value: Any) -> float | None:
+    if value is None:
+        return None
+    try:
+        out = float(value)
+    except (TypeError, ValueError):
+        return None
+    if not math.isfinite(out):
+        return None
+    return out
+
+
+def _write_cheatcode_phase_summary(metrics_path: Path, summary_path: Path) -> dict[str, Any] | None:
+    if not metrics_path.exists():
+        return None
+
+    s_values: list[float] = []
+    r_values: list[float] = []
+    theta_values: list[float] = []
+    prev_s: float | None = None
+    transition_count = 0
+    delta_s_positive_lateral_bad_count = 0
+    delta_s_positive_orientation_bad_count = 0
+    axial_progress_count = 0
+    axial_progress_positive_lateral_bad_count = 0
+    axial_progress_positive_orientation_bad_count = 0
+    first_g_align_insert_gt_half: int | None = None
+    first_s_positive: int | None = None
+    first_success_candidate: int | None = None
+    success_threshold_violation_steps: list[int] = []
+
+    with metrics_path.open("r", encoding="utf-8") as f:
+        for line in f:
+            line = line.strip()
+            if not line:
+                continue
+            try:
+                row = json.loads(line)
+            except json.JSONDecodeError:
+                continue
+            step = int(row.get("step", len(s_values) + 1))
+            geom = row.get("pre_step_insertion_geometry")
+            if not isinstance(geom, dict):
+                geom = {}
+            phase = geom.get("cheatcode_phase_reward")
+            if not isinstance(phase, dict):
+                phase = {}
+
+            s = _as_float_or_none(geom.get("signed_depth_m_env0"))
+            r = _as_float_or_none(geom.get("lateral_error_m_env0"))
+            theta = _as_float_or_none(geom.get("orientation_error_rad_env0"))
+            g_align_insert = _as_float_or_none(phase.get("g_align_insert_env0"))
+            axial_progress = _as_float_or_none(phase.get("axial_progress_env0"))
+            success_candidate = _as_float_or_none(phase.get("success_candidate_env0"))
+
+            if s is not None:
+                s_values.append(s)
+                if first_s_positive is None and s > 0.0:
+                    first_s_positive = step
+                if prev_s is not None:
+                    delta_s = s - prev_s
+                    transition_count += 1
+                    if delta_s > 0.0 and r is not None and r > 0.0015:
+                        delta_s_positive_lateral_bad_count += 1
+                    if delta_s > 0.0 and theta is not None and theta > 0.06:
+                        delta_s_positive_orientation_bad_count += 1
+                prev_s = s
+            if r is not None:
+                r_values.append(r)
+            if theta is not None:
+                theta_values.append(theta)
+            if g_align_insert is not None and first_g_align_insert_gt_half is None and g_align_insert > 0.5:
+                first_g_align_insert_gt_half = step
+            if axial_progress is not None and axial_progress > 0.0:
+                axial_progress_count += 1
+                if r is not None and r > 0.0015:
+                    axial_progress_positive_lateral_bad_count += 1
+                if theta is not None and theta > 0.06:
+                    axial_progress_positive_orientation_bad_count += 1
+            if success_candidate is not None and success_candidate >= 0.5:
+                if first_success_candidate is None:
+                    first_success_candidate = step
+                if (r is not None and r > 0.0005) or (theta is not None and theta > 0.03):
+                    success_threshold_violation_steps.append(step)
+
+    summary: dict[str, Any] = {
+        "thresholds": {
+            "misaligned_lateral_m": 0.0015,
+            "misaligned_orientation_rad": 0.06,
+            "success_lateral_m": 0.0005,
+            "success_orientation_rad": 0.03,
+        },
+        "s": _finite_summary(s_values),
+        "r": _finite_summary(r_values),
+        "theta": _finite_summary(theta_values),
+        "transition_count": transition_count,
+        "axial_progress_positive_count": axial_progress_count,
+        "fraction_delta_s_positive_and_r_gt_0p0015": _fraction(
+            delta_s_positive_lateral_bad_count, transition_count
+        ),
+        "fraction_delta_s_positive_and_theta_gt_0p06": _fraction(
+            delta_s_positive_orientation_bad_count, transition_count
+        ),
+        "fraction_axial_progress_positive_and_r_gt_0p0015": _fraction(
+            axial_progress_positive_lateral_bad_count, axial_progress_count
+        ),
+        "fraction_axial_progress_positive_and_theta_gt_0p06": _fraction(
+            axial_progress_positive_orientation_bad_count, axial_progress_count
+        ),
+        "first_step_g_align_insert_gt_0p5": first_g_align_insert_gt_half,
+        "first_step_s_gt_0": first_s_positive,
+        "first_step_success_candidate": first_success_candidate,
+        "success_while_lateral_or_orientation_threshold_violated": bool(success_threshold_violation_steps),
+        "success_threshold_violation_steps": success_threshold_violation_steps,
+    }
+    summary_path.write_text(json.dumps(_jsonable(summary), indent=2, sort_keys=True), encoding="utf-8")
+    return summary
 
 
 def _scene_asset_pose_diagnostics(env, reward_config: dict[str, Any]) -> dict[str, Any]:
@@ -6612,6 +6808,9 @@ def main() -> None:
     _save_checkpoint(run_dir / "checkpoint_latest.pt", trainer, train_config, train_config["result"]["steps_completed"])
     print(f"Wrote online SERL checkpoint: {run_dir / 'checkpoint_latest.pt'}")
     print(f"Wrote metrics: {metrics_path}")
+    cheatcode_summary = _write_cheatcode_phase_summary(metrics_path, run_dir / "cheatcode_phase_summary.json")
+    if cheatcode_summary is not None:
+        print(f"Wrote cheatcode phase summary: {run_dir / 'cheatcode_phase_summary.json'}")
     env.close()
 
 

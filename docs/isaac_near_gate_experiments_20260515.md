@@ -222,3 +222,44 @@ Interpretation:
 Next recommended short run:
 
 Use `cheatcode_insertion_v1` for an alignment-only diagnostic by explicitly setting axial/corridor terms to zero through the phase reward weights in code or by adding CLI knobs for the subweights, then run 100-300 no-learning or delayed-learning steps. Only turn on learning after the logged `r` and `theta` improve before `s` increases.
+
+## CheatCode Phase Reward Verification Probes
+
+I separately evaluated the pure helper at controlled `(s, r, theta)` positions and compared it to Isaac rollout logs.
+
+Synthetic probes used `D=10 mm`, entrance at the origin, insertion axis `[1, 0, 0]`, and the `cheatcode_insertion_v1` defaults:
+
+| Probe | s mm | r mm | theta rad | Total | Axial | Lateral progress | Orientation progress | Success |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| start, inward, misaligned | `-5.50` | `6.00` | `0.100` | `-1.084` | `-0.500` | `0.000` | `0.000` | no |
+| start, lateral improves only | `-6.00` | `5.00` | `0.100` | `-0.342` | `0.000` | `+1.000` | `0.000` | no |
+| start, orientation improves only | `-6.00` | `6.00` | `0.080` | `-0.520` | `0.000` | `0.000` | `+1.000` | no |
+| aligned pre-entry inward | `-3.50` | `0.50` | `0.030` | `+0.123` | `+0.428` | `0.000` | `0.000` | no |
+| lateral-bad inward | `-3.50` | `3.00` | `0.030` | `-0.470` | `-0.500` | `0.000` | `0.000` | no |
+| orientation-bad inward | `-3.50` | `0.50` | `0.150` | `-0.623` | `-0.500` | `0.000` | `0.000` | no |
+| entrance aligned inward | `+0.50` | `0.40` | `0.030` | `+0.080` | `+0.435` | `0.000` | `0.000` | no |
+| inside centered | `+4.00` | `0.40` | `0.030` | `+0.312` | `+0.435` | `0.000` | `0.000` | no |
+| inside lateral bad | `+4.00` | `3.00` | `0.030` | `-6.141` | `-0.500` | `0.000` | `0.000` | no |
+| seated aligned | `+10.00` | `0.20` | `0.020` | `+2.645` | `+0.487` | `+0.100` | `+0.500` | yes |
+| seated lateral bad | `+10.00` | `3.00` | `0.020` | `-11.709` | `-0.500` | `0.000` | `0.000` | no |
+| retreat while inserted/aligned | `+4.00` | `0.40` | `0.030` | `-0.064` | `-0.491` | `0.000` | `0.000` | no |
+
+The synthetic trend is correct: lateral/orientation progress are individually positive, but total reward stays negative until the state is close enough to the tight insertion tube. Inward motion is positive only when both lateral and orientation gates are tight.
+
+ACT-only Isaac smoke recomputation:
+
+- run: `outputs/train/isaac_online_serl_near_gate/audit/2026-05-15_14-38-58_audit_cheatcode_phase_v1_actonly_30_20260515_143835`
+- recompute from logged `s/r/theta` vs logged `target_cheatcode_phase_reward`: mean absolute difference `0.0089`, max `0.0423`
+- trend: `s -5.918 -> -3.576 mm`, `r 5.999 -> 3.901 mm`, `theta 0.078 -> 0.084 rad`, reward `-1.017 -> -0.795`
+
+Guided no-learning Isaac diagnostic:
+
+- run: `outputs/train/isaac_online_serl_near_gate/audit/2026-05-15_14-58-04_audit_cheatcode_phase_v1_guided_40_20260515_145741`
+- videos:
+  - `videos/env0_center_h264.mp4`
+  - `videos/env0_left_h264.mp4`
+  - `videos/env0_right_h264.mp4`
+- trend: `s -5.918 -> -0.218 mm`, `r 5.999 -> 1.187 mm`, `theta 0.078 -> 0.069 rad`, reward `-0.901 -> -0.542`
+- recompute vs logged reward differs more than ACT-only, mean `0.0535`, max `0.5364`, because the guide changes state rapidly and logged reward is computed during `env.step` while diagnostics are pre-step snapshots. The signs and trend still agree.
+
+Visual inspection of the guided run's final center frame matches the metrics: the tip is near the entrance and more centered, but the module is still visibly outside. The reward remains negative and success false, which is the desired behavior for a not-yet-inserted state.

@@ -755,7 +755,7 @@ class RewardsCfg:
             "orientation_progress_scale": 0.02,
             "axial_progress_scale": 0.001,
             "hover_depth": -0.004,
-            "hover_scale": 0.004,
+            "hover_scale": 0.002,
             "near_gate_start": -0.008,
             "near_gate_scale": 0.001,
             "inside_gate_scale": 0.001,

@@ -171,9 +171,11 @@ def cheatcode_insertion_phase_reward(
     orientation_progress_scale: float = 0.02,
     axial_progress_scale: float = 0.001,
     hover_depth: float = -0.004,
-    hover_scale: float = 0.004,
+    hover_scale: float = 0.002,
     near_gate_start: float = -0.008,
     near_gate_scale: float = 0.001,
+    hover_gate_start: float = -0.100,
+    hover_gate_scale: float = 0.010,
     inside_gate_scale: float = 0.001,
     near_misaligned_lateral_threshold: float = 0.0015,
     near_misaligned_orientation_threshold: float = 0.06,
@@ -213,6 +215,7 @@ def cheatcode_insertion_phase_reward(
     g_align_insert = g_lat_insert * g_ori_insert
 
     near_gate = _sigmoid_gate(s - float(near_gate_start), near_gate_scale)
+    hover_gate = _sigmoid_gate(s - float(hover_gate_start), hover_gate_scale)
     inside_gate = _sigmoid_gate(s, inside_gate_scale)
 
     r_lateral_progress = lateral_progress_reward(
@@ -231,7 +234,10 @@ def cheatcode_insertion_phase_reward(
         / max(float(near_misaligned_orientation_threshold), 1.0e-9)
     )
     r_hover = -torch.abs(s - float(hover_depth)) / max(float(hover_scale), 1.0e-9)
-    r_preinsert_hover = (1.0 - g_align_pre) * near_gate * r_hover
+    # Keep the pre-insertion attractor active across the near-gate curriculum
+    # region. Otherwise backing far away can look better than staying near the
+    # entrance while misaligned because near_gate intentionally decays outside.
+    r_preinsert_hover = (1.0 - g_align_pre) * torch.maximum(near_gate, hover_gate) * r_hover
 
     delta_s = s - previous_depth
     forward = (delta_s / max(float(axial_progress_scale), 1.0e-9)).clamp(min=-1.0, max=1.0)
