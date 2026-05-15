@@ -17,6 +17,27 @@ class InsertionGeometry(NamedTuple):
     axis: torch.Tensor
 
 
+class CheatcodeInsertionRewardComponents(NamedTuple):
+    total: torch.Tensor
+    lateral_progress: torch.Tensor
+    orientation_progress: torch.Tensor
+    near_misaligned: torch.Tensor
+    preinsert_hover: torch.Tensor
+    axial_progress: torch.Tensor
+    corridor: torch.Tensor
+    inside_alignment: torch.Tensor
+    retreat: torch.Tensor
+    success_candidate: torch.Tensor
+    g_lat_pre: torch.Tensor
+    g_ori_pre: torch.Tensor
+    g_align_pre: torch.Tensor
+    g_lat_insert: torch.Tensor
+    g_ori_insert: torch.Tensor
+    g_align_insert: torch.Tensor
+    near_gate: torch.Tensor
+    inside_gate: torch.Tensor
+
+
 def normalize_axis(axis_w: torch.Tensor) -> torch.Tensor:
     """Return a unit insertion axis, preserving batched shape."""
     return axis_w / torch.linalg.norm(axis_w, dim=-1, keepdim=True).clamp(min=1.0e-9)
@@ -123,4 +144,143 @@ def lateral_progress_reward(
     return ((previous_lateral_error - current_lateral_error) / max(float(scale), 1.0e-9)).clamp(
         min=-1.0,
         max=1.0,
+    )
+
+
+def _pow4_gate(error: torch.Tensor, sigma: float) -> torch.Tensor:
+    scaled = error / max(float(sigma), 1.0e-9)
+    return torch.exp(-(scaled * scaled * scaled * scaled))
+
+
+def _sigmoid_gate(value: torch.Tensor, scale: float) -> torch.Tensor:
+    return torch.sigmoid(value / max(float(scale), 1.0e-9))
+
+
+def cheatcode_insertion_phase_reward(
+    *,
+    geometry: InsertionGeometry,
+    previous_depth: torch.Tensor,
+    previous_lateral_error: torch.Tensor,
+    orientation_error: torch.Tensor,
+    previous_orientation_error: torch.Tensor,
+    sigma_lat_pre: float = 0.0025,
+    sigma_lat_insert: float = 0.0015,
+    sigma_theta_pre: float = 0.10,
+    sigma_theta_insert: float = 0.06,
+    lateral_progress_scale: float = 0.001,
+    orientation_progress_scale: float = 0.02,
+    axial_progress_scale: float = 0.001,
+    hover_depth: float = -0.004,
+    hover_scale: float = 0.004,
+    near_gate_start: float = -0.008,
+    near_gate_scale: float = 0.001,
+    inside_gate_scale: float = 0.001,
+    near_misaligned_lateral_threshold: float = 0.0015,
+    near_misaligned_orientation_threshold: float = 0.06,
+    inside_lateral_scale: float = 0.001,
+    inside_orientation_scale: float = 0.04,
+    bypass_penalty_scale: float = 6.0,
+    success_depth_fraction: float = 0.9,
+    success_lateral_threshold: float = 0.0005,
+    success_orientation_threshold: float = 0.03,
+    lateral_progress_weight: float = 0.40,
+    orientation_progress_weight: float = 0.30,
+    near_misaligned_weight: float = 0.25,
+    hover_weight: float = 0.15,
+    axial_progress_weight: float = 0.30,
+    corridor_weight: float = 1.50,
+    inside_alignment_weight: float = 0.20,
+    retreat_weight: float = 0.20,
+) -> CheatcodeInsertionRewardComponents:
+    """Phase-aware insertion reward modeled after the Gazebo CheatCode state machine.
+
+    The reward first pays for lateral/orientation alignment outside the port,
+    then permits forward insertion only inside a sharp alignment tube. Inward
+    motion while lateral or orientation error is large is explicitly negative.
+    """
+    s = geometry.axial_depth
+    r = geometry.lateral_error
+    theta = orientation_error.to(device=s.device, dtype=s.dtype)
+    previous_depth = previous_depth.to(device=s.device, dtype=s.dtype)
+    previous_lateral_error = previous_lateral_error.to(device=s.device, dtype=s.dtype)
+    previous_orientation_error = previous_orientation_error.to(device=s.device, dtype=s.dtype)
+
+    g_lat_pre = _pow4_gate(r, sigma_lat_pre)
+    g_ori_pre = _pow4_gate(theta, sigma_theta_pre)
+    g_align_pre = g_lat_pre * g_ori_pre
+    g_lat_insert = _pow4_gate(r, sigma_lat_insert)
+    g_ori_insert = _pow4_gate(theta, sigma_theta_insert)
+    g_align_insert = g_lat_insert * g_ori_insert
+
+    near_gate = _sigmoid_gate(s - float(near_gate_start), near_gate_scale)
+    inside_gate = _sigmoid_gate(s, inside_gate_scale)
+
+    r_lateral_progress = lateral_progress_reward(
+        previous_lateral_error=previous_lateral_error,
+        current_lateral_error=r,
+        scale=lateral_progress_scale,
+    )
+    r_orientation_progress = ((previous_orientation_error - theta) / max(float(orientation_progress_scale), 1.0e-9)).clamp(
+        min=-1.0,
+        max=1.0,
+    )
+    r_near_misaligned = -near_gate * (
+        torch.relu(r - float(near_misaligned_lateral_threshold))
+        / max(float(near_misaligned_lateral_threshold), 1.0e-9)
+        + torch.relu(theta - float(near_misaligned_orientation_threshold))
+        / max(float(near_misaligned_orientation_threshold), 1.0e-9)
+    )
+    r_hover = -torch.abs(s - float(hover_depth)) / max(float(hover_scale), 1.0e-9)
+    r_preinsert_hover = (1.0 - g_align_pre) * near_gate * r_hover
+
+    delta_s = s - previous_depth
+    forward = (delta_s / max(float(axial_progress_scale), 1.0e-9)).clamp(min=-1.0, max=1.0)
+    forward_reward = forward * (2.0 * g_align_insert - 1.0)
+    retreat_penalty = -inside_gate * torch.relu(-delta_s / max(float(axial_progress_scale), 1.0e-9))
+    r_axial = torch.where(delta_s > 0.0, forward_reward, retreat_penalty)
+
+    centered_depth = geometry.depth_fraction * g_align_insert
+    bypass_penalty = geometry.depth_fraction * (1.0 - g_align_insert) * max(float(bypass_penalty_scale), 0.0)
+    r_corridor = centered_depth - bypass_penalty
+    r_inside_alignment = -inside_gate * (
+        torch.square(r / max(float(inside_lateral_scale), 1.0e-9))
+        + torch.square(theta / max(float(inside_orientation_scale), 1.0e-9))
+    )
+    r_retreat = -inside_gate * torch.relu(-delta_s / max(float(axial_progress_scale), 1.0e-9))
+    success_candidate = (
+        (geometry.depth_fraction >= float(success_depth_fraction))
+        & (r <= float(success_lateral_threshold))
+        & (theta <= float(success_orientation_threshold))
+    ).to(dtype=s.dtype)
+
+    total = (
+        float(lateral_progress_weight) * r_lateral_progress
+        + float(orientation_progress_weight) * r_orientation_progress
+        + float(near_misaligned_weight) * r_near_misaligned
+        + float(hover_weight) * r_preinsert_hover
+        + float(axial_progress_weight) * r_axial
+        + float(corridor_weight) * r_corridor
+        + float(inside_alignment_weight) * r_inside_alignment
+        + float(retreat_weight) * r_retreat
+        + success_candidate
+    )
+    return CheatcodeInsertionRewardComponents(
+        total=total,
+        lateral_progress=r_lateral_progress,
+        orientation_progress=r_orientation_progress,
+        near_misaligned=r_near_misaligned,
+        preinsert_hover=r_preinsert_hover,
+        axial_progress=r_axial,
+        corridor=r_corridor,
+        inside_alignment=r_inside_alignment,
+        retreat=r_retreat,
+        success_candidate=success_candidate,
+        g_lat_pre=g_lat_pre,
+        g_ori_pre=g_ori_pre,
+        g_align_pre=g_align_pre,
+        g_lat_insert=g_lat_insert,
+        g_ori_insert=g_ori_insert,
+        g_align_insert=g_align_insert,
+        near_gate=near_gate,
+        inside_gate=inside_gate,
     )

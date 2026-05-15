@@ -189,6 +189,7 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser.add_argument("--target-action-guide-axial-step-size", type=float, default=0.0)
     parser.add_argument("--target-action-guide-lateral-switch-m", type=float, default=0.002)
     parser.add_argument("--target-action-guide-axial-blend-lateral-m", type=float, default=0.006)
+    parser.add_argument("--target-action-guide-orientation-switch-rad", type=float, default=0.0)
     parser.add_argument("--target-action-guide-collect-blend", type=float, default=0.0)
     parser.add_argument("--target-action-guide-collect-steps", type=int, default=0)
     parser.add_argument("--target-action-guide-collect-decay", action=argparse.BooleanOptionalAction, default=False)
@@ -276,6 +277,7 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser.add_argument("--insertion-corridor-weight", type=float, default=0.0)
     parser.add_argument("--insertion-corridor-sigma", type=float, default=0.0025)
     parser.add_argument("--insertion-bypass-penalty-scale", type=float, default=1.0)
+    parser.add_argument("--insertion-cheatcode-phase-weight", type=float, default=0.0)
     parser.add_argument(
         "--insertion-corridor-orientation-gate-std",
         type=float,
@@ -285,10 +287,15 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
             "Forward progress with bad orientation is penalized."
         ),
     )
+    parser.add_argument("--insertion-consistency-body", default="auto")
+    parser.add_argument("--insertion-consistency-axial-std", type=float, default=0.0)
+    parser.add_argument("--insertion-consistency-lateral-sigma", type=float, default=0.0)
+    parser.add_argument("--target-success-consistency-axial-threshold", type=float, default=0.0)
+    parser.add_argument("--target-success-consistency-lateral-threshold", type=float, default=0.0)
     parser.add_argument("--insertion-axis", type=int, choices=[0, 1, 2], default=0)
     parser.add_argument(
         "--reward-preset",
-        choices=["default", "near_gate_corridor_v1"],
+        choices=["default", "near_gate_corridor_v1", "cheatcode_insertion_v1"],
         default="default",
         help="Apply a named online SERL reward-shaping preset before launch.",
     )
@@ -318,6 +325,7 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     )
     parser.add_argument("--target-success-axial-threshold", type=float, default=None)
     parser.add_argument("--target-success-lateral-threshold", type=float, default=None)
+    parser.add_argument("--target-success-orientation-threshold", type=float, default=None)
     parser.add_argument("--target-reward-position-offset", type=float, nargs=3, default=None)
     parser.add_argument("--target-reward-body-position-offset", type=float, nargs=3, default=None)
     parser.add_argument("--state-source", choices=["lerobot_compatible", "policy_prefix"], default="lerobot_compatible")
@@ -620,6 +628,9 @@ def build_plan(args: argparse.Namespace, *, inspect_required: bool = True) -> di
         "target_action_guide_axial_blend_lateral_m": getattr(
             args, "target_action_guide_axial_blend_lateral_m", 0.006
         ),
+        "target_action_guide_orientation_switch_rad": getattr(
+            args, "target_action_guide_orientation_switch_rad", 0.0
+        ),
         "target_action_guide_collect_blend": getattr(args, "target_action_guide_collect_blend", 0.0),
         "target_action_guide_collect_steps": getattr(args, "target_action_guide_collect_steps", 0),
         "target_action_guide_collect_decay": bool(getattr(args, "target_action_guide_collect_decay", False)),
@@ -653,6 +664,7 @@ def build_plan(args: argparse.Namespace, *, inspect_required: bool = True) -> di
         "insertion_corridor_weight": getattr(args, "insertion_corridor_weight", 0.0),
         "insertion_corridor_sigma": getattr(args, "insertion_corridor_sigma", 0.0025),
         "insertion_bypass_penalty_scale": getattr(args, "insertion_bypass_penalty_scale", 1.0),
+        "insertion_cheatcode_phase_weight": getattr(args, "insertion_cheatcode_phase_weight", 0.0),
         "insertion_axis": args.insertion_axis,
         "force_delta_penalty_weight": args.force_delta_penalty_weight,
         "force_delta_threshold": args.force_delta_threshold,
@@ -826,6 +838,8 @@ def build_command(args: argparse.Namespace) -> tuple[list[str], dict[str, str]]:
         str(getattr(args, "target_action_guide_lateral_switch_m", 0.002)),
         "--target_action_guide_axial_blend_lateral_m",
         str(getattr(args, "target_action_guide_axial_blend_lateral_m", 0.006)),
+        "--target_action_guide_orientation_switch_rad",
+        str(getattr(args, "target_action_guide_orientation_switch_rad", 0.0)),
         "--target_action_guide_collect_blend",
         str(getattr(args, "target_action_guide_collect_blend", 0.0)),
         "--target_action_guide_collect_steps",
@@ -931,8 +945,20 @@ def build_command(args: argparse.Namespace) -> tuple[list[str], dict[str, str]]:
         str(getattr(args, "insertion_corridor_sigma", 0.0025)),
         "--target_reward_insertion_bypass_penalty_scale",
         str(getattr(args, "insertion_bypass_penalty_scale", 1.0)),
+        "--target_reward_cheatcode_phase_weight",
+        str(getattr(args, "insertion_cheatcode_phase_weight", 0.0)),
         "--target_reward_insertion_orientation_gate_std",
         str(getattr(args, "insertion_corridor_orientation_gate_std", 0.0)),
+        "--target_reward_consistency_body",
+        str(getattr(args, "insertion_consistency_body", "auto")),
+        "--target_reward_consistency_axial_std",
+        str(getattr(args, "insertion_consistency_axial_std", 0.0)),
+        "--target_reward_consistency_lateral_sigma",
+        str(getattr(args, "insertion_consistency_lateral_sigma", 0.0)),
+        "--target_success_consistency_axial_threshold",
+        str(getattr(args, "target_success_consistency_axial_threshold", 0.0)),
+        "--target_success_consistency_lateral_threshold",
+        str(getattr(args, "target_success_consistency_lateral_threshold", 0.0)),
         "--target_reward_insertion_axis",
         str(args.insertion_axis),
         "--reward_preset",
@@ -965,6 +991,8 @@ def build_command(args: argparse.Namespace) -> tuple[list[str], dict[str, str]]:
         cmd.extend(["--target_success_axial_threshold", str(args.target_success_axial_threshold)])
     if getattr(args, "target_success_lateral_threshold", None) is not None:
         cmd.extend(["--target_success_lateral_threshold", str(args.target_success_lateral_threshold)])
+    if getattr(args, "target_success_orientation_threshold", None) is not None:
+        cmd.extend(["--target_success_orientation_threshold", str(args.target_success_orientation_threshold)])
     act_only = bool(getattr(args, "act_only", False))
     if act_only:
         cmd.extend(
@@ -1119,6 +1147,8 @@ def validate_launch_inputs(args: argparse.Namespace) -> None:
         raise ValueError("--target-action-guide-axial-step-size must be non-negative")
     if float(getattr(args, "target_action_guide_axial_blend_lateral_m", 0.006)) < 0.0:
         raise ValueError("--target-action-guide-axial-blend-lateral-m must be non-negative")
+    if float(getattr(args, "target_action_guide_orientation_switch_rad", 0.0)) < 0.0:
+        raise ValueError("--target-action-guide-orientation-switch-rad must be non-negative")
     if args.batch_size <= 0:
         raise ValueError("--batch-size must be positive")
     if args.replay_capacity < args.batch_size:
@@ -1139,6 +1169,8 @@ def validate_launch_inputs(args: argparse.Namespace) -> None:
         raise ValueError("--target-success-axial-threshold must be non-negative")
     if args.target_success_lateral_threshold is not None and float(args.target_success_lateral_threshold) < 0.0:
         raise ValueError("--target-success-lateral-threshold must be non-negative")
+    if args.target_success_orientation_threshold is not None and float(args.target_success_orientation_threshold) < 0.0:
+        raise ValueError("--target-success-orientation-threshold must be non-negative")
     if bool(getattr(args, "terminate_on_target_success", False)) and float(
         getattr(args, "target_success_termination_threshold", 0.0)
     ) <= 0.0:
@@ -1224,13 +1256,43 @@ def normalize_reward_sign_args(args: argparse.Namespace) -> None:
 def apply_reward_preset(args: argparse.Namespace) -> None:
     if getattr(args, "reward_preset", "default") == "default":
         return
-    if args.reward_preset != "near_gate_corridor_v1":
+    if args.reward_preset not in {"near_gate_corridor_v1", "cheatcode_insertion_v1"}:
         raise ValueError(f"Unsupported reward preset: {args.reward_preset}")
     explicit = getattr(args, "_explicit_cli_flags", set())
 
     def set_default(attr: str, flag: str, value: object) -> None:
         if flag not in explicit:
             setattr(args, attr, value)
+
+    if args.reward_preset == "cheatcode_insertion_v1":
+        set_default("insertion_distance_weight", "--insertion-distance-weight", 0.0)
+        set_default("insertion_close_weight", "--insertion-close-weight", 0.0)
+        set_default("insertion_progress_weight", "--insertion-progress-weight", 0.0)
+        set_default("insertion_reaching_weight", "--insertion-reaching-weight", 0.0)
+        set_default("insertion_lateral_weight", "--insertion-lateral-weight", -0.20)
+        set_default("insertion_lateral_error_scale", "--insertion-lateral-error-scale", 0.003)
+        set_default("insertion_lateral_progress_weight", "--insertion-lateral-progress-weight", 0.0)
+        set_default("insertion_axial_progress_weight", "--insertion-axial-progress-weight", 0.0)
+        set_default("insertion_lateral_gate_sigma", "--insertion-lateral-gate-sigma", 0.002)
+        set_default("insertion_corridor_weight", "--insertion-corridor-weight", 0.0)
+        set_default("insertion_corridor_sigma", "--insertion-corridor-sigma", 0.0015)
+        set_default("insertion_bypass_penalty_scale", "--insertion-bypass-penalty-scale", 6.0)
+        set_default("insertion_corridor_orientation_gate_std", "--insertion-corridor-orientation-gate-std", 0.05)
+        set_default("insertion_orientation_weight", "--insertion-orientation-weight", 0.20)
+        set_default("insertion_orientation_std", "--insertion-orientation-std", 0.08)
+        set_default("insertion_orientation_gate_sigma", "--insertion-orientation-gate-sigma", 0.006)
+        set_default("insertion_cheatcode_phase_weight", "--insertion-cheatcode-phase-weight", 1.0)
+        set_default("insertion_consistency_body", "--insertion-consistency-body", "auto")
+        set_default("insertion_consistency_axial_std", "--insertion-consistency-axial-std", 0.004)
+        set_default("insertion_consistency_lateral_sigma", "--insertion-consistency-lateral-sigma", 0.003)
+        set_default("target_success_consistency_axial_threshold", "--target-success-consistency-axial-threshold", 0.001)
+        set_default("target_success_consistency_lateral_threshold", "--target-success-consistency-lateral-threshold", 0.0015)
+        set_default("force_delta_penalty_weight", "--force-delta-penalty-weight", 0.02)
+        set_default("terminate_on_target_success", "--terminate-on-target-success", True)
+        set_default("target_success_axial_threshold", "--target-success-axial-threshold", 0.0005)
+        set_default("target_success_lateral_threshold", "--target-success-lateral-threshold", 0.0005)
+        set_default("target_success_orientation_threshold", "--target-success-orientation-threshold", 0.03)
+        return
 
     set_default("insertion_distance_weight", "--insertion-distance-weight", 0.02)
     set_default("insertion_close_weight", "--insertion-close-weight", 0.05)
@@ -1246,6 +1308,19 @@ def apply_reward_preset(args: argparse.Namespace) -> None:
     set_default("insertion_corridor_sigma", "--insertion-corridor-sigma", 0.0025)
     set_default("insertion_bypass_penalty_scale", "--insertion-bypass-penalty-scale", 2.0)
     set_default("insertion_corridor_orientation_gate_std", "--insertion-corridor-orientation-gate-std", 0.10)
+    set_default("insertion_consistency_body", "--insertion-consistency-body", "auto")
+    set_default("insertion_consistency_axial_std", "--insertion-consistency-axial-std", 0.004)
+    set_default("insertion_consistency_lateral_sigma", "--insertion-consistency-lateral-sigma", 0.003)
+    set_default(
+        "target_success_consistency_axial_threshold",
+        "--target-success-consistency-axial-threshold",
+        0.001,
+    )
+    set_default(
+        "target_success_consistency_lateral_threshold",
+        "--target-success-consistency-lateral-threshold",
+        0.0015,
+    )
     set_default("insertion_orientation_weight", "--insertion-orientation-weight", 0.05)
     set_default("insertion_orientation_std", "--insertion-orientation-std", 0.10)
     set_default("insertion_orientation_gate_sigma", "--insertion-orientation-gate-sigma", 0.010)
