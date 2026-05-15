@@ -90,6 +90,9 @@ def validate_request(request: dict[str, Any]) -> None:
         offset = start.get("reset_body_offset_from_reference_world")
         if offset is not None and (not isinstance(offset, (list, tuple)) or len(offset) != 3):
             raise ValueError("scene.start_near_gate.reset_body_offset_from_reference_world must be a 3-value list")
+        orientation = start.get("reset_body_orientation_wxyz")
+        if orientation is not None and (not isinstance(orientation, (list, tuple)) or len(orientation) != 4):
+            raise ValueError("scene.start_near_gate.reset_body_orientation_wxyz must be a 4-value list")
 
 
 def _choices(value: Any, default: list[Any]) -> list[Any]:
@@ -269,8 +272,15 @@ def _sample_context(request: dict[str, Any], rng: random.Random) -> dict[str, An
     raise ValueError(f"Unsupported task_family: {family}")
 
 
-def _target_spec(context: dict[str, Any], board_pos: tuple[float, float, float]) -> dict[str, Any]:
+def _target_spec(
+    context: dict[str, Any],
+    board_pos: tuple[float, float, float],
+    request: dict[str, Any] | None = None,
+) -> dict[str, Any]:
     if context["task_family"] == "sfp_to_nic":
+        scene = (request or {}).get("scene") or {}
+        target_cfg = scene.get("target") or {}
+        entrance_axis_offset_m = float(target_cfg.get("entrance_axis_offset_m", 0.0))
         part = DEFAULT_PARTS["nic_card"]
         target_port_index = int(context["target_port_index"])
         target_offset = SFP_PORT_SEATED_TARGET_ROOT_LOCAL[target_port_index]
@@ -285,6 +295,14 @@ def _target_spec(context: dict[str, Any], board_pos: tuple[float, float, float])
         )
         entrance_position = _vadd(root_position, _quat_apply_wxyz(NIC_CARD_ROT_WXYZ, entrance_offset_local))
         entrance_axis = _normalize(_quat_apply_wxyz(NIC_CARD_ROT_WXYZ, _matvec(port_rotation, (0.0, 0.0, 1.0))))
+        if entrance_axis_offset_m:
+            entrance_position = _vadd(entrance_position, _vscale(entrance_axis, entrance_axis_offset_m))
+        seated_depth_m = target_cfg.get("seated_depth_m")
+        if seated_depth_m is not None:
+            seated_depth = float(seated_depth_m)
+            if seated_depth <= 0.0:
+                raise ValueError("scene.target.seated_depth_m must be positive")
+            position = _vadd(entrance_position, _vscale(entrance_axis, seated_depth))
         return {
             "scene_name": "nic_card",
             "target_reward_body": "sfp_tip_link",
@@ -294,6 +312,8 @@ def _target_spec(context: dict[str, Any], board_pos: tuple[float, float, float])
             "entrance_pose_world": {"position": _round3(entrance_position), "orientation_wxyz": _round4(target_orientation)},
             "body_start_orientation_wxyz": _round4(body_orientation),
             "entrance_position_offset": _round3(entrance_offset_local),
+            "entrance_axis_offset_m": round(entrance_axis_offset_m, 6),
+            "seated_depth_m": None if seated_depth_m is None else round(float(seated_depth_m), 6),
             "insertion_axis_world": _round3(entrance_axis),
         }
     scene_name = "sc_port" if int(context["target_port_index"]) == 0 else "sc_port_2"
@@ -325,7 +345,7 @@ def _apply_start_near_gate(
     start = (request.get("scene") or {}).get("start_near_gate")
     if not isinstance(start, dict):
         return board_pos, None
-    target = _target_spec(context, board_pos)
+    target = _target_spec(context, board_pos, request)
     gate_position = tuple(
         float(v)
         for v in (target.get("entrance_pose_world") or target["target_pose_world"])["position"]
@@ -388,6 +408,12 @@ def _apply_start_near_gate(
             raise ValueError("scene.start_near_gate.reset_body_offset_from_reference_world must be a 3-value list")
         reset_body_offset = (float(offset_raw[0]), float(offset_raw[1]), float(offset_raw[2]))
     reset_body_position = _vadd(reference, reset_body_offset)
+    orientation_raw = start.get("reset_body_orientation_wxyz")
+    reset_body_orientation = target.get("body_start_orientation_wxyz")
+    if orientation_raw is not None:
+        if not isinstance(orientation_raw, (list, tuple)) or len(orientation_raw) != 4:
+            raise ValueError("scene.start_near_gate.reset_body_orientation_wxyz must be a 4-value list")
+        reset_body_orientation = [round(float(v), 6) for v in orientation_raw]
     ref_delta = _vsub(reference, gate_position)
     axial_component = abs(_vdot(ref_delta, axis))
     lateral_component = math.sqrt(max(0.0, _vnorm(ref_delta) ** 2 - axial_component * axial_component))
@@ -396,14 +422,16 @@ def _apply_start_near_gate(
         "reset_mode": "body_start_position_world",
         "reset_body_name": reset_body_name,
         "body_start_position_world": _round3(reset_body_position),
-        "body_start_orientation_wxyz": target.get("body_start_orientation_wxyz"),
+        "body_start_orientation_wxyz": reset_body_orientation,
         "reference_reward_body_name": target.get("target_reward_body") or "sfp_tip_link",
         "reference_reward_body_start_position_world": _round3(reference),
+        "reference_reward_body_start_orientation_wxyz": target.get("body_start_orientation_wxyz"),
         "reset_body_offset_from_reference_world": _round3(reset_body_offset),
+        "reset_body_orientation_wxyz": reset_body_orientation,
         "reference_body_position": _round3(reference),
         # Backward-compatible aliases for older diagnostics.
         "tcp_start_position_world": _round3(reset_body_position),
-        "tcp_start_orientation_world": target.get("body_start_orientation_wxyz"),
+        "tcp_start_orientation_world": reset_body_orientation,
         "reference_tcp_position": _round3(reference),
         "target_gate_position": _round3(gate_position),
         "target_gate_axis_world": _round3(axis),
@@ -424,7 +452,7 @@ def _episode_config(request: dict[str, Any], index: int, rng: random.Random) -> 
         board_pos=DEFAULT_BOARD_POS,
         rng=rng,
     )
-    target = _target_spec(context, board_pos)
+    target = _target_spec(context, board_pos, request)
     parts = [dict(DEFAULT_PARTS[name]) for name in ("sc_port", "sc_port_2", "nic_card")]
     task_description = (
         f"Insert SFP cable into NIC card {context['target_card_index']} port {context['target_port_index']}"

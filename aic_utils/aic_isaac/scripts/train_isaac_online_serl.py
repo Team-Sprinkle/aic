@@ -175,6 +175,7 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser.add_argument("--act-preservation-weight", type=float, default=1e-2)
     parser.add_argument("--target-action-guide-weight", type=float, default=0.0)
     parser.add_argument("--target-action-guide-step-size", type=float, default=0.001)
+    parser.add_argument("--target-action-guide-rotation-step-size", type=float, default=0.0)
     parser.add_argument("--target-action-guide-axial-step-size", type=float, default=0.0)
     parser.add_argument("--target-action-guide-lateral-switch-m", type=float, default=0.002)
     parser.add_argument("--target-action-guide-axial-blend-lateral-m", type=float, default=0.006)
@@ -182,6 +183,7 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser.add_argument("--target-action-guide-collect-steps", type=int, default=0)
     parser.add_argument("--target-action-guide-collect-decay", action=argparse.BooleanOptionalAction, default=False)
     parser.add_argument("--target-action-guide-prefix-decay", action=argparse.BooleanOptionalAction, default=False)
+    parser.add_argument("--target-action-guide-train-executed", action=argparse.BooleanOptionalAction, default=False)
     parser.add_argument("--adapter-delta-clip", type=float, default=0.05)
     parser.add_argument(
         "--tcp-translation-action-clip",
@@ -195,6 +197,26 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         default=0.0,
         help="Optional per-step TCP rotation-vector norm cap in radians for each action in the predicted chunk.",
     )
+    parser.add_argument("--insertion-action-guard", action=argparse.BooleanOptionalAction, default=False)
+    parser.add_argument("--insertion-action-guard-lateral-threshold-m", type=float, default=0.002)
+    parser.add_argument("--insertion-action-guard-lateral-step-m", type=float, default=0.0005)
+    parser.add_argument(
+        "--insertion-action-guard-adaptive-lateral-sign",
+        action=argparse.BooleanOptionalAction,
+        default=False,
+    )
+    parser.add_argument("--insertion-action-guard-adaptive-lateral-flip-margin-m", type=float, default=0.00005)
+    parser.add_argument("--insertion-action-guard-centered-axial-step-m", type=float, default=0.0)
+    parser.add_argument("--insertion-action-guard-retention", action=argparse.BooleanOptionalAction, default=False)
+    parser.add_argument("--insertion-action-guard-retention-entry-depth-m", type=float, default=0.0)
+    parser.add_argument("--insertion-action-guard-retention-lateral-threshold-m", type=float, default=0.0015)
+    parser.add_argument(
+        "--insertion-action-guard-retention-ignore-lateral-threshold",
+        action=argparse.BooleanOptionalAction,
+        default=False,
+    )
+    parser.add_argument("--insertion-action-guard-retention-min-axial-step-m", type=float, default=0.0)
+    parser.add_argument("--insertion-action-guard-retention-lateral-scale", type=float, default=1.0)
     parser.add_argument(
         "--action-clip",
         type=float,
@@ -245,6 +267,12 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser.add_argument("--insertion-corridor-sigma", type=float, default=0.0025)
     parser.add_argument("--insertion-bypass-penalty-scale", type=float, default=1.0)
     parser.add_argument("--insertion-axis", type=int, choices=[0, 1, 2], default=0)
+    parser.add_argument(
+        "--reward-preset",
+        choices=["default", "near_gate_corridor_v1"],
+        default="default",
+        help="Apply a named online SERL reward-shaping preset before launch.",
+    )
     parser.add_argument("--force-delta-penalty-weight", type=float, default=0.3)
     parser.add_argument("--force-delta-threshold", type=float, default=10.0)
     parser.add_argument("--force-delta-reference", type=float, default=20.0)
@@ -265,6 +293,8 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
             "This is intentionally separate from --target-reward-reaching-threshold."
         ),
     )
+    parser.add_argument("--target-success-axial-threshold", type=float, default=None)
+    parser.add_argument("--target-success-lateral-threshold", type=float, default=None)
     parser.add_argument("--target-reward-position-offset", type=float, nargs=3, default=None)
     parser.add_argument("--target-reward-body-position-offset", type=float, nargs=3, default=None)
     parser.add_argument("--state-source", choices=["lerobot_compatible", "policy_prefix"], default="lerobot_compatible")
@@ -340,6 +370,12 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser.add_argument("--debug-timing", action=argparse.BooleanOptionalAction, default=True)
     parser.add_argument("--disable-fabric", action="store_true", default=False)
     parser.add_argument("--save-step-images", action=argparse.BooleanOptionalAction, default=False)
+    parser.add_argument(
+        "--debug-visual-overlays",
+        action=argparse.BooleanOptionalAction,
+        default=True,
+        help="Overlay insertion-frame markers and body metrics on saved debug images.",
+    )
     parser.add_argument("--image-log-every", type=int, default=1)
     parser.add_argument("--max-logged-image-steps", type=int, default=200)
     parser.add_argument(
@@ -391,12 +427,26 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         default=True,
         help="Flip Isaac IK root-frame x/y translation commands to match realized TCP motion direction.",
     )
+    parser.add_argument(
+        "--isaac-ik-xy-sign-by-target-card",
+        action=argparse.BooleanOptionalAction,
+        default=False,
+        help="Apply Isaac IK x/y sign correction per SFP-to-NIC target card parity.",
+    )
     parser.add_argument("--dry-run", action="store_true")
     parser.add_argument("--extra-arg", action="append", default=[])
     return parser.parse_args(argv)
 
 
 def inspect_checkpoint(path: Path, *, required: bool) -> dict[str, Any]:
+    if path is None:
+        if required:
+            raise ValueError("--checkpoint is required unless --act-only is set")
+        return {
+            "path": None,
+            "exists": False,
+            "inspect_skipped": True,
+        }
     if not path.exists():
         if required:
             raise FileNotFoundError(f"Checkpoint does not exist: {path}")
@@ -515,6 +565,7 @@ def build_plan(args: argparse.Namespace, *, inspect_required: bool = True) -> di
         "act_preservation_weight": args.act_preservation_weight,
         "target_action_guide_weight": getattr(args, "target_action_guide_weight", 0.0),
         "target_action_guide_step_size": getattr(args, "target_action_guide_step_size", 0.001),
+        "target_action_guide_rotation_step_size": getattr(args, "target_action_guide_rotation_step_size", 0.0),
         "target_action_guide_axial_step_size": getattr(args, "target_action_guide_axial_step_size", 0.0),
         "target_action_guide_lateral_switch_m": getattr(args, "target_action_guide_lateral_switch_m", 0.002),
         "target_action_guide_axial_blend_lateral_m": getattr(
@@ -524,6 +575,7 @@ def build_plan(args: argparse.Namespace, *, inspect_required: bool = True) -> di
         "target_action_guide_collect_steps": getattr(args, "target_action_guide_collect_steps", 0),
         "target_action_guide_collect_decay": bool(getattr(args, "target_action_guide_collect_decay", False)),
         "target_action_guide_prefix_decay": bool(getattr(args, "target_action_guide_prefix_decay", False)),
+        "target_action_guide_train_executed": bool(getattr(args, "target_action_guide_train_executed", False)),
         "adapter_delta_clip": args.adapter_delta_clip,
         "tcp_translation_action_clip": args.tcp_translation_action_clip,
         "tcp_rotation_action_clip": args.tcp_rotation_action_clip,
@@ -565,6 +617,8 @@ def build_plan(args: argparse.Namespace, *, inspect_required: bool = True) -> di
         "target_reward_reaching_threshold": args.target_reward_reaching_threshold,
         "terminate_on_target_success": bool(getattr(args, "terminate_on_target_success", False)),
         "target_success_termination_threshold": args.target_success_termination_threshold,
+        "target_success_axial_threshold": getattr(args, "target_success_axial_threshold", None),
+        "target_success_lateral_threshold": getattr(args, "target_success_lateral_threshold", None),
         "target_reward_position_offset": args.target_reward_position_offset,
         "target_reward_body_position_offset": args.target_reward_body_position_offset,
         "initial_arm_joint_pos": args.initial_arm_joint_pos,
@@ -602,6 +656,9 @@ def build_plan(args: argparse.Namespace, *, inspect_required: bool = True) -> di
         "debug_audit_constant_action": getattr(args, "debug_audit_constant_action", None),
         "enable_contact_sensor": bool(getattr(args, "enable_contact_sensor", True)),
         "fix_isaac_ik_xy_sign": bool(getattr(args, "fix_isaac_ik_xy_sign", True)),
+        "isaac_ik_xy_sign_by_target_card": bool(
+            getattr(args, "isaac_ik_xy_sign_by_target_card", False)
+        ),
         "force_camera_render_before_read": bool(getattr(args, "force_camera_render_before_read", False)),
         "disable_ppo_resnet_observation_terms": bool(getattr(args, "disable_ppo_resnet_observation_terms", True)),
         "replay_buffer": asdict(replay),
@@ -705,6 +762,8 @@ def build_command(args: argparse.Namespace) -> tuple[list[str], dict[str, str]]:
         str(getattr(args, "target_action_guide_weight", 0.0)),
         "--target_action_guide_step_size",
         str(getattr(args, "target_action_guide_step_size", 0.001)),
+        "--target_action_guide_rotation_step_size",
+        str(getattr(args, "target_action_guide_rotation_step_size", 0.0)),
         "--target_action_guide_axial_step_size",
         str(getattr(args, "target_action_guide_axial_step_size", 0.0)),
         "--target_action_guide_lateral_switch_m",
@@ -717,12 +776,39 @@ def build_command(args: argparse.Namespace) -> tuple[list[str], dict[str, str]]:
         str(getattr(args, "target_action_guide_collect_steps", 0)),
         "--target_action_guide_collect_decay" if getattr(args, "target_action_guide_collect_decay", False) else "--no-target_action_guide_collect_decay",
         "--target_action_guide_prefix_decay" if getattr(args, "target_action_guide_prefix_decay", False) else "--no-target_action_guide_prefix_decay",
+        "--target_action_guide_train_executed" if getattr(args, "target_action_guide_train_executed", False) else "--no-target_action_guide_train_executed",
         "--adapter_delta_clip",
         str(args.adapter_delta_clip),
         "--tcp_translation_action_clip",
         str(args.tcp_translation_action_clip),
         "--tcp_rotation_action_clip",
         str(args.tcp_rotation_action_clip),
+        "--insertion_action_guard" if getattr(args, "insertion_action_guard", False) else "--no-insertion_action_guard",
+        "--insertion_action_guard_lateral_threshold_m",
+        str(getattr(args, "insertion_action_guard_lateral_threshold_m", 0.002)),
+        "--insertion_action_guard_lateral_step_m",
+        str(getattr(args, "insertion_action_guard_lateral_step_m", 0.0005)),
+        "--insertion_action_guard_adaptive_lateral_sign"
+        if getattr(args, "insertion_action_guard_adaptive_lateral_sign", False)
+        else "--no-insertion_action_guard_adaptive_lateral_sign",
+        "--insertion_action_guard_adaptive_lateral_flip_margin_m",
+        str(getattr(args, "insertion_action_guard_adaptive_lateral_flip_margin_m", 0.00005)),
+        "--insertion_action_guard_centered_axial_step_m",
+        str(getattr(args, "insertion_action_guard_centered_axial_step_m", 0.0)),
+        "--insertion_action_guard_retention" if getattr(args, "insertion_action_guard_retention", False) else "--no-insertion_action_guard_retention",
+        "--insertion_action_guard_retention_entry_depth_m",
+        str(getattr(args, "insertion_action_guard_retention_entry_depth_m", 0.0)),
+        "--insertion_action_guard_retention_lateral_threshold_m",
+        str(getattr(args, "insertion_action_guard_retention_lateral_threshold_m", 0.0015)),
+        (
+            "--insertion_action_guard_retention_ignore_lateral_threshold"
+            if getattr(args, "insertion_action_guard_retention_ignore_lateral_threshold", False)
+            else "--no-insertion_action_guard_retention_ignore_lateral_threshold"
+        ),
+        "--insertion_action_guard_retention_min_axial_step_m",
+        str(getattr(args, "insertion_action_guard_retention_min_axial_step_m", 0.0)),
+        "--insertion_action_guard_retention_lateral_scale",
+        str(getattr(args, "insertion_action_guard_retention_lateral_scale", 1.0)),
         "--action_clip",
         str(args.action_clip),
         "--isaac_action_scale",
@@ -785,6 +871,8 @@ def build_command(args: argparse.Namespace) -> tuple[list[str], dict[str, str]]:
         str(getattr(args, "insertion_bypass_penalty_scale", 1.0)),
         "--target_reward_insertion_axis",
         str(args.insertion_axis),
+        "--reward_preset",
+        str(getattr(args, "reward_preset", "default")),
         "--force_delta_penalty_weight",
         str(args.force_delta_penalty_weight),
         "--force_delta_threshold",
@@ -809,6 +897,10 @@ def build_command(args: argparse.Namespace) -> tuple[list[str], dict[str, str]]:
         "--target_success_termination_threshold",
         str(args.target_success_termination_threshold),
     ]
+    if getattr(args, "target_success_axial_threshold", None) is not None:
+        cmd.extend(["--target_success_axial_threshold", str(args.target_success_axial_threshold)])
+    if getattr(args, "target_success_lateral_threshold", None) is not None:
+        cmd.extend(["--target_success_lateral_threshold", str(args.target_success_lateral_threshold)])
     act_only = bool(getattr(args, "act_only", False))
     if act_only:
         cmd.extend(
@@ -859,6 +951,11 @@ def build_command(args: argparse.Namespace) -> tuple[list[str], dict[str, str]]:
     cmd.append("--freeze_act" if args.freeze_act else "--no-freeze_act")
     cmd.append("--debug_timing" if args.debug_timing else "--no-debug_timing")
     cmd.append("--save_step_images" if args.save_step_images else "--no-save_step_images")
+    cmd.append(
+        "--debug_visual_overlays"
+        if bool(getattr(args, "debug_visual_overlays", True))
+        else "--no-debug_visual_overlays"
+    )
     cmd.extend(["--image_log_every", str(args.image_log_every)])
     cmd.extend(["--max_logged_image_steps", str(args.max_logged_image_steps)])
     cmd.append("--swap_rgb_channels" if bool(getattr(args, "swap_rgb_channels", False)) else "--no-swap_rgb_channels")
@@ -890,6 +987,11 @@ def build_command(args: argparse.Namespace) -> tuple[list[str], dict[str, str]]:
         cmd.extend(["--debug_audit_constant_action", *(str(v) for v in args.debug_audit_constant_action)])
     cmd.append("--enable_contact_sensor" if bool(getattr(args, "enable_contact_sensor", True)) else "--no-enable_contact_sensor")
     cmd.append("--fix_isaac_ik_xy_sign" if bool(getattr(args, "fix_isaac_ik_xy_sign", True)) else "--no-fix_isaac_ik_xy_sign")
+    cmd.append(
+        "--isaac_ik_xy_sign_by_target_card"
+        if bool(getattr(args, "isaac_ik_xy_sign_by_target_card", False))
+        else "--no-isaac_ik_xy_sign_by_target_card"
+    )
     if args.disable_fabric:
         cmd.append("--disable_fabric")
     if args.headless:
@@ -947,6 +1049,8 @@ def validate_launch_inputs(args: argparse.Namespace) -> None:
         raise ValueError("--tcp-rotation-action-clip must be non-negative")
     if float(getattr(args, "target_action_guide_lateral_switch_m", 0.002)) < 0.0:
         raise ValueError("--target-action-guide-lateral-switch-m must be non-negative")
+    if float(getattr(args, "target_action_guide_rotation_step_size", 0.0)) < 0.0:
+        raise ValueError("--target-action-guide-rotation-step-size must be non-negative")
     if float(getattr(args, "target_action_guide_axial_step_size", 0.0)) < 0.0:
         raise ValueError("--target-action-guide-axial-step-size must be non-negative")
     if float(getattr(args, "target_action_guide_axial_blend_lateral_m", 0.006)) < 0.0:
@@ -967,6 +1071,10 @@ def validate_launch_inputs(args: argparse.Namespace) -> None:
         raise ValueError("--policy-hz must be positive")
     if float(getattr(args, "target_success_termination_threshold", 0.0)) < 0.0:
         raise ValueError("--target-success-termination-threshold must be non-negative")
+    if args.target_success_axial_threshold is not None and float(args.target_success_axial_threshold) < 0.0:
+        raise ValueError("--target-success-axial-threshold must be non-negative")
+    if args.target_success_lateral_threshold is not None and float(args.target_success_lateral_threshold) < 0.0:
+        raise ValueError("--target-success-lateral-threshold must be non-negative")
     if bool(getattr(args, "terminate_on_target_success", False)) and float(
         getattr(args, "target_success_termination_threshold", 0.0)
     ) <= 0.0:
@@ -1038,8 +1146,34 @@ def normalize_reward_sign_args(args: argparse.Namespace) -> None:
         args.insertion_lateral_weight = corrected
 
 
+def apply_reward_preset(args: argparse.Namespace) -> None:
+    if getattr(args, "reward_preset", "default") == "default":
+        return
+    if args.reward_preset != "near_gate_corridor_v1":
+        raise ValueError(f"Unsupported reward preset: {args.reward_preset}")
+    args.insertion_distance_weight = 0.02
+    args.insertion_close_weight = 0.05
+    args.insertion_progress_weight = 0.0
+    args.insertion_lateral_weight = -0.10
+    args.insertion_lateral_error_scale = 0.006
+    args.insertion_lateral_progress_weight = 0.25
+    args.insertion_lateral_progress_scale = 0.001
+    args.insertion_axial_progress_weight = 0.25
+    args.insertion_axial_progress_scale = 0.001
+    args.insertion_lateral_gate_sigma = 0.004
+    args.insertion_corridor_weight = 0.50
+    args.insertion_corridor_sigma = 0.0025
+    args.insertion_bypass_penalty_scale = 2.0
+    args.insertion_orientation_weight = 0.05
+    args.insertion_orientation_std = 0.10
+    args.insertion_orientation_gate_sigma = 0.010
+    args.force_delta_penalty_weight = 0.05
+    args.terminate_on_target_success = True
+
+
 def main() -> int:
     args = parse_args()
+    apply_reward_preset(args)
     normalize_reward_sign_args(args)
     user_config_summary = prepare_user_episode_configs(args)
     plan = build_plan(args, inspect_required=not args.dry_run)

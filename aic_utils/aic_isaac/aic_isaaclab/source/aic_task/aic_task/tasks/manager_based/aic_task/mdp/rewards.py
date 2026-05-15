@@ -23,6 +23,12 @@ from isaaclab.managers import SceneEntityCfg
 from isaaclab.utils.math import combine_frame_transforms, quat_apply, quat_error_magnitude, quat_mul
 
 from .force_penalty import force_delta_penalty_curve
+from .insertion_geometry import (
+    compute_insertion_geometry,
+    insertion_corridor_reward,
+    lateral_progress_reward,
+    signed_axial_progress_reward,
+)
 
 if TYPE_CHECKING:
     from isaaclab.envs import ManagerBasedRLEnv
@@ -201,14 +207,6 @@ def _episode_target_position_w(env: ManagerBasedRLEnv) -> torch.Tensor | None:
         if position is None:
             return None
         position_tensor = torch.tensor(position, dtype=origins.dtype, device=origins.device)
-        entrance = (target.get("entrance_pose_world") or {}).get("position")
-        axis = target.get("insertion_axis_world")
-        if entrance is not None and axis is not None:
-            entrance_tensor = torch.tensor(entrance, dtype=origins.dtype, device=origins.device)
-            axis_tensor = torch.tensor(axis, dtype=origins.dtype, device=origins.device)
-            axis_tensor = axis_tensor / torch.linalg.norm(axis_tensor).clamp(min=1.0e-9)
-            seated_depth = torch.sum((position_tensor - entrance_tensor) * axis_tensor).clamp(min=0.0)
-            position_tensor = entrance_tensor + seated_depth * axis_tensor
         rows.append(position_tensor + origins[env_id])
     return torch.stack(rows, dim=0)
 
@@ -662,7 +660,11 @@ def body_to_object_lateral_progress(
         previous = lateral_error.detach().clone()
     else:
         previous = _reset_previous_on_episode_start(previous, lateral_error, reset_mask)
-    reward = ((previous - lateral_error) / max(float(scale), 1.0e-9)).clamp(min=-1.0, max=1.0)
+    reward = lateral_progress_reward(
+        previous_lateral_error=previous,
+        current_lateral_error=lateral_error,
+        scale=scale,
+    )
     setattr(env, "_aic_previous_target_lateral_error", lateral_error.detach().clone())
     return reward
 
@@ -687,7 +689,37 @@ def body_to_object_axial_progress(
     """
     body_asset: RigidObject = env.scene[body_cfg.name]
     target_asset: RigidObject = env.scene[target_cfg.name]
+    entrance_axis = None
     axis_w = _episode_insertion_axis_w(env)
+    if axis_w is not None:
+        body_pos_w = _body_position_w(body_asset, body_cfg.body_ids[0], body_position_offset)
+        target_pos_w = _target_position_w(env, target_asset, target_position_offset)
+        entrance_axis = _episode_entrance_position_axis_w(env, target_pos_w=target_pos_w)
+    if entrance_axis is not None:
+        entrance_w, axis_w = entrance_axis
+        geometry = compute_insertion_geometry(
+            body_pos_w=body_pos_w,
+            entrance_pos_w=entrance_w,
+            target_pos_w=target_pos_w,
+            axis_w=axis_w,
+            lateral_gate_sigma=0.0 if lateral_gate_sigma is None else float(lateral_gate_sigma),
+        )
+        current_depth = geometry.axial_depth
+        lateral_error = geometry.lateral_error
+        previous = getattr(env, "_aic_previous_target_axial_depth", None)
+        reset_mask = getattr(env, "episode_length_buf", None)
+        if previous is None or previous.shape != current_depth.shape:
+            previous = current_depth.detach().clone()
+        else:
+            previous = _reset_previous_on_episode_start(previous, current_depth, reset_mask)
+        reward = signed_axial_progress_reward(
+            previous_depth=previous,
+            current_depth=current_depth,
+            lateral_gate=geometry.lateral_gate,
+            scale=scale,
+        )
+        setattr(env, "_aic_previous_target_axial_depth", current_depth.detach().clone())
+        return reward
     if axis_w is not None:
         body_pos_w = _body_position_w(body_asset, body_cfg.body_ids[0], body_position_offset)
         target_pos_w = _target_position_w(env, target_asset, target_position_offset)
@@ -748,11 +780,14 @@ def body_to_object_insertion_corridor(
     entrance_axis = _episode_entrance_position_axis_w(env, target_pos_w=target_pos_w)
     if entrance_axis is not None:
         entrance_w, axis_w = entrance_axis
-        axis_w = axis_w.to(device=body_pos_w.device, dtype=body_pos_w.dtype)
-        entrance_w = entrance_w.to(device=body_pos_w.device, dtype=body_pos_w.dtype)
-        depth = torch.sum((body_pos_w - entrance_w) * axis_w, dim=1)
-        target_depth = torch.sum((target_pos_w - entrance_w) * axis_w, dim=1).clamp(min=1.0e-6)
-        lateral_error = _axis_lateral_error_w(body_pos_w, entrance_w, axis_w)
+        geometry = compute_insertion_geometry(
+            body_pos_w=body_pos_w,
+            entrance_pos_w=entrance_w,
+            target_pos_w=target_pos_w,
+            axis_w=axis_w,
+            lateral_gate_sigma=lateral_gate_sigma,
+        )
+        return insertion_corridor_reward(geometry, bypass_penalty_scale=bypass_penalty_scale)
     else:
         delta_target = _target_frame_delta(
             env,
