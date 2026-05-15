@@ -146,6 +146,12 @@ parser.add_argument(
 parser.add_argument("--target_action_guide_step_size", type=float, default=0.001)
 parser.add_argument("--target_action_guide_rotation_step_size", type=float, default=0.0)
 parser.add_argument(
+    "--target_action_guide_rotation_sign",
+    type=float,
+    default=1.0,
+    help="Multiplier for cheatcode guide rotation deltas; use -1 only as a command-convention ablation.",
+)
+parser.add_argument(
     "--target_action_guide_axial_step_size",
     type=float,
     default=0.0,
@@ -173,6 +179,21 @@ parser.add_argument(
     help=(
         "If >0, suppress guide axial insertion while semantic tip orientation error exceeds this threshold. "
         "This lets near-gate runs align coaxially before pushing into the port."
+    ),
+)
+parser.add_argument(
+    "--target_action_guide_rotate_while_lateral",
+    action=argparse.BooleanOptionalAction,
+    default=False,
+    help="Allow cheatcode_transform guide rotation while lateral error is still above the lateral switch.",
+)
+parser.add_argument(
+    "--target_action_guide_preinsert_hover_depth",
+    type=float,
+    default=float("nan"),
+    help=(
+        "If finite, keep the tip near this signed axial depth while lateral/orientation alignment is not ready. "
+        "Use negative values for a safe pose outside the entrance plane, e.g. -0.004."
     ),
 )
 parser.add_argument("--target_action_guide_collect_blend", type=float, default=0.0)
@@ -387,6 +408,8 @@ parser.add_argument("--target_reward_cheatcode_axial_progress_weight", type=floa
 parser.add_argument("--target_reward_cheatcode_corridor_weight", type=float, default=1.50)
 parser.add_argument("--target_reward_cheatcode_inside_alignment_weight", type=float, default=0.20)
 parser.add_argument("--target_reward_cheatcode_retreat_weight", type=float, default=0.20)
+parser.add_argument("--target_reward_orientation_error_mode", choices=["quat", "axis"], default="quat")
+parser.add_argument("--target_reward_orientation_axis_local", type=float, nargs=3, default=None)
 parser.add_argument(
     "--target_reward_insertion_orientation_gate_std",
     type=float,
@@ -619,6 +642,7 @@ def _apply_reward_preset(args: argparse.Namespace) -> None:
         _set_preset_default(args, "target_reward_orientation_weight", "--target_reward_orientation_weight", 0.20)
         _set_preset_default(args, "target_reward_orientation_std", "--target_reward_orientation_std", 0.08)
         _set_preset_default(args, "target_reward_orientation_gate_sigma", "--target_reward_orientation_gate_sigma", 0.006)
+        _set_preset_default(args, "target_reward_orientation_error_mode", "--target_reward_orientation_error_mode", "axis")
         _set_preset_default(args, "target_reward_cheatcode_phase_weight", "--target_reward_cheatcode_phase_weight", 1.0)
         if args.reward_preset == "cheatcode_alignment_v1":
             _set_preset_default(
@@ -1325,6 +1349,14 @@ def _target_reward_body_orientation_offset(args: argparse.Namespace) -> tuple[fl
     return None
 
 
+def _target_reward_orientation_axis_local(args: argparse.Namespace) -> tuple[float, float, float]:
+    if args.target_reward_orientation_axis_local is not None:
+        return tuple(float(v) for v in args.target_reward_orientation_axis_local)
+    if args.task_family == "sfp_to_nic":
+        return (0.0, 0.0, 1.0)
+    return (0.0, 1.0, 0.0)
+
+
 def _resolved_target_reward_body(args: argparse.Namespace) -> str:
     raw = str(getattr(args, "target_reward_body", "auto"))
     if raw != "auto":
@@ -1349,6 +1381,8 @@ def _configure_task_geometry_rewards(env_cfg: Any, args: argparse.Namespace) -> 
     resolved_target_body = _resolved_target_reward_body(args)
     consistency_body = _resolved_consistency_body(args, resolved_target_body)
     target_body = [resolved_target_body]
+    orientation_error_mode = str(args.target_reward_orientation_error_mode)
+    orientation_axis_local = _target_reward_orientation_axis_local(args)
     target_position_offset = _target_reward_position_offset(args)
     body_position_offset = _target_reward_body_position_offset(args)
     target_orientation_offset = _target_reward_orientation_offset(args)
@@ -1379,6 +1413,10 @@ def _configure_task_geometry_rewards(env_cfg: Any, args: argparse.Namespace) -> 
             term.params["target_orientation_offset"] = target_orientation_offset
         if "body_orientation_offset" in term.params:
             term.params["body_orientation_offset"] = body_orientation_offset
+        if "orientation_error_mode" in term.params:
+            term.params["orientation_error_mode"] = orientation_error_mode
+        if "orientation_axis_local" in term.params:
+            term.params["orientation_axis_local"] = orientation_axis_local
     rewards.target_distance_tanh.params["std"] = float(args.target_reward_distance_std)
     rewards.target_distance_exp.params["sigma"] = float(args.target_reward_close_sigma)
     rewards.target_distance_progress.params["scale"] = float(args.target_reward_progress_scale)
@@ -1400,6 +1438,8 @@ def _configure_task_geometry_rewards(env_cfg: Any, args: argparse.Namespace) -> 
         args.target_reward_insertion_orientation_gate_std
     )
     rewards.target_axial_progress.params["body_orientation_offset"] = body_orientation_offset
+    rewards.target_axial_progress.params["orientation_error_mode"] = orientation_error_mode
+    rewards.target_axial_progress.params["orientation_axis_local"] = orientation_axis_local
     rewards.target_axial_progress.params["consistency_body_name"] = consistency_body
     rewards.target_axial_progress.params["consistency_axial_std"] = float(args.target_reward_consistency_axial_std)
     rewards.target_axial_progress.params["consistency_lateral_sigma"] = (
@@ -1418,6 +1458,8 @@ def _configure_task_geometry_rewards(env_cfg: Any, args: argparse.Namespace) -> 
         args.target_reward_insertion_orientation_gate_std
     )
     rewards.target_insertion_corridor.params["body_orientation_offset"] = body_orientation_offset
+    rewards.target_insertion_corridor.params["orientation_error_mode"] = orientation_error_mode
+    rewards.target_insertion_corridor.params["orientation_axis_local"] = orientation_axis_local
     rewards.target_insertion_corridor.params["consistency_body_name"] = consistency_body
     rewards.target_insertion_corridor.params["consistency_axial_std"] = float(
         args.target_reward_consistency_axial_std
@@ -1467,6 +1509,8 @@ def _configure_task_geometry_rewards(env_cfg: Any, args: argparse.Namespace) -> 
         args.target_reward_cheatcode_inside_alignment_weight
     )
     rewards.target_cheatcode_phase_reward.params["retreat_weight"] = float(args.target_reward_cheatcode_retreat_weight)
+    rewards.target_cheatcode_phase_reward.params["orientation_error_mode"] = orientation_error_mode
+    rewards.target_cheatcode_phase_reward.params["orientation_axis_local"] = orientation_axis_local
     success_axial_threshold = (
         float(args.target_success_termination_threshold)
         if args.target_success_axial_threshold is None
@@ -1488,6 +1532,8 @@ def _configure_task_geometry_rewards(env_cfg: Any, args: argparse.Namespace) -> 
     )
     rewards.target_success_once_bonus.params["body_orientation_offset"] = body_orientation_offset
     rewards.target_success_once_bonus.params["target_orientation_offset"] = target_orientation_offset
+    rewards.target_success_once_bonus.params["orientation_error_mode"] = orientation_error_mode
+    rewards.target_success_once_bonus.params["orientation_axis_local"] = orientation_axis_local
     rewards.target_success_once_bonus.params["consistency_body_name"] = consistency_body
     rewards.target_success_once_bonus.params["consistency_axial_threshold"] = (
         None
@@ -1537,6 +1583,8 @@ def _configure_task_geometry_rewards(env_cfg: Any, args: argparse.Namespace) -> 
         target_success.params["body_position_offset"] = body_position_offset
         target_success.params["target_orientation_offset"] = target_orientation_offset
         target_success.params["body_orientation_offset"] = body_orientation_offset
+        target_success.params["orientation_error_mode"] = orientation_error_mode
+        target_success.params["orientation_axis_local"] = orientation_axis_local
         target_success.params["orientation_threshold"] = (
             None
             if not bool(args.terminate_on_target_success) or args.target_success_orientation_threshold is None
@@ -1624,6 +1672,8 @@ def _configure_task_geometry_rewards(env_cfg: Any, args: argparse.Namespace) -> 
         "consistency_body": consistency_body,
         "consistency_axial_std": float(args.target_reward_consistency_axial_std),
         "consistency_lateral_sigma": float(args.target_reward_consistency_lateral_sigma),
+        "orientation_error_mode": orientation_error_mode,
+        "orientation_axis_local": [float(v) for v in orientation_axis_local],
         "success_consistency_axial_threshold": float(args.target_success_consistency_axial_threshold),
         "success_consistency_lateral_threshold": float(args.target_success_consistency_lateral_threshold),
         "insertion_axis": int(args.target_reward_insertion_axis),
@@ -2753,6 +2803,9 @@ def _cheatcode_transform_guided_policy_action(
     lateral_switch_m: float,
     axial_blend_lateral_m: float,
     orientation_switch_rad: float,
+    rotate_while_lateral: bool,
+    preinsert_hover_depth: float | None,
+    rotation_sign: float,
     action_frame: str,
     device: torch.device,
 ) -> torch.Tensor:
@@ -2788,13 +2841,13 @@ def _cheatcode_transform_guided_policy_action(
         body_quat_w,
         task_geometry_reward_config.get("body_position_offset"),
     )
+    body_frame_quat_w = _offset_quat_w(
+        body_quat_w,
+        task_geometry_reward_config.get("body_orientation_offset"),
+    )
     orientation_aligned = torch.ones((batch_size, 1), dtype=torch.bool, device=device)
     desired_controlled_quat_w = controlled_quat_w
     if target_quat_w is not None and float(rotation_step_size) > 0.0:
-        body_frame_quat_w = _offset_quat_w(
-            body_quat_w,
-            task_geometry_reward_config.get("body_orientation_offset"),
-        )
         target_quat_w = target_quat_w.to(device=device, dtype=guide.dtype)
         orientation_error = math_utils.quat_error_magnitude(body_frame_quat_w, target_quat_w).view(batch_size, 1)
         if float(orientation_switch_rad) > 0.0:
@@ -2808,6 +2861,17 @@ def _cheatcode_transform_guided_policy_action(
     if entrance_w is not None and axis_w is not None:
         entrance_w = entrance_w.to(device=device, dtype=guide.dtype)
         axis_w = axis_w.to(device=device, dtype=guide.dtype)
+        if str(task_geometry_reward_config.get("orientation_error_mode", "quat")).lower() == "axis":
+            local_axis = torch.tensor(
+                task_geometry_reward_config.get("orientation_axis_local", (0.0, 1.0, 0.0)),
+                dtype=guide.dtype,
+                device=device,
+            ).reshape(1, 3)
+            local_axis = local_axis / torch.linalg.norm(local_axis, dim=1, keepdim=True).clamp(min=1.0e-9)
+            body_axis_w = math_utils.quat_apply(body_frame_quat_w, local_axis.expand(batch_size, -1))
+            axis_error = torch.acos(torch.sum(body_axis_w * axis_w, dim=1, keepdim=True).clamp(min=-1.0, max=1.0))
+            if float(orientation_switch_rad) > 0.0:
+                orientation_aligned = axis_error <= float(orientation_switch_rad)
         target_depth = torch.sum((target_pos_w - entrance_w) * axis_w, dim=1, keepdim=True)
         tip_delta = body_point_w - entrance_w
         axial_depth = torch.sum(tip_delta * axis_w, dim=1, keepdim=True)
@@ -2823,14 +2887,22 @@ def _cheatcode_transform_guided_policy_action(
         axial_direction = axial_delta / axial_distance.clamp(min=1.0e-9)
         axial_move = axial_direction * torch.minimum(axial_distance, torch.full_like(axial_distance, max(axial_step, 0.0)))
         axial_move = torch.where(orientation_aligned, axial_move, torch.zeros_like(axial_move))
+        hover_move = torch.zeros_like(axial_move)
+        if preinsert_hover_depth is not None and math.isfinite(float(preinsert_hover_depth)):
+            hover_error = float(preinsert_hover_depth) - axial_depth
+            hover_step = hover_error.clamp(min=-max(axial_step, 0.0), max=max(axial_step, 0.0))
+            hover_move = hover_step * axis_w
         lateral_switch = max(float(lateral_switch_m), 0.0)
         blend_width = max(float(axial_blend_lateral_m), 1.0e-9)
         lateral_blend = (lateral_distance / blend_width).clamp(min=0.0, max=1.0)
         use_lateral_only = lateral_distance > lateral_switch
-        move_w = torch.where(use_lateral_only, lateral_move, axial_move + lateral_move * lateral_blend)
+        align_ready = torch.logical_and(~use_lateral_only, orientation_aligned)
+        preinsert_move = hover_move + lateral_move * torch.where(use_lateral_only, torch.ones_like(lateral_blend), lateral_blend)
+        insert_move = axial_move + lateral_move * lateral_blend
+        move_w = torch.where(align_ready, insert_move, preinsert_move)
         rotation_gate = torch.where(
             use_lateral_only,
-            torch.zeros_like(lateral_distance),
+            torch.ones_like(lateral_distance) if bool(rotate_while_lateral) else torch.zeros_like(lateral_distance),
             (1.0 - lateral_distance / blend_width).clamp(min=0.0, max=1.0),
         )
         desired_controlled_pos_w = controlled_pos_w + move_w
@@ -2872,7 +2944,7 @@ def _cheatcode_transform_guided_policy_action(
         ),
     )
     delta_rot_frame = math_utils.axis_angle_from_quat(delta_quat_frame)
-    guide[:, 3:6] = _clip_vector_norm(delta_rot_frame, rotation_step_size) * rotation_gate
+    guide[:, 3:6] = _clip_vector_norm(delta_rot_frame, rotation_step_size) * rotation_gate * float(rotation_sign)
     return guide
 
 
@@ -2886,6 +2958,9 @@ def _target_guided_policy_action(
     lateral_switch_m: float,
     axial_blend_lateral_m: float,
     orientation_switch_rad: float,
+    rotate_while_lateral: bool,
+    preinsert_hover_depth: float | None,
+    rotation_sign: float,
     action_frame: str,
     mode: str,
     device: torch.device,
@@ -2901,6 +2976,9 @@ def _target_guided_policy_action(
             lateral_switch_m=lateral_switch_m,
             axial_blend_lateral_m=axial_blend_lateral_m,
             orientation_switch_rad=orientation_switch_rad,
+            rotate_while_lateral=rotate_while_lateral,
+            preinsert_hover_depth=preinsert_hover_depth,
+            rotation_sign=rotation_sign,
             action_frame=action_frame,
             device=device,
         )
@@ -3370,6 +3448,36 @@ def _body_orientation_by_name(env, body_name: str, body_offset: Any = None) -> t
     return _offset_quat_w(robot.data.body_quat_w[:, body_idx], body_offset)
 
 
+def _body_target_orientation_error_from_config(
+    env,
+    body_name: str,
+    reward_config: dict[str, Any],
+    *,
+    axis_w: torch.Tensor | None = None,
+) -> torch.Tensor | None:
+    body_quat = _body_orientation_by_name(env, body_name, reward_config.get("body_orientation_offset"))
+    if body_quat is None:
+        return None
+    target_quat = _target_orientation_from_reward_config(env, reward_config)
+    mode = str(reward_config.get("orientation_error_mode", "quat")).lower()
+    if mode == "axis":
+        axis = axis_w if axis_w is not None else _episode_insertion_axis_from_yaml(env)
+        if axis is None:
+            return None
+        axis = axis.to(device=body_quat.device, dtype=body_quat.dtype)
+        local_axis = torch.tensor(
+            reward_config.get("orientation_axis_local", (0.0, 1.0, 0.0)),
+            dtype=body_quat.dtype,
+            device=body_quat.device,
+        ).reshape(1, 3)
+        local_axis = local_axis / torch.linalg.norm(local_axis, dim=1, keepdim=True).clamp(min=1.0e-9)
+        body_axis = math_utils.quat_apply(body_quat, local_axis.expand(body_quat.shape[0], -1))
+        return torch.acos(torch.sum(body_axis * axis, dim=1).clamp(min=-1.0, max=1.0))
+    if target_quat is None:
+        return None
+    return math_utils.quat_error_magnitude(body_quat, target_quat)
+
+
 def _resolved_reward_terms(env) -> dict[str, Any]:
     manager = getattr(env.unwrapped, "reward_manager", None)
     names = list(getattr(manager, "_term_names", None) or getattr(manager, "active_terms", []) or [])
@@ -3398,6 +3506,8 @@ def _resolved_reward_terms(env) -> dict[str, Any]:
             "body_position_offset": params.get("body_position_offset"),
             "target_orientation_offset": params.get("target_orientation_offset"),
             "body_orientation_offset": params.get("body_orientation_offset"),
+            "orientation_error_mode": params.get("orientation_error_mode"),
+            "orientation_axis_local": params.get("orientation_axis_local"),
         }
     return out
 
@@ -3458,6 +3568,8 @@ def _pose_reward_diagnostics(env, reward_config: dict[str, Any]) -> dict[str, An
         "body_position_offset": body_offset,
         "target_orientation_offset": reward_config.get("target_orientation_offset"),
         "body_orientation_offset": body_orientation_offset,
+        "orientation_error_mode": reward_config.get("orientation_error_mode", "quat"),
+        "orientation_axis_local": reward_config.get("orientation_axis_local", (0.0, 1.0, 0.0)),
         "target_position_world_env0": None if target_pos is None else _sample_vector(target_pos, limit=3),
         "target_orientation_wxyz_env0": None if target_quat is None else _sample_vector(target_quat, limit=4),
         "target_asset_root_world_env0": None,
@@ -3495,9 +3607,12 @@ def _pose_reward_diagnostics(env, reward_config: dict[str, Any]) -> dict[str, An
             out["body_distances_to_target_env0"][body_name] = float(
                 torch.norm(body_pos[0] - target_pos[0]).detach().cpu()
             )
-        if target_quat is not None and body_quat is not None:
-            out["body_orientation_error_rad_env0"][body_name] = float(
-                math_utils.quat_error_magnitude(body_quat[0:1], target_quat[0:1]).detach().cpu().reshape(-1)[0]
+        if body_quat is not None:
+            orientation_error = _body_target_orientation_error_from_config(env, body_name, reward_config)
+            out["body_orientation_error_rad_env0"][body_name] = (
+                None
+                if orientation_error is None
+                else float(orientation_error[0].detach().cpu().reshape(-1)[0])
             )
     if reward_config.get("target_body") not in ("wrist_3_link", "gripper_tcp", "sfp_tip_link"):
         out["warnings"] = [f"target_reward_body {reward_config.get('target_body')!r} is not one of common audit bodies"]
@@ -3554,9 +3669,14 @@ def _insertion_geometry_diagnostics(env, reward_config: dict[str, Any]) -> dict[
     orientation_error = None
     orientation_gate = None
     orientation_gate_std = float(reward_config.get("insertion_orientation_gate_std", 0.0) or 0.0)
-    if target_quat is not None and body_quat is not None:
-        orientation_error = math_utils.quat_error_magnitude(body_quat, target_quat)
-        if orientation_gate_std > 0.0:
+    if body_quat is not None:
+        orientation_error = _body_target_orientation_error_from_config(
+            env,
+            body_name,
+            reward_config,
+            axis_w=geometry.axis,
+        )
+        if orientation_error is not None and orientation_gate_std > 0.0:
             orientation_gate = torch.exp(-torch.square(orientation_error / max(orientation_gate_std, 1.0e-9)))
     semantic_gate = lateral_gate if orientation_gate is None else lateral_gate * orientation_gate
     consistency_body = reward_config.get("consistency_body")
@@ -5896,6 +6016,9 @@ def main() -> None:
             "actor_update_end_steps": args_cli.actor_update_end_steps,
             "target_action_guide_mode": args_cli.target_action_guide_mode,
             "target_action_guide_orientation_switch_rad": float(args_cli.target_action_guide_orientation_switch_rad),
+            "target_action_guide_rotate_while_lateral": bool(args_cli.target_action_guide_rotate_while_lateral),
+            "target_action_guide_preinsert_hover_depth": float(args_cli.target_action_guide_preinsert_hover_depth),
+            "target_action_guide_rotation_sign": float(args_cli.target_action_guide_rotation_sign),
             "target_action_guide_prefix_decay": args_cli.target_action_guide_prefix_decay,
             "ppo_resnet_observation_terms_disabled": True,
             "camera_sensors_enabled": True,
@@ -6232,6 +6355,13 @@ def main() -> None:
                 lateral_switch_m=float(args_cli.target_action_guide_lateral_switch_m),
                 axial_blend_lateral_m=float(args_cli.target_action_guide_axial_blend_lateral_m),
                 orientation_switch_rad=float(args_cli.target_action_guide_orientation_switch_rad),
+                rotate_while_lateral=bool(args_cli.target_action_guide_rotate_while_lateral),
+                preinsert_hover_depth=(
+                    None
+                    if not math.isfinite(float(args_cli.target_action_guide_preinsert_hover_depth))
+                    else float(args_cli.target_action_guide_preinsert_hover_depth)
+                ),
+                rotation_sign=float(args_cli.target_action_guide_rotation_sign),
                 action_frame=str(args_cli.tcp_action_frame),
                 mode=str(args_cli.target_action_guide_mode),
                 device=device,
