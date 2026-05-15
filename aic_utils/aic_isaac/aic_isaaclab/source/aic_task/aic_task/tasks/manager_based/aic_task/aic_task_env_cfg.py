@@ -701,8 +701,10 @@ class RewardsCfg:
             "scale": 0.001,
             "insertion_axis": 0,
             "lateral_gate_sigma": 0.012,
+            "orientation_gate_std": 0.0,
             "target_position_offset": (0.093, 0.140, 0.020),
             "body_position_offset": (0.0, 0.0, 0.0),
+            "body_orientation_offset": None,
             "target_orientation_offset": None,
         },
     )
@@ -715,8 +717,10 @@ class RewardsCfg:
             "insertion_axis": 0,
             "lateral_gate_sigma": 0.0025,
             "bypass_penalty_scale": 1.0,
+            "orientation_gate_std": 0.0,
             "target_position_offset": (0.093, 0.140, 0.020),
             "body_position_offset": (0.0, 0.0, 0.0),
+            "body_orientation_offset": None,
             "target_orientation_offset": None,
         },
     )

@@ -77,8 +77,9 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         choices=["act_adapter", "act_direct"],
         default="act_adapter",
         help=(
-            "act_adapter learns a residual added to ACT. act_direct initializes to ACT "
-            "but trains an unconstrained full-action override before final TCP caps."
+            "act_adapter learns a residual added to ACT. act_direct feeds ACT into "
+            "the trainable head as context, but the head output is the full TCP "
+            "delta action before final TCP caps."
         ),
     )
     parser.add_argument("--act-torchscript", type=Path, required=True)
@@ -275,6 +276,15 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser.add_argument("--insertion-corridor-weight", type=float, default=0.0)
     parser.add_argument("--insertion-corridor-sigma", type=float, default=0.0025)
     parser.add_argument("--insertion-bypass-penalty-scale", type=float, default=1.0)
+    parser.add_argument(
+        "--insertion-corridor-orientation-gate-std",
+        type=float,
+        default=0.0,
+        help=(
+            "If >0, gate axial/corridor insertion rewards by semantic tip orientation error. "
+            "Forward progress with bad orientation is penalized."
+        ),
+    )
     parser.add_argument("--insertion-axis", type=int, choices=[0, 1, 2], default=0)
     parser.add_argument(
         "--reward-preset",
@@ -288,7 +298,11 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser.add_argument("--force-delta-saturation", type=float, default=30.0)
     parser.add_argument("--force-delta-knee-penalty-fraction", type=float, default=0.1)
     parser.add_argument("--isaac-force-observation-clip-n", type=float, default=35.0)
-    parser.add_argument("--target-reward-body", default="sfp_tip_link")
+    parser.add_argument(
+        "--target-reward-body",
+        default="auto",
+        help="Reward/diagnostic body name, or 'auto' to use the materialized episode tip body.",
+    )
     parser.add_argument("--target-reward-distance-std", type=float, default=0.02)
     parser.add_argument("--target-reward-close-sigma", type=float, default=0.006)
     parser.add_argument("--target-reward-reaching-threshold", type=float, default=0.01)
@@ -362,6 +376,24 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         help="Number of per-episode configs to generate from --isaac-user-config-yaml.",
     )
     parser.add_argument("--gripper-joint-position", type=float, default=0.0035405)
+    parser.add_argument(
+        "--near-gate-reset-max-iterations",
+        type=int,
+        default=0,
+        help="If >0, override the IK iteration count for reset_robot_tcp_to_episode_start.",
+    )
+    parser.add_argument(
+        "--near-gate-reset-position-tolerance",
+        type=float,
+        default=0.0,
+        help="If >0, override the near-gate reset body position tolerance in meters.",
+    )
+    parser.add_argument(
+        "--near-gate-reset-orientation-tolerance",
+        type=float,
+        default=0.0,
+        help="If >0, override the near-gate reset body orientation tolerance in radians.",
+    )
     parser.add_argument(
         "--initial-arm-joint-pos",
         default=None,
@@ -444,7 +476,14 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     )
     parser.add_argument("--dry-run", action="store_true")
     parser.add_argument("--extra-arg", action="append", default=[])
-    return parser.parse_args(argv)
+    parsed = parser.parse_args(argv)
+    raw_args = sys.argv[1:] if argv is None else argv
+    parsed._explicit_cli_flags = {
+        arg.split("=", 1)[0]
+        for arg in raw_args
+        if arg.startswith("--")
+    }
+    return parsed
 
 
 def inspect_checkpoint(path: Path, *, required: bool) -> dict[str, Any]:
@@ -647,6 +686,11 @@ def build_plan(args: argparse.Namespace, *, inspect_required: bool = True) -> di
         "episode_config_count": args.episode_config_count,
         "max_gpus": args.max_gpus,
         "gripper_joint_position": args.gripper_joint_position,
+        "near_gate_reset_max_iterations": int(getattr(args, "near_gate_reset_max_iterations", 0)),
+        "near_gate_reset_position_tolerance": float(getattr(args, "near_gate_reset_position_tolerance", 0.0)),
+        "near_gate_reset_orientation_tolerance": float(
+            getattr(args, "near_gate_reset_orientation_tolerance", 0.0)
+        ),
         "debug_timing": args.debug_timing,
         "disable_fabric": args.disable_fabric,
         "save_step_images": args.save_step_images,
@@ -839,6 +883,12 @@ def build_command(args: argparse.Namespace) -> tuple[list[str], dict[str, str]]:
         str(args.target_card_valid),
         "--gripper_joint_position",
         str(args.gripper_joint_position),
+        "--near_gate_reset_max_iterations",
+        str(getattr(args, "near_gate_reset_max_iterations", 0)),
+        "--near_gate_reset_position_tolerance",
+        str(getattr(args, "near_gate_reset_position_tolerance", 0.0)),
+        "--near_gate_reset_orientation_tolerance",
+        str(getattr(args, "near_gate_reset_orientation_tolerance", 0.0)),
         "--target_reward_distance_weight",
         str(args.insertion_distance_weight),
         "--target_reward_close_weight",
@@ -881,6 +931,8 @@ def build_command(args: argparse.Namespace) -> tuple[list[str], dict[str, str]]:
         str(getattr(args, "insertion_corridor_sigma", 0.0025)),
         "--target_reward_insertion_bypass_penalty_scale",
         str(getattr(args, "insertion_bypass_penalty_scale", 1.0)),
+        "--target_reward_insertion_orientation_gate_std",
+        str(getattr(args, "insertion_corridor_orientation_gate_std", 0.0)),
         "--target_reward_insertion_axis",
         str(args.insertion_axis),
         "--reward_preset",
@@ -1105,6 +1157,12 @@ def validate_launch_inputs(args: argparse.Namespace) -> None:
         raise FileNotFoundError(f"--episode-config-dir does not exist: {args.episode_config_dir}")
     if args.episode_config_count is not None and args.episode_config_count <= 0:
         raise ValueError("--episode-config-count must be positive")
+    if int(getattr(args, "near_gate_reset_max_iterations", 0)) < 0:
+        raise ValueError("--near-gate-reset-max-iterations must be non-negative")
+    if float(getattr(args, "near_gate_reset_position_tolerance", 0.0)) < 0.0:
+        raise ValueError("--near-gate-reset-position-tolerance must be non-negative")
+    if float(getattr(args, "near_gate_reset_orientation_tolerance", 0.0)) < 0.0:
+        raise ValueError("--near-gate-reset-orientation-tolerance must be non-negative")
     is_audit = int(getattr(args, "debug_audit_steps", 0)) > 0
     if not is_audit and args.warmup_steps > args.steps * args.num_envs:
         raise ValueError(
@@ -1142,6 +1200,11 @@ def prepare_user_episode_configs(args: argparse.Namespace) -> dict[str, Any] | N
     args.episode_config_dir = Path(summary["episodes_dir"])
     if args.task_distribution_yaml is None:
         args.task_distribution_yaml = Path(summary["task_distribution_yaml"])
+    first_target = (((summary.get("first_episode") or {}).get("scene") or {}).get("target") or {})
+    if str(getattr(args, "target_reward_body", "auto")) == "auto" and first_target.get("target_reward_body"):
+        args.target_reward_body = str(first_target["target_reward_body"])
+    if args.target_reward_body_position_offset is None and first_target.get("body_position_offset") is not None:
+        args.target_reward_body_position_offset = [float(v) for v in first_target["body_position_offset"]]
     return summary
 
 
@@ -1163,24 +1226,31 @@ def apply_reward_preset(args: argparse.Namespace) -> None:
         return
     if args.reward_preset != "near_gate_corridor_v1":
         raise ValueError(f"Unsupported reward preset: {args.reward_preset}")
-    args.insertion_distance_weight = 0.02
-    args.insertion_close_weight = 0.05
-    args.insertion_progress_weight = 0.0
-    args.insertion_lateral_weight = -0.10
-    args.insertion_lateral_error_scale = 0.006
-    args.insertion_lateral_progress_weight = 0.25
-    args.insertion_lateral_progress_scale = 0.001
-    args.insertion_axial_progress_weight = 0.25
-    args.insertion_axial_progress_scale = 0.001
-    args.insertion_lateral_gate_sigma = 0.004
-    args.insertion_corridor_weight = 0.50
-    args.insertion_corridor_sigma = 0.0025
-    args.insertion_bypass_penalty_scale = 2.0
-    args.insertion_orientation_weight = 0.05
-    args.insertion_orientation_std = 0.10
-    args.insertion_orientation_gate_sigma = 0.010
-    args.force_delta_penalty_weight = 0.05
-    args.terminate_on_target_success = True
+    explicit = getattr(args, "_explicit_cli_flags", set())
+
+    def set_default(attr: str, flag: str, value: object) -> None:
+        if flag not in explicit:
+            setattr(args, attr, value)
+
+    set_default("insertion_distance_weight", "--insertion-distance-weight", 0.02)
+    set_default("insertion_close_weight", "--insertion-close-weight", 0.05)
+    set_default("insertion_progress_weight", "--insertion-progress-weight", 0.0)
+    set_default("insertion_lateral_weight", "--insertion-lateral-weight", -0.10)
+    set_default("insertion_lateral_error_scale", "--insertion-lateral-error-scale", 0.006)
+    set_default("insertion_lateral_progress_weight", "--insertion-lateral-progress-weight", 0.25)
+    set_default("insertion_lateral_progress_scale", "--insertion-lateral-progress-scale", 0.001)
+    set_default("insertion_axial_progress_weight", "--insertion-axial-progress-weight", 0.25)
+    set_default("insertion_axial_progress_scale", "--insertion-axial-progress-scale", 0.001)
+    set_default("insertion_lateral_gate_sigma", "--insertion-lateral-gate-sigma", 0.004)
+    set_default("insertion_corridor_weight", "--insertion-corridor-weight", 0.50)
+    set_default("insertion_corridor_sigma", "--insertion-corridor-sigma", 0.0025)
+    set_default("insertion_bypass_penalty_scale", "--insertion-bypass-penalty-scale", 2.0)
+    set_default("insertion_corridor_orientation_gate_std", "--insertion-corridor-orientation-gate-std", 0.10)
+    set_default("insertion_orientation_weight", "--insertion-orientation-weight", 0.05)
+    set_default("insertion_orientation_std", "--insertion-orientation-std", 0.10)
+    set_default("insertion_orientation_gate_sigma", "--insertion-orientation-gate-sigma", 0.010)
+    set_default("force_delta_penalty_weight", "--force-delta-penalty-weight", 0.05)
+    set_default("terminate_on_target_success", "--terminate-on-target-success", True)
 
 
 def main() -> int:
