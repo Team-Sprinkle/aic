@@ -402,6 +402,8 @@ class TerminationsCfg:
             "target_cfg": SceneEntityCfg("task_board"),
             "body_orientation_offset": None,
             "orientation_threshold": None,
+            "orientation_error_mode": "quat",
+            "orientation_axis_local": (0.0, 1.0, 0.0),
             "consistency_body_name": None,
             "consistency_axial_threshold": None,
             "consistency_lateral_threshold": None,
@@ -619,6 +621,8 @@ class RewardsCfg:
             "std": 0.25,
             "body_orientation_offset": None,
             "target_orientation_offset": None,
+            "orientation_error_mode": "quat",
+            "orientation_axis_local": (0.0, 1.0, 0.0),
         },
     )
     target_orientation_gated_exp = RewTerm(
@@ -633,6 +637,8 @@ class RewardsCfg:
             "target_orientation_offset": None,
             "target_position_offset": (0.093, 0.140, 0.020),
             "body_position_offset": (0.0, 0.0, 0.0),
+            "orientation_error_mode": "quat",
+            "orientation_axis_local": (0.0, 1.0, 0.0),
         },
     )
     target_reaching_bonus = RewTerm(
@@ -657,6 +663,8 @@ class RewardsCfg:
             "body_position_offset": (0.0, 0.0, 0.0),
             "body_orientation_offset": None,
             "orientation_threshold": None,
+            "orientation_error_mode": "quat",
+            "orientation_axis_local": (0.0, 1.0, 0.0),
             "consistency_body_name": None,
             "consistency_axial_threshold": None,
             "consistency_lateral_threshold": None,
@@ -719,6 +727,8 @@ class RewardsCfg:
             "body_position_offset": (0.0, 0.0, 0.0),
             "body_orientation_offset": None,
             "target_orientation_offset": None,
+            "orientation_error_mode": "quat",
+            "orientation_axis_local": (0.0, 1.0, 0.0),
         },
     )
     target_insertion_corridor = RewTerm(
@@ -738,6 +748,8 @@ class RewardsCfg:
             "body_position_offset": (0.0, 0.0, 0.0),
             "body_orientation_offset": None,
             "target_orientation_offset": None,
+            "orientation_error_mode": "quat",
+            "orientation_axis_local": (0.0, 1.0, 0.0),
         },
     )
     target_cheatcode_phase_reward = RewTerm(
@@ -779,6 +791,8 @@ class RewardsCfg:
             "body_position_offset": (0.0, 0.0, 0.0),
             "body_orientation_offset": None,
             "target_orientation_offset": None,
+            "orientation_error_mode": "quat",
+            "orientation_axis_local": (0.0, 1.0, 0.0),
         },
     )
     force_delta_penalty = RewTerm(

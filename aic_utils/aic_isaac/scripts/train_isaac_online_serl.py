@@ -186,10 +186,13 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     )
     parser.add_argument("--target-action-guide-step-size", type=float, default=0.001)
     parser.add_argument("--target-action-guide-rotation-step-size", type=float, default=0.0)
+    parser.add_argument("--target-action-guide-rotation-sign", type=float, default=1.0)
     parser.add_argument("--target-action-guide-axial-step-size", type=float, default=0.0)
     parser.add_argument("--target-action-guide-lateral-switch-m", type=float, default=0.002)
     parser.add_argument("--target-action-guide-axial-blend-lateral-m", type=float, default=0.006)
     parser.add_argument("--target-action-guide-orientation-switch-rad", type=float, default=0.0)
+    parser.add_argument("--target-action-guide-rotate-while-lateral", action=argparse.BooleanOptionalAction, default=False)
+    parser.add_argument("--target-action-guide-preinsert-hover-depth", type=float, default=float("nan"))
     parser.add_argument("--target-action-guide-collect-blend", type=float, default=0.0)
     parser.add_argument("--target-action-guide-collect-steps", type=int, default=0)
     parser.add_argument("--target-action-guide-collect-decay", action=argparse.BooleanOptionalAction, default=False)
@@ -334,6 +337,8 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser.add_argument("--target-success-axial-threshold", type=float, default=None)
     parser.add_argument("--target-success-lateral-threshold", type=float, default=None)
     parser.add_argument("--target-success-orientation-threshold", type=float, default=None)
+    parser.add_argument("--target-reward-orientation-error-mode", choices=["quat", "axis"], default="quat")
+    parser.add_argument("--target-reward-orientation-axis-local", type=float, nargs=3, default=None)
     parser.add_argument("--target-reward-position-offset", type=float, nargs=3, default=None)
     parser.add_argument("--target-reward-body-position-offset", type=float, nargs=3, default=None)
     parser.add_argument("--state-source", choices=["lerobot_compatible", "policy_prefix"], default="lerobot_compatible")
@@ -631,6 +636,7 @@ def build_plan(args: argparse.Namespace, *, inspect_required: bool = True) -> di
         "target_action_guide_mode": getattr(args, "target_action_guide_mode", "axis"),
         "target_action_guide_step_size": getattr(args, "target_action_guide_step_size", 0.001),
         "target_action_guide_rotation_step_size": getattr(args, "target_action_guide_rotation_step_size", 0.0),
+        "target_action_guide_rotation_sign": getattr(args, "target_action_guide_rotation_sign", 1.0),
         "target_action_guide_axial_step_size": getattr(args, "target_action_guide_axial_step_size", 0.0),
         "target_action_guide_lateral_switch_m": getattr(args, "target_action_guide_lateral_switch_m", 0.002),
         "target_action_guide_axial_blend_lateral_m": getattr(
@@ -639,11 +645,19 @@ def build_plan(args: argparse.Namespace, *, inspect_required: bool = True) -> di
         "target_action_guide_orientation_switch_rad": getattr(
             args, "target_action_guide_orientation_switch_rad", 0.0
         ),
+        "target_action_guide_rotate_while_lateral": bool(
+            getattr(args, "target_action_guide_rotate_while_lateral", False)
+        ),
+        "target_action_guide_preinsert_hover_depth": getattr(
+            args, "target_action_guide_preinsert_hover_depth", float("nan")
+        ),
         "target_action_guide_collect_blend": getattr(args, "target_action_guide_collect_blend", 0.0),
         "target_action_guide_collect_steps": getattr(args, "target_action_guide_collect_steps", 0),
         "target_action_guide_collect_decay": bool(getattr(args, "target_action_guide_collect_decay", False)),
         "target_action_guide_prefix_decay": bool(getattr(args, "target_action_guide_prefix_decay", False)),
         "target_action_guide_train_executed": bool(getattr(args, "target_action_guide_train_executed", False)),
+        "target_reward_orientation_error_mode": getattr(args, "target_reward_orientation_error_mode", "quat"),
+        "target_reward_orientation_axis_local": getattr(args, "target_reward_orientation_axis_local", None),
         "adapter_delta_clip": args.adapter_delta_clip,
         "tcp_translation_action_clip": args.tcp_translation_action_clip,
         "tcp_rotation_action_clip": args.tcp_rotation_action_clip,
@@ -858,6 +872,8 @@ def build_command(args: argparse.Namespace) -> tuple[list[str], dict[str, str]]:
         str(getattr(args, "target_action_guide_step_size", 0.001)),
         "--target_action_guide_rotation_step_size",
         str(getattr(args, "target_action_guide_rotation_step_size", 0.0)),
+        "--target_action_guide_rotation_sign",
+        str(getattr(args, "target_action_guide_rotation_sign", 1.0)),
         "--target_action_guide_axial_step_size",
         str(getattr(args, "target_action_guide_axial_step_size", 0.0)),
         "--target_action_guide_lateral_switch_m",
@@ -866,6 +882,13 @@ def build_command(args: argparse.Namespace) -> tuple[list[str], dict[str, str]]:
         str(getattr(args, "target_action_guide_axial_blend_lateral_m", 0.006)),
         "--target_action_guide_orientation_switch_rad",
         str(getattr(args, "target_action_guide_orientation_switch_rad", 0.0)),
+        (
+            "--target_action_guide_rotate_while_lateral"
+            if getattr(args, "target_action_guide_rotate_while_lateral", False)
+            else "--no-target_action_guide_rotate_while_lateral"
+        ),
+        "--target_action_guide_preinsert_hover_depth",
+        str(getattr(args, "target_action_guide_preinsert_hover_depth", float("nan"))),
         "--target_action_guide_collect_blend",
         str(getattr(args, "target_action_guide_collect_blend", 0.0)),
         "--target_action_guide_collect_steps",
@@ -991,6 +1014,8 @@ def build_command(args: argparse.Namespace) -> tuple[list[str], dict[str, str]]:
         str(getattr(args, "insertion_cheatcode_retreat_weight", 0.20)),
         "--target_reward_insertion_orientation_gate_std",
         str(getattr(args, "insertion_corridor_orientation_gate_std", 0.0)),
+        "--target_reward_orientation_error_mode",
+        str(getattr(args, "target_reward_orientation_error_mode", "quat")),
         "--target_reward_consistency_body",
         str(getattr(args, "insertion_consistency_body", "auto")),
         "--target_reward_consistency_axial_std",
@@ -1035,6 +1060,13 @@ def build_command(args: argparse.Namespace) -> tuple[list[str], dict[str, str]]:
         cmd.extend(["--target_success_lateral_threshold", str(args.target_success_lateral_threshold)])
     if getattr(args, "target_success_orientation_threshold", None) is not None:
         cmd.extend(["--target_success_orientation_threshold", str(args.target_success_orientation_threshold)])
+    if getattr(args, "target_reward_orientation_axis_local", None) is not None:
+        cmd.extend(
+            [
+                "--target_reward_orientation_axis_local",
+                *[str(v) for v in getattr(args, "target_reward_orientation_axis_local")],
+            ]
+        )
     act_only = bool(getattr(args, "act_only", False))
     if act_only:
         cmd.extend(
@@ -1335,6 +1367,7 @@ def apply_reward_preset(args: argparse.Namespace) -> None:
         set_default("insertion_orientation_weight", "--insertion-orientation-weight", 0.20)
         set_default("insertion_orientation_std", "--insertion-orientation-std", 0.08)
         set_default("insertion_orientation_gate_sigma", "--insertion-orientation-gate-sigma", 0.006)
+        set_default("target_reward_orientation_error_mode", "--target-reward-orientation-error-mode", "axis")
         set_default("insertion_cheatcode_phase_weight", "--insertion-cheatcode-phase-weight", 1.0)
         if args.reward_preset == "cheatcode_alignment_v1":
             set_default(

@@ -312,17 +312,63 @@ def _orientation_gate(
     orientation_gate_std: float | None,
     body_orientation_offset: tuple[float, float, float, float] | list[float] | None,
     target_orientation_offset: tuple[float, float, float, float] | list[float] | None,
+    orientation_error_mode: str = "quat",
+    orientation_axis_local: tuple[float, float, float] | list[float] = (0.0, 1.0, 0.0),
+    insertion_axis_w: torch.Tensor | None = None,
 ) -> torch.Tensor | None:
     if orientation_gate_std is None or float(orientation_gate_std) <= 0.0:
         return None
+    error = _body_target_orientation_error(
+        env,
+        body_asset,
+        body_id,
+        target_asset,
+        body_orientation_offset=body_orientation_offset,
+        target_orientation_offset=target_orientation_offset,
+        orientation_error_mode=orientation_error_mode,
+        orientation_axis_local=orientation_axis_local,
+        insertion_axis_w=insertion_axis_w,
+    )
+    if error is None:
+        return None
+    std = max(float(orientation_gate_std), 1.0e-9)
+    return torch.exp(-torch.square(error / std))
+
+
+def _body_target_orientation_error(
+    env: ManagerBasedRLEnv,
+    body_asset: RigidObject,
+    body_id: int,
+    target_asset: RigidObject,
+    *,
+    body_orientation_offset: tuple[float, float, float, float] | list[float] | None,
+    target_orientation_offset: tuple[float, float, float, float] | list[float] | None,
+    orientation_error_mode: str = "quat",
+    orientation_axis_local: tuple[float, float, float] | list[float] = (0.0, 1.0, 0.0),
+    insertion_axis_w: torch.Tensor | None = None,
+) -> torch.Tensor | None:
     body_quat_w = _offset_quat_w(
         body_asset.data.body_quat_w[:, body_id],  # type: ignore
         body_orientation_offset,
     )
     target_quat_w = _target_orientation_w(env, target_asset, target_orientation_offset)
-    error = quat_error_magnitude(body_quat_w, target_quat_w)
-    std = max(float(orientation_gate_std), 1.0e-9)
-    return torch.exp(-torch.square(error / std))
+    if str(orientation_error_mode).lower() == "axis":
+        axis = insertion_axis_w
+        if axis is None:
+            axis = _episode_insertion_axis_w(env)
+        if axis is None:
+            return None
+        axis = axis.to(device=body_quat_w.device, dtype=body_quat_w.dtype)
+        local_axis = torch.tensor(
+            orientation_axis_local,
+            dtype=body_quat_w.dtype,
+            device=body_quat_w.device,
+        ).reshape(1, 3)
+        local_axis = local_axis / torch.linalg.norm(local_axis, dim=1, keepdim=True).clamp(min=1.0e-9)
+        body_axis_w = quat_apply(body_quat_w, local_axis.expand(body_quat_w.shape[0], -1))
+        dot = torch.sum(body_axis_w * axis, dim=1).clamp(min=-1.0, max=1.0)
+        return torch.acos(dot)
+    return quat_error_magnitude(body_quat_w, target_quat_w)
 
 
 def _plug_consistency_gate_from_entrance(
@@ -767,6 +813,8 @@ def body_to_object_axial_progress(
     body_position_offset: tuple[float, float, float] | list[float] | None = None,
     body_orientation_offset: tuple[float, float, float, float] | list[float] | None = None,
     target_orientation_offset: tuple[float, float, float, float] | list[float] | None = None,
+    orientation_error_mode: str = "quat",
+    orientation_axis_local: tuple[float, float, float] | list[float] = (0.0, 1.0, 0.0),
 ) -> torch.Tensor:
     """Reward reducing signed gap along the insertion axis in the target frame.
 
@@ -808,6 +856,9 @@ def body_to_object_axial_progress(
             orientation_gate_std=orientation_gate_std,
             body_orientation_offset=body_orientation_offset,
             target_orientation_offset=target_orientation_offset,
+            orientation_error_mode=orientation_error_mode,
+            orientation_axis_local=orientation_axis_local,
+            insertion_axis_w=geometry.axis,
         )
         consistency_gate = _plug_consistency_gate_from_entrance(
             env,
@@ -884,6 +935,8 @@ def body_to_object_insertion_corridor(
     body_position_offset: tuple[float, float, float] | list[float] | None = None,
     body_orientation_offset: tuple[float, float, float, float] | list[float] | None = None,
     target_orientation_offset: tuple[float, float, float, float] | list[float] | None = None,
+    orientation_error_mode: str = "quat",
+    orientation_axis_local: tuple[float, float, float] | list[float] = (0.0, 1.0, 0.0),
 ) -> torch.Tensor:
     """Reward being seated along the entrance corridor and punish off-axis bypass.
 
@@ -914,6 +967,9 @@ def body_to_object_insertion_corridor(
             orientation_gate_std=orientation_gate_std,
             body_orientation_offset=body_orientation_offset,
             target_orientation_offset=target_orientation_offset,
+            orientation_error_mode=orientation_error_mode,
+            orientation_axis_local=orientation_axis_local,
+            insertion_axis_w=geometry.axis,
         )
         consistency_gate = _plug_consistency_gate_from_entrance(
             env,
@@ -963,6 +1019,8 @@ def body_to_object_insertion_corridor(
         orientation_gate_std=orientation_gate_std,
         body_orientation_offset=body_orientation_offset,
         target_orientation_offset=target_orientation_offset,
+        orientation_error_mode=orientation_error_mode,
+        orientation_axis_local=orientation_axis_local,
     )
     if orientation_gate is not None:
         gate = gate * orientation_gate
@@ -1010,6 +1068,8 @@ def body_to_object_cheatcode_phase_reward(
     body_position_offset: tuple[float, float, float] | list[float] | None = None,
     body_orientation_offset: tuple[float, float, float, float] | list[float] | None = None,
     target_orientation_offset: tuple[float, float, float, float] | list[float] | None = None,
+    orientation_error_mode: str = "quat",
+    orientation_axis_local: tuple[float, float, float] | list[float] = (0.0, 1.0, 0.0),
 ) -> torch.Tensor:
     """CheatCode-style phase reward: align first, insert only through a tight corridor."""
     body_asset: RigidObject = env.scene[body_cfg.name]
@@ -1027,12 +1087,19 @@ def body_to_object_cheatcode_phase_reward(
         axis_w=axis_w,
         lateral_gate_sigma=sigma_lat_insert,
     )
-    body_quat_w = _offset_quat_w(
-        body_asset.data.body_quat_w[:, body_cfg.body_ids[0]],  # type: ignore
-        body_orientation_offset,
+    orientation_error = _body_target_orientation_error(
+        env,
+        body_asset,
+        body_cfg.body_ids[0],
+        target_asset,
+        body_orientation_offset=body_orientation_offset,
+        target_orientation_offset=target_orientation_offset,
+        orientation_error_mode=orientation_error_mode,
+        orientation_axis_local=orientation_axis_local,
+        insertion_axis_w=geometry.axis,
     )
-    target_quat_w = _target_orientation_w(env, target_asset, target_orientation_offset)
-    orientation_error = quat_error_magnitude(body_quat_w, target_quat_w)
+    if orientation_error is None:
+        orientation_error = torch.zeros_like(geometry.axial_depth)
 
     reset_mask = getattr(env, "episode_length_buf", None)
     previous_depth = getattr(env, "_aic_previous_cheatcode_phase_depth", None)
@@ -1106,16 +1173,24 @@ def body_to_object_orientation_tanh(
     target_cfg: SceneEntityCfg,
     body_orientation_offset: tuple[float, float, float, float] | list[float] | None = None,
     target_orientation_offset: tuple[float, float, float, float] | list[float] | None = None,
+    orientation_error_mode: str = "quat",
+    orientation_axis_local: tuple[float, float, float] | list[float] = (0.0, 1.0, 0.0),
 ) -> torch.Tensor:
     """Reward semantic body-frame alignment to a semantic target frame."""
     body_asset: RigidObject = env.scene[body_cfg.name]
     target_asset: RigidObject = env.scene[target_cfg.name]
-    body_quat_w = _offset_quat_w(
-        body_asset.data.body_quat_w[:, body_cfg.body_ids[0]],  # type: ignore
-        body_orientation_offset,
+    ang_error = _body_target_orientation_error(
+        env,
+        body_asset,
+        body_cfg.body_ids[0],
+        target_asset,
+        body_orientation_offset=body_orientation_offset,
+        target_orientation_offset=target_orientation_offset,
+        orientation_error_mode=orientation_error_mode,
+        orientation_axis_local=orientation_axis_local,
     )
-    target_quat_w = _target_orientation_w(env, target_asset, target_orientation_offset)
-    ang_error = quat_error_magnitude(body_quat_w, target_quat_w)
+    if ang_error is None:
+        return torch.zeros(env.num_envs, dtype=target_asset.data.root_pos_w.dtype, device=target_asset.data.root_pos_w.device)
     return 1.0 - torch.tanh(ang_error / std)
 
 
@@ -1129,19 +1204,30 @@ def body_to_object_orientation_gated_exp(
     target_orientation_offset: tuple[float, float, float, float] | list[float] | None = None,
     target_position_offset: tuple[float, float, float] | list[float] | None = None,
     body_position_offset: tuple[float, float, float] | list[float] | None = None,
+    orientation_error_mode: str = "quat",
+    orientation_axis_local: tuple[float, float, float] | list[float] = (0.0, 1.0, 0.0),
 ) -> torch.Tensor:
     """Reward orientation alignment only near the target, matching offline rewards."""
     body_asset: RigidObject = env.scene[body_cfg.name]
     target_asset: RigidObject = env.scene[target_cfg.name]
-    body_quat_w = _offset_quat_w(
-        body_asset.data.body_quat_w[:, body_cfg.body_ids[0]],  # type: ignore
-        body_orientation_offset,
+    target_pos_w = _target_position_w(env, target_asset, target_position_offset)
+    entrance_axis = _episode_entrance_position_axis_w(env, target_pos_w=target_pos_w)
+    axis_w = None if entrance_axis is None else entrance_axis[1]
+    ang_error = _body_target_orientation_error(
+        env,
+        body_asset,
+        body_cfg.body_ids[0],
+        target_asset,
+        body_orientation_offset=body_orientation_offset,
+        target_orientation_offset=target_orientation_offset,
+        orientation_error_mode=orientation_error_mode,
+        orientation_axis_local=orientation_axis_local,
+        insertion_axis_w=axis_w,
     )
-    target_quat_w = _target_orientation_w(env, target_asset, target_orientation_offset)
-    ang_error = quat_error_magnitude(body_quat_w, target_quat_w)
+    if ang_error is None:
+        return torch.zeros(env.num_envs, dtype=target_asset.data.root_pos_w.dtype, device=target_asset.data.root_pos_w.device)
     orientation_alignment = torch.exp(-torch.square(ang_error / max(float(std), 1.0e-9)))
     body_pos_w = _body_position_w(body_asset, body_cfg.body_ids[0], body_position_offset)
-    target_pos_w = _target_position_w(env, target_asset, target_position_offset)
     distance = torch.norm(body_pos_w - target_pos_w, dim=1)
     orientation_gate = torch.exp(-torch.square(distance / max(float(gate_sigma), 1.0e-9)))
     return orientation_alignment * orientation_gate
@@ -1180,6 +1266,8 @@ def body_to_object_success(
     body_position_offset: tuple[float, float, float] | list[float] | None = None,
     body_orientation_offset: tuple[float, float, float, float] | list[float] | None = None,
     target_orientation_offset: tuple[float, float, float, float] | list[float] | None = None,
+    orientation_error_mode: str = "quat",
+    orientation_axis_local: tuple[float, float, float] | list[float] = (0.0, 1.0, 0.0),
 ) -> torch.Tensor:
     """Terminate when the selected body is centered and seated at the semantic target."""
     if float(threshold) <= 0.0:
@@ -1206,12 +1294,21 @@ def body_to_object_success(
     lateral_limit = float(threshold if lateral_threshold is None else lateral_threshold)
     success = torch.logical_and(axial_error <= axial_limit, lateral_error <= lateral_limit)
     if orientation_threshold is not None:
-        body_quat_w = _offset_quat_w(
-            body_asset.data.body_quat_w[:, body_cfg.body_ids[0]],  # type: ignore
-            body_orientation_offset,
+        entrance_axis = _episode_entrance_position_axis_w(env, target_pos_w=target_pos_w)
+        orientation_axis_w = None if entrance_axis is None else entrance_axis[1]
+        orientation_error = _body_target_orientation_error(
+            env,
+            body_asset,
+            body_cfg.body_ids[0],
+            target_asset,
+            body_orientation_offset=body_orientation_offset,
+            target_orientation_offset=target_orientation_offset,
+            orientation_error_mode=orientation_error_mode,
+            orientation_axis_local=orientation_axis_local,
+            insertion_axis_w=orientation_axis_w,
         )
-        target_quat_w = _target_orientation_w(env, target_asset, target_orientation_offset)
-        orientation_error = quat_error_magnitude(body_quat_w, target_quat_w)
+        if orientation_error is None:
+            orientation_error = torch.full_like(axial_error, float("inf"))
         success = torch.logical_and(success, orientation_error <= float(orientation_threshold))
     if consistency_body_name and consistency_axial_threshold is not None:
         entrance_axis = _episode_entrance_position_axis_w(env, target_pos_w=target_pos_w)
@@ -1274,6 +1371,8 @@ def body_to_object_success_once_bonus(
     body_position_offset: tuple[float, float, float] | list[float] | None = None,
     body_orientation_offset: tuple[float, float, float, float] | list[float] | None = None,
     target_orientation_offset: tuple[float, float, float, float] | list[float] | None = None,
+    orientation_error_mode: str = "quat",
+    orientation_axis_local: tuple[float, float, float] | list[float] = (0.0, 1.0, 0.0),
 ) -> torch.Tensor:
     """Emit a sparse +1 once when an episode first satisfies strict insertion geometry."""
     success = body_to_object_success(
@@ -1292,6 +1391,8 @@ def body_to_object_success_once_bonus(
         body_position_offset=body_position_offset,
         body_orientation_offset=body_orientation_offset,
         target_orientation_offset=target_orientation_offset,
+        orientation_error_mode=orientation_error_mode,
+        orientation_axis_local=orientation_axis_local,
     )
     achieved = getattr(env, "_aic_success_bonus_emitted", None)
     reset_mask = getattr(env, "episode_length_buf", None)

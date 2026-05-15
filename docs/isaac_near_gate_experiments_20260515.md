@@ -263,3 +263,56 @@ Guided no-learning Isaac diagnostic:
 - recompute vs logged reward differs more than ACT-only, mean `0.0535`, max `0.5364`, because the guide changes state rapidly and logged reward is computed during `env.step` while diagnostics are pre-step snapshots. The signs and trend still agree.
 
 Visual inspection of the guided run's final center frame matches the metrics: the tip is near the entrance and more centered, but the module is still visibly outside. The reward remains negative and success false, which is the desired behavior for a not-yet-inserted state.
+
+## Sign Convention and Success Semantics Check
+
+Checked after stopping the `one_day_20260515_axis_stage3` multi-GPU run on user request.
+
+The near-gate episode generator and reward helper use the same signed convention:
+
+- `insertion_axis_world` points from the port entrance into the port.
+- `s = dot(p_tip - p_entrance, insertion_axis_world)`.
+- `s < 0` means the tip center is outside / before the entrance plane.
+- `s = 0` means the tip center is at the entrance plane.
+- `s > 0` means the tip center has passed into the port.
+- `r` is the lateral distance from the tip center to the port centerline, so smaller is better and it is never signed.
+- `theta` is the semantic tip-axis orientation error to the port insertion axis, so smaller is better.
+
+For `outputs/analysis/isaac_near_gate_6mm_orientation_gate/episode_configs/episodes/episode_000001.yaml`, the generated metadata is consistent with the intended 6 mm outside / 6 mm lateral start:
+
+```text
+entrance = [0.2384, 0.246715, 0.152572]
+tip start reference = [0.235231, 0.251733, 0.158636]
+axis into port = [-0.0, 0.012642, -0.99992]
+s_start = -0.006000077 m = -6.000 mm
+r_start =  0.005999504 m =  6.000 mm
+D_target = 0.007999637 m = 8.000 mm
+```
+
+So `start_near_gate.axial_distance_m: 0.006` is stored as a positive requested distance in YAML, but it is converted into a world start position on the outside of the port. The runtime reward then reports it as a negative signed depth, which is the correct convention.
+
+`success_candidate` is intentionally stricter than "positive s". In `cheatcode_insertion_phase_reward`, it requires:
+
+- `depth_fraction >= success_depth_fraction` (default `0.90`);
+- `r <= success_lateral_threshold` (default `0.0005 m`);
+- `theta <= success_orientation_threshold` (default `0.03 rad`).
+
+The environment termination/success term additionally supports semantic axial/lateral thresholds, orientation threshold, and optional consistency-body checks. Therefore, `success_candidate=True` means the tip is near seated depth and tightly aligned, not merely that the tip crossed the entrance plane. In the stopped one-day stage run, the best guide/alignment runs never crossed the entrance:
+
+```text
+stage2_guide_w2_from_1:
+  s range: [-5.918, -2.851] mm
+  r min/final: 1.046 / 1.291 mm
+  theta min/final: 0.0596 / 0.0596 rad
+  first s > 0: none
+  first success_candidate: none
+
+stage3_imit_p1_1:
+  s range: [-5.918, -1.978] mm
+  r min/final: 1.046 / 1.597 mm
+  theta min/final: 0.0595 / 0.0596 rad
+  first s > 0: none
+  first success_candidate: none
+```
+
+Conclusion: the sign convention is implemented correctly for `start_near_gate`, and the current diagnostics did not falsely mark outside/near-entrance states as successful insertion.
