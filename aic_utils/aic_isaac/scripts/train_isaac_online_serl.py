@@ -175,6 +175,7 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser.add_argument("--act-preservation-weight", type=float, default=1e-2)
     parser.add_argument("--target-action-guide-weight", type=float, default=0.0)
     parser.add_argument("--target-action-guide-step-size", type=float, default=0.001)
+    parser.add_argument("--target-action-guide-axial-step-size", type=float, default=0.0)
     parser.add_argument("--target-action-guide-lateral-switch-m", type=float, default=0.002)
     parser.add_argument("--target-action-guide-axial-blend-lateral-m", type=float, default=0.006)
     parser.add_argument("--target-action-guide-collect-blend", type=float, default=0.0)
@@ -240,6 +241,9 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser.add_argument("--insertion-lateral-progress-scale", type=float, default=0.001)
     parser.add_argument("--insertion-axial-progress-weight", type=float, default=0.0)
     parser.add_argument("--insertion-axial-progress-scale", type=float, default=0.001)
+    parser.add_argument("--insertion-corridor-weight", type=float, default=0.0)
+    parser.add_argument("--insertion-corridor-sigma", type=float, default=0.0025)
+    parser.add_argument("--insertion-bypass-penalty-scale", type=float, default=1.0)
     parser.add_argument("--insertion-axis", type=int, choices=[0, 1, 2], default=0)
     parser.add_argument("--force-delta-penalty-weight", type=float, default=0.3)
     parser.add_argument("--force-delta-threshold", type=float, default=10.0)
@@ -511,6 +515,7 @@ def build_plan(args: argparse.Namespace, *, inspect_required: bool = True) -> di
         "act_preservation_weight": args.act_preservation_weight,
         "target_action_guide_weight": getattr(args, "target_action_guide_weight", 0.0),
         "target_action_guide_step_size": getattr(args, "target_action_guide_step_size", 0.001),
+        "target_action_guide_axial_step_size": getattr(args, "target_action_guide_axial_step_size", 0.0),
         "target_action_guide_lateral_switch_m": getattr(args, "target_action_guide_lateral_switch_m", 0.002),
         "target_action_guide_axial_blend_lateral_m": getattr(
             args, "target_action_guide_axial_blend_lateral_m", 0.006
@@ -544,6 +549,9 @@ def build_plan(args: argparse.Namespace, *, inspect_required: bool = True) -> di
         "insertion_lateral_progress_scale": getattr(args, "insertion_lateral_progress_scale", 0.001),
         "insertion_axial_progress_weight": getattr(args, "insertion_axial_progress_weight", 0.0),
         "insertion_axial_progress_scale": getattr(args, "insertion_axial_progress_scale", 0.001),
+        "insertion_corridor_weight": getattr(args, "insertion_corridor_weight", 0.0),
+        "insertion_corridor_sigma": getattr(args, "insertion_corridor_sigma", 0.0025),
+        "insertion_bypass_penalty_scale": getattr(args, "insertion_bypass_penalty_scale", 1.0),
         "insertion_axis": args.insertion_axis,
         "force_delta_penalty_weight": args.force_delta_penalty_weight,
         "force_delta_threshold": args.force_delta_threshold,
@@ -697,6 +705,8 @@ def build_command(args: argparse.Namespace) -> tuple[list[str], dict[str, str]]:
         str(getattr(args, "target_action_guide_weight", 0.0)),
         "--target_action_guide_step_size",
         str(getattr(args, "target_action_guide_step_size", 0.001)),
+        "--target_action_guide_axial_step_size",
+        str(getattr(args, "target_action_guide_axial_step_size", 0.0)),
         "--target_action_guide_lateral_switch_m",
         str(getattr(args, "target_action_guide_lateral_switch_m", 0.002)),
         "--target_action_guide_axial_blend_lateral_m",
@@ -767,6 +777,12 @@ def build_command(args: argparse.Namespace) -> tuple[list[str], dict[str, str]]:
         str(getattr(args, "insertion_axial_progress_weight", 0.0)),
         "--target_reward_axial_progress_scale",
         str(getattr(args, "insertion_axial_progress_scale", 0.001)),
+        "--target_reward_insertion_corridor_weight",
+        str(getattr(args, "insertion_corridor_weight", 0.0)),
+        "--target_reward_insertion_corridor_sigma",
+        str(getattr(args, "insertion_corridor_sigma", 0.0025)),
+        "--target_reward_insertion_bypass_penalty_scale",
+        str(getattr(args, "insertion_bypass_penalty_scale", 1.0)),
         "--target_reward_insertion_axis",
         str(args.insertion_axis),
         "--force_delta_penalty_weight",
@@ -931,6 +947,8 @@ def validate_launch_inputs(args: argparse.Namespace) -> None:
         raise ValueError("--tcp-rotation-action-clip must be non-negative")
     if float(getattr(args, "target_action_guide_lateral_switch_m", 0.002)) < 0.0:
         raise ValueError("--target-action-guide-lateral-switch-m must be non-negative")
+    if float(getattr(args, "target_action_guide_axial_step_size", 0.0)) < 0.0:
+        raise ValueError("--target-action-guide-axial-step-size must be non-negative")
     if float(getattr(args, "target_action_guide_axial_blend_lateral_m", 0.006)) < 0.0:
         raise ValueError("--target-action-guide-axial-blend-lateral-m must be non-negative")
     if args.batch_size <= 0:

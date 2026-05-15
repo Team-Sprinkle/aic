@@ -195,11 +195,21 @@ def _episode_target_position_w(env: ManagerBasedRLEnv) -> torch.Tensor | None:
         episode = episode_by_env.get(env_id)
         if not episode:
             return None
-        target = ((episode.get("scene") or {}).get("target") or {}).get("target_pose_world") or {}
-        position = target.get("position")
+        target = ((episode.get("scene") or {}).get("target") or {})
+        pose = target.get("target_pose_world") or {}
+        position = pose.get("position")
         if position is None:
             return None
-        rows.append(torch.tensor(position, dtype=origins.dtype, device=origins.device) + origins[env_id])
+        position_tensor = torch.tensor(position, dtype=origins.dtype, device=origins.device)
+        entrance = (target.get("entrance_pose_world") or {}).get("position")
+        axis = target.get("insertion_axis_world")
+        if entrance is not None and axis is not None:
+            entrance_tensor = torch.tensor(entrance, dtype=origins.dtype, device=origins.device)
+            axis_tensor = torch.tensor(axis, dtype=origins.dtype, device=origins.device)
+            axis_tensor = axis_tensor / torch.linalg.norm(axis_tensor).clamp(min=1.0e-9)
+            seated_depth = torch.sum((position_tensor - entrance_tensor) * axis_tensor).clamp(min=0.0)
+            position_tensor = entrance_tensor + seated_depth * axis_tensor
+        rows.append(position_tensor + origins[env_id])
     return torch.stack(rows, dim=0)
 
 
@@ -383,6 +393,31 @@ def _semantic_lateral_error(
         target_orientation_offset=target_orientation_offset,
     )
     return _lateral_error_from_delta(delta_target, insertion_axis)
+
+
+def _episode_entrance_position_axis_w(
+    env: ManagerBasedRLEnv,
+    *,
+    target_pos_w: torch.Tensor,
+) -> tuple[torch.Tensor, torch.Tensor] | None:
+    episode_by_env = getattr(env, "_aic_current_episode_by_env", None)
+    if not episode_by_env:
+        return None
+    origins = env.scene.env_origins
+    entrance_rows: list[torch.Tensor] = []
+    axis_rows: list[torch.Tensor] = []
+    for env_id in range(env.num_envs):
+        target = (((episode_by_env.get(env_id) or {}).get("scene") or {}).get("target") or {})
+        entrance = (target.get("entrance_pose_world") or {}).get("position")
+        axis = target.get("insertion_axis_world")
+        if entrance is None or axis is None:
+            return None
+        entrance_tensor = torch.tensor(entrance, dtype=target_pos_w.dtype, device=target_pos_w.device)
+        axis_tensor = torch.tensor(axis, dtype=target_pos_w.dtype, device=target_pos_w.device)
+        axis_tensor = axis_tensor / torch.linalg.norm(axis_tensor).clamp(min=1.0e-9)
+        entrance_rows.append(entrance_tensor + origins[env_id].to(device=target_pos_w.device, dtype=target_pos_w.dtype))
+        axis_rows.append(axis_tensor)
+    return torch.stack(entrance_rows, dim=0), torch.stack(axis_rows, dim=0)
 
 
 def _reset_previous_on_episode_start(
@@ -686,6 +721,60 @@ def body_to_object_axial_progress(
     if lateral_gate_sigma is None or float(lateral_gate_sigma) <= 0.0:
         return reward
     return _insertion_progress_lateral_gate(reward, lateral_error, lateral_gate_sigma)
+
+
+def body_to_object_insertion_corridor(
+    env: ManagerBasedRLEnv,
+    body_cfg: SceneEntityCfg,
+    target_cfg: SceneEntityCfg,
+    insertion_axis: int = 0,
+    lateral_gate_sigma: float = 0.0025,
+    bypass_penalty_scale: float = 1.0,
+    target_position_offset: tuple[float, float, float] | list[float] | None = None,
+    body_position_offset: tuple[float, float, float] | list[float] | None = None,
+    target_orientation_offset: tuple[float, float, float, float] | list[float] | None = None,
+) -> torch.Tensor:
+    """Reward being seated along the entrance corridor and punish off-axis bypass.
+
+    Depth past the entrance only counts as good insertion when the tip is close to
+    the port centerline. Moving down beside the card can reduce Euclidean
+    distance, but here it produces a negative bypass term because the lateral
+    gate is near zero while signed depth is positive.
+    """
+    body_asset: RigidObject = env.scene[body_cfg.name]
+    target_asset: RigidObject = env.scene[target_cfg.name]
+    body_pos_w = _body_position_w(body_asset, body_cfg.body_ids[0], body_position_offset)
+    target_pos_w = _target_position_w(env, target_asset, target_position_offset)
+    entrance_axis = _episode_entrance_position_axis_w(env, target_pos_w=target_pos_w)
+    if entrance_axis is not None:
+        entrance_w, axis_w = entrance_axis
+        axis_w = axis_w.to(device=body_pos_w.device, dtype=body_pos_w.dtype)
+        entrance_w = entrance_w.to(device=body_pos_w.device, dtype=body_pos_w.dtype)
+        depth = torch.sum((body_pos_w - entrance_w) * axis_w, dim=1)
+        target_depth = torch.sum((target_pos_w - entrance_w) * axis_w, dim=1).clamp(min=1.0e-6)
+        lateral_error = _axis_lateral_error_w(body_pos_w, entrance_w, axis_w)
+    else:
+        delta_target = _target_frame_delta(
+            env,
+            body_asset,
+            body_cfg.body_ids[0],
+            target_asset,
+            target_position_offset=target_position_offset,
+            body_position_offset=body_position_offset,
+            target_orientation_offset=target_orientation_offset,
+        )
+        axis = int(insertion_axis)
+        if axis < 0 or axis > 2:
+            raise ValueError(f"insertion_axis must be 0, 1, or 2, got {insertion_axis}")
+        depth = -delta_target[:, axis]
+        target_depth = torch.full_like(depth, 0.01)
+        lateral_error = _lateral_error_from_delta(delta_target, axis)
+
+    depth_fraction = (depth / target_depth).clamp(min=0.0, max=1.0)
+    gate = torch.exp(-torch.square(lateral_error / max(float(lateral_gate_sigma), 1.0e-9)))
+    centered_depth_reward = depth_fraction * gate
+    bypass_penalty = depth_fraction * (1.0 - gate) * max(float(bypass_penalty_scale), 0.0)
+    return centered_depth_reward - bypass_penalty
 
 
 def body_to_object_orientation_tanh(

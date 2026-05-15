@@ -13,6 +13,7 @@ import time
 import traceback
 import copy
 import random
+import zlib
 from collections import deque
 from datetime import datetime
 from pathlib import Path
@@ -133,6 +134,15 @@ parser.add_argument(
 )
 parser.add_argument("--target_action_guide_weight", type=float, default=0.0)
 parser.add_argument("--target_action_guide_step_size", type=float, default=0.001)
+parser.add_argument(
+    "--target_action_guide_axial_step_size",
+    type=float,
+    default=0.0,
+    help=(
+        "Optional insertion-axis guide step size. If <=0, uses --target_action_guide_step_size. "
+        "This lets near-gate runs center laterally with a small step, then push harder along the port axis."
+    ),
+)
 parser.add_argument(
     "--target_action_guide_lateral_switch_m",
     type=float,
@@ -275,6 +285,9 @@ parser.add_argument("--target_reward_lateral_progress_weight", type=float, defau
 parser.add_argument("--target_reward_lateral_progress_scale", type=float, default=0.001)
 parser.add_argument("--target_reward_axial_progress_weight", type=float, default=0.0)
 parser.add_argument("--target_reward_axial_progress_scale", type=float, default=0.001)
+parser.add_argument("--target_reward_insertion_corridor_weight", type=float, default=0.0)
+parser.add_argument("--target_reward_insertion_corridor_sigma", type=float, default=0.0025)
+parser.add_argument("--target_reward_insertion_bypass_penalty_scale", type=float, default=1.0)
 parser.add_argument("--target_reward_insertion_axis", type=int, choices=[0, 1, 2], default=0)
 parser.add_argument("--force_delta_penalty_weight", type=float, default=0.3)
 parser.add_argument("--force_delta_threshold", type=float, default=10.0)
@@ -1024,6 +1037,7 @@ def _configure_task_geometry_rewards(env_cfg: Any, args: argparse.Namespace) -> 
         "target_motion_projection",
         "target_lateral_progress",
         "target_axial_progress",
+        "target_insertion_corridor",
     ):
         term = getattr(rewards, name)
         term.params["target_cfg"].name = target_scene_name
@@ -1053,6 +1067,13 @@ def _configure_task_geometry_rewards(env_cfg: Any, args: argparse.Namespace) -> 
     rewards.target_axial_progress.params["scale"] = float(args.target_reward_axial_progress_scale)
     rewards.target_axial_progress.params["insertion_axis"] = int(args.target_reward_insertion_axis)
     rewards.target_axial_progress.params["lateral_gate_sigma"] = float(args.target_reward_lateral_gate_sigma)
+    rewards.target_insertion_corridor.params["insertion_axis"] = int(args.target_reward_insertion_axis)
+    rewards.target_insertion_corridor.params["lateral_gate_sigma"] = float(
+        args.target_reward_insertion_corridor_sigma
+    )
+    rewards.target_insertion_corridor.params["bypass_penalty_scale"] = float(
+        args.target_reward_insertion_bypass_penalty_scale
+    )
     rewards.target_reaching_bonus.params["threshold"] = float(args.target_reward_reaching_threshold)
     rewards.target_success_once_bonus.params["threshold"] = float(args.target_reward_reaching_threshold)
     rewards.target_success_once_bonus.params["insertion_axis"] = int(args.target_reward_insertion_axis)
@@ -1075,6 +1096,9 @@ def _configure_task_geometry_rewards(env_cfg: Any, args: argparse.Namespace) -> 
     rewards.target_motion_projection.weight = float(args.target_reward_motion_projection_weight) * reward_weight_multiplier
     rewards.target_lateral_progress.weight = float(args.target_reward_lateral_progress_weight) * reward_weight_multiplier
     rewards.target_axial_progress.weight = float(args.target_reward_axial_progress_weight) * reward_weight_multiplier
+    rewards.target_insertion_corridor.weight = (
+        float(args.target_reward_insertion_corridor_weight) * reward_weight_multiplier
+    )
     if hasattr(rewards, "force_delta_penalty"):
         rewards.force_delta_penalty.weight = float(args.force_delta_penalty_weight) * reward_weight_multiplier
         rewards.force_delta_penalty.params["threshold"] = float(args.force_delta_threshold)
@@ -1135,6 +1159,9 @@ def _configure_task_geometry_rewards(env_cfg: Any, args: argparse.Namespace) -> 
         "lateral_progress_scale": float(args.target_reward_lateral_progress_scale),
         "axial_progress_weight": float(args.target_reward_axial_progress_weight),
         "axial_progress_scale": float(args.target_reward_axial_progress_scale),
+        "insertion_corridor_weight": float(args.target_reward_insertion_corridor_weight),
+        "insertion_corridor_sigma": float(args.target_reward_insertion_corridor_sigma),
+        "insertion_bypass_penalty_scale": float(args.target_reward_insertion_bypass_penalty_scale),
         "insertion_axis": int(args.target_reward_insertion_axis),
         "force_delta_penalty_weight": float(args.force_delta_penalty_weight) if hasattr(rewards, "force_delta_penalty") else 0.0,
         "force_delta_threshold": float(args.force_delta_threshold),
@@ -1244,7 +1271,7 @@ class ReplayBuffer:
         return {
             "state": torch.stack([item["state"] for item in obs_items]).to(device),
             "images": {
-                key: torch.stack([item["images"][key] for item in obs_items]).to(device)
+                key: _unpack_replay_images([item["images"][key] for item in obs_items], device)
                 for key in CAMERA_KEYS
             },
         }
@@ -2029,6 +2056,7 @@ def _target_guided_policy_action(
     task_geometry_reward_config: dict[str, Any],
     *,
     step_size: float,
+    axial_step_size: float | None,
     lateral_switch_m: float,
     axial_blend_lateral_m: float,
     action_frame: str,
@@ -2054,17 +2082,20 @@ def _target_guided_policy_action(
         lateral_direction = lateral_delta / lateral_distance.clamp(min=1.0e-9)
         axial_direction = axial_delta / axial_distance.clamp(min=1.0e-9)
         lateral_switch = max(float(lateral_switch_m), 0.0)
-        axial_blend_start = max(float(axial_blend_lateral_m), lateral_switch + 1.0e-6)
-        axial_blend = ((axial_blend_start - lateral_distance) / (axial_blend_start - lateral_switch)).clamp(0.0, 1.0)
-        blended_direction = (1.0 - axial_blend) * lateral_direction + axial_blend * axial_direction
-        blended_direction = blended_direction / torch.linalg.norm(blended_direction, dim=1, keepdim=True).clamp(min=1.0e-9)
-        use_lateral_only = lateral_distance > axial_blend_start
-        use_axial_only = lateral_distance <= lateral_switch
-        move_direction = torch.where(use_lateral_only, lateral_direction, blended_direction)
-        move_direction = torch.where(use_axial_only, axial_direction, move_direction)
-        remaining = torch.where(use_lateral_only, lateral_distance, torch.maximum(lateral_distance, axial_distance))
-        remaining = torch.where(use_axial_only, axial_distance, remaining)
-        move_w = move_direction * torch.minimum(remaining, torch.full_like(remaining, float(step_size)))
+        # Keep the guide insertion-safe: first remove lateral error, then insert.
+        # Blending axial motion while off-axis let the policy reduce Euclidean
+        # distance by descending beside the port instead of entering it.
+        use_lateral_only = lateral_distance > lateral_switch
+        move_direction = torch.where(use_lateral_only, lateral_direction, axial_direction)
+        remaining = torch.where(use_lateral_only, lateral_distance, axial_distance)
+        lateral_step = max(float(step_size), 0.0)
+        axial_step = lateral_step if axial_step_size is None or float(axial_step_size) <= 0.0 else float(axial_step_size)
+        step_limit = torch.where(
+            use_lateral_only,
+            torch.full_like(remaining, lateral_step),
+            torch.full_like(remaining, max(axial_step, 0.0)),
+        )
+        move_w = move_direction * torch.minimum(remaining, step_limit)
     else:
         distance = torch.linalg.norm(delta_w, dim=1, keepdim=True).clamp(min=1.0e-9)
         move_w = delta_w / distance * torch.minimum(distance, torch.full_like(distance, float(step_size)))
@@ -2135,11 +2166,21 @@ def _episode_target_position_from_yaml(env) -> torch.Tensor | None:
     origins = env.unwrapped.scene.env_origins
     for env_id in range(env.unwrapped.num_envs):
         episode = episodes.get(env_id)
-        target = (((episode or {}).get("scene") or {}).get("target") or {}).get("target_pose_world") or {}
-        position = target.get("position")
+        target = (((episode or {}).get("scene") or {}).get("target") or {})
+        pose = target.get("target_pose_world") or {}
+        position = pose.get("position")
         if position is None:
             return None
-        rows.append(torch.tensor(position, dtype=origins.dtype, device=origins.device) + origins[env_id])
+        position_tensor = torch.tensor(position, dtype=origins.dtype, device=origins.device)
+        entrance = (target.get("entrance_pose_world") or {}).get("position")
+        axis = target.get("insertion_axis_world")
+        if entrance is not None and axis is not None:
+            entrance_tensor = torch.tensor(entrance, dtype=origins.dtype, device=origins.device)
+            axis_tensor = torch.tensor(axis, dtype=origins.dtype, device=origins.device)
+            axis_tensor = axis_tensor / torch.linalg.norm(axis_tensor).clamp(min=1.0e-9)
+            seated_depth = torch.sum((position_tensor - entrance_tensor) * axis_tensor).clamp(min=0.0)
+            position_tensor = entrance_tensor + seated_depth * axis_tensor
+        rows.append(position_tensor + origins[env_id])
     return torch.stack(rows, dim=0)
 
 
@@ -2351,6 +2392,69 @@ def _pose_reward_diagnostics(env, reward_config: dict[str, Any]) -> dict[str, An
             )
     if reward_config.get("target_body") not in ("wrist_3_link", "gripper_tcp", "sfp_tip_link"):
         out["warnings"] = [f"target_reward_body {reward_config.get('target_body')!r} is not one of common audit bodies"]
+    return out
+
+
+def _insertion_geometry_diagnostics(env, reward_config: dict[str, Any]) -> dict[str, Any]:
+    target_pos = _target_position_from_reward_config(env, reward_config)
+    body_name = str(reward_config.get("target_body") or "sfp_tip_link")
+    body_pos = _body_position_by_name(env, body_name, reward_config.get("body_position_offset"))
+    axis_w = _episode_insertion_axis_from_yaml(env)
+    out: dict[str, Any] = {
+        "body_name": body_name,
+        "has_target": target_pos is not None,
+        "has_body": body_pos is not None,
+        "has_episode_axis": axis_w is not None,
+        "target_world_env0": None if target_pos is None else _sample_vector(target_pos, limit=3),
+        "body_world_env0": None if body_pos is None else _sample_vector(body_pos, limit=3),
+    }
+    if target_pos is None or body_pos is None or axis_w is None:
+        return out
+    episodes = _current_episode_by_env(env)
+    origins = env.unwrapped.scene.env_origins
+    entrance_rows: list[torch.Tensor] = []
+    for env_id in range(env.unwrapped.num_envs):
+        target = (((episodes.get(env_id) or {}).get("scene") or {}).get("target") or {})
+        entrance = (target.get("entrance_pose_world") or {}).get("position")
+        if entrance is None:
+            out["has_entrance"] = False
+            return out
+        entrance_rows.append(
+            torch.tensor(entrance, dtype=body_pos.dtype, device=body_pos.device)
+            + origins[env_id].to(device=body_pos.device, dtype=body_pos.dtype)
+        )
+    entrance_w = torch.stack(entrance_rows, dim=0)
+    axis_w = axis_w.to(device=body_pos.device, dtype=body_pos.dtype)
+    delta_from_entrance = body_pos - entrance_w
+    signed_depth = torch.sum(delta_from_entrance * axis_w, dim=1)
+    target_depth = torch.sum((target_pos - entrance_w) * axis_w, dim=1).clamp(min=1.0e-9)
+    axial_component = signed_depth.unsqueeze(1) * axis_w
+    lateral_error = torch.linalg.norm(delta_from_entrance - axial_component, dim=1)
+    corridor_sigma = float(reward_config.get("insertion_corridor_sigma", 0.0025))
+    lateral_gate = torch.exp(-torch.square(lateral_error / max(corridor_sigma, 1.0e-9)))
+    depth_fraction = (signed_depth / target_depth).clamp(min=0.0, max=1.0)
+    out.update(
+        {
+            "has_entrance": True,
+            "entrance_world_env0": _sample_vector(entrance_w, limit=3),
+            "axis_world_env0": _sample_vector(axis_w, limit=3),
+            "signed_depth_m_mean": float(signed_depth.mean().detach().cpu()),
+            "signed_depth_m_env0": float(signed_depth[0].detach().cpu()),
+            "target_depth_m_mean": float(target_depth.mean().detach().cpu()),
+            "target_depth_m_env0": float(target_depth[0].detach().cpu()),
+            "depth_fraction_mean": float(depth_fraction.mean().detach().cpu()),
+            "depth_fraction_env0": float(depth_fraction[0].detach().cpu()),
+            "lateral_error_m_mean": float(lateral_error.mean().detach().cpu()),
+            "lateral_error_m_env0": float(lateral_error[0].detach().cpu()),
+            "lateral_gate_mean": float(lateral_gate.mean().detach().cpu()),
+            "lateral_gate_env0": float(lateral_gate[0].detach().cpu()),
+            "inside_2mm_fraction": float((lateral_error <= 0.002).float().mean().detach().cpu()),
+            "inside_3mm_fraction": float((lateral_error <= 0.003).float().mean().detach().cpu()),
+            "bypass_risk_fraction": float(
+                torch.logical_and(signed_depth > 0.0, lateral_error > corridor_sigma).float().mean().detach().cpu()
+            ),
+        }
+    )
     return out
 
 
@@ -3803,6 +3907,32 @@ def _cpu_tree(value: Any) -> Any:
     return value
 
 
+def _pack_replay_image(image: torch.Tensor) -> dict[str, Any]:
+    image_cpu = image.detach().cpu().contiguous()
+    array = image_cpu.numpy()
+    raw = array.tobytes(order="C")
+    return {
+        "__aic_packed_tensor__": True,
+        "shape": tuple(int(dim) for dim in image_cpu.shape),
+        "dtype": str(array.dtype),
+        "data": zlib.compress(raw, level=1),
+    }
+
+
+def _unpack_replay_images(images: list[Any] | torch.Tensor, device: torch.device) -> torch.Tensor:
+    if isinstance(images, torch.Tensor):
+        return images.to(device)
+    tensors: list[torch.Tensor] = []
+    for image in images:
+        if isinstance(image, dict) and image.get("__aic_packed_tensor__"):
+            raw = zlib.decompress(image["data"])
+            array = np.frombuffer(raw, dtype=np.dtype(image["dtype"])).copy().reshape(tuple(image["shape"]))
+            tensors.append(torch.from_numpy(array))
+        else:
+            tensors.append(image)
+    return torch.stack(tensors).to(device)
+
+
 def _transition_payload(
     *,
     act_obs: dict[str, Any],
@@ -3817,11 +3947,11 @@ def _transition_payload(
     payload = {
             "obs": {
                 "state": act_obs["state"][env_index],
-                "images": {key: value[env_index] for key, value in act_obs["images"].items()},
+                "images": {key: _pack_replay_image(value[env_index]) for key, value in act_obs["images"].items()},
             },
             "next_obs": {
                 "state": next_act_obs["state"][env_index],
-                "images": {key: value[env_index] for key, value in next_act_obs["images"].items()},
+                "images": {key: _pack_replay_image(value[env_index]) for key, value in next_act_obs["images"].items()},
             },
             "action": action_for_critic[env_index],
             "reward": reward[env_index],
@@ -4286,6 +4416,7 @@ def main() -> None:
                 "resolved_terms": _resolved_reward_terms(env),
                 "all_reward_weights_after_env_creation": _reward_weight_diagnostics(env),
                 "pose_distances": _pose_reward_diagnostics(env, task_geometry_reward_config),
+                "insertion_geometry": _insertion_geometry_diagnostics(env, task_geometry_reward_config),
                 "scene_assets": _scene_asset_pose_diagnostics(env, task_geometry_reward_config),
                 "target_source": _target_source_diagnostics(env, task_geometry_reward_config),
             },
@@ -4459,6 +4590,7 @@ def main() -> None:
                 env,
                 task_geometry_reward_config,
                 step_size=float(args_cli.target_action_guide_step_size),
+                axial_step_size=float(args_cli.target_action_guide_axial_step_size),
                 lateral_switch_m=float(args_cli.target_action_guide_lateral_switch_m),
                 axial_blend_lateral_m=float(args_cli.target_action_guide_axial_blend_lateral_m),
                 action_frame=str(args_cli.tcp_action_frame),
@@ -4669,6 +4801,7 @@ def main() -> None:
                     if before_orientations
                     else {},
                     "reward_pose": _pose_reward_diagnostics(env, task_geometry_reward_config),
+                    "insertion_geometry": _insertion_geometry_diagnostics(env, task_geometry_reward_config),
                     "reward_resolution": {
                         "resolved_terms": _resolved_reward_terms(env),
                         "all_reward_weights_after_env_creation": _reward_weight_diagnostics(env),

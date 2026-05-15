@@ -6,6 +6,7 @@ import sys
 from pathlib import Path
 
 import torch
+import yaml
 
 SCRIPT = Path(__file__).resolve().parents[1] / "scripts" / "train_isaac_online_serl.py"
 spec = importlib.util.spec_from_file_location("train_isaac_online_serl", SCRIPT)
@@ -75,6 +76,9 @@ def test_isaac_serl_plan_inspects_adapter_checkpoint(tmp_path: Path) -> None:
         insertion_lateral_weight=-0.1,
         insertion_lateral_gate_sigma=0.012,
         insertion_lateral_error_scale=0.006,
+        insertion_corridor_weight=0.4,
+        insertion_corridor_sigma=0.0025,
+        insertion_bypass_penalty_scale=1.0,
         insertion_axis=0,
         force_delta_penalty_weight=0.3,
         force_delta_threshold=10.0,
@@ -165,6 +169,11 @@ def test_isaac_serl_plan_inspects_adapter_checkpoint(tmp_path: Path) -> None:
     assert "--isaac_force_observation_clip_n" in cmd
     assert "--enable_contact_sensor" in cmd
     assert "--target_reward_lateral_gate_sigma" in cmd
+    assert "--target_reward_insertion_corridor_weight" in cmd
+    idx = cmd.index("--target_reward_insertion_corridor_weight")
+    assert cmd[idx + 1] == "0.4"
+    assert "--target_reward_insertion_corridor_sigma" in cmd
+    assert "--target_reward_insertion_bypass_penalty_scale" in cmd
     assert "--target_reward_insertion_axis" in cmd
     assert "--terminate_on_target_success" in cmd
     assert "--target_success_termination_threshold" in cmd
@@ -260,6 +269,40 @@ scene:
     assert "achieved_axial_distance_m: 0.05" in text
     assert Path(summary["manifest_csv"]).exists()
     assert Path(summary["task_distribution_yaml"]).exists()
+
+
+def test_near_gate_axial_start_is_outside_entrance(tmp_path: Path) -> None:
+    request = tmp_path / "request.yaml"
+    request.write_text(
+        """
+task_family: sfp_to_nic
+generation:
+  target_accepted_trajectories: 1
+  seed: 11
+scene:
+  start_near_gate:
+    axial_distance_m: 0.006
+    lateral_distance_m: 0.006
+    min_clearance_m: 0.004
+  nic_cards:
+    count: 1
+    target_card: 0
+    target_port: sfp_port_0
+""",
+        encoding="utf-8",
+    )
+
+    summary = isaac_online_serl.materialize_episode_configs(request, tmp_path / "episodes")
+    episode = yaml.safe_load((Path(summary["episodes_dir"]) / "episode_000001.yaml").read_text(encoding="utf-8"))
+    start = episode["scene"]["start_near_gate"]
+    gate = start["target_gate_position"]
+    body = start["body_start_position_world"]
+    axis = start["target_gate_axis_world"]
+    signed_depth = sum((float(body[i]) - float(gate[i])) * float(axis[i]) for i in range(3))
+
+    assert signed_depth < 0.0
+    assert abs(abs(signed_depth) - 0.006) < 1e-4
+    assert start["achieved_axial_distance_m"] == 0.006
 
 
 def test_isaac_user_config_wrapper_sets_episode_config_dir(tmp_path: Path) -> None:
