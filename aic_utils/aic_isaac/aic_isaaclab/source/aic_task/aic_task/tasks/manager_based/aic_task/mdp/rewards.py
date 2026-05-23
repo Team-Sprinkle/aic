@@ -809,6 +809,9 @@ def body_to_object_axial_progress(
     consistency_body_name: str | None = None,
     consistency_axial_std: float | None = None,
     consistency_lateral_sigma: float | None = None,
+    semantic_progress_scale: float = 0.10,
+    semantic_progress_weight: float = 0.0,
+    semantic_loss_weight: float = 0.0,
     target_position_offset: tuple[float, float, float] | list[float] | None = None,
     body_position_offset: tuple[float, float, float] | list[float] | None = None,
     body_orientation_offset: tuple[float, float, float, float] | list[float] | None = None,
@@ -931,6 +934,9 @@ def body_to_object_insertion_corridor(
     consistency_body_name: str | None = None,
     consistency_axial_std: float | None = None,
     consistency_lateral_sigma: float | None = None,
+    semantic_progress_scale: float = 0.10,
+    semantic_progress_weight: float = 0.0,
+    semantic_loss_weight: float = 0.0,
     target_position_offset: tuple[float, float, float] | list[float] | None = None,
     body_position_offset: tuple[float, float, float] | list[float] | None = None,
     body_orientation_offset: tuple[float, float, float, float] | list[float] | None = None,
@@ -1036,8 +1042,18 @@ def body_to_object_cheatcode_phase_reward(
     insertion_axis: int = 0,
     sigma_lat_pre: float = 0.0025,
     sigma_lat_insert: float = 0.0015,
+    schedule_lateral_radius: bool = False,
+    sigma_lat_pre_far: float = 0.004,
+    sigma_lat_insert_far: float = 0.004,
+    lateral_radius_schedule_far_depth: float = -0.020,
+    lateral_radius_schedule_near_depth: float = 0.0,
     sigma_theta_pre: float = 0.10,
     sigma_theta_insert: float = 0.06,
+    schedule_orientation_tolerance: bool = False,
+    sigma_theta_pre_far: float = 0.12,
+    sigma_theta_insert_far: float = 0.10,
+    orientation_tolerance_schedule_far_depth: float = -0.020,
+    orientation_tolerance_schedule_near_depth: float = 0.0,
     lateral_progress_scale: float = 0.001,
     orientation_progress_scale: float = 0.02,
     axial_progress_scale: float = 0.001,
@@ -1064,6 +1080,20 @@ def body_to_object_cheatcode_phase_reward(
     corridor_weight: float = 1.50,
     inside_alignment_weight: float = 0.20,
     retreat_weight: float = 0.20,
+    action_axis_gate: bool = False,
+    action_axis_source: str = "action_manager",
+    action_lateral_sigma: float = 0.00005,
+    action_lateral_sigma_far: float = 0.00030,
+    action_radius_schedule_far_depth: float = -0.020,
+    action_radius_schedule_near_depth: float = 0.0,
+    action_forward_scale: float = 0.00005,
+    action_min_forward: float = 0.0,
+    consistency_body_name: str | None = None,
+    consistency_axial_std: float | None = None,
+    consistency_lateral_sigma: float | None = None,
+    semantic_progress_scale: float = 0.10,
+    semantic_progress_weight: float = 0.0,
+    semantic_loss_weight: float = 0.0,
     target_position_offset: tuple[float, float, float] | list[float] | None = None,
     body_position_offset: tuple[float, float, float] | list[float] | None = None,
     body_orientation_offset: tuple[float, float, float, float] | list[float] | None = None,
@@ -1101,6 +1131,21 @@ def body_to_object_cheatcode_phase_reward(
     if orientation_error is None:
         orientation_error = torch.zeros_like(geometry.axial_depth)
 
+    semantic_gate = None
+    if consistency_body_name:
+        semantic_gate = _plug_consistency_gate_from_entrance(
+            env,
+            primary_depth=geometry.axial_depth,
+            primary_pos_w=body_pos_w,
+            target_depth=geometry.target_depth,
+            entrance_w=entrance_w,
+            axis_w=axis_w,
+            body_asset=body_asset,
+            consistency_body_name=consistency_body_name,
+            consistency_axial_std=consistency_axial_std,
+            consistency_lateral_sigma=consistency_lateral_sigma,
+        )
+
     reset_mask = getattr(env, "episode_length_buf", None)
     previous_depth = getattr(env, "_aic_previous_cheatcode_phase_depth", None)
     previous_lateral = getattr(env, "_aic_previous_cheatcode_phase_lateral", None)
@@ -1117,6 +1162,38 @@ def body_to_object_cheatcode_phase_reward(
         previous_orientation = orientation_error.detach().clone()
     else:
         previous_orientation = _reset_previous_on_episode_start(previous_orientation, orientation_error, reset_mask)
+    previous_semantic_gate = getattr(env, "_aic_previous_cheatcode_phase_semantic_gate", None)
+    if semantic_gate is None:
+        previous_semantic_gate = None
+    elif previous_semantic_gate is None or previous_semantic_gate.shape != semantic_gate.shape:
+        previous_semantic_gate = semantic_gate.detach().clone()
+    else:
+        previous_semantic_gate = _reset_previous_on_episode_start(previous_semantic_gate, semantic_gate, reset_mask)
+
+    action_delta_w = None
+    action_source = "disabled"
+    if bool(action_axis_gate):
+        action_manager = getattr(env, "action_manager", None)
+        manager_action = None if action_manager is None else getattr(action_manager, "action", None)
+        requested_source = str(action_axis_source)
+        if requested_source not in {"action_manager", "body_delta"}:
+            raise ValueError("action_axis_source must be 'action_manager' or 'body_delta'")
+        if (
+            requested_source == "action_manager"
+            and torch.is_tensor(manager_action)
+            and manager_action.ndim == 2
+            and manager_action.shape[0] == env.num_envs
+        ):
+            action_delta_w = manager_action[:, :3]
+            action_source = "action_manager.action"
+        else:
+            previous_body_pos = getattr(env, "_aic_previous_cheatcode_phase_body_pos", None)
+            if previous_body_pos is None or previous_body_pos.shape != body_pos_w.shape:
+                previous_body_pos = body_pos_w.detach().clone()
+            else:
+                previous_body_pos = _reset_previous_on_episode_start(previous_body_pos, body_pos_w, reset_mask)
+            action_delta_w = body_pos_w - previous_body_pos
+            action_source = "body_position_delta"
 
     components = cheatcode_insertion_phase_reward(
         geometry=geometry,
@@ -1126,8 +1203,18 @@ def body_to_object_cheatcode_phase_reward(
         previous_orientation_error=previous_orientation,
         sigma_lat_pre=sigma_lat_pre,
         sigma_lat_insert=sigma_lat_insert,
+        schedule_lateral_radius=schedule_lateral_radius,
+        sigma_lat_pre_far=sigma_lat_pre_far,
+        sigma_lat_insert_far=sigma_lat_insert_far,
+        lateral_radius_schedule_far_depth=lateral_radius_schedule_far_depth,
+        lateral_radius_schedule_near_depth=lateral_radius_schedule_near_depth,
         sigma_theta_pre=sigma_theta_pre,
         sigma_theta_insert=sigma_theta_insert,
+        schedule_orientation_tolerance=schedule_orientation_tolerance,
+        sigma_theta_pre_far=sigma_theta_pre_far,
+        sigma_theta_insert_far=sigma_theta_insert_far,
+        orientation_tolerance_schedule_far_depth=orientation_tolerance_schedule_far_depth,
+        orientation_tolerance_schedule_near_depth=orientation_tolerance_schedule_near_depth,
         lateral_progress_scale=lateral_progress_scale,
         orientation_progress_scale=orientation_progress_scale,
         axial_progress_scale=axial_progress_scale,
@@ -1154,14 +1241,33 @@ def body_to_object_cheatcode_phase_reward(
         corridor_weight=corridor_weight,
         inside_alignment_weight=inside_alignment_weight,
         retreat_weight=retreat_weight,
+        action_delta_w=action_delta_w,
+        action_axis_gate=action_axis_gate,
+        action_lateral_sigma=action_lateral_sigma,
+        action_lateral_sigma_far=action_lateral_sigma_far,
+        action_radius_schedule_far_depth=action_radius_schedule_far_depth,
+        action_radius_schedule_near_depth=action_radius_schedule_near_depth,
+        action_forward_scale=action_forward_scale,
+        action_min_forward=action_min_forward,
+        semantic_gate=semantic_gate,
+        previous_semantic_gate=previous_semantic_gate,
+        semantic_progress_scale=semantic_progress_scale,
+        semantic_progress_weight=semantic_progress_weight,
+        semantic_loss_weight=semantic_loss_weight,
     )
     setattr(env, "_aic_previous_cheatcode_phase_depth", geometry.axial_depth.detach().clone())
     setattr(env, "_aic_previous_cheatcode_phase_lateral", geometry.lateral_error.detach().clone())
     setattr(env, "_aic_previous_cheatcode_phase_orientation", orientation_error.detach().clone())
+    setattr(env, "_aic_previous_cheatcode_phase_body_pos", body_pos_w.detach().clone())
+    if semantic_gate is not None:
+        setattr(env, "_aic_previous_cheatcode_phase_semantic_gate", semantic_gate.detach().clone())
     setattr(
         env,
         "_aic_cheatcode_phase_reward_components",
-        {name: value.detach().clone() for name, value in components._asdict().items()},
+        {
+            **{name: value.detach().clone() for name, value in components._asdict().items()},
+            "action_axis_source": action_source,
+        },
     )
     return components.total
 

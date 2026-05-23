@@ -55,13 +55,31 @@ def _geom10(depth: float, lateral: float, *, sigma: float = 0.0015):
     )
 
 
-def _phase(depth: float, lateral: float, theta: float, *, prev_depth: float, prev_lateral: float, prev_theta: float):
+def _phase(
+    depth: float,
+    lateral: float,
+    theta: float,
+    *,
+    prev_depth: float,
+    prev_lateral: float,
+    prev_theta: float,
+    action_delta: tuple[float, float, float] | None = None,
+    action_axis_gate: bool = False,
+    semantic_gate: float | None = None,
+    prev_semantic_gate: float | None = None,
+):
     return insertion_geometry.cheatcode_insertion_phase_reward(
         geometry=_geom10(depth, lateral),
         previous_depth=torch.tensor([prev_depth], dtype=torch.float32),
         previous_lateral_error=torch.tensor([prev_lateral], dtype=torch.float32),
         orientation_error=torch.tensor([theta], dtype=torch.float32),
         previous_orientation_error=torch.tensor([prev_theta], dtype=torch.float32),
+        action_delta_w=None if action_delta is None else torch.tensor([action_delta], dtype=torch.float32),
+        action_axis_gate=action_axis_gate,
+        semantic_gate=None if semantic_gate is None else torch.tensor([semantic_gate], dtype=torch.float32),
+        previous_semantic_gate=None
+        if prev_semantic_gate is None
+        else torch.tensor([prev_semantic_gate], dtype=torch.float32),
     )
 
 
@@ -210,10 +228,142 @@ def test_cheatcode_seated_aligned_is_success_candidate_and_high() -> None:
     assert reward.total.item() > 1.0
 
 
+def test_cheatcode_semantic_gate_blocks_tip_only_insert_reward() -> None:
+    reward = _phase(
+        0.010,
+        0.0002,
+        0.02,
+        prev_depth=0.009,
+        prev_lateral=0.0003,
+        prev_theta=0.03,
+        semantic_gate=0.0,
+    )
+    assert reward.g_insert_combined.item() == 0.0
+    assert reward.axial_progress.item() < 0.0
+    assert reward.corridor.item() < 0.0
+
+
+def test_cheatcode_semantic_gate_does_not_block_early_aligned_entry() -> None:
+    reward = _phase(
+        -0.003,
+        0.0002,
+        0.02,
+        prev_depth=-0.004,
+        prev_lateral=0.0003,
+        prev_theta=0.03,
+        action_delta=(0.0003, 0.0, 0.0),
+        action_axis_gate=True,
+        semantic_gate=0.0,
+    )
+    assert reward.axial_progress.item() > 0.0
+
+
+def test_cheatcode_semantic_progress_rewards_module_catchup() -> None:
+    reward = insertion_geometry.cheatcode_insertion_phase_reward(
+        geometry=_geom10(0.006, 0.0002),
+        previous_depth=torch.tensor([0.005], dtype=torch.float32),
+        previous_lateral_error=torch.tensor([0.0002], dtype=torch.float32),
+        orientation_error=torch.tensor([0.02], dtype=torch.float32),
+        previous_orientation_error=torch.tensor([0.02], dtype=torch.float32),
+        semantic_gate=torch.tensor([0.8], dtype=torch.float32),
+        previous_semantic_gate=torch.tensor([0.2], dtype=torch.float32),
+        semantic_progress_weight=1.0,
+        semantic_loss_weight=1.0,
+    )
+    assert reward.semantic_progress.item() > 0.0
+    assert reward.total.item() > 0.0
+
+
+def test_cheatcode_semantic_loss_penalizes_tip_only_overshoot() -> None:
+    reward = insertion_geometry.cheatcode_insertion_phase_reward(
+        geometry=_geom10(0.010, 0.0002),
+        previous_depth=torch.tensor([0.009], dtype=torch.float32),
+        previous_lateral_error=torch.tensor([0.0002], dtype=torch.float32),
+        orientation_error=torch.tensor([0.02], dtype=torch.float32),
+        previous_orientation_error=torch.tensor([0.02], dtype=torch.float32),
+        semantic_gate=torch.tensor([0.05], dtype=torch.float32),
+        previous_semantic_gate=torch.tensor([0.8], dtype=torch.float32),
+        semantic_progress_weight=1.0,
+        semantic_loss_weight=1.0,
+    )
+    assert reward.semantic_progress.item() < 0.0
+    assert reward.corridor.item() < 0.0
+
+
 def test_cheatcode_seated_laterally_bad_is_not_success_and_penalized() -> None:
     reward = _phase(0.010, 0.003, 0.02, prev_depth=0.009, prev_lateral=0.003, prev_theta=0.02)
     assert reward.success_candidate.item() == 0.0
     assert reward.corridor.item() < 0.0
+
+
+def test_cheatcode_action_aligned_forward_preserves_insert_reward() -> None:
+    reward = _phase(
+        -0.003,
+        0.0005,
+        0.03,
+        prev_depth=-0.004,
+        prev_lateral=0.0005,
+        prev_theta=0.03,
+        action_delta=(0.0003, 0.0, 0.0),
+        action_axis_gate=True,
+    )
+    assert reward.g_action_axis.item() > 0.5
+    assert reward.axial_progress.item() > 0.0
+
+
+def test_cheatcode_off_axis_action_blocks_forward_insert_reward() -> None:
+    reward = _phase(
+        -0.003,
+        0.0005,
+        0.03,
+        prev_depth=-0.004,
+        prev_lateral=0.0005,
+        prev_theta=0.03,
+        action_delta=(0.0003, 0.0003, 0.0),
+        action_axis_gate=True,
+    )
+    assert reward.g_action_axis.item() < 0.1
+    assert reward.axial_progress.item() < 0.0
+
+
+def test_cheatcode_action_radius_tightens_near_entrance_and_stays_tight_inside() -> None:
+    far = insertion_geometry.cheatcode_insertion_phase_reward(
+        geometry=_geom10(-0.020, 0.0005),
+        previous_depth=torch.tensor([-0.021], dtype=torch.float32),
+        previous_lateral_error=torch.tensor([0.0005], dtype=torch.float32),
+        orientation_error=torch.tensor([0.03], dtype=torch.float32),
+        previous_orientation_error=torch.tensor([0.03], dtype=torch.float32),
+        action_delta_w=torch.tensor([[0.0003, 0.00015, 0.0]], dtype=torch.float32),
+        action_axis_gate=True,
+        action_lateral_sigma=0.00005,
+        action_lateral_sigma_far=0.00030,
+    )
+    near = insertion_geometry.cheatcode_insertion_phase_reward(
+        geometry=_geom10(0.0, 0.0005),
+        previous_depth=torch.tensor([-0.001], dtype=torch.float32),
+        previous_lateral_error=torch.tensor([0.0005], dtype=torch.float32),
+        orientation_error=torch.tensor([0.03], dtype=torch.float32),
+        previous_orientation_error=torch.tensor([0.03], dtype=torch.float32),
+        action_delta_w=torch.tensor([[0.0003, 0.00015, 0.0]], dtype=torch.float32),
+        action_axis_gate=True,
+        action_lateral_sigma=0.00005,
+        action_lateral_sigma_far=0.00030,
+    )
+    inside = insertion_geometry.cheatcode_insertion_phase_reward(
+        geometry=_geom10(0.002, 0.0005),
+        previous_depth=torch.tensor([0.001], dtype=torch.float32),
+        previous_lateral_error=torch.tensor([0.0005], dtype=torch.float32),
+        orientation_error=torch.tensor([0.03], dtype=torch.float32),
+        previous_orientation_error=torch.tensor([0.03], dtype=torch.float32),
+        action_delta_w=torch.tensor([[0.0003, 0.00015, 0.0]], dtype=torch.float32),
+        action_axis_gate=True,
+        action_lateral_sigma=0.00005,
+        action_lateral_sigma_far=0.00030,
+    )
+    assert far.action_lateral_sigma.item() > near.action_lateral_sigma.item()
+    assert inside.action_lateral_sigma.item() == pytest.approx(near.action_lateral_sigma.item())
+    assert far.g_action_axis.item() > near.g_action_axis.item()
+    assert inside.g_action_axis.item() == pytest.approx(near.g_action_axis.item())
 
 
 def test_off_axis_target_fails_loudly() -> None:

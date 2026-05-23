@@ -198,6 +198,14 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser.add_argument("--target-action-guide-collect-decay", action=argparse.BooleanOptionalAction, default=False)
     parser.add_argument("--target-action-guide-prefix-decay", action=argparse.BooleanOptionalAction, default=False)
     parser.add_argument("--target-action-guide-train-executed", action=argparse.BooleanOptionalAction, default=False)
+    parser.add_argument(
+        "--isaac-ik-body-name",
+        default=None,
+        help=(
+            "Optional Isaac DifferentialIK controlled body. Defaults to the task config's wrist_3_link; "
+            "use sfp_tip_link for insertion-frame rotation diagnostics."
+        ),
+    )
     parser.add_argument("--adapter-delta-clip", type=float, default=0.05)
     parser.add_argument(
         "--tcp-translation-action-clip",
@@ -214,6 +222,8 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser.add_argument("--insertion-action-guard", action=argparse.BooleanOptionalAction, default=False)
     parser.add_argument("--insertion-action-guard-lateral-threshold-m", type=float, default=0.002)
     parser.add_argument("--insertion-action-guard-lateral-step-m", type=float, default=0.0005)
+    parser.add_argument("--insertion-action-guard-zero-rotation-when-offcenter", action=argparse.BooleanOptionalAction, default=False)
+    parser.add_argument("--insertion-action-guard-rotation-lateral-threshold-m", type=float, default=float("nan"))
     parser.add_argument(
         "--insertion-action-guard-adaptive-lateral-sign",
         action=argparse.BooleanOptionalAction,
@@ -221,6 +231,7 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     )
     parser.add_argument("--insertion-action-guard-adaptive-lateral-flip-margin-m", type=float, default=0.00005)
     parser.add_argument("--insertion-action-guard-centered-axial-step-m", type=float, default=0.0)
+    parser.add_argument("--insertion-action-guard-blocked-axial-step-m", type=float, default=0.0)
     parser.add_argument("--insertion-action-guard-retention", action=argparse.BooleanOptionalAction, default=False)
     parser.add_argument("--insertion-action-guard-retention-entry-depth-m", type=float, default=0.0)
     parser.add_argument("--insertion-action-guard-retention-lateral-threshold-m", type=float, default=0.0015)
@@ -281,6 +292,16 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser.add_argument("--insertion-corridor-sigma", type=float, default=0.0025)
     parser.add_argument("--insertion-bypass-penalty-scale", type=float, default=1.0)
     parser.add_argument("--insertion-cheatcode-phase-weight", type=float, default=0.0)
+    parser.add_argument("--insertion-cheatcode-schedule-lateral-radius", action="store_true")
+    parser.add_argument("--insertion-cheatcode-sigma-lat-pre-far", type=float, default=0.004)
+    parser.add_argument("--insertion-cheatcode-sigma-lat-insert-far", type=float, default=0.004)
+    parser.add_argument("--insertion-cheatcode-radius-schedule-far-depth", type=float, default=-0.020)
+    parser.add_argument("--insertion-cheatcode-radius-schedule-near-depth", type=float, default=0.0)
+    parser.add_argument("--insertion-cheatcode-schedule-orientation-tolerance", action="store_true")
+    parser.add_argument("--insertion-cheatcode-sigma-theta-pre-far", type=float, default=0.12)
+    parser.add_argument("--insertion-cheatcode-sigma-theta-insert-far", type=float, default=0.10)
+    parser.add_argument("--insertion-cheatcode-orientation-schedule-far-depth", type=float, default=-0.020)
+    parser.add_argument("--insertion-cheatcode-orientation-schedule-near-depth", type=float, default=0.0)
     parser.add_argument("--insertion-cheatcode-lateral-progress-weight", type=float, default=0.40)
     parser.add_argument("--insertion-cheatcode-orientation-progress-weight", type=float, default=0.30)
     parser.add_argument("--insertion-cheatcode-near-misaligned-weight", type=float, default=0.25)
@@ -289,6 +310,18 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser.add_argument("--insertion-cheatcode-corridor-weight", type=float, default=1.50)
     parser.add_argument("--insertion-cheatcode-inside-alignment-weight", type=float, default=0.20)
     parser.add_argument("--insertion-cheatcode-retreat-weight", type=float, default=0.20)
+    parser.add_argument("--insertion-cheatcode-action-axis-gate", action="store_true")
+    parser.add_argument(
+        "--insertion-cheatcode-action-axis-source",
+        choices=["action_manager", "body_delta"],
+        default="action_manager",
+    )
+    parser.add_argument("--insertion-cheatcode-action-lateral-sigma", type=float, default=0.00005)
+    parser.add_argument("--insertion-cheatcode-action-lateral-sigma-far", type=float, default=0.00030)
+    parser.add_argument("--insertion-cheatcode-action-radius-schedule-far-depth", type=float, default=-0.020)
+    parser.add_argument("--insertion-cheatcode-action-radius-schedule-near-depth", type=float, default=0.0)
+    parser.add_argument("--insertion-cheatcode-action-forward-scale", type=float, default=0.00005)
+    parser.add_argument("--insertion-cheatcode-action-min-forward", type=float, default=0.0)
     parser.add_argument(
         "--insertion-corridor-orientation-gate-std",
         type=float,
@@ -687,6 +720,32 @@ def build_plan(args: argparse.Namespace, *, inspect_required: bool = True) -> di
         "insertion_corridor_sigma": getattr(args, "insertion_corridor_sigma", 0.0025),
         "insertion_bypass_penalty_scale": getattr(args, "insertion_bypass_penalty_scale", 1.0),
         "insertion_cheatcode_phase_weight": getattr(args, "insertion_cheatcode_phase_weight", 0.0),
+        "insertion_cheatcode_schedule_lateral_radius": getattr(
+            args, "insertion_cheatcode_schedule_lateral_radius", False
+        ),
+        "insertion_cheatcode_sigma_lat_pre_far": getattr(args, "insertion_cheatcode_sigma_lat_pre_far", 0.004),
+        "insertion_cheatcode_sigma_lat_insert_far": getattr(
+            args, "insertion_cheatcode_sigma_lat_insert_far", 0.004
+        ),
+        "insertion_cheatcode_radius_schedule_far_depth": getattr(
+            args, "insertion_cheatcode_radius_schedule_far_depth", -0.020
+        ),
+        "insertion_cheatcode_radius_schedule_near_depth": getattr(
+            args, "insertion_cheatcode_radius_schedule_near_depth", 0.0
+        ),
+        "insertion_cheatcode_schedule_orientation_tolerance": getattr(
+            args, "insertion_cheatcode_schedule_orientation_tolerance", False
+        ),
+        "insertion_cheatcode_sigma_theta_pre_far": getattr(args, "insertion_cheatcode_sigma_theta_pre_far", 0.12),
+        "insertion_cheatcode_sigma_theta_insert_far": getattr(
+            args, "insertion_cheatcode_sigma_theta_insert_far", 0.10
+        ),
+        "insertion_cheatcode_orientation_schedule_far_depth": getattr(
+            args, "insertion_cheatcode_orientation_schedule_far_depth", -0.020
+        ),
+        "insertion_cheatcode_orientation_schedule_near_depth": getattr(
+            args, "insertion_cheatcode_orientation_schedule_near_depth", 0.0
+        ),
         "insertion_cheatcode_lateral_progress_weight": getattr(
             args, "insertion_cheatcode_lateral_progress_weight", 0.40
         ),
@@ -705,6 +764,26 @@ def build_plan(args: argparse.Namespace, *, inspect_required: bool = True) -> di
             args, "insertion_cheatcode_inside_alignment_weight", 0.20
         ),
         "insertion_cheatcode_retreat_weight": getattr(args, "insertion_cheatcode_retreat_weight", 0.20),
+        "insertion_cheatcode_action_axis_gate": getattr(args, "insertion_cheatcode_action_axis_gate", False),
+        "insertion_cheatcode_action_axis_source": getattr(
+            args, "insertion_cheatcode_action_axis_source", "action_manager"
+        ),
+        "insertion_cheatcode_action_lateral_sigma": getattr(
+            args, "insertion_cheatcode_action_lateral_sigma", 0.00005
+        ),
+        "insertion_cheatcode_action_lateral_sigma_far": getattr(
+            args, "insertion_cheatcode_action_lateral_sigma_far", 0.00030
+        ),
+        "insertion_cheatcode_action_radius_schedule_far_depth": getattr(
+            args, "insertion_cheatcode_action_radius_schedule_far_depth", -0.020
+        ),
+        "insertion_cheatcode_action_radius_schedule_near_depth": getattr(
+            args, "insertion_cheatcode_action_radius_schedule_near_depth", 0.0
+        ),
+        "insertion_cheatcode_action_forward_scale": getattr(
+            args, "insertion_cheatcode_action_forward_scale", 0.00005
+        ),
+        "insertion_cheatcode_action_min_forward": getattr(args, "insertion_cheatcode_action_min_forward", 0.0),
         "insertion_axis": args.insertion_axis,
         "force_delta_penalty_weight": args.force_delta_penalty_weight,
         "force_delta_threshold": args.force_delta_threshold,
@@ -907,6 +986,11 @@ def build_command(args: argparse.Namespace) -> tuple[list[str], dict[str, str]]:
         str(getattr(args, "insertion_action_guard_lateral_threshold_m", 0.002)),
         "--insertion_action_guard_lateral_step_m",
         str(getattr(args, "insertion_action_guard_lateral_step_m", 0.0005)),
+        "--insertion_action_guard_zero_rotation_when_offcenter"
+        if getattr(args, "insertion_action_guard_zero_rotation_when_offcenter", False)
+        else "--no-insertion_action_guard_zero_rotation_when_offcenter",
+        "--insertion_action_guard_rotation_lateral_threshold_m",
+        str(getattr(args, "insertion_action_guard_rotation_lateral_threshold_m", float("nan"))),
         "--insertion_action_guard_adaptive_lateral_sign"
         if getattr(args, "insertion_action_guard_adaptive_lateral_sign", False)
         else "--no-insertion_action_guard_adaptive_lateral_sign",
@@ -914,6 +998,8 @@ def build_command(args: argparse.Namespace) -> tuple[list[str], dict[str, str]]:
         str(getattr(args, "insertion_action_guard_adaptive_lateral_flip_margin_m", 0.00005)),
         "--insertion_action_guard_centered_axial_step_m",
         str(getattr(args, "insertion_action_guard_centered_axial_step_m", 0.0)),
+        "--insertion_action_guard_blocked_axial_step_m",
+        str(getattr(args, "insertion_action_guard_blocked_axial_step_m", 0.0)),
         "--insertion_action_guard_retention" if getattr(args, "insertion_action_guard_retention", False) else "--no-insertion_action_guard_retention",
         "--insertion_action_guard_retention_entry_depth_m",
         str(getattr(args, "insertion_action_guard_retention_entry_depth_m", 0.0)),
@@ -996,6 +1082,32 @@ def build_command(args: argparse.Namespace) -> tuple[list[str], dict[str, str]]:
         str(getattr(args, "insertion_bypass_penalty_scale", 1.0)),
         "--target_reward_cheatcode_phase_weight",
         str(getattr(args, "insertion_cheatcode_phase_weight", 0.0)),
+        *(
+            ["--target_reward_cheatcode_schedule_lateral_radius"]
+            if getattr(args, "insertion_cheatcode_schedule_lateral_radius", False)
+            else []
+        ),
+        "--target_reward_cheatcode_sigma_lat_pre_far",
+        str(getattr(args, "insertion_cheatcode_sigma_lat_pre_far", 0.004)),
+        "--target_reward_cheatcode_sigma_lat_insert_far",
+        str(getattr(args, "insertion_cheatcode_sigma_lat_insert_far", 0.004)),
+        "--target_reward_cheatcode_radius_schedule_far_depth",
+        str(getattr(args, "insertion_cheatcode_radius_schedule_far_depth", -0.020)),
+        "--target_reward_cheatcode_radius_schedule_near_depth",
+        str(getattr(args, "insertion_cheatcode_radius_schedule_near_depth", 0.0)),
+        *(
+            ["--target_reward_cheatcode_schedule_orientation_tolerance"]
+            if getattr(args, "insertion_cheatcode_schedule_orientation_tolerance", False)
+            else []
+        ),
+        "--target_reward_cheatcode_sigma_theta_pre_far",
+        str(getattr(args, "insertion_cheatcode_sigma_theta_pre_far", 0.12)),
+        "--target_reward_cheatcode_sigma_theta_insert_far",
+        str(getattr(args, "insertion_cheatcode_sigma_theta_insert_far", 0.10)),
+        "--target_reward_cheatcode_orientation_schedule_far_depth",
+        str(getattr(args, "insertion_cheatcode_orientation_schedule_far_depth", -0.020)),
+        "--target_reward_cheatcode_orientation_schedule_near_depth",
+        str(getattr(args, "insertion_cheatcode_orientation_schedule_near_depth", 0.0)),
         "--target_reward_cheatcode_lateral_progress_weight",
         str(getattr(args, "insertion_cheatcode_lateral_progress_weight", 0.40)),
         "--target_reward_cheatcode_orientation_progress_weight",
@@ -1012,6 +1124,25 @@ def build_command(args: argparse.Namespace) -> tuple[list[str], dict[str, str]]:
         str(getattr(args, "insertion_cheatcode_inside_alignment_weight", 0.20)),
         "--target_reward_cheatcode_retreat_weight",
         str(getattr(args, "insertion_cheatcode_retreat_weight", 0.20)),
+        *(
+            ["--target_reward_cheatcode_action_axis_gate"]
+            if getattr(args, "insertion_cheatcode_action_axis_gate", False)
+            else []
+        ),
+        "--target_reward_cheatcode_action_axis_source",
+        str(getattr(args, "insertion_cheatcode_action_axis_source", "action_manager")),
+        "--target_reward_cheatcode_action_lateral_sigma",
+        str(getattr(args, "insertion_cheatcode_action_lateral_sigma", 0.00005)),
+        "--target_reward_cheatcode_action_lateral_sigma_far",
+        str(getattr(args, "insertion_cheatcode_action_lateral_sigma_far", 0.00030)),
+        "--target_reward_cheatcode_action_radius_schedule_far_depth",
+        str(getattr(args, "insertion_cheatcode_action_radius_schedule_far_depth", -0.020)),
+        "--target_reward_cheatcode_action_radius_schedule_near_depth",
+        str(getattr(args, "insertion_cheatcode_action_radius_schedule_near_depth", 0.0)),
+        "--target_reward_cheatcode_action_forward_scale",
+        str(getattr(args, "insertion_cheatcode_action_forward_scale", 0.00005)),
+        "--target_reward_cheatcode_action_min_forward",
+        str(getattr(args, "insertion_cheatcode_action_min_forward", 0.0)),
         "--target_reward_insertion_orientation_gate_std",
         str(getattr(args, "insertion_corridor_orientation_gate_std", 0.0)),
         "--target_reward_orientation_error_mode",
@@ -1183,6 +1314,8 @@ def build_command(args: argparse.Namespace) -> tuple[list[str], dict[str, str]]:
     env["AIC_ISAAC_INSERTION_LATERAL_WEIGHT"] = str(args.insertion_lateral_weight)
     env["AIC_ISAAC_INSERTION_AXIAL_PROGRESS_WEIGHT"] = str(getattr(args, "insertion_axial_progress_weight", 0.0))
     env["AIC_ISAAC_FORCE_DELTA_PENALTY_WEIGHT"] = str(args.force_delta_penalty_weight)
+    if args.isaac_ik_body_name:
+        env["AIC_ISAAC_IK_BODY_NAME"] = str(args.isaac_ik_body_name)
     if args.initial_arm_joint_pos:
         env["AIC_ISAAC_INITIAL_ARM_JOINT_POS"] = args.initial_arm_joint_pos
     if args.episode_config_dir is not None:
@@ -1232,6 +1365,13 @@ def validate_launch_inputs(args: argparse.Namespace) -> None:
         ("insertion_cheatcode_corridor_weight", "--insertion-cheatcode-corridor-weight"),
         ("insertion_cheatcode_inside_alignment_weight", "--insertion-cheatcode-inside-alignment-weight"),
         ("insertion_cheatcode_retreat_weight", "--insertion-cheatcode-retreat-weight"),
+        ("insertion_cheatcode_sigma_lat_pre_far", "--insertion-cheatcode-sigma-lat-pre-far"),
+        ("insertion_cheatcode_sigma_lat_insert_far", "--insertion-cheatcode-sigma-lat-insert-far"),
+        ("insertion_cheatcode_sigma_theta_pre_far", "--insertion-cheatcode-sigma-theta-pre-far"),
+        ("insertion_cheatcode_sigma_theta_insert_far", "--insertion-cheatcode-sigma-theta-insert-far"),
+        ("insertion_cheatcode_action_lateral_sigma", "--insertion-cheatcode-action-lateral-sigma"),
+        ("insertion_cheatcode_action_lateral_sigma_far", "--insertion-cheatcode-action-lateral-sigma-far"),
+        ("insertion_cheatcode_action_forward_scale", "--insertion-cheatcode-action-forward-scale"),
     ]:
         if float(getattr(args, attr, 0.0)) < 0.0:
             raise ValueError(f"{flag} must be non-negative")
