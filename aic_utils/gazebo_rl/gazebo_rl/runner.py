@@ -69,6 +69,12 @@ class GazeboRLRunnerConfig:
     record_video_encoding_batch_size: int = 1
     clean_stale_zenoh: bool = True
     include_images: bool = False
+    episode_config: Path | None = None
+    preposition_start_near_gate: bool = False
+    start_near_gate_mode: str = "task_board"
+    preposition_max_steps: int = 240
+    preposition_tolerance_m: float = 0.003
+    preposition_max_translation_m: float = 0.003
 
 
 class ManagedProcess:
@@ -118,8 +124,16 @@ class GazeboRLRunner:
                 "AIC_GAZEBO_RL_GROUND_TRUTH": _bool_arg(self.config.ground_truth),
                 "AIC_GAZEBO_RL_INCLUDE_IMAGES": _bool_arg(self.config.include_images),
                 "AIC_RESULTS_DIR": str(self.config.results_dir),
+                "AIC_GAZEBO_RL_PREPOSITION_START_NEAR_GATE": _bool_arg(self.config.preposition_start_near_gate),
+                "AIC_GAZEBO_RL_START_NEAR_GATE_MODE": self.config.start_near_gate_mode,
+                "AIC_GAZEBO_RL_SIM_DISTROBOX": self.config.sim_distrobox or "",
+                "AIC_GAZEBO_RL_PREPOSITION_MAX_STEPS": str(self.config.preposition_max_steps),
+                "AIC_GAZEBO_RL_PREPOSITION_TOLERANCE_M": str(self.config.preposition_tolerance_m),
+                "AIC_GAZEBO_RL_PREPOSITION_MAX_TRANSLATION_M": str(self.config.preposition_max_translation_m),
             }
         )
+        if self.config.episode_config is not None:
+            env["AIC_GAZEBO_RL_EPISODE_CONFIG"] = str(self.config.episode_config)
         return env
 
     def _runtime_env_exports(self) -> str:
@@ -139,7 +153,15 @@ class GazeboRLRunner:
             "AIC_GAZEBO_RL_GROUND_TRUTH": env["AIC_GAZEBO_RL_GROUND_TRUTH"],
             "AIC_GAZEBO_RL_INCLUDE_IMAGES": env["AIC_GAZEBO_RL_INCLUDE_IMAGES"],
             "AIC_RESULTS_DIR": self._container_path(self.config.results_dir),
+            "AIC_GAZEBO_RL_PREPOSITION_START_NEAR_GATE": env["AIC_GAZEBO_RL_PREPOSITION_START_NEAR_GATE"],
+            "AIC_GAZEBO_RL_START_NEAR_GATE_MODE": env["AIC_GAZEBO_RL_START_NEAR_GATE_MODE"],
+            "AIC_GAZEBO_RL_SIM_DISTROBOX": env["AIC_GAZEBO_RL_SIM_DISTROBOX"],
+            "AIC_GAZEBO_RL_PREPOSITION_MAX_STEPS": env["AIC_GAZEBO_RL_PREPOSITION_MAX_STEPS"],
+            "AIC_GAZEBO_RL_PREPOSITION_TOLERANCE_M": env["AIC_GAZEBO_RL_PREPOSITION_TOLERANCE_M"],
+            "AIC_GAZEBO_RL_PREPOSITION_MAX_TRANSLATION_M": env["AIC_GAZEBO_RL_PREPOSITION_MAX_TRANSLATION_M"],
         }
+        if self.config.episode_config is not None:
+            runtime_env["AIC_GAZEBO_RL_EPISODE_CONFIG"] = self._container_path(self.config.episode_config)
         exports = [f"export {key}={shlex_quote(value)}" for key, value in runtime_env.items()]
         exports.append(f"export PYTHONPATH={shlex_quote(pythonpath_prefix)}:${{PYTHONPATH:-}}")
         return "\n".join(exports)
