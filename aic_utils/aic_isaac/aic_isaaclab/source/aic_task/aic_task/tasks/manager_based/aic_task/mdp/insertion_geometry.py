@@ -27,6 +27,7 @@ class CheatcodeInsertionRewardComponents(NamedTuple):
     corridor: torch.Tensor
     inside_alignment: torch.Tensor
     retreat: torch.Tensor
+    semantic_progress: torch.Tensor
     success_candidate: torch.Tensor
     g_lat_pre: torch.Tensor
     g_ori_pre: torch.Tensor
@@ -34,8 +35,19 @@ class CheatcodeInsertionRewardComponents(NamedTuple):
     g_lat_insert: torch.Tensor
     g_ori_insert: torch.Tensor
     g_align_insert: torch.Tensor
+    g_semantic: torch.Tensor
+    g_action_axis: torch.Tensor
+    g_insert_combined: torch.Tensor
+    action_axial: torch.Tensor
+    action_lateral: torch.Tensor
+    action_lateral_sigma: torch.Tensor
+    action_forward_gate: torch.Tensor
     near_gate: torch.Tensor
     inside_gate: torch.Tensor
+    sigma_lat_pre: torch.Tensor
+    sigma_lat_insert: torch.Tensor
+    sigma_theta_pre: torch.Tensor
+    sigma_theta_insert: torch.Tensor
 
 
 def normalize_axis(axis_w: torch.Tensor) -> torch.Tensor:
@@ -147,9 +159,27 @@ def lateral_progress_reward(
     )
 
 
-def _pow4_gate(error: torch.Tensor, sigma: float) -> torch.Tensor:
-    scaled = error / max(float(sigma), 1.0e-9)
+def _pow4_gate(error: torch.Tensor, sigma: float | torch.Tensor) -> torch.Tensor:
+    if isinstance(sigma, torch.Tensor):
+        sigma_t = sigma.to(device=error.device, dtype=error.dtype).clamp(min=1.0e-9)
+    else:
+        sigma_t = torch.as_tensor(max(float(sigma), 1.0e-9), device=error.device, dtype=error.dtype)
+    scaled = error / sigma_t
     return torch.exp(-(scaled * scaled * scaled * scaled))
+
+
+def _scheduled_lateral_sigma(
+    axial_depth: torch.Tensor,
+    *,
+    near_sigma: float,
+    far_sigma: float,
+    far_depth: float,
+    near_depth: float,
+) -> torch.Tensor:
+    """Linearly shrink lateral reward radius as the tip approaches the entrance."""
+    denom = max(float(near_depth) - float(far_depth), 1.0e-9)
+    alpha = ((axial_depth - float(far_depth)) / denom).clamp(min=0.0, max=1.0)
+    return float(far_sigma) + alpha * (float(near_sigma) - float(far_sigma))
 
 
 def _sigmoid_gate(value: torch.Tensor, scale: float) -> torch.Tensor:
@@ -165,8 +195,18 @@ def cheatcode_insertion_phase_reward(
     previous_orientation_error: torch.Tensor,
     sigma_lat_pre: float = 0.0025,
     sigma_lat_insert: float = 0.0015,
+    schedule_lateral_radius: bool = False,
+    sigma_lat_pre_far: float = 0.004,
+    sigma_lat_insert_far: float = 0.004,
+    lateral_radius_schedule_far_depth: float = -0.020,
+    lateral_radius_schedule_near_depth: float = 0.0,
     sigma_theta_pre: float = 0.10,
     sigma_theta_insert: float = 0.06,
+    schedule_orientation_tolerance: bool = False,
+    sigma_theta_pre_far: float = 0.12,
+    sigma_theta_insert_far: float = 0.10,
+    orientation_tolerance_schedule_far_depth: float = -0.020,
+    orientation_tolerance_schedule_near_depth: float = 0.0,
     lateral_progress_scale: float = 0.001,
     orientation_progress_scale: float = 0.02,
     axial_progress_scale: float = 0.001,
@@ -193,6 +233,19 @@ def cheatcode_insertion_phase_reward(
     corridor_weight: float = 1.50,
     inside_alignment_weight: float = 0.20,
     retreat_weight: float = 0.20,
+    action_delta_w: torch.Tensor | None = None,
+    action_axis_gate: bool = False,
+    action_lateral_sigma: float = 0.00005,
+    action_lateral_sigma_far: float = 0.00030,
+    action_radius_schedule_far_depth: float = -0.020,
+    action_radius_schedule_near_depth: float = 0.0,
+    action_forward_scale: float = 0.00005,
+    action_min_forward: float = 0.0,
+    semantic_gate: torch.Tensor | None = None,
+    previous_semantic_gate: torch.Tensor | None = None,
+    semantic_progress_scale: float = 0.10,
+    semantic_progress_weight: float = 0.0,
+    semantic_loss_weight: float = 0.0,
 ) -> CheatcodeInsertionRewardComponents:
     """Phase-aware insertion reward modeled after the Gazebo CheatCode state machine.
 
@@ -207,12 +260,94 @@ def cheatcode_insertion_phase_reward(
     previous_lateral_error = previous_lateral_error.to(device=s.device, dtype=s.dtype)
     previous_orientation_error = previous_orientation_error.to(device=s.device, dtype=s.dtype)
 
-    g_lat_pre = _pow4_gate(r, sigma_lat_pre)
-    g_ori_pre = _pow4_gate(theta, sigma_theta_pre)
+    effective_sigma_lat_pre: torch.Tensor
+    effective_sigma_lat_insert: torch.Tensor
+    if bool(schedule_lateral_radius):
+        effective_sigma_lat_pre = _scheduled_lateral_sigma(
+            s,
+            near_sigma=sigma_lat_pre,
+            far_sigma=sigma_lat_pre_far,
+            far_depth=lateral_radius_schedule_far_depth,
+            near_depth=lateral_radius_schedule_near_depth,
+        )
+        effective_sigma_lat_insert = _scheduled_lateral_sigma(
+            s,
+            near_sigma=sigma_lat_insert,
+            far_sigma=sigma_lat_insert_far,
+            far_depth=lateral_radius_schedule_far_depth,
+            near_depth=lateral_radius_schedule_near_depth,
+        )
+    else:
+        effective_sigma_lat_pre = torch.full_like(s, float(sigma_lat_pre))
+        effective_sigma_lat_insert = torch.full_like(s, float(sigma_lat_insert))
+
+    effective_sigma_theta_pre: torch.Tensor
+    effective_sigma_theta_insert: torch.Tensor
+    if bool(schedule_orientation_tolerance):
+        effective_sigma_theta_pre = _scheduled_lateral_sigma(
+            s,
+            near_sigma=sigma_theta_pre,
+            far_sigma=sigma_theta_pre_far,
+            far_depth=orientation_tolerance_schedule_far_depth,
+            near_depth=orientation_tolerance_schedule_near_depth,
+        )
+        effective_sigma_theta_insert = _scheduled_lateral_sigma(
+            s,
+            near_sigma=sigma_theta_insert,
+            far_sigma=sigma_theta_insert_far,
+            far_depth=orientation_tolerance_schedule_far_depth,
+            near_depth=orientation_tolerance_schedule_near_depth,
+        )
+    else:
+        effective_sigma_theta_pre = torch.full_like(s, float(sigma_theta_pre))
+        effective_sigma_theta_insert = torch.full_like(s, float(sigma_theta_insert))
+
+    g_lat_pre = _pow4_gate(r, effective_sigma_lat_pre)
+    g_ori_pre = _pow4_gate(theta, effective_sigma_theta_pre)
     g_align_pre = g_lat_pre * g_ori_pre
-    g_lat_insert = _pow4_gate(r, sigma_lat_insert)
-    g_ori_insert = _pow4_gate(theta, sigma_theta_insert)
+    g_lat_insert = _pow4_gate(r, effective_sigma_lat_insert)
+    g_ori_insert = _pow4_gate(theta, effective_sigma_theta_insert)
     g_align_insert = g_lat_insert * g_ori_insert
+    if bool(action_axis_gate) and action_delta_w is not None:
+        action = action_delta_w.to(device=s.device, dtype=s.dtype)
+        if action.ndim != 2 or action.shape[-1] < 3:
+            raise ValueError("action_delta_w must have shape (num_envs, >=3) when action_axis_gate is enabled")
+        action_xyz = action[:, :3]
+        action_axial = torch.sum(action_xyz * geometry.axis, dim=1)
+        action_lateral = torch.linalg.norm(action_xyz - action_axial.unsqueeze(1) * geometry.axis, dim=1)
+        action_sigma = _scheduled_lateral_sigma(
+            s,
+            near_sigma=action_lateral_sigma,
+            far_sigma=action_lateral_sigma_far,
+            far_depth=action_radius_schedule_far_depth,
+            near_depth=action_radius_schedule_near_depth,
+        )
+        action_direction_gate = _pow4_gate(action_lateral, action_sigma)
+        action_forward_gate = _sigmoid_gate(action_axial - float(action_min_forward), action_forward_scale)
+        g_action_axis = action_direction_gate * action_forward_gate
+    else:
+        action_axial = torch.zeros_like(s)
+        action_lateral = torch.zeros_like(s)
+        action_sigma = torch.full_like(s, float(action_lateral_sigma))
+        action_forward_gate = torch.ones_like(s)
+        g_action_axis = torch.ones_like(s)
+    if semantic_gate is None:
+        g_semantic = torch.ones_like(s)
+    else:
+        g_semantic = semantic_gate.to(device=s.device, dtype=s.dtype).clamp(min=0.0, max=1.0)
+    if previous_semantic_gate is None:
+        previous_semantic = g_semantic.detach()
+    else:
+        previous_semantic = previous_semantic_gate.to(device=s.device, dtype=s.dtype).clamp(min=0.0, max=1.0)
+    # The trailing-body consistency gate is a seated-depth check. Applying it
+    # from the start prevents the policy from receiving credit for beginning a
+    # valid aligned insertion because the trailing body cannot be near its
+    # seated-depth reference until the plug has already advanced. Ramp it in
+    # with depth: early insertion is governed by tip alignment/action, while
+    # near full depth the consistency body becomes mandatory.
+    semantic_depth_weight = geometry.depth_fraction.clamp(min=0.0, max=1.0)
+    g_semantic_depth = (1.0 - semantic_depth_weight) + semantic_depth_weight * g_semantic
+    g_insert_combined = g_align_insert * g_action_axis * g_semantic_depth
 
     near_gate = _sigmoid_gate(s - float(near_gate_start), near_gate_scale)
     hover_gate = _sigmoid_gate(s - float(hover_gate_start), hover_gate_scale)
@@ -241,34 +376,58 @@ def cheatcode_insertion_phase_reward(
 
     delta_s = s - previous_depth
     forward = (delta_s / max(float(axial_progress_scale), 1.0e-9)).clamp(min=-1.0, max=1.0)
-    forward_reward = forward * (2.0 * g_align_insert - 1.0)
+    forward_reward = forward * (2.0 * g_insert_combined - 1.0)
     retreat_penalty = -inside_gate * torch.relu(-delta_s / max(float(axial_progress_scale), 1.0e-9))
     r_axial = torch.where(delta_s > 0.0, forward_reward, retreat_penalty)
 
-    centered_depth = geometry.depth_fraction * g_align_insert
-    bypass_penalty = geometry.depth_fraction * (1.0 - g_align_insert) * max(float(bypass_penalty_scale), 0.0)
+    centered_depth = geometry.depth_fraction * g_insert_combined
+    bypass_penalty = geometry.depth_fraction * (1.0 - g_insert_combined) * max(float(bypass_penalty_scale), 0.0)
     r_corridor = centered_depth - bypass_penalty
     r_inside_alignment = -inside_gate * (
         torch.square(r / max(float(inside_lateral_scale), 1.0e-9))
         + torch.square(theta / max(float(inside_orientation_scale), 1.0e-9))
     )
     r_retreat = -inside_gate * torch.relu(-delta_s / max(float(axial_progress_scale), 1.0e-9))
+    semantic_progress_raw = ((g_semantic - previous_semantic) / max(float(semantic_progress_scale), 1.0e-9)).clamp(
+        min=-1.0,
+        max=1.0,
+    )
+    semantic_active = torch.maximum(inside_gate, geometry.depth_fraction.clamp(min=0.0, max=1.0))
+    r_semantic_progress = semantic_active * semantic_progress_raw
     success_candidate = (
         (geometry.depth_fraction >= float(success_depth_fraction))
         & (r <= float(success_lateral_threshold))
         & (theta <= float(success_orientation_threshold))
     ).to(dtype=s.dtype)
 
+    positive_lateral_progress = torch.relu(r_lateral_progress)
+    negative_lateral_progress = torch.minimum(r_lateral_progress, torch.zeros_like(r_lateral_progress))
+    positive_orientation_progress = torch.relu(r_orientation_progress)
+    negative_orientation_progress = torch.minimum(r_orientation_progress, torch.zeros_like(r_orientation_progress))
+    positive_axial_progress = torch.relu(forward) * g_insert_combined
+    bad_forward_progress = torch.relu(forward) * (1.0 - g_insert_combined)
+    positive_corridor = geometry.depth_fraction * g_insert_combined
+    negative_corridor = -geometry.depth_fraction * (1.0 - g_insert_combined) * max(
+        float(bypass_penalty_scale),
+        0.0,
+    )
+
+    # Positive insertion credit is deliberately conjunctive: it is large only
+    # when position, orientation, and action direction gates are all high.
+    # Alignment progress remains as small shaping, but is cross-gated so one
+    # good term cannot compensate for a bad paired term.
     total = (
-        float(lateral_progress_weight) * r_lateral_progress
-        + float(orientation_progress_weight) * r_orientation_progress
+        float(lateral_progress_weight) * (positive_lateral_progress * g_ori_pre + negative_lateral_progress)
+        + float(orientation_progress_weight) * (positive_orientation_progress * g_lat_pre + negative_orientation_progress)
         + float(near_misaligned_weight) * r_near_misaligned
         + float(hover_weight) * r_preinsert_hover
-        + float(axial_progress_weight) * r_axial
-        + float(corridor_weight) * r_corridor
+        + float(axial_progress_weight) * (positive_axial_progress - bad_forward_progress + retreat_penalty)
+        + float(corridor_weight) * (positive_corridor + negative_corridor)
         + float(inside_alignment_weight) * r_inside_alignment
         + float(retreat_weight) * r_retreat
-        + success_candidate
+        + float(semantic_progress_weight) * torch.relu(r_semantic_progress)
+        + float(semantic_loss_weight) * torch.minimum(r_semantic_progress, torch.zeros_like(r_semantic_progress))
+        + success_candidate * g_insert_combined
     )
     return CheatcodeInsertionRewardComponents(
         total=total,
@@ -280,6 +439,7 @@ def cheatcode_insertion_phase_reward(
         corridor=r_corridor,
         inside_alignment=r_inside_alignment,
         retreat=r_retreat,
+        semantic_progress=r_semantic_progress,
         success_candidate=success_candidate,
         g_lat_pre=g_lat_pre,
         g_ori_pre=g_ori_pre,
@@ -287,6 +447,17 @@ def cheatcode_insertion_phase_reward(
         g_lat_insert=g_lat_insert,
         g_ori_insert=g_ori_insert,
         g_align_insert=g_align_insert,
+        g_semantic=g_semantic,
+        g_action_axis=g_action_axis,
+        g_insert_combined=g_insert_combined,
+        action_axial=action_axial,
+        action_lateral=action_lateral,
+        action_lateral_sigma=action_sigma,
+        action_forward_gate=action_forward_gate,
         near_gate=near_gate,
         inside_gate=inside_gate,
+        sigma_lat_pre=effective_sigma_lat_pre,
+        sigma_lat_insert=effective_sigma_lat_insert,
+        sigma_theta_pre=effective_sigma_theta_pre,
+        sigma_theta_insert=effective_sigma_theta_insert,
     )

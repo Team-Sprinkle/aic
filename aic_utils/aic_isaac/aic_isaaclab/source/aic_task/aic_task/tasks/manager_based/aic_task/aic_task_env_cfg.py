@@ -723,6 +723,9 @@ class RewardsCfg:
             "consistency_body_name": None,
             "consistency_axial_std": 0.0,
             "consistency_lateral_sigma": None,
+            "semantic_progress_scale": 0.10,
+            "semantic_progress_weight": 0.0,
+            "semantic_loss_weight": 0.0,
             "target_position_offset": (0.093, 0.140, 0.020),
             "body_position_offset": (0.0, 0.0, 0.0),
             "body_orientation_offset": None,
@@ -744,6 +747,9 @@ class RewardsCfg:
             "consistency_body_name": None,
             "consistency_axial_std": 0.0,
             "consistency_lateral_sigma": None,
+            "semantic_progress_scale": 0.10,
+            "semantic_progress_weight": 0.0,
+            "semantic_loss_weight": 0.0,
             "target_position_offset": (0.093, 0.140, 0.020),
             "body_position_offset": (0.0, 0.0, 0.0),
             "body_orientation_offset": None,
@@ -787,6 +793,17 @@ class RewardsCfg:
             "corridor_weight": 1.50,
             "inside_alignment_weight": 0.20,
             "retreat_weight": 0.20,
+            "action_axis_gate": False,
+            "action_axis_source": "action_manager",
+            "action_lateral_sigma": 0.00005,
+            "action_lateral_sigma_far": 0.00030,
+            "action_radius_schedule_far_depth": -0.020,
+            "action_radius_schedule_near_depth": 0.0,
+            "action_forward_scale": 0.00005,
+            "action_min_forward": 0.0,
+            "consistency_body_name": None,
+            "consistency_axial_std": 0.0,
+            "consistency_lateral_sigma": None,
             "target_position_offset": (0.093, 0.140, 0.020),
             "body_position_offset": (0.0, 0.0, 0.0),
             "body_orientation_offset": None,
@@ -921,7 +938,9 @@ class AICTaskEnvCfg(ManagerBasedRLEnvCfg):
         #     asset_name="robot", joint_names=[".*"], scale=0.5, use_default_offset=True
         # )
 
-        # Arm action: differential IK (for teleoperation)
+        ik_body_name = os.environ.get("AIC_ISAAC_IK_BODY_NAME", "wrist_3_link").strip() or "wrist_3_link"
+        # Arm action: differential IK.  Default to the wrist for compatibility, but allow insertion
+        # diagnostics/training to control the semantic tip frame directly.
         self.actions.arm_action = DifferentialInverseKinematicsActionCfg(
             asset_name="robot",
             joint_names=[
@@ -932,7 +951,7 @@ class AICTaskEnvCfg(ManagerBasedRLEnvCfg):
                 "wrist_2_joint",
                 "wrist_3_joint",
             ],
-            body_name="wrist_3_link",
+            body_name=ik_body_name,
             controller=DifferentialIKControllerCfg(
                 command_type="pose",
                 use_relative_mode=True,

@@ -83,6 +83,16 @@ def _rel_to_container(path: Path) -> str:
         return str(path)
 
 
+def _checkpoint_for_row(row: dict[str, Any] | None) -> Path | None:
+    if not row:
+        return None
+    run_dir_raw = row.get("run_dir")
+    if not run_dir_raw:
+        return None
+    checkpoint = Path(str(run_dir_raw)) / "checkpoint_latest.pt"
+    return checkpoint if checkpoint.exists() else None
+
+
 def _repo_python() -> str:
     pixi_python = REPO / ".pixi/envs/default/bin/python"
     return str(pixi_python if pixi_python.exists() else sys.executable)
@@ -398,7 +408,9 @@ def _metrics_for_run(run_dir: Path | None) -> dict[str, Any]:
 
     s_vals: list[float] = []
     r_vals: list[float] = []
+    r_worst_vals: list[float] = []
     theta_vals: list[float] = []
+    theta_worst_vals: list[float] = []
     force_vals: list[float] = []
     reward_vals: list[float] = []
     guide_norms: list[float] = []
@@ -409,6 +421,21 @@ def _metrics_for_run(run_dir: Path | None) -> dict[str, Any]:
     consistency_axial_vals: list[float] = []
     consistency_lateral_vals: list[float] = []
     first = last = None
+
+    def geom_scalar(geom: dict[str, Any], stem: str) -> float | None:
+        # Prefer all-env mean metrics when num_envs > 1.  Fall back to env0 for
+        # older logs that predate the mean/by-env diagnostics.
+        return _float(geom.get(f"{stem}_mean", geom.get(f"{stem}_env0")))
+
+    def geom_worst(geom: dict[str, Any], stem: str) -> float | None:
+        vals = geom.get(f"{stem}_by_env")
+        if isinstance(vals, list):
+            parsed = [_float(v) for v in vals]
+            finite = [v for v in parsed if v is not None]
+            if finite:
+                return max(finite)
+        return geom_scalar(geom, stem)
+
     for row in rows:
         geom = row.get("pre_step_insertion_geometry") or {}
         phase = geom.get("cheatcode_phase_reward") or {}
@@ -416,17 +443,27 @@ def _metrics_for_run(run_dir: Path | None) -> dict[str, Any]:
             first = geom
         if geom:
             last = geom
-        for target, key in (
-            (s_vals, "signed_depth_m_env0"),
-            (r_vals, "lateral_error_m_env0"),
-            (theta_vals, "orientation_error_rad_env0"),
-            (consistency_axial_vals, "consistency_axial_error_m_env0"),
-            (consistency_lateral_vals, "consistency_lateral_error_m_env0"),
+        for target, stem in (
+            (s_vals, "signed_depth_m"),
+            (r_vals, "lateral_error_m"),
+            (theta_vals, "orientation_error_rad"),
+            (consistency_axial_vals, "consistency_axial_error_m"),
+            (consistency_lateral_vals, "consistency_lateral_error_m"),
         ):
-            v = _float(geom.get(key))
+            v = geom_scalar(geom, stem)
             if v is not None:
                 target.append(v)
-        if _float(phase.get("success_candidate_env0")) and float(phase["success_candidate_env0"]) >= 0.5:
+        r_worst = geom_worst(geom, "lateral_error_m")
+        theta_worst = geom_worst(geom, "orientation_error_rad")
+        if r_worst is not None:
+            r_worst_vals.append(r_worst)
+        if theta_worst is not None:
+            theta_worst_vals.append(theta_worst)
+        success_by_env = phase.get("success_candidate_by_env")
+        if isinstance(success_by_env, list):
+            if any((_float(v) or 0.0) >= 0.5 for v in success_by_env):
+                success_count += 1
+        elif _float(phase.get("success_candidate_env0")) and float(phase["success_candidate_env0"]) >= 0.5:
             success_count += 1
         for target, key in (
             (force_vals, "force_norm_mean"),
@@ -452,13 +489,17 @@ def _metrics_for_run(run_dir: Path | None) -> dict[str, Any]:
             return sum(vals) / len(vals)
         return vals[-1]
 
-    initial_r = _float((first or {}).get("lateral_error_m_env0"))
-    final_r = _float((last or {}).get("lateral_error_m_env0"))
-    initial_theta = _float((first or {}).get("orientation_error_rad_env0"))
-    final_theta = _float((last or {}).get("orientation_error_rad_env0"))
-    final_s = _float((last or {}).get("signed_depth_m_env0"))
+    initial_r = geom_scalar(first or {}, "lateral_error_m")
+    final_r = geom_scalar(last or {}, "lateral_error_m")
+    initial_theta = geom_scalar(first or {}, "orientation_error_rad")
+    final_theta = geom_scalar(last or {}, "orientation_error_rad")
+    final_s = geom_scalar(last or {}, "signed_depth_m")
     best_r = stat(r_vals, "min")
     best_theta = stat(theta_vals, "min")
+    final_r_worst = stat(r_worst_vals, "last")
+    final_theta_worst = stat(theta_worst_vals, "last")
+    best_r_worst = stat(r_worst_vals, "min")
+    best_theta_worst = stat(theta_worst_vals, "min")
     max_s = stat(s_vals, "max")
     bad_axial_r = summary.get("fraction_delta_s_positive_and_r_gt_0p0015")
     bad_axial_theta = summary.get("fraction_delta_s_positive_and_theta_gt_0p06")
@@ -475,10 +516,15 @@ def _metrics_for_run(run_dir: Path | None) -> dict[str, Any]:
         alignment_score -= final_theta * 8.0
     if best_r is not None:
         alignment_score -= best_r * 200.0
+    if final_r_worst is not None:
+        alignment_score -= final_r_worst * 500.0
     if best_theta is not None:
         alignment_score -= best_theta * 2.0
+    if final_theta_worst is not None:
+        alignment_score -= final_theta_worst * 4.0
     if initial_r is not None and final_r is not None:
         alignment_score += max(0.0, initial_r - final_r) * 800.0
+        alignment_score -= max(0.0, final_r - initial_r) * 1200.0
     if initial_theta is not None and final_theta is not None:
         alignment_score += max(0.0, initial_theta - final_theta) * 4.0
     alignment_score -= float(bad_axial_r or 0.0) * 5.0
@@ -504,9 +550,13 @@ def _metrics_for_run(run_dir: Path | None) -> dict[str, Any]:
         "initial_r_m": initial_r,
         "final_r_m": final_r,
         "best_r_m": best_r,
+        "final_r_worst_m": final_r_worst,
+        "best_r_worst_m": best_r_worst,
         "initial_theta_rad": initial_theta,
         "final_theta_rad": final_theta,
         "best_theta_rad": best_theta,
+        "final_theta_worst_rad": final_theta_worst,
+        "best_theta_worst_rad": best_theta_worst,
         "first_g_align_insert_gt_0p5": summary.get("first_step_g_align_insert_gt_0p5"),
         "first_s_gt_0": summary.get("first_step_s_gt_0"),
         "success_candidate_count": success_count,
@@ -617,6 +667,12 @@ def _base_inner_args(args: argparse.Namespace, exp: Experiment, run_name: str, o
         "--log_every", str(exp.args.get("log_every", 25)),
         "--max_wall_time_minutes", str(exp.args.get("max_wall_time_minutes", args.per_run_max_wall_time_minutes)),
     ]
+    if exp.args.get("checkpoint"):
+        cmd.extend(["--checkpoint", _rel_to_container(Path(str(exp.args["checkpoint"])))])
+    if int(exp.args.get("save_every_steps", 0)) > 0:
+        cmd.extend(["--save_every_steps", str(int(exp.args["save_every_steps"]))])
+    if int(exp.args.get("save_latest_every_steps", 0)) > 0:
+        cmd.extend(["--save_latest_every_steps", str(int(exp.args["save_latest_every_steps"]))])
     if exp.args.get("insertion_action_guard", False):
         cmd.append("--insertion_action_guard")
     else:
@@ -1015,18 +1071,41 @@ def _passed_curriculum_stage(row: dict[str, Any], stage: CurriculumStage) -> boo
     if int(_float(row.get("returncode")) or 0) != 0:
         return False
     best_r = _float(row.get("best_r_m"))
+    best_r_worst = _float(row.get("best_r_worst_m"))
     best_theta = _float(row.get("best_theta_rad"))
+    best_theta_worst = _float(row.get("best_theta_worst_rad"))
     initial_r = _float(row.get("initial_r_m"))
     final_r = _float(row.get("final_r_m"))
+    final_r_worst = _float(row.get("final_r_worst_m"))
+    final_theta = _float(row.get("final_theta_rad"))
+    final_theta_worst = _float(row.get("final_theta_worst_rad"))
     max_s = _float(row.get("max_s_m"))
     bad_r = _float(row.get("bad_delta_s_r_frac")) or 0.0
     force_clip = _float(row.get("force_clipped_fraction")) or 0.0
-    if best_r is None or best_theta is None or initial_r is None or final_r is None or max_s is None:
+    if (
+        best_r is None
+        or best_theta is None
+        or initial_r is None
+        or final_r is None
+        or final_theta is None
+        or max_s is None
+    ):
         return False
+    best_r_guard = best_r_worst if best_r_worst is not None else best_r
+    best_theta_guard = best_theta_worst if best_theta_worst is not None else best_theta
+    final_r_guard = final_r_worst if final_r_worst is not None else final_r
+    final_theta_guard = final_theta_worst if final_theta_worst is not None else final_theta
+    r_tolerance = stage.alignment_r_pass_m * 1.25
+    theta_tolerance = stage.alignment_theta_pass_rad + 0.01
+    r_improved_or_started_centered = final_r <= initial_r or initial_r <= stage.alignment_r_pass_m * 0.5
     base_ok = (
         best_r <= stage.alignment_r_pass_m
+        and best_r_guard <= r_tolerance
         and best_theta <= stage.alignment_theta_pass_rad
-        and final_r < initial_r
+        and best_theta_guard <= theta_tolerance
+        and final_r_guard <= r_tolerance
+        and final_theta_guard <= theta_tolerance
+        and r_improved_or_started_centered
         and force_clip < 0.5
     )
     if stage.key in {"stage_a", "stage_b"}:
@@ -1066,8 +1145,8 @@ def _write_report(
         "",
         "## Metric Table",
         "",
-        "| stage | name | score | final r mm | best r mm | final theta | max s mm | bad inward r frac | force clip frac | run |",
-        "| --- | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | --- |",
+        "| stage | name | score | final r mean mm | final r worst mm | best r mean mm | final theta mean | final theta worst | max s mm | bad inward r frac | force clip frac | run |",
+        "| --- | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | --- |",
     ]
     if stage_summaries:
         lines.extend(["", "## Curriculum Episode Configs", ""])
@@ -1096,7 +1175,8 @@ def _write_report(
 
         lines.append(
             f"| {row.get('stage')} | {row.get('name')} | {num('alignment_score', 2)} | "
-            f"{mm('final_r_m')} | {mm('best_r_m')} | {num('final_theta_rad')} | {mm('max_s_m')} | "
+            f"{mm('final_r_m')} | {mm('final_r_worst_m')} | {mm('best_r_m')} | "
+            f"{num('final_theta_rad')} | {num('final_theta_worst_rad')} | {mm('max_s_m')} | "
             f"{num('bad_delta_s_r_frac')} | {num('force_clipped_fraction')} | `{row.get('run_dir')}` |"
         )
     lines.extend(["", "## Stage Conclusions", ""])
@@ -1166,6 +1246,333 @@ def _stage_guided_args(stage: CurriculumStage, episodes_dir: Path) -> dict[str, 
         out["target_action_guide_preinsert_hover_depth"] = -0.004
     else:
         out["target_action_guide_preinsert_hover_depth"] = -0.003
+    return out
+
+
+def _smart4_candidates_for_stage(
+    stage: CurriculumStage,
+    episodes_dir: Path,
+    *,
+    parent: dict[str, Any] | None,
+    initial_checkpoint: Path | None,
+    steps: int,
+) -> list[Experiment]:
+    """Four hand-picked candidates per stage.
+
+    These are intentionally not a Cartesian grid.  They cover distinct control
+    hypotheses: conservative retention, balanced guide imitation, stronger
+    orientation correction, and weak gated insertion where appropriate.
+    """
+    base_parent_args = _args_from_parent(parent or {})
+    checkpoint = _checkpoint_for_row(parent) or initial_checkpoint
+    base = {
+        **_stage_guided_args(stage, episodes_dir),
+        **base_parent_args,
+        **_stage_reward_args(stage),
+        "episode_config_dir": episodes_dir,
+        "checkpoint": checkpoint,
+        "save_latest_every_steps": max(50, steps // 4),
+        "save_every_steps": 0,
+        "act_only_actor_mode": "act_direct",
+        "target_action_guide_mode": "cheatcode_transform",
+        "target_action_guide_rotation_sign": 1.0,
+        "target_action_guide_train_executed": True,
+        "update_every_steps": 4,
+        "warmup_steps": 50,
+        "actor_update_start_steps": 100 if stage.key in {"stage_b", "stage_c"} else 150,
+        "batch_size": 32,
+        "replay_capacity": 20000,
+        "diagnostics_every": 10,
+        "image_log_every": max(1, steps // 4),
+        "max_logged_image_steps": steps,
+    }
+
+    if stage.key == "stage_b":
+        specs = [
+            (
+                "balanced_align",
+                {
+                    "target_action_guide_weight": 0.05,
+                    "target_action_guide_collect_blend": 1.0,
+                    "target_action_guide_collect_steps": min(steps, 800),
+                    "target_action_guide_collect_decay": True,
+                    "target_action_guide_step_size": 0.0003,
+                    "target_action_guide_rotation_step_size": 0.005,
+                    "target_action_guide_lateral_switch_m": 0.0015,
+                    "target_action_guide_orientation_switch_rad": 0.06,
+                    "target_action_guide_rotate_while_lateral": False,
+                    "target_action_guide_axial_step_size": 0.0,
+                    "tcp_translation_action_clip": 0.0005,
+                    "tcp_rotation_action_clip": 0.005,
+                    "adapter_lr": 1e-5,
+                    "adapter_delta_clip": 0.003,
+                    "actor_q_weight": 0.0,
+                },
+            ),
+            (
+                "rotate_while_align",
+                {
+                    "target_action_guide_weight": 0.05,
+                    "target_action_guide_collect_blend": 1.0,
+                    "target_action_guide_collect_steps": min(steps, 800),
+                    "target_action_guide_collect_decay": True,
+                    "target_action_guide_step_size": 0.0003,
+                    "target_action_guide_rotation_step_size": 0.005,
+                    "target_action_guide_lateral_switch_m": 0.0015,
+                    "target_action_guide_orientation_switch_rad": 0.08,
+                    "target_action_guide_rotate_while_lateral": True,
+                    "target_action_guide_axial_step_size": 0.0,
+                    "tcp_translation_action_clip": 0.0005,
+                    "tcp_rotation_action_clip": 0.010,
+                    "adapter_lr": 1e-5,
+                    "adapter_delta_clip": 0.003,
+                    "actor_q_weight": 0.0,
+                },
+            ),
+            (
+                "conservative_align",
+                {
+                    "target_action_guide_weight": 0.10,
+                    "target_action_guide_collect_blend": 1.0,
+                    "target_action_guide_collect_steps": min(steps, 1000),
+                    "target_action_guide_collect_decay": False,
+                    "target_action_guide_step_size": 0.0002,
+                    "target_action_guide_rotation_step_size": 0.003,
+                    "target_action_guide_lateral_switch_m": 0.0010,
+                    "target_action_guide_orientation_switch_rad": 0.06,
+                    "target_action_guide_rotate_while_lateral": True,
+                    "target_action_guide_axial_step_size": 0.0,
+                    "tcp_translation_action_clip": 0.0003,
+                    "tcp_rotation_action_clip": 0.005,
+                    "adapter_lr": 3e-6,
+                    "adapter_delta_clip": 0.002,
+                    "actor_q_weight": 0.0,
+                },
+            ),
+            (
+                "weak_approach_hover",
+                {
+                    "target_action_guide_weight": 0.05,
+                    "target_action_guide_collect_blend": 1.0,
+                    "target_action_guide_collect_steps": min(steps, 800),
+                    "target_action_guide_collect_decay": True,
+                    "target_action_guide_step_size": 0.0003,
+                    "target_action_guide_rotation_step_size": 0.005,
+                    "target_action_guide_lateral_switch_m": 0.0015,
+                    "target_action_guide_orientation_switch_rad": 0.06,
+                    "target_action_guide_rotate_while_lateral": True,
+                    "target_action_guide_axial_step_size": 0.00005,
+                    "tcp_translation_action_clip": 0.0005,
+                    "tcp_rotation_action_clip": 0.005,
+                    "adapter_lr": 1e-5,
+                    "adapter_delta_clip": 0.003,
+                    "actor_q_weight": 0.02,
+                    "actor_update_start_steps": 200,
+                    "target_reward_cheatcode_axial_progress_weight": 0.02,
+                },
+            ),
+        ]
+    elif stage.key == "stage_c":
+        specs = [
+            (
+                "weak_insert_conservative",
+                {
+                    "target_action_guide_weight": 0.08,
+                    "target_action_guide_collect_blend": 1.0,
+                    "target_action_guide_collect_steps": min(steps, 1000),
+                    "target_action_guide_collect_decay": True,
+                    "target_action_guide_step_size": 0.0002,
+                    "target_action_guide_rotation_step_size": 0.004,
+                    "target_action_guide_lateral_switch_m": 0.0010,
+                    "target_action_guide_orientation_switch_rad": 0.06,
+                    "target_action_guide_rotate_while_lateral": True,
+                    "target_action_guide_axial_step_size": 0.00005,
+                    "tcp_translation_action_clip": 0.0003,
+                    "tcp_rotation_action_clip": 0.005,
+                    "adapter_lr": 3e-6,
+                    "adapter_delta_clip": 0.002,
+                    "actor_q_weight": 0.02,
+                    "target_reward_cheatcode_axial_progress_weight": 0.10,
+                    "target_reward_cheatcode_corridor_weight": 0.25,
+                },
+            ),
+            (
+                "weak_insert_balanced",
+                {
+                    "target_action_guide_weight": 0.05,
+                    "target_action_guide_collect_blend": 1.0,
+                    "target_action_guide_collect_steps": min(steps, 800),
+                    "target_action_guide_collect_decay": True,
+                    "target_action_guide_step_size": 0.0003,
+                    "target_action_guide_rotation_step_size": 0.005,
+                    "target_action_guide_lateral_switch_m": 0.0015,
+                    "target_action_guide_orientation_switch_rad": 0.06,
+                    "target_action_guide_rotate_while_lateral": True,
+                    "target_action_guide_axial_step_size": 0.00010,
+                    "tcp_translation_action_clip": 0.0005,
+                    "tcp_rotation_action_clip": 0.005,
+                    "adapter_lr": 1e-5,
+                    "adapter_delta_clip": 0.003,
+                    "actor_q_weight": 0.02,
+                    "target_reward_cheatcode_axial_progress_weight": 0.10,
+                    "target_reward_cheatcode_corridor_weight": 0.25,
+                },
+            ),
+            (
+                "medium_corridor",
+                {
+                    "target_action_guide_weight": 0.05,
+                    "target_action_guide_collect_blend": 1.0,
+                    "target_action_guide_collect_steps": min(steps, 800),
+                    "target_action_guide_collect_decay": True,
+                    "target_action_guide_step_size": 0.0003,
+                    "target_action_guide_rotation_step_size": 0.005,
+                    "target_action_guide_lateral_switch_m": 0.0010,
+                    "target_action_guide_orientation_switch_rad": 0.05,
+                    "target_action_guide_rotate_while_lateral": True,
+                    "target_action_guide_axial_step_size": 0.00010,
+                    "tcp_translation_action_clip": 0.0003,
+                    "tcp_rotation_action_clip": 0.005,
+                    "adapter_lr": 3e-6,
+                    "adapter_delta_clip": 0.002,
+                    "actor_q_weight": 0.05,
+                    "target_reward_cheatcode_axial_progress_weight": 0.15,
+                    "target_reward_cheatcode_corridor_weight": 0.50,
+                },
+            ),
+            (
+                "guarded_insert",
+                {
+                    "target_action_guide_weight": 0.08,
+                    "target_action_guide_collect_blend": 1.0,
+                    "target_action_guide_collect_steps": min(steps, 1000),
+                    "target_action_guide_collect_decay": True,
+                    "target_action_guide_step_size": 0.0002,
+                    "target_action_guide_rotation_step_size": 0.005,
+                    "target_action_guide_lateral_switch_m": 0.0010,
+                    "target_action_guide_orientation_switch_rad": 0.05,
+                    "target_action_guide_rotate_while_lateral": True,
+                    "target_action_guide_axial_step_size": 0.00005,
+                    "tcp_translation_action_clip": 0.0003,
+                    "tcp_rotation_action_clip": 0.005,
+                    "adapter_lr": 3e-6,
+                    "adapter_delta_clip": 0.002,
+                    "actor_q_weight": 0.02,
+                    "insertion_action_guard": True,
+                    "target_reward_cheatcode_axial_progress_weight": 0.10,
+                    "target_reward_cheatcode_corridor_weight": 0.25,
+                },
+            ),
+        ]
+    else:
+        specs = [
+            (
+                "final_slow_safe",
+                {
+                    "target_action_guide_weight": 0.08,
+                    "target_action_guide_collect_blend": 1.0,
+                    "target_action_guide_collect_steps": min(steps, 1200),
+                    "target_action_guide_collect_decay": True,
+                    "target_action_guide_step_size": 0.00015,
+                    "target_action_guide_rotation_step_size": 0.004,
+                    "target_action_guide_lateral_switch_m": 0.0010,
+                    "target_action_guide_orientation_switch_rad": 0.05,
+                    "target_action_guide_rotate_while_lateral": True,
+                    "target_action_guide_axial_step_size": 0.00005,
+                    "tcp_translation_action_clip": 0.0003,
+                    "tcp_rotation_action_clip": 0.005,
+                    "adapter_lr": 3e-6,
+                    "adapter_delta_clip": 0.002,
+                    "actor_q_weight": 0.02,
+                    "target_reward_cheatcode_axial_progress_weight": 0.20,
+                    "target_reward_cheatcode_corridor_weight": 0.75,
+                },
+            ),
+            (
+                "final_balanced",
+                {
+                    "target_action_guide_weight": 0.05,
+                    "target_action_guide_collect_blend": 1.0,
+                    "target_action_guide_collect_steps": min(steps, 1000),
+                    "target_action_guide_collect_decay": True,
+                    "target_action_guide_step_size": 0.0002,
+                    "target_action_guide_rotation_step_size": 0.005,
+                    "target_action_guide_lateral_switch_m": 0.0010,
+                    "target_action_guide_orientation_switch_rad": 0.05,
+                    "target_action_guide_rotate_while_lateral": True,
+                    "target_action_guide_axial_step_size": 0.00010,
+                    "tcp_translation_action_clip": 0.0003,
+                    "tcp_rotation_action_clip": 0.005,
+                    "adapter_lr": 3e-6,
+                    "adapter_delta_clip": 0.002,
+                    "actor_q_weight": 0.05,
+                    "target_reward_cheatcode_axial_progress_weight": 0.25,
+                    "target_reward_cheatcode_corridor_weight": 1.00,
+                },
+            ),
+            (
+                "final_strong_corridor",
+                {
+                    "target_action_guide_weight": 0.05,
+                    "target_action_guide_collect_blend": 1.0,
+                    "target_action_guide_collect_steps": min(steps, 1000),
+                    "target_action_guide_collect_decay": True,
+                    "target_action_guide_step_size": 0.0002,
+                    "target_action_guide_rotation_step_size": 0.005,
+                    "target_action_guide_lateral_switch_m": 0.0008,
+                    "target_action_guide_orientation_switch_rad": 0.04,
+                    "target_action_guide_rotate_while_lateral": True,
+                    "target_action_guide_axial_step_size": 0.00010,
+                    "tcp_translation_action_clip": 0.0003,
+                    "tcp_rotation_action_clip": 0.005,
+                    "adapter_lr": 3e-6,
+                    "adapter_delta_clip": 0.002,
+                    "actor_q_weight": 0.03,
+                    "target_reward_cheatcode_axial_progress_weight": 0.25,
+                    "target_reward_cheatcode_corridor_weight": 1.50,
+                },
+            ),
+            (
+                "final_guarded",
+                {
+                    "target_action_guide_weight": 0.10,
+                    "target_action_guide_collect_blend": 1.0,
+                    "target_action_guide_collect_steps": min(steps, 1500),
+                    "target_action_guide_collect_decay": True,
+                    "target_action_guide_step_size": 0.00015,
+                    "target_action_guide_rotation_step_size": 0.004,
+                    "target_action_guide_lateral_switch_m": 0.0008,
+                    "target_action_guide_orientation_switch_rad": 0.04,
+                    "target_action_guide_rotate_while_lateral": True,
+                    "target_action_guide_axial_step_size": 0.00005,
+                    "tcp_translation_action_clip": 0.0003,
+                    "tcp_rotation_action_clip": 0.005,
+                    "adapter_lr": 3e-6,
+                    "adapter_delta_clip": 0.002,
+                    "actor_q_weight": 0.02,
+                    "insertion_action_guard": True,
+                    "target_reward_cheatcode_axial_progress_weight": 0.20,
+                    "target_reward_cheatcode_corridor_weight": 1.00,
+                },
+            ),
+        ]
+
+    out: list[Experiment] = []
+    for idx, (name, overrides) in enumerate(specs, start=1):
+        exp_args = {
+            **base,
+            **overrides,
+            "seed": 700 + {"stage_b": 0, "stage_c": 100, "stage_d": 200}.get(stage.key, 300) + idx,
+            "target_reward_cheatcode_inside_alignment_weight": overrides.get(
+                "target_reward_cheatcode_inside_alignment_weight",
+                stage.inside_weight,
+            ),
+            "target_reward_cheatcode_retreat_weight": overrides.get(
+                "target_reward_cheatcode_retreat_weight",
+                stage.retreat_weight,
+            ),
+        }
+        out.append(Experiment(stage.key, f"smart4_{idx}_{name}", steps, steps, exp_args, parent=str((parent or {}).get("run_dir") or "")))
     return out
 
 
@@ -1320,6 +1727,74 @@ def _run_staged_curriculum(
     return rows, stage_summaries
 
 
+def _run_smart4_curriculum(
+    args: argparse.Namespace,
+    *,
+    run_output: Path,
+    log_dir: Path,
+    deadline: float,
+) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
+    stages = _curriculum_stage_specs(args)
+    start_idx = next((i for i, s in enumerate(stages) if s.key == args.start_stage), 0)
+    stop_idx = next((i for i, s in enumerate(stages) if s.key == args.stop_after_stage), len(stages) - 1)
+    selected_stages = stages[start_idx : stop_idx + 1]
+
+    stage_summaries: list[dict[str, Any]] = []
+    stage_dirs: dict[str, Path] = {}
+    for stage in selected_stages:
+        summary = _materialize_curriculum_stage(args, stage)
+        stage_summaries.append(summary)
+        stage_dirs[stage.key] = Path(str(summary["episodes_dir"]))
+        print(
+            f"[pipeline] {stage.key} episodes {summary['episodes_dir']} "
+            f"s={summary.get('s_start_min_m')}..{summary.get('s_start_max_m')} "
+            f"r={summary.get('r_start_min_m')}..{summary.get('r_start_max_m')}",
+            flush=True,
+        )
+
+    rows: list[dict[str, Any]] = []
+    parent: dict[str, Any] | None = None
+    initial_checkpoint = args.initial_checkpoint.resolve() if args.initial_checkpoint else None
+    for stage in selected_stages:
+        if time.monotonic() >= deadline:
+            break
+        episodes_dir = stage_dirs[stage.key]
+        print(f"[pipeline] {stage.key} smart4 hyperparameter candidates", flush=True)
+        candidates = _smart4_candidates_for_stage(
+            stage,
+            episodes_dir,
+            parent=parent,
+            initial_checkpoint=initial_checkpoint,
+            steps=int(args.smart4_steps),
+        )
+        stage_rows = _run_wave(
+            args,
+            candidates,
+            output_dir=run_output,
+            log_dir=log_dir,
+            stage_deadline=min(deadline, time.monotonic() + (float(args.per_run_max_wall_time_minutes) + 5.0) * 60.0),
+        )
+        rows.extend(stage_rows)
+        _write_csv(args.output_root / f"metrics_after_{stage.key}_smart4.csv", rows)
+        ranked = sorted(stage_rows, key=lambda r: float(r.get("insertion_score" if stage.key in {"stage_c", "stage_d"} else "alignment_score") or -1e9), reverse=True)
+        passed = [r for r in ranked if _passed_curriculum_stage(r, stage)]
+        parent = (passed or ranked or [None])[0]
+        if parent:
+            checkpoint = _checkpoint_for_row(parent)
+            print(
+                f"[pipeline] selected {stage.key}/{parent.get('name')} "
+                f"score={parent.get('alignment_score')} r={parent.get('final_r_m')} "
+                f"theta={parent.get('final_theta_rad')} checkpoint={checkpoint}",
+                flush=True,
+            )
+            initial_checkpoint = checkpoint
+        if not parent or not initial_checkpoint:
+            print(f"[pipeline] no checkpoint available after {stage.key}; stopping smart4 curriculum", flush=True)
+            break
+
+    return rows, stage_summaries
+
+
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--act-torchscript", type=Path, default=DEFAULT_ACT)
@@ -1337,6 +1812,11 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--container-name", default="isaac-lab-base")
     parser.add_argument("--skip-preflight", action="store_true")
     parser.add_argument("--curriculum-mode", choices=["single", "staged"], default="single")
+    parser.add_argument("--curriculum-strategy", choices=["successive_halving", "smart4"], default="successive_halving")
+    parser.add_argument("--start-stage", choices=["stage_a", "stage_b", "stage_c", "stage_d"], default="stage_a")
+    parser.add_argument("--stop-after-stage", choices=["stage_a", "stage_b", "stage_c", "stage_d"], default="stage_d")
+    parser.add_argument("--initial-checkpoint", type=Path, default=None)
+    parser.add_argument("--smart4-steps", type=int, default=1500)
     parser.add_argument("--stage-a-axial-m", type=float, default=0.020)
     parser.add_argument("--stage-a-lateral-min-m", type=float, default=0.004)
     parser.add_argument("--stage-a-lateral-max-m", type=float, default=0.008)
@@ -1400,7 +1880,10 @@ def main() -> int:
             summaries = [_materialize_curriculum_stage(args, stage) for stage in _curriculum_stage_specs(args)]
             print(json.dumps(summaries, indent=2, default=str))
             return 0
-        rows, stage_summaries = _run_staged_curriculum(args, run_output=run_output, log_dir=log_dir, deadline=deadline)
+        if args.curriculum_strategy == "smart4":
+            rows, stage_summaries = _run_smart4_curriculum(args, run_output=run_output, log_dir=log_dir, deadline=deadline)
+        else:
+            rows, stage_summaries = _run_staged_curriculum(args, run_output=run_output, log_dir=log_dir, deadline=deadline)
         _write_csv(args.output_root / "metrics_all.csv", rows)
         _write_report(report_path, args, rows, stage_summaries=stage_summaries)
         print(f"[pipeline] wrote {report_path}", flush=True)

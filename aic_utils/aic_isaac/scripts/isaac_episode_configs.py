@@ -273,10 +273,85 @@ def _sample_context(request: dict[str, Any], rng: random.Random) -> dict[str, An
     raise ValueError(f"Unsupported task_family: {family}")
 
 
+def _range_tuple(value: Any, default: tuple[float, float] = (0.0, 0.0)) -> tuple[float, float]:
+    if value is None:
+        return default
+    if isinstance(value, (int, float)):
+        v = float(value)
+        return (-v, v)
+    if isinstance(value, (list, tuple)) and len(value) == 2:
+        return (float(value[0]), float(value[1]))
+    raise ValueError(f"Expected scalar or [lo, hi] range, got {value!r}")
+
+
+def _sample_axis_offset(pose_range: dict[str, Any], snap_step: dict[str, Any], axis: str, rng: random.Random) -> float:
+    lo, hi = _range_tuple(pose_range.get(axis), (0.0, 0.0))
+    value = rng.uniform(lo, hi)
+    step = float((snap_step or {}).get(axis, 0.0) or 0.0)
+    if step > 0.0:
+        value = round(value / step) * step
+        value = min(max(value, lo), hi)
+    return value
+
+
+def _sample_board_position(request: dict[str, Any], rng: random.Random) -> tuple[float, float, float]:
+    board_cfg = ((request.get("scene") or {}).get("task_board") or {})
+    raw_base = board_cfg.get("position_world", DEFAULT_BOARD_POS)
+    if not isinstance(raw_base, (list, tuple)) or len(raw_base) != 3:
+        raise ValueError("scene.task_board.position_world must be a 3-value list")
+    board_pos = [float(raw_base[0]), float(raw_base[1]), float(raw_base[2])]
+    pose_range = board_cfg.get("position_range") or board_cfg.get("pose_range") or {}
+    if pose_range and not isinstance(pose_range, dict):
+        raise ValueError("scene.task_board.position_range must be a mapping")
+    for axis_idx, axis in enumerate(("x", "y", "z")):
+        board_pos[axis_idx] += _sample_axis_offset(pose_range, {}, axis, rng)
+    return (board_pos[0], board_pos[1], board_pos[2])
+
+
+def _episode_parts(
+    request: dict[str, Any],
+    context: dict[str, Any],
+    rng: random.Random,
+) -> list[dict[str, Any]]:
+    """Return per-episode part offsets with materialized card/position variation.
+
+    Episode-level target geometry is generated from these same offsets, so the
+    reward target does not become stale when the scene is varied.
+    """
+    scene_parts = ((request.get("scene") or {}).get("parts") or {})
+    if scene_parts and not isinstance(scene_parts, dict):
+        raise ValueError("scene.parts must be a mapping keyed by scene_name")
+    parts: list[dict[str, Any]] = []
+    for name in ("sc_port", "sc_port_2", "nic_card"):
+        base = dict(DEFAULT_PARTS[name])
+        override = scene_parts.get(name, {}) if isinstance(scene_parts, dict) else {}
+        if override and not isinstance(override, dict):
+            raise ValueError(f"scene.parts.{name} must be a mapping")
+        pose_range = dict(override.get("pose_range") or {})
+        snap_step = dict(override.get("snap_step") or base.get("snap_step") or {})
+        raw_offset = override.get("offset", base["offset"])
+        if not isinstance(raw_offset, (list, tuple)) or len(raw_offset) != 3:
+            raise ValueError(f"scene.parts.{name}.offset must be a 3-value list")
+        offset = [float(raw_offset[0]), float(raw_offset[1]), float(raw_offset[2])]
+        if name == "nic_card" and context.get("task_family") == "sfp_to_nic":
+            # Isaac has one NIC-card asset.  Materialize target_card_index as a
+            # snapped card-position offset so the task vector, visible card, and
+            # semantic entrance/target metadata all point at the same card.
+            offset[1] += 0.04 * int(context.get("target_card_index", 0))
+        for axis_idx, axis in enumerate(("x", "y", "z")):
+            offset[axis_idx] += _sample_axis_offset(pose_range, snap_step, axis, rng)
+        base["offset"] = tuple(offset)
+        base["pose_range"] = {}
+        base["snap_step"] = {}
+        parts.append(base)
+    return parts
+
+
 def _target_spec(
     context: dict[str, Any],
     board_pos: tuple[float, float, float],
     request: dict[str, Any] | None = None,
+    parts_by_name: dict[str, dict[str, Any]] | None = None,
 ) -> dict[str, Any]:
     scene = (request or {}).get("scene") or {}
     tip_cfg = scene.get("end_effector_tip") or {}
@@ -295,7 +370,7 @@ def _target_spec(
     if context["task_family"] == "sfp_to_nic":
         target_cfg = scene.get("target") or {}
         entrance_axis_offset_m = float(target_cfg.get("entrance_axis_offset_m", 0.0))
-        part = DEFAULT_PARTS["nic_card"]
+        part = (parts_by_name or DEFAULT_PARTS)["nic_card"]
         target_port_index = int(context["target_port_index"])
         target_offset = SFP_PORT_SEATED_TARGET_ROOT_LOCAL[target_port_index]
         root_position = _vadd(board_pos, part["offset"])
@@ -335,7 +410,7 @@ def _target_spec(
             "insertion_axis_world": _round3(entrance_axis),
         }
     scene_name = "sc_port" if int(context["target_port_index"]) == 0 else "sc_port_2"
-    part = DEFAULT_PARTS[scene_name]
+    part = (parts_by_name or DEFAULT_PARTS)[scene_name]
     position = _vadd(_vadd(board_pos, part["offset"]), SC_PORT_TARGET_LOCAL)
     tip_body = _tip_body("sc_tip_link")
     tip_offset = _tip_offset((0.0, 0.0, 0.0))
@@ -356,6 +431,7 @@ def _apply_start_near_gate(
     request: dict[str, Any],
     context: dict[str, Any],
     board_pos: tuple[float, float, float],
+    parts_by_name: dict[str, dict[str, Any]],
     rng: random.Random,
 ) -> tuple[tuple[float, float, float], dict[str, Any] | None]:
     """Compute near-gate body-start metadata without moving the target scene.
@@ -367,7 +443,7 @@ def _apply_start_near_gate(
     start = (request.get("scene") or {}).get("start_near_gate")
     if not isinstance(start, dict):
         return board_pos, None
-    target = _target_spec(context, board_pos, request)
+    target = _target_spec(context, board_pos, request, parts_by_name)
     gate_position = tuple(
         float(v)
         for v in (target.get("entrance_pose_world") or target["target_pose_world"])["position"]
@@ -484,14 +560,16 @@ def _apply_start_near_gate(
 
 def _episode_config(request: dict[str, Any], index: int, rng: random.Random) -> dict[str, Any]:
     context = _sample_context(request, rng)
+    parts = _episode_parts(request, context, rng)
+    parts_by_name = {str(part["scene_name"]): part for part in parts}
     board_pos, start_metadata = _apply_start_near_gate(
         request=request,
         context=context,
-        board_pos=DEFAULT_BOARD_POS,
+        board_pos=_sample_board_position(request, rng),
+        parts_by_name=parts_by_name,
         rng=rng,
     )
-    target = _target_spec(context, board_pos, request)
-    parts = [dict(DEFAULT_PARTS[name]) for name in ("sc_port", "sc_port_2", "nic_card")]
+    target = _target_spec(context, board_pos, request, parts_by_name)
     task_description = (
         f"Insert SFP cable into NIC card {context['target_card_index']} port {context['target_port_index']}"
         if context["task_family"] == "sfp_to_nic"
