@@ -897,6 +897,9 @@ class AICTaskEnvCfg(ManagerBasedRLEnvCfg):
         solver_velocity_iterations = os.environ.get("AIC_ISAAC_SOLVER_VELOCITY_ITERATIONS")
         if solver_velocity_iterations:
             self.scene.robot.spawn.articulation_props.solver_velocity_iteration_count = int(solver_velocity_iterations)
+        max_depenetration_velocity = os.environ.get("AIC_ISAAC_ROBOT_MAX_DEPENETRATION_VELOCITY")
+        if max_depenetration_velocity:
+            self.scene.robot.spawn.rigid_props.max_depenetration_velocity = float(max_depenetration_velocity)
         actuator_stiffness = os.environ.get("AIC_ISAAC_ARM_ACTUATOR_STIFFNESS")
         if actuator_stiffness:
             self.scene.robot.actuators["arm"].stiffness = float(actuator_stiffness)
