@@ -728,6 +728,25 @@ python aic_utils/lerobot_robot_aic/scripts/inspect_dataset_schema.py \
 See [docs/act_serl_warmstart_pipeline.md](../../docs/act_serl_warmstart_pipeline.md)
 for the complete smoke workflow and current non-goals.
 
+For training SmolVLA: 
+```bash
+pixi run lerobot-train\
+ --dataset.repo_id=jskim/sft2nic_target_card2_port1_randomized\
+ --policy.path=lerobot/smolvla_base\
+ --output_dir=outputs/train/smolvla-sfp2nic_card2_port1\
+ --job_name=smolval-sfp2nic_card2_port1\
+ --policy.device=cuda\
+ --wandb.enable=true\
+ --policy.repo_id=jskim/smolvla_sfp2nic_card2_port1\
+ --num_workers=1\
+ --batch_size=8\
+ --policy.optimizer_lr=1e-4\
+ --steps=50000\
+ --dataset.video_backend=pyav\
+ --save_freq 5000\
+ --rename_map='{"observation.images.center_camera": "observation.images.camera1", "observation.images.left_camera": "observation.images.camera2", "observation.images.right_camera": "observation.images.camera3"}'
+```
+
 ### Merging Lerobot Datasets by score (assuming you have associated score files for each of the datasets, as outlined in this README's "Recording Autonomous Policy Rollouts" section)
 
 pixi run python aic_utils/lerobot_robot_aic/scripts/filter_merge_lerobot_by_score.py\
