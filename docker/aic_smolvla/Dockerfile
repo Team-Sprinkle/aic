@@ -18,7 +18,8 @@ COPY aic_example_policies/aic_example_policies/ros/RunSmolVLA.py /ws_aic/src/aic
 COPY aic_model /ws_aic/src/aic/aic_model
 COPY aic_interfaces /ws_aic/src/aic/aic_interfaces
 COPY aic_utils /ws_aic/src/aic/aic_utils
-COPY pixi.toml pixi.lock /ws_aic/src/aic/
+COPY docker/aic_smolvla/pixi.toml /ws_aic/src/aic/pixi.toml
+COPY robostack_mapping.json /ws_aic/src/aic/robostack_mapping.json
 COPY pixi_env_setup.sh /ws_aic/src/aic/
 
 # 3. Add Trained Model Artifacts (The "Stable Path" strategy)
@@ -36,7 +37,7 @@ RUN sed -i "s#HuggingFaceTB/SmolVLM2-500M-Video-Instruct#${AIC_SMOLVLA_VLM_PATH}
 # 4. Install Python Dependencies via Pixi
 SHELL ["/bin/bash", "-c"]
 RUN --mount=type=cache,target=/root/.cache/rattler/cache --mount=type=cache,target=/ws_aic/src/aic/.pixi/build \
-    cd /ws_aic/src/aic && pixi install --locked -vvv
+    cd /ws_aic/src/aic && pixi install
 
 # 5. Set SmolVLA Runtime Environment Variables
 ENV HF_HUB_OFFLINE=1
