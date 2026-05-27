@@ -9,7 +9,8 @@ COPY aic_example_policies /ws_aic/src/aic/aic_example_policies
 COPY aic_model /ws_aic/src/aic/aic_model
 COPY aic_interfaces /ws_aic/src/aic/aic_interfaces
 COPY aic_utils /ws_aic/src/aic/aic_utils
-COPY pixi.toml pixi.lock /ws_aic/src/aic/
+COPY docker/aic_transport/pixi.toml /ws_aic/src/aic/pixi.toml
+COPY robostack_mapping.json /ws_aic/src/aic/robostack_mapping.json
 COPY pixi_env_setup.sh /ws_aic/src/aic/
 
 # Add other dependencies
