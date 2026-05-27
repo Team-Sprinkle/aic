@@ -42,6 +42,40 @@ AIC_PARTS_DIR = os.path.join(AIC_ASSET_DIR, "assets")
 
 EXTENSION_PATH = os.path.dirname(os.path.abspath(__file__))
 
+_FIXED_SFP2NIC_SCENE_PROFILE = {
+    # Isaac-native baseline profile. Gazebo trial values should be converted
+    # through an explicit frame/parity mapping (see eval script), not copied
+    # directly into these world-frame coordinates.
+    "robot_base_pos": (-0.18, -0.122, 0.0),
+    "robot_base_rot": (0.0, 0.0, 0.0, 1.0),
+    "robot_home_joint_pos": {
+        "shoulder_pan_joint": 0.1597,
+        "shoulder_lift_joint": -1.3542,
+        "elbow_joint": -1.6648,
+        "wrist_1_joint": -1.6933,
+        "wrist_2_joint": 1.5710,
+        "wrist_3_joint": 1.4110,
+    },
+    "task_board_pos": (0.2837, 0.229, 0.0),
+    "task_board_rot_wxyz": (1.0, 0.0, 0.0, 0.0),
+    "nic_card_pos": (0.25135, 0.25229, 0.0743),
+    "nic_card_rot_wxyz": (0.0, 0.0, -0.7068252, 0.7073883),
+    "sc_port_pos": (0.2904, 0.1928, 0.005),
+    "sc_port_2_pos": (0.2913, 0.1507, 0.005),
+}
+
+
+def _apply_fixed_scene_profile(env_cfg: "AICTaskEnvCfg") -> None:
+    env_cfg.scene.robot.init_state.pos = _FIXED_SFP2NIC_SCENE_PROFILE["robot_base_pos"]
+    env_cfg.scene.robot.init_state.rot = _FIXED_SFP2NIC_SCENE_PROFILE["robot_base_rot"]
+    env_cfg.scene.robot.init_state.joint_pos = _FIXED_SFP2NIC_SCENE_PROFILE["robot_home_joint_pos"]
+    env_cfg.scene.task_board.init_state.pos = _FIXED_SFP2NIC_SCENE_PROFILE["task_board_pos"]
+    env_cfg.scene.task_board.init_state.rot = _FIXED_SFP2NIC_SCENE_PROFILE["task_board_rot_wxyz"]
+    env_cfg.scene.sc_port.init_state.pos = _FIXED_SFP2NIC_SCENE_PROFILE["sc_port_pos"]
+    env_cfg.scene.sc_port_2.init_state.pos = _FIXED_SFP2NIC_SCENE_PROFILE["sc_port_2_pos"]
+    env_cfg.scene.nic_card.init_state.pos = _FIXED_SFP2NIC_SCENE_PROFILE["nic_card_pos"]
+    env_cfg.scene.nic_card.init_state.rot = _FIXED_SFP2NIC_SCENE_PROFILE["nic_card_rot_wxyz"]
+
 ##
 # Scene definition
 ##
@@ -68,16 +102,9 @@ class AICTaskSceneCfg(InteractiveSceneCfg):
             activate_contact_sensors=False,
         ),
         init_state=ArticulationCfg.InitialStateCfg(
-            pos=(-0.18, -0.122, 0),
-            rot=(0.0, 0.0, 0.0, 1.0),
-            joint_pos={
-                "shoulder_pan_joint": 0.1597,
-                "shoulder_lift_joint": -1.3542,
-                "elbow_joint": -1.6648,
-                "wrist_1_joint": -1.6933,
-                "wrist_2_joint": 1.5710,
-                "wrist_3_joint": 1.4110,
-            },
+            pos=_FIXED_SFP2NIC_SCENE_PROFILE["robot_base_pos"],
+            rot=_FIXED_SFP2NIC_SCENE_PROFILE["robot_base_rot"],
+            joint_pos=_FIXED_SFP2NIC_SCENE_PROFILE["robot_home_joint_pos"],
         ),
         actuators={
             "arm": ImplicitActuatorCfg(
@@ -152,8 +179,8 @@ class AICTaskSceneCfg(InteractiveSceneCfg):
             ),
         ),
         init_state=RigidObjectCfg.InitialStateCfg(
-            pos=(0.2837, 0.229, 0.0),
-            # rot=(0.70686, -0.01851, 0.70686, 0.01851),
+            pos=_FIXED_SFP2NIC_SCENE_PROFILE["task_board_pos"],
+            rot=_FIXED_SFP2NIC_SCENE_PROFILE["task_board_rot_wxyz"],
         ),
     )
 
@@ -166,7 +193,7 @@ class AICTaskSceneCfg(InteractiveSceneCfg):
             ),
         ),
         init_state=RigidObjectCfg.InitialStateCfg(
-            pos=(0.2904, 0.1928, 0.005),
+            pos=_FIXED_SFP2NIC_SCENE_PROFILE["sc_port_pos"],
             rot=(0.73136, 0.0, 0.0, -0.682),
         ),
     )
@@ -180,7 +207,7 @@ class AICTaskSceneCfg(InteractiveSceneCfg):
             ),
         ),
         init_state=RigidObjectCfg.InitialStateCfg(
-            pos=(0.2913, 0.1507, 0.005),
+            pos=_FIXED_SFP2NIC_SCENE_PROFILE["sc_port_2_pos"],
             rot=(0.73136, 0.0, 0.0, -0.682),
         ),
     )
@@ -195,8 +222,8 @@ class AICTaskSceneCfg(InteractiveSceneCfg):
             ),
         ),
         init_state=RigidObjectCfg.InitialStateCfg(
-            pos=(0.25135, 0.25229, 0.0743),
-            rot=(0.0, 0.0, -0.7068252, 0.7073883),
+            pos=_FIXED_SFP2NIC_SCENE_PROFILE["nic_card_pos"],
+            rot=_FIXED_SFP2NIC_SCENE_PROFILE["nic_card_rot_wxyz"],
         ),
     )
 
@@ -682,128 +709,6 @@ class AICTaskEnvCfg(ManagerBasedRLEnvCfg):
             },
         )
 
-    def _apply_randomization_profile(self) -> None:
-        profile = os.environ.get("AIC_ISAAC_RANDOMIZATION_PROFILE", "light").lower()
-        if profile not in {"none", "light", "heavy"}:
-            raise ValueError(
-                "AIC_ISAAC_RANDOMIZATION_PROFILE must be one of: none, light, heavy"
-            )
-
-        if profile == "none":
-            self.events.reset_robot_joints.params["position_range"] = (0.0, 0.0)
-            self.events.randomize_light.params["intensity_range"] = (2500.0, 2500.0)
-            self.events.randomize_light.params["color_range"] = (
-                (0.75, 0.75, 0.75),
-                (0.75, 0.75, 0.75),
-            )
-            self.events.randomize_board_and_parts.params["board_range"] = {
-                "x": (0.0, 0.0),
-                "y": (0.0, 0.0),
-                "z": (0.0, 0.0),
-                "yaw": (0.0, 0.0),
-            }
-            for part in self.events.randomize_board_and_parts.params["parts"]:
-                part["pose_range"] = {}
-            self.actions.arm_action.scale = 0.05
-            self.observations.policy.joint_pos.noise = Unoise(n_min=0.0, n_max=0.0)
-            self.observations.policy.joint_vel.noise = Unoise(n_min=0.0, n_max=0.0)
-            self.observations.policy.eef_pose.noise = Unoise(n_min=0.0, n_max=0.0)
-            return
-
-        if profile == "light":
-            self.events.reset_robot_joints.params["position_range"] = (-0.05, 0.05)
-            self.events.randomize_light.params["intensity_range"] = (1500.0, 3500.0)
-            self.events.randomize_light.params["color_range"] = (
-                (0.5, 0.5, 0.5),
-                (1.0, 1.0, 1.0),
-            )
-            self.events.randomize_board_and_parts.params["board_range"] = {
-                "x": (-0.005, 0.005),
-                "y": (-0.005, 0.005),
-                "z": (0.0, 0.0),
-                "yaw": (0.0, 0.0),
-            }
-            self.events.randomize_board_and_parts.params["parts"] = [
-                {
-                    "scene_name": "sc_port",
-                    "offset": (0.0067, -0.0362, 0.005),
-                    "pose_range": {"x": (-0.005, 0.02)},
-                },
-                {
-                    "scene_name": "sc_port_2",
-                    "offset": (0.0076, -0.0783, 0.005),
-                    "pose_range": {"x": (-0.005, 0.02)},
-                },
-                {
-                    "scene_name": "nic_card",
-                    "offset": (-0.03235, 0.02329, 0.0743),
-                    "pose_range": {"y": (0.0, 0.12)},
-                    "snap_step": {"y": 0.04},
-                },
-            ]
-            self.actions.arm_action.scale = 0.05
-            return
-
-        # Heavy profile: still conservative enough for smoke PPO runs, but
-        # covers geometry, visual, robot reset, action scale, and lowdim sensor
-        # variation. Physics/material randomization is documented as future work
-        # because the current assets do not expose stable semantic handles for it.
-        self.events.reset_robot_joints.params["position_range"] = (-0.12, 0.12)
-        self.events.randomize_light.params["intensity_range"] = (800.0, 5000.0)
-        self.events.randomize_light.params["color_range"] = (
-            (0.35, 0.35, 0.4),
-            (1.0, 0.95, 0.9),
-        )
-        self.events.randomize_board_and_parts.params["board_range"] = {
-            "x": (-0.02, 0.02),
-            "y": (-0.02, 0.02),
-            "z": (-0.003, 0.003),
-            "yaw": (-0.08, 0.08),
-        }
-        self.events.randomize_board_and_parts.params["parts"] = [
-            {
-                "scene_name": "sc_port",
-                "offset": (0.0067, -0.0362, 0.005),
-                "pose_range": {
-                    "x": (-0.015, 0.03),
-                    "y": (-0.004, 0.004),
-                    "z": (-0.002, 0.002),
-                    "yaw": (-0.04, 0.04),
-                },
-            },
-            {
-                "scene_name": "sc_port_2",
-                "offset": (0.0076, -0.0783, 0.005),
-                "pose_range": {
-                    "x": (-0.015, 0.03),
-                    "y": (-0.004, 0.004),
-                    "z": (-0.002, 0.002),
-                    "yaw": (-0.04, 0.04),
-                },
-            },
-            {
-                "scene_name": "nic_card",
-                "offset": (-0.03235, 0.02329, 0.0743),
-                "pose_range": {
-                    "x": (-0.005, 0.005),
-                    "y": (0.0, 0.12),
-                    "z": (-0.003, 0.003),
-                    "yaw": (-0.04, 0.04),
-                },
-                "snap_step": {"y": 0.04},
-            },
-        ]
-        self.actions.arm_action.scale = 0.06
-        self.observations.policy.joint_pos.noise = Unoise(n_min=-0.025, n_max=0.025)
-        self.observations.policy.joint_vel.noise = Unoise(n_min=-0.025, n_max=0.025)
-        self.observations.policy.eef_pose.noise = Unoise(n_min=-0.003, n_max=0.003)
-
-    def _apply_optional_insertion_reward_weights(self) -> None:
-        distance_weight = float(
-            os.environ.get("AIC_ISAAC_INSERTION_DISTANCE_WEIGHT", "0.0")
-        )
-        lateral_weight = float(
-            os.environ.get("AIC_ISAAC_INSERTION_LATERAL_WEIGHT", "0.0")
-        )
-        self.rewards.target_distance_tanh.weight = distance_weight
-        self.rewards.target_lateral_error.weight = lateral_weight
+        _apply_fixed_scene_profile(self)
+        self.events.randomize_light = None
+        self.events.randomize_board_and_parts = None
