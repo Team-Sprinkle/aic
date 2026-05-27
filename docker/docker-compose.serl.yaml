@@ -15,7 +15,7 @@ services:
   model:
     image: aic-submission-candidate:local
     build:
-      dockerfile: docker/aic_submission/Dockerfile
+      dockerfile: docker/aic_serl/Dockerfile
       context: ..
     gpus: all
     networks:
