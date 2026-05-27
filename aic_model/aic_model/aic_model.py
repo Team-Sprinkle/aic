@@ -260,17 +260,13 @@ class AicModel(LifecycleNode):
         while rclpy.ok():
             self.get_logger().info("insert_cable execute loop")
 
-            # First, wait a bit so this loop doesn't consume much CPU time.
-            # This must be an async wait in order for other callbacks to run.
-            wait_future = Future()
-
-            def done_waiting():
-                wait_future.set_result(None)
-
-            wait_timer = self.create_timer(1.0, done_waiting, clock=self.get_clock())
-            await wait_future
-            wait_timer.cancel()
-            self.destroy_timer(wait_timer)
+            # Use a wall-clock timer here. This node normally runs with
+            # use_sim_time=true, and a simulator failure stops ROS time; the
+            # action wrapper still has to wake up and return the policy result
+            # so the engine does not wait forever.
+            sleep_future = Future()
+            threading.Timer(1.0, lambda: sleep_future.set_result(True)).start()
+            await sleep_future
 
             # Check if a cancellation request has arrived.
             if goal_handle.is_cancel_requested:

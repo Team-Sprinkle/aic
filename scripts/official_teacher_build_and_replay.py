@@ -239,6 +239,7 @@ def main() -> None:
     parser.add_argument("--vlm-model", default="gpt-5-mini")
     parser.add_argument("--max-vlm-calls", type=int, default=20)
     parser.add_argument("--image", action="append", default=[])
+    parser.add_argument("--debug-output-dir", default="")
     parser.add_argument("--gazebo-gui", action="store_true")
     parser.add_argument("--launch-rviz", action="store_true")
     parser.add_argument("--startup-delay-sec", type=int, default=8)
@@ -275,6 +276,7 @@ def main() -> None:
             image_paths=[Path(path) for path in args.image],
             max_calls=args.max_vlm_calls,
             model=args.vlm_model,
+            debug_output_dir=args.debug_output_dir or None,
         )
 
     config = PiecewiseGeneratorConfig(

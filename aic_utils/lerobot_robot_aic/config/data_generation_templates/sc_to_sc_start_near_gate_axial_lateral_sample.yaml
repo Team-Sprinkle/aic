@@ -1,0 +1,40 @@
+root_dir: outputs/trajectory_datasets_probe
+task_family: sc_to_sc
+suffix: sc_start_near_gate_axial_lateral_sample_v5
+
+generation:
+  target_accepted_trajectories: 1
+  max_attempts: 4
+  max_planner_attempts: 2
+  policy: agent
+  expert_mode: nominal
+  auto_improve_on_failure: true
+  write_expert_registry_overlay: true
+  seed: 608
+  append_if_exists: true
+  env:
+    AIC_OFFICIAL_TEACHER_TRACKING_GATE_TIMEOUT_SEC: "8.0"
+    AIC_OFFICIAL_TEACHER_SC_TRACKING_GATE_TIMEOUT_SEC: "8.0"
+    AIC_OFFICIAL_TEACHER_PREINSERT_SERVO_GAIN: "1.0"
+    AIC_OFFICIAL_TEACHER_PREINSERT_SERVO_STEP_LIMIT_M: "0.0015"
+    AIC_OFFICIAL_TEACHER_SC_PREINSERT_SERVO_MAX_BIAS_M: "0.020"
+    AIC_EXPERT_MOVEIT_APPROACH_SEGMENT_MODE: "three_stage"
+
+acceptance:
+  success_only: false
+  min_score: 10.0
+  stop_near_gate:
+    max_lateral_error_m: 0.004
+    max_axial_error_m: 0.004
+
+scene:
+  start_near_gate:
+    axial_distance_m: 0.035
+    lateral_distance_m: 0.012
+  sc_ports:
+    count: 1
+    rails: [sc_rail_0]
+    target_port: sc_rail_0
+  nic_cards:
+    count: 4
+    rails: [nic_rail_0, nic_rail_1, nic_rail_2, nic_rail_3]

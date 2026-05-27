@@ -30,6 +30,7 @@ from __future__ import annotations
 
 import json
 import os
+import sys
 import time
 from pathlib import Path
 from typing import Any
@@ -56,6 +57,13 @@ from aic_model_interfaces.msg import Observation
 from aic_task_interfaces.msg import Task
 from lerobot.policies.act.configuration_act import ACTConfig
 from lerobot.policies.act.modeling_act import ACTPolicy
+
+REPO_ROOT = Path(__file__).resolve().parents[3]
+LEROBOT_AIC_PACKAGE_DIR = REPO_ROOT / "aic_utils" / "lerobot_robot_aic"
+if LEROBOT_AIC_PACKAGE_DIR.exists() and str(LEROBOT_AIC_PACKAGE_DIR) not in sys.path:
+    sys.path.insert(0, str(LEROBOT_AIC_PACKAGE_DIR))
+
+from lerobot_robot_aic.runtime_features import AICRuntimeFeatureAssembler  # noqa: E402
 
 
 DEFAULT_POLICY_REPO_ID = "grkw/aic_act_policy"
@@ -86,6 +94,14 @@ class RunACT(Policy):
         config_dict = self._load_config_dict(self.policy_path)
         config = draccus.decode(ACTConfig, config_dict)
         config.device = str(self.device)
+        requested_n_action_steps = int(os.environ.get("AIC_ACT_N_ACTION_STEPS", "4"))
+        if requested_n_action_steps < 1:
+            raise ValueError(f"AIC_ACT_N_ACTION_STEPS must be >= 1, got {requested_n_action_steps}")
+        if requested_n_action_steps > int(config.chunk_size):
+            raise ValueError(
+                f"AIC_ACT_N_ACTION_STEPS={requested_n_action_steps} exceeds chunk_size={config.chunk_size}"
+            )
+        config.n_action_steps = requested_n_action_steps
 
         self.policy = ACTPolicy(config)
         self.policy.load_state_dict(load_file(self.policy_path / "model.safetensors"))
@@ -112,9 +128,11 @@ class RunACT(Policy):
         }
         self.state_mean = self._stat(stats, "observation.state.mean", (1, -1))
         self.state_std = self._stat(stats, "observation.state.std", (1, -1))
+        self._apply_task_vector_identity_normalization()
         self.action_mean = self._stat(stats, "action.mean", (1, -1))
         self.action_std = self._stat(stats, "action.std", (1, -1))
         self._current_task: Task | None = None
+        self.feature_assembler = AICRuntimeFeatureAssembler(self.state_dim, fps=self.control_hz)
 
         self.get_logger().info(
             "ACT policy loaded from "
@@ -127,6 +145,9 @@ class RunACT(Policy):
             f"action_mode=delta_pose, command_mode={self.command_mode}, "
             f"action_frame=gripper/tcp, command_frame={self.command_frame}"
         )
+
+    def _active_command_mode(self) -> str:
+        return os.environ.get("AIC_ACT_RUNTIME_COMMAND_MODE", self.command_mode)
 
     def _resolve_policy_path(self) -> Path:
         policy_path = os.environ.get("AIC_ACT_POLICY_PATH")
@@ -158,7 +179,16 @@ class RunACT(Policy):
     def _stat(self, stats: dict[str, torch.Tensor], key: str, shape: tuple[int, ...]) -> torch.Tensor:
         if key not in stats:
             raise KeyError(f"policy normalizer is missing required statistic {key!r}")
-        return stats[key].to(self.device).view(*shape)
+        tensor = stats[key].to(self.device).view(*shape)
+        if key.endswith(".std"):
+            tensor = torch.where(torch.abs(tensor) < 1e-8, torch.ones_like(tensor), tensor)
+        return tensor
+
+    def _apply_task_vector_identity_normalization(self) -> None:
+        if self.state_dim not in (42, 82):
+            return
+        self.state_mean[:, -10:] = 0.0
+        self.state_std[:, -10:] = 1.0
 
     @staticmethod
     def _camera_shapes(config_dict: dict[str, Any]) -> dict[str, tuple[int, int, int]]:
@@ -236,41 +266,11 @@ class RunACT(Policy):
         return obs
 
     def _state_vector(self, obs_msg: Observation) -> np.ndarray:
-        tcp_pose = obs_msg.controller_state.tcp_pose
-        tcp_vel = obs_msg.controller_state.tcp_velocity
-        values = [
-            tcp_pose.position.x,
-            tcp_pose.position.y,
-            tcp_pose.position.z,
-            tcp_pose.orientation.x,
-            tcp_pose.orientation.y,
-            tcp_pose.orientation.z,
-            tcp_pose.orientation.w,
-            tcp_vel.linear.x,
-            tcp_vel.linear.y,
-            tcp_vel.linear.z,
-            tcp_vel.angular.x,
-            tcp_vel.angular.y,
-            tcp_vel.angular.z,
-            *obs_msg.controller_state.tcp_error,
-            *obs_msg.joint_states.position[:7],
-        ]
-        if self.state_dim >= 32:
-            values.extend(
-                [
-                    obs_msg.wrist_wrench.wrench.force.x,
-                    obs_msg.wrist_wrench.wrench.force.y,
-                    obs_msg.wrist_wrench.wrench.force.z,
-                    obs_msg.wrist_wrench.wrench.torque.x,
-                    obs_msg.wrist_wrench.wrench.torque.y,
-                    obs_msg.wrist_wrench.wrench.torque.z,
-                ]
-            )
-        if self.state_dim == 42:
+        if self.feature_assembler.uses_task_vector:
             if self._current_task is None:
-                raise ValueError("checkpoint expects task-conditioned 42D state, but no active task is set")
-            values.extend(self._task_vector(self._current_task))
-        return np.array(values, dtype=np.float32)
+                raise ValueError(f"checkpoint expects task-conditioned {self.state_dim}D state, but no active task is set")
+            self.feature_assembler.task_vector = np.asarray(self._task_vector(self._current_task), dtype=np.float32)
+        return self.feature_assembler.assemble_ros(obs_msg)
 
     def select_delta_action(self, obs_msg: Observation) -> np.ndarray:
         obs_tensors = self.prepare_observations(obs_msg)
@@ -338,7 +338,10 @@ class RunACT(Policy):
     ) -> bool:
         self.policy.reset()
         self._current_task = task
+        self.feature_assembler.reset(self._task_vector(task) if self.feature_assembler.uses_task_vector else None)
+        command_mode = self._active_command_mode()
         self.get_logger().info(f"RunACT.insert_cable() enter. Task: {task}")
+        self.get_logger().info(f"RunACT active command_mode={command_mode}")
         if self.start_delay_sec > 0.0:
             self.get_logger().info(f"Waiting {self.start_delay_sec:.2f}s before first ACT command.")
             time.sleep(self.start_delay_sec)
@@ -357,11 +360,11 @@ class RunACT(Policy):
             action = self.select_delta_action(observation_msg)
             if hasattr(self._parent_node, "_target_mode"):
                 self._parent_node._target_mode = TargetMode.MODE_CARTESIAN
-            if self.command_mode == "none":
+            if command_mode == "none":
                 pass
-            elif self.command_mode == "velocity":
+            elif command_mode == "velocity":
                 self._set_velocity_target(move_robot, action[:3], action[3:6])
-            elif self.command_mode == "delta_pose":
+            elif command_mode == "delta_pose":
                 self.set_delta_pose_target_from_components(
                     move_robot=move_robot,
                     delta_position_xyz=action[:3],
@@ -372,7 +375,7 @@ class RunACT(Policy):
                     deadband_rotation=self.rotation_deadband,
                 )
             else:
-                raise ValueError(f"Unsupported AIC_ACT_COMMAND_MODE={self.command_mode!r}")
+                raise ValueError(f"Unsupported AIC_ACT_COMMAND_MODE={command_mode!r}")
             command_count += 1
             if command_count % max(1, int(self.control_hz)) == 0:
                 send_feedback(f"in progress; commands={command_count}")

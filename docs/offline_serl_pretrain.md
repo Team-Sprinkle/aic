@@ -77,9 +77,9 @@ outputs/train/offline_serl_smoke/metrics.jsonl
 
 The checkpoint contains the actor, twin critics, target critics, optimizer
 state, dataset schema summary, training config, and normalization statistics.
-It is a metadata-compatible handoff artifact for future bridge work, but Stage 5
+It is a metadata-compatible handoff artifact for future bridge work, but Isaac online RL
 can now consume it as a conservative PPO action-prior initialization; see
-`isaac_rl_stage5.md`.
+`isaac_online_rl.md`.
 
 ## Lowdim ACT Warm Start
 
@@ -124,6 +124,31 @@ vision critics encode the same camera observations plus low-dimensional state
 and score flattened action chunks. `--actor-mode act_direct` remains available
 for the older direct-ACT actor.
 
+Default production settings for the current ACT -> offline SERL warm start are:
+
+```text
+actor_update_mode: q_bc
+critic_arch: multiplicative
+adapter_activation: gelu
+critic_activation: gelu
+state_encoding: fourier
+state_encoding_indices: 0 1 2 13 14 15
+state_encoding_num_bands: 4
+state_encoding_max_freq: 8.0
+state_encoding_scale: 10.0
+adapter_lr: 1e-5
+critic_lr: 1e-4
+bc_weight: 5.0
+reward_mode: dataset
+```
+
+The Fourier encoding is model-side. It appends sinusoidal bands for TCP xyz
+and TCP-error xyz after the dataset/runtime feature vector has already been
+materialized as 32D, 42D, 72D, or 82D. Do not add these Fourier features in the
+dataset postprocessor. The 40D contact/recovery features and the 10D task
+vector remain dataset/runtime features, so offline training and online Gazebo or
+Isaac execution see the same physical state contract.
+
 Dry run:
 
 ```bash
@@ -138,6 +163,10 @@ pixi run python aic_utils/lerobot_robot_aic/scripts/train_vision_offline_serl.py
   --action-horizon 8 \
   --actor-mode act_adapter \
   --freeze-act \
+  --adapter-activation gelu \
+  --critic-activation gelu \
+  --state-encoding fourier \
+  --state-encoding-indices 0 1 2 13 14 15 \
   --dry-run
 ```
 
@@ -155,6 +184,10 @@ pixi run python aic_utils/lerobot_robot_aic/scripts/train_vision_offline_serl.py
   --action-horizon 8 \
   --actor-mode act_adapter \
   --freeze-act \
+  --adapter-activation gelu \
+  --critic-activation gelu \
+  --state-encoding fourier \
+  --state-encoding-indices 0 1 2 13 14 15 \
   --bc-weight 1.0 \
   --adapter-penalty-weight 1e-3 \
   --act-preservation-weight 1e-2 \
@@ -202,6 +235,45 @@ skipped tensors: none
 
 The checkpoint contains the ACT-backed actor state, twin critics, target
 critics, optimizers, train config, dataset summary, and warm-start report.
+
+## Online SERL Rewards
+
+Offline and online SERL should optimize the same task geometry, not Isaac's
+random `ee_pose` command. The online defaults now use simulator-only ground
+truth for reward calculation while keeping the deployable policy observation
+unchanged.
+
+Gazebo online SERL uses ground-truth TF from `observation.oracle`:
+
+```text
+progress_weight: 1.0
+distance_weight: 0.5
+close_weight: 0.3
+orientation_weight: 0.05
+terminal_score_weight: 1.0
+```
+
+The dense terms compare the plug frame to the target port frame. If ground-truth
+poses are unavailable, Gazebo falls back to the legacy `-0.01` non-terminal /
+`total_score / 100` terminal reward.
+
+Isaac online SERL enables target-object rewards in
+`aic_utils/aic_isaac/aic_isaaclab/scripts/serl/train.py`:
+
+```text
+target_reward_body: sfp_module_link
+target_scene_name: sc_port or sc_port_2 from target_port_index
+target_reward_distance_weight: 0.5
+target_reward_close_weight: 0.3
+target_reward_orientation_weight: 0.05
+target_reward_reaching_weight: 1.0
+target_reward_lateral_weight: 0.0
+disable_command_pose_rewards: true
+```
+
+With exact target-body/target-port position and orientation alignment, the dense
+distance/close/orientation part reaches `0.85` before reaching bonus,
+smoothness, and safety penalties.
 
 Guarded few-step run:
 

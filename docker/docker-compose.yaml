@@ -15,9 +15,9 @@ services:
       AIC_MODEL_PASSWD: CHANGE_IN_PROD
       # AIC_ENABLE_ACL: true
   model:
-    image: my-solution:v1
+    image: act_adapter_serl:v1
     build:
-      dockerfile: docker/aic_model/Dockerfile
+      dockerfile: docker/aic_act_serl/Dockerfile
       context: ..
     gpus: all
     networks:
@@ -27,6 +27,13 @@ services:
       ZENOH_ROUTER_CHECK_ATTEMPTS: -1
       AIC_ROUTER_ADDR: eval:7447
       AIC_MODEL_PASSWD: CHANGE_IN_PROD
+      AIC_SERL_CHECKPOINT: /opt/aic_policy/act_adapter_serl/checkpoint_latest.pt
+      AIC_SERL_ACT_TORCHSCRIPT: /opt/aic_policy/act_080000/act_policy_ts_080000_cpu.pt
+      AIC_SERL_COMMAND_MODE: delta_pose
+      AIC_SERL_COMMAND_FRAME: gripper/tcp
+      AIC_SERL_CONTROL_HZ: 20
+      AIC_SERL_MAX_RUNTIME_SEC: 170
+      AIC_SERL_N_ACTION_STEPS: 4
       # AIC_ENABLE_ACL: true
 networks:
   default:

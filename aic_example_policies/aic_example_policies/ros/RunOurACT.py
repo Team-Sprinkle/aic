@@ -84,7 +84,10 @@ class RunOurACT(Policy):
 
         # Helper to extract and shape stats for broadcasting
         def get_stat(key, shape):
-            return stats[key].to(self.device).view(*shape)
+            tensor = stats[key].to(self.device).view(*shape)
+            if key.endswith(".std"):
+                tensor = torch.where(torch.abs(tensor) < 1e-8, torch.ones_like(tensor), tensor)
+            return tensor
 
         # Image Stats (1, 3, 1, 1) for broadcasting against (Batch, Channel, Height, Width)
         self.img_stats = {
@@ -106,6 +109,9 @@ class RunOurACT(Policy):
         # Robot State Stats (1, 26)
         self.state_mean = get_stat("observation.state.mean", (1, -1))
         self.state_std = get_stat("observation.state.std", (1, -1))
+        if self.state_mean.shape[-1] == 42:
+            self.state_mean[:, -10:] = 0.0
+            self.state_std[:, -10:] = 1.0
         print(f"Robot state mean: {self.state_mean}")
         print(f"Robot state std: {self.state_std}")
 

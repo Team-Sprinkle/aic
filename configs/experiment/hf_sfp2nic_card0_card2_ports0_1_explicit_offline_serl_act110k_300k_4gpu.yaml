@@ -1,0 +1,99 @@
+# @package _global_
+
+defaults:
+  - /train: vision_offline_serl
+  - /model: act_adapter_serl
+  - /data: hf_sfp2nic_card0_card2_ports0_1_explicit
+  - /hardware: default
+  - _self_
+
+run:
+  task_family: ${data.task_family}
+  dataset_tag: ${data.dataset_tag}
+  model_family: ${model.family}
+  stage: ${train.stage}
+  name: offline_serl_from_act110k_300k_bs128x4_clip010
+  output_root: outputs/train
+  output_dir: ${run.output_root}/${run.task_family}/${run.dataset_tag}/${run.model_family}/${run.stage}/20260505_offline_serl_from_act110k_300k_bs128x4_clip010
+
+train:
+  dataset_root: ${data.dataset_root}
+  act_checkpoint: /data1/chmin/yj/ws_aic/src/aic/outputs/train/sfp_to_nic/hf_sfp2nic_card0_card2_ports0_1_explicit/act/bc/20260505_act_multidata_taskvec_300k_bs8_4gpu_v2/checkpoints/110000/pretrained_model
+  output_dir: ${run.output_dir}
+  job_name: ${run.name}
+  steps: 300000
+  # Per-GPU batch size. With 4 DDP ranks this is an effective batch of 512.
+  batch_size: 128
+  device: ${hardware.effective_device}
+  lr: 0.0001
+  adapter_lr: 0.0001
+  act_lr: 0.00001
+  critic_lr: 0.0001
+  gamma: 0.99
+  tau: 0.005
+  bc_weight: 1.0
+  cql_weight: 0.0
+  adapter_penalty_weight: 0.001
+  act_preservation_weight: 0.01
+  smoothness_weight: 0.0
+  # Match the ACT checkpoint's n_action_steps=2 for the flattened action chunk.
+  action_horizon: 2
+  actor_mode: act_adapter
+  freeze_act: true
+  adapter_hidden_dim: 256
+  adapter_num_layers: 2
+  adapter_arch: mlp
+  adapter_layer_norm: false
+  adapter_activation: gelu
+  adapter_scale: 1.0
+  adapter_delta_clip: 0.10
+  action_clip: null
+  actor_update_mode: q_bc
+  critic_image_encoder: small_conv
+  critic_arch: multiplicative
+  critic_feature_dim: 256
+  critic_hidden_dim: 256
+  critic_num_layers: 2
+  critic_per_camera_dim: 64
+  critic_layer_norm: false
+  critic_activation: gelu
+  state_encoding: fourier
+  state_encoding_indices:
+    - 0
+    - 1
+    - 2
+    - 13
+    - 14
+    - 15
+  state_encoding_num_bands: 4
+  state_encoding_max_freq: 8.0
+  state_encoding_scale: 10.0
+  reward_mode: dataset
+  camera_keys: ${data.camera_keys}
+  dataset_video_backend: pyav
+  save_every: 10000
+  val_fraction: 0.05
+  val_every: 10000
+  val_max_batches: 16
+  early_stopping_metric: bc_loss
+  early_stopping_patience: 0
+  dry_run: false
+
+hardware:
+  cuda_devices:
+    - 0
+    - 1
+    - 2
+    - 3
+  num_devices: 4
+  effective_device: cuda:0
+  distributed:
+    enabled: true
+    launcher: torchrun
+    standalone: true
+    nnodes: 1
+    nproc_per_node: 4
+
+logging:
+  save_resolved_config: true
+  save_git_info: true

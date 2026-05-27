@@ -10,8 +10,8 @@ It deliberately uses CheatCode-based trajectories only. It does not use VLM
 planner trajectories or Gazebo recovery rollouts. A minimal offline SERL-style
 pretraining smoke path is documented in
 [`offline_serl_pretrain.md`](offline_serl_pretrain.md), and the current Isaac
-legacy PPO/RSL-RL Stage 5 smoke path is documented in
-[`isaac_rl_stage5.md`](isaac_rl_stage5.md).
+legacy PPO/RSL-RL Isaac online RL smoke path is documented in
+[`isaac_online_rl.md`](isaac_online_rl.md).
 The repo has a `Team-Sprinkle/mip` dependency and `RunMIP` runtime policy
 integration, but no direct in-repo MIP ACT training wrapper for this flow; this
 smoke path uses LeRobot training directly.

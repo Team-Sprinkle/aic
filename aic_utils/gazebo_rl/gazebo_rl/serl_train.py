@@ -1,56 +1,148 @@
 from __future__ import annotations
 
 import argparse
+import base64
 import json
+import subprocess
+import sys
 import time
 from collections import deque
 from pathlib import Path
 from typing import Any
 
 import torch
+import yaml
 from torch import nn
 from torch.nn import functional as F
 
 from gazebo_rl.gym_env import GazeboRLEnv
-from gazebo_rl.serl_policy import ACTAdapterSERLGazeboPolicy, ACT_CAMERA_KEYS, task_vector_from_context
+from gazebo_rl.insertion_reward import GazeboRewardConfig
+from gazebo_rl.serl_policy import (
+    ACTAdapterSERLGazeboPolicy,
+    ACT_CAMERA_KEYS,
+    _activation,
+    _make_state_encoder,
+    task_vector_from_context,
+)
 from gazebo_rl.train import add_recording_args
+
+REPO_ROOT = Path(__file__).resolve().parents[3]
+ISAAC_SCRIPTS = REPO_ROOT / "aic_utils" / "aic_isaac" / "scripts"
+if str(ISAAC_SCRIPTS) not in sys.path:
+    sys.path.insert(0, str(ISAAC_SCRIPTS))
+
+from isaac_episode_configs import _split_filenames, materialize_episode_configs, materialize_many_episode_configs
 
 
 class ImageStateEncoder(nn.Module):
-    def __init__(self, *, state_dim: int, camera_keys: list[str], feature_dim: int = 256):
+    def __init__(
+        self,
+        *,
+        state_dim: int,
+        camera_keys: list[str],
+        feature_dim: int = 256,
+        per_camera_dim: int = 64,
+        activation: str = "relu",
+        state_encoding: str = "none",
+        state_encoding_indices: list[int] | tuple[int, ...] = (),
+        state_encoding_num_bands: int = 4,
+        state_encoding_max_freq: float = 8.0,
+        state_encoding_scale: float = 1.0,
+    ):
         super().__init__()
         self.camera_keys = list(camera_keys)
+        self.state_encoder, encoded_state_dim = _make_state_encoder(
+            state_dim=state_dim,
+            state_encoding=state_encoding,
+            state_encoding_indices=state_encoding_indices,
+            state_encoding_num_bands=state_encoding_num_bands,
+            state_encoding_max_freq=state_encoding_max_freq,
+            state_encoding_scale=state_encoding_scale,
+        )
         self.image_encoder = nn.Sequential(
             nn.Conv2d(3, 16, kernel_size=5, stride=4, padding=2),
-            nn.ReLU(),
+            _activation(activation),
             nn.Conv2d(16, 32, kernel_size=3, stride=4, padding=1),
-            nn.ReLU(),
+            _activation(activation),
             nn.AdaptiveAvgPool2d((1, 1)),
             nn.Flatten(),
-            nn.Linear(32, 64),
-            nn.ReLU(),
+            nn.Linear(32, per_camera_dim),
+            _activation(activation),
         )
-        self.proj = nn.Sequential(nn.Linear(state_dim + 64 * len(self.camera_keys), feature_dim), nn.ReLU())
+        self.proj = nn.Sequential(
+            nn.Linear(encoded_state_dim + per_camera_dim * len(self.camera_keys), feature_dim),
+            _activation(activation),
+        )
 
     def forward(self, obs: dict[str, Any]) -> torch.Tensor:
         image_features = [self.image_encoder(obs["images"][key]) for key in self.camera_keys]
-        return self.proj(torch.cat([obs["state"], *image_features], dim=-1))
+        return self.proj(torch.cat([self.state_encoder(obs["state"]), *image_features], dim=-1))
 
 
 class VisionCritic(nn.Module):
-    def __init__(self, *, state_dim: int, camera_keys: list[str], action_dim: int, feature_dim: int = 256):
+    def __init__(
+        self,
+        *,
+        state_dim: int,
+        camera_keys: list[str],
+        action_dim: int,
+        feature_dim: int = 256,
+        arch: str = "concat",
+        hidden_dim: int = 256,
+        num_layers: int = 2,
+        per_camera_dim: int = 64,
+        activation: str = "relu",
+        state_encoding: str = "none",
+        state_encoding_indices: list[int] | tuple[int, ...] = (),
+        state_encoding_num_bands: int = 4,
+        state_encoding_max_freq: float = 8.0,
+        state_encoding_scale: float = 1.0,
+    ):
         super().__init__()
-        self.encoder = ImageStateEncoder(state_dim=state_dim, camera_keys=camera_keys, feature_dim=feature_dim)
-        self.q = nn.Sequential(
-            nn.Linear(feature_dim + action_dim, 256),
-            nn.ReLU(),
-            nn.Linear(256, 256),
-            nn.ReLU(),
-            nn.Linear(256, 1),
+        self.arch = str(arch)
+        self.encoder = ImageStateEncoder(
+            state_dim=state_dim,
+            camera_keys=camera_keys,
+            feature_dim=feature_dim,
+            per_camera_dim=per_camera_dim,
+            activation=activation,
+            state_encoding=state_encoding,
+            state_encoding_indices=state_encoding_indices,
+            state_encoding_num_bands=state_encoding_num_bands,
+            state_encoding_max_freq=state_encoding_max_freq,
+            state_encoding_scale=state_encoding_scale,
         )
+        if self.arch == "concat":
+            self.q = self._mlp(feature_dim + action_dim, hidden_dim, num_layers, 1, activation=activation)
+        elif self.arch == "multiplicative":
+            self.action_proj = nn.Sequential(nn.Linear(action_dim, feature_dim), _activation(activation))
+            self.q = self._mlp(feature_dim * 3, hidden_dim, num_layers, 1, activation=activation)
+        elif self.arch == "value_advantage":
+            self.value = self._mlp(feature_dim, hidden_dim, num_layers, 1, activation=activation)
+            self.advantage = self._mlp(feature_dim + action_dim, hidden_dim, num_layers, 1, activation=activation)
+        else:
+            raise ValueError(f"Unsupported critic architecture: {self.arch!r}")
+
+    @staticmethod
+    def _mlp(input_dim: int, hidden_dim: int, num_layers: int, output_dim: int, *, activation: str) -> nn.Sequential:
+        layers: list[nn.Module] = []
+        dim = input_dim
+        for _ in range(num_layers):
+            layers.extend([nn.Linear(dim, hidden_dim), _activation(activation)])
+            dim = hidden_dim
+        layers.append(nn.Linear(dim, output_dim))
+        return nn.Sequential(*layers)
 
     def forward(self, obs: dict[str, Any], action: torch.Tensor) -> torch.Tensor:
-        return self.q(torch.cat([self.encoder(obs), action], dim=-1))
+        obs_feature = self.encoder(obs)
+        if self.arch == "concat":
+            return self.q(torch.cat([obs_feature, action], dim=-1))
+        if self.arch == "multiplicative":
+            action_feature = self.action_proj(action)
+            return self.q(torch.cat([obs_feature, action_feature, obs_feature * action_feature], dim=-1))
+        if self.arch == "value_advantage":
+            return self.value(obs_feature) + self.advantage(torch.cat([obs_feature, action], dim=-1))
+        raise RuntimeError(f"Unsupported critic architecture at forward: {self.arch!r}")
 
 
 class ReplayBuffer:
@@ -107,21 +199,15 @@ class GazeboOnlineSERLTrainer:
         adapter_penalty_weight: float,
         act_preservation_weight: float,
         device: torch.device,
+        critic_kwargs: dict[str, Any] | None = None,
     ):
         self.policy = policy
         self.actor = policy.actor.to(device)
         self.critic1 = critic1.to(device)
         self.critic2 = critic2.to(device)
-        self.target_critic1 = VisionCritic(
-            state_dim=policy.state_dim,
-            camera_keys=ACT_CAMERA_KEYS,
-            action_dim=policy.action_dim,
-        ).to(device)
-        self.target_critic2 = VisionCritic(
-            state_dim=policy.state_dim,
-            camera_keys=ACT_CAMERA_KEYS,
-            action_dim=policy.action_dim,
-        ).to(device)
+        critic_kwargs = dict(critic_kwargs or {})
+        self.target_critic1 = VisionCritic(**critic_kwargs).to(device)
+        self.target_critic2 = VisionCritic(**critic_kwargs).to(device)
         self.target_critic1.load_state_dict(self.critic1.state_dict())
         self.target_critic2.load_state_dict(self.critic2.state_dict())
         self.gamma = float(gamma)
@@ -259,12 +345,287 @@ def _jsonable(value: Any) -> Any:
         return str(value)
     if isinstance(value, dict):
         return {key: _jsonable(item) for key, item in value.items()}
+    if isinstance(value, set):
+        return sorted(_jsonable(item) for item in value)
     if isinstance(value, (list, tuple)):
         return [_jsonable(item) for item in value]
     return value
 
 
+def _explicit_flags(argv: list[str] | None) -> set[str]:
+    flags: set[str] = set()
+    for token in argv or sys.argv[1:]:
+        if token.startswith("--"):
+            flags.add(token.split("=", 1)[0])
+    return flags
+
+
+def apply_reward_preset(args: argparse.Namespace) -> None:
+    if getattr(args, "reward_preset", "default") == "default":
+        return
+    explicit = getattr(args, "_explicit_cli_flags", set())
+
+    def set_default(attr: str, flag: str, value: object) -> None:
+        if flag not in explicit:
+            setattr(args, attr, value)
+
+    if args.reward_preset in {"cheatcode_insertion_v1", "cheatcode_alignment_v1"}:
+        set_default("insertion_distance_weight", "--insertion-distance-weight", 0.0)
+        set_default("insertion_close_weight", "--insertion-close-weight", 0.0)
+        set_default("insertion_progress_weight", "--insertion-progress-weight", 0.0)
+        set_default("insertion_reaching_weight", "--insertion-reaching-weight", 0.0)
+        set_default("insertion_lateral_weight", "--insertion-lateral-weight", -0.20)
+        set_default("insertion_lateral_error_scale", "--insertion-lateral-error-scale", 0.003)
+        set_default("insertion_lateral_progress_weight", "--insertion-lateral-progress-weight", 0.0)
+        set_default("insertion_axial_progress_weight", "--insertion-axial-progress-weight", 0.0)
+        set_default("insertion_lateral_gate_sigma", "--insertion-lateral-gate-sigma", 0.002)
+        set_default("insertion_corridor_weight", "--insertion-corridor-weight", 0.0)
+        set_default("insertion_corridor_sigma", "--insertion-corridor-sigma", 0.0015)
+        set_default("insertion_bypass_penalty_scale", "--insertion-bypass-penalty-scale", 6.0)
+        set_default("insertion_corridor_orientation_gate_std", "--insertion-corridor-orientation-gate-std", 0.05)
+        set_default("insertion_orientation_weight", "--insertion-orientation-weight", 0.20)
+        set_default("insertion_orientation_std", "--insertion-orientation-std", 0.08)
+        set_default("insertion_orientation_gate_sigma", "--insertion-orientation-gate-sigma", 0.006)
+        set_default("target_reward_orientation_error_mode", "--target-reward-orientation-error-mode", "axis")
+        set_default("insertion_cheatcode_phase_weight", "--insertion-cheatcode-phase-weight", 1.0)
+        if args.reward_preset == "cheatcode_alignment_v1":
+            set_default("insertion_cheatcode_axial_progress_weight", "--insertion-cheatcode-axial-progress-weight", 0.0)
+            set_default("insertion_cheatcode_corridor_weight", "--insertion-cheatcode-corridor-weight", 0.0)
+            set_default("insertion_cheatcode_inside_alignment_weight", "--insertion-cheatcode-inside-alignment-weight", 0.0)
+            set_default("insertion_cheatcode_retreat_weight", "--insertion-cheatcode-retreat-weight", 0.0)
+        set_default("force_delta_penalty_weight", "--force-delta-penalty-weight", 0.02)
+        set_default("terminate_on_target_success", "--terminate-on-target-success", True)
+        set_default("target_success_axial_threshold", "--target-success-axial-threshold", 0.0005)
+        set_default("target_success_lateral_threshold", "--target-success-lateral-threshold", 0.0005)
+        set_default("target_success_orientation_threshold", "--target-success-orientation-threshold", 0.03)
+        return
+
+    if args.reward_preset == "near_gate_corridor_v1":
+        set_default("insertion_distance_weight", "--insertion-distance-weight", 0.02)
+        set_default("insertion_close_weight", "--insertion-close-weight", 0.05)
+        set_default("insertion_progress_weight", "--insertion-progress-weight", 0.0)
+        set_default("insertion_lateral_weight", "--insertion-lateral-weight", -0.10)
+        set_default("insertion_lateral_error_scale", "--insertion-lateral-error-scale", 0.006)
+        set_default("insertion_lateral_progress_weight", "--insertion-lateral-progress-weight", 0.25)
+        set_default("insertion_lateral_progress_scale", "--insertion-lateral-progress-scale", 0.001)
+        set_default("insertion_axial_progress_weight", "--insertion-axial-progress-weight", 0.25)
+        set_default("insertion_axial_progress_scale", "--insertion-axial-progress-scale", 0.001)
+        set_default("insertion_lateral_gate_sigma", "--insertion-lateral-gate-sigma", 0.004)
+        set_default("insertion_corridor_weight", "--insertion-corridor-weight", 0.50)
+        set_default("insertion_corridor_sigma", "--insertion-corridor-sigma", 0.0025)
+        set_default("insertion_bypass_penalty_scale", "--insertion-bypass-penalty-scale", 2.0)
+        set_default("insertion_corridor_orientation_gate_std", "--insertion-corridor-orientation-gate-std", 0.10)
+        set_default("insertion_orientation_weight", "--insertion-orientation-weight", 0.05)
+        set_default("insertion_orientation_std", "--insertion-orientation-std", 0.10)
+        set_default("insertion_orientation_gate_sigma", "--insertion-orientation-gate-sigma", 0.010)
+        set_default("force_delta_penalty_weight", "--force-delta-penalty-weight", 0.05)
+        set_default("terminate_on_target_success", "--terminate-on-target-success", True)
+
+
+def reward_config_from_args(args: argparse.Namespace) -> GazeboRewardConfig:
+    if float(getattr(args, "insertion_lateral_weight", 0.0)) > 0.0:
+        args.insertion_lateral_weight = -float(args.insertion_lateral_weight)
+    return GazeboRewardConfig(
+        distance_weight=args.insertion_distance_weight,
+        close_weight=args.insertion_close_weight,
+        progress_weight=args.insertion_progress_weight,
+        progress_scale=args.insertion_progress_scale,
+        orientation_weight=args.insertion_orientation_weight,
+        orientation_std=args.insertion_orientation_std,
+        orientation_gate_sigma=args.insertion_orientation_gate_sigma,
+        reaching_weight=args.insertion_reaching_weight,
+        terminal_score_weight=args.insertion_terminal_weight,
+        lateral_weight=args.insertion_lateral_weight,
+        lateral_gate_sigma=args.insertion_lateral_gate_sigma,
+        lateral_error_scale=args.insertion_lateral_error_scale,
+        lateral_progress_weight=args.insertion_lateral_progress_weight,
+        lateral_progress_scale=args.insertion_lateral_progress_scale,
+        axial_progress_weight=args.insertion_axial_progress_weight,
+        axial_progress_scale=args.insertion_axial_progress_scale,
+        corridor_weight=args.insertion_corridor_weight,
+        corridor_sigma=args.insertion_corridor_sigma,
+        bypass_penalty_scale=args.insertion_bypass_penalty_scale,
+        corridor_orientation_gate_std=args.insertion_corridor_orientation_gate_std,
+        cheatcode_phase_weight=args.insertion_cheatcode_phase_weight,
+        cheatcode_lateral_progress_weight=args.insertion_cheatcode_lateral_progress_weight,
+        cheatcode_orientation_progress_weight=args.insertion_cheatcode_orientation_progress_weight,
+        cheatcode_near_misaligned_weight=args.insertion_cheatcode_near_misaligned_weight,
+        cheatcode_hover_weight=args.insertion_cheatcode_hover_weight,
+        cheatcode_axial_progress_weight=args.insertion_cheatcode_axial_progress_weight,
+        cheatcode_corridor_weight=args.insertion_cheatcode_corridor_weight,
+        cheatcode_inside_alignment_weight=args.insertion_cheatcode_inside_alignment_weight,
+        cheatcode_retreat_weight=args.insertion_cheatcode_retreat_weight,
+        target_reward_distance_std=args.target_reward_distance_std,
+        target_reward_close_sigma=args.target_reward_close_sigma,
+        target_reward_reaching_threshold=args.target_reward_reaching_threshold,
+        target_reward_orientation_error_mode=args.target_reward_orientation_error_mode,
+        target_reward_orientation_axis_local=tuple(args.target_reward_orientation_axis_local)
+        if args.target_reward_orientation_axis_local is not None
+        else None,
+        force_delta_penalty_weight=args.force_delta_penalty_weight,
+        force_delta_threshold=args.force_delta_threshold,
+        force_delta_reference=args.force_delta_reference,
+        force_delta_saturation=args.force_delta_saturation,
+        force_delta_knee_penalty_fraction=args.force_delta_knee_penalty_fraction,
+    )
+
+
+def prepare_user_episode_configs(args: argparse.Namespace) -> dict[str, Any] | None:
+    user_yaml = args.user_config_yaml or args.gazebo_user_config_yaml
+    user_dir = args.user_config_dir or args.gazebo_user_config_dir
+    if user_yaml is None and user_dir is None:
+        return None
+    output_dir = Path(args.episode_config_dir or (Path(args.output_dir) / "gazebo_episode_configs"))
+    if user_dir is not None:
+        input_yamls = [Path(user_yaml)] if user_yaml is not None else []
+        summary = materialize_many_episode_configs(
+            input_dir=Path(user_dir),
+            output_dir=output_dir,
+            filenames=_split_filenames(args.user_config_filenames),
+            input_yamls=input_yamls,
+            max_gpus=args.max_gpus,
+            episode_count_override=args.episode_config_count,
+        )
+    else:
+        summary = materialize_episode_configs(
+            Path(user_yaml),
+            output_dir,
+            episode_count=args.episode_config_count,
+        )
+    args.episode_config_dir = Path(summary["episodes_dir"])
+    first_context = ((summary.get("first_episode") or {}).get("task_context") or {})
+    if args.task_context_json is None and first_context and not _has_explicit_task_context(args):
+        args.task_context_json = json.dumps(first_context, sort_keys=True)
+    return summary
+
+
+def _has_explicit_task_context(args: argparse.Namespace) -> bool:
+    explicit = getattr(args, "_explicit_cli_flags", set())
+    return bool(
+        {"--task-family", "--target-port-index", "--target-card-index", "--target-card-valid", "--task-context-json"}
+        & explicit
+    )
+
+
+def _episode_paths(args: argparse.Namespace) -> list[Path]:
+    if args.episode_config_dir is None:
+        return []
+    return sorted(Path(args.episode_config_dir).glob("episode_*.yaml"))
+
+
+def _load_episode(path: Path | None) -> dict[str, Any] | None:
+    if path is None:
+        return None
+    data = yaml.safe_load(path.read_text(encoding="utf-8"))
+    if not isinstance(data, dict):
+        raise ValueError(f"Episode config must be a mapping: {path}")
+    data["_episode_config_path"] = str(path)
+    return data
+
+
+def _save_first_observation_images(obs: dict[str, Any], output_dir: Path, episode: int) -> dict[str, str]:
+    saved: dict[str, str] = {}
+    images = (obs.get("images") or {}) if isinstance(obs, dict) else {}
+    if not images:
+        return saved
+    image_dir = output_dir / "first_observations" / f"episode_{episode:03d}"
+    image_dir.mkdir(parents=True, exist_ok=True)
+    for key, image in images.items():
+        if not isinstance(image, dict):
+            continue
+        data_b64 = image.get("data_b64")
+        if not data_b64:
+            continue
+        name = str(key).split(".")[-1].replace("/", "_")
+        suffix = ".jpg" if image.get("encoding") == "jpeg_rgb8" else ".bin"
+        path = image_dir / f"{name}{suffix}"
+        path.write_bytes(base64.b64decode(data_b64))
+        saved[key] = str(path)
+    return saved
+
+
+def _select_episode_path(paths: list[Path], episode_index: int, order: str) -> Path | None:
+    if not paths:
+        return None
+    if order == "cycle":
+        return paths[episode_index % len(paths)]
+    if order == "random":
+        return paths[torch.randint(len(paths), (1,)).item()]
+    return paths[min(episode_index, len(paths) - 1)]
+
+
+def _ensure_arg_defaults(args: argparse.Namespace) -> None:
+    defaults = {
+        "reward_preset": "default",
+        "insertion_progress_weight": 0.25,
+        "insertion_progress_scale": 0.003,
+        "insertion_distance_weight": 0.25,
+        "insertion_close_weight": 0.35,
+        "insertion_orientation_weight": 0.10,
+        "insertion_orientation_std": 0.03,
+        "insertion_orientation_gate_sigma": 0.012,
+        "insertion_reaching_weight": 0.0,
+        "insertion_terminal_weight": 1.0,
+        "insertion_lateral_weight": -0.05,
+        "insertion_lateral_gate_sigma": 0.012,
+        "insertion_lateral_error_scale": 0.006,
+        "insertion_lateral_progress_weight": 0.0,
+        "insertion_lateral_progress_scale": 0.001,
+        "insertion_axial_progress_weight": 0.0,
+        "insertion_axial_progress_scale": 0.001,
+        "insertion_corridor_weight": 0.0,
+        "insertion_corridor_sigma": 0.0025,
+        "insertion_bypass_penalty_scale": 1.0,
+        "insertion_corridor_orientation_gate_std": 0.0,
+        "insertion_cheatcode_phase_weight": 0.0,
+        "insertion_cheatcode_lateral_progress_weight": 0.40,
+        "insertion_cheatcode_orientation_progress_weight": 0.30,
+        "insertion_cheatcode_near_misaligned_weight": 0.25,
+        "insertion_cheatcode_hover_weight": 0.15,
+        "insertion_cheatcode_axial_progress_weight": 0.30,
+        "insertion_cheatcode_corridor_weight": 1.50,
+        "insertion_cheatcode_inside_alignment_weight": 0.20,
+        "insertion_cheatcode_retreat_weight": 0.20,
+        "target_reward_distance_std": 0.02,
+        "target_reward_close_sigma": 0.006,
+        "target_reward_reaching_threshold": 0.01,
+        "target_reward_orientation_error_mode": "quat",
+        "target_reward_orientation_axis_local": None,
+        "force_delta_penalty_weight": 0.3,
+        "force_delta_threshold": 10.0,
+        "force_delta_reference": 20.0,
+        "force_delta_saturation": 30.0,
+        "force_delta_knee_penalty_fraction": 0.1,
+        "terminate_on_target_success": False,
+        "target_success_axial_threshold": None,
+        "target_success_lateral_threshold": None,
+        "target_success_orientation_threshold": None,
+        "user_config_yaml": None,
+        "gazebo_user_config_yaml": None,
+        "user_config_dir": None,
+        "gazebo_user_config_dir": None,
+        "user_config_filenames": "",
+        "episode_config_dir": None,
+        "episode_config_count": None,
+        "max_gpus": 1,
+        "curriculum_order": "sequential",
+        "allow_reward_only_curriculum": False,
+        "sim_docker_container": None,
+        "docker_host": None,
+        "workspace_container": "/home/chmin/yj/ws_aic/src/aic",
+        "save_every_updates": 0,
+        "eval_every_updates": 0,
+        "eval_max_steps": 600,
+        "eval_timeout_sec": 900.0,
+        "_explicit_cli_flags": set(),
+    }
+    for key, value in defaults.items():
+        if not hasattr(args, key):
+            setattr(args, key, value)
+
+
 def load_trainer(args: argparse.Namespace) -> tuple[GazeboOnlineSERLTrainer, dict[str, Any]]:
+    _ensure_arg_defaults(args)
     device = torch.device(args.device)
     task_vector = task_vector_from_context(
         task_family=getattr(args, "task_family", None),
@@ -283,8 +644,29 @@ def load_trainer(args: argparse.Namespace) -> tuple[GazeboOnlineSERLTrainer, dic
         task_vector=task_vector,
     )
     checkpoint = torch.load(args.checkpoint, map_location="cpu")
-    critic1 = VisionCritic(state_dim=policy.state_dim, camera_keys=ACT_CAMERA_KEYS, action_dim=policy.action_dim)
-    critic2 = VisionCritic(state_dim=policy.state_dim, camera_keys=ACT_CAMERA_KEYS, action_dim=policy.action_dim)
+    offline_cfg = checkpoint.get("vision_offline_serl_config") or (
+        (checkpoint.get("online_serl_config") or {}).get("checkpoint") or {}
+    ).get("vision_offline_serl_config") or (
+        (checkpoint.get("online_gazebo_serl_config") or {}).get("checkpoint") or {}
+    ).get("vision_offline_serl_config") or {}
+    critic_kwargs = {
+        "state_dim": policy.state_dim,
+        "camera_keys": ACT_CAMERA_KEYS,
+        "action_dim": policy.action_dim,
+        "feature_dim": int(offline_cfg.get("critic_feature_dim", 256)),
+        "arch": str(offline_cfg.get("critic_arch", "concat")),
+        "hidden_dim": int(offline_cfg.get("critic_hidden_dim", 256)),
+        "num_layers": int(offline_cfg.get("critic_num_layers", 2)),
+        "per_camera_dim": int(offline_cfg.get("critic_per_camera_dim", 64)),
+        "activation": str(offline_cfg.get("critic_activation", "relu")),
+        "state_encoding": str(offline_cfg.get("state_encoding", "none")),
+        "state_encoding_indices": tuple(int(i) for i in offline_cfg.get("state_encoding_indices", ())),
+        "state_encoding_num_bands": int(offline_cfg.get("state_encoding_num_bands", 4)),
+        "state_encoding_max_freq": float(offline_cfg.get("state_encoding_max_freq", 8.0)),
+        "state_encoding_scale": float(offline_cfg.get("state_encoding_scale", 1.0)),
+    }
+    critic1 = VisionCritic(**critic_kwargs)
+    critic2 = VisionCritic(**critic_kwargs)
     critic_init = getattr(args, "critic_init", "scratch")
     critic_checkpoint_path = getattr(args, "critic_checkpoint", None)
     if critic_init == "act":
@@ -304,6 +686,7 @@ def load_trainer(args: argparse.Namespace) -> tuple[GazeboOnlineSERLTrainer, dic
         adapter_penalty_weight=args.adapter_penalty_weight,
         act_preservation_weight=args.act_preservation_weight,
         device=device,
+        critic_kwargs=critic_kwargs,
     )
     train_config = {
         "checkpoint_path": str(Path(args.checkpoint).resolve()),
@@ -328,6 +711,12 @@ def load_trainer(args: argparse.Namespace) -> tuple[GazeboOnlineSERLTrainer, dic
             "checkpoint": str(Path(critic_checkpoint_path).resolve()) if critic_checkpoint_path else None,
             "note": "Critic/value is scratch by default; ACT is actor/action prior only.",
         },
+        "reward_preset": getattr(args, "reward_preset", "default"),
+        "reward_config": reward_config_from_args(args).as_dict(),
+        "user_config_materialization": getattr(args, "user_config_materialization", None),
+        "episode_config_dir": None if getattr(args, "episode_config_dir", None) is None else str(args.episode_config_dir),
+        "curriculum_order": getattr(args, "curriculum_order", "sequential"),
+        "allow_reward_only_curriculum": bool(getattr(args, "allow_reward_only_curriculum", False)),
         "args": _jsonable(vars(args)),
     }
     if not train_config["checkpoint"]["vision_offline_serl_config"]:
@@ -341,13 +730,19 @@ def load_trainer(args: argparse.Namespace) -> tuple[GazeboOnlineSERLTrainer, dic
 
 
 def run_training(args: argparse.Namespace) -> dict[str, Any]:
+    _ensure_arg_defaults(args)
+    apply_reward_preset(args)
+    args.user_config_materialization = prepare_user_episode_configs(args)
     started = time.monotonic()
     output_dir = Path(args.output_dir).resolve()
     output_dir.mkdir(parents=True, exist_ok=True)
     metrics_path = output_dir / "metrics.jsonl"
     checkpoint_path = output_dir / "checkpoint_latest.pt"
     trainer, train_config = load_trainer(args)
+    reward_config = reward_config_from_args(args)
+    episode_paths = _episode_paths(args)
     if args.dry_run:
+        first_episode = _load_episode(episode_paths[0]) if episode_paths else None
         summary = {
             "status": "dry_run",
             "checkpoint": str(Path(args.checkpoint).resolve()),
@@ -360,8 +755,17 @@ def run_training(args: argparse.Namespace) -> dict[str, Any]:
             "action_clip": args.action_clip,
             "include_images": bool(args.include_images),
             "allow_zero_images": bool(args.allow_zero_images),
+            "reward_preset": args.reward_preset,
+            "reward_config": reward_config.as_dict(),
+            "user_config_materialization": args.user_config_materialization,
+            "episode_config_dir": None if args.episode_config_dir is None else str(args.episode_config_dir),
+            "first_episode_config": first_episode,
+            "curriculum_start_mode": "preposition_planned"
+            if ((first_episode or {}).get("scene") or {}).get("start_near_gate")
+            else "none",
         }
         (output_dir / "dry_run_summary.json").write_text(json.dumps(summary, indent=2, sort_keys=True), encoding="utf-8")
+        (output_dir / "train_config.json").write_text(json.dumps(train_config, indent=2, sort_keys=True), encoding="utf-8")
         return summary
 
     replay = ReplayBuffer(args.replay_capacity)
@@ -369,16 +773,136 @@ def run_training(args: argparse.Namespace) -> dict[str, Any]:
     total_steps = 0
     episodes: list[dict[str, Any]] = []
     last_metrics: dict[str, float] = {}
+    saved_checkpoints: list[dict[str, Any]] = []
+    saved_update_counts: set[int] = set()
+    pending_eval_checkpoints: list[dict[str, Any]] = []
+    eval_results: list[dict[str, Any]] = []
     max_seconds = float(args.max_minutes) * 60.0 if args.max_minutes > 0 else None
+
+    def save_update_checkpoint() -> None:
+        if args.save_every_updates <= 0 or updates_done <= 0 or updates_done in saved_update_counts:
+            return
+        if updates_done % args.save_every_updates != 0:
+            return
+        path = output_dir / f"checkpoint_update_{updates_done:06d}.pt"
+        trainer.save_checkpoint(path, train_config=train_config, step=total_steps)
+        saved_update_counts.add(updates_done)
+        saved_checkpoints.append(
+            {
+                "updates_done": updates_done,
+                "steps_completed": total_steps,
+                "checkpoint_path": str(path),
+            }
+        )
+        if args.eval_every_updates > 0 and updates_done % args.eval_every_updates == 0:
+            pending_eval_checkpoints.append(saved_checkpoints[-1])
+
+    def run_checkpoint_evals() -> None:
+        while pending_eval_checkpoints:
+            item = pending_eval_checkpoints.pop(0)
+            checkpoint = Path(item["checkpoint_path"])
+            update_count = int(item["updates_done"])
+            eval_dir = output_dir / "runtime_eval" / f"update_{update_count:06d}"
+            cmd = [
+                sys.executable,
+                str(Path(__file__).resolve().parents[1] / "scripts" / "serl_transfer_validate.py"),
+                "--policy-kind",
+                "act_adapter_serl",
+                "--checkpoint",
+                str(checkpoint),
+                "--act-torchscript",
+                str(args.act_torchscript),
+                "--output-dir",
+                str(eval_dir),
+                "--workspace-dir",
+                str(args.workspace_dir),
+                "--engine-config",
+                str(args.engine_config),
+                "--max-steps",
+                str(args.eval_max_steps),
+                "--per-trial-timeout-sec",
+                str(args.eval_timeout_sec),
+                "--device",
+                str(args.device),
+                "--adapter-delta-clip",
+                str(args.adapter_delta_clip),
+                "--action-clip",
+                str(args.action_clip),
+                "--task-family",
+                str(args.task_family),
+                "--target-port-index",
+                str(args.target_port_index),
+                "--target-card-index",
+                str(args.target_card_index),
+                "--target-card-valid",
+                str(args.target_card_valid),
+            ]
+            if args.sim_docker_container:
+                cmd.extend(["--sim-docker-container", str(args.sim_docker_container)])
+            if args.docker_host:
+                cmd.extend(["--docker-host", str(args.docker_host)])
+            if args.workspace_container:
+                cmd.extend(["--workspace-container", str(args.workspace_container)])
+            if args.host:
+                cmd.extend(["--host", str(args.host)])
+            if args.ground_truth:
+                cmd.extend(["--ground-truth", "true"])
+            else:
+                cmd.extend(["--ground-truth", "false"])
+            if args.gazebo_gui:
+                cmd.extend(["--gazebo-gui", "true"])
+            else:
+                cmd.extend(["--gazebo-gui", "false"])
+            if args.launch_rviz:
+                cmd.extend(["--launch-rviz", "true"])
+            else:
+                cmd.extend(["--launch-rviz", "false"])
+            if args.include_images:
+                cmd.append("--include-images")
+            else:
+                cmd.append("--no-include-images")
+            if args.allow_zero_images:
+                cmd.append("--allow-zero-images")
+
+            log_path = eval_dir / "eval_command.log"
+            eval_dir.mkdir(parents=True, exist_ok=True)
+            result = subprocess.run(cmd, cwd=args.workspace_dir, text=True, capture_output=True)
+            log_path.write_text(result.stdout + result.stderr, encoding="utf-8")
+            row = {
+                "updates_done": update_count,
+                "checkpoint_path": str(checkpoint),
+                "eval_dir": str(eval_dir),
+                "returncode": result.returncode,
+                "command": cmd,
+            }
+            eval_results.append(row)
+            with (output_dir / "eval_metrics.jsonl").open("a", encoding="utf-8") as eval_file:
+                eval_file.write(json.dumps(row, sort_keys=True) + "\n")
 
     for episode in range(args.max_episodes):
         if max_seconds is not None and time.monotonic() - started >= max_seconds:
             break
         results_dir = output_dir / "results" / f"episode_{episode:03d}"
+        episode_path = _select_episode_path(episode_paths, episode, args.curriculum_order)
+        episode_config = _load_episode(episode_path)
+        if episode_config and not _has_explicit_task_context(args):
+            context = episode_config.get("task_context") or {}
+            task_vector = task_vector_from_context(task_context_json=context)
+            trainer.policy.feature_assembler.reset(task_vector=task_vector)
+        selected_episode_artifact = None
+        if episode_config is not None:
+            selected_dir = output_dir / "selected_episode_configs"
+            selected_dir.mkdir(parents=True, exist_ok=True)
+            selected_episode_artifact = selected_dir / f"rollout_{episode:03d}.yaml"
+            selected_episode_artifact.write_text(yaml.safe_dump(episode_config, sort_keys=False), encoding="utf-8")
         env = GazeboRLEnv(
             workspace_dir=args.workspace_dir,
             engine_config=args.engine_config,
             sim_distrobox=args.sim_distrobox,
+            sim_docker_container=args.sim_docker_container,
+            docker_host=args.docker_host,
+            workspace_container=args.workspace_container,
+            host=args.host,
             ground_truth=args.ground_truth,
             gazebo_gui=args.gazebo_gui,
             launch_rviz=args.launch_rviz,
@@ -397,11 +921,18 @@ def run_training(args: argparse.Namespace) -> dict[str, Any]:
             record_image_writer_threads_per_camera=args.record_image_writer_threads_per_camera,
             record_video_encoding_batch_size=args.record_video_encoding_batch_size,
             include_images=args.include_images,
+            reward_config=reward_config,
+            reward_preset=args.reward_preset,
+            episode_config=episode_config,
+            episode_config_path=selected_episode_artifact or episode_path,
+            allow_reward_only_curriculum=args.allow_reward_only_curriculum,
         )
         episode_reward = 0.0
         episode_steps = 0
+        first_observation_images: dict[str, str] = {}
         try:
-            obs, _ = env.reset()
+            obs, reset_info = env.reset()
+            first_observation_images = _save_first_observation_images(obs, output_dir, episode)
             for _ in range(args.max_steps):
                 actor_obs = trainer.obs_to_actor(obs)
                 action, action_metrics = trainer.action_for_env(actor_obs)
@@ -429,6 +960,18 @@ def run_training(args: argparse.Namespace) -> dict[str, Any]:
                     **action_metrics,
                     **last_metrics,
                 }
+                for key, value in (info.get("reward") or {}).items():
+                    row[f"reward/{key}"] = value
+                if episode_config is not None:
+                    row["episode_id"] = episode_config.get("episode_id")
+                    row["episode_config_path"] = str(episode_path)
+                    row["curriculum_start_mode"] = reset_info.get("curriculum_start_mode")
+                    preposition = reset_info.get("preposition") or {}
+                    if preposition:
+                        row["preposition/mode"] = preposition.get("mode")
+                        row["preposition/error_m"] = preposition.get("error_m")
+                        row["preposition/steps"] = preposition.get("steps")
+                        row["preposition/source"] = preposition.get("source")
                 if len(replay) >= args.batch_size and updates_done < args.updates:
                     next_update = updates_done + 1
                     critic_only_steps = getattr(args, "critic_only_steps", 0)
@@ -441,6 +984,7 @@ def run_training(args: argparse.Namespace) -> dict[str, Any]:
                         update_actor=update_actor,
                     )
                     updates_done += 1
+                    save_update_checkpoint()
                     row.update(last_metrics)
                     row["updates_done"] = updates_done
                 with metrics_path.open("a", encoding="utf-8") as metrics_file:
@@ -451,6 +995,15 @@ def run_training(args: argparse.Namespace) -> dict[str, Any]:
             episodes.append(
                 {
                     "episode": episode,
+                    "episode_id": None if episode_config is None else episode_config.get("episode_id"),
+                    "episode_config_path": None if episode_path is None else str(episode_path),
+                    "selected_episode_config_artifact": None
+                    if selected_episode_artifact is None
+                    else str(selected_episode_artifact),
+                    "start_near_gate": None if episode_config is None else ((episode_config.get("scene") or {}).get("start_near_gate")),
+                    "curriculum_start_mode": env.curriculum_start_mode,
+                    "preposition": reset_info.get("preposition"),
+                    "first_observation_images": first_observation_images,
                     "steps": episode_steps,
                     "reward": episode_reward,
                     "results_dir": str(results_dir),
@@ -458,6 +1011,7 @@ def run_training(args: argparse.Namespace) -> dict[str, Any]:
             )
         finally:
             env.close()
+        run_checkpoint_evals()
         if updates_done >= args.updates:
             break
 
@@ -466,6 +1020,8 @@ def run_training(args: argparse.Namespace) -> dict[str, Any]:
         "steps_completed": total_steps,
         "updates_done": updates_done,
         "elapsed_sec": time.monotonic() - started,
+        "saved_checkpoints": saved_checkpoints,
+        "eval_results": eval_results,
     }
     (output_dir / "train_config.json").write_text(json.dumps(train_config, indent=2, sort_keys=True), encoding="utf-8")
     trainer.save_checkpoint(checkpoint_path, train_config=train_config, step=total_steps)
@@ -492,6 +1048,10 @@ def build_arg_parser() -> argparse.ArgumentParser:
     parser.add_argument("--workspace-dir", default=".")
     parser.add_argument("--engine-config", default=None)
     parser.add_argument("--sim-distrobox", default=None)
+    parser.add_argument("--sim-docker-container", default=None)
+    parser.add_argument("--docker-host", default=None)
+    parser.add_argument("--workspace-container", default="/home/chmin/yj/ws_aic/src/aic")
+    parser.add_argument("--host", default="127.0.0.1", help="Host/IP reachable from the runtime container.")
     parser.add_argument("--ground-truth", type=_bool, default=True)
     parser.add_argument("--gazebo-gui", type=_bool, default=False)
     parser.add_argument("--launch-rviz", type=_bool, default=False)
@@ -511,10 +1071,62 @@ def build_arg_parser() -> argparse.ArgumentParser:
     parser.add_argument("--act-preservation-weight", type=float, default=1e-1)
     parser.add_argument("--adapter-delta-clip", type=float, default=0.05)
     parser.add_argument("--action-clip", type=float, default=0.05)
+    parser.add_argument(
+        "--reward-preset",
+        choices=["default", "near_gate_corridor_v1", "cheatcode_insertion_v1", "cheatcode_alignment_v1"],
+        default="default",
+    )
+    parser.add_argument("--insertion-progress-weight", type=float, default=0.25)
+    parser.add_argument("--insertion-progress-scale", type=float, default=0.003)
+    parser.add_argument("--insertion-distance-weight", type=float, default=0.25)
+    parser.add_argument("--insertion-close-weight", type=float, default=0.35)
+    parser.add_argument("--insertion-orientation-weight", type=float, default=0.10)
+    parser.add_argument("--insertion-orientation-std", type=float, default=0.03)
+    parser.add_argument("--insertion-orientation-gate-sigma", type=float, default=0.012)
+    parser.add_argument("--insertion-reaching-weight", type=float, default=0.0)
+    parser.add_argument("--insertion-terminal-weight", type=float, default=1.0)
+    parser.add_argument("--insertion-lateral-weight", type=float, default=-0.05)
+    parser.add_argument("--insertion-lateral-gate-sigma", type=float, default=0.012)
+    parser.add_argument("--insertion-lateral-error-scale", type=float, default=0.006)
+    parser.add_argument("--insertion-lateral-progress-weight", type=float, default=0.0)
+    parser.add_argument("--insertion-lateral-progress-scale", type=float, default=0.001)
+    parser.add_argument("--insertion-axial-progress-weight", type=float, default=0.0)
+    parser.add_argument("--insertion-axial-progress-scale", type=float, default=0.001)
+    parser.add_argument("--insertion-corridor-weight", type=float, default=0.0)
+    parser.add_argument("--insertion-corridor-sigma", type=float, default=0.0025)
+    parser.add_argument("--insertion-bypass-penalty-scale", type=float, default=1.0)
+    parser.add_argument("--insertion-corridor-orientation-gate-std", type=float, default=0.0)
+    parser.add_argument("--insertion-cheatcode-phase-weight", type=float, default=0.0)
+    parser.add_argument("--insertion-cheatcode-lateral-progress-weight", type=float, default=0.40)
+    parser.add_argument("--insertion-cheatcode-orientation-progress-weight", type=float, default=0.30)
+    parser.add_argument("--insertion-cheatcode-near-misaligned-weight", type=float, default=0.25)
+    parser.add_argument("--insertion-cheatcode-hover-weight", type=float, default=0.15)
+    parser.add_argument("--insertion-cheatcode-axial-progress-weight", type=float, default=0.30)
+    parser.add_argument("--insertion-cheatcode-corridor-weight", type=float, default=1.50)
+    parser.add_argument("--insertion-cheatcode-inside-alignment-weight", type=float, default=0.20)
+    parser.add_argument("--insertion-cheatcode-retreat-weight", type=float, default=0.20)
+    parser.add_argument("--force-delta-penalty-weight", type=float, default=0.3)
+    parser.add_argument("--force-delta-threshold", type=float, default=10.0)
+    parser.add_argument("--force-delta-reference", type=float, default=20.0)
+    parser.add_argument("--force-delta-saturation", type=float, default=30.0)
+    parser.add_argument("--force-delta-knee-penalty-fraction", type=float, default=0.1)
+    parser.add_argument("--target-reward-distance-std", type=float, default=0.02)
+    parser.add_argument("--target-reward-close-sigma", type=float, default=0.006)
+    parser.add_argument("--target-reward-reaching-threshold", type=float, default=0.01)
+    parser.add_argument("--target-reward-orientation-error-mode", choices=["quat", "axis"], default="quat")
+    parser.add_argument("--target-reward-orientation-axis-local", type=float, nargs=3, default=None)
+    parser.add_argument("--terminate-on-target-success", action=argparse.BooleanOptionalAction, default=False)
+    parser.add_argument("--target-success-axial-threshold", type=float, default=None)
+    parser.add_argument("--target-success-lateral-threshold", type=float, default=None)
+    parser.add_argument("--target-success-orientation-threshold", type=float, default=None)
     parser.add_argument("--critic-init", choices=["scratch", "checkpoint", "act"], default="scratch")
     parser.add_argument("--critic-checkpoint", default=None)
     parser.add_argument("--critic-only-steps", type=int, default=0)
     parser.add_argument("--actor-update-delay", type=int, default=1)
+    parser.add_argument("--save-every-updates", type=int, default=0)
+    parser.add_argument("--eval-every-updates", type=int, default=0)
+    parser.add_argument("--eval-max-steps", type=int, default=600)
+    parser.add_argument("--eval-timeout-sec", type=float, default=900.0)
     parser.add_argument("--task-family", choices=["sfp_to_nic", "sc_to_sc"], default=None)
     parser.add_argument("--target-port-index", type=int, default=None)
     parser.add_argument("--target-card-index", type=int, default=None)
@@ -523,10 +1135,25 @@ def build_arg_parser() -> argparse.ArgumentParser:
     parser.add_argument("--include-images", action=argparse.BooleanOptionalAction, default=True)
     parser.add_argument("--allow-zero-images", action="store_true")
     parser.add_argument("--dry-run", action="store_true")
+    parser.add_argument("--user-config-yaml", type=Path, default=None)
+    parser.add_argument("--gazebo-user-config-yaml", type=Path, default=None)
+    parser.add_argument("--user-config-dir", type=Path, default=None)
+    parser.add_argument("--gazebo-user-config-dir", type=Path, default=None)
+    parser.add_argument("--user-config-filenames", default="")
+    parser.add_argument("--episode-config-dir", type=Path, default=None)
+    parser.add_argument("--episode-config-count", type=int, default=None)
+    parser.add_argument("--max-gpus", type=int, default=1)
+    parser.add_argument("--curriculum-order", choices=["sequential", "cycle", "random"], default="sequential")
+    parser.add_argument(
+        "--allow-reward-only-curriculum",
+        action="store_true",
+        help="Allow start_near_gate YAMLs to affect reward metadata only when Gazebo cannot physically reset the body/TCP.",
+    )
     add_recording_args(parser)
     return parser
 
 
 def main(argv: list[str] | None = None) -> None:
     args = build_arg_parser().parse_args(argv)
+    args._explicit_cli_flags = _explicit_flags(argv)
     print(json.dumps(run_training(args), indent=2, sort_keys=True))

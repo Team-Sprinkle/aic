@@ -57,7 +57,13 @@ from rclpy.node import Node
 from rclpy.qos import qos_profile_sensor_data
 from sensor_msgs.msg import Image
 
-from aic_model.policy import quaternion_xyzw_to_rotation_vector
+from aic_model.policy import (
+    normalize_quaternion_xyzw,
+    quaternion_inverse_xyzw,
+    quaternion_multiply_xyzw,
+    quaternion_xyzw_to_rotation_matrix,
+    quaternion_xyzw_to_rotation_vector,
+)
 from .types import JointMotionUpdateActionDict, MotionUpdateActionDict
 
 
@@ -306,7 +312,7 @@ class PolicyRecorder(Node):
         self._latest_joint_cmd = msg
         self._latest_joint_wall_time = time.time()
 
-    def _image_to_bgr(self, image_msg: Image) -> np.ndarray:
+    def _image_to_rgb(self, image_msg: Image) -> np.ndarray:
         h = int(image_msg.height)
         w = int(image_msg.width)
         step = int(image_msg.step)
@@ -321,19 +327,19 @@ class PolicyRecorder(Node):
             return np.zeros((h, w, 3), dtype=np.uint8)
 
         if encoding == "bgr8":
-            image = row_data[:, : w * 3].reshape(h, w, 3)
+            bgr = row_data[:, : w * 3].reshape(h, w, 3)
+            image = cv2.cvtColor(bgr, cv2.COLOR_BGR2RGB)
         elif encoding == "rgb8":
-            rgb = row_data[:, : w * 3].reshape(h, w, 3)
-            image = cv2.cvtColor(rgb, cv2.COLOR_RGB2BGR)
+            image = row_data[:, : w * 3].reshape(h, w, 3)
         elif encoding == "mono8":
             gray = row_data[:, :w]
-            image = cv2.cvtColor(gray, cv2.COLOR_GRAY2BGR)
+            image = cv2.cvtColor(gray, cv2.COLOR_GRAY2RGB)
         elif encoding == "bgra8":
             bgra = row_data[:, : w * 4].reshape(h, w, 4)
-            image = cv2.cvtColor(bgra, cv2.COLOR_BGRA2BGR)
+            image = cv2.cvtColor(bgra, cv2.COLOR_BGRA2RGB)
         elif encoding == "rgba8":
             rgba = row_data[:, : w * 4].reshape(h, w, 4)
-            image = cv2.cvtColor(rgba, cv2.COLOR_RGBA2BGR)
+            image = cv2.cvtColor(rgba, cv2.COLOR_RGBA2RGB)
         else:
             if encoding not in self._unsupported_encodings_logged:
                 self.get_logger().warn(
@@ -354,7 +360,6 @@ class PolicyRecorder(Node):
 
     def _obs_message_to_values(self, obs: Observation) -> dict[str, Any]:
         ctrl = obs.controller_state
-
         values: dict[str, Any] = {
             "tcp_pose.position.x": float(ctrl.tcp_pose.position.x),
             "tcp_pose.position.y": float(ctrl.tcp_pose.position.y),
@@ -388,9 +393,9 @@ class PolicyRecorder(Node):
             "wrist_wrench.torque.x": float(obs.wrist_wrench.wrench.torque.x),
             "wrist_wrench.torque.y": float(obs.wrist_wrench.wrench.torque.y),
             "wrist_wrench.torque.z": float(obs.wrist_wrench.wrench.torque.z),
-            "left_camera": self._image_to_bgr(obs.left_image),
-            "center_camera": self._image_to_bgr(obs.center_image),
-            "right_camera": self._image_to_bgr(obs.right_image),
+            "left_camera": self._image_to_rgb(obs.left_image),
+            "center_camera": self._image_to_rgb(obs.center_image),
+            "right_camera": self._image_to_rgb(obs.right_image),
         }
 
         joints = _fixed_len([float(v) for v in obs.joint_states.position], 7)
@@ -399,7 +404,10 @@ class PolicyRecorder(Node):
 
         return values
 
-    def _cartesian_action_from_motion(self) -> dict[str, float]:
+    def _cartesian_action_from_motion(
+        self,
+        obs_values: dict[str, Any] | None = None,
+    ) -> dict[str, float]:
         now = time.monotonic()
         zero_action = {
             "delta_position.x": 0.0,
@@ -432,16 +440,76 @@ class PolicyRecorder(Node):
             return zero_action
 
         frame_id = str(getattr(msg.header, "frame_id", "") or "")
-        if frame_id != "gripper/tcp":
+        if frame_id not in {"gripper/tcp", "base_link"}:
             mode_key = f"frame:{frame_id}"
             if mode_key not in self._unsupported_action_modes_logged:
                 self.get_logger().warn(
                     "Recorder expected Cartesian pose commands in frame_id='gripper/tcp' "
+                    "or frame_id='base_link' "
                     f"for delta-pose datasets, received frame_id='{frame_id}'. "
                     "Recording zero action for this frame."
                 )
                 self._unsupported_action_modes_logged.add(mode_key)
             return zero_action
+
+        if frame_id == "base_link":
+            if obs_values is None:
+                return zero_action
+            current_position = np.array(
+                [
+                    float(obs_values["tcp_pose.position.x"]),
+                    float(obs_values["tcp_pose.position.y"]),
+                    float(obs_values["tcp_pose.position.z"]),
+                ],
+                dtype=np.float64,
+            )
+            current_quat = normalize_quaternion_xyzw(
+                np.array(
+                    [
+                        float(obs_values["tcp_pose.orientation.x"]),
+                        float(obs_values["tcp_pose.orientation.y"]),
+                        float(obs_values["tcp_pose.orientation.z"]),
+                        float(obs_values["tcp_pose.orientation.w"]),
+                    ],
+                    dtype=np.float64,
+                )
+            )
+            target_position = np.array(
+                [
+                    float(msg.pose.position.x),
+                    float(msg.pose.position.y),
+                    float(msg.pose.position.z),
+                ],
+                dtype=np.float64,
+            )
+            target_quat = normalize_quaternion_xyzw(
+                np.array(
+                    [
+                        float(msg.pose.orientation.x),
+                        float(msg.pose.orientation.y),
+                        float(msg.pose.orientation.z),
+                        float(msg.pose.orientation.w),
+                    ],
+                    dtype=np.float64,
+                )
+            )
+            base_to_tcp = quaternion_xyzw_to_rotation_matrix(
+                quaternion_inverse_xyzw(current_quat)
+            )
+            delta_position = base_to_tcp @ (target_position - current_position)
+            delta_quat = quaternion_multiply_xyzw(
+                quaternion_inverse_xyzw(current_quat),
+                target_quat,
+            )
+            rotvec = quaternion_xyzw_to_rotation_vector(delta_quat)
+            return {
+                "delta_position.x": float(delta_position[0]),
+                "delta_position.y": float(delta_position[1]),
+                "delta_position.z": float(delta_position[2]),
+                "delta_rotation.x": float(rotvec[0]),
+                "delta_rotation.y": float(rotvec[1]),
+                "delta_rotation.z": float(rotvec[2]),
+            }
 
         rotvec = quaternion_xyzw_to_rotation_vector(
             np.array(
@@ -489,10 +557,10 @@ class PolicyRecorder(Node):
             "wrist_3_joint": v[5],
         }
 
-    def _action_values(self) -> dict[str, float]:
+    def _action_values(self, obs_values: dict[str, Any] | None = None) -> dict[str, float]:
         if self.action_mode == "joint":
             return self._joint_action_from_joint_cmd()
-        return self._cartesian_action_from_motion()
+        return self._cartesian_action_from_motion(obs_values)
 
     def _init_dataset(self, obs_values: dict[str, Any]) -> None:
         left_image_shape = tuple(int(x) for x in obs_values["left_camera"].shape)
@@ -667,7 +735,7 @@ class PolicyRecorder(Node):
             return
 
         obs_values_processed = self._robot_observation_processor(obs_values)
-        action_values_raw = self._action_values()
+        action_values_raw = self._action_values(obs_values)
         action_values_processed = self._teleop_action_processor((action_values_raw, obs_values))
 
         observation_frame = build_dataset_frame(

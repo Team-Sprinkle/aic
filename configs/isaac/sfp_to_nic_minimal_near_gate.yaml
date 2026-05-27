@@ -1,0 +1,27 @@
+root_dir: outputs/isaac_episode_configs
+task_family: sfp_to_nic
+suffix: isaac_near_gate
+
+generation:
+  target_accepted_trajectories: 16
+  max_attempts: 16
+  policy: agent
+  seed: 42
+
+acceptance:
+  success_only: false
+  min_score: 0.0
+  stop_near_gate:
+    max_lateral_error_m: 0.004
+    max_axial_error_m: 0.020
+    max_tcp_speed_mps: 0.020
+    max_force_n: 20.0
+
+scene:
+  start_near_gate:
+    axial_distance_m: 0.050
+    lateral_distance_m: 0.010
+  nic_cards:
+    count: 1
+    target_card: 0
+    target_port: sfp_port_0

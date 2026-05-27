@@ -18,6 +18,9 @@ from .task_encoding import (
 )
 
 
+NORMALIZATION_STD_EPS = 1e-8
+
+
 def task_vector_from_fields(
     task_family: str,
     target_port_index: int,
@@ -274,11 +277,17 @@ def append_task_vectors_to_observation_state_dataset(
     if stats_path.exists() and appended_states:
         stats = json.loads(stats_path.read_text(encoding="utf-8"))
         matrix = np.stack([np.asarray(state, dtype=np.float32).reshape(-1) for state in appended_states], axis=0)
+        mean = matrix.mean(axis=0)
+        std = matrix.std(axis=0)
+        safe_std = np.where(np.abs(std) < NORMALIZATION_STD_EPS, 1.0, std)
+        if matrix.shape[1] >= TASK_VECTOR_DIM:
+            mean[-TASK_VECTOR_DIM:] = 0.0
+            safe_std[-TASK_VECTOR_DIM:] = 1.0
         stats["observation.state"] = {
             "min": matrix.min(axis=0).tolist(),
             "max": matrix.max(axis=0).tolist(),
-            "mean": matrix.mean(axis=0).tolist(),
-            "std": matrix.std(axis=0).tolist(),
+            "mean": mean.tolist(),
+            "std": safe_std.tolist(),
             "count": [int(matrix.shape[0])],
             "q01": np.quantile(matrix, 0.01, axis=0).tolist(),
             "q10": np.quantile(matrix, 0.10, axis=0).tolist(),

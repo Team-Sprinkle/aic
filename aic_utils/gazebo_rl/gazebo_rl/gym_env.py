@@ -6,7 +6,9 @@ from typing import Any
 
 from gazebo_rl.ipc import IPCMessage, IPCServer, JsonLineConnection
 from gazebo_rl.runner import GazeboRLRunner, GazeboRLRunnerConfig
-from gazebo_rl.score_parser import dense_training_reward, score_from_scoring_yaml
+from gazebo_rl.score_parser import dense_training_reward, gazebo_terminal_score, score_from_scoring_yaml
+from gazebo_rl.insertion_reward import GazeboRewardConfig, calculate_gazebo_insertion_reward
+from gazebo_rl.task_geometry_reward import dense_task_geometry_reward
 
 
 class GazeboRLEnv:
@@ -40,6 +42,12 @@ class GazeboRLEnv:
         record_image_writer_threads_per_camera: int = 4,
         record_video_encoding_batch_size: int = 1,
         include_images: bool = False,
+        reward_config: GazeboRewardConfig | None = None,
+        reward_preset: str = "default",
+        episode_config: dict[str, Any] | None = None,
+        episode_config_path: str | Path | None = None,
+        allow_reward_only_curriculum: bool = False,
+        preposition_start_near_gate: bool = True,
     ):
         self.workspace_dir = Path(workspace_dir).resolve()
         self.max_steps = int(max_steps)
@@ -47,8 +55,26 @@ class GazeboRLEnv:
         self._server = IPCServer(host=host, port=port)
         self._conn: JsonLineConnection | None = None
         self._hello: dict[str, Any] | None = None
+        self._preposition: dict[str, Any] | None = None
         self._closed = False
         self._step_count = 0
+        self.reward_config = reward_config
+        self.reward_preset = reward_preset
+        self.episode_config = episode_config
+        self.curriculum_start_mode = "none"
+        start_near_gate = ((episode_config or {}).get("scene") or {}).get("start_near_gate")
+        if start_near_gate:
+            if allow_reward_only_curriculum:
+                self.curriculum_start_mode = "reward_only"
+            elif preposition_start_near_gate and episode_config_path is not None:
+                self.curriculum_start_mode = "preposition"
+            elif not allow_reward_only_curriculum:
+                raise RuntimeError(
+                    "Gazebo start_near_gate metadata was requested, but this Gazebo stack does not expose "
+                    "a physical body/TCP reset hook through aic_engine or GazeboRLEnv and no bridge "
+                    "pre-position episode config path was provided. Re-run with "
+                    "--allow-reward-only-curriculum to use the materialized metadata for reward shaping only."
+                )
         self.runner = GazeboRLRunner(
             GazeboRLRunnerConfig(
                 workspace_dir=self.workspace_dir,
@@ -78,6 +104,8 @@ class GazeboRLEnv:
                 record_image_writer_threads_per_camera=record_image_writer_threads_per_camera,
                 record_video_encoding_batch_size=record_video_encoding_batch_size,
                 include_images=include_images,
+                episode_config=Path(episode_config_path).resolve() if episode_config_path is not None else None,
+                preposition_start_near_gate=self.curriculum_start_mode == "preposition",
             )
         )
 
@@ -100,6 +128,9 @@ class GazeboRLEnv:
                 continue
             if msg.type == "hello":
                 self._hello = msg.payload
+                continue
+            if msg.type == "preposition":
+                self._preposition = msg.payload
                 continue
             if msg.type in {"observation", "done", "error"}:
                 return msg
@@ -125,7 +156,36 @@ class GazeboRLEnv:
             raise RuntimeError(f"Expected first observation, got {msg.type}: {msg.payload}")
         obs = msg.payload["observation"]
         self._last_obs = obs
-        return obs, {"hello": self._hello, "results_dir": str(self.results_dir)}
+        return obs, {
+            "hello": self._hello,
+            "preposition": self._preposition,
+            "results_dir": str(self.results_dir),
+            "curriculum_start_mode": self.curriculum_start_mode,
+        }
+
+    def _reward(
+        self,
+        *,
+        prev_obs: dict[str, Any] | None,
+        obs: dict[str, Any] | None,
+        terminal_score: float,
+    ) -> tuple[float, dict[str, float]]:
+        if self.reward_config is not None or self.episode_config is not None:
+            reward, reward_info = calculate_gazebo_insertion_reward(
+                prev_obs=prev_obs,
+                obs=obs,
+                terminal_score=terminal_score,
+                episode_config=self.episode_config,
+                config=self.reward_config,
+            )
+            if reward_info.get("insertion_reward_available", 0.0) != 0.0:
+                return reward, reward_info
+        reward, reward_info = dense_task_geometry_reward(
+            prev_obs=prev_obs,
+            obs=obs,
+            terminal_score=terminal_score,
+        )
+        return reward, reward_info
 
     def step(self, action: list[float] | tuple[float, ...]) -> tuple[dict[str, Any], float, bool, bool, dict[str, Any]]:
         if self._conn is None:
@@ -138,16 +198,33 @@ class GazeboRLEnv:
             raise RuntimeError(f"Bridge error: {msg.payload}")
         if msg.type == "done":
             parsed = score_from_scoring_yaml(self.results_dir)
-            return self._last_obs, dense_training_reward(terminal=True, results_dir=self.results_dir), True, False, {
+            terminal_score = gazebo_terminal_score(self.results_dir)
+            reward, reward_info = self._reward(
+                prev_obs=self._last_obs,
+                obs=self._last_obs,
+                terminal_score=terminal_score,
+            )
+            if reward_info.get("task_geometry_reward_available", 0.0) == 0.0:
+                reward = dense_training_reward(terminal=True, results_dir=self.results_dir)
+            return self._last_obs, reward, True, False, {
                 "done": msg.payload,
                 "score": parsed,
+                "reward": reward_info,
             }
         obs = msg.payload["observation"]
+        prev_obs = self._last_obs
         self._last_obs = obs
         terminated = bool(msg.payload.get("terminated", False))
         truncated = self._step_count >= self.max_steps
-        reward = dense_training_reward(terminal=terminated, results_dir=self.results_dir)
-        info = {"step_count": self._step_count, "results_dir": str(self.results_dir)}
+        terminal_score = gazebo_terminal_score(self.results_dir) if terminated else 0.0
+        reward, reward_info = self._reward(
+            prev_obs=prev_obs,
+            obs=obs,
+            terminal_score=terminal_score,
+        )
+        if reward_info.get("task_geometry_reward_available", 0.0) == 0.0:
+            reward = dense_training_reward(terminal=terminated, results_dir=self.results_dir)
+        info = {"step_count": self._step_count, "results_dir": str(self.results_dir), "reward": reward_info}
         if truncated:
             self._conn.send("done", {"reason": "env_max_steps", "step_count": self._step_count})
         return obs, reward, terminated, truncated, info

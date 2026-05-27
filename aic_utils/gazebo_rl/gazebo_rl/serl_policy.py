@@ -9,10 +9,13 @@ import numpy as np
 import torch
 from torch import nn
 from torch.nn import functional as F
+from safetensors.torch import load_file
 
 
 LEROBOT_AIC_PACKAGE_DIR = Path(__file__).resolve().parents[2] / "lerobot_robot_aic"
-if LEROBOT_AIC_PACKAGE_DIR.exists() and str(LEROBOT_AIC_PACKAGE_DIR) not in sys.path:
+if LEROBOT_AIC_PACKAGE_DIR.exists() and str(LEROBOT_AIC_PACKAGE_DIR) in sys.path:
+    sys.path.remove(str(LEROBOT_AIC_PACKAGE_DIR))
+if LEROBOT_AIC_PACKAGE_DIR.exists():
     sys.path.insert(0, str(LEROBOT_AIC_PACKAGE_DIR))
 
 ACT_CAMERA_KEYS = [
@@ -20,6 +23,8 @@ ACT_CAMERA_KEYS = [
     "observation.images.left_camera",
     "observation.images.right_camera",
 ]
+
+from lerobot_robot_aic.runtime_features import AICRuntimeFeatureAssembler, base_state_from_gazebo_observation
 
 
 def task_vector_from_context(
@@ -62,24 +67,7 @@ def task_vector_from_context(
 
 
 def lowdim_state_from_gazebo_observation(obs: dict[str, Any]) -> np.ndarray:
-    controller = obs.get("controller") or {}
-    tcp_pose = controller.get("current_tcp_pose") or {}
-    tcp_velocity = controller.get("tcp_velocity") or {}
-    joints = obs.get("joints") or {}
-    wrench = obs.get("wrist_wrench") or {}
-
-    values: list[float] = []
-    values.extend((tcp_pose.get("position") or [0.0, 0.0, 0.0])[:3])
-    values.extend((tcp_pose.get("orientation_xyzw") or [0.0, 0.0, 0.0, 1.0])[:4])
-    values.extend(((tcp_velocity or {}).get("linear") or [0.0, 0.0, 0.0])[:3])
-    values.extend(((tcp_velocity or {}).get("angular") or [0.0, 0.0, 0.0])[:3])
-    tcp_error = list(controller.get("tcp_error") or [])
-    values.extend((tcp_error + [0.0] * 6)[:6])
-    joint_positions = list(joints.get("position") or [])
-    values.extend((joint_positions + [0.0] * 7)[:7])
-    values.extend(((wrench or {}).get("force") or [0.0, 0.0, 0.0])[:3])
-    values.extend(((wrench or {}).get("torque") or [0.0, 0.0, 0.0])[:3])
-    return np.asarray(values[:32], dtype=np.float32)
+    return base_state_from_gazebo_observation(obs)
 
 
 class OfflineSERLGazeboPolicy:
@@ -101,10 +89,12 @@ class OfflineSERLGazeboPolicy:
         self.task_vector = None if task_vector is None else torch.as_tensor(
             task_vector, dtype=torch.float32, device=self.device
         )
-        if int(cfg.get("obs_dim", 0)) != 32 and self.task_vector is None:
+        obs_dim = int(cfg.get("obs_dim", 0))
+        self.feature_assembler = AICRuntimeFeatureAssembler(obs_dim, task_vector=task_vector)
+        if self.feature_assembler.uses_task_vector and task_vector is None:
             raise ValueError(
                 f"Gazebo SERL policy got obs_dim={cfg.get('obs_dim')}; pass task context "
-                "when loading a task-conditioned checkpoint."
+                "when loading a task/contact-conditioned checkpoint."
             )
         self.action_horizon = int(cfg.get("action_horizon", 1))
         self.single_action_dim = int((ckpt.get("dataset_schema") or {}).get("action_shape", [6])[0])
@@ -118,15 +108,14 @@ class OfflineSERLGazeboPolicy:
         self.actor.eval()
         stats = ckpt.get("normalization_stats") or {}
         self.obs_mean = torch.as_tensor(stats["obs_mean"], dtype=torch.float32, device=self.device)
-        self.obs_std = torch.as_tensor(stats["obs_std"], dtype=torch.float32, device=self.device)
+        obs_std = torch.as_tensor(stats["obs_std"], dtype=torch.float32, device=self.device)
+        self.obs_std = torch.where(torch.abs(obs_std) < 1.0e-8, torch.ones_like(obs_std), obs_std)
         self.action_mean = torch.as_tensor(stats["action_mean"], dtype=torch.float32, device=self.device)
         self.action_std = torch.as_tensor(stats["action_std"], dtype=torch.float32, device=self.device)
 
     def act(self, obs: dict[str, Any], *, explore: bool = False) -> list[float]:
         del explore
-        lowdim = torch.as_tensor(lowdim_state_from_gazebo_observation(obs), device=self.device).unsqueeze(0)
-        if self.task_vector is not None:
-            lowdim = torch.cat([lowdim, self.task_vector.unsqueeze(0)], dim=-1)
+        lowdim = torch.as_tensor(self.feature_assembler.assemble_gazebo(obs), device=self.device).unsqueeze(0)
         if lowdim.shape[-1] != self.obs_mean.shape[-1]:
             raise ValueError(f"Expected runtime state dim {self.obs_mean.shape[-1]}, got {lowdim.shape[-1]}")
         lowdim = (lowdim - self.obs_mean) / self.obs_std
@@ -136,17 +125,203 @@ class OfflineSERLGazeboPolicy:
         return action[: self.single_action_dim].detach().cpu().numpy().astype(float).tolist()
 
 
-def _mlp(input_dim: int, hidden_dim: int, num_layers: int, output_dim: int) -> nn.Sequential:
+def _activation(name: str) -> nn.Module:
+    normalized = name.strip().lower()
+    if normalized == "relu":
+        return nn.ReLU()
+    if normalized == "gelu":
+        return nn.GELU()
+    raise ValueError(f"Unsupported activation: {name!r}")
+
+
+class FourierStateEncoding(nn.Module):
+    def __init__(
+        self,
+        *,
+        state_dim: int,
+        indices: list[int] | tuple[int, ...],
+        num_bands: int,
+        max_freq: float,
+        scale: float,
+    ):
+        super().__init__()
+        self.state_dim = int(state_dim)
+        self.indices = tuple(int(i) for i in indices)
+        if any(i < 0 or i >= self.state_dim for i in self.indices):
+            raise ValueError(f"State encoding indices must be within [0, {self.state_dim}); got {self.indices}")
+        self.num_bands = int(num_bands)
+        if self.num_bands < 1:
+            raise ValueError("num_bands must be >= 1")
+        self.max_freq = float(max_freq)
+        self.scale = float(scale)
+        freqs = torch.logspace(0.0, torch.log10(torch.tensor(self.max_freq)), self.num_bands)
+        self.register_buffer("freqs", freqs.float(), persistent=False)
+        self.output_dim = self.state_dim + len(self.indices) * self.num_bands * 2
+
+    def forward(self, state: torch.Tensor) -> torch.Tensor:
+        selected = state[:, self.indices] * self.scale
+        angles = selected.unsqueeze(-1) * self.freqs.to(device=state.device, dtype=state.dtype).view(1, 1, -1)
+        encoded = torch.cat([torch.sin(angles), torch.cos(angles)], dim=-1).flatten(start_dim=1)
+        return torch.cat([state, encoded], dim=-1)
+
+
+def _torchscript_metadata(path: Path) -> dict[str, Any]:
+    metadata_path = path.with_suffix(".json")
+    if not metadata_path.exists():
+        raise FileNotFoundError(f"ACT TorchScript metadata not found: {metadata_path}")
+    import json
+
+    return json.loads(metadata_path.read_text(encoding="utf-8"))
+
+
+def _resolve_act_checkpoint_dir(path: Path) -> Path:
+    metadata = _torchscript_metadata(path)
+    checkpoint_dir = Path(str(metadata.get("checkpoint_dir", "")))
+    candidates = [checkpoint_dir] if checkpoint_dir.is_absolute() else [Path.cwd() / checkpoint_dir, path.parent / checkpoint_dir]
+    for candidate in candidates:
+        if (candidate / "policy_preprocessor_step_3_normalizer_processor.safetensors").exists():
+            return candidate
+    raise FileNotFoundError(
+        "Could not resolve ACT checkpoint normalizer directory from "
+        f"{path.with_suffix('.json')}: tried {', '.join(str(c) for c in candidates)}"
+    )
+
+
+class ACTRuntimeNormalizer(nn.Module):
+    """LeRobot ACT runtime scaling around the exported TorchScript model."""
+
+    def __init__(self, act_torchscript_path: Path, *, state_dim: int, action_dim: int):
+        super().__init__()
+        checkpoint_dir = _resolve_act_checkpoint_dir(act_torchscript_path)
+        stats = load_file(str(checkpoint_dir / "policy_preprocessor_step_3_normalizer_processor.safetensors"))
+
+        def stat(key: str, shape: tuple[int, ...]) -> torch.Tensor:
+            if key not in stats:
+                raise KeyError(f"ACT normalizer stats are missing {key!r}")
+            tensor = stats[key].float().view(*shape)
+            if key.endswith(".std"):
+                tensor = torch.where(torch.abs(tensor) < 1.0e-8, torch.ones_like(tensor), tensor)
+            return tensor
+
+        state_mean = stat("observation.state.mean", (1, -1))[:, :state_dim]
+        state_std = stat("observation.state.std", (1, -1))[:, :state_dim]
+        if state_dim in (42, 82):
+            state_mean[:, -10:] = 0.0
+            state_std[:, -10:] = 1.0
+
+        self.register_buffer("state_mean", state_mean, persistent=False)
+        self.register_buffer("state_std", state_std, persistent=False)
+        self.register_buffer("action_mean", stat("action.mean", (1, -1))[:, :action_dim], persistent=False)
+        self.register_buffer("action_std", stat("action.std", (1, -1))[:, :action_dim], persistent=False)
+        for key in ACT_CAMERA_KEYS:
+            safe_key = key.replace(".", "__")
+            self.register_buffer(f"{safe_key}_mean", stat(f"{key}.mean", (1, 3, 1, 1)), persistent=False)
+            self.register_buffer(f"{safe_key}_std", stat(f"{key}.std", (1, 3, 1, 1)), persistent=False)
+
+    def normalize_state(self, state: torch.Tensor) -> torch.Tensor:
+        return (state - self.state_mean.to(device=state.device, dtype=state.dtype)) / self.state_std.to(
+            device=state.device, dtype=state.dtype
+        )
+
+    def normalize_image(self, key: str, image: torch.Tensor) -> torch.Tensor:
+        safe_key = key.replace(".", "__")
+        mean = getattr(self, f"{safe_key}_mean").to(device=image.device, dtype=image.dtype)
+        std = getattr(self, f"{safe_key}_std").to(device=image.device, dtype=image.dtype)
+        return (image - mean) / std
+
+    def unnormalize_action(self, normalized_action: torch.Tensor) -> torch.Tensor:
+        return normalized_action * self.action_std.to(
+            device=normalized_action.device, dtype=normalized_action.dtype
+        ) + self.action_mean.to(device=normalized_action.device, dtype=normalized_action.dtype)
+
+
+class IdentityACTRuntimeNormalizer(nn.Module):
+    def normalize_state(self, state: torch.Tensor) -> torch.Tensor:
+        return state
+
+    def normalize_image(self, key: str, image: torch.Tensor) -> torch.Tensor:
+        del key
+        return image
+
+    def unnormalize_action(self, normalized_action: torch.Tensor) -> torch.Tensor:
+        return normalized_action
+
+
+def _make_state_encoder(
+    *,
+    state_dim: int,
+    state_encoding: str,
+    state_encoding_indices: list[int] | tuple[int, ...],
+    state_encoding_num_bands: int,
+    state_encoding_max_freq: float,
+    state_encoding_scale: float,
+) -> tuple[nn.Module, int]:
+    if state_encoding == "none":
+        return nn.Identity(), int(state_dim)
+    if state_encoding == "fourier":
+        encoder = FourierStateEncoding(
+            state_dim=state_dim,
+            indices=state_encoding_indices,
+            num_bands=state_encoding_num_bands,
+            max_freq=state_encoding_max_freq,
+            scale=state_encoding_scale,
+        )
+        return encoder, int(encoder.output_dim)
+    raise ValueError(f"Unsupported state_encoding: {state_encoding!r}")
+
+
+def _mlp(
+    input_dim: int,
+    hidden_dim: int,
+    num_layers: int,
+    output_dim: int,
+    *,
+    layer_norm: bool = False,
+    zero_final: bool = True,
+    activation: str = "relu",
+) -> nn.Sequential:
     layers: list[nn.Module] = []
     dim = input_dim
     for _ in range(num_layers):
-        layers.extend([nn.Linear(dim, hidden_dim), nn.ReLU()])
+        layers.append(nn.Linear(dim, hidden_dim))
+        if layer_norm:
+            layers.append(nn.LayerNorm(hidden_dim))
+        layers.append(_activation(activation))
         dim = hidden_dim
     final = nn.Linear(dim, output_dim)
-    nn.init.zeros_(final.weight)
-    nn.init.zeros_(final.bias)
+    if zero_final:
+        nn.init.zeros_(final.weight)
+        nn.init.zeros_(final.bias)
     layers.append(final)
     return nn.Sequential(*layers)
+
+
+class GatedActionAdapter(nn.Module):
+    def __init__(
+        self,
+        *,
+        input_dim: int,
+        hidden_dim: int,
+        num_layers: int,
+        output_dim: int,
+        layer_norm: bool,
+        activation: str,
+    ):
+        super().__init__()
+        self.net = _mlp(
+            input_dim,
+            hidden_dim,
+            num_layers,
+            output_dim * 2,
+            layer_norm=layer_norm,
+            zero_final=True,
+            activation=activation,
+        )
+        self.output_dim = int(output_dim)
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        raw_delta, raw_gate = self.net(x).split(self.output_dim, dim=-1)
+        return torch.tanh(raw_delta) * torch.sigmoid(raw_gate)
 
 
 def _infer_adapter_shape(actor_state: dict[str, torch.Tensor]) -> tuple[int, int]:
@@ -211,6 +386,7 @@ class TorchScriptACTAdapterActor(nn.Module):
         self,
         *,
         act_base: torch.jit.ScriptModule,
+        act_torchscript_path: Path | None = None,
         state_dim: int,
         action_dim: int,
         action_horizon: int,
@@ -219,6 +395,15 @@ class TorchScriptACTAdapterActor(nn.Module):
         adapter_scale: float,
         adapter_delta_clip: float | None,
         action_clip: float | None,
+        adapter_activation: str = "relu",
+        actor_mode: str = "act_adapter",
+        state_encoding: str = "none",
+        state_encoding_indices: list[int] | tuple[int, ...] = (),
+        state_encoding_num_bands: int = 4,
+        state_encoding_max_freq: float = 8.0,
+        state_encoding_scale: float = 1.0,
+        adapter_arch: str = "mlp",
+        adapter_layer_norm: bool = False,
     ):
         super().__init__()
         self.act_base = act_base
@@ -226,22 +411,70 @@ class TorchScriptACTAdapterActor(nn.Module):
         self.action_dim = int(action_dim)
         self.action_horizon = int(action_horizon)
         self.single_action_dim = self.action_dim // self.action_horizon
+        self.act_normalizer = (
+            ACTRuntimeNormalizer(
+                act_torchscript_path=Path(act_torchscript_path),
+                state_dim=self.state_dim,
+                action_dim=self.single_action_dim,
+            )
+            if act_torchscript_path is not None
+            else IdentityACTRuntimeNormalizer()
+        )
         self.adapter_scale = float(adapter_scale)
         self.adapter_delta_clip = None if adapter_delta_clip is None else float(adapter_delta_clip)
         self.action_clip = None if action_clip is None else float(action_clip)
-        self.adapter = _mlp(self.state_dim + self.action_dim, hidden_dim, num_layers, self.action_dim)
+        self.actor_mode = str(actor_mode)
+        if self.actor_mode not in {"act_adapter", "act_direct"}:
+            raise ValueError(f"Unsupported actor_mode: {self.actor_mode!r}")
+        self.state_encoder, encoded_state_dim = _make_state_encoder(
+            state_dim=self.state_dim,
+            state_encoding=state_encoding,
+            state_encoding_indices=state_encoding_indices,
+            state_encoding_num_bands=state_encoding_num_bands,
+            state_encoding_max_freq=state_encoding_max_freq,
+            state_encoding_scale=state_encoding_scale,
+        )
+        adapter_input_dim = encoded_state_dim + self.action_dim
+        if adapter_arch == "mlp":
+            self.adapter = _mlp(
+                adapter_input_dim,
+                hidden_dim,
+                num_layers,
+                self.action_dim,
+                layer_norm=adapter_layer_norm,
+                zero_final=True,
+                activation=adapter_activation,
+            )
+        elif adapter_arch == "gated":
+            self.adapter = GatedActionAdapter(
+                input_dim=adapter_input_dim,
+                hidden_dim=hidden_dim,
+                num_layers=num_layers,
+                output_dim=self.action_dim,
+                layer_norm=adapter_layer_norm,
+                activation=adapter_activation,
+            )
+        else:
+            raise ValueError(f"Unsupported adapter_arch: {adapter_arch!r}")
         self.log_std = nn.Parameter(torch.full((self.action_dim,), -2.0))
 
     def action_components(self, obs: dict[str, Any]) -> dict[str, torch.Tensor]:
+        normalized_state = self.act_normalizer.normalize_state(obs["state"])
+        normalized_images = {
+            key: self.act_normalizer.normalize_image(key, value)
+            for key, value in obs["images"].items()
+        }
         chunk = self.act_base(
-            obs["state"],
-            obs["images"]["observation.images.center_camera"],
-            obs["images"]["observation.images.left_camera"],
-            obs["images"]["observation.images.right_camera"],
+            normalized_state,
+            normalized_images["observation.images.center_camera"],
+            normalized_images["observation.images.left_camera"],
+            normalized_images["observation.images.right_camera"],
         )
-        base_action = chunk[:, : self.action_horizon, :].reshape(obs["state"].shape[0], -1)
-        raw_delta_action = self.adapter(torch.cat([obs["state"], base_action], dim=-1))
-        if self.adapter_delta_clip is not None and self.adapter_delta_clip > 0.0:
+        base_action = self.act_normalizer.unnormalize_action(chunk)
+        base_action = base_action[:, : self.action_horizon, :].reshape(obs["state"].shape[0], -1)
+        encoded_state = self.state_encoder(obs["state"])
+        raw_delta_action = self.adapter(torch.cat([encoded_state, base_action], dim=-1))
+        if self.actor_mode == "act_adapter" and self.adapter_delta_clip is not None and self.adapter_delta_clip > 0.0:
             delta_action = raw_delta_action.clamp(-self.adapter_delta_clip, self.adapter_delta_clip)
         else:
             delta_action = raw_delta_action
@@ -275,12 +508,13 @@ def _load_adapter_actor(
 ) -> TorchScriptACTAdapterActor:
     actor_state = checkpoint["actor"]
     hidden_dim, num_layers = _infer_adapter_shape(actor_state)
-    _, _, warmstart = _checkpoint_training_context(checkpoint)
+    offline_cfg, _, warmstart = _checkpoint_training_context(checkpoint)
     act_base = torch.jit.load(str(act_torchscript), map_location=device).eval()
     for param in act_base.parameters():
         param.requires_grad = False
     actor = TorchScriptACTAdapterActor(
         act_base=act_base,
+        act_torchscript_path=act_torchscript if Path(act_torchscript).with_suffix(".json").exists() else None,
         state_dim=state_dim,
         action_dim=action_dim,
         action_horizon=action_horizon,
@@ -289,6 +523,15 @@ def _load_adapter_actor(
         adapter_scale=_adapter_scale_from_checkpoint(checkpoint, warmstart),
         adapter_delta_clip=adapter_delta_clip,
         action_clip=action_clip,
+        adapter_activation=str(offline_cfg.get("adapter_activation", "relu")),
+        actor_mode=str(offline_cfg.get("actor_mode", "act_adapter")),
+        state_encoding=str(offline_cfg.get("state_encoding", "none")),
+        state_encoding_indices=tuple(int(i) for i in offline_cfg.get("state_encoding_indices", ())),
+        state_encoding_num_bands=int(offline_cfg.get("state_encoding_num_bands", 4)),
+        state_encoding_max_freq=float(offline_cfg.get("state_encoding_max_freq", 8.0)),
+        state_encoding_scale=float(offline_cfg.get("state_encoding_scale", 1.0)),
+        adapter_arch=str(offline_cfg.get("adapter_arch", "mlp")),
+        adapter_layer_norm=bool(offline_cfg.get("adapter_layer_norm", False)),
     ).to(device)
     own_state = actor.state_dict()
     compatible = {
@@ -309,12 +552,12 @@ def _as_image_tensor(value: Any, *, device: torch.device) -> torch.Tensor:
         encoding = str(value.get("encoding", "rgb8")).lower()
         raw = base64.b64decode(str(value["data_b64"]))
         if encoding in {"jpeg_rgb8", "jpg_rgb8", "jpeg", "jpg"}:
-            import cv2
+            from io import BytesIO
 
-            decoded = cv2.imdecode(np.frombuffer(raw, dtype=np.uint8), cv2.IMREAD_COLOR)
-            if decoded is None:
-                raise ValueError("Could not decode JPEG image payload from Gazebo observation")
-            image = torch.from_numpy(cv2.cvtColor(decoded, cv2.COLOR_BGR2RGB))
+            from PIL import Image
+
+            with Image.open(BytesIO(raw)) as decoded:
+                image = torch.from_numpy(np.asarray(decoded.convert("RGB")).copy())
         else:
             channels = 4 if encoding in {"rgba8", "bgra8"} else 1 if encoding in {"mono8", "8uc1"} else 3
             image = torch.frombuffer(bytearray(raw), dtype=torch.uint8)
@@ -388,8 +631,8 @@ class ACTAdapterSERLGazeboPolicy:
         act_torchscript: str | Path,
         device: str = "cpu",
         allow_zero_images: bool = False,
-        adapter_delta_clip: float | None = 0.05,
-        action_clip: float | None = 0.05,
+        adapter_delta_clip: float | None = None,
+        action_clip: float | None = None,
         task_vector: np.ndarray | None = None,
     ):
         self.device = torch.device(device)
@@ -398,6 +641,13 @@ class ACTAdapterSERLGazeboPolicy:
         self.act_torchscript = Path(act_torchscript)
         ckpt = torch.load(self.checkpoint_path, map_location="cpu")
         cfg, self.dataset_summary, self.warmstart_report = _checkpoint_training_context(ckpt)
+        online_adapter_cfg = ((ckpt.get("online_serl_config") or {}).get("isaac_adapter") or {})
+        if adapter_delta_clip is None:
+            adapter_delta_clip = online_adapter_cfg.get("adapter_delta_clip")
+            if adapter_delta_clip is None:
+                adapter_delta_clip = cfg.get("adapter_delta_clip", self.warmstart_report.get("adapter_delta_clip"))
+        if action_clip is None:
+            action_clip = online_adapter_cfg.get("action_clip") if "action_clip" in online_adapter_cfg else cfg.get("action_clip")
         self.state_dim = int(cfg["state_dim"])
         self.action_horizon = int(cfg["action_horizon"])
         self.action_dim = int(cfg["action_dim"])
@@ -420,15 +670,14 @@ class ACTAdapterSERLGazeboPolicy:
         self.task_vector = None if task_vector is None else torch.as_tensor(
             task_vector, dtype=torch.float32, device=self.device
         ).reshape(1, -1)
+        self.feature_assembler = AICRuntimeFeatureAssembler(self.state_dim, task_vector=task_vector)
 
     def _obs_to_actor(self, obs: dict[str, Any]) -> dict[str, Any]:
-        lowdim = torch.as_tensor(lowdim_state_from_gazebo_observation(obs), device=self.device).unsqueeze(0)
-        if self.task_vector is not None:
-            lowdim = torch.cat([lowdim, self.task_vector], dim=-1)
+        lowdim = torch.as_tensor(self.feature_assembler.assemble_gazebo(obs), device=self.device).unsqueeze(0)
         if lowdim.shape[1] < self.state_dim:
             raise ValueError(
                 f"Gazebo lowdim state has {lowdim.shape[1]} dims, checkpoint expects {self.state_dim}. "
-                "If the checkpoint was trained with task vectors, pass task context."
+                "If the checkpoint was trained with task/contact features, pass task context."
             )
         return {
             "state": lowdim[:, : self.state_dim],
@@ -441,10 +690,20 @@ class ACTAdapterSERLGazeboPolicy:
 
     def act(self, obs: dict[str, Any], *, explore: bool = False) -> list[float]:
         del explore
+        action = self.act_chunk(obs, n_action_steps=1)[0]
+        return action.astype(float).tolist()
+
+    def act_chunk(self, obs: dict[str, Any], *, n_action_steps: int) -> np.ndarray:
+        if n_action_steps < 1:
+            raise ValueError(f"n_action_steps must be >= 1, got {n_action_steps}")
+        if n_action_steps > self.action_horizon:
+            raise ValueError(f"n_action_steps={n_action_steps} exceeds action_horizon={self.action_horizon}")
         actor_obs = self._obs_to_actor(obs)
         with torch.no_grad():
             components = self.actor.action_components(actor_obs)
-            action = components["final_action"].squeeze(0)
+            action = components["final_action"].reshape(1, self.action_horizon, self.single_action_dim)[
+                0, :n_action_steps
+            ]
             self.last_action_components = {
                 "base_action_norm": float(components["base_action"].norm(dim=-1).mean().detach().cpu()),
                 "delta_action_norm": float(components["delta_action"].norm(dim=-1).mean().detach().cpu()),
@@ -460,4 +719,4 @@ class ACTAdapterSERLGazeboPolicy:
                     .cpu()
                 ),
             }
-        return action[: self.single_action_dim].detach().cpu().numpy().astype(float).tolist()
+        return action.detach().cpu().numpy().astype(np.float32)

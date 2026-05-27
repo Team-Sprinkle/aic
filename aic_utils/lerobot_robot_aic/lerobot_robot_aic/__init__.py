@@ -14,12 +14,29 @@
 #  limitations under the License.
 #
 
-from .aic_robot_aic_controller import AICRobotAICController, AICRobotAICControllerConfig
-from .aic_teleop import (
-    AICKeyboardEETeleop,
-    AICKeyboardEETeleopConfig,
-    AICKeyboardJointTeleop,
-    AICKeyboardJointTeleopConfig,
-    AICSpaceMouseTeleop,
-    AICSpaceMouseTeleopConfig,
-)
+_CONTROLLER_EXPORTS = {
+    "AICRobotAICController",
+    "AICRobotAICControllerConfig",
+}
+_TELEOP_EXPORTS = {
+    "AICKeyboardEETeleop",
+    "AICKeyboardEETeleopConfig",
+    "AICKeyboardJointTeleop",
+    "AICKeyboardJointTeleopConfig",
+    "AICSpaceMouseTeleop",
+    "AICSpaceMouseTeleopConfig",
+}
+
+__all__ = sorted(_CONTROLLER_EXPORTS | _TELEOP_EXPORTS)
+
+
+def __getattr__(name):
+    if name in _CONTROLLER_EXPORTS:
+        from . import aic_robot_aic_controller
+
+        return getattr(aic_robot_aic_controller, name)
+    if name in _TELEOP_EXPORTS:
+        from . import aic_teleop
+
+        return getattr(aic_teleop, name)
+    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")

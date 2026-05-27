@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<robot name="ur">
+  <group name="ur_manipulator">
+    <chain base_link="base_link" tip_link="gripper/tcp"/>
+  </group>
+
+  <end_effector name="plug_tcp" parent_link="gripper/tcp" group="ur_manipulator"/>
+
+  <disable_collisions link1="base_link" link2="base_link_inertia" reason="Adjacent"/>
+  <disable_collisions link1="base_link_inertia" link2="shoulder_link" reason="Adjacent"/>
+  <disable_collisions link1="shoulder_link" link2="upper_arm_link" reason="Adjacent"/>
+  <disable_collisions link1="upper_arm_link" link2="forearm_link" reason="Adjacent"/>
+  <disable_collisions link1="forearm_link" link2="wrist_1_link" reason="Adjacent"/>
+  <disable_collisions link1="wrist_1_link" link2="wrist_2_link" reason="Adjacent"/>
+  <disable_collisions link1="wrist_2_link" link2="wrist_3_link" reason="Adjacent"/>
+  <disable_collisions link1="wrist_3_link" link2="cam_mount/cam_mount_link" reason="Adjacent"/>
+  <disable_collisions link1="wrist_3_link" link2="ati/base_link" reason="Adjacent"/>
+  <disable_collisions link1="cam_mount/cam_mount_link" link2="ati/base_link" reason="Adjacent"/>
+  <disable_collisions link1="cam_mount/cam_mount_link" link2="center_camera/camera_link" reason="Adjacent"/>
+  <disable_collisions link1="cam_mount/cam_mount_link" link2="left_camera/camera_link" reason="Adjacent"/>
+  <disable_collisions link1="cam_mount/cam_mount_link" link2="right_camera/camera_link" reason="Adjacent"/>
+  <disable_collisions link1="ati/base_link" link2="gripper/hande_base_link" reason="Adjacent"/>
+  <disable_collisions link1="ati/tool_link" link2="gripper/hande_base_link" reason="Adjacent"/>
+  <disable_collisions link1="gripper/hande_base_link" link2="gripper/hande_finger_link_l" reason="Adjacent"/>
+  <disable_collisions link1="gripper/hande_base_link" link2="gripper/hande_finger_link_r" reason="Adjacent"/>
+  <disable_collisions link1="gripper/hande_finger_link_l" link2="gripper/hande_finger_link_r" reason="Default"/>
+</robot>

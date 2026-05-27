@@ -30,8 +30,6 @@ import torch
 from torch.utils.data import Dataset
 
 from .dataset_schema import DatasetSchemaSummary, summarize_dataset_schema
-from .task_encoding import TASK_VECTOR_DIM, task_encoding_schema
-from .task_metadata import infer_task_metadata_path, load_episode_task_vectors, validate_task_vector
 
 RewardMode = Literal["dataset", "final_success", "zero"]
 ObsMode = Literal["lowdim"]
@@ -97,7 +95,7 @@ def _rewards(df: pd.DataFrame, reward_mode: RewardMode) -> np.ndarray:
     if reward_mode == "dataset":
         if "reward" in df.columns:
             return df["reward"].to_numpy(dtype=np.float32)
-        reward_mode = "final_success"
+        raise ValueError("reward_mode='dataset' requires a 'reward' column. Run add_offline_rewards.py first.")
     if reward_mode == "zero":
         return np.zeros(len(df), dtype=np.float32)
     if reward_mode == "final_success":
@@ -114,9 +112,6 @@ def load_lerobot_transitions(
     reward_mode: RewardMode = "dataset",
     obs_mode: ObsMode = "lowdim",
     action_horizon: int = 1,
-    include_task_vector: bool = False,
-    task_metadata: Path | None = None,
-    missing_task_vector: str = "error",
 ) -> tuple[TransitionArrays, DatasetSchemaSummary]:
     if obs_mode != "lowdim":
         raise ValueError("Only obs-mode=lowdim is implemented for the offline SERL smoke path.")
@@ -127,29 +122,6 @@ def load_lerobot_transitions(
     df = _read_dataframes(dataset_root).reset_index(drop=True)
 
     obs = _stack_vector_column(df["observation.state"], "observation.state")
-    if include_task_vector:
-        manifest_path = task_metadata or infer_task_metadata_path(dataset_root)
-        if manifest_path is None:
-            if missing_task_vector == "zeros":
-                vectors: dict[int, list[int]] = {}
-            else:
-                raise FileNotFoundError(
-                    "include_task_vector=true but no task metadata was provided or found at "
-                    "<dataset_parent>/manifests/accepted.csv"
-                )
-        else:
-            vectors = load_episode_task_vectors(manifest_path)
-        task_rows: list[np.ndarray] = []
-        zero = np.zeros((TASK_VECTOR_DIM,), dtype=np.float32)
-        for episode_id in df["episode_index"].to_numpy(dtype=np.int64):
-            vector = vectors.get(int(episode_id))
-            if vector is None:
-                if missing_task_vector == "error":
-                    raise KeyError(f"Missing task vector for episode {int(episode_id)}")
-                task_rows.append(zero)
-            else:
-                task_rows.append(np.asarray(validate_task_vector(vector), dtype=np.float32))
-        obs = np.concatenate([obs, np.stack(task_rows, axis=0)], axis=1).astype(np.float32)
     single_step_action = _stack_vector_column(df["action"], "action")
     reward = _rewards(df, reward_mode)
     episode = df["episode_index"].to_numpy(dtype=np.int64)
@@ -174,21 +146,6 @@ def load_lerobot_transitions(
         frame_index=frame,
     )
     return arrays, schema
-
-
-def task_conditioning_summary(
-    *,
-    include_task_vector: bool,
-    original_obs_dim: int,
-    effective_obs_dim: int,
-) -> dict[str, object]:
-    return {
-        "include_task_vector": bool(include_task_vector),
-        "task_vector_dim": TASK_VECTOR_DIM if include_task_vector else 0,
-        "task_encoding_schema": task_encoding_schema() if include_task_vector else None,
-        "original_obs_dim": int(original_obs_dim),
-        "effective_obs_dim": int(effective_obs_dim),
-    }
 
 
 def _action_chunks(action: np.ndarray, episode: np.ndarray, horizon: int) -> np.ndarray:

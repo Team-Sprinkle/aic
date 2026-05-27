@@ -5,7 +5,10 @@ suffix: controlled_sc_batch
 generation:
   target_accepted_trajectories: 200
   max_attempts: 400
-  policy: cheatcode
+  policy: agent
+  expert_mode: nominal
+  auto_improve_on_failure: true
+  write_expert_registry_overlay: true
   seed: 43
   append_if_exists: true
 
@@ -52,7 +55,7 @@ scene:
       max: 0.0
 
   nic_cards:
-    count: [0, 1, 2]
+    count: [1, 2, 3, 4, 5]
     rails: [nic_rail_0, nic_rail_1, nic_rail_2, nic_rail_3, nic_rail_4]
     translation:
       min: -0.0215

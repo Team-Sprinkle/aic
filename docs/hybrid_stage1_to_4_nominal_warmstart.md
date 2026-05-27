@@ -196,17 +196,17 @@ claimed.
 
 ## SERL -> Isaac PPO Warm Start
 
-The Stage 5 wrapper now accepts an offline SERL checkpoint:
+The Isaac online RL wrapper now accepts an offline SERL checkpoint:
 
 ```bash
-pixi run python aic_utils/aic_isaac/scripts/train_isaac_ppo_stage5.py \
+pixi run python aic_utils/aic_isaac/scripts/train_isaac_rsl_rl.py \
   --task AIC-Task-v0 \
   --num-envs 4 \
   --max-iterations 1 \
   --seed 1 \
   --headless \
   --randomization-profile light \
-  --output-dir outputs/train/isaac_stage5_serl_warmstart \
+  --output-dir outputs/train/isaac_online_serl_warmstart \
   --init-policy-checkpoint outputs/train/hybrid_offline_serl_nominal_n10_actwarm/checkpoint_latest.pt
 ```
 

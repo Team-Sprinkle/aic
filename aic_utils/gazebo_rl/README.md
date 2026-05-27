@@ -105,6 +105,54 @@ The saved checkpoint can be passed back to `gazebo_serl_train.py`,
 `serl_transfer_validate.py --policy-kind act_adapter_serl`, or
 `ACTAdapterSERLGazeboPolicy`.
 
+### Reward Presets and Curriculum YAML
+
+`gazebo_serl_train.py` accepts the same named reward presets used by the Isaac
+online SERL wrapper:
+
+```bash
+pixi run python aic_utils/gazebo_rl/scripts/gazebo_serl_train.py \
+  --checkpoint outputs/runtime_models/stage_a_guide_w2_from_3_20260515_175649/checkpoint_latest.pt \
+  --act-torchscript outputs/runtime_models/stage_a_guide_w2_from_3_20260515_175649/act/act_policy_ts_175000_cuda0.pt \
+  --output-dir outputs/gazebo_rl/online_serl/start_near_gate_dry_run \
+  --device cuda \
+  --dry-run \
+  --reward-preset cheatcode_insertion_v1 \
+  --user-config-yaml aic_utils/gazebo_rl/config/curriculum/sfp_to_nic_start_near_gate_smoke.yaml \
+  --episode-config-count 1 \
+  --include-images \
+  --adapter-delta-clip 0.05 \
+  --action-clip 0.05
+```
+
+The minimal YAML is materialized with the shared Isaac episode-config generator.
+Generated episode YAMLs, selected rollout YAMLs, `reward_config`, and reward
+components are saved in the run artifacts. If `scene.start_near_gate` is present,
+Gazebo training fails by default because the current `aic_engine` launch path
+does not expose a physical body/TCP reset hook. Pass
+`--allow-reward-only-curriculum` only when you intentionally want the near-gate
+metadata to shape reward without changing the simulator start pose.
+
+### Runtime ACT-Adapter SERL Policy
+
+For evaluation without the online trainer IPC bridge, load the in-repo runtime
+policy directly through `aic_model`:
+
+```bash
+AIC_SERL_CHECKPOINT=outputs/runtime_models/stage_a_guide_w2_from_3_20260515_175649/checkpoint_latest.pt \
+AIC_ACT_TORCHSCRIPT=outputs/runtime_models/stage_a_guide_w2_from_3_20260515_175649/act/act_policy_ts_175000_cuda0.pt \
+pixi run ros2 run aic_model aic_model --ros-args \
+  -p use_sim_time:=true \
+  -p policy:=gazebo_rl.runtime_policy.ACTAdapterSERLRuntimePolicy \
+  -p device:=cuda \
+  -p include_images:=true
+```
+
+The runtime policy uses `ACTAdapterSERLGazeboPolicy` directly, converts live
+`Observation` messages with images by default, derives task context from the
+live `Task` message unless `AIC_TASK_CONTEXT_JSON` is supplied, and sends the
+same clipped relative TCP delta commands as `GazeboRLBridgePolicy`.
+
 ## Checkpoint Rollout and Recording
 
 Roll out a saved checkpoint without recording a LeRobot dataset:
@@ -169,7 +217,9 @@ Use `--ground-truth false` for non-oracle state observations. The trainer enviro
 ## Limitations
 
 - Low throughput: every step is a real ROS/Gazebo/controller tick.
-- Sparse reward: v1 uses a small per-step penalty and terminal score parsed from `scoring.yaml`.
+- Reward shaping now supports insertion geometry and cheatcode-style component
+  rewards when oracle or episode target metadata is available, with fallback to
+  the older dense/terminal Gazebo reward behavior when geometry is unavailable.
 - Bridge observations contain low-dimensional ROS/controller state by default.
   Live RGB frames can be sent to the policy process by setting
   `AIC_GAZEBO_RL_INCLUDE_IMAGES=true` or by using

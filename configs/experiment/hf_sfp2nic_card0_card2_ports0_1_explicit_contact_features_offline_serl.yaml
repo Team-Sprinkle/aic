@@ -1,0 +1,100 @@
+# @package _global_
+
+defaults:
+  - /train: vision_offline_serl
+  - /model: act_adapter_serl
+  - /data: hf_sfp2nic_card0_card2_ports0_1_explicit_contact_features
+  - /hardware: default
+  - _self_
+
+run:
+  task_family: ${data.task_family}
+  dataset_tag: ${data.dataset_tag}
+  model_family: ${model.family}
+  stage: ${train.stage}
+  name: offline_serl_contact_features_from_act
+  output_root: outputs/train
+  output_dir: ${run.output_root}/${run.task_family}/${run.dataset_tag}/${run.model_family}/${run.stage}/20260508_offline_serl_contact_features_from_act
+
+train:
+  dataset_root: ${data.dataset_root}
+  # Override this to a checkpoint trained with the matching 82D contact-feature state.
+  act_checkpoint: null
+  output_dir: ${run.output_dir}
+  job_name: ${run.name}
+  steps: 300000
+  batch_size: 128
+  device: ${hardware.effective_device}
+  lr: 0.0001
+  adapter_lr: 0.00001
+  act_lr: 0.00001
+  critic_lr: 0.0001
+  gamma: 0.99
+  tau: 0.005
+  bc_weight: 5.0
+  cql_weight: 0.0
+  adapter_penalty_weight: 0.001
+  act_preservation_weight: 1.0
+  smoothness_weight: 0.0
+  action_horizon: 2
+  actor_mode: act_adapter
+  actor_update_mode: q_bc
+  freeze_act: true
+  adapter_hidden_dim: 256
+  adapter_num_layers: 2
+  adapter_arch: mlp
+  adapter_layer_norm: false
+  adapter_activation: gelu
+  adapter_scale: 1.0
+  adapter_delta_clip: 0.000001
+  action_clip: null
+  critic_image_encoder: small_conv
+  critic_arch: multiplicative
+  critic_feature_dim: 256
+  critic_hidden_dim: 256
+  critic_num_layers: 2
+  critic_per_camera_dim: 64
+  critic_layer_norm: false
+  critic_activation: gelu
+  state_encoding: fourier
+  state_encoding_indices:
+    - 0
+    - 1
+    - 2
+    - 13
+    - 14
+    - 15
+  state_encoding_num_bands: 4
+  state_encoding_max_freq: 8.0
+  state_encoding_scale: 10.0
+  reward_mode: dataset
+  camera_keys: ${data.camera_keys}
+  dataset_video_backend: pyav
+  num_workers: 8
+  pin_memory: true
+  save_every: 10000
+  val_fraction: 0.05
+  val_every: 10000
+  val_max_batches: 16
+  early_stopping_metric: bc_loss
+  early_stopping_patience: 0
+  dry_run: false
+
+hardware:
+  cuda_devices:
+    - 0
+    - 1
+    - 2
+    - 3
+  num_devices: 4
+  effective_device: cuda:0
+  distributed:
+    enabled: true
+    launcher: torchrun
+    standalone: true
+    nnodes: 1
+    nproc_per_node: 4
+
+logging:
+  save_resolved_config: true
+  save_git_info: true

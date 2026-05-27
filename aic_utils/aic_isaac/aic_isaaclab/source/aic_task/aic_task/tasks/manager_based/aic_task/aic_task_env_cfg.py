@@ -25,14 +25,14 @@ from isaaclab.scene import InteractiveSceneCfg
 from isaaclab.utils import configclass
 from isaaclab.utils.assets import ISAAC_NUCLEUS_DIR
 from isaaclab.utils.noise import AdditiveUniformNoiseCfg as Unoise
-from isaaclab.sensors import TiledCameraCfg
+from isaaclab.sensors import ContactSensorCfg, TiledCameraCfg
 from isaaclab.devices import DevicesCfg
 from isaaclab.devices.keyboard import Se3KeyboardCfg
 from isaaclab.devices.spacemouse import Se3SpaceMouseCfg
 from isaaclab.devices.gamepad import Se3GamepadCfg
 
 from . import mdp
-from .mdp.events import randomize_dome_light, randomize_board_and_parts
+from .mdp.events import randomize_dome_light, randomize_board_and_parts, reset_robot_tcp_to_episode_start
 
 # Resolve asset directory relative to this file (portable across machines)
 _THIS_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -65,13 +65,13 @@ class AICTaskSceneCfg(InteractiveSceneCfg):
                 solver_position_iteration_count=16,
                 solver_velocity_iteration_count=8,
             ),
-            activate_contact_sensors=False,
+            activate_contact_sensors=True,
         ),
         init_state=ArticulationCfg.InitialStateCfg(
             pos=(-0.18, -0.122, 0),
             rot=(0.0, 0.0, 0.0, 1.0),
             joint_pos={
-                "shoulder_pan_joint": 0.1597,
+                "shoulder_pan_joint": -0.1597,
                 "shoulder_lift_joint": -1.3542,
                 "elbow_joint": -1.6648,
                 "wrist_1_joint": -1.6933,
@@ -103,6 +103,19 @@ class AICTaskSceneCfg(InteractiveSceneCfg):
             #     damping=40.0,
             # ),
         },
+    )
+
+    contact_forces = ContactSensorCfg(
+        prim_path="{ENV_REGEX_NS}/Robot/aic_unified_robot/wrist_3_link",
+        update_period=0.0,
+        history_length=2,
+        debug_vis=False,
+        filter_prim_paths_expr=[
+            "{ENV_REGEX_NS}/task_board",
+            "{ENV_REGEX_NS}/nic_card",
+            "{ENV_REGEX_NS}/sc_port",
+            "{ENV_REGEX_NS}/sc_port_2",
+        ],
     )
 
     # cable = ArticulationCfg(
@@ -365,12 +378,37 @@ class EventCfg:
         },
     )
 
+    reset_robot_tcp_to_episode_start = EventTerm(
+        func=reset_robot_tcp_to_episode_start,
+        mode="reset",
+        params={
+            "body_name": "gripper_tcp",
+            "max_iterations": 8,
+            "position_tolerance": 0.002,
+        },
+    )
+
 
 @configclass
 class TerminationsCfg:
     """Termination terms for the MDP."""
 
     time_out = DoneTerm(func=mdp.time_out, time_out=True)
+    target_success = DoneTerm(
+        func=mdp.body_to_object_success,
+        params={
+            "threshold": float(os.environ.get("AIC_ISAAC_TERMINATE_ON_TARGET_SUCCESS_THRESHOLD", "0.0")),
+            "body_cfg": SceneEntityCfg("robot", body_names="wrist_3_link"),
+            "target_cfg": SceneEntityCfg("task_board"),
+            "body_orientation_offset": None,
+            "orientation_threshold": None,
+            "orientation_error_mode": "quat",
+            "orientation_axis_local": (0.0, 1.0, 0.0),
+            "consistency_body_name": None,
+            "consistency_axial_threshold": None,
+            "consistency_lateral_threshold": None,
+        },
+    )
 
 
 @configclass
@@ -538,7 +576,98 @@ class RewardsCfg:
         params={
             "body_cfg": SceneEntityCfg("robot", body_names=MISSING),
             "target_cfg": SceneEntityCfg("sc_port"),
-            "std": 0.05,
+            "std": 0.02,
+            "insertion_axis": 0,
+            "lateral_gate_sigma": 0.012,
+            "target_position_offset": (0.093, 0.140, 0.020),
+            "body_position_offset": (0.0, 0.0, 0.0),
+            "target_orientation_offset": None,
+        },
+    )
+    target_distance_exp = RewTerm(
+        func=mdp.body_to_object_distance_exp,
+        weight=0.0,
+        params={
+            "body_cfg": SceneEntityCfg("robot", body_names=MISSING),
+            "target_cfg": SceneEntityCfg("sc_port"),
+            "sigma": 0.01,
+            "insertion_axis": 0,
+            "lateral_gate_sigma": 0.012,
+            "target_position_offset": (0.093, 0.140, 0.020),
+            "body_position_offset": (0.0, 0.0, 0.0),
+            "target_orientation_offset": None,
+        },
+    )
+    target_distance_progress = RewTerm(
+        func=mdp.body_to_object_distance_progress,
+        weight=0.0,
+        params={
+            "body_cfg": SceneEntityCfg("robot", body_names=MISSING),
+            "target_cfg": SceneEntityCfg("sc_port"),
+            "scale": 0.003,
+            "insertion_axis": 0,
+            "lateral_gate_sigma": 0.012,
+            "target_position_offset": (0.093, 0.140, 0.020),
+            "body_position_offset": (0.0, 0.0, 0.0),
+            "target_orientation_offset": None,
+        },
+    )
+    target_orientation_tanh = RewTerm(
+        func=mdp.body_to_object_orientation_tanh,
+        weight=0.0,
+        params={
+            "body_cfg": SceneEntityCfg("robot", body_names=MISSING),
+            "target_cfg": SceneEntityCfg("sc_port"),
+            "std": 0.25,
+            "body_orientation_offset": None,
+            "target_orientation_offset": None,
+            "orientation_error_mode": "quat",
+            "orientation_axis_local": (0.0, 1.0, 0.0),
+        },
+    )
+    target_orientation_gated_exp = RewTerm(
+        func=mdp.body_to_object_orientation_gated_exp,
+        weight=0.0,
+        params={
+            "body_cfg": SceneEntityCfg("robot", body_names=MISSING),
+            "target_cfg": SceneEntityCfg("sc_port"),
+            "std": 0.03,
+            "gate_sigma": 0.012,
+            "body_orientation_offset": None,
+            "target_orientation_offset": None,
+            "target_position_offset": (0.093, 0.140, 0.020),
+            "body_position_offset": (0.0, 0.0, 0.0),
+            "orientation_error_mode": "quat",
+            "orientation_axis_local": (0.0, 1.0, 0.0),
+        },
+    )
+    target_reaching_bonus = RewTerm(
+        func=mdp.body_to_object_reaching_bonus,
+        weight=0.0,
+        params={
+            "body_cfg": SceneEntityCfg("robot", body_names=MISSING),
+            "target_cfg": SceneEntityCfg("sc_port"),
+            "threshold": 0.01,
+            "target_position_offset": (0.093, 0.140, 0.020),
+            "body_position_offset": (0.0, 0.0, 0.0),
+        },
+    )
+    target_success_once_bonus = RewTerm(
+        func=mdp.body_to_object_success_once_bonus,
+        weight=0.0,
+        params={
+            "body_cfg": SceneEntityCfg("robot", body_names=MISSING),
+            "target_cfg": SceneEntityCfg("sc_port"),
+            "threshold": 0.01,
+            "target_position_offset": (0.093, 0.140, 0.020),
+            "body_position_offset": (0.0, 0.0, 0.0),
+            "body_orientation_offset": None,
+            "orientation_threshold": None,
+            "orientation_error_mode": "quat",
+            "orientation_axis_local": (0.0, 1.0, 0.0),
+            "consistency_body_name": None,
+            "consistency_axial_threshold": None,
+            "consistency_lateral_threshold": None,
         },
     )
     target_lateral_error = RewTerm(
@@ -547,7 +676,155 @@ class RewardsCfg:
         params={
             "body_cfg": SceneEntityCfg("robot", body_names=MISSING),
             "target_cfg": SceneEntityCfg("sc_port"),
-            "axis": 0,
+            "insertion_axis": 0,
+            "scale": 0.006,
+            "target_position_offset": (0.093, 0.140, 0.020),
+            "body_position_offset": (0.0, 0.0, 0.0),
+            "target_orientation_offset": None,
+        },
+    )
+    target_motion_projection = RewTerm(
+        func=mdp.body_to_object_motion_projection,
+        weight=0.0,
+        params={
+            "body_cfg": SceneEntityCfg("robot", body_names=MISSING),
+            "target_cfg": SceneEntityCfg("sc_port"),
+            "scale": 0.001,
+            "insertion_axis": 0,
+            "lateral_gate_sigma": 0.012,
+            "target_position_offset": (0.093, 0.140, 0.020),
+            "body_position_offset": (0.0, 0.0, 0.0),
+            "target_orientation_offset": None,
+        },
+    )
+    target_lateral_progress = RewTerm(
+        func=mdp.body_to_object_lateral_progress,
+        weight=0.0,
+        params={
+            "body_cfg": SceneEntityCfg("robot", body_names=MISSING),
+            "target_cfg": SceneEntityCfg("sc_port"),
+            "scale": 0.001,
+            "insertion_axis": 0,
+            "target_position_offset": (0.093, 0.140, 0.020),
+            "body_position_offset": (0.0, 0.0, 0.0),
+            "target_orientation_offset": None,
+        },
+    )
+    target_axial_progress = RewTerm(
+        func=mdp.body_to_object_axial_progress,
+        weight=0.0,
+        params={
+            "body_cfg": SceneEntityCfg("robot", body_names=MISSING),
+            "target_cfg": SceneEntityCfg("sc_port"),
+            "scale": 0.001,
+            "insertion_axis": 0,
+            "lateral_gate_sigma": 0.012,
+            "orientation_gate_std": 0.0,
+            "consistency_body_name": None,
+            "consistency_axial_std": 0.0,
+            "consistency_lateral_sigma": None,
+            "semantic_progress_scale": 0.10,
+            "semantic_progress_weight": 0.0,
+            "semantic_loss_weight": 0.0,
+            "target_position_offset": (0.093, 0.140, 0.020),
+            "body_position_offset": (0.0, 0.0, 0.0),
+            "body_orientation_offset": None,
+            "target_orientation_offset": None,
+            "orientation_error_mode": "quat",
+            "orientation_axis_local": (0.0, 1.0, 0.0),
+        },
+    )
+    target_insertion_corridor = RewTerm(
+        func=mdp.body_to_object_insertion_corridor,
+        weight=0.0,
+        params={
+            "body_cfg": SceneEntityCfg("robot", body_names=MISSING),
+            "target_cfg": SceneEntityCfg("sc_port"),
+            "insertion_axis": 0,
+            "lateral_gate_sigma": 0.0025,
+            "bypass_penalty_scale": 1.0,
+            "orientation_gate_std": 0.0,
+            "consistency_body_name": None,
+            "consistency_axial_std": 0.0,
+            "consistency_lateral_sigma": None,
+            "semantic_progress_scale": 0.10,
+            "semantic_progress_weight": 0.0,
+            "semantic_loss_weight": 0.0,
+            "target_position_offset": (0.093, 0.140, 0.020),
+            "body_position_offset": (0.0, 0.0, 0.0),
+            "body_orientation_offset": None,
+            "target_orientation_offset": None,
+            "orientation_error_mode": "quat",
+            "orientation_axis_local": (0.0, 1.0, 0.0),
+        },
+    )
+    target_cheatcode_phase_reward = RewTerm(
+        func=mdp.body_to_object_cheatcode_phase_reward,
+        weight=0.0,
+        params={
+            "body_cfg": SceneEntityCfg("robot", body_names=MISSING),
+            "target_cfg": SceneEntityCfg("sc_port"),
+            "insertion_axis": 0,
+            "sigma_lat_pre": 0.0025,
+            "sigma_lat_insert": 0.0015,
+            "sigma_theta_pre": 0.10,
+            "sigma_theta_insert": 0.06,
+            "lateral_progress_scale": 0.001,
+            "orientation_progress_scale": 0.02,
+            "axial_progress_scale": 0.001,
+            "hover_depth": -0.004,
+            "hover_scale": 0.002,
+            "near_gate_start": -0.008,
+            "near_gate_scale": 0.001,
+            "inside_gate_scale": 0.001,
+            "near_misaligned_lateral_threshold": 0.0015,
+            "near_misaligned_orientation_threshold": 0.06,
+            "inside_lateral_scale": 0.001,
+            "inside_orientation_scale": 0.04,
+            "bypass_penalty_scale": 6.0,
+            "success_depth_fraction": 0.90,
+            "success_lateral_threshold": 0.0005,
+            "success_orientation_threshold": 0.03,
+            "lateral_progress_weight": 0.40,
+            "orientation_progress_weight": 0.30,
+            "near_misaligned_weight": 0.25,
+            "hover_weight": 0.15,
+            "axial_progress_weight": 0.30,
+            "corridor_weight": 1.50,
+            "inside_alignment_weight": 0.20,
+            "retreat_weight": 0.20,
+            "action_axis_gate": False,
+            "action_axis_source": "action_manager",
+            "action_lateral_sigma": 0.00005,
+            "action_lateral_sigma_far": 0.00030,
+            "action_radius_schedule_far_depth": -0.020,
+            "action_radius_schedule_near_depth": 0.0,
+            "action_forward_scale": 0.00005,
+            "action_min_forward": 0.0,
+            "consistency_body_name": None,
+            "consistency_axial_std": 0.0,
+            "consistency_lateral_sigma": None,
+            "target_position_offset": (0.093, 0.140, 0.020),
+            "body_position_offset": (0.0, 0.0, 0.0),
+            "body_orientation_offset": None,
+            "target_orientation_offset": None,
+            "orientation_error_mode": "quat",
+            "orientation_axis_local": (0.0, 1.0, 0.0),
+        },
+    )
+    force_delta_penalty = RewTerm(
+        func=mdp.force_delta_penalty,
+        weight=0.0,
+        params={
+            "threshold": 10.0,
+            "reference": 20.0,
+            "knee_penalty_fraction": 0.1,
+            "saturation": 30.0,
+            "max_penalty": 1.0,
+            # gripper_tcp is a semantic frame and can report near-zero wrench even
+            # during contact. Use the physical wrist link as the Isaac proxy for
+            # the Gazebo wrist F/T sensor.
+            "asset_cfg": SceneEntityCfg("robot", body_names="wrist_3_link"),
         },
     )
 
@@ -599,12 +876,36 @@ class AICTaskEnvCfg(ManagerBasedRLEnvCfg):
 
     def __post_init__(self) -> None:
         super().__post_init__()
+        self._apply_initial_arm_joint_override()
+        if os.environ.get("AIC_ISAAC_ENABLE_CONTACT_SENSOR", "0") not in {"1", "true", "True"}:
+            self.scene.contact_forces = None
 
-        # General settings
-        self.decimation = 4
-        self.sim.render_interval = self.decimation
+        # General settings.  Gazebo expert datasets are sampled at 20 Hz, so
+        # keep Isaac's policy/control step at 50 ms while physics runs faster.
         self.episode_length_s = 200.0
         self.sim.dt = 1.0 / 120.0
+        policy_hz = float(os.environ.get("AIC_ISAAC_POLICY_HZ", "20.0"))
+        if policy_hz <= 0.0:
+            raise ValueError(f"AIC_ISAAC_POLICY_HZ must be positive, got {policy_hz}")
+        self.decimation = max(1, int(round(1.0 / (self.sim.dt * policy_hz))))
+        self.sim.render_interval = self.decimation
+        if os.environ.get("AIC_ISAAC_ENABLE_EXTERNAL_FORCES_EVERY_ITERATION", "0") in {"1", "true", "True"}:
+            self.sim.physx.enable_external_forces_every_iteration = True
+        solver_position_iterations = os.environ.get("AIC_ISAAC_SOLVER_POSITION_ITERATIONS")
+        if solver_position_iterations:
+            self.scene.robot.spawn.articulation_props.solver_position_iteration_count = int(solver_position_iterations)
+        solver_velocity_iterations = os.environ.get("AIC_ISAAC_SOLVER_VELOCITY_ITERATIONS")
+        if solver_velocity_iterations:
+            self.scene.robot.spawn.articulation_props.solver_velocity_iteration_count = int(solver_velocity_iterations)
+        max_depenetration_velocity = os.environ.get("AIC_ISAAC_ROBOT_MAX_DEPENETRATION_VELOCITY")
+        if max_depenetration_velocity:
+            self.scene.robot.spawn.rigid_props.max_depenetration_velocity = float(max_depenetration_velocity)
+        actuator_stiffness = os.environ.get("AIC_ISAAC_ARM_ACTUATOR_STIFFNESS")
+        if actuator_stiffness:
+            self.scene.robot.actuators["arm"].stiffness = float(actuator_stiffness)
+        actuator_damping = os.environ.get("AIC_ISAAC_ARM_ACTUATOR_DAMPING")
+        if actuator_damping:
+            self.scene.robot.actuators["arm"].damping = float(actuator_damping)
         # self.sim.gravity = (0.0, 0.0, 3)
         self.viewer.eye = (8.0, 0.0, 5.0)
 
@@ -627,6 +928,12 @@ class AICTaskEnvCfg(ManagerBasedRLEnvCfg):
         ].body_names = ee_body
         self.rewards.reaching_bonus.params["asset_cfg"].body_names = ee_body
         self.rewards.target_distance_tanh.params["body_cfg"].body_names = ee_body
+        self.rewards.target_distance_exp.params["body_cfg"].body_names = ee_body
+        self.rewards.target_distance_progress.params["body_cfg"].body_names = ee_body
+        self.rewards.target_orientation_tanh.params["body_cfg"].body_names = ee_body
+        self.rewards.target_orientation_gated_exp.params["body_cfg"].body_names = ee_body
+        self.rewards.target_reaching_bonus.params["body_cfg"].body_names = ee_body
+        self.rewards.target_success_once_bonus.params["body_cfg"].body_names = ee_body
         self.rewards.target_lateral_error.params["body_cfg"].body_names = ee_body
 
         # # Arm action: joint position control
@@ -634,7 +941,9 @@ class AICTaskEnvCfg(ManagerBasedRLEnvCfg):
         #     asset_name="robot", joint_names=[".*"], scale=0.5, use_default_offset=True
         # )
 
-        # Arm action: differential IK (for teleoperation)
+        ik_body_name = os.environ.get("AIC_ISAAC_IK_BODY_NAME", "wrist_3_link").strip() or "wrist_3_link"
+        # Arm action: differential IK.  Default to the wrist for compatibility, but allow insertion
+        # diagnostics/training to control the semantic tip frame directly.
         self.actions.arm_action = DifferentialInverseKinematicsActionCfg(
             asset_name="robot",
             joint_names=[
@@ -645,7 +954,7 @@ class AICTaskEnvCfg(ManagerBasedRLEnvCfg):
                 "wrist_2_joint",
                 "wrist_3_joint",
             ],
-            body_name="wrist_3_link",
+            body_name=ik_body_name,
             controller=DifferentialIKControllerCfg(
                 command_type="pose",
                 use_relative_mode=True,
@@ -799,11 +1108,114 @@ class AICTaskEnvCfg(ManagerBasedRLEnvCfg):
         self.observations.policy.eef_pose.noise = Unoise(n_min=-0.003, n_max=0.003)
 
     def _apply_optional_insertion_reward_weights(self) -> None:
+        target_scene_name = os.environ.get("AIC_ISAAC_TARGET_SCENE_NAME", "sc_port")
+        target_body_name = os.environ.get("AIC_ISAAC_TARGET_BODY_NAME")
+        target_offset = tuple(
+            float(value)
+            for value in os.environ.get(
+                "AIC_ISAAC_TARGET_POSITION_OFFSET", "0.093,0.140,0.020"
+            ).split(",")
+        )
+        if len(target_offset) != 3:
+            raise ValueError("AIC_ISAAC_TARGET_POSITION_OFFSET must contain three comma-separated floats")
+        body_offset = tuple(
+            float(value)
+            for value in os.environ.get(
+                "AIC_ISAAC_BODY_POSITION_OFFSET", "0.0,0.0,0.0"
+            ).split(",")
+        )
+        if len(body_offset) != 3:
+            raise ValueError("AIC_ISAAC_BODY_POSITION_OFFSET must contain three comma-separated floats")
+        target_orientation_offset_raw = os.environ.get("AIC_ISAAC_TARGET_ORIENTATION_OFFSET")
+        target_orientation_offset = (
+            None
+            if not target_orientation_offset_raw
+            else tuple(float(value) for value in target_orientation_offset_raw.split(","))
+        )
+        if target_orientation_offset is not None and len(target_orientation_offset) != 4:
+            raise ValueError("AIC_ISAAC_TARGET_ORIENTATION_OFFSET must contain four comma-separated floats")
+        body_orientation_offset_raw = os.environ.get("AIC_ISAAC_BODY_ORIENTATION_OFFSET")
+        body_orientation_offset = (
+            None
+            if not body_orientation_offset_raw
+            else tuple(float(value) for value in body_orientation_offset_raw.split(","))
+        )
+        if body_orientation_offset is not None and len(body_orientation_offset) != 4:
+            raise ValueError("AIC_ISAAC_BODY_ORIENTATION_OFFSET must contain four comma-separated floats")
+        for term_name in (
+            "target_distance_tanh",
+            "target_distance_exp",
+            "target_distance_progress",
+            "target_orientation_tanh",
+            "target_orientation_gated_exp",
+            "target_reaching_bonus",
+            "target_success_once_bonus",
+            "target_lateral_error",
+            "target_axial_progress",
+            "target_insertion_corridor",
+        ):
+            term = getattr(self.rewards, term_name)
+            term.params["target_cfg"].name = target_scene_name
+            if target_body_name:
+                term.params["body_cfg"].body_names = [target_body_name]
+            if "target_position_offset" in term.params:
+                term.params["target_position_offset"] = target_offset
+            if "body_position_offset" in term.params:
+                term.params["body_position_offset"] = body_offset
+            if "target_orientation_offset" in term.params:
+                term.params["target_orientation_offset"] = target_orientation_offset
+            if "body_orientation_offset" in term.params:
+                term.params["body_orientation_offset"] = body_orientation_offset
         distance_weight = float(
             os.environ.get("AIC_ISAAC_INSERTION_DISTANCE_WEIGHT", "0.0")
         )
+        close_weight = float(os.environ.get("AIC_ISAAC_INSERTION_CLOSE_WEIGHT", "0.0"))
+        orientation_weight = float(
+            os.environ.get("AIC_ISAAC_INSERTION_ORIENTATION_WEIGHT", "0.0")
+        )
+        reaching_weight = float(os.environ.get("AIC_ISAAC_INSERTION_REACHING_WEIGHT", "0.0"))
+        terminal_weight = float(os.environ.get("AIC_ISAAC_INSERTION_TERMINAL_WEIGHT", "0.0"))
+        progress_weight = float(os.environ.get("AIC_ISAAC_INSERTION_PROGRESS_WEIGHT", "0.0"))
         lateral_weight = float(
             os.environ.get("AIC_ISAAC_INSERTION_LATERAL_WEIGHT", "0.0")
         )
-        self.rewards.target_distance_tanh.weight = distance_weight
-        self.rewards.target_lateral_error.weight = lateral_weight
+        force_delta_weight = float(
+            os.environ.get("AIC_ISAAC_FORCE_DELTA_PENALTY_WEIGHT", "0.0")
+        )
+        reward_weight_multiplier = 1.0 / max(float(self.sim.dt) * float(self.decimation), 1.0e-9)
+        self.rewards.target_distance_tanh.weight = distance_weight * reward_weight_multiplier
+        self.rewards.target_distance_exp.weight = close_weight * reward_weight_multiplier
+        self.rewards.target_distance_progress.weight = progress_weight * reward_weight_multiplier
+        self.rewards.target_orientation_tanh.weight = orientation_weight * reward_weight_multiplier
+        self.rewards.target_orientation_gated_exp.weight = float(
+            os.environ.get("AIC_ISAAC_INSERTION_ORIENTATION_GATED_WEIGHT", "0.0")
+        ) * reward_weight_multiplier
+        self.rewards.target_reaching_bonus.weight = reaching_weight * reward_weight_multiplier
+        self.rewards.target_success_once_bonus.weight = terminal_weight * reward_weight_multiplier
+        self.rewards.target_lateral_error.weight = lateral_weight * reward_weight_multiplier
+        self.rewards.target_axial_progress.weight = float(
+            os.environ.get("AIC_ISAAC_INSERTION_AXIAL_PROGRESS_WEIGHT", "0.0")
+        ) * reward_weight_multiplier
+        self.rewards.target_insertion_corridor.weight = float(
+            os.environ.get("AIC_ISAAC_INSERTION_CORRIDOR_WEIGHT", "0.0")
+        ) * reward_weight_multiplier
+        self.rewards.force_delta_penalty.weight = force_delta_weight * reward_weight_multiplier
+
+    def _apply_initial_arm_joint_override(self) -> None:
+        raw = os.environ.get("AIC_ISAAC_INITIAL_ARM_JOINT_POS")
+        if not raw:
+            return
+        values = [float(item.strip()) for item in raw.split(",") if item.strip()]
+        if len(values) != 6:
+            raise ValueError(
+                "AIC_ISAAC_INITIAL_ARM_JOINT_POS must contain exactly 6 comma-separated joint positions"
+            )
+        joint_names = [
+            "shoulder_pan_joint",
+            "shoulder_lift_joint",
+            "elbow_joint",
+            "wrist_1_joint",
+            "wrist_2_joint",
+            "wrist_3_joint",
+        ]
+        self.scene.robot.init_state.joint_pos.update(dict(zip(joint_names, values, strict=True)))

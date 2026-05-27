@@ -22,11 +22,9 @@ from torch.utils.data.distributed import DistributedSampler
 from lerobot_robot_aic.offline_rl_dataset import (
     OfflineRLTransitionDataset,
     load_lerobot_transitions,
-    task_conditioning_summary,
 )
 from lerobot_robot_aic.act_warmstart import inspect_act_checkpoint, load_act_action_head_bias
 from lerobot_robot_aic.run_metadata import git_info, write_json
-from lerobot_robot_aic.task_encoding import TASK_VECTOR_DIM, task_encoding_schema
 from lerobot_robot_aic.offline_serl import OfflineSERLConfig, OfflineSERLTrainer
 
 
@@ -54,12 +52,9 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--reward-mode",
         choices=["dataset", "final_success", "zero"],
-        default="dataset",
+        default="final_success",
     )
     parser.add_argument("--obs-mode", choices=["lowdim"], default="lowdim")
-    parser.add_argument("--include-task-vector", action="store_true")
-    parser.add_argument("--task-metadata", type=Path, default=None)
-    parser.add_argument("--missing-task-vector", choices=["error", "zeros"], default="error")
     parser.add_argument(
         "--critic-init",
         choices=["scratch", "checkpoint", "act"],
@@ -131,7 +126,6 @@ def _wrap_ddp(trainer: OfflineSERLTrainer, device: torch.device) -> None:
 
 
 def config_dict(args: argparse.Namespace, dataset: OfflineRLTransitionDataset) -> dict[str, Any]:
-    original_obs_dim = dataset.obs_dim - (TASK_VECTOR_DIM if args.include_task_vector else 0)
     return {
         "dataset_root": str(args.dataset_root),
         "output_dir": str(args.output_dir),
@@ -149,12 +143,7 @@ def config_dict(args: argparse.Namespace, dataset: OfflineRLTransitionDataset) -
         "num_layers": args.num_layers,
         "reward_mode": args.reward_mode,
         "obs_mode": args.obs_mode,
-        "include_task_vector": args.include_task_vector,
-        "task_metadata": str(args.task_metadata) if args.task_metadata else None,
-        "missing_task_vector": args.missing_task_vector,
-        "task_vector_dim": TASK_VECTOR_DIM if args.include_task_vector else 0,
-        "task_encoding_schema": task_encoding_schema() if args.include_task_vector else None,
-        "original_obs_dim": original_obs_dim,
+        "task_vector_source": "observation.state",
         "effective_obs_dim": dataset.obs_dim,
         "critic_init": args.critic_init,
         "critic_checkpoint": str(args.critic_checkpoint) if args.critic_checkpoint else None,
@@ -193,9 +182,6 @@ def main() -> int:
         reward_mode=args.reward_mode,
         obs_mode=args.obs_mode,
         action_horizon=args.action_horizon,
-        include_task_vector=args.include_task_vector,
-        task_metadata=args.task_metadata,
-        missing_task_vector=args.missing_task_vector,
     )
     dataset = OfflineRLTransitionDataset(arrays, normalize=True)
     cfg = config_dict(args, dataset)
@@ -206,11 +192,11 @@ def main() -> int:
         "normalization_stats": dataset.stats.as_dict(),
         "reward_mean": float(arrays.reward.mean()),
         "done_count": int(arrays.done.sum()),
-        "task_conditioning": task_conditioning_summary(
-            include_task_vector=args.include_task_vector,
-            original_obs_dim=cfg["original_obs_dim"],
-            effective_obs_dim=dataset.obs_dim,
-        ),
+        "task_conditioning": {
+            "source": "observation.state",
+            "note": "Task vectors, when used, must be materialized by the dataset postprocessor before training.",
+            "effective_obs_dim": dataset.obs_dim,
+        },
         "critic_initialization": {
             "mode": args.critic_init,
             "checkpoint": str(args.critic_checkpoint) if args.critic_checkpoint else None,
@@ -230,7 +216,6 @@ def main() -> int:
     if _is_rank0():
         run_dir.mkdir(parents=True, exist_ok=True)
         _write_json(run_dir / "train_config.json", summary)
-        _write_json(run_dir / "task_encoding_schema.json", task_encoding_schema() if args.include_task_vector else {})
         _write_json(run_dir / "git_info.json", git_info(Path(__file__).resolve().parents[3]))
 
     trainer = OfflineSERLTrainer(
@@ -314,10 +299,7 @@ def main() -> int:
             "steps": step,
             "obs_dim": dataset.obs_dim,
             "action_dim": dataset.action_dim,
-            "include_task_vector": args.include_task_vector,
-            "task_vector_dim": cfg["task_vector_dim"],
-            "task_encoding_schema": cfg["task_encoding_schema"],
-            "original_obs_dim": cfg["original_obs_dim"],
+            "task_vector_source": cfg["task_vector_source"],
             "effective_obs_dim": cfg["effective_obs_dim"],
             "critic_init": args.critic_init,
             "act_warmstart": act_warmstart,

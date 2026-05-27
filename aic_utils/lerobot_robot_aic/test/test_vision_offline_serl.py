@@ -9,6 +9,7 @@ from lerobot_robot_aic.vision_offline_serl import (
     VisionCritic,
     VisionOfflineSERLConfig,
     VisionOfflineSERLTrainer,
+    _set_processor_pipeline_device,
 )
 
 
@@ -30,6 +31,24 @@ class _FakeACTPolicy(nn.Module):
             output_features={"action": SimpleNamespace(shape=(2,))},
         )
         self.model = _FakeACTModel()
+
+
+def test_set_processor_pipeline_device_updates_loaded_device_steps():
+    class DeviceStep:
+        def __init__(self):
+            self.device = "cuda"
+            self.tensor_device = torch.device("cuda")
+
+        def __post_init__(self):
+            self.tensor_device = torch.device(self.device)
+
+    pipeline = SimpleNamespace(steps=[DeviceStep(), SimpleNamespace(other="unchanged")])
+
+    _set_processor_pipeline_device(pipeline, "cpu")
+
+    assert pipeline.steps[0].device == "cpu"
+    assert pipeline.steps[0].tensor_device == torch.device("cpu")
+    assert pipeline.steps[1].other == "unchanged"
 
 
 def test_act_chunk_actor_flattens_chunks_and_preserves_gradients():
@@ -147,6 +166,8 @@ def test_adapter_training_step_with_frozen_act():
             camera_keys=["observation.images.cam"],
             adapter_lr=1e-3,
             critic_lr=1e-3,
+            state_encoding="none",
+            state_encoding_indices=(),
         ),
         actor=actor,
         device="cpu",
@@ -185,6 +206,8 @@ def test_adapter_checkpoint_save_load(tmp_path):
             action_dim=4,
             action_horizon=2,
             camera_keys=["observation.images.cam"],
+            state_encoding="none",
+            state_encoding_indices=(),
         ),
         actor=actor,
         device="cpu",
@@ -202,3 +225,38 @@ def test_adapter_checkpoint_save_load(tmp_path):
     assert checkpoint["step"] == 3
     assert checkpoint["vision_offline_serl_config"]["actor_mode"] == "act_adapter"
     assert "actor" in checkpoint
+
+
+def test_fourier_gelu_adapter_and_critic_shapes():
+    actor = ACTAdapterSERLActor(
+        _FakeACTPolicy(),
+        action_horizon=2,
+        state_dim=4,
+        adapter_hidden_dim=8,
+        adapter_num_layers=1,
+        freeze_act=True,
+        adapter_activation="gelu",
+        state_encoding="fourier",
+        state_encoding_indices=(0, 1, 2),
+        state_encoding_num_bands=4,
+        state_encoding_max_freq=8.0,
+        state_encoding_scale=10.0,
+    )
+    critic = VisionCritic(
+        state_dim=4,
+        camera_keys=["observation.images.cam"],
+        action_dim=4,
+        activation="gelu",
+        state_encoding="fourier",
+        state_encoding_indices=(0, 1, 2),
+        state_encoding_num_bands=4,
+        state_encoding_max_freq=8.0,
+        state_encoding_scale=10.0,
+    )
+    obs = {
+        "state": torch.randn(2, 4),
+        "images": {"observation.images.cam": torch.randn(2, 3, 64, 64)},
+    }
+
+    assert actor.mean_action(obs).shape == (2, 4)
+    assert critic(obs, torch.randn(2, 4)).shape == (2, 1)

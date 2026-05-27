@@ -1,0 +1,16 @@
+task_family: sfp_to_nic
+generation:
+  target_accepted_trajectories: 1
+  seed: 1
+scene:
+  nic_cards:
+    count: 1
+    target_card: 0
+    target_port: 0
+  start_near_gate:
+    axial_distance_m: 0.012
+    lateral_distance_m: 0.003
+    min_clearance_m: 0.010
+  end_effector_tip:
+    body_name: sfp_tip_link
+    body_position_offset: [0.0, 0.0, 0.0]

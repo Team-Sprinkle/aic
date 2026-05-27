@@ -1,0 +1,60 @@
+# @package _global_
+
+defaults:
+  - /train: act
+  - /model: act
+  - /data: hf_sfp2nic_card0_card2_ports0_1_explicit_contact_features
+  - /hardware: default
+  - _self_
+
+run:
+  task_family: ${data.task_family}
+  dataset_tag: ${data.dataset_tag}
+  model_family: ${model.family}
+  stage: ${train.stage}
+  name: act_contact_features_300k_dec2_dropout0_bs8_4gpu
+  output_root: outputs/train
+  output_dir: ${run.output_root}/${run.task_family}/${run.dataset_tag}/${run.model_family}/${run.stage}/20260509_act_contact_features_300k_dec2_dropout0_bs8_4gpu
+
+train:
+  # The state already contains 32 robot dims + 40 contact features + 10D task vector.
+  task_conditioning: "off"
+  steps: 300000
+  batch_size: 8
+  num_workers: 4
+  lr: 0.00003
+  dataset_video_backend: pyav
+  save_freq: 10000
+  log_freq: 200
+  eval_freq: 0
+  chunk_size: 8
+  n_action_steps: 2
+  n_obs_steps: 1
+  dry_run: false
+  dim_model: 384
+  dim_feedforward: 2048
+  n_encoder_layers: 4
+  n_decoder_layers: 2
+  n_vae_encoder_layers: 4
+  n_heads: 6
+  kl_weight: 10.0
+  dropout: 0.0
+
+hardware:
+  cuda_devices:
+    - 0
+    - 1
+    - 2
+    - 3
+  num_devices: 4
+  effective_device: cuda:0
+  distributed:
+    enabled: true
+    launcher: torchrun
+    standalone: true
+    nnodes: 1
+    nproc_per_node: 4
+
+logging:
+  save_resolved_config: true
+  save_git_info: true

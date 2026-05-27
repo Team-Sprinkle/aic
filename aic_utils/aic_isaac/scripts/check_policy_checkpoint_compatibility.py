@@ -35,7 +35,7 @@ def main() -> int:
         "partial_action_prior_init_supported": True,
         "reason": (
             "Offline SERL and RSL-RL PPO use different actor-critic architectures. "
-            "The Stage 5 bridge can initialize a safe PPO action prior from SERL "
+            "The Isaac online RL bridge can initialize a safe PPO action prior from SERL "
             "action normalization stats and can copy exact-shape tensors if a future "
             "configuration matches, but it does not claim full hidden-layer transfer."
         ),

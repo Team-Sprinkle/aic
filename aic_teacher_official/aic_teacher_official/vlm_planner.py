@@ -61,36 +61,12 @@ def _extract_output_text(response: Any) -> str:
     return "\n".join(chunks)
 
 
-def call_gpt5_mini_delta_planner(
+def build_delta_planner_prompt(
     context: OfficialTeacherContext,
     *,
-    image_paths: list[Path] | None = None,
     planner_feedback: dict[str, Any] | None = None,
-    max_calls: int = 20,
-    model: str = "gpt-5-mini",
-    request_timeout_sec: float = 120.0,
 ) -> dict[str, Any]:
-    """Ask GPT-5 mini for approach/alignment Cartesian delta waypoints.
-
-    This function is intentionally slow-run only. Replay imports do not depend
-    on this module.
-    """
-    if max_calls < 1 or max_calls > 20:
-        raise ValueError("max_calls must be in [1, 20]")
-    api_key = load_openai_api_key()
-    if not api_key:
-        raise RuntimeError(
-            "OPENAI_API_KEY is not set and could not be read from ~/.zshrc. "
-            "Export it before using --use-vlm."
-        )
-    try:
-        from openai import OpenAI
-    except Exception as ex:
-        raise RuntimeError("The openai Python package is required for --use-vlm.") from ex
-
-    image_paths = image_paths or []
-    client = OpenAI(api_key=api_key)
-    prompt = {
+    return {
         "task": "Plan approach/alignment only for robot TCP trajectory.",
         "hard_constraints": [
             "Return Cartesian delta waypoints in base_link frame, not joints.",
@@ -113,6 +89,63 @@ def call_gpt5_mini_delta_planner(
             "diagnostics": {"notes": "string"},
         },
     }
+
+
+def call_gpt5_mini_delta_planner(
+    context: OfficialTeacherContext,
+    *,
+    image_paths: list[Path] | None = None,
+    planner_feedback: dict[str, Any] | None = None,
+    max_calls: int = 20,
+    model: str = "gpt-5-mini",
+    request_timeout_sec: float = 120.0,
+    debug_output_dir: str | Path | None = None,
+) -> dict[str, Any]:
+    """Ask GPT-5 mini for approach/alignment Cartesian delta waypoints.
+
+    This function is intentionally slow-run only. Replay imports do not depend
+    on this module.
+    """
+    if max_calls < 1 or max_calls > 20:
+        raise ValueError("max_calls must be in [1, 20]")
+    api_key = load_openai_api_key()
+    if not api_key:
+        raise RuntimeError(
+            "OPENAI_API_KEY is not set and could not be read from ~/.zshrc. "
+            "Export it before using --use-vlm."
+        )
+    try:
+        from openai import OpenAI
+    except Exception as ex:
+        raise RuntimeError("The openai Python package is required for --use-vlm.") from ex
+
+    image_paths = image_paths or []
+    if not image_paths:
+        raise RuntimeError(
+            "GPT-5-mini local planning requires at least one validated scene image. "
+            "No images were provided, so planning is aborted before any model call."
+        )
+    client = OpenAI(api_key=api_key)
+    prompt = build_delta_planner_prompt(context, planner_feedback=planner_feedback)
+    if debug_output_dir is not None:
+        output_dir = Path(debug_output_dir)
+        output_dir.mkdir(parents=True, exist_ok=True)
+        (output_dir / "planner_prompt.json").write_text(
+            json.dumps(
+                {
+                    "model": model,
+                    "instructions": (
+                        "You are a robotics trajectory planner. Output JSON only. "
+                        "Use Cartesian delta waypoints in meters in base_link."
+                    ),
+                    "prompt": prompt,
+                    "image_paths": [str(path) for path in image_paths[:8]],
+                },
+                indent=2,
+            )
+            + "\n",
+            encoding="utf-8",
+        )
     response = client.responses.create(
         model=model,
         timeout=request_timeout_sec,
@@ -131,6 +164,9 @@ def call_gpt5_mini_delta_planner(
         ],
     )
     output_text = _extract_output_text(response)
+    if debug_output_dir is not None:
+        output_dir = Path(debug_output_dir)
+        (output_dir / "planner_response.txt").write_text(output_text + "\n", encoding="utf-8")
     try:
         parsed = json.loads(output_text)
     except json.JSONDecodeError as ex:
@@ -146,6 +182,12 @@ def call_gpt5_mini_delta_planner(
             "planner_feedback_used": planner_feedback is not None,
         }
     )
+    if debug_output_dir is not None:
+        output_dir = Path(debug_output_dir)
+        (output_dir / "planner_response.json").write_text(
+            json.dumps(parsed, indent=2) + "\n",
+            encoding="utf-8",
+        )
     return parsed
 
 
