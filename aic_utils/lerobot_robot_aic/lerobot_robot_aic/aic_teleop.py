@@ -14,6 +14,10 @@
 #  limitations under the License.
 #
 
+import csv
+import os
+from pathlib import Path
+import time
 from dataclasses import dataclass, field
 from threading import Thread
 from typing import Any, cast
@@ -332,6 +336,8 @@ class AICSpaceMouseTeleopConfig(TeleoperatorConfig):
     operator_position_front: bool = True
     device: str | None = None  # only needed for multiple space mice
     command_scaling: float = 0.1
+    profile_enabled: bool = False
+    profile_csv: str = ""
 
 
 class AICSpaceMouseTeleop(Teleoperator):
@@ -340,6 +346,9 @@ class AICSpaceMouseTeleop(Teleoperator):
         self.config = config
         self._is_connected = False
         self._device: pyspacemouse.SpaceMouseDevice | None = None
+        self._profile_file = None
+        self._profile_writer = None
+        self._profile_sample_index = 0
 
         self._current_actions: MotionUpdateActionDict = {
             "delta_position.x": 0.0,
@@ -397,6 +406,7 @@ class AICSpaceMouseTeleop(Teleoperator):
         self._executor_thread = Thread(target=self._executor.spin)
         self._executor_thread.start()
         self._is_connected = True
+        self._open_profile()
 
     @property
     def is_calibrated(self) -> bool:
@@ -417,7 +427,9 @@ class AICSpaceMouseTeleop(Teleoperator):
         if not self.is_connected or not self._device:
             raise DeviceNotConnectedError()
 
+        read_start_ns = time.perf_counter_ns()
         state = self._device.read()
+        read_end_ns = time.perf_counter_ns()
 
         clean_x = self.apply_deadband(float(state.x))
         clean_y = self.apply_deadband(float(state.y))
@@ -448,6 +460,12 @@ class AICSpaceMouseTeleop(Teleoperator):
             "delta_rotation.y": twist_msg.angular.y,
             "delta_rotation.z": twist_msg.angular.z,
         }
+        action_end_ns = time.perf_counter_ns()
+        self._write_profile_row(
+            read_start_ns=read_start_ns,
+            read_end_ns=read_end_ns,
+            action_end_ns=action_end_ns,
+        )
 
         return cast(dict, self._current_actions)
 
@@ -455,7 +473,87 @@ class AICSpaceMouseTeleop(Teleoperator):
         pass
 
     def disconnect(self) -> None:
+        self._close_profile()
         if self._device:
             self._device.close()
         self._is_connected = False
         pass
+
+    def _open_profile(self) -> None:
+        if not self.config.profile_enabled:
+            return
+
+        profile_csv = self.config.profile_csv or os.environ.get(
+            "AIC_SPACEMOUSE_PROFILE_CSV", ""
+        )
+        if not profile_csv:
+            self._node.get_logger().warn(
+                "SpaceMouse profiling enabled, but no profile CSV path was set. "
+                "Use --teleop.profile_csv or AIC_SPACEMOUSE_PROFILE_CSV."
+            )
+            return
+
+        profile_path = Path(profile_csv)
+        profile_path.parent.mkdir(parents=True, exist_ok=True)
+        self._profile_file = profile_path.open("w", newline="")
+        self._profile_writer = csv.DictWriter(
+            self._profile_file,
+            fieldnames=[
+                "sample_index",
+                "wall_time_ns",
+                "read_start_ns",
+                "read_duration_ns",
+                "action_duration_ns",
+                "nonzero_action",
+                "linear_x",
+                "linear_y",
+                "linear_z",
+                "angular_x",
+                "angular_y",
+                "angular_z",
+            ],
+        )
+        self._profile_writer.writeheader()
+        self._node.get_logger().info(f"Writing SpaceMouse profile to {profile_path}")
+
+    def _write_profile_row(
+        self, *, read_start_ns: int, read_end_ns: int, action_end_ns: int
+    ) -> None:
+        if self._profile_writer is None:
+            return
+
+        values = (
+            self._current_actions["linear.x"],
+            self._current_actions["linear.y"],
+            self._current_actions["linear.z"],
+            self._current_actions["angular.x"],
+            self._current_actions["angular.y"],
+            self._current_actions["angular.z"],
+        )
+        self._profile_writer.writerow(
+            {
+                "sample_index": self._profile_sample_index,
+                "wall_time_ns": time.time_ns(),
+                "read_start_ns": read_start_ns,
+                "read_duration_ns": read_end_ns - read_start_ns,
+                "action_duration_ns": action_end_ns - read_start_ns,
+                "nonzero_action": int(any(abs(value) > 1e-9 for value in values)),
+                "linear_x": values[0],
+                "linear_y": values[1],
+                "linear_z": values[2],
+                "angular_x": values[3],
+                "angular_y": values[4],
+                "angular_z": values[5],
+            }
+        )
+        self._profile_sample_index += 1
+        if self._profile_sample_index % 50 == 0:
+            self._profile_file.flush()
+
+    def _close_profile(self) -> None:
+        if self._profile_file is None:
+            return
+        self._profile_file.flush()
+        self._profile_file.close()
+        self._profile_file = None
+        self._profile_writer = None

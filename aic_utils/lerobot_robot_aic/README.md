@@ -35,7 +35,7 @@ cd ~/ws_aic/src/aic
 pixi run lerobot-teleoperate \
   --robot.type=aic_controller --robot.id=aic \
   --teleop.type=aic_keyboard_ee --teleop.id=aic \
-  --robot.teleop_target_mode=cartesian --robot.teleop_frame_id=base_link \
+  --robot.teleop_target_mode=cartesian --robot.teleop_frame_id=gripper/tcp \
   --display_data=true
 ```
 
@@ -81,7 +81,11 @@ View and edit key mappings and speed settings in `AICKeyboardJointTeleop` and `A
 
 ##### SpaceMouse
 
-:warning: Note: In our experience, SpaceMouse teleoperation was laggier than keyboard teleoperation.
+Current SpaceMouse debug result: with the SpaceNav settings below and
+`--robot.teleop_frame_id=gripper/tcp`, SpaceMouse teleoperation is smooth in the
+NoOp teleop debug setup. The earlier problem was not latency; it was command
+clipping on `linear_z` and `angular_z`, followed by an IK/frame issue when using
+`base_link`.
 
 We used a 3Dconnexion SpaceMouse with the [pyspacemouse](https://github.com/JakubAndrysek/PySpaceMouse?tab=readme-ov-file#dependencies) library. To enable USB permissions, you may need to add the following to your `/etc/udev/rules.d/99-spacemouse.rules`:
 ``` bash
@@ -95,6 +99,42 @@ and then run
 sudo udevadm control --reload-rules
 sudo udevadm trigger
 ```
+
+Recommended SpaceNav/SpaceMouse configuration:
+
+- `Sensitivity = 2.00`
+- Enable `Swap Y-Z`
+- Use `--robot.teleop_frame_id=gripper/tcp`
+
+Recommended SpaceMouse teleop command:
+
+```bash
+cd ~/ws_aic/src/aic
+pixi run lerobot-teleoperate \
+  --robot.type=aic_controller --robot.id=aic \
+  --teleop.type=aic_spacemouse --teleop.id=aic \
+  --robot.teleop_target_mode=cartesian --robot.teleop_frame_id=gripper/tcp \
+  --display_data=true
+```
+
+Profiling is disabled by default. To capture SpaceMouse and action profiles,
+enable it explicitly:
+
+```bash
+PROFILE_DIR=outputs/spacemouse_debug/noop_lerobot/$(date +%Y%m%d_%H%M%S)
+mkdir -p "${PROFILE_DIR}"
+
+pixi run lerobot-teleoperate \
+  --robot.type=aic_controller --robot.id=aic \
+  --teleop.type=aic_spacemouse --teleop.id=aic \
+  --robot.teleop_target_mode=cartesian --robot.teleop_frame_id=gripper/tcp \
+  --teleop.profile_enabled=true \
+  --teleop.profile_csv="${PROFILE_DIR}/spacemouse_profile.csv" \
+  --robot.action_profile_enabled=true \
+  --robot.action_profile_csv="${PROFILE_DIR}/action_profile.csv" \
+  --display_data=true
+```
+
 View and edit axis mappings and speed settings in `AICSpaceMouseTeleop` and `AICSpaceMouseTeleopConfig` in `aic_teleop.py`.
 
 #### Joint space control

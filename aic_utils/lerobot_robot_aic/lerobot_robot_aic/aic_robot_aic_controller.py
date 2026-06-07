@@ -16,7 +16,10 @@
 
 """LeRobot driver for AIC robot: derived from https://github.com/huggingface/lerobot/blob/main/src/lerobot/robots/robot.py"""
 
+import csv
 import logging
+import os
+from pathlib import Path
 import time
 from dataclasses import dataclass, field
 from functools import cached_property
@@ -110,6 +113,8 @@ class CameraImageScaling(TypedDict):
 class AICRobotAICControllerConfig(RobotConfig):
     teleop_target_mode: str = "cartesian"  # "cartesian" or "joint"
     teleop_frame_id: str = "gripper/tcp"  # "gripper/tcp" or "base_link"
+    action_profile_enabled: bool = False
+    action_profile_csv: str = ""
 
     arm_joint_names: list[str] = field(default_factory=arm_joint_names.copy)
 
@@ -213,6 +218,9 @@ class AICRobotAICController(Robot):
         self.last_wrench: WrenchStamped | None = None
 
         self._is_connected = False
+        self._action_profile_file = None
+        self._action_profile_writer = None
+        self._action_profile_sample_index = 0
 
         if config.teleop_frame_id not in ["gripper/tcp", "base_link"]:
             raise ValueError(
@@ -320,6 +328,7 @@ class AICRobotAICController(Robot):
             cam.connect()
 
         self._is_connected = True
+        self._open_action_profile()
 
     @property
     def is_calibrated(self) -> bool:
@@ -488,11 +497,16 @@ class AICRobotAICController(Robot):
         self.ros2_interface.joint_motion_update_pub.publish(msg)
 
     def send_action(self, action: dict[str, Any]) -> dict[str, Any]:
+        start_ns = time.perf_counter_ns()
         if self.teleop_target_mode == "cartesian":
             self.send_action_cartesian(action)
+            end_ns = time.perf_counter_ns()
+            self._write_action_profile_row(action, start_ns, end_ns)
             return action
         elif self.teleop_target_mode == "joint":
             self.send_action_joint(action)
+            end_ns = time.perf_counter_ns()
+            self._write_action_profile_row(action, start_ns, end_ns)
             return action
         else:
             raise ValueError("Invalid teleop_target_mode")
@@ -500,6 +514,8 @@ class AICRobotAICController(Robot):
     def disconnect(self) -> None:
         if not self.is_connected:
             raise DeviceNotConnectedError(f"{self} is not connected.")
+
+        self._close_action_profile()
 
         for cam in self.cameras.values():
             cam.disconnect()
@@ -511,3 +527,82 @@ class AICRobotAICController(Robot):
             self.ros2_interface = None
 
         self._is_connected = False
+
+    def _open_action_profile(self) -> None:
+        if not self.config.action_profile_enabled:
+            return
+
+        profile_csv = self.config.action_profile_csv or os.environ.get(
+            "AIC_LEROBOT_ACTION_PROFILE_CSV", ""
+        )
+        if not profile_csv:
+            logger.warning(
+                "LeRobot action profiling enabled, but no profile CSV path was set. "
+                "Use --robot.action_profile_csv or AIC_LEROBOT_ACTION_PROFILE_CSV."
+            )
+            return
+
+        profile_path = Path(profile_csv)
+        profile_path.parent.mkdir(parents=True, exist_ok=True)
+        self._action_profile_file = profile_path.open("w", newline="")
+        self._action_profile_writer = csv.DictWriter(
+            self._action_profile_file,
+            fieldnames=[
+                "sample_index",
+                "wall_time_ns",
+                "send_action_start_ns",
+                "send_action_duration_ns",
+                "target_mode",
+                "nonzero_action",
+                "linear_x",
+                "linear_y",
+                "linear_z",
+                "angular_x",
+                "angular_y",
+                "angular_z",
+            ],
+        )
+        self._action_profile_writer.writeheader()
+        logger.info(f"Writing LeRobot action profile to {profile_path}")
+
+    def _write_action_profile_row(
+        self, action: dict[str, Any], start_ns: int, end_ns: int
+    ) -> None:
+        if self._action_profile_writer is None:
+            return
+
+        linear_x = float(action.get("linear.x", 0.0))
+        linear_y = float(action.get("linear.y", 0.0))
+        linear_z = float(action.get("linear.z", 0.0))
+        angular_x = float(action.get("angular.x", 0.0))
+        angular_y = float(action.get("angular.y", 0.0))
+        angular_z = float(action.get("angular.z", 0.0))
+        values = (linear_x, linear_y, linear_z, angular_x, angular_y, angular_z)
+
+        self._action_profile_writer.writerow(
+            {
+                "sample_index": self._action_profile_sample_index,
+                "wall_time_ns": time.time_ns(),
+                "send_action_start_ns": start_ns,
+                "send_action_duration_ns": end_ns - start_ns,
+                "target_mode": self.teleop_target_mode,
+                "nonzero_action": int(any(abs(value) > 1e-9 for value in values)),
+                "linear_x": linear_x,
+                "linear_y": linear_y,
+                "linear_z": linear_z,
+                "angular_x": angular_x,
+                "angular_y": angular_y,
+                "angular_z": angular_z,
+            }
+        )
+        self._action_profile_sample_index += 1
+        if self._action_profile_sample_index % 50 == 0:
+            self._action_profile_file.flush()
+
+    def _close_action_profile(self) -> None:
+        if self._action_profile_file is None:
+            return
+        self._action_profile_file.flush()
+        self._action_profile_file.close()
+        self._action_profile_file = None
+        self._action_profile_writer = None
