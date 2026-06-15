@@ -45,8 +45,8 @@ from insertion_geometry import cheatcode_insertion_phase_reward, compute_inserti
 
 @dataclass
 class ServoConfig:
-    target_depth_m: float = 0.010
-    max_steps: int = 260
+    target_depth_m: float = 0.046864
+    max_steps: int = 1000
     lateral_gate_m: float = 0.0006
     orientation_gate_rad: float = 0.030
     lateral_servo_gain: float = 0.65
@@ -67,6 +67,7 @@ class ServoConfig:
     rotation_sweep_m_per_rad: float = 0.075
     force_base_n: float = 0.6
     force_bad_gate_n: float = 13.0
+    force_activation_depth_m: float = -0.001
     seed: int = 7
 
 
@@ -111,7 +112,7 @@ def _geometry(s: float, r: float, cfg: ServoConfig):
 
 def _strict_success(s: float, r: float, theta: float, module_gate: float, max_force: float, cfg: ServoConfig) -> bool:
     return (
-        s >= 0.90 * cfg.target_depth_m
+        s >= cfg.target_depth_m - 0.0005
         and r <= cfg.lateral_gate_m
         and theta <= cfg.orientation_gate_rad
         and module_gate >= cfg.module_consistency_threshold
@@ -195,9 +196,13 @@ def _simulate_case(case_id: str, lateral_start_m: float, axial_start_m: float, t
         next_theta = max(0.0, theta + realized_theta)
         bad_forward = cmd_axial > 0.0 and (r > cfg.lateral_gate_m or theta > cfg.orientation_gate_rad)
         contact = next_s > -0.001 and (next_r > cfg.contact_lateral_m or next_theta > 2.0 * cfg.orientation_gate_rad)
-        force = cfg.force_base_n + 2400.0 * max(next_r - cfg.lateral_gate_m, 0.0) + 35.0 * max(next_theta - cfg.orientation_gate_rad, 0.0)
+        force_depth_gate = 1.0 if next_s >= cfg.force_activation_depth_m else 0.0
+        force = cfg.force_base_n + force_depth_gate * (
+            2400.0 * max(next_r - cfg.lateral_gate_m, 0.0)
+            + 35.0 * max(next_theta - cfg.orientation_gate_rad, 0.0)
+        )
         if bad_forward:
-            force += cfg.force_bad_gate_n
+            force += force_depth_gate * cfg.force_bad_gate_n
         if contact:
             force += 4.0
             contact_events += 1
@@ -265,6 +270,7 @@ def _simulate_case(case_id: str, lateral_start_m: float, axial_start_m: float, t
         "axial_start_m": axial_start_m,
         "orientation_label": theta_label,
         "theta_start_rad": theta_start,
+        "target_depth_m": cfg.target_depth_m,
         "steps": len(rows),
         "final_s_m": final["s_m"],
         "final_r_m": final["r_m"],
@@ -302,7 +308,8 @@ def _write_plots(run_dir: Path, all_rows: list[dict[str, Any]], summaries: list[
         rows = [row for row in all_rows if row["case_id"] == case["case_id"]]
         ax.plot([r["s_m"] * 1000.0 for r in rows], [r["r_m"] * 1000.0 for r in rows], linewidth=1.0, label=case["case_id"])
     ax.axvline(0.0, color="black", linewidth=0.8)
-    ax.axvline(10.0, color="black", linestyle="--", linewidth=0.8)
+    target_depth_m = summaries[0].get("target_depth_m", 0.0458) if summaries else 0.0458
+    ax.axvline(target_depth_m * 1000.0, color="black", linestyle="--", linewidth=0.8)
     ax.set_xlabel("s axial depth (mm)")
     ax.set_ylabel("r lateral error (mm)")
     ax.set_title("Privileged Servo Trajectories")
@@ -372,6 +379,24 @@ def _write_summary(run_dir: Path, summaries: list[dict[str, Any]], plots: dict[s
     (run_dir / "summary.md").write_text("\n".join(lines) + "\n", encoding="utf-8")
 
 
+def _write_teacher_rows(run_dir: Path, summaries: list[dict[str, Any]], all_rows: list[dict[str, Any]]) -> dict[str, Any]:
+    successful_cases = {str(row["case_id"]) for row in summaries if row.get("strict_success")}
+    teacher_rows = [row for row in all_rows if str(row.get("case_id")) in successful_cases]
+    if teacher_rows:
+        with (run_dir / "successful_teacher_trajectories.csv").open("w", encoding="utf-8", newline="") as f:
+            writer = csv.DictWriter(f, fieldnames=list(teacher_rows[0].keys()))
+            writer.writeheader()
+            writer.writerows(teacher_rows)
+    summary = {
+        "successful_cases": sorted(successful_cases),
+        "successful_case_count": len(successful_cases),
+        "teacher_rows": len(teacher_rows),
+        "teacher_csv": str(run_dir / "successful_teacher_trajectories.csv") if teacher_rows else None,
+    }
+    (run_dir / "teacher_summary.json").write_text(json.dumps(summary, indent=2, sort_keys=True), encoding="utf-8")
+    return summary
+
+
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--output-root", type=Path, default=Path("outputs/agent_reward_funnel/servo_sweeps"))
@@ -379,7 +404,8 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--lateral-starts-mm", default="1,2,4,6,10")
     parser.add_argument("--axial-starts-mm", default="3,6,10,20")
     parser.add_argument("--orientation-starts", default="small,medium,hard")
-    parser.add_argument("--max-steps", type=int, default=260)
+    parser.add_argument("--max-steps", type=int, default=1000)
+    parser.add_argument("--target-depth-m", type=float, default=0.046864)
     parser.add_argument("--axial-step-m", type=float, default=0.00006)
     parser.add_argument("--lateral-gate-m", type=float, default=0.0006)
     parser.add_argument("--orientation-gate-rad", type=float, default=0.030)
@@ -390,6 +416,7 @@ def main() -> int:
     args = parse_args()
     cfg = ServoConfig(
         max_steps=int(args.max_steps),
+        target_depth_m=float(args.target_depth_m),
         axial_step_m=float(args.axial_step_m),
         lateral_gate_m=float(args.lateral_gate_m),
         orientation_gate_rad=float(args.orientation_gate_rad),
@@ -432,9 +459,20 @@ def main() -> int:
         writer = csv.DictWriter(f, fieldnames=list(summaries[0].keys()))
         writer.writeheader()
         writer.writerows(summaries)
+    teacher_summary = _write_teacher_rows(run_dir, summaries, all_rows)
     plots = _write_plots(run_dir, all_rows, summaries)
     _write_summary(run_dir, summaries, plots)
-    print(json.dumps({"run_dir": str(run_dir), "successes": sum(1 for row in summaries if row["strict_success"]), "cases": len(summaries)}, indent=2))
+    print(
+        json.dumps(
+            {
+                "run_dir": str(run_dir),
+                "successes": sum(1 for row in summaries if row["strict_success"]),
+                "cases": len(summaries),
+                "teacher_rows": teacher_summary["teacher_rows"],
+            },
+            indent=2,
+        )
+    )
     return 0
 
 

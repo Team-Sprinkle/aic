@@ -1,0 +1,64 @@
+stage: offline_adapter
+script: aic_utils/lerobot_robot_aic/scripts/train_vision_offline_serl.py
+dataset_root: ${data.dataset_root}
+act_checkpoint: null
+output_dir: ${run.output_dir}
+job_name: ${run.name}
+steps: 1000
+batch_size: 2
+device: ${hardware.effective_device}
+lr: 0.0001
+adapter_lr: 0.00001
+act_lr: 0.00001
+critic_lr: 0.0001
+gamma: 0.99
+tau: 0.005
+bc_weight: 5.0
+cql_weight: 0.0
+adapter_penalty_weight: 0.001
+act_preservation_weight: 1.0
+smoothness_weight: 0.0
+action_horizon: 2
+actor_mode: act_adapter
+actor_update_mode: q_bc
+freeze_act: true
+adapter_hidden_dim: 256
+adapter_num_layers: 2
+adapter_arch: mlp
+adapter_layer_norm: true
+adapter_activation: gelu
+adapter_scale: 1.0
+adapter_delta_clip: 0.0001
+action_clip: null
+critic_image_encoder: convnext_tiny_imagenet
+critic_arch: concat
+critic_feature_dim: 384
+critic_hidden_dim: 384
+critic_num_layers: 3
+critic_per_camera_dim: 96
+critic_layer_norm: true
+critic_activation: gelu
+state_encoding: fourier
+state_encoding_indices:
+  - 0
+  - 1
+  - 2
+  - 13
+  - 14
+  - 15
+state_encoding_num_bands: 4
+state_encoding_max_freq: 8.0
+state_encoding_scale: 10.0
+reward_mode: dataset
+camera_keys: null
+dataset_video_backend: pyav
+num_workers: 8
+pin_memory: true
+save_every: 500
+val_fraction: 0.05
+val_every: 500
+val_max_batches: 16
+early_stopping_metric: bc_loss
+early_stopping_patience: 0
+early_stopping_min_delta: 0.0
+dry_run: false

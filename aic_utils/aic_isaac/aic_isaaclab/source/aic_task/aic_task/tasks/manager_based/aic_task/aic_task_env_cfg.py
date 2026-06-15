@@ -42,6 +42,24 @@ AIC_PARTS_DIR = os.path.join(AIC_ASSET_DIR, "assets")
 
 EXTENSION_PATH = os.path.dirname(os.path.abspath(__file__))
 
+
+def _camera_render_resolution(default: int = 224) -> int:
+    raw_value = os.environ.get("AIC_ISAAC_CAMERA_RESOLUTION", "").strip()
+    if not raw_value:
+        return default
+    try:
+        resolution = int(raw_value)
+    except ValueError as exc:
+        raise ValueError(
+            f"AIC_ISAAC_CAMERA_RESOLUTION must be a positive integer, got {raw_value!r}."
+        ) from exc
+    if resolution <= 0:
+        raise ValueError(
+            f"AIC_ISAAC_CAMERA_RESOLUTION must be a positive integer, got {raw_value!r}."
+        )
+    return resolution
+
+
 ##
 # Scene definition
 ##
@@ -55,7 +73,10 @@ class AICTaskSceneCfg(InteractiveSceneCfg):
     robot: ArticulationCfg = ArticulationCfg(
         prim_path="{ENV_REGEX_NS}/Robot",
         spawn=sim_utils.UsdFileCfg(
-            usd_path=os.path.join(AIC_ASSET_DIR, "aic_unified_robot_cable_sdf.usd"),
+            usd_path=os.environ.get(
+                "AIC_ISAAC_ROBOT_USD_PATH",
+                os.path.join(AIC_ASSET_DIR, "aic_unified_robot_cable_sdf.usd"),
+            ),
             rigid_props=sim_utils.RigidBodyPropertiesCfg(
                 # disable_gravity=True,
                 max_depenetration_velocity=5.0,
@@ -242,12 +263,18 @@ class AICTaskSceneCfg(InteractiveSceneCfg):
             vertical_aperture=18.627,
             clipping_range=(0.07, 20.0),
         )
+        camera_render_resolution = _camera_render_resolution()
+        print(
+            "[AIC task] camera render resolution: "
+            f"{camera_render_resolution}x{camera_render_resolution}",
+            flush=True,
+        )
 
         self.center_camera = TiledCameraCfg(
             prim_path="{ENV_REGEX_NS}/Robot/aic_unified_robot/center_camera_optical/center_camera",
             spawn=_cam_spawn,
-            height=224,
-            width=224,
+            height=camera_render_resolution,
+            width=camera_render_resolution,
             data_types=["rgb"],
             offset=TiledCameraCfg.OffsetCfg(
                 pos=(0.0, 0.0, 0.0),
@@ -258,8 +285,8 @@ class AICTaskSceneCfg(InteractiveSceneCfg):
         self.left_camera = TiledCameraCfg(
             prim_path="{ENV_REGEX_NS}/Robot/aic_unified_robot/left_camera_optical/left_camera",
             spawn=_cam_spawn,
-            height=224,
-            width=224,
+            height=camera_render_resolution,
+            width=camera_render_resolution,
             data_types=["rgb"],
             offset=TiledCameraCfg.OffsetCfg(
                 pos=(0.0, 0.0, 0.0),
@@ -270,8 +297,8 @@ class AICTaskSceneCfg(InteractiveSceneCfg):
         self.right_camera = TiledCameraCfg(
             prim_path="{ENV_REGEX_NS}/Robot/aic_unified_robot/right_camera_optical/right_camera",
             spawn=_cam_spawn,
-            height=224,
-            width=224,
+            height=camera_render_resolution,
+            width=camera_render_resolution,
             data_types=["rgb"],
             offset=TiledCameraCfg.OffsetCfg(
                 pos=(0.0, 0.0, 0.0),
@@ -322,6 +349,17 @@ class EventCfg:
         func=mdp.reset_joints_by_offset,
         mode="reset",
         params={
+            "asset_cfg": SceneEntityCfg(
+                "robot",
+                joint_names=[
+                    "shoulder_pan_joint",
+                    "shoulder_lift_joint",
+                    "elbow_joint",
+                    "wrist_1_joint",
+                    "wrist_2_joint",
+                    "wrist_3_joint",
+                ],
+            ),
             "position_range": (-0.05, 0.05),
             "velocity_range": (0.0, 0.0),
         },
@@ -407,6 +445,52 @@ class TerminationsCfg:
             "consistency_body_name": None,
             "consistency_axial_threshold": None,
             "consistency_lateral_threshold": None,
+        },
+    )
+    lateral_bypass_failure = DoneTerm(
+        func=mdp.body_to_object_lateral_bypass_failure,
+        params={
+            "threshold": 0.0,
+            "body_cfg": SceneEntityCfg("robot", body_names="sfp_tip_link"),
+            "target_cfg": SceneEntityCfg("nic_card"),
+            "insertion_axis": 0,
+            "activation_depth": float("-inf"),
+            "min_episode_steps": 0,
+            "target_position_offset": None,
+            "body_position_offset": None,
+            "target_orientation_offset": None,
+        },
+    )
+    offgate_depth_failure = DoneTerm(
+        func=mdp.body_to_object_offgate_depth_failure,
+        params={
+            "activation_depth": float("inf"),
+            "lateral_threshold": 0.0005,
+            "orientation_threshold": 0.030,
+            "body_cfg": SceneEntityCfg("robot", body_names="sfp_tip_link"),
+            "target_cfg": SceneEntityCfg("nic_card"),
+            "insertion_axis": 0,
+            "min_episode_steps": 0,
+            "target_position_offset": None,
+            "body_position_offset": None,
+            "body_orientation_offset": None,
+            "target_orientation_offset": None,
+            "orientation_error_mode": "quat",
+            "orientation_axis_local": (0.0, 1.0, 0.0),
+        },
+    )
+    centered_lateral_sweep_failure = DoneTerm(
+        func=mdp.body_to_object_centered_lateral_sweep_failure,
+        params={
+            "center_threshold": 0.0005,
+            "failure_threshold": 0.0,
+            "body_cfg": SceneEntityCfg("robot", body_names="sfp_tip_link"),
+            "target_cfg": SceneEntityCfg("nic_card"),
+            "insertion_axis": 0,
+            "min_episode_steps": 0,
+            "target_position_offset": None,
+            "body_position_offset": None,
+            "target_orientation_offset": None,
         },
     )
 
@@ -779,17 +863,43 @@ class RewardsCfg:
             "inside_gate_scale": 0.001,
             "near_misaligned_lateral_threshold": 0.0015,
             "near_misaligned_orientation_threshold": 0.06,
+            "near_misaligned_max": 25.0,
+            "lateral_funnel_scale": 0.010,
+            "lateral_funnel_max": 4.0,
             "inside_lateral_scale": 0.001,
             "inside_orientation_scale": 0.04,
+            "inside_alignment_max": 25.0,
             "bypass_penalty_scale": 6.0,
             "success_depth_fraction": 0.90,
             "success_lateral_threshold": 0.0005,
             "success_orientation_threshold": 0.03,
             "lateral_progress_weight": 0.40,
             "orientation_progress_weight": 0.30,
+            "lateral_funnel_weight": 0.0,
             "near_misaligned_weight": 0.25,
             "hover_weight": 0.15,
             "axial_progress_weight": 0.30,
+            "lateral_alignment_action_weight": 0.0,
+            "lateral_alignment_action_scale": 0.001,
+            "lateral_alignment_require_axial_quiet": False,
+            "lateral_alignment_axial_quiet_scale": 0.0005,
+            "off_axis_axial_action_penalty_weight": 0.0,
+            "off_axis_axial_action_scale": 0.001,
+            "off_axis_axial_action_penalty_max": 0.0,
+            "lateral_error_state_penalty_weight": 0.0,
+            "lateral_error_state_penalty_scale": 0.010,
+            "lateral_error_state_penalty_max": 4.0,
+            "stateful_axial_lateral_action_penalty_weight": 0.0,
+            "stateful_axial_lateral_action_scale": 0.00015,
+            "stateful_axial_lateral_action_penalty_max": 4.0,
+            "stateful_axial_alignment_loss_penalty_weight": 0.0,
+            "stateful_axial_alignment_loss_lateral_scale": 0.0005,
+            "stateful_axial_alignment_loss_orientation_scale": 0.02,
+            "stateful_axial_alignment_loss_penalty_max": 8.0,
+            "stateful_axial_pure_action_weight": 0.0,
+            "stateful_axial_impure_action_penalty_weight": 0.0,
+            "stateful_axial_impure_action_penalty_max": 4.0,
+            "phase_gate_insertion_credit": False,
             "corridor_weight": 1.50,
             "inside_alignment_weight": 0.20,
             "retreat_weight": 0.20,
@@ -900,6 +1010,8 @@ class AICTaskEnvCfg(ManagerBasedRLEnvCfg):
         max_depenetration_velocity = os.environ.get("AIC_ISAAC_ROBOT_MAX_DEPENETRATION_VELOCITY")
         if max_depenetration_velocity:
             self.scene.robot.spawn.rigid_props.max_depenetration_velocity = float(max_depenetration_velocity)
+        if os.environ.get("AIC_ISAAC_ROBOT_DISABLE_GRAVITY", "0") in {"1", "true", "True"}:
+            self.scene.robot.spawn.rigid_props.disable_gravity = True
         actuator_stiffness = os.environ.get("AIC_ISAAC_ARM_ACTUATOR_STIFFNESS")
         if actuator_stiffness:
             self.scene.robot.actuators["arm"].stiffness = float(actuator_stiffness)

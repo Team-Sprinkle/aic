@@ -271,7 +271,7 @@ def _make_stage_request(axial: float, lateral: float, seed: int) -> dict[str, An
         "task_family": "sfp_to_nic",
         "generation": {"target_accepted_trajectories": 1, "seed": seed},
         "scene": {
-            "target": {"entrance_axis_offset_m": -0.0009, "seated_depth_m": 0.008},
+            "target": {"entrance_axis_offset_m": 0.0, "seated_depth_m": 0.04872},
             "start_near_gate": {
                 "axial_distance_m": round(float(axial), 6),
                 "lateral_distance_m": round(float(lateral), 6),
@@ -349,7 +349,7 @@ def _validate_stage_episodes(stage: CurriculumStage, episodes_dir: Path, output_
             failures.append(f"{ep_path.name}: s_start {s:.6f} outside expected negative axial range")
         if not (stage.lateral_min_m - 0.001 <= r <= stage.lateral_max_m + 0.001):
             failures.append(f"{ep_path.name}: r_start {r:.6f} outside expected lateral range")
-        if not (0.003 <= geom["target_depth_m"] <= 0.030):
+        if not (0.003 <= geom["target_depth_m"] <= 0.060):
             failures.append(f"{ep_path.name}: target depth {geom['target_depth_m']:.6f} invalid")
     _write_csv(output_dir / "stage_geometry_validation.csv", rows)
     summary = {

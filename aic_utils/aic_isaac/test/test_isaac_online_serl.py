@@ -432,6 +432,49 @@ scene:
     assert start["achieved_lateral_distance_m"] == 0.006
 
 
+def test_near_gate_can_use_configured_lateral_direction(tmp_path: Path) -> None:
+    request = tmp_path / "request.yaml"
+    request.write_text(
+        """
+task_family: sfp_to_nic
+generation:
+  target_accepted_trajectories: 1
+  seed: 11
+scene:
+  start_near_gate:
+    axial_distance_m: 0.006
+    lateral_distance_m: 0.006
+    lateral_direction_world: [0.0, 1.0, 0.0]
+    min_clearance_m: 0.004
+  nic_cards:
+    count: 1
+    target_card: 0
+    target_port: sfp_port_0
+""",
+        encoding="utf-8",
+    )
+
+    summary = isaac_online_serl.materialize_episode_configs(request, tmp_path / "episodes")
+    episode = yaml.safe_load((Path(summary["episodes_dir"]) / "episode_000001.yaml").read_text(encoding="utf-8"))
+    start = episode["scene"]["start_near_gate"]
+    gate = start["target_gate_position"]
+    tip = start["reference_tip_center_position_world"]
+    axis = start["target_gate_axis_world"]
+    lateral_dir = start["lateral_direction_world"]
+    delta = [float(tip[i]) - float(gate[i]) for i in range(3)]
+    axial_component = sum(delta[i] * float(axis[i]) for i in range(3))
+    lateral_component = [
+        delta[i] - axial_component * float(axis[i])
+        for i in range(3)
+    ]
+
+    assert lateral_dir[1] > 0.99
+    assert sum(float(lateral_dir[i]) * float(axis[i]) for i in range(3)) == pytest.approx(0.0, abs=1e-6)
+    assert lateral_component == pytest.approx([0.006 * float(v) for v in lateral_dir], abs=1e-6)
+    assert start["achieved_axial_distance_m"] == 0.006
+    assert start["achieved_lateral_distance_m"] == 0.006
+
+
 def test_sc_near_gate_uses_sc_tip_link_by_default(tmp_path: Path) -> None:
     request = tmp_path / "request.yaml"
     request.write_text(
@@ -501,7 +544,7 @@ scene:
 
     assert target["entrance_axis_offset_m"] == -0.0009
     assert entrance == start_gate
-    assert signed_depth_to_target > 0.002
+    assert signed_depth_to_target == pytest.approx(0.04872, abs=5e-6)
 
 
 def test_sfp_seated_depth_override_places_target_along_entrance_axis(tmp_path: Path) -> None:

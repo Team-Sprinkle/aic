@@ -27,3 +27,4 @@ outputs
 pixi.lock
 generated_videos/
 isaac_visible_debug/
+artifacts/

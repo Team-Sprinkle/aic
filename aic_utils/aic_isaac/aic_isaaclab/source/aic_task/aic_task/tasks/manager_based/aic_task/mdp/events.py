@@ -364,10 +364,90 @@ def reset_robot_tcp_to_episode_start(
     setattr(env, "_aic_reset_event_order", order[-64:])
 
     episode_by_env = getattr(env, "_aic_current_episode_by_env", {}) or {}
+    robot = env.scene["robot"]
+    report = dict(getattr(env, "_aic_tcp_reset_report_by_env", {}) or {})
+    joint_state_targets: list[tuple[int, dict]] = []
+    for local_idx, env_id in enumerate(env_ids.tolist()):
+        start = ((episode_by_env.get(int(env_id)) or {}).get("scene") or {}).get("start_near_gate") or {}
+        if start.get("reset_mode") == "robot_joint_state":
+            joint_state_targets.append((local_idx, start))
+    if joint_state_targets:
+        active_env_ids = torch.tensor(
+            [int(env_ids[local_idx].item()) for local_idx, _ in joint_state_targets],
+            dtype=torch.long,
+            device=env.device,
+        )
+        joint_names_in = joint_state_targets[0][1].get("robot_joint_names")
+        joint_positions_in = joint_state_targets[0][1].get("robot_joint_positions")
+        if not isinstance(joint_names_in, (list, tuple)) or not isinstance(joint_positions_in, (list, tuple)):
+            raise ValueError("robot_joint_state reset requires robot_joint_names and robot_joint_positions lists")
+        reset_joint_names = [str(name) for name in joint_names_in]
+        joint_ids, resolved_joint_names = robot.find_joints(reset_joint_names, preserve_order=True)
+        if len(joint_ids) != len(reset_joint_names):
+            raise RuntimeError(
+                f"Could not resolve all robot_joint_state joints {reset_joint_names}; resolved {resolved_joint_names}"
+            )
+        q_rows = []
+        qd_rows = []
+        for _, start in joint_state_targets:
+            raw_q = start.get("robot_joint_positions")
+            raw_qd = start.get("robot_joint_velocities")
+            if not isinstance(raw_q, (list, tuple)) or len(raw_q) != len(reset_joint_names):
+                raise ValueError("robot_joint_positions length must match robot_joint_names")
+            if raw_qd is None:
+                raw_qd = [0.0] * len(reset_joint_names)
+            if not isinstance(raw_qd, (list, tuple)) or len(raw_qd) != len(reset_joint_names):
+                raise ValueError("robot_joint_velocities length must match robot_joint_names")
+            q_rows.append(torch.tensor([float(v) for v in raw_q], dtype=torch.float32, device=env.device))
+            qd_rows.append(torch.tensor([float(v) for v in raw_qd], dtype=torch.float32, device=env.device))
+        q = torch.stack(q_rows, dim=0)
+        qd = torch.stack(qd_rows, dim=0)
+        robot.write_joint_state_to_sim(q, qd, joint_ids=joint_ids, env_ids=active_env_ids)
+        robot.set_joint_position_target(q, joint_ids=joint_ids, env_ids=active_env_ids)
+        if hasattr(env, "sim"):
+            env.sim.forward()
+        robot.update(0.0)
+        if sync_action_term_after_reset:
+            action_manager = getattr(env, "action_manager", None)
+            if action_manager is not None:
+                try:
+                    action_term = action_manager.get_term("arm_action")
+                except Exception:
+                    action_term = None
+                if action_term is not None and hasattr(action_term, "process_actions"):
+                    zeros_action = torch.zeros(
+                        (getattr(env, "num_envs", robot.data.joint_pos.shape[0]), action_term.action_dim),
+                        dtype=robot.data.joint_pos.dtype,
+                        device=env.device,
+                    )
+                    action_term.process_actions(zeros_action)
+                    try:
+                        action_manager._action[active_env_ids] = 0.0
+                        action_manager._prev_action[active_env_ids] = 0.0
+                    except Exception:
+                        pass
+        for row, env_id in enumerate(active_env_ids.tolist()):
+            episode = episode_by_env.get(int(env_id)) or {}
+            start = joint_state_targets[row][1]
+            report[int(env_id)] = {
+                "body_name": None,
+                "episode_id": episode.get("episode_id"),
+                "reset_mode": "robot_joint_state",
+                "note": "direct per-episode robot joint state reset",
+                "robot_joint_names": reset_joint_names,
+                "robot_joint_positions": [float(v) for v in q[row].detach().cpu().tolist()],
+                "robot_joint_velocities": [float(v) for v in qd[row].detach().cpu().tolist()],
+                "full_joint_velocities_zeroed": bool(start.get("robot_joint_velocities") is None),
+                "action_term_synced_after_reset": bool(sync_action_term_after_reset),
+            }
+        setattr(env, "_aic_tcp_reset_report_by_env", report)
+
     targets: list[tuple[int, torch.Tensor, torch.Tensor | None, str]] = []
     for local_idx, env_id in enumerate(env_ids.tolist()):
         start = ((episode_by_env.get(int(env_id)) or {}).get("scene") or {}).get("start_near_gate") or {}
         reset_mode = start.get("reset_mode")
+        if reset_mode == "robot_joint_state":
+            continue
         if reset_mode == "body_start_position_world":
             raw_target = start.get("body_start_position_world")
             reset_body_name = str(start.get("reset_body_name") or body_name)
@@ -393,7 +473,6 @@ def reset_robot_tcp_to_episode_start(
         raise RuntimeError(f"Mixed near-gate reset bodies in one reset batch are not supported: {sorted(reset_body_names)}")
     active_body_name = next(iter(reset_body_names))
 
-    robot = env.scene["robot"]
     body_ids, body_names = robot.find_bodies(active_body_name, preserve_order=True)
     if not body_ids:
         raise RuntimeError(f"Robot body {active_body_name!r} not found; available bodies: {robot.body_names}")
@@ -515,7 +594,6 @@ def reset_robot_tcp_to_episode_start(
             target_quat,
         )
     )
-    report = dict(getattr(env, "_aic_tcp_reset_report_by_env", {}) or {})
     for row, env_id in enumerate(active_env_ids.tolist()):
         episode = episode_by_env.get(int(env_id)) or {}
         start = ((episode.get("scene") or {}).get("start_near_gate") or {})

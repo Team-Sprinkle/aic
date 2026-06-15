@@ -80,7 +80,7 @@ def _summary(run_dir: Path) -> dict[str, Any]:
             and _metric(row, "consistency_gate_env0") is not None
         ),
         key=lambda row: (
-            min((_metric(row, "signed_depth_m_env0") or 0.0) / 0.008, 1.0) * 10.0
+            min((_metric(row, "signed_depth_m_env0") or 0.0) / 0.0458, 1.0) * 10.0
             - (_metric(row, "lateral_error_m_env0") or 1.0) * 1000.0
             - (_metric(row, "orientation_error_rad_env0") or 1.0) * 10.0
             + (_metric(row, "consistency_gate_env0") or 0.0)

@@ -9,11 +9,13 @@ import math
 import os
 import shlex
 import signal
+import subprocess
 import sys
 import time
 import traceback
 import copy
 import random
+import re
 import zlib
 from collections import deque
 from datetime import datetime
@@ -59,6 +61,12 @@ parser.add_argument(
         "is the full TCP delta action, not an ACT correction."
     ),
 )
+parser.add_argument(
+    "--reset_actor_head",
+    action="store_true",
+    default=False,
+    help="When loading a checkpoint, initialize the trainable ACT adapter/direct head from scratch.",
+)
 parser.add_argument("--act_only_state_encoding", choices=["none", "fourier"], default="fourier")
 parser.add_argument("--act_only_state_encoding_indices", type=int, nargs="*", default=[0, 1, 2, 13, 14, 15])
 parser.add_argument("--act_only_state_encoding_num_bands", type=int, default=4)
@@ -81,8 +89,88 @@ parser.add_argument(
     default=1,
     help="Run one gradient update every N environment steps after warmup.",
 )
+parser.add_argument(
+    "--gradient_updates_per_step",
+    type=int,
+    default=1,
+    help="Number of gradient updates to run each time update_every_steps fires.",
+)
+parser.add_argument(
+    "--critic_image_encoder_override",
+    choices=["", "small_conv", "resnet18", "resnet18_imagenet", "convnext_tiny", "convnext_tiny_imagenet"],
+    default="",
+    help=(
+        "Override the online SERL critic image encoder recorded in the checkpoint/config. "
+        "This leaves the ACT actor path unchanged and initializes a fresh critic with the requested encoder."
+    ),
+)
+parser.add_argument(
+    "--critic_state_history_steps",
+    type=int,
+    default=1,
+    help=(
+        "Number of recent low-dimensional policy states flattened for the online critics only. "
+        "The ACT actor still receives the current state, so runtime/export policy paths remain unchanged."
+    ),
+)
+parser.add_argument(
+    "--actor_state_history_steps",
+    type=int,
+    default=1,
+    help=(
+        "Number of recent low-dimensional policy states flattened for the trainable ACT adapter head. "
+        "The frozen ACT TorchScript base still receives only the current state/images; values >1 "
+        "reinitialize incompatible adapter input weights when loading older checkpoints."
+    ),
+)
+parser.add_argument(
+    "--resume_online_state",
+    action=argparse.BooleanOptionalAction,
+    default=False,
+    help=(
+        "When loading an online SERL checkpoint, restore compatible online critics, "
+        "target critics, and optimizer states. Default preserves the historical actor-only resume path."
+    ),
+)
 parser.add_argument("--batch_size", type=int, default=4)
 parser.add_argument("--replay_capacity", type=int, default=10000)
+parser.add_argument(
+    "--load_replay_path",
+    type=str,
+    default="",
+    help="Optional replay buffer .pt file to preload before online updates.",
+)
+parser.add_argument(
+    "--load_replay_max_transitions",
+    type=int,
+    default=0,
+    help="If >0, load at most this many most-recent transitions from --load_replay_path.",
+)
+parser.add_argument(
+    "--save_replay_at_end",
+    action=argparse.BooleanOptionalAction,
+    default=False,
+    help="Save the replay buffer at the end of the run.",
+)
+parser.add_argument(
+    "--save_replay_path",
+    type=str,
+    default="",
+    help="Optional explicit output path for --save_replay_at_end. Defaults to run_dir/replay_buffer.pt.",
+)
+parser.add_argument(
+    "--save_replay_filter",
+    choices=[
+        "all",
+        "strict_success",
+        "strict_near_success",
+        "positive_centered",
+        "centered_high_theta_or_positive",
+        "deep_contact",
+    ],
+    default="all",
+    help="Optional geometry filter applied when saving replay. Requires diagnostic insertion geometry in metadata.",
+)
 parser.add_argument("--warmup_steps", type=int, default=0)
 parser.add_argument(
     "--actor_update_start_steps",
@@ -136,14 +224,566 @@ parser.add_argument(
 )
 parser.add_argument("--target_action_guide_weight", type=float, default=0.0)
 parser.add_argument(
+    "--target_action_guide_rotation_loss_weight",
+    type=float,
+    default=0.1,
+    help=(
+        "Relative weight for rotational components inside target-action guide distillation. "
+        "The historical default is 0.1; increasing it tests orientation-blocked insertion policies."
+    ),
+)
+parser.add_argument(
     "--target_action_guide_mode",
-    choices=["axis", "cheatcode_transform"],
+    choices=[
+        "axis",
+        "cheatcode_transform",
+        "target_tip_stabilize",
+        "target_module_stabilize",
+        "target_tip_then_module_stabilize",
+    ],
     default="axis",
     help=(
         "Guide-action geometry. 'axis' keeps the conservative lateral/axial guide; "
-        "'cheatcode_transform' mirrors the ROS CheatCode rigid transform from reward body to target."
+        "'cheatcode_transform' mirrors the ROS CheatCode rigid transform from reward body to target; "
+        "'target_tip_stabilize' directly servo-corrects the semantic tip toward a target depth; "
+        "'target_module_stabilize' drives a trailing module/body axially while keeping the semantic tip centered; "
+        "'target_tip_then_module_stabilize' latches from tip centering into module insertion after a configurable gate."
     ),
 )
+parser.add_argument(
+    "--target_action_guide_target_tip_goal_depth_m",
+    type=float,
+    default=float("nan"),
+    help=(
+        "Goal signed depth for --target_action_guide_mode target_tip_stabilize. "
+        "Defaults to the episode target depth when omitted/NaN."
+    ),
+)
+parser.add_argument(
+    "--target_action_guide_target_tip_axial_step_m",
+    type=float,
+    default=float("nan"),
+    help="Axial correction clip for target_tip_stabilize; defaults to --target_action_guide_step_size.",
+)
+parser.add_argument(
+    "--target_action_guide_target_tip_axial_direction_sign",
+    type=float,
+    default=1.0,
+    help=(
+        "Multiplier applied only to the executed axial translation in target_tip_stabilize. "
+        "Keep +1 for the historical behavior; use -1 as a controller-frame diagnostic when "
+        "nominal positive guide depth commands make semantic module depth retreat."
+    ),
+)
+parser.add_argument(
+    "--target_action_guide_target_tip_lateral_step_m",
+    type=float,
+    default=float("nan"),
+    help="Lateral correction clip for target_tip_stabilize; defaults to --target_action_guide_step_size.",
+)
+parser.add_argument(
+    "--target_action_guide_target_tip_body_name",
+    default="",
+    help=(
+        "Optional semantic body to stabilize for target_tip_stabilize. Defaults to the reward body. "
+        "When set to the configured consistency body and no explicit goal depth is provided, the "
+        "guide targets the final module/body depth implied by the initial tip-to-body axial gap."
+    ),
+)
+parser.add_argument(
+    "--target_action_guide_target_tip_lateral_body_name",
+    default="",
+    help=(
+        "Optional body used for target_tip_stabilize lateral centering. Defaults to the stabilized "
+        "body. Use sfp_tip_link with --target_action_guide_target_tip_body_name sfp_module_link "
+        "to drive module/body axial insertion while keeping the semantic tip centered."
+    ),
+)
+parser.add_argument(
+    "--target_action_guide_target_tip_orientation_body_name",
+    default="",
+    help=(
+        "Optional body used for target_tip_stabilize semantic orientation gating and final "
+        "orientation trim. Defaults to the stabilized body for backward compatibility. Use "
+        "sfp_tip_link when the stabilized axial body is sfp_module_link."
+    ),
+)
+parser.add_argument(
+    "--target_action_guide_deep_translation_body_name",
+    default="",
+    help=(
+        "Optional body used for cheatcode_transform translation after the reward body passes "
+        "--target_action_guide_deep_translation_activation_depth_m. This keeps tip-based approach "
+        "while allowing a module/body-consistency insertion phase."
+    ),
+)
+parser.add_argument(
+    "--target_action_guide_deep_translation_activation_depth_m",
+    type=float,
+    default=float("nan"),
+    help="Reward-body signed depth at which cheatcode_transform switches translation to the deep body.",
+)
+parser.add_argument(
+    "--target_action_guide_deep_translation_axial_step_size",
+    type=float,
+    default=float("nan"),
+    help=(
+        "Optional axial step clip used only while cheatcode_transform deep translation is active. "
+        "NaN keeps --target_action_guide_axial_step_size."
+    ),
+)
+parser.add_argument(
+    "--target_action_guide_zero_rotation_when_deep_translation_active",
+    action=argparse.BooleanOptionalAction,
+    default=False,
+    help=(
+        "For cheatcode_transform, zero the rotation command after the deep translation body has "
+        "activated. This tests whether final rotation is causing module-stage retreat."
+    ),
+)
+parser.add_argument(
+    "--target_action_guide_target_tip_secondary_lateral_body_name",
+    default="",
+    help=(
+        "Optional second body whose semantic centerline error is also corrected in "
+        "target_tip_stabilize. Useful for centering both sfp_module_link and sfp_tip_link."
+    ),
+)
+parser.add_argument(
+    "--target_action_guide_target_tip_secondary_lateral_step_m",
+    type=float,
+    default=float("nan"),
+    help="Lateral correction clip for the optional secondary lateral body.",
+)
+parser.add_argument(
+    "--target_action_guide_target_tip_secondary_lateral_activation_depth_m",
+    type=float,
+    default=float("-inf"),
+    help=(
+        "Teacher-only gate for optional secondary lateral correction. The secondary lateral trim "
+        "is applied only after the semantic tip/phase depth reaches this signed depth. Default "
+        "preserves historical always-active behavior."
+    ),
+)
+parser.add_argument(
+    "--target_action_guide_target_tip_secondary_lateral_activation_error_m",
+    type=float,
+    default=0.0,
+    help=(
+        "Teacher-only gate for optional secondary lateral correction. The secondary lateral trim "
+        "is applied only while the secondary body centerline error exceeds this threshold. Default "
+        "preserves historical behavior."
+    ),
+)
+parser.add_argument(
+    "--target_action_guide_target_tip_secondary_lateral_extra_step_m",
+    type=float,
+    default=0.0,
+    help=(
+        "Teacher-only additive late-stage secondary lateral correction clip. This is added on top "
+        "of --target_action_guide_target_tip_secondary_lateral_step_m only when the activation "
+        "depth/error gates pass. Default disabled."
+    ),
+)
+parser.add_argument(
+    "--target_action_guide_target_tip_axial_lateral_gate_m",
+    type=float,
+    default=float("nan"),
+    help=(
+        "If finite, target_tip_stabilize zeroes positive axial guide motion until the configured "
+        "lateral body is within this semantic centerline error."
+    ),
+)
+parser.add_argument(
+    "--target_action_guide_target_tip_secondary_axial_lateral_gate_m",
+    type=float,
+    default=float("nan"),
+    help=(
+        "If finite and a secondary lateral body is configured, also zero positive axial guide "
+        "motion until that secondary body is within this semantic centerline error."
+    ),
+)
+parser.add_argument(
+    "--target_action_guide_target_tip_secondary_axial_lateral_gate_activation_depth_m",
+    type=float,
+    default=float("-inf"),
+    help=(
+        "Teacher-only activation depth for --target_action_guide_target_tip_secondary_axial_lateral_gate_m. "
+        "Use this to avoid blocking the coarse approach while still forcing late module centering."
+    ),
+)
+parser.add_argument(
+    "--target_action_guide_target_tip_phase_lateral_dither_m",
+    type=float,
+    default=0.0,
+    help=(
+        "Teacher-only target_tip_stabilize post-gate wiggle. When phase axial mode is active and a secondary "
+        "lateral body is configured, add a small alternating lateral offset along the secondary centering axis."
+    ),
+)
+parser.add_argument(
+    "--target_action_guide_target_tip_phase_lateral_dither_period_steps",
+    type=int,
+    default=20,
+    help="Episode steps per sign flip for --target_action_guide_target_tip_phase_lateral_dither_m.",
+)
+parser.add_argument(
+    "--target_action_guide_target_tip_phase_lateral_dither_activation_depth_m",
+    type=float,
+    default=-0.001,
+    help="Semantic tip signed depth at which target_tip_stabilize post-gate lateral dither may activate.",
+)
+parser.add_argument(
+    "--target_action_guide_target_tip_phase_lateral_dither_secondary_min_m",
+    type=float,
+    default=0.00035,
+    help="Minimum secondary/module lateral error required for target_tip_stabilize post-gate lateral dither.",
+)
+parser.add_argument(
+    "--target_action_guide_target_module_body_name",
+    default="sfp_module_link",
+    help="Semantic body whose axial signed depth is driven by target_module_stabilize.",
+)
+parser.add_argument(
+    "--target_action_guide_target_module_goal_depth_m",
+    type=float,
+    default=float("nan"),
+    help=(
+        "Goal signed depth for --target_action_guide_mode target_module_stabilize. "
+        "Defaults to final target depth minus the initial tip-to-module axial gap."
+    ),
+)
+parser.add_argument(
+    "--target_action_guide_target_module_axial_step_m",
+    type=float,
+    default=float("nan"),
+    help="Axial correction clip for target_module_stabilize; defaults to --target_action_guide_step_size.",
+)
+parser.add_argument(
+    "--target_action_guide_target_module_lateral_step_m",
+    type=float,
+    default=0.0,
+    help="Optional module-body lateral correction clip for target_module_stabilize.",
+)
+parser.add_argument(
+    "--target_action_guide_target_module_tip_lateral_step_m",
+    type=float,
+    default=float("nan"),
+    help="Semantic-tip lateral correction clip for target_module_stabilize; defaults to --target_action_guide_step_size.",
+)
+parser.add_argument(
+    "--target_action_guide_target_module_tip_lateral_gate_m",
+    type=float,
+    default=float("nan"),
+    help="If finite, positive module axial motion is blocked while semantic-tip lateral error exceeds this value.",
+)
+parser.add_argument(
+    "--target_action_guide_target_module_tip_theta_gate_rad",
+    type=float,
+    default=float("nan"),
+    help="If finite, positive module axial motion is blocked while semantic-tip orientation error exceeds this value.",
+)
+parser.add_argument(
+    "--target_action_guide_target_module_orientation_step_rad",
+    type=float,
+    default=0.0,
+    help="Optional semantic-tip orientation trim step for target_module_stabilize.",
+)
+parser.add_argument(
+    "--target_action_guide_target_module_orientation_lateral_gate_m",
+    type=float,
+    default=0.00065,
+)
+parser.add_argument(
+    "--target_action_guide_target_module_orientation_activation_depth_m",
+    type=float,
+    default=0.020,
+)
+parser.add_argument(
+    "--target_action_guide_target_module_orientation_threshold_rad",
+    type=float,
+    default=0.034,
+)
+parser.add_argument(
+    "--target_action_guide_target_module_orientation_mode",
+    choices=["direct_quat", "candidate_quat_best", "candidate_axis_best", "axis_cross"],
+    default="candidate_quat_best",
+    help=(
+        "Orientation trim used by target_module_stabilize. direct_quat applies the target-body "
+        "quaternion error direction; candidate_* tests bounded +/- world-axis rotations and chooses "
+        "the one predicted to reduce tip orientation error; axis_cross applies the direct world-frame "
+        "cross-product correction for the configured axis-error metric."
+    ),
+)
+parser.add_argument(
+    "--target_action_guide_target_module_orientation_module_lateral_penalty",
+    type=float,
+    default=0.0,
+    help=(
+        "Penalty applied when selecting target_module_stabilize orientation candidates if predicted "
+        "module lateral error increases."
+    ),
+)
+parser.add_argument(
+    "--target_action_guide_target_module_orientation_module_lateral_margin_m",
+    type=float,
+    default=0.0,
+    help="Allowed predicted module lateral increase before the module-lateral orientation penalty is applied.",
+)
+parser.add_argument(
+    "--target_action_guide_target_module_rotation_compensation_clip_m",
+    type=float,
+    default=0.0005,
+)
+parser.add_argument(
+    "--target_action_guide_target_module_emit_isaac_root_action",
+    action=argparse.BooleanOptionalAction,
+    default=False,
+    help=(
+        "Teacher/data-collection only: make target_module_stabilize emit the already sign-corrected "
+        "Isaac root-frame IK action used by the diagnostic wrist_contact_realization probe. This is only "
+        "valid with collect blend 1.0; it bypasses the normal TCP-action conversion path."
+    ),
+)
+parser.add_argument(
+    "--target_action_guide_target_module_polish_after_near_success",
+    action=argparse.BooleanOptionalAction,
+    default=False,
+    help=(
+        "Teacher/data-collection only: once the semantic tip is deep and centered, limit positive "
+        "module axial motion so target_module_stabilize can spend steps polishing orientation/lateral error."
+    ),
+)
+parser.add_argument("--target_action_guide_target_module_polish_min_tip_depth_m", type=float, default=0.044)
+parser.add_argument("--target_action_guide_target_module_polish_max_tip_lateral_m", type=float, default=0.0005)
+parser.add_argument("--target_action_guide_target_module_polish_max_tip_theta_rad", type=float, default=float("inf"))
+parser.add_argument("--target_action_guide_target_module_polish_axial_step_m", type=float, default=0.0)
+parser.add_argument(
+    "--target_action_guide_target_module_polish_latch",
+    action=argparse.BooleanOptionalAction,
+    default=False,
+    help="Teacher/data-collection only: keep the target-module polish gate active after it first triggers.",
+)
+parser.add_argument(
+    "--target_action_guide_target_tip_phase_axial_switch_depth_m",
+    type=float,
+    default=float("nan"),
+    help=(
+        "If finite, target_tip_stabilize uses the normal tip axial target until the semantic tip "
+        "reaches this signed depth, then drives a trailing body axially toward its final depth. "
+        "This is a teacher-only diagnostic for the mid-depth tip/module separation failure."
+    ),
+)
+parser.add_argument(
+    "--target_action_guide_target_tip_phase_axial_body_name",
+    default="",
+    help=(
+        "Body whose signed depth is driven after --target_action_guide_target_tip_phase_axial_switch_depth_m. "
+        "Defaults to the consistency body, or the secondary lateral body if no consistency body is configured."
+    ),
+)
+parser.add_argument(
+    "--target_action_guide_target_tip_phase_axial_step_m",
+    type=float,
+    default=float("nan"),
+    help=(
+        "Optional axial correction clip used only after the phased axial body switch is active. "
+        "NaN keeps --target_action_guide_target_tip_axial_step_m."
+    ),
+)
+parser.add_argument(
+    "--target_action_guide_target_tip_phase_axial_latch",
+    action=argparse.BooleanOptionalAction,
+    default=False,
+    help=(
+        "Diagnostic/teacher-only: once the target-tip phase axial switch depth is reached, keep driving "
+        "the phase axial body until reset instead of reverting when the tip slips back below the switch depth."
+    ),
+)
+parser.add_argument(
+    "--target_action_guide_target_tip_dual_lateral_rotation_step_rad",
+    type=float,
+    default=0.0,
+    help=(
+        "If positive with a secondary lateral body, probe small wrist-frame rotations that reduce "
+        "the worst primary/secondary semantic lateral error before allowing axial insertion."
+    ),
+)
+parser.add_argument(
+    "--target_action_guide_target_tip_dual_lateral_rotation_primary_gate_m",
+    type=float,
+    default=0.0010,
+    help="Only activate dual-lateral rotation once the primary lateral body is within this error.",
+)
+parser.add_argument(
+    "--target_action_guide_target_tip_dual_lateral_rotation_secondary_threshold_m",
+    type=float,
+    default=0.0007,
+    help="Only activate dual-lateral rotation while the secondary lateral body exceeds this error.",
+)
+parser.add_argument(
+    "--target_action_guide_target_tip_dual_lateral_rotation_compensation_clip_m",
+    type=float,
+    default=0.0005,
+    help="Translation compensation clip used to keep the primary lateral body fixed during dual-lateral rotation.",
+)
+parser.add_argument(
+    "--target_action_guide_target_tip_dual_lateral_rotation_allow_positive_axial",
+    action=argparse.BooleanOptionalAction,
+    default=False,
+    help=(
+        "Teacher-only: allow dual-lateral rotation while the target-tip guide is still commanding positive "
+        "axial motion. The default only rotates during blocked/backoff steps."
+    ),
+)
+parser.add_argument(
+    "--target_action_guide_tip_then_module_switch_depth_m",
+    type=float,
+    default=0.023,
+    help="Tip signed depth at which target_tip_then_module_stabilize may latch into module mode.",
+)
+parser.add_argument(
+    "--target_action_guide_tip_then_module_switch_lateral_m",
+    type=float,
+    default=0.00075,
+    help="Tip lateral-error gate for target_tip_then_module_stabilize module handoff.",
+)
+parser.add_argument(
+    "--target_action_guide_tip_then_module_switch_theta_rad",
+    type=float,
+    default=0.060,
+    help="Tip orientation-error gate for target_tip_then_module_stabilize module handoff.",
+)
+parser.add_argument(
+    "--target_action_guide_target_tip_clamp_positive_axial_when_gated",
+    action=argparse.BooleanOptionalAction,
+    default=False,
+    help=(
+        "For target_tip_stabilize, remove any positive axial component from the final guided "
+        "translation while the axial gate has zeroed positive axial motion."
+    ),
+)
+parser.add_argument(
+    "--target_action_guide_target_tip_shallow_bypass_recovery",
+    action=argparse.BooleanOptionalAction,
+    default=False,
+    help=(
+        "For target_tip_stabilize, treat positive semantic-tip depth with a still-large "
+        "module/body axial gap as bypass/contact-risk. The guide backs out slightly and "
+        "keeps lateral correction instead of continuing shallow tip-only insertion."
+    ),
+)
+parser.add_argument(
+    "--target_action_guide_target_tip_shallow_bypass_activation_depth_m",
+    type=float,
+    default=0.0,
+    help="Semantic tip depth at which shallow-bypass recovery may activate.",
+)
+parser.add_argument(
+    "--target_action_guide_target_tip_shallow_bypass_module_gap_m",
+    type=float,
+    default=0.035,
+    help=(
+        "Minimum remaining axial gap for the stabilized body/module before positive tip depth "
+        "is treated as a shallow bypass risk."
+    ),
+)
+parser.add_argument(
+    "--target_action_guide_target_tip_shallow_bypass_backoff_m",
+    type=float,
+    default=0.00008,
+    help="Outward axial backoff commanded during shallow-bypass recovery.",
+)
+parser.add_argument(
+    "--target_action_guide_target_tip_shallow_bypass_allow_final_orientation",
+    action=argparse.BooleanOptionalAction,
+    default=False,
+    help=(
+        "Allow target_tip_stabilize final-orientation trimming while shallow-bypass recovery is "
+        "holding/backing out. This is useful when recovery creates a stable pre-lip state but "
+        "theta drifts above the strict gate."
+    ),
+)
+parser.add_argument(
+    "--target_action_guide_target_tip_realized_r_recovery",
+    action=argparse.BooleanOptionalAction,
+    default=False,
+    help=(
+        "For target_tip_stabilize, detect when a previous positive axial guide step is followed by "
+        "semantic lateral-error growth near the entrance. The guide then backs out briefly and "
+        "suppresses positive axial motion before retrying."
+    ),
+)
+parser.add_argument(
+    "--target_action_guide_target_tip_realized_r_recovery_activation_depth_m",
+    type=float,
+    default=-0.004,
+    help="Minimum semantic tip signed depth where target-tip realized-r recovery may activate.",
+)
+parser.add_argument(
+    "--target_action_guide_target_tip_realized_r_recovery_margin_m",
+    type=float,
+    default=0.00005,
+    help="Required lateral-error increase over the previous frame to trigger target-tip realized-r recovery.",
+)
+parser.add_argument(
+    "--target_action_guide_target_tip_realized_r_recovery_depth_progress_m",
+    type=float,
+    default=0.00001,
+    help=(
+        "Measured semantic tip signed-depth increase over the previous frame that counts as "
+        "realized inward progress for target-tip realized-r recovery."
+    ),
+)
+parser.add_argument(
+    "--target_action_guide_target_tip_realized_r_recovery_theta_gate_rad",
+    type=float,
+    default=float("inf"),
+    help=(
+        "If finite, measured inward depth progress while semantic tip orientation exceeds this "
+        "threshold also triggers target-tip realized-r recovery, even if lateral error has not grown yet."
+    ),
+)
+parser.add_argument(
+    "--target_action_guide_target_tip_realized_r_recovery_secondary_lateral_gate_m",
+    type=float,
+    default=float("inf"),
+    help=(
+        "If finite, measured inward depth progress while secondary/module lateral error exceeds this "
+        "threshold also triggers target-tip realized-r recovery."
+    ),
+)
+parser.add_argument(
+    "--target_action_guide_target_tip_realized_r_recovery_backoff_m",
+    type=float,
+    default=0.00004,
+    help="Outward axial backoff commanded while target-tip realized-r recovery is active.",
+)
+parser.add_argument(
+    "--target_action_guide_target_tip_realized_r_recovery_cooldown_steps",
+    type=int,
+    default=2,
+    help="Number of guide steps to keep target-tip realized-r recovery active after a trigger.",
+)
+parser.add_argument(
+    "--target_action_guide_target_tip_contact_force_recovery",
+    action=argparse.BooleanOptionalAction,
+    default=False,
+    help=(
+        "Diagnostic-only target-tip guide recovery: when contact-proxy force spikes after the tip is "
+        "centered and partly inserted, command a short outward axial backoff before contact ejects the plug."
+    ),
+)
+parser.add_argument("--target_action_guide_target_tip_contact_force_recovery_threshold", type=float, default=8.0)
+parser.add_argument("--target_action_guide_target_tip_contact_force_recovery_activation_depth_m", type=float, default=0.020)
+parser.add_argument("--target_action_guide_target_tip_contact_force_recovery_max_lateral_m", type=float, default=0.0008)
+parser.add_argument(
+    "--target_action_guide_target_tip_contact_force_recovery_max_secondary_lateral_m",
+    type=float,
+    default=float("inf"),
+)
+parser.add_argument("--target_action_guide_target_tip_contact_force_recovery_backoff_m", type=float, default=0.00025)
+parser.add_argument("--target_action_guide_target_tip_contact_force_recovery_cooldown_steps", type=int, default=12)
 parser.add_argument("--target_action_guide_step_size", type=float, default=0.001)
 parser.add_argument("--target_action_guide_rotation_step_size", type=float, default=0.0)
 parser.add_argument(
@@ -204,7 +844,8 @@ parser.add_argument(
     default=False,
     help=(
         "During final orientation refinement, choose among +/- action-frame rotation basis "
-        "commands by predicted semantic tip-axis improvement and predicted lateral sweep."
+        "commands by predicted semantic tip orientation improvement and predicted lateral sweep. "
+        "Also applies to target_tip_stabilize final orientation refinement."
     ),
 )
 parser.add_argument(
@@ -212,6 +853,113 @@ parser.add_argument(
     type=float,
     default=20.0,
     help="Penalty multiplier for predicted lateral-error increase in orientation basis probing.",
+)
+parser.add_argument(
+    "--target_action_guide_orientation_probe_strict_lateral_gate",
+    action=argparse.BooleanOptionalAction,
+    default=False,
+    help=(
+        "For target_tip_stabilize probe-basis final orientation, reject candidate rotations whose "
+        "rotation-compensated one-step semantic tip prediction leaves the active lateral gate."
+    ),
+)
+parser.add_argument(
+    "--target_action_guide_orientation_probe_lateral_margin_m",
+    type=float,
+    default=0.00005,
+    help="Allowed predicted lateral-error increase for strict target-tip orientation probe gating.",
+)
+parser.add_argument(
+    "--target_action_guide_orientation_probe_secondary_lateral_penalty",
+    type=float,
+    default=0.0,
+    help=(
+        "Penalty multiplier for predicted secondary/module lateral-error increase in "
+        "target_tip_stabilize final-orientation probe-basis selection."
+    ),
+)
+parser.add_argument(
+    "--target_action_guide_orientation_probe_strict_secondary_lateral_gate",
+    action=argparse.BooleanOptionalAction,
+    default=False,
+    help=(
+        "For target_tip_stabilize probe-basis final orientation, reject candidate rotations whose "
+        "rotation-compensated one-step secondary/module lateral prediction leaves its active gate."
+    ),
+)
+parser.add_argument(
+    "--target_action_guide_orientation_probe_secondary_lateral_margin_m",
+    type=float,
+    default=0.00005,
+    help="Allowed secondary/module lateral-error increase for strict orientation probe gating.",
+)
+parser.add_argument(
+    "--target_action_guide_orientation_probe_secondary_max_lateral_m",
+    type=float,
+    default=float("nan"),
+    help=(
+        "Optional absolute secondary/module lateral limit for target_tip_stabilize final-orientation "
+        "probe-basis gating. If unset, the secondary axial-lateral gate is used when finite."
+    ),
+)
+parser.add_argument(
+    "--target_action_guide_target_tip_orientation_realized_reject",
+    action=argparse.BooleanOptionalAction,
+    default=False,
+    help=(
+        "For target_tip_stabilize final-orientation trim, suppress further rotation commands when "
+        "the previous realized step increased semantic theta or lateral/module error."
+    ),
+)
+parser.add_argument(
+    "--target_action_guide_target_tip_orientation_realized_theta_margin_rad",
+    type=float,
+    default=0.0002,
+    help="Allowed post-step semantic theta increase before target-tip orientation trim enters cooldown.",
+)
+parser.add_argument(
+    "--target_action_guide_target_tip_orientation_realized_lateral_margin_m",
+    type=float,
+    default=0.00003,
+    help="Allowed post-step primary semantic lateral-error increase before target-tip orientation trim enters cooldown.",
+)
+parser.add_argument(
+    "--target_action_guide_target_tip_orientation_realized_secondary_margin_m",
+    type=float,
+    default=0.00003,
+    help="Allowed post-step secondary/module lateral-error increase before target-tip orientation trim enters cooldown.",
+)
+parser.add_argument(
+    "--target_action_guide_target_tip_orientation_realized_cooldown_steps",
+    type=int,
+    default=12,
+    help="Number of guide steps to suppress target-tip orientation trim after a measured rejection.",
+)
+parser.add_argument(
+    "--target_action_guide_target_tip_orientation_realized_basis_cooldown_steps",
+    type=int,
+    default=0,
+    help=(
+        "If >0 with target-tip orientation realized reject, temporarily blacklist the previously "
+        "selected final-orientation probe basis after a realized rejection instead of only pausing "
+        "all orientation trim commands."
+    ),
+)
+parser.add_argument(
+    "--target_action_guide_target_tip_orientation_realized_sign_flip",
+    action=argparse.BooleanOptionalAction,
+    default=False,
+    help=(
+        "Empirically flip final-orientation rotation sign for an environment when the previous "
+        "final-orientation command increased realized semantic theta. This is off by default and "
+        "only affects target_tip_stabilize final-orientation commands."
+    ),
+)
+parser.add_argument(
+    "--target_action_guide_target_tip_orientation_realized_sign_flip_margin_rad",
+    type=float,
+    default=0.00002,
+    help="Semantic theta increase that triggers the empirical final-orientation sign flip.",
 )
 parser.add_argument(
     "--target_action_guide_axial_step_size",
@@ -275,6 +1023,44 @@ parser.add_argument(
     ),
 )
 parser.add_argument(
+    "--target_action_guide_preinsert_hover_step_m",
+    type=float,
+    default=float("nan"),
+    help=(
+        "Optional axial correction clip for --target_action_guide_preinsert_hover_depth. "
+        "When unset, the hover branch uses the normal target-tip axial step limit."
+    ),
+)
+parser.add_argument(
+    "--target_action_guide_preinsert_hover_ready_tolerance_m",
+    type=float,
+    default=float("nan"),
+    help=(
+        "If finite with --target_action_guide_preinsert_hover_depth, preinsert alignment is not ready "
+        "until the phase axial depth is within this tolerance on the safe side of the hover depth. "
+        "This prevents shallow insertion after lateral/orientation gates pass before the hover pose is reached."
+    ),
+)
+parser.add_argument(
+    "--target_action_guide_preinsert_hover_zero_lateral_until_depth_ready",
+    action=argparse.BooleanOptionalAction,
+    default=False,
+    help=(
+        "When using --target_action_guide_preinsert_hover_ready_tolerance_m, suppress preinsert lateral "
+        "centering while the hover-depth gate is not ready. This isolates axial backoff from contact-induced "
+        "lateral centering drift."
+    ),
+)
+parser.add_argument(
+    "--target_action_guide_preinsert_alignment_latch",
+    action=argparse.BooleanOptionalAction,
+    default=False,
+    help=(
+        "For target_tip_stabilize, once preinsert lateral/orientation/depth gates are satisfied, "
+        "keep the env in the insertion phase until the next episode reset."
+    ),
+)
+parser.add_argument(
     "--target_action_guide_blocked_axial_step_size",
     type=float,
     default=float("nan"),
@@ -319,8 +1105,53 @@ parser.add_argument(
         "This keeps approach rotation gentle while allowing stronger seated-pose alignment."
     ),
 )
+parser.add_argument(
+    "--target_action_guide_final_orientation_stop_rotation_theta_gate_rad",
+    type=float,
+    default=float("nan"),
+    help=(
+        "If finite, keep final-orientation hold/recenter active but zero final-orientation rotation "
+        "commands once the final-orientation gate error is at or below this threshold."
+    ),
+)
 parser.add_argument("--target_action_guide_collect_blend", type=float, default=0.0)
 parser.add_argument("--target_action_guide_collect_steps", type=int, default=0)
+parser.add_argument(
+    "--target_action_guide_use_episode_constant_action",
+    action=argparse.BooleanOptionalAction,
+    default=False,
+    help=(
+        "Use scene.start_near_gate.debug_audit_constant_action/debug_audit_action_sequence "
+        "as the target-action guide during normal training/evaluation. Unlike "
+        "--debug_audit_episode_constant_action, this does not bypass the actor or disable "
+        "gradient updates; it only supplies the guide action used for guide loss/blending."
+    ),
+)
+parser.add_argument(
+    "--target_action_guide_collect_decay_floor",
+    type=float,
+    default=0.0,
+    help=(
+        "Lower bound for linearly decayed guide collection blend. With collect_blend=1.0, "
+        "collect_decay, and floor=0.7, the executed action decays from full guide to a "
+        "stable 70/30 guide/actor blend instead of dropping to actor-only behavior."
+    ),
+)
+parser.add_argument(
+    "--target_action_guide_collect_decay_start_step",
+    type=int,
+    default=1,
+    help="First step at which guide collection blend decay begins.",
+)
+parser.add_argument(
+    "--target_action_guide_collect_decay_steps",
+    type=int,
+    default=0,
+    help=(
+        "Number of steps over which to decay guide collection blend. Defaults to "
+        "--target_action_guide_collect_steps when <=0."
+    ),
+)
 parser.add_argument(
     "--target_action_guide_collect_decay",
     action=argparse.BooleanOptionalAction,
@@ -348,9 +1179,103 @@ parser.add_argument(
         "after insertion guard and TCP clipping instead of the raw pre-guard guide action."
     ),
 )
+parser.add_argument(
+    "--target_action_guide_train_env_ids",
+    type=str,
+    default="",
+    help=(
+        "Comma-separated env ids that should contribute to target-action guide loss. "
+        "Leave empty to train on all envs. This is useful for preserved-index final-window "
+        "batches where only a few envs are valid near-strict teachers."
+    ),
+)
+parser.add_argument(
+    "--target_action_guide_train_env_repeat",
+    type=int,
+    default=1,
+    help=(
+        "Replay insertion count for envs selected by --target_action_guide_train_env_ids. "
+        "Values >1 oversample scarce near-strict guide transitions during adapter training."
+    ),
+)
+parser.add_argument(
+    "--target_action_guide_train_phase_filter",
+    choices=[
+        "all",
+        "centered",
+        "centered_high_theta",
+        "final_window",
+        "positive_centered",
+        "strict_near_success",
+    ],
+    default="all",
+    help=(
+        "Optional post-step geometry filter for guide distillation. The guide action is still "
+        "computed for diagnostics, but replay samples outside this phase receive zero guide loss."
+    ),
+)
+parser.add_argument("--target_action_guide_phase_lateral_gate_m", type=float, default=0.0007)
+parser.add_argument("--target_action_guide_phase_module_lateral_gate_m", type=float, default=0.0015)
+parser.add_argument("--target_action_guide_phase_theta_min_rad", type=float, default=0.030)
+parser.add_argument("--target_action_guide_phase_theta_max_rad", type=float, default=0.070)
+parser.add_argument("--target_action_guide_phase_min_s_m", type=float, default=-0.003)
+parser.add_argument("--target_action_guide_phase_max_s_m", type=float, default=0.010)
+parser.add_argument("--target_action_guide_phase_weight", type=float, default=1.0)
+parser.add_argument(
+    "--target_action_guide_train_phase_repeat",
+    type=int,
+    default=1,
+    help="Replay insertion count for samples selected by --target_action_guide_train_phase_filter.",
+)
 parser.add_argument("--freeze_act", action=argparse.BooleanOptionalAction, default=True)
 parser.add_argument("--adapter_penalty_weight", type=float, default=1e-3)
 parser.add_argument("--act_preservation_weight", type=float, default=1e-2)
+parser.add_argument(
+    "--actor_axial_purity_weight",
+    type=float,
+    default=0.0,
+    help=(
+        "Learner-side auxiliary for stateful axial phase. When replay geometry is laterally and "
+        "orientationally aligned, penalize actor lateral/rotational TCP action and reward forward "
+        "axial action. This changes only the actor loss, not rollout actions."
+    ),
+)
+parser.add_argument("--actor_axial_purity_lateral_weight", type=float, default=1.0)
+parser.add_argument("--actor_axial_purity_rotation_weight", type=float, default=1.0)
+parser.add_argument("--actor_axial_purity_forward_weight", type=float, default=1.0)
+parser.add_argument("--actor_axial_purity_backward_weight", type=float, default=2.0)
+parser.add_argument("--actor_axial_purity_lateral_scale", type=float, default=0.00002)
+parser.add_argument("--actor_axial_purity_rotation_scale", type=float, default=0.00001)
+parser.add_argument("--actor_axial_purity_forward_scale", type=float, default=0.000005)
+parser.add_argument("--actor_axial_purity_lateral_gate_m", type=float, default=0.0007)
+parser.add_argument("--actor_axial_purity_orientation_gate_rad", type=float, default=0.030)
+parser.add_argument("--actor_axial_purity_min_s_m", type=float, default=-0.010)
+parser.add_argument("--actor_axial_purity_max_s_m", type=float, default=0.100)
+parser.add_argument(
+    "--actor_axial_direction_sign",
+    type=float,
+    default=1.0,
+    help=(
+        "Sign multiplier for actor axial-bias/purity target direction. Use -1 when "
+        "raw policy action sign is opposite realized signed-depth progress."
+    ),
+)
+parser.add_argument(
+    "--actor_orientation_direction_sign",
+    type=float,
+    default=1.0,
+    help="Sign multiplier for actor orientation-phase corrective rotation exploration.",
+)
+parser.add_argument(
+    "--actor_initial_axial_bias_m",
+    type=float,
+    default=0.0,
+    help=(
+        "If >0 in act_direct mode, initialize the trainable actor head's final bias "
+        "to a pure forward TCP delta along the episode insertion axis after env reset. "
+        "This changes model parameters only; rollouts still execute the actor output."
+    ),
+)
 parser.add_argument("--adapter_delta_clip", type=float, default=0.05)
 parser.add_argument(
     "--tcp_translation_action_clip",
@@ -368,6 +1293,47 @@ parser.add_argument(
     help=(
         "Optional per-step TCP rotation-vector norm cap in radians, applied to every 3D "
         "rotation inside the predicted action chunk after ACT+adapter. 0 disables it."
+    ),
+)
+parser.add_argument(
+    "--actor_exploration_noise_std",
+    type=float,
+    default=0.0,
+    help=(
+        "Training-rollout Gaussian noise std added to the actor TCP action before clipping/env step. "
+        "0 disables it; eval remains deterministic."
+    ),
+)
+parser.add_argument(
+    "--actor_exploration_noise_steps",
+    type=int,
+    default=0,
+    help="Number of environment steps to apply --actor_exploration_noise_std. 0 applies it for the whole run.",
+)
+parser.add_argument(
+    "--actor_exploration_noise_mode",
+    choices=("isotropic", "axial", "axial_positive", "phase_positive"),
+    default="isotropic",
+    help=(
+        "Shape of training-rollout exploration noise. isotropic adds Gaussian noise to all TCP action "
+        "components. axial projects one Gaussian scalar onto the current insertion axis. axial_positive "
+        "uses the absolute scalar so exploration only samples toward the insertion target. phase_positive "
+        "samples toward the lateral axis while off-axis and toward insertion while aligned."
+    ),
+)
+parser.add_argument(
+    "--actor_exploration_phase_lateral_multiplier",
+    type=float,
+    default=1.0,
+    help="Multiplier applied only to lateral-phase noise when --actor_exploration_noise_mode=phase_positive.",
+)
+parser.add_argument(
+    "--actor_exploration_phase_orientation_std",
+    type=float,
+    default=0.0,
+    help=(
+        "Rotation-vector std in radians for orientation-phase exploration when "
+        "--actor_exploration_noise_mode=phase_positive. Eval remains deterministic."
     ),
 )
 parser.add_argument(
@@ -430,6 +1396,16 @@ parser.add_argument(
 )
 parser.add_argument("--insertion_action_guard_adaptive_lateral_flip_margin_m", type=float, default=0.00005)
 parser.add_argument(
+    "--insertion_action_guard_realized_lateral_sign_flip",
+    action=argparse.BooleanOptionalAction,
+    default=False,
+    help=(
+        "If enabled, flip the adaptive lateral correction sign when the previous realized "
+        "semantic tip lateral error worsened. Off by default because geometric sign is "
+        "usually correct and realized flips can amplify controller noise."
+    ),
+)
+parser.add_argument(
     "--insertion_action_guard_centered_axial_step_m",
     type=float,
     default=0.0,
@@ -453,12 +1429,219 @@ parser.add_argument(
         "and allow positive axial motion only when lateral/orientation/module gates are satisfied."
     ),
 )
-parser.add_argument("--insertion_action_guard_target_tip_servo_goal_depth_m", type=float, default=0.008)
+parser.add_argument(
+    "--insertion_action_guard_target_tip_servo_goal_depth_m",
+    type=float,
+    default=float("nan"),
+    help="Target semantic tip depth for the guard. Defaults to the episode target depth when omitted/NaN.",
+)
 parser.add_argument("--insertion_action_guard_target_tip_servo_lateral_step_m", type=float, default=0.00030)
+parser.add_argument(
+    "--insertion_action_guard_target_tip_servo_gated_lateral_step_m",
+    type=float,
+    default=float("nan"),
+    help=(
+        "Optional smaller lateral correction clip used only after the target-tip servo axial gate "
+        "passes. This preserves aggressive pre-gate centering while reducing lateral command "
+        "dominance during tiny axial insertion steps."
+    ),
+)
 parser.add_argument("--insertion_action_guard_target_tip_servo_axial_step_m", type=float, default=0.00002)
+parser.add_argument(
+    "--insertion_action_guard_target_tip_servo_deep_axial_step_m",
+    type=float,
+    default=float("nan"),
+    help=(
+        "Optional larger positive axial step for target-tip servo insertion after the semantic "
+        "tip has passed --insertion_action_guard_target_tip_servo_deep_axial_activation_depth_m. "
+        "This preserves tiny near-entrance steps while probing whether the controller can continue "
+        "full-depth insertion once r/theta gates are already satisfied."
+    ),
+)
+parser.add_argument(
+    "--insertion_action_guard_target_tip_servo_deep_axial_activation_depth_m",
+    type=float,
+    default=float("inf"),
+)
 parser.add_argument("--insertion_action_guard_target_tip_servo_axial_lateral_gate_m", type=float, default=0.00050)
 parser.add_argument("--insertion_action_guard_target_tip_servo_axial_theta_gate_rad", type=float, default=0.030)
+parser.add_argument(
+    "--insertion_action_guard_target_tip_servo_orientation_mode",
+    choices=("inherit", "quat", "axis"),
+    default="inherit",
+    help=(
+        "Orientation metric used only by the guarded target-tip servo gates. "
+        "'inherit' preserves the reward orientation mode; 'quat' can require full plug orientation "
+        "for final insertion while leaving an axis-oriented reward/run otherwise unchanged."
+    ),
+)
+parser.add_argument(
+    "--insertion_action_guard_target_tip_servo_override_final_orientation_when_gated",
+    action=argparse.BooleanOptionalAction,
+    default=False,
+    help=(
+        "Allow the target-tip servo axial/lateral command to take precedence over the final-orientation "
+        "hold when the servo's own lateral/orientation/module gates are satisfied. This prevents a "
+        "zero-axial final-orientation phase from stalling already-aligned shallow insertion."
+    ),
+)
+parser.add_argument(
+    "--insertion_action_guard_target_tip_servo_override_final_orientation_max_depth_m",
+    type=float,
+    default=float("inf"),
+    help=(
+        "Optional depth limit for target-tip servo overriding final-orientation hold. "
+        "Set near the shallow plateau to preserve approach behavior while forcing final-orientation "
+        "refinement before deeper insertion."
+    ),
+)
+parser.add_argument(
+    "--insertion_action_guard_target_tip_servo_zero_rotation_when_gated",
+    action=argparse.BooleanOptionalAction,
+    default=False,
+    help=(
+        "Zero rotational action while the target-tip servo axial gate is satisfied so guide/policy "
+        "orientation commands cannot induce lateral tip sweep during guarded axial insertion."
+    ),
+)
+parser.add_argument(
+    "--insertion_action_guard_target_tip_servo_zero_rotation_theta_gate_rad",
+    type=float,
+    default=float("inf"),
+    help=(
+        "Only zero rotation during gated target-tip servo insertion when the servo orientation error "
+        "is at or below this value. Defaults to infinity, matching unconditional zeroing when the "
+        "zero-rotation flag is enabled."
+    ),
+)
+parser.add_argument(
+    "--insertion_action_guard_target_tip_servo_zero_rotation_only_deep_axial",
+    action=argparse.BooleanOptionalAction,
+    default=False,
+    help=(
+        "When zeroing target-tip servo rotation, apply it only after the deep axial phase is active. "
+        "This preserves the earlier orientation solve while removing rotation-induced sweep at the "
+        "shallow insertion plateau."
+    ),
+)
+parser.add_argument(
+    "--insertion_action_guard_target_tip_servo_depth_retention",
+    action=argparse.BooleanOptionalAction,
+    default=False,
+    help=(
+        "Track the best target-tip servo depth within an episode and force a tiny reinsert command "
+        "when the tip retreats beyond the configured margin while the servo gates remain valid."
+    ),
+)
+parser.add_argument(
+    "--insertion_action_guard_target_tip_servo_depth_retention_margin_m",
+    type=float,
+    default=0.00025,
+)
+parser.add_argument(
+    "--insertion_action_guard_target_tip_servo_plateau_pure_axial",
+    action=argparse.BooleanOptionalAction,
+    default=False,
+    help=(
+        "When deep target-tip servo insertion is gated but measured depth stops increasing, "
+        "temporarily replace lateral correction with a bounded pure axial micro-step. This is "
+        "a diagnostic/guard for the shallow contact plateau and is disabled by default."
+    ),
+)
+parser.add_argument(
+    "--insertion_action_guard_target_tip_servo_plateau_activation_depth_m",
+    type=float,
+    default=0.0,
+)
+parser.add_argument(
+    "--insertion_action_guard_target_tip_servo_plateau_realized_depth_threshold_m",
+    type=float,
+    default=0.0,
+)
+parser.add_argument(
+    "--insertion_action_guard_target_tip_servo_plateau_lateral_gate_m",
+    type=float,
+    default=0.00050,
+)
+parser.add_argument(
+    "--insertion_action_guard_target_tip_servo_plateau_theta_gate_rad",
+    type=float,
+    default=0.080,
+)
+parser.add_argument(
+    "--insertion_action_guard_target_tip_servo_plateau_lateral_hold_scale",
+    type=float,
+    default=0.0,
+    help="Fraction of the normal lateral correction to keep during plateau pure-axial probing.",
+)
 parser.add_argument("--insertion_action_guard_target_tip_servo_min_consistency", type=float, default=0.80)
+parser.add_argument(
+    "--insertion_action_guard_target_tip_servo_consistency_body_axial",
+    action=argparse.BooleanOptionalAction,
+    default=False,
+    help=(
+        "Use the configured consistency body and its target-depth-consistent axial goal for target-tip "
+        "servo axial progress. Lateral/orientation gates still use the semantic tip body. Disabled by default."
+    ),
+)
+parser.add_argument(
+    "--insertion_action_guard_target_tip_servo_stable_steps",
+    type=int,
+    default=0,
+    help=(
+        "Require this many consecutive measured in-gate steps before the target-tip servo may "
+        "command positive axial motion. This is a controller-aware guard against lateral/contact "
+        "commands producing unintended depth jumps."
+    ),
+)
+parser.add_argument(
+    "--insertion_action_guard_target_tip_servo_realized_depth_limit_m",
+    type=float,
+    default=0.0,
+    help=(
+        "If >0, suppress/back off target-tip servo motion when measured semantic tip depth "
+        "increases by more than this amount from the previous step."
+    ),
+)
+parser.add_argument(
+    "--insertion_action_guard_target_tip_servo_realized_depth_backoff_m",
+    type=float,
+    default=0.0,
+    help="Outward axial backoff command used after a target-tip servo realized-depth overshoot.",
+)
+parser.add_argument(
+    "--insertion_action_guard_target_tip_servo_realized_depth_recovery_lateral_scale",
+    type=float,
+    default=1.0,
+    help=(
+        "Scale lateral correction while recovering from realized target-tip depth overshoot. "
+        "Use 0 to back off without lateral motion when controller coupling converts lateral "
+        "correction into unwanted inward semantic-tip depth."
+    ),
+)
+parser.add_argument(
+    "--insertion_action_guard_target_tip_servo_orientation_recovery",
+    action=argparse.BooleanOptionalAction,
+    default=False,
+    help=(
+        "During shallow target-tip servo insertion, stop axial progress and optionally back off "
+        "when measured semantic tip orientation worsens or exceeds a configured cap."
+    ),
+)
+parser.add_argument("--insertion_action_guard_target_tip_servo_orientation_recovery_activation_depth_m", type=float, default=-0.006)
+parser.add_argument("--insertion_action_guard_target_tip_servo_orientation_recovery_lateral_gate_m", type=float, default=0.00050)
+parser.add_argument("--insertion_action_guard_target_tip_servo_orientation_recovery_theta_limit_rad", type=float, default=0.030)
+parser.add_argument("--insertion_action_guard_target_tip_servo_orientation_recovery_worsen_margin_rad", type=float, default=0.0010)
+parser.add_argument("--insertion_action_guard_target_tip_servo_orientation_recovery_backoff_m", type=float, default=0.0)
+parser.add_argument(
+    "--insertion_action_guard_target_tip_servo_orientation_recovery_override_final_orientation",
+    action=argparse.BooleanOptionalAction,
+    default=False,
+    help=(
+        "Allow measured target-tip orientation recovery to override final-orientation hold. "
+        "Use this when theta remains high at the lip and the final rotator is not reducing it."
+    ),
+)
 parser.add_argument(
     "--insertion_action_guard_retention",
     action=argparse.BooleanOptionalAction,
@@ -515,6 +1698,15 @@ parser.add_argument("--insertion_action_guard_module_recovery_backoff_step_m", t
 parser.add_argument("--insertion_action_guard_module_recovery_backout_lateral_scale", type=float, default=1.0)
 parser.add_argument("--insertion_action_guard_module_recovery_backoff_direction_sign", type=float, default=-1.0)
 parser.add_argument("--insertion_action_guard_module_recovery_min_consistency", type=float, default=0.80)
+parser.add_argument(
+    "--insertion_action_guard_module_recovery_final_axial_error_gate_m",
+    type=float,
+    default=float("inf"),
+    help=(
+        "If finite, module recovery also triggers while the consistency body is farther than this "
+        "from its final target-depth-consistent axial position. Disabled by default."
+    ),
+)
 parser.add_argument("--insertion_action_guard_module_recovery_theta_threshold_rad", type=float, default=0.040)
 parser.add_argument("--insertion_action_guard_module_recovery_lateral_threshold_m", type=float, default=0.0005)
 parser.add_argument(
@@ -533,9 +1725,28 @@ parser.add_argument(
     ),
 )
 parser.add_argument("--insertion_action_guard_module_recovery_hold_steps", type=int, default=25)
+parser.add_argument(
+    "--insertion_action_guard_module_recovery_backout_max_steps",
+    type=int,
+    default=0,
+    help=(
+        "If >0, leave module-recovery backout after this many control steps even if the "
+        "target retreat depth has not been reached. This prevents indefinite backout when "
+        "contact/controller realization stalls just short of the target."
+    ),
+)
 parser.add_argument("--insertion_action_guard_module_recovery_max_retries", type=int, default=2)
 parser.add_argument("--insertion_action_guard_module_recovery_reinsert_step_m", type=float, default=0.000005)
 parser.add_argument("--insertion_action_guard_module_recovery_trim_lateral_step_m", type=float, default=0.00002)
+parser.add_argument(
+    "--insertion_action_guard_module_recovery_command_clip_m",
+    type=float,
+    default=0.0,
+    help=(
+        "If >0, clip module-recovery translation command norms before they override the "
+        "guarded world delta. This is a controller-safety cap for contact/backout recovery."
+    ),
+)
 parser.add_argument(
     "--insertion_action_guard_module_lateral_alignment",
     action=argparse.BooleanOptionalAction,
@@ -574,6 +1785,91 @@ parser.add_argument(
     ),
 )
 parser.add_argument(
+    "--insertion_action_guard_final_two_stage_servo",
+    action=argparse.BooleanOptionalAction,
+    default=False,
+    help=(
+        "Enable a final trim/reinsert schedule: hold near a configured depth while theta or "
+        "module lateral consistency are bad, then allow tiny axial steps only after both gates pass."
+    ),
+)
+parser.add_argument("--insertion_action_guard_final_two_stage_activation_depth_m", type=float, default=-0.035)
+parser.add_argument("--insertion_action_guard_final_two_stage_lateral_gate_m", type=float, default=0.0005)
+parser.add_argument("--insertion_action_guard_final_two_stage_trim_theta_gate_rad", type=float, default=0.055)
+parser.add_argument("--insertion_action_guard_final_two_stage_trim_module_lateral_gate_m", type=float, default=0.0015)
+parser.add_argument("--insertion_action_guard_final_two_stage_reinsert_theta_gate_rad", type=float, default=0.050)
+parser.add_argument("--insertion_action_guard_final_two_stage_reinsert_module_lateral_gate_m", type=float, default=0.0015)
+parser.add_argument(
+    "--insertion_action_guard_final_two_stage_reinsert_module_axial_error_gate_m",
+    type=float,
+    default=float("inf"),
+    help=(
+        "If finite, final two-stage reinsert is allowed only when the consistency body is within this "
+        "target-depth axial error. Disabled by default to preserve existing runs."
+    ),
+)
+parser.add_argument("--insertion_action_guard_final_two_stage_reinsert_axial_step_m", type=float, default=0.000003)
+parser.add_argument(
+    "--insertion_action_guard_prelip_lateral_clamp",
+    action=argparse.BooleanOptionalAction,
+    default=False,
+    help=(
+        "Clamp guarded lateral translation in a configured pre-lip signed-depth window once the "
+        "semantic tip is centered. This catches controller/contact sweeps that are not predicted "
+        "by one-step kinematic geometry."
+    ),
+)
+parser.add_argument("--insertion_action_guard_prelip_lateral_clamp_min_depth_m", type=float, default=-0.035)
+parser.add_argument("--insertion_action_guard_prelip_lateral_clamp_max_depth_m", type=float, default=-0.020)
+parser.add_argument("--insertion_action_guard_prelip_lateral_clamp_tip_threshold_m", type=float, default=0.0005)
+parser.add_argument("--insertion_action_guard_prelip_lateral_clamp_max_step_m", type=float, default=0.00001)
+parser.add_argument("--insertion_action_guard_prelip_lateral_clamp_backoff_m", type=float, default=0.0)
+parser.add_argument(
+    "--insertion_action_guard_prelip_lateral_clamp_preserve_axial",
+    action=argparse.BooleanOptionalAction,
+    default=False,
+    help=(
+        "When the pre-lip lateral clamp activates, preserve the current guarded axial component "
+        "instead of clamping it to outward/backoff motion. This is useful when the observed failure "
+        "is lateral sweep rather than axial contact."
+    ),
+)
+parser.add_argument(
+    "--insertion_action_guard_prelip_offgate_axial_lock",
+    action=argparse.BooleanOptionalAction,
+    default=False,
+    help=(
+        "In a configured pre-lip signed-depth window, cap positive axial motion whenever "
+        "semantic tip lateral/orientation gates are not satisfied. This prevents training on "
+        "forward progress while the tip is off-axis."
+    ),
+)
+parser.add_argument("--insertion_action_guard_prelip_offgate_axial_lock_min_depth_m", type=float, default=-0.050)
+parser.add_argument("--insertion_action_guard_prelip_offgate_axial_lock_max_depth_m", type=float, default=-0.006)
+parser.add_argument("--insertion_action_guard_prelip_offgate_axial_lock_lateral_gate_m", type=float, default=0.0005)
+parser.add_argument("--insertion_action_guard_prelip_offgate_axial_lock_theta_gate_rad", type=float, default=0.040)
+parser.add_argument("--insertion_action_guard_prelip_offgate_axial_lock_max_inward_step_m", type=float, default=0.0)
+parser.add_argument("--insertion_action_guard_prelip_offgate_axial_lock_backoff_m", type=float, default=0.0)
+parser.add_argument(
+    "--insertion_action_guard_prelip_offgate_axial_lock_bidirectional",
+    action=argparse.BooleanOptionalAction,
+    default=False,
+    help=(
+        "When off-gate near the lip, clamp axial motion in both signed directions. "
+        "This is useful when the wrist/port axis sign convention makes negative command "
+        "components realize as inward semantic tip motion."
+    ),
+)
+parser.add_argument(
+    "--insertion_action_guard_prelip_offgate_axial_lock_zero_lateral",
+    action=argparse.BooleanOptionalAction,
+    default=False,
+    help=(
+        "When the pre-lip off-gate axial lock is active, also suppress lateral translation. "
+        "Use this when wrist lateral correction is empirically causing inward/lateral tip sweep."
+    ),
+)
+parser.add_argument(
     "--insertion_action_guard_final_axis_alignment_rotation",
     action=argparse.BooleanOptionalAction,
     default=False,
@@ -596,12 +1892,39 @@ parser.add_argument(
 )
 parser.add_argument(
     "--insertion_action_guard_final_fixed_world_rotation_axis",
-    choices=("x", "y", "z", "best"),
+    choices=(
+        "x",
+        "y",
+        "z",
+        "best",
+        "quat_best",
+        "frame_x",
+        "frame_y",
+        "frame_z",
+        "frame_best",
+        "frame_quat_best",
+    ),
     default="y",
 )
 parser.add_argument("--insertion_action_guard_final_fixed_world_rotation_sign", type=float, default=1.0)
 parser.add_argument("--insertion_action_guard_final_fixed_world_rotation_step_rad", type=float, default=0.0010)
 parser.add_argument("--insertion_action_guard_final_fixed_world_rotation_compensation_clip_m", type=float, default=0.00020)
+parser.add_argument(
+    "--insertion_action_guard_final_fixed_world_rotation_pulse_on_steps",
+    type=int,
+    default=0,
+    help=(
+        "If >0 with --insertion_action_guard_final_fixed_world_rotation, only allow this many "
+        "consecutive per-episode control steps of fixed-world orientation trim before a pause. "
+        "Use with the matching *_pulse_off_steps to avoid continuous rotation-induced tip sweep."
+    ),
+)
+parser.add_argument(
+    "--insertion_action_guard_final_fixed_world_rotation_pulse_off_steps",
+    type=int,
+    default=0,
+    help="Number of per-episode control steps to pause fixed-world orientation trim after each pulse-on window.",
+)
 parser.add_argument(
     "--insertion_action_guard_final_fixed_world_rotation_force",
     action=argparse.BooleanOptionalAction,
@@ -611,6 +1934,26 @@ parser.add_argument(
         "even if the one-step semantic-axis predictor says the rotation is not improving. This is a "
         "diagnostic for controller-realization mismatch; the strict lateral/depth/module gates remain active."
     ),
+)
+parser.add_argument(
+    "--insertion_action_guard_final_fixed_world_rotation_realized_reject",
+    action=argparse.BooleanOptionalAction,
+    default=False,
+    help=(
+        "Disable final fixed-world orientation trim after the previous realized post-step semantic tip "
+        "orientation error worsened. This guards against predicted quaternion improvement that does not "
+        "realize through wrist IK/contact."
+    ),
+)
+parser.add_argument(
+    "--insertion_action_guard_final_fixed_world_rotation_realized_reject_margin_rad",
+    type=float,
+    default=0.00015,
+)
+parser.add_argument(
+    "--insertion_action_guard_final_fixed_world_rotation_realized_reject_cooldown_steps",
+    type=int,
+    default=8,
 )
 parser.add_argument(
     "--insertion_action_guard_final_axis_alignment_strict_gate",
@@ -649,6 +1992,55 @@ parser.add_argument(
     ),
 )
 parser.add_argument(
+    "--insertion_action_guard_prefinal_orientation_depth_m",
+    type=float,
+    default=float("nan"),
+    help=(
+        "Optional earlier signed-depth threshold for insertion-action-guard orientation refinement. "
+        "When set, the same final-orientation rotator can trim semantic tip orientation before the "
+        "normal final window, while still using the configured lateral/theta gates and no axial step."
+    ),
+)
+parser.add_argument(
+    "--insertion_action_guard_prefinal_orientation_lateral_m",
+    type=float,
+    default=float("nan"),
+    help=(
+        "Lateral gate for the optional pre-final orientation trim. Defaults to "
+        "--target_action_guide_final_orientation_lateral_m when NaN."
+    ),
+)
+parser.add_argument(
+    "--insertion_action_guard_final_orientation_recovery_lateral_m",
+    type=float,
+    default=float("nan"),
+    help=(
+        "Optional wider lateral window for final/prefinal orientation recovery. "
+        "When finite, the final-orientation hold/rotation path can stay active after "
+        "lateral error drifts outside the strict final-orientation gate, so the guard "
+        "keeps recentering and holding depth instead of falling back to inward policy motion. "
+        "This does not change strict success thresholds."
+    ),
+)
+parser.add_argument(
+    "--insertion_action_guard_prefinal_orientation_threshold_rad",
+    type=float,
+    default=float("nan"),
+    help=(
+        "Theta gate for the optional pre-final orientation trim. Defaults to "
+        "--target_action_guide_final_orientation_threshold_rad when NaN."
+    ),
+)
+parser.add_argument(
+    "--insertion_action_guard_prefinal_orientation_rotation_only",
+    action=argparse.BooleanOptionalAction,
+    default=False,
+    help=(
+        "When the optional pre-final orientation trim is active, apply only the configured "
+        "rotation overlay and keep the translation chosen by the normal insertion guard."
+    ),
+)
+parser.add_argument(
     "--insertion_action_guard_final_orientation_hold_depth_m",
     type=float,
     default=float("nan"),
@@ -668,6 +2060,71 @@ parser.add_argument(
         "When the final seated-depth hold is active, compensate only the axial component of "
         "rotation-induced semantic-tip motion. This preserves the historical no-full-compensation "
         "path while preventing final orientation trims from pushing the tip past seated depth."
+    ),
+)
+parser.add_argument(
+    "--insertion_action_guard_final_orientation_hold_reject_predicted_depth",
+    action=argparse.BooleanOptionalAction,
+    default=False,
+    help=(
+        "When the final-orientation hold depth is active, clamp the guarded translation so the "
+        "one-step predicted semantic-tip depth cannot exceed hold_depth + hold_margin. This is "
+        "an opt-in guard against rotation-compensation error creating tip-depth false positives."
+    ),
+)
+parser.add_argument(
+    "--insertion_action_guard_final_orientation_lateral_scale",
+    type=float,
+    default=1.0,
+    help=(
+        "Scale the lateral recentering term used only during the final-orientation guard phase. "
+        "A value of 0 keeps the current lateral offset while still allowing rotation/depth hold."
+    ),
+)
+parser.add_argument(
+    "--insertion_action_guard_final_orientation_lateral_scale_theta_gate_rad",
+    type=float,
+    default=float("nan"),
+    help=(
+        "Optional theta gate for switching the final-orientation lateral scale after orientation "
+        "has been trimmed. When finite and theta is at or below this value, "
+        "--insertion_action_guard_final_orientation_lateral_scale_after_theta_gate is used."
+    ),
+)
+parser.add_argument(
+    "--insertion_action_guard_final_orientation_lateral_scale_after_theta_gate",
+    type=float,
+    default=1.0,
+)
+parser.add_argument(
+    "--insertion_action_guard_final_orientation_lateral_bias_m",
+    type=float,
+    default=0.0,
+    help=(
+        "Optional extra lateral step used only during final-orientation guard mode while theta is "
+        "above the final-orientation threshold. Positive values bias away from the centerline; "
+        "negative values bias toward the centerline. This is applied before the after-theta "
+        "lateral recovery gate."
+    ),
+)
+parser.add_argument(
+    "--insertion_action_guard_final_orientation_lateral_bias_max_lateral_m",
+    type=float,
+    default=float("inf"),
+    help=(
+        "Maximum current lateral error at which --insertion_action_guard_final_orientation_lateral_bias_m "
+        "is allowed to apply."
+    ),
+)
+parser.add_argument(
+    "--insertion_action_guard_final_orientation_recover_lateral_after_theta_gate",
+    action=argparse.BooleanOptionalAction,
+    default=False,
+    help=(
+        "Keep the insertion-action-guard final-orientation override active after theta is within the "
+        "final-orientation threshold when lateral error is still outside the strict final gate. This "
+        "allows a tiny lateral-only recovery under the seated-depth hold instead of releasing to the "
+        "normal inward servo. Requires a finite final-orientation recovery lateral window."
     ),
 )
 parser.add_argument(
@@ -692,6 +2149,72 @@ parser.add_argument(
     help="Small outward axial backoff used when --insertion_action_guard_reject_predicted_r_increase rejects a command.",
 )
 parser.add_argument(
+    "--insertion_action_guard_final_post_override_r_reject",
+    action=argparse.BooleanOptionalAction,
+    default=False,
+    help=(
+        "Run a final one-step predicted-r safety check after recovery, module, prelip, and "
+        "orientation overrides. This catches late override branches that can reintroduce "
+        "lateral sweep after the earlier predicted-r check."
+    ),
+)
+parser.add_argument(
+    "--insertion_action_guard_final_post_override_r_reject_margin_m",
+    type=float,
+    default=0.00001,
+    help="Allowed predicted lateral-error increase for the final post-override r check.",
+)
+parser.add_argument(
+    "--insertion_action_guard_final_post_override_r_reject_activation_depth_m",
+    type=float,
+    default=-1.0e9,
+    help="Minimum semantic tip depth at which the final post-override r check is active.",
+)
+parser.add_argument(
+    "--insertion_action_guard_final_post_override_r_reject_lateral_gate_m",
+    type=float,
+    default=float("inf"),
+    help="Only apply final post-override r rejection while current lateral error is at or below this gate.",
+)
+parser.add_argument(
+    "--insertion_action_guard_final_post_override_r_reject_backoff_m",
+    type=float,
+    default=0.00008,
+    help="Outward axial backoff used when the final post-override r check rejects a command.",
+)
+parser.add_argument(
+    "--insertion_action_guard_final_post_override_r_reject_zero_rotation",
+    action=argparse.BooleanOptionalAction,
+    default=True,
+    help="Zero rotation on steps rejected by the final post-override r check.",
+)
+parser.add_argument(
+    "--insertion_action_guard_reject_predicted_depth_when_offgate",
+    action=argparse.BooleanOptionalAction,
+    default=False,
+    help=(
+        "Clamp one-step predicted semantic-tip depth while lateral/theta/module gates are not satisfied. "
+        "This prevents lateral or orientation guard commands from creating forward insertion before the "
+        "strict insertion gates are ready."
+    ),
+)
+parser.add_argument(
+    "--insertion_action_guard_predicted_depth_offgate_margin_m",
+    type=float,
+    default=0.0,
+    help="Allowed one-step positive semantic-tip depth change when off-gate depth clamping is enabled.",
+)
+parser.add_argument(
+    "--insertion_action_guard_predicted_depth_offgate_allow_final_two_stage_reinsert",
+    action=argparse.BooleanOptionalAction,
+    default=False,
+    help=(
+        "When final two-stage reinsert gates are satisfied, allow that micro-axial command through the "
+        "generic off-gate depth clamp. This keeps the clamp strict by default while allowing a tighter "
+        "phase-specific final-window theta/module gate to control reinsert pulses."
+    ),
+)
+parser.add_argument(
     "--insertion_action_guard_realized_r_recovery",
     action=argparse.BooleanOptionalAction,
     default=False,
@@ -709,6 +2232,164 @@ parser.add_argument(
     default=-0.004,
 )
 parser.add_argument(
+    "--insertion_action_guard_realized_r_accum_limit_m",
+    type=float,
+    default=0.0,
+    help=(
+        "If >0 with realized-r recovery enabled, accumulate positive realized lateral-error drift "
+        "near the gate and recover once the cumulative drift exceeds this limit. This catches "
+        "slow lateral creep that stays below the per-step realized-r margin."
+    ),
+)
+parser.add_argument(
+    "--insertion_action_guard_realized_r_accum_max_depth_m",
+    type=float,
+    default=float("inf"),
+    help="Maximum signed depth where cumulative realized-r drift recovery is active.",
+)
+parser.add_argument(
+    "--insertion_action_guard_realized_r_accum_lateral_gate_m",
+    type=float,
+    default=float("inf"),
+    help="Only accumulate realized-r drift while semantic lateral error is below this gate.",
+)
+parser.add_argument(
+    "--insertion_action_guard_realized_r_recovery_cooldown_steps",
+    type=int,
+    default=0,
+    help="If >0, keep applying realized-r recovery for this many control steps after a trigger.",
+)
+parser.add_argument(
+    "--insertion_action_guard_realized_r_recovery_cooldown_zero_lateral",
+    action=argparse.BooleanOptionalAction,
+    default=False,
+    help="During realized-r recovery cooldown, suppress lateral translation and command only outward axial backoff.",
+)
+parser.add_argument(
+    "--insertion_action_guard_offcenter_realized_depth_limit_m",
+    type=float,
+    default=0.0,
+    help=(
+        "If >0, recover while the guarded tip is off-center when measured signed depth "
+        "increases by more than this per-step amount. This catches controller-induced "
+        "axial drift during nominally lateral-only correction before it becomes bypass."
+    ),
+)
+parser.add_argument(
+    "--insertion_action_guard_offcenter_realized_depth_backoff_m",
+    type=float,
+    default=0.0,
+    help="Outward axial backoff used after off-center realized-depth drift is detected.",
+)
+parser.add_argument(
+    "--insertion_action_guard_offcenter_realized_depth_accum_limit_m",
+    type=float,
+    default=0.0,
+    help=(
+        "If >0, accumulate measured positive signed-depth drift while the semantic tip is "
+        "off-center or misoriented, and trigger recovery once the cumulative drift exceeds "
+        "this limit. This catches slow controller creep below the per-step drift threshold."
+    ),
+)
+parser.add_argument(
+    "--insertion_action_guard_offcenter_realized_depth_accum_lateral_gate_m",
+    type=float,
+    default=float("inf"),
+    help=(
+        "Only accumulate off-gate realized-depth drift when semantic lateral error is below "
+        "this value. Use a tight gate to target centered-but-misoriented pre-lip creep "
+        "without suppressing the far lateral approach."
+    ),
+)
+parser.add_argument(
+    "--insertion_action_guard_offcenter_realized_depth_cooldown_steps",
+    type=int,
+    default=0,
+    help=(
+        "If >0, keep applying off-center realized-depth recovery for this many control steps "
+        "after a measured off-gate inward drift event. This handles controller/contact drift "
+        "that is not fixed by a single-step backoff."
+    ),
+)
+parser.add_argument(
+    "--insertion_action_guard_offcenter_realized_depth_cooldown_zero_lateral",
+    action=argparse.BooleanOptionalAction,
+    default=False,
+    help=(
+        "During off-center realized-depth cooldown, suppress lateral translation and command "
+        "only outward axial backoff. Use when lateral wrist motion causes pre-lip sweep."
+    ),
+)
+parser.add_argument(
+    "--insertion_action_guard_recovery_zero_rotation",
+    action=argparse.BooleanOptionalAction,
+    default=False,
+    help=(
+        "During realized-r or off-center realized-depth recovery, suppress rotation commands. "
+        "This prevents final orientation trim from inducing a lateral sweep while the guard is "
+        "trying to back out and recenter."
+    ),
+)
+parser.add_argument(
+    "--insertion_action_guard_recovery_zero_axial",
+    action=argparse.BooleanOptionalAction,
+    default=False,
+    help=(
+        "During realized-r, realized-depth, target-tip recovery, or module-recovery backout, "
+        "remove the axial component from the guarded translation while preserving lateral "
+        "correction. Use this when measured controller realization turns nominal backoff into "
+        "additional semantic tip insertion."
+    ),
+)
+parser.add_argument(
+    "--insertion_action_guard_contact_force_recovery",
+    action=argparse.BooleanOptionalAction,
+    default=False,
+    help=(
+        "When wrist/contact-proxy force is high near the gate, override guarded translation "
+        "with an outward backoff before the controller/contact transition becomes a lateral bypass."
+    ),
+)
+parser.add_argument("--insertion_action_guard_contact_force_recovery_threshold", type=float, default=12.0)
+parser.add_argument("--insertion_action_guard_contact_force_recovery_activation_depth_m", type=float, default=-0.030)
+parser.add_argument("--insertion_action_guard_contact_force_recovery_max_lateral_m", type=float, default=0.0020)
+parser.add_argument("--insertion_action_guard_contact_force_recovery_backoff_m", type=float, default=0.00010)
+parser.add_argument("--insertion_action_guard_contact_force_recovery_lateral_scale", type=float, default=0.0)
+parser.add_argument(
+    "--insertion_action_guard_contact_force_recovery_zero_rotation",
+    action=argparse.BooleanOptionalAction,
+    default=True,
+    help="Suppress guarded rotation while contact-force recovery is active.",
+)
+parser.add_argument(
+    "--insertion_action_guard_contact_force_retreat_state_machine",
+    action=argparse.BooleanOptionalAction,
+    default=False,
+    help=(
+        "When contact force trips near the gate, enter a persistent backout/hold state "
+        "instead of applying a one-step recovery command. This is intended for final "
+        "insertion where a single force spike previously caused controller realization jumps."
+    ),
+)
+parser.add_argument("--insertion_action_guard_contact_force_retreat_exit_depth_m", type=float, default=-0.043)
+parser.add_argument("--insertion_action_guard_contact_force_retreat_backout_max_steps", type=int, default=40)
+parser.add_argument("--insertion_action_guard_contact_force_retreat_hold_steps", type=int, default=12)
+parser.add_argument("--insertion_action_guard_contact_force_retreat_force_clear_threshold", type=float, default=6.0)
+parser.add_argument("--insertion_action_guard_contact_force_retreat_recenter_lateral_gate_m", type=float, default=0.0007)
+parser.add_argument("--insertion_action_guard_contact_force_retreat_max_retries", type=int, default=3)
+parser.add_argument("--insertion_action_guard_contact_force_retreat_reapproach_steps", type=int, default=0)
+parser.add_argument("--insertion_action_guard_contact_force_retreat_reapproach_step_m", type=float, default=0.0)
+parser.add_argument(
+    "--insertion_action_guard_contact_force_retreat_abort_after_max_retries",
+    action=argparse.BooleanOptionalAction,
+    default=False,
+    help=(
+        "If contact force remains high after the retreat retry budget is exhausted, enter an "
+        "abort/backout state instead of staying indefinitely in force-hold."
+    ),
+)
+parser.add_argument("--insertion_action_guard_contact_force_retreat_abort_max_steps", type=int, default=40)
+parser.add_argument(
     "--insertion_action_guard_settle_steps",
     type=int,
     default=0,
@@ -716,6 +2397,16 @@ parser.add_argument(
         "If >0, hold TCP translation/rotation at zero for this many initial post-reset "
         "steps when semantic insertion geometry is already near the gate. This diagnoses "
         "and mitigates contact/controller transients before final insertion commands."
+    ),
+)
+parser.add_argument(
+    "--reset_settle_steps",
+    type=int,
+    default=0,
+    help=(
+        "If >0, apply zero root actions for this many simulator steps immediately after env.reset() "
+        "before initializing actor bias/history or collecting replay. This lets contact/reset "
+        "transients settle without adding a rollout guide."
     ),
 )
 parser.add_argument(
@@ -827,40 +2518,557 @@ parser.add_argument("--target_reward_axial_progress_scale", type=float, default=
 parser.add_argument("--target_reward_insertion_corridor_weight", type=float, default=0.0)
 parser.add_argument("--target_reward_insertion_corridor_sigma", type=float, default=0.0025)
 parser.add_argument("--target_reward_insertion_bypass_penalty_scale", type=float, default=1.0)
-parser.add_argument("--target_reward_cheatcode_phase_weight", type=float, default=0.0)
-parser.add_argument("--target_reward_cheatcode_sigma_lat_pre", type=float, default=0.0025)
-parser.add_argument("--target_reward_cheatcode_sigma_lat_insert", type=float, default=0.0015)
-parser.add_argument("--target_reward_cheatcode_schedule_lateral_radius", action="store_true")
-parser.add_argument("--target_reward_cheatcode_sigma_lat_pre_far", type=float, default=0.004)
-parser.add_argument("--target_reward_cheatcode_sigma_lat_insert_far", type=float, default=0.004)
-parser.add_argument("--target_reward_cheatcode_radius_schedule_far_depth", type=float, default=-0.020)
-parser.add_argument("--target_reward_cheatcode_radius_schedule_near_depth", type=float, default=0.0)
-parser.add_argument("--target_reward_cheatcode_sigma_theta_pre", type=float, default=0.10)
-parser.add_argument("--target_reward_cheatcode_sigma_theta_insert", type=float, default=0.06)
-parser.add_argument("--target_reward_cheatcode_schedule_orientation_tolerance", action="store_true")
-parser.add_argument("--target_reward_cheatcode_sigma_theta_pre_far", type=float, default=0.12)
-parser.add_argument("--target_reward_cheatcode_sigma_theta_insert_far", type=float, default=0.10)
-parser.add_argument("--target_reward_cheatcode_orientation_schedule_far_depth", type=float, default=-0.020)
-parser.add_argument("--target_reward_cheatcode_orientation_schedule_near_depth", type=float, default=0.0)
-parser.add_argument("--target_reward_cheatcode_orientation_progress_scale", type=float, default=0.02)
-parser.add_argument("--target_reward_cheatcode_hover_depth", type=float, default=-0.004)
-parser.add_argument("--target_reward_cheatcode_lateral_progress_weight", type=float, default=0.40)
-parser.add_argument("--target_reward_cheatcode_orientation_progress_weight", type=float, default=0.30)
-parser.add_argument("--target_reward_cheatcode_near_misaligned_weight", type=float, default=0.25)
-parser.add_argument("--target_reward_cheatcode_hover_weight", type=float, default=0.15)
-parser.add_argument("--target_reward_cheatcode_axial_progress_weight", type=float, default=0.30)
-parser.add_argument("--target_reward_cheatcode_corridor_weight", type=float, default=1.50)
-parser.add_argument("--target_reward_cheatcode_inside_alignment_weight", type=float, default=0.20)
-parser.add_argument("--target_reward_cheatcode_retreat_weight", type=float, default=0.20)
-parser.add_argument("--target_reward_cheatcode_action_axis_gate", action="store_true")
-parser.add_argument("--target_reward_cheatcode_action_axis_source", choices=["action_manager", "body_delta"], default="action_manager")
-parser.add_argument("--target_reward_cheatcode_action_lateral_sigma", type=float, default=0.00005)
-parser.add_argument("--target_reward_cheatcode_action_lateral_sigma_far", type=float, default=0.00030)
-parser.add_argument("--target_reward_cheatcode_action_radius_schedule_far_depth", type=float, default=-0.020)
-parser.add_argument("--target_reward_cheatcode_action_radius_schedule_near_depth", type=float, default=0.0)
-parser.add_argument("--target_reward_cheatcode_action_forward_scale", type=float, default=0.00005)
-parser.add_argument("--target_reward_cheatcode_action_min_forward", type=float, default=0.0)
+parser.add_argument(
+    "--target_reward_insertion_bypass_gate_tolerance",
+    type=float,
+    default=0.0,
+    help=(
+        "Optional depth-gated deadband for insertion bypass penalty on the combined alignment gate. "
+        "Default 0 preserves legacy behavior. Values near 0.7-0.85 keep severe shallow bypass "
+        "penalized while preventing near-strict centered final states from receiving a large "
+        "negative corridor term."
+    ),
+)
+parser.add_argument(
+    "--target_reward_exp_gated_phase_weight",
+    "--target_reward_cheatcode_phase_weight",
+    dest="target_reward_cheatcode_phase_weight",
+    type=float,
+    default=0.0,
+)
+parser.add_argument(
+    "--target_reward_exp_gated_sigma_lat_pre",
+    "--target_reward_cheatcode_sigma_lat_pre",
+    dest="target_reward_cheatcode_sigma_lat_pre",
+    type=float,
+    default=0.0025,
+)
+parser.add_argument(
+    "--target_reward_exp_gated_sigma_lat_insert",
+    "--target_reward_cheatcode_sigma_lat_insert",
+    dest="target_reward_cheatcode_sigma_lat_insert",
+    type=float,
+    default=0.0015,
+)
+parser.add_argument(
+    "--target_reward_exp_gated_schedule_lateral_radius",
+    "--target_reward_cheatcode_schedule_lateral_radius",
+    dest="target_reward_cheatcode_schedule_lateral_radius",
+    action="store_true",
+)
+parser.add_argument(
+    "--target_reward_exp_gated_sigma_lat_pre_far",
+    "--target_reward_cheatcode_sigma_lat_pre_far",
+    dest="target_reward_cheatcode_sigma_lat_pre_far",
+    type=float,
+    default=0.004,
+)
+parser.add_argument(
+    "--target_reward_exp_gated_sigma_lat_insert_far",
+    "--target_reward_cheatcode_sigma_lat_insert_far",
+    dest="target_reward_cheatcode_sigma_lat_insert_far",
+    type=float,
+    default=0.004,
+)
+parser.add_argument(
+    "--target_reward_exp_gated_radius_schedule_far_depth",
+    "--target_reward_cheatcode_radius_schedule_far_depth",
+    dest="target_reward_cheatcode_radius_schedule_far_depth",
+    type=float,
+    default=-0.020,
+)
+parser.add_argument(
+    "--target_reward_exp_gated_radius_schedule_near_depth",
+    "--target_reward_cheatcode_radius_schedule_near_depth",
+    dest="target_reward_cheatcode_radius_schedule_near_depth",
+    type=float,
+    default=0.0,
+)
+parser.add_argument(
+    "--target_reward_exp_gated_sigma_theta_pre",
+    "--target_reward_cheatcode_sigma_theta_pre",
+    dest="target_reward_cheatcode_sigma_theta_pre",
+    type=float,
+    default=0.10,
+)
+parser.add_argument(
+    "--target_reward_exp_gated_sigma_theta_insert",
+    "--target_reward_cheatcode_sigma_theta_insert",
+    dest="target_reward_cheatcode_sigma_theta_insert",
+    type=float,
+    default=0.06,
+)
+parser.add_argument(
+    "--target_reward_exp_gated_schedule_orientation_tolerance",
+    "--target_reward_cheatcode_schedule_orientation_tolerance",
+    dest="target_reward_cheatcode_schedule_orientation_tolerance",
+    action="store_true",
+)
+parser.add_argument(
+    "--target_reward_exp_gated_sigma_theta_pre_far",
+    "--target_reward_cheatcode_sigma_theta_pre_far",
+    dest="target_reward_cheatcode_sigma_theta_pre_far",
+    type=float,
+    default=0.12,
+)
+parser.add_argument(
+    "--target_reward_exp_gated_sigma_theta_insert_far",
+    "--target_reward_cheatcode_sigma_theta_insert_far",
+    dest="target_reward_cheatcode_sigma_theta_insert_far",
+    type=float,
+    default=0.10,
+)
+parser.add_argument(
+    "--target_reward_exp_gated_orientation_schedule_far_depth",
+    "--target_reward_cheatcode_orientation_schedule_far_depth",
+    dest="target_reward_cheatcode_orientation_schedule_far_depth",
+    type=float,
+    default=-0.020,
+)
+parser.add_argument(
+    "--target_reward_exp_gated_orientation_schedule_near_depth",
+    "--target_reward_cheatcode_orientation_schedule_near_depth",
+    dest="target_reward_cheatcode_orientation_schedule_near_depth",
+    type=float,
+    default=0.0,
+)
+parser.add_argument(
+    "--target_reward_exp_gated_orientation_progress_scale",
+    "--target_reward_cheatcode_orientation_progress_scale",
+    dest="target_reward_cheatcode_orientation_progress_scale",
+    type=float,
+    default=0.02,
+)
+parser.add_argument(
+    "--target_reward_exp_gated_hover_depth",
+    "--target_reward_cheatcode_hover_depth",
+    dest="target_reward_cheatcode_hover_depth",
+    type=float,
+    default=-0.004,
+)
+parser.add_argument(
+    "--target_reward_exp_gated_near_gate_start",
+    "--target_reward_cheatcode_near_gate_start",
+    dest="target_reward_cheatcode_near_gate_start",
+    type=float,
+    default=-0.008,
+)
+parser.add_argument(
+    "--target_reward_exp_gated_near_gate_scale",
+    "--target_reward_cheatcode_near_gate_scale",
+    dest="target_reward_cheatcode_near_gate_scale",
+    type=float,
+    default=0.001,
+)
+parser.add_argument(
+    "--target_reward_exp_gated_near_misaligned_lateral_threshold",
+    "--target_reward_cheatcode_near_misaligned_lateral_threshold",
+    dest="target_reward_cheatcode_near_misaligned_lateral_threshold",
+    type=float,
+    default=0.0015,
+)
+parser.add_argument(
+    "--target_reward_exp_gated_near_misaligned_orientation_threshold",
+    "--target_reward_cheatcode_near_misaligned_orientation_threshold",
+    dest="target_reward_cheatcode_near_misaligned_orientation_threshold",
+    type=float,
+    default=0.060,
+)
+parser.add_argument(
+    "--target_reward_exp_gated_near_misaligned_max",
+    "--target_reward_cheatcode_near_misaligned_max",
+    dest="target_reward_cheatcode_near_misaligned_max",
+    type=float,
+    default=25.0,
+)
+parser.add_argument(
+    "--target_reward_exp_gated_lateral_funnel_scale",
+    "--target_reward_cheatcode_lateral_funnel_scale",
+    dest="target_reward_cheatcode_lateral_funnel_scale",
+    type=float,
+    default=0.010,
+)
+parser.add_argument(
+    "--target_reward_exp_gated_lateral_funnel_max",
+    "--target_reward_cheatcode_lateral_funnel_max",
+    dest="target_reward_cheatcode_lateral_funnel_max",
+    type=float,
+    default=4.0,
+)
+parser.add_argument(
+    "--target_reward_exp_gated_inside_alignment_max",
+    "--target_reward_cheatcode_inside_alignment_max",
+    dest="target_reward_cheatcode_inside_alignment_max",
+    type=float,
+    default=25.0,
+)
+parser.add_argument(
+    "--target_reward_exp_gated_lateral_progress_weight",
+    "--target_reward_cheatcode_lateral_progress_weight",
+    dest="target_reward_cheatcode_lateral_progress_weight",
+    type=float,
+    default=0.40,
+)
+parser.add_argument(
+    "--target_reward_exp_gated_orientation_progress_weight",
+    "--target_reward_cheatcode_orientation_progress_weight",
+    dest="target_reward_cheatcode_orientation_progress_weight",
+    type=float,
+    default=0.30,
+)
+parser.add_argument(
+    "--target_reward_exp_gated_lateral_funnel_weight",
+    "--target_reward_cheatcode_lateral_funnel_weight",
+    dest="target_reward_cheatcode_lateral_funnel_weight",
+    type=float,
+    default=0.0,
+)
+parser.add_argument(
+    "--target_reward_exp_gated_near_misaligned_weight",
+    "--target_reward_cheatcode_near_misaligned_weight",
+    dest="target_reward_cheatcode_near_misaligned_weight",
+    type=float,
+    default=0.25,
+)
+parser.add_argument(
+    "--target_reward_exp_gated_hover_weight",
+    "--target_reward_cheatcode_hover_weight",
+    dest="target_reward_cheatcode_hover_weight",
+    type=float,
+    default=0.15,
+)
+parser.add_argument(
+    "--target_reward_exp_gated_axial_progress_weight",
+    "--target_reward_cheatcode_axial_progress_weight",
+    dest="target_reward_cheatcode_axial_progress_weight",
+    type=float,
+    default=0.30,
+)
+parser.add_argument(
+    "--target_reward_exp_gated_lateral_alignment_action_weight",
+    "--target_reward_cheatcode_lateral_alignment_action_weight",
+    dest="target_reward_cheatcode_lateral_alignment_action_weight",
+    type=float,
+    default=0.0,
+)
+parser.add_argument(
+    "--target_reward_exp_gated_lateral_alignment_action_scale",
+    "--target_reward_cheatcode_lateral_alignment_action_scale",
+    dest="target_reward_cheatcode_lateral_alignment_action_scale",
+    type=float,
+    default=0.001,
+)
+parser.add_argument(
+    "--target_reward_exp_gated_lateral_alignment_require_axial_quiet",
+    "--target_reward_cheatcode_lateral_alignment_require_axial_quiet",
+    dest="target_reward_cheatcode_lateral_alignment_require_axial_quiet",
+    action=argparse.BooleanOptionalAction,
+    default=False,
+    help="When enabled, off-axis lateral action credit is gated off if the same command is axially forward.",
+)
+parser.add_argument(
+    "--target_reward_exp_gated_lateral_alignment_axial_quiet_scale",
+    "--target_reward_cheatcode_lateral_alignment_axial_quiet_scale",
+    dest="target_reward_cheatcode_lateral_alignment_axial_quiet_scale",
+    type=float,
+    default=0.0005,
+)
+parser.add_argument(
+    "--target_reward_exp_gated_off_axis_axial_action_penalty_weight",
+    "--target_reward_cheatcode_off_axis_axial_action_penalty_weight",
+    dest="target_reward_cheatcode_off_axis_axial_action_penalty_weight",
+    type=float,
+    default=0.0,
+)
+parser.add_argument(
+    "--target_reward_exp_gated_off_axis_axial_action_scale",
+    "--target_reward_cheatcode_off_axis_axial_action_scale",
+    dest="target_reward_cheatcode_off_axis_axial_action_scale",
+    type=float,
+    default=0.001,
+)
+parser.add_argument(
+    "--target_reward_exp_gated_off_axis_axial_action_penalty_max",
+    "--target_reward_cheatcode_off_axis_axial_action_penalty_max",
+    dest="target_reward_cheatcode_off_axis_axial_action_penalty_max",
+    type=float,
+    default=0.0,
+)
+parser.add_argument(
+    "--target_reward_exp_gated_lateral_error_state_penalty_weight",
+    "--target_reward_cheatcode_lateral_error_state_penalty_weight",
+    dest="target_reward_cheatcode_lateral_error_state_penalty_weight",
+    type=float,
+    default=0.0,
+)
+parser.add_argument(
+    "--target_reward_exp_gated_lateral_error_state_penalty_scale",
+    "--target_reward_cheatcode_lateral_error_state_penalty_scale",
+    dest="target_reward_cheatcode_lateral_error_state_penalty_scale",
+    type=float,
+    default=0.010,
+)
+parser.add_argument(
+    "--target_reward_exp_gated_lateral_error_state_penalty_max",
+    "--target_reward_cheatcode_lateral_error_state_penalty_max",
+    dest="target_reward_cheatcode_lateral_error_state_penalty_max",
+    type=float,
+    default=4.0,
+)
+parser.add_argument(
+    "--target_reward_exp_gated_preinsert_aligned_axial_weight",
+    "--target_reward_cheatcode_preinsert_aligned_axial_weight",
+    dest="target_reward_cheatcode_preinsert_aligned_axial_weight",
+    type=float,
+    default=0.0,
+)
+parser.add_argument(
+    "--target_reward_exp_gated_preinsert_aligned_axial_start",
+    "--target_reward_cheatcode_preinsert_aligned_axial_start",
+    dest="target_reward_cheatcode_preinsert_aligned_axial_start",
+    type=float,
+    default=-0.035,
+)
+parser.add_argument(
+    "--target_reward_exp_gated_preinsert_aligned_axial_scale",
+    "--target_reward_cheatcode_preinsert_aligned_axial_scale",
+    dest="target_reward_cheatcode_preinsert_aligned_axial_scale",
+    type=float,
+    default=0.005,
+)
+parser.add_argument(
+    "--target_reward_exp_gated_phase_gate_insertion_credit",
+    "--target_reward_cheatcode_phase_gate_insertion_credit",
+    dest="target_reward_cheatcode_phase_gate_insertion_credit",
+    action=argparse.BooleanOptionalAction,
+    default=False,
+    help="Gate positive insertion/depth credit by the lateral phase gate while leaving bypass penalties active.",
+)
+parser.add_argument(
+    "--target_reward_stateful_phase_mode",
+    dest="target_reward_stateful_phase_mode",
+    action=argparse.BooleanOptionalAction,
+    default=False,
+    help="Use the hard stateful reward phases: lateral alignment, orientation alignment, then axial insertion.",
+)
+parser.add_argument(
+    "--target_reward_stateful_lateral_enter_threshold",
+    dest="target_reward_stateful_lateral_enter_threshold",
+    type=float,
+    default=0.0010,
+)
+parser.add_argument(
+    "--target_reward_stateful_orientation_enter_threshold",
+    dest="target_reward_stateful_orientation_enter_threshold",
+    type=float,
+    default=0.035,
+)
+parser.add_argument(
+    "--target_reward_stateful_axial_action_quiet_scale",
+    dest="target_reward_stateful_axial_action_quiet_scale",
+    type=float,
+    default=0.0005,
+)
+parser.add_argument(
+    "--target_reward_stateful_axial_lateral_action_penalty_weight",
+    dest="target_reward_stateful_axial_lateral_action_penalty_weight",
+    type=float,
+    default=0.0,
+)
+parser.add_argument(
+    "--target_reward_stateful_axial_lateral_action_scale",
+    dest="target_reward_stateful_axial_lateral_action_scale",
+    type=float,
+    default=0.00015,
+)
+parser.add_argument(
+    "--target_reward_stateful_axial_lateral_action_penalty_max",
+    dest="target_reward_stateful_axial_lateral_action_penalty_max",
+    type=float,
+    default=4.0,
+)
+parser.add_argument(
+    "--target_reward_stateful_axial_alignment_loss_penalty_weight",
+    dest="target_reward_stateful_axial_alignment_loss_penalty_weight",
+    type=float,
+    default=0.0,
+)
+parser.add_argument(
+    "--target_reward_stateful_axial_alignment_loss_lateral_scale",
+    dest="target_reward_stateful_axial_alignment_loss_lateral_scale",
+    type=float,
+    default=0.0005,
+)
+parser.add_argument(
+    "--target_reward_stateful_axial_alignment_loss_orientation_scale",
+    dest="target_reward_stateful_axial_alignment_loss_orientation_scale",
+    type=float,
+    default=0.02,
+)
+parser.add_argument(
+    "--target_reward_stateful_axial_alignment_loss_penalty_max",
+    dest="target_reward_stateful_axial_alignment_loss_penalty_max",
+    type=float,
+    default=8.0,
+)
+parser.add_argument(
+    "--target_reward_stateful_axial_pure_action_weight",
+    dest="target_reward_stateful_axial_pure_action_weight",
+    type=float,
+    default=0.0,
+)
+parser.add_argument(
+    "--target_reward_stateful_axial_impure_action_penalty_weight",
+    dest="target_reward_stateful_axial_impure_action_penalty_weight",
+    type=float,
+    default=0.0,
+)
+parser.add_argument(
+    "--target_reward_stateful_axial_impure_action_penalty_max",
+    dest="target_reward_stateful_axial_impure_action_penalty_max",
+    type=float,
+    default=4.0,
+)
+parser.add_argument(
+    "--target_reward_stateful_axial_rotation_action_penalty_weight",
+    dest="target_reward_stateful_axial_rotation_action_penalty_weight",
+    type=float,
+    default=0.0,
+)
+parser.add_argument(
+    "--target_reward_stateful_axial_rotation_action_scale",
+    dest="target_reward_stateful_axial_rotation_action_scale",
+    type=float,
+    default=0.00015,
+)
+parser.add_argument(
+    "--target_reward_stateful_axial_rotation_action_penalty_max",
+    dest="target_reward_stateful_axial_rotation_action_penalty_max",
+    type=float,
+    default=4.0,
+)
+parser.add_argument(
+    "--target_reward_stateful_axial_forward_action_penalty_weight",
+    dest="target_reward_stateful_axial_forward_action_penalty_weight",
+    type=float,
+    default=0.0,
+)
+parser.add_argument(
+    "--target_reward_stateful_axial_forward_action_scale",
+    dest="target_reward_stateful_axial_forward_action_scale",
+    type=float,
+    default=0.00005,
+)
+parser.add_argument(
+    "--target_reward_stateful_axial_forward_action_penalty_max",
+    dest="target_reward_stateful_axial_forward_action_penalty_max",
+    type=float,
+    default=4.0,
+)
+parser.add_argument(
+    "--target_reward_exp_gated_corridor_weight",
+    "--target_reward_cheatcode_corridor_weight",
+    dest="target_reward_cheatcode_corridor_weight",
+    type=float,
+    default=1.50,
+)
+parser.add_argument(
+    "--target_reward_exp_gated_inside_alignment_weight",
+    "--target_reward_cheatcode_inside_alignment_weight",
+    dest="target_reward_cheatcode_inside_alignment_weight",
+    type=float,
+    default=0.20,
+)
+parser.add_argument(
+    "--target_reward_exp_gated_retreat_weight",
+    "--target_reward_cheatcode_retreat_weight",
+    dest="target_reward_cheatcode_retreat_weight",
+    type=float,
+    default=0.20,
+)
+parser.add_argument(
+    "--target_reward_exp_gated_success_candidate_weight",
+    dest="target_reward_exp_gated_success_candidate_weight",
+    type=float,
+    default=1.0,
+    help=(
+        "Weight for the internal success-candidate bonus inside the multiplicative "
+        "exponential-gated reward. The clean axial-progress preset sets this to 0."
+    ),
+)
+parser.add_argument(
+    "--target_reward_exp_gated_action_axis_gate",
+    "--target_reward_cheatcode_action_axis_gate",
+    dest="target_reward_cheatcode_action_axis_gate",
+    action="store_true",
+)
+parser.add_argument(
+    "--target_reward_exp_gated_action_axis_source",
+    "--target_reward_cheatcode_action_axis_source",
+    dest="target_reward_cheatcode_action_axis_source",
+    choices=["action_manager", "body_delta", "policy_tcp_delta"],
+    default="action_manager",
+)
+parser.add_argument(
+    "--target_reward_exp_gated_action_lateral_sigma",
+    "--target_reward_cheatcode_action_lateral_sigma",
+    dest="target_reward_cheatcode_action_lateral_sigma",
+    type=float,
+    default=0.00005,
+)
+parser.add_argument(
+    "--target_reward_exp_gated_action_lateral_sigma_far",
+    "--target_reward_cheatcode_action_lateral_sigma_far",
+    dest="target_reward_cheatcode_action_lateral_sigma_far",
+    type=float,
+    default=0.00030,
+)
+parser.add_argument(
+    "--target_reward_exp_gated_action_radius_schedule_far_depth",
+    "--target_reward_cheatcode_action_radius_schedule_far_depth",
+    dest="target_reward_cheatcode_action_radius_schedule_far_depth",
+    type=float,
+    default=-0.020,
+)
+parser.add_argument(
+    "--target_reward_exp_gated_action_radius_schedule_near_depth",
+    "--target_reward_cheatcode_action_radius_schedule_near_depth",
+    dest="target_reward_cheatcode_action_radius_schedule_near_depth",
+    type=float,
+    default=0.0,
+)
+parser.add_argument(
+    "--target_reward_exp_gated_action_forward_scale",
+    "--target_reward_cheatcode_action_forward_scale",
+    dest="target_reward_cheatcode_action_forward_scale",
+    type=float,
+    default=0.00005,
+)
+parser.add_argument(
+    "--target_reward_exp_gated_action_min_forward",
+    "--target_reward_cheatcode_action_min_forward",
+    dest="target_reward_cheatcode_action_min_forward",
+    type=float,
+    default=0.0,
+)
+parser.add_argument(
+    "--target_reward_policy_tcp_delta_sign",
+    type=float,
+    default=1.0,
+    help="Sign multiplier applied to policy TCP delta before reward action-axis projection.",
+)
 parser.add_argument("--target_reward_orientation_error_mode", choices=["quat", "axis"], default="quat")
+parser.add_argument(
+    "--episode_target_orientation_source",
+    choices=["target_pose", "reference_reward_body_start", "auto_reference_then_target"],
+    default="target_pose",
+    help=(
+        "Episode YAML orientation source for quaternion reward/success diagnostics. "
+        "'target_pose' preserves historical train.py behavior. "
+        "'reference_reward_body_start' matches wrist_contact_realization.py final-window diagnostics when "
+        "start_near_gate.reference_reward_body_start_orientation_wxyz is present."
+    ),
+)
 parser.add_argument("--target_reward_orientation_axis_local", type=float, nargs=3, default=None)
 parser.add_argument(
     "--target_reward_insertion_orientation_gate_std",
@@ -881,15 +3089,54 @@ parser.add_argument(
 )
 parser.add_argument("--target_reward_consistency_axial_std", type=float, default=0.0)
 parser.add_argument("--target_reward_consistency_lateral_sigma", type=float, default=0.0)
-parser.add_argument("--target_reward_cheatcode_semantic_progress_scale", type=float, default=0.10)
-parser.add_argument("--target_reward_cheatcode_semantic_progress_weight", type=float, default=0.0)
-parser.add_argument("--target_reward_cheatcode_semantic_loss_weight", type=float, default=0.0)
+parser.add_argument(
+    "--target_reward_consistency_gate_mode",
+    choices=("target_depth", "current_depth"),
+    default="target_depth",
+    help=(
+        "How reward semantic consistency gates compare the configured consistency body. "
+        "'target_depth' preserves the historical final-seated-depth gate. "
+        "'current_depth' gates on the calibrated current tip/body axial gap, which shapes "
+        "partial insertion without rewarding tip-only bypass."
+    ),
+)
+parser.add_argument(
+    "--target_reward_exp_gated_semantic_progress_scale",
+    "--target_reward_cheatcode_semantic_progress_scale",
+    dest="target_reward_cheatcode_semantic_progress_scale",
+    type=float,
+    default=0.10,
+)
+parser.add_argument(
+    "--target_reward_exp_gated_semantic_progress_weight",
+    "--target_reward_cheatcode_semantic_progress_weight",
+    dest="target_reward_cheatcode_semantic_progress_weight",
+    type=float,
+    default=0.0,
+)
+parser.add_argument(
+    "--target_reward_exp_gated_semantic_loss_weight",
+    "--target_reward_cheatcode_semantic_loss_weight",
+    dest="target_reward_cheatcode_semantic_loss_weight",
+    type=float,
+    default=0.0,
+)
+parser.add_argument("--target_reward_cheatcode_module_depth_progress_scale", type=float, default=0.001)
+parser.add_argument("--target_reward_cheatcode_module_depth_progress_weight", type=float, default=0.0)
+parser.add_argument("--target_reward_cheatcode_module_depth_loss_weight", type=float, default=0.0)
 parser.add_argument("--target_success_consistency_axial_threshold", type=float, default=0.0)
 parser.add_argument("--target_success_consistency_lateral_threshold", type=float, default=0.0)
 parser.add_argument("--target_reward_insertion_axis", type=int, choices=[0, 1, 2], default=0)
 parser.add_argument(
     "--reward_preset",
-    choices=["default", "near_gate_corridor_v1", "cheatcode_insertion_v1", "cheatcode_alignment_v1"],
+    choices=[
+        "default",
+        "near_gate_corridor_v1",
+        "cheatcode_insertion_v1",
+        "cheatcode_alignment_v1",
+        "multiplicative_exp_gated_insertion_v1",
+        "stateful_insertion_v1",
+    ],
     default="default",
     help="Apply a named reward-shaping preset before env creation.",
 )
@@ -924,6 +3171,46 @@ parser.add_argument("--target_success_axial_threshold", type=float, default=None
 parser.add_argument("--target_success_lateral_threshold", type=float, default=None)
 parser.add_argument("--target_success_orientation_threshold", type=float, default=None)
 parser.add_argument(
+    "--terminate_on_lateral_bypass",
+    action=argparse.BooleanOptionalAction,
+    default=False,
+    help=(
+        "Terminate/reset an episode when semantic tip lateral error exceeds a configured "
+        "failure threshold after the near-gate activation depth. This is an opt-in guard "
+        "against training on tip-depth or rotation-induced lateral bypass trajectories."
+    ),
+)
+parser.add_argument("--lateral_bypass_termination_threshold_m", type=float, default=0.003)
+parser.add_argument("--lateral_bypass_termination_activation_depth_m", type=float, default=-0.040)
+parser.add_argument("--lateral_bypass_termination_min_steps", type=int, default=20)
+parser.add_argument(
+    "--terminate_on_offgate_depth_progress",
+    action=argparse.BooleanOptionalAction,
+    default=False,
+    help=(
+        "Terminate/reset an episode when semantic tip depth advances beyond the configured "
+        "activation depth while lateral or orientation gates are still violated. This prevents "
+        "training on partial-depth false positives with tight r but bad theta."
+    ),
+)
+parser.add_argument("--offgate_depth_termination_activation_depth_m", type=float, default=-0.040)
+parser.add_argument("--offgate_depth_termination_lateral_threshold_m", type=float, default=0.0005)
+parser.add_argument("--offgate_depth_termination_orientation_threshold_rad", type=float, default=0.030)
+parser.add_argument("--offgate_depth_termination_min_steps", type=int, default=20)
+parser.add_argument(
+    "--terminate_on_centered_lateral_sweep",
+    action=argparse.BooleanOptionalAction,
+    default=False,
+    help=(
+        "Terminate/reset an episode if semantic lateral error first becomes centered and later "
+        "blows past a sweep threshold. This catches rotation/controller-induced sweep even if "
+        "the plug retreats behind the off-gate depth termination window."
+    ),
+)
+parser.add_argument("--centered_lateral_sweep_center_threshold_m", type=float, default=0.0005)
+parser.add_argument("--centered_lateral_sweep_failure_threshold_m", type=float, default=0.003)
+parser.add_argument("--centered_lateral_sweep_min_steps", type=int, default=20)
+parser.add_argument(
     "--policy_hz",
     type=float,
     default=20.0,
@@ -956,8 +3243,8 @@ parser.add_argument("--gripper_joint_position", type=float, default=0.0035405)
 parser.add_argument(
     "--near_gate_reset_max_iterations",
     type=int,
-    default=0,
-    help="If >0, override the IK iteration count for reset_robot_tcp_to_episode_start.",
+    default=-1,
+    help="If >=0, override the IK iteration count for reset_robot_tcp_to_episode_start.",
 )
 parser.add_argument(
     "--near_gate_reset_position_tolerance",
@@ -972,11 +3259,100 @@ parser.add_argument(
     help="If >0, override the near-gate reset body orientation tolerance in radians.",
 )
 parser.add_argument("--disable_fabric", action="store_true", default=False)
+parser.add_argument(
+    "--disable_collision_prim_regex",
+    action="append",
+    default=[],
+    help=(
+        "Diagnostic-only regex matched against USD prim paths after env creation. "
+        "Matched collision prims have physics collision disabled and are logged. "
+        "Repeatable. Does not modify source USD assets or defaults."
+    ),
+)
+parser.add_argument(
+    "--collision_contact_tune_prim_regex",
+    action="append",
+    default=[],
+    help=(
+        "Diagnostic-only regex matched against USD collision prim paths after env creation. Matching prims receive "
+        "PhysX contact/rest offset overrides when the corresponding offset flags are finite. Repeatable."
+    ),
+)
+parser.add_argument("--collision_contact_offset_m", type=float, default=float("nan"))
+parser.add_argument("--collision_rest_offset_m", type=float, default=float("nan"))
+parser.add_argument(
+    "--collision_material_tune_prim_regex",
+    action="append",
+    default=[],
+    help=(
+        "Diagnostic-only regex matched against USD collision prim paths after env creation. Matching prims receive "
+        "a runtime physics material when any collision friction/restitution flag is finite. Repeatable."
+    ),
+)
+parser.add_argument("--collision_static_friction", type=float, default=float("nan"))
+parser.add_argument("--collision_dynamic_friction", type=float, default=float("nan"))
+parser.add_argument("--collision_restitution", type=float, default=float("nan"))
+parser.add_argument(
+    "--replace_sfp_body_sdf_collision_with_sdf_boxes",
+    action=argparse.BooleanOptionalAction,
+    default=False,
+    help=(
+        "Diagnostic-only: disable converted SFP module body_sdf_collision mesh prims and add runtime box "
+        "colliders matching the four body_collider_box entries in aic_assets/models/SFP Module/model.sdf. "
+        "Does not modify source USD assets or defaults."
+    ),
+)
+parser.add_argument(
+    "--replace_sfp_body_sdf_collision_with_shrunk_sdf_boxes",
+    action=argparse.BooleanOptionalAction,
+    default=False,
+    help=(
+        "Diagnostic-only: like --replace_sfp_body_sdf_collision_with_sdf_boxes, but shrink each runtime "
+        "body box by configurable per-axis margins. Defaults remain unchanged."
+    ),
+)
+parser.add_argument("--sfp_shrunk_box_margin_m", type=float, nargs=3, default=(0.00015, 0.0, 0.00015))
+parser.add_argument(
+    "--replace_sfp_module_sdf_collision_with_all_sdf_boxes",
+    action=argparse.BooleanOptionalAction,
+    default=False,
+    help=(
+        "Diagnostic-only: disable converted SFP module body_sdf_collision mesh prims and add runtime box "
+        "colliders matching all sfp_module_link box collisions in aic_assets/models/SFP Module/model.sdf. "
+        "This preserves the old body-only diagnostic flag and does not modify source USD assets or defaults."
+    ),
+)
+parser.add_argument(
+    "--replace_sfp_module_sdf_collision_with_active_sdf_boxes",
+    action=argparse.BooleanOptionalAction,
+    default=False,
+    help=(
+        "Diagnostic-only: disable converted SFP module body_sdf_collision mesh prims and add runtime box "
+        "colliders matching the SFP module box collisions that remain active in aic_assets/models/sfp_sc_cable/model.sdf. "
+        "This excludes the port/latch/head colliders removed by the Gazebo cable wrapper."
+    ),
+)
+parser.add_argument(
+    "--replace_nic_cage_p0_with_aligned_cubes",
+    action=argparse.BooleanOptionalAction,
+    default=False,
+    help=(
+        "Diagnostic-only: disable converted NIC cage_p0_* mesh collision prims and add runtime USD cubes "
+        "using each original prim's local transform. This preserves Isaac cage registration while testing "
+        "mesh-vs-box contact behavior."
+    ),
+)
 parser.add_argument("--save_step_images", action=argparse.BooleanOptionalAction, default=False)
+parser.add_argument(
+    "--save_final_checkpoint",
+    action=argparse.BooleanOptionalAction,
+    default=True,
+    help="Write checkpoint_latest.pt at normal exit. Disable for metrics-only diagnostics on low-disk scratch storage.",
+)
 parser.add_argument(
     "--debug_visual_overlays",
     action=argparse.BooleanOptionalAction,
-    default=True,
+    default=False,
     help=(
         "When saving step images, overlay projected insertion geometry markers and numeric "
         "body metrics for visual frame audits. This affects debug artifacts only."
@@ -984,8 +3360,39 @@ parser.add_argument(
 )
 parser.add_argument("--image_log_every", type=int, default=1)
 parser.add_argument("--max_logged_image_steps", type=int, default=200)
+parser.add_argument(
+    "--save_videos",
+    action=argparse.BooleanOptionalAction,
+    default=True,
+    help=(
+        "When --save_step_images is enabled, encode separate center/left/right full-episode "
+        "MP4 videos from the saved frames."
+    ),
+)
+parser.add_argument("--video_fps", type=int, default=20)
+parser.add_argument("--video_final_hold_s", type=float, default=2.0)
+parser.add_argument("--video_crf", type=int, default=16)
+parser.add_argument(
+    "--camera_render_resolution",
+    type=int,
+    default=0,
+    help=(
+        "Override Isaac TiledCameraCfg width/height for native video/debug rendering. "
+        "Use 0 to keep the task default, or set AIC_ISAAC_CAMERA_RESOLUTION."
+    ),
+)
 parser.add_argument("--debug_diagnostics", action=argparse.BooleanOptionalAction, default=False)
 parser.add_argument("--diagnostics_every", type=int, default=100)
+parser.add_argument(
+    "--log_robot_state_every",
+    type=int,
+    default=0,
+    help=(
+        "If >0, write full robot joint/root state into metrics every N steps, independent of "
+        "--debug_diagnostics sampling. This is intended for materializing replayable "
+        "robot_joint_state reset candidates from promising insertion states."
+    ),
+)
 parser.add_argument("--debug_audit_steps", type=int, default=0)
 parser.add_argument(
     "--debug_audit_start_step",
@@ -1010,9 +3417,21 @@ parser.add_argument(
 )
 parser.add_argument(
     "--tcp_action_frame",
-    choices=["gripper_tcp", "wrist_3_link", "root"],
     default="gripper_tcp",
-    help="Frame convention for ACT/SERL TCP delta actions before passing them to Isaac IK.",
+    help=(
+        "Frame convention for ACT/SERL TCP delta actions before passing them to Isaac IK. "
+        "Use 'root' or any robot body name such as gripper_tcp, wrist_3_link, or sfp_tip_link."
+    ),
+)
+parser.add_argument(
+    "--absolute_ik_target_pose",
+    action=argparse.BooleanOptionalAction,
+    default=False,
+    help=(
+        "Teacher/diagnostic-only: switch Differential IK to absolute pose mode and convert the "
+        "6D TCP delta into an absolute wrist target pose. Defaults off so evaluation/controller "
+        "behavior is unchanged."
+    ),
 )
 parser.add_argument(
     "--debug_audit_axis_magnitude",
@@ -1033,6 +3452,21 @@ parser.add_argument(
     default=None,
     metavar=("DX", "DY", "DZ", "DRX", "DRY", "DRZ"),
     help="If set in audit mode, bypass actor output and execute this constant 6D TCP action every step.",
+)
+parser.add_argument(
+    "--debug_audit_episode_constant_action",
+    action=argparse.BooleanOptionalAction,
+    default=False,
+    help=(
+        "In audit mode, bypass actor output with per-episode start_near_gate.debug_audit_constant_action "
+        "6D TCP actions. Useful for batched one-step action grids from identical reset states."
+    ),
+)
+parser.add_argument(
+    "--log_policy_actions_by_env",
+    action=argparse.BooleanOptionalAction,
+    default=False,
+    help="Write per-env actor/executed 6D TCP actions into metrics rows for short diagnostic evals.",
 )
 parser.add_argument(
     "--debug_audit_insertion_axis_action",
@@ -1097,7 +3531,15 @@ parser.add_argument(
 )
 AppLauncher.add_app_launcher_args(parser)
 def _preset_flag_explicit(flag: str) -> bool:
-    return flag in globals().get("_explicit_cli_flags", set())
+    explicit_flags = globals().get("_explicit_cli_flags", set())
+    aliases = {flag}
+    if flag.startswith("--target_reward_cheatcode_"):
+        aliases.add(flag.replace("--target_reward_cheatcode_", "--target_reward_exp_gated_", 1))
+    if any(alias in explicit_flags for alias in aliases):
+        return True
+    if flag.startswith("--") and any(f"--no-{alias[2:]}" in explicit_flags for alias in aliases if alias.startswith("--")):
+        return True
+    return False
 
 
 def _set_preset_default(args: argparse.Namespace, attr: str, flag: str, value: object) -> None:
@@ -1108,9 +3550,15 @@ def _set_preset_default(args: argparse.Namespace, attr: str, flag: str, value: o
 def _apply_reward_preset(args: argparse.Namespace) -> None:
     if args.reward_preset == "default":
         return
-    if args.reward_preset not in {"near_gate_corridor_v1", "cheatcode_insertion_v1", "cheatcode_alignment_v1"}:
+    exp_gated_presets = {
+        "cheatcode_insertion_v1",
+        "cheatcode_alignment_v1",
+        "multiplicative_exp_gated_insertion_v1",
+        "stateful_insertion_v1",
+    }
+    if args.reward_preset not in {"near_gate_corridor_v1", *exp_gated_presets}:
         raise ValueError(f"Unsupported reward preset: {args.reward_preset}")
-    if args.reward_preset in {"cheatcode_insertion_v1", "cheatcode_alignment_v1"}:
+    if args.reward_preset in exp_gated_presets:
         _set_preset_default(args, "target_reward_distance_weight", "--target_reward_distance_weight", 0.0)
         _set_preset_default(args, "target_reward_close_weight", "--target_reward_close_weight", 0.0)
         _set_preset_default(args, "target_reward_progress_weight", "--target_reward_progress_weight", 0.0)
@@ -1131,6 +3579,333 @@ def _apply_reward_preset(args: argparse.Namespace) -> None:
         _set_preset_default(args, "target_reward_orientation_gate_sigma", "--target_reward_orientation_gate_sigma", 0.006)
         _set_preset_default(args, "target_reward_orientation_error_mode", "--target_reward_orientation_error_mode", "axis")
         _set_preset_default(args, "target_reward_cheatcode_phase_weight", "--target_reward_cheatcode_phase_weight", 1.0)
+        if args.reward_preset in {"multiplicative_exp_gated_insertion_v1", "stateful_insertion_v1"}:
+            _set_preset_default(args, "target_reward_lateral_weight", "--target_reward_lateral_weight", 0.0)
+            _set_preset_default(args, "target_reward_orientation_weight", "--target_reward_orientation_weight", 0.0)
+            _set_preset_default(args, "target_reward_terminal_weight", "--target_reward_terminal_weight", 0.0)
+            _set_preset_default(
+                args,
+                "target_reward_cheatcode_lateral_progress_weight",
+                "--target_reward_cheatcode_lateral_progress_weight",
+                6.0,
+            )
+            _set_preset_default(
+                args,
+                "target_reward_cheatcode_orientation_progress_weight",
+                "--target_reward_cheatcode_orientation_progress_weight",
+                0.0,
+            )
+            _set_preset_default(
+                args,
+                "target_reward_cheatcode_lateral_funnel_scale",
+                "--target_reward_cheatcode_lateral_funnel_scale",
+                0.010,
+            )
+            _set_preset_default(
+                args,
+                "target_reward_cheatcode_near_misaligned_max",
+                "--target_reward_cheatcode_near_misaligned_max",
+                25.0,
+            )
+            _set_preset_default(
+                args,
+                "target_reward_cheatcode_lateral_funnel_max",
+                "--target_reward_cheatcode_lateral_funnel_max",
+                4.0,
+            )
+            _set_preset_default(
+                args,
+                "target_reward_cheatcode_inside_alignment_max",
+                "--target_reward_cheatcode_inside_alignment_max",
+                25.0,
+            )
+            _set_preset_default(
+                args,
+                "target_reward_cheatcode_lateral_funnel_weight",
+                "--target_reward_cheatcode_lateral_funnel_weight",
+                0.0,
+            )
+            _set_preset_default(
+                args,
+                "target_reward_cheatcode_near_misaligned_weight",
+                "--target_reward_cheatcode_near_misaligned_weight",
+                0.5,
+            )
+            _set_preset_default(
+                args,
+                "target_reward_cheatcode_hover_weight",
+                "--target_reward_cheatcode_hover_weight",
+                0.0,
+            )
+            _set_preset_default(
+                args,
+                "target_reward_cheatcode_axial_progress_weight",
+                "--target_reward_cheatcode_axial_progress_weight",
+                1.0,
+            )
+            _set_preset_default(
+                args,
+                "target_reward_cheatcode_lateral_alignment_action_weight",
+                "--target_reward_cheatcode_lateral_alignment_action_weight",
+                6.0 if args.reward_preset == "stateful_insertion_v1" else 2.0,
+            )
+            _set_preset_default(
+                args,
+                "target_reward_cheatcode_lateral_alignment_action_scale",
+                "--target_reward_cheatcode_lateral_alignment_action_scale",
+                0.00025,
+            )
+            _set_preset_default(
+                args,
+                "target_reward_cheatcode_lateral_alignment_require_axial_quiet",
+                "--target_reward_cheatcode_lateral_alignment_require_axial_quiet",
+                True,
+            )
+            _set_preset_default(
+                args,
+                "target_reward_cheatcode_lateral_alignment_axial_quiet_scale",
+                "--target_reward_cheatcode_lateral_alignment_axial_quiet_scale",
+                0.0005,
+            )
+            _set_preset_default(
+                args,
+                "target_reward_cheatcode_off_axis_axial_action_penalty_weight",
+                "--target_reward_cheatcode_off_axis_axial_action_penalty_weight",
+                16.0,
+            )
+            _set_preset_default(
+                args,
+                "target_reward_cheatcode_off_axis_axial_action_scale",
+                "--target_reward_cheatcode_off_axis_axial_action_scale",
+                0.001,
+            )
+            _set_preset_default(
+                args,
+                "target_reward_cheatcode_off_axis_axial_action_penalty_max",
+                "--target_reward_cheatcode_off_axis_axial_action_penalty_max",
+                4.0,
+            )
+            _set_preset_default(
+                args,
+                "target_reward_cheatcode_lateral_error_state_penalty_weight",
+                "--target_reward_cheatcode_lateral_error_state_penalty_weight",
+                1.0,
+            )
+            _set_preset_default(
+                args,
+                "target_reward_cheatcode_lateral_error_state_penalty_scale",
+                "--target_reward_cheatcode_lateral_error_state_penalty_scale",
+                0.010,
+            )
+            _set_preset_default(
+                args,
+                "target_reward_cheatcode_lateral_error_state_penalty_max",
+                "--target_reward_cheatcode_lateral_error_state_penalty_max",
+                4.0,
+            )
+            _set_preset_default(
+                args,
+                "target_reward_cheatcode_preinsert_aligned_axial_weight",
+                "--target_reward_cheatcode_preinsert_aligned_axial_weight",
+                0.0,
+            )
+            _set_preset_default(
+                args,
+                "target_reward_cheatcode_phase_gate_insertion_credit",
+                "--target_reward_cheatcode_phase_gate_insertion_credit",
+                True,
+            )
+            _set_preset_default(
+                args,
+                "target_reward_stateful_phase_mode",
+                "--target_reward_stateful_phase_mode",
+                args.reward_preset == "stateful_insertion_v1",
+            )
+            if args.reward_preset == "stateful_insertion_v1":
+                _set_preset_default(
+                    args,
+                    "target_reward_cheatcode_orientation_progress_weight",
+                    "--target_reward_cheatcode_orientation_progress_weight",
+                    8.0,
+                )
+                _set_preset_default(
+                    args,
+                    "target_reward_cheatcode_orientation_progress_scale",
+                    "--target_reward_cheatcode_orientation_progress_scale",
+                    0.005,
+                )
+                _set_preset_default(
+                    args,
+                    "target_reward_cheatcode_lateral_progress_weight",
+                    "--target_reward_cheatcode_lateral_progress_weight",
+                    8.0,
+                )
+                _set_preset_default(
+                    args,
+                    "target_reward_cheatcode_axial_progress_weight",
+                    "--target_reward_cheatcode_axial_progress_weight",
+                    8.0,
+                )
+                _set_preset_default(
+                    args,
+                    "target_reward_cheatcode_preinsert_aligned_axial_weight",
+                    "--target_reward_cheatcode_preinsert_aligned_axial_weight",
+                    8.0,
+                )
+                _set_preset_default(
+                    args,
+                    "target_reward_cheatcode_corridor_weight",
+                    "--target_reward_cheatcode_corridor_weight",
+                    10.0,
+                )
+                _set_preset_default(
+                    args,
+                    "target_reward_cheatcode_inside_alignment_weight",
+                    "--target_reward_cheatcode_inside_alignment_weight",
+                    0.5,
+                )
+                _set_preset_default(
+                    args,
+                    "target_reward_exp_gated_success_candidate_weight",
+                    "--target_reward_exp_gated_success_candidate_weight",
+                    32.0,
+                )
+                _set_preset_default(
+                    args,
+                    "target_reward_cheatcode_lateral_error_state_penalty_max",
+                    "--target_reward_cheatcode_lateral_error_state_penalty_max",
+                    25.0,
+                )
+                _set_preset_default(
+                    args,
+                    "target_reward_stateful_lateral_enter_threshold",
+                    "--target_reward_stateful_lateral_enter_threshold",
+                    0.0010,
+                )
+                _set_preset_default(
+                    args,
+                    "target_reward_stateful_orientation_enter_threshold",
+                    "--target_reward_stateful_orientation_enter_threshold",
+                    0.040,
+                )
+                _set_preset_default(
+                    args,
+                    "target_reward_stateful_axial_action_quiet_scale",
+                    "--target_reward_stateful_axial_action_quiet_scale",
+                    0.0005,
+                )
+                _set_preset_default(
+                    args,
+                    "target_reward_stateful_axial_lateral_action_penalty_weight",
+                    "--target_reward_stateful_axial_lateral_action_penalty_weight",
+                    2.0,
+                )
+                _set_preset_default(
+                    args,
+                    "target_reward_stateful_axial_lateral_action_scale",
+                    "--target_reward_stateful_axial_lateral_action_scale",
+                    0.00010,
+                )
+                _set_preset_default(
+                    args,
+                    "target_reward_stateful_axial_lateral_action_penalty_max",
+                    "--target_reward_stateful_axial_lateral_action_penalty_max",
+                    6.0,
+                )
+                _set_preset_default(
+                    args,
+                    "target_reward_stateful_axial_alignment_loss_penalty_weight",
+                    "--target_reward_stateful_axial_alignment_loss_penalty_weight",
+                    4.0,
+                )
+                _set_preset_default(
+                    args,
+                    "target_reward_stateful_axial_alignment_loss_lateral_scale",
+                    "--target_reward_stateful_axial_alignment_loss_lateral_scale",
+                    0.0005,
+                )
+                _set_preset_default(
+                    args,
+                    "target_reward_stateful_axial_alignment_loss_orientation_scale",
+                    "--target_reward_stateful_axial_alignment_loss_orientation_scale",
+                    0.020,
+                )
+                _set_preset_default(
+                    args,
+                    "target_reward_stateful_axial_alignment_loss_penalty_max",
+                    "--target_reward_stateful_axial_alignment_loss_penalty_max",
+                    8.0,
+                )
+                _set_preset_default(
+                    args,
+                    "target_reward_stateful_axial_pure_action_weight",
+                    "--target_reward_stateful_axial_pure_action_weight",
+                    4.0,
+                )
+                _set_preset_default(
+                    args,
+                    "target_reward_stateful_axial_impure_action_penalty_weight",
+                    "--target_reward_stateful_axial_impure_action_penalty_weight",
+                    8.0,
+                )
+                _set_preset_default(
+                    args,
+                    "target_reward_stateful_axial_impure_action_penalty_max",
+                    "--target_reward_stateful_axial_impure_action_penalty_max",
+                    4.0,
+                )
+            _set_preset_default(
+                args,
+                "target_reward_cheatcode_corridor_weight",
+                "--target_reward_cheatcode_corridor_weight",
+                1.0,
+            )
+            _set_preset_default(
+                args,
+                "target_reward_cheatcode_inside_alignment_weight",
+                "--target_reward_cheatcode_inside_alignment_weight",
+                0.25,
+            )
+            _set_preset_default(
+                args,
+                "target_reward_cheatcode_retreat_weight",
+                "--target_reward_cheatcode_retreat_weight",
+                0.10,
+            )
+            _set_preset_default(
+                args,
+                "target_reward_exp_gated_success_candidate_weight",
+                "--target_reward_exp_gated_success_candidate_weight",
+                8.0,
+            )
+            if args.reward_preset == "stateful_insertion_v1":
+                if not _preset_flag_explicit("--target_reward_cheatcode_corridor_weight"):
+                    args.target_reward_cheatcode_corridor_weight = 10.0
+                if not _preset_flag_explicit("--target_reward_cheatcode_inside_alignment_weight"):
+                    args.target_reward_cheatcode_inside_alignment_weight = 0.5
+                if not _preset_flag_explicit("--target_reward_exp_gated_success_candidate_weight"):
+                    args.target_reward_exp_gated_success_candidate_weight = 32.0
+            _set_preset_default(
+                args,
+                "target_reward_cheatcode_semantic_progress_weight",
+                "--target_reward_cheatcode_semantic_progress_weight",
+                0.0,
+            )
+            _set_preset_default(
+                args,
+                "target_reward_cheatcode_semantic_loss_weight",
+                "--target_reward_cheatcode_semantic_loss_weight",
+                0.0,
+            )
+            _set_preset_default(
+                args,
+                "target_reward_cheatcode_action_axis_gate",
+                "--target_reward_cheatcode_action_axis_gate",
+                True,
+            )
+            _set_preset_default(args, "target_reward_consistency_body", "--target_reward_consistency_body", "none")
+            _set_preset_default(args, "target_success_consistency_axial_threshold", "--target_success_consistency_axial_threshold", 0.0)
+            _set_preset_default(args, "target_success_consistency_lateral_threshold", "--target_success_consistency_lateral_threshold", 0.0)
         if args.reward_preset == "cheatcode_alignment_v1":
             _set_preset_default(
                 args,
@@ -1156,11 +3931,30 @@ def _apply_reward_preset(args: argparse.Namespace) -> None:
                 "--target_reward_cheatcode_retreat_weight",
                 0.0,
             )
-        _set_preset_default(args, "target_reward_consistency_body", "--target_reward_consistency_body", "auto")
-        _set_preset_default(args, "target_reward_consistency_axial_std", "--target_reward_consistency_axial_std", 0.004)
-        _set_preset_default(args, "target_reward_consistency_lateral_sigma", "--target_reward_consistency_lateral_sigma", 0.003)
-        _set_preset_default(args, "target_success_consistency_axial_threshold", "--target_success_consistency_axial_threshold", 0.001)
-        _set_preset_default(args, "target_success_consistency_lateral_threshold", "--target_success_consistency_lateral_threshold", 0.0015)
+        if args.reward_preset in {"multiplicative_exp_gated_insertion_v1", "stateful_insertion_v1"}:
+            _set_preset_default(args, "target_reward_consistency_axial_std", "--target_reward_consistency_axial_std", 0.0)
+            _set_preset_default(
+                args,
+                "target_reward_consistency_lateral_sigma",
+                "--target_reward_consistency_lateral_sigma",
+                0.0,
+            )
+        else:
+            _set_preset_default(args, "target_reward_consistency_body", "--target_reward_consistency_body", "auto")
+            _set_preset_default(args, "target_reward_consistency_axial_std", "--target_reward_consistency_axial_std", 0.004)
+            _set_preset_default(args, "target_reward_consistency_lateral_sigma", "--target_reward_consistency_lateral_sigma", 0.003)
+            _set_preset_default(
+                args,
+                "target_success_consistency_axial_threshold",
+                "--target_success_consistency_axial_threshold",
+                0.001,
+            )
+            _set_preset_default(
+                args,
+                "target_success_consistency_lateral_threshold",
+                "--target_success_consistency_lateral_threshold",
+                0.0015,
+            )
         _set_preset_default(args, "force_delta_penalty_weight", "--force_delta_penalty_weight", 0.02)
         _set_preset_default(args, "terminate_on_target_success", "--terminate_on_target_success", True)
         if not bool(getattr(args, "_target_success_axial_threshold_explicit", False)):
@@ -1168,7 +3962,7 @@ def _apply_reward_preset(args: argparse.Namespace) -> None:
         if not bool(getattr(args, "_target_success_lateral_threshold_explicit", False)):
             args.target_success_lateral_threshold = 0.0005
         if not bool(getattr(args, "_target_success_orientation_threshold_explicit", False)):
-            args.target_success_orientation_threshold = 0.03
+            args.target_success_orientation_threshold = 0.04
         return
     _set_preset_default(args, "target_reward_distance_weight", "--target_reward_distance_weight", 0.02)
     _set_preset_default(args, "target_reward_close_weight", "--target_reward_close_weight", 0.05)
@@ -1240,6 +4034,8 @@ args_cli._target_success_orientation_threshold_explicit = (
     "--target_success_orientation_threshold" in _explicit_cli_flags
 )
 _apply_reward_preset(args_cli)
+if int(args_cli.camera_render_resolution) < 0:
+    parser.error("--camera_render_resolution must be >= 0")
 if float(args_cli.target_reward_lateral_weight) > 0.0:
     corrected_lateral_weight = -float(args_cli.target_reward_lateral_weight)
     print(
@@ -1253,6 +4049,17 @@ os.environ["AIC_ISAAC_TASK_FAMILY"] = args_cli.task_family
 if args_cli.episode_config_dir:
     os.environ["AIC_ISAAC_EPISODE_CONFIG_DIR"] = args_cli.episode_config_dir
 os.environ["AIC_ISAAC_POLICY_HZ"] = str(float(args_cli.policy_hz))
+if int(args_cli.camera_render_resolution) > 0:
+    camera_render_resolution = int(args_cli.camera_render_resolution)
+    os.environ["AIC_ISAAC_CAMERA_RESOLUTION"] = str(camera_render_resolution)
+    if getattr(args_cli, "width", None) is None:
+        args_cli.width = camera_render_resolution
+    if getattr(args_cli, "height", None) is None:
+        args_cli.height = camera_render_resolution
+    kit_args = str(getattr(args_cli, "kit_args", "") or "").strip()
+    disable_ngx_arg = "--/ngx/enabled=false"
+    if disable_ngx_arg not in kit_args.split():
+        args_cli.kit_args = f"{kit_args} {disable_ngx_arg}".strip()
 if args_cli.enable_contact_sensor:
     os.environ["AIC_ISAAC_ENABLE_CONTACT_SENSOR"] = "1"
 args_cli.enable_cameras = True
@@ -1282,6 +4089,8 @@ from safetensors.torch import load_file
 import isaaclab_tasks  # noqa: F401
 from isaaclab_tasks.utils import parse_env_cfg
 from isaaclab.utils import math as math_utils
+import omni.usd
+from pxr import Gf, PhysxSchema, UsdGeom, UsdPhysics, UsdShade
 
 import aic_task.tasks  # noqa: F401
 from aic_task.tasks.manager_based.aic_task.mdp.insertion_geometry import compute_insertion_geometry
@@ -1650,6 +4459,19 @@ def _load_episode_configs(path: str | None) -> list[dict[str, Any]]:
 EPISODE_CONFIGS = _load_episode_configs(args_cli.episode_config_dir)
 
 
+def _parse_env_id_set(value: str) -> set[int]:
+    ids: set[int] = set()
+    for item in str(value or "").split(","):
+        item = item.strip()
+        if not item:
+            continue
+        ids.add(int(item))
+    return ids
+
+
+TARGET_ACTION_GUIDE_TRAIN_ENV_IDS = _parse_env_id_set(args_cli.target_action_guide_train_env_ids)
+
+
 def _choices(value: Any, default: list[Any]) -> list[Any]:
     if value is None or value == "auto":
         return list(default)
@@ -1727,6 +4549,49 @@ def _sample_task_context_from_distribution(rng: random.Random) -> tuple[str, int
 
 def _current_episode_by_env(env) -> dict[int, dict[str, Any]]:
     return dict(getattr(env.unwrapped, "_aic_current_episode_by_env", {}) or {})
+
+
+def _episode_constant_action_chunk(
+    env,
+    *,
+    step: int,
+    audit_start_step: int,
+    device: torch.device,
+    batch_size: int,
+    action_dim: int,
+    single_action_dim: int,
+    n_action_steps: int,
+) -> torch.Tensor | None:
+    episodes = _current_episode_by_env(env)
+    if not episodes:
+        return None
+    rows = []
+    found = False
+    sequence_index = max(0, int(step) - max(int(audit_start_step), 1))
+    for env_id in range(batch_size):
+        start = ((episodes.get(env_id) or {}).get("scene") or {}).get("start_near_gate") or {}
+        raw = start.get("debug_audit_constant_action")
+        sequence = start.get("debug_audit_action_sequence")
+        if isinstance(sequence, (list, tuple)) and sequence:
+            raw = sequence[min(sequence_index, len(sequence) - 1)]
+        if raw is None:
+            rows.append([0.0] * single_action_dim)
+            continue
+        if not isinstance(raw, (list, tuple)) or len(raw) != single_action_dim:
+            raise ValueError(
+                "start_near_gate.debug_audit_constant_action must contain "
+                f"{single_action_dim} values for env {env_id}"
+            )
+        found = True
+        rows.append([float(v) for v in raw])
+    if not found:
+        return None
+    base = torch.tensor(rows, dtype=torch.float32, device=device)
+    action = torch.zeros((batch_size, action_dim), dtype=torch.float32, device=device)
+    for action_idx in range(n_action_steps):
+        start_idx = action_idx * single_action_dim
+        action[:, start_idx : start_idx + single_action_dim] = base
+    return action
 
 
 def _episode_context_tuple(episode: dict[str, Any]) -> tuple[str, int, int, int]:
@@ -1874,6 +4739,7 @@ def _configure_task_geometry_rewards(env_cfg: Any, args: argparse.Namespace) -> 
     body_position_offset = _target_reward_body_position_offset(args)
     target_orientation_offset = _target_reward_orientation_offset(args)
     body_orientation_offset = _target_reward_body_orientation_offset(args)
+    episode_target_orientation_source = str(args.episode_target_orientation_source)
     for name in (
         "target_distance_tanh",
         "target_distance_exp",
@@ -1898,6 +4764,7 @@ def _configure_task_geometry_rewards(env_cfg: Any, args: argparse.Namespace) -> 
             term.params["body_position_offset"] = body_position_offset
         if "target_orientation_offset" in term.params:
             term.params["target_orientation_offset"] = target_orientation_offset
+            term.params["episode_target_orientation_source"] = episode_target_orientation_source
         if "body_orientation_offset" in term.params:
             term.params["body_orientation_offset"] = body_orientation_offset
         if "orientation_error_mode" in term.params:
@@ -1925,6 +4792,7 @@ def _configure_task_geometry_rewards(env_cfg: Any, args: argparse.Namespace) -> 
         args.target_reward_insertion_orientation_gate_std
     )
     rewards.target_axial_progress.params["body_orientation_offset"] = body_orientation_offset
+    rewards.target_axial_progress.params["episode_target_orientation_source"] = episode_target_orientation_source
     rewards.target_axial_progress.params["orientation_error_mode"] = orientation_error_mode
     rewards.target_axial_progress.params["orientation_axis_local"] = orientation_axis_local
     rewards.target_axial_progress.params["consistency_body_name"] = consistency_body
@@ -1934,6 +4802,7 @@ def _configure_task_geometry_rewards(env_cfg: Any, args: argparse.Namespace) -> 
         if float(args.target_reward_consistency_lateral_sigma) <= 0.0
         else float(args.target_reward_consistency_lateral_sigma)
     )
+    rewards.target_axial_progress.params["consistency_gate_mode"] = str(args.target_reward_consistency_gate_mode)
     rewards.target_insertion_corridor.params["insertion_axis"] = int(args.target_reward_insertion_axis)
     rewards.target_insertion_corridor.params["lateral_gate_sigma"] = float(
         args.target_reward_insertion_corridor_sigma
@@ -1941,10 +4810,14 @@ def _configure_task_geometry_rewards(env_cfg: Any, args: argparse.Namespace) -> 
     rewards.target_insertion_corridor.params["bypass_penalty_scale"] = float(
         args.target_reward_insertion_bypass_penalty_scale
     )
+    rewards.target_insertion_corridor.params["bypass_gate_tolerance"] = float(
+        args.target_reward_insertion_bypass_gate_tolerance
+    )
     rewards.target_insertion_corridor.params["orientation_gate_std"] = float(
         args.target_reward_insertion_orientation_gate_std
     )
     rewards.target_insertion_corridor.params["body_orientation_offset"] = body_orientation_offset
+    rewards.target_insertion_corridor.params["episode_target_orientation_source"] = episode_target_orientation_source
     rewards.target_insertion_corridor.params["orientation_error_mode"] = orientation_error_mode
     rewards.target_insertion_corridor.params["orientation_axis_local"] = orientation_axis_local
     rewards.target_insertion_corridor.params["consistency_body_name"] = consistency_body
@@ -1956,6 +4829,7 @@ def _configure_task_geometry_rewards(env_cfg: Any, args: argparse.Namespace) -> 
         if float(args.target_reward_consistency_lateral_sigma) <= 0.0
         else float(args.target_reward_consistency_lateral_sigma)
     )
+    rewards.target_insertion_corridor.params["consistency_gate_mode"] = str(args.target_reward_consistency_gate_mode)
     rewards.target_cheatcode_phase_reward.params["insertion_axis"] = int(args.target_reward_insertion_axis)
     rewards.target_cheatcode_phase_reward.params["sigma_lat_pre"] = float(args.target_reward_cheatcode_sigma_lat_pre)
     rewards.target_cheatcode_phase_reward.params["sigma_lat_insert"] = float(
@@ -2005,8 +4879,38 @@ def _configure_task_geometry_rewards(env_cfg: Any, args: argparse.Namespace) -> 
     )
     rewards.target_cheatcode_phase_reward.params["axial_progress_scale"] = float(args.target_reward_axial_progress_scale)
     rewards.target_cheatcode_phase_reward.params["hover_depth"] = float(args.target_reward_cheatcode_hover_depth)
+    rewards.target_cheatcode_phase_reward.params["near_gate_start"] = float(
+        args.target_reward_cheatcode_near_gate_start
+    )
+    rewards.target_cheatcode_phase_reward.params["near_gate_scale"] = float(
+        args.target_reward_cheatcode_near_gate_scale
+    )
+    rewards.target_cheatcode_phase_reward.params["near_misaligned_lateral_threshold"] = float(
+        args.target_reward_cheatcode_near_misaligned_lateral_threshold
+    )
+    rewards.target_cheatcode_phase_reward.params["near_misaligned_orientation_threshold"] = float(
+        args.target_reward_cheatcode_near_misaligned_orientation_threshold
+    )
+    rewards.target_cheatcode_phase_reward.params["near_misaligned_max"] = float(
+        args.target_reward_cheatcode_near_misaligned_max
+    )
+    rewards.target_cheatcode_phase_reward.params["lateral_funnel_scale"] = float(
+        args.target_reward_cheatcode_lateral_funnel_scale
+    )
+    rewards.target_cheatcode_phase_reward.params["lateral_funnel_max"] = float(
+        args.target_reward_cheatcode_lateral_funnel_max
+    )
+    rewards.target_cheatcode_phase_reward.params["inside_alignment_max"] = float(
+        args.target_reward_cheatcode_inside_alignment_max
+    )
     rewards.target_cheatcode_phase_reward.params["bypass_penalty_scale"] = float(
         args.target_reward_insertion_bypass_penalty_scale
+    )
+    rewards.target_cheatcode_phase_reward.params["bypass_gate_tolerance"] = float(
+        args.target_reward_insertion_bypass_gate_tolerance
+    )
+    rewards.target_cheatcode_phase_reward.params["success_candidate_weight"] = float(
+        args.target_reward_exp_gated_success_candidate_weight
     )
     rewards.target_cheatcode_phase_reward.params["lateral_progress_weight"] = float(
         args.target_reward_cheatcode_lateral_progress_weight
@@ -2014,12 +4918,115 @@ def _configure_task_geometry_rewards(env_cfg: Any, args: argparse.Namespace) -> 
     rewards.target_cheatcode_phase_reward.params["orientation_progress_weight"] = float(
         args.target_reward_cheatcode_orientation_progress_weight
     )
+    rewards.target_cheatcode_phase_reward.params["lateral_funnel_weight"] = float(
+        args.target_reward_cheatcode_lateral_funnel_weight
+    )
     rewards.target_cheatcode_phase_reward.params["near_misaligned_weight"] = float(
         args.target_reward_cheatcode_near_misaligned_weight
     )
     rewards.target_cheatcode_phase_reward.params["hover_weight"] = float(args.target_reward_cheatcode_hover_weight)
     rewards.target_cheatcode_phase_reward.params["axial_progress_weight"] = float(
         args.target_reward_cheatcode_axial_progress_weight
+    )
+    rewards.target_cheatcode_phase_reward.params["lateral_alignment_action_weight"] = float(
+        args.target_reward_cheatcode_lateral_alignment_action_weight
+    )
+    rewards.target_cheatcode_phase_reward.params["lateral_alignment_action_scale"] = float(
+        args.target_reward_cheatcode_lateral_alignment_action_scale
+    )
+    rewards.target_cheatcode_phase_reward.params["lateral_alignment_require_axial_quiet"] = bool(
+        args.target_reward_cheatcode_lateral_alignment_require_axial_quiet
+    )
+    rewards.target_cheatcode_phase_reward.params["lateral_alignment_axial_quiet_scale"] = float(
+        args.target_reward_cheatcode_lateral_alignment_axial_quiet_scale
+    )
+    rewards.target_cheatcode_phase_reward.params["off_axis_axial_action_penalty_weight"] = float(
+        args.target_reward_cheatcode_off_axis_axial_action_penalty_weight
+    )
+    rewards.target_cheatcode_phase_reward.params["off_axis_axial_action_scale"] = float(
+        args.target_reward_cheatcode_off_axis_axial_action_scale
+    )
+    rewards.target_cheatcode_phase_reward.params["off_axis_axial_action_penalty_max"] = float(
+        args.target_reward_cheatcode_off_axis_axial_action_penalty_max
+    )
+    rewards.target_cheatcode_phase_reward.params["lateral_error_state_penalty_weight"] = float(
+        args.target_reward_cheatcode_lateral_error_state_penalty_weight
+    )
+    rewards.target_cheatcode_phase_reward.params["lateral_error_state_penalty_scale"] = float(
+        args.target_reward_cheatcode_lateral_error_state_penalty_scale
+    )
+    rewards.target_cheatcode_phase_reward.params["lateral_error_state_penalty_max"] = float(
+        args.target_reward_cheatcode_lateral_error_state_penalty_max
+    )
+    rewards.target_cheatcode_phase_reward.params["preinsert_aligned_axial_weight"] = float(
+        args.target_reward_cheatcode_preinsert_aligned_axial_weight
+    )
+    rewards.target_cheatcode_phase_reward.params["preinsert_aligned_axial_start"] = float(
+        args.target_reward_cheatcode_preinsert_aligned_axial_start
+    )
+    rewards.target_cheatcode_phase_reward.params["preinsert_aligned_axial_scale"] = float(
+        args.target_reward_cheatcode_preinsert_aligned_axial_scale
+    )
+    rewards.target_cheatcode_phase_reward.params["phase_gate_insertion_credit"] = bool(
+        args.target_reward_cheatcode_phase_gate_insertion_credit
+    )
+    rewards.target_cheatcode_phase_reward.params["stateful_phase_mode"] = bool(args.target_reward_stateful_phase_mode)
+    rewards.target_cheatcode_phase_reward.params["stateful_lateral_enter_threshold"] = float(
+        args.target_reward_stateful_lateral_enter_threshold
+    )
+    rewards.target_cheatcode_phase_reward.params["stateful_orientation_enter_threshold"] = float(
+        args.target_reward_stateful_orientation_enter_threshold
+    )
+    rewards.target_cheatcode_phase_reward.params["stateful_axial_action_quiet_scale"] = float(
+        args.target_reward_stateful_axial_action_quiet_scale
+    )
+    rewards.target_cheatcode_phase_reward.params["stateful_axial_lateral_action_penalty_weight"] = float(
+        args.target_reward_stateful_axial_lateral_action_penalty_weight
+    )
+    rewards.target_cheatcode_phase_reward.params["stateful_axial_lateral_action_scale"] = float(
+        args.target_reward_stateful_axial_lateral_action_scale
+    )
+    rewards.target_cheatcode_phase_reward.params["stateful_axial_lateral_action_penalty_max"] = float(
+        args.target_reward_stateful_axial_lateral_action_penalty_max
+    )
+    rewards.target_cheatcode_phase_reward.params["stateful_axial_alignment_loss_penalty_weight"] = float(
+        args.target_reward_stateful_axial_alignment_loss_penalty_weight
+    )
+    rewards.target_cheatcode_phase_reward.params["stateful_axial_alignment_loss_lateral_scale"] = float(
+        args.target_reward_stateful_axial_alignment_loss_lateral_scale
+    )
+    rewards.target_cheatcode_phase_reward.params["stateful_axial_alignment_loss_orientation_scale"] = float(
+        args.target_reward_stateful_axial_alignment_loss_orientation_scale
+    )
+    rewards.target_cheatcode_phase_reward.params["stateful_axial_alignment_loss_penalty_max"] = float(
+        args.target_reward_stateful_axial_alignment_loss_penalty_max
+    )
+    rewards.target_cheatcode_phase_reward.params["stateful_axial_pure_action_weight"] = float(
+        args.target_reward_stateful_axial_pure_action_weight
+    )
+    rewards.target_cheatcode_phase_reward.params["stateful_axial_impure_action_penalty_weight"] = float(
+        args.target_reward_stateful_axial_impure_action_penalty_weight
+    )
+    rewards.target_cheatcode_phase_reward.params["stateful_axial_impure_action_penalty_max"] = float(
+        args.target_reward_stateful_axial_impure_action_penalty_max
+    )
+    rewards.target_cheatcode_phase_reward.params["stateful_axial_rotation_action_penalty_weight"] = float(
+        args.target_reward_stateful_axial_rotation_action_penalty_weight
+    )
+    rewards.target_cheatcode_phase_reward.params["stateful_axial_rotation_action_scale"] = float(
+        args.target_reward_stateful_axial_rotation_action_scale
+    )
+    rewards.target_cheatcode_phase_reward.params["stateful_axial_rotation_action_penalty_max"] = float(
+        args.target_reward_stateful_axial_rotation_action_penalty_max
+    )
+    rewards.target_cheatcode_phase_reward.params["stateful_axial_forward_action_penalty_weight"] = float(
+        args.target_reward_stateful_axial_forward_action_penalty_weight
+    )
+    rewards.target_cheatcode_phase_reward.params["stateful_axial_forward_action_scale"] = float(
+        args.target_reward_stateful_axial_forward_action_scale
+    )
+    rewards.target_cheatcode_phase_reward.params["stateful_axial_forward_action_penalty_max"] = float(
+        args.target_reward_stateful_axial_forward_action_penalty_max
     )
     rewards.target_cheatcode_phase_reward.params["corridor_weight"] = float(args.target_reward_cheatcode_corridor_weight)
     rewards.target_cheatcode_phase_reward.params["inside_alignment_weight"] = float(
@@ -2059,6 +5066,7 @@ def _configure_task_geometry_rewards(env_cfg: Any, args: argparse.Namespace) -> 
         if consistency_body is None or float(args.target_reward_consistency_lateral_sigma) <= 0.0
         else float(args.target_reward_consistency_lateral_sigma)
     )
+    rewards.target_cheatcode_phase_reward.params["consistency_gate_mode"] = str(args.target_reward_consistency_gate_mode)
     rewards.target_cheatcode_phase_reward.params["semantic_progress_scale"] = float(
         args.target_reward_cheatcode_semantic_progress_scale
     )
@@ -2068,7 +5076,17 @@ def _configure_task_geometry_rewards(env_cfg: Any, args: argparse.Namespace) -> 
     rewards.target_cheatcode_phase_reward.params["semantic_loss_weight"] = float(
         args.target_reward_cheatcode_semantic_loss_weight
     )
+    rewards.target_cheatcode_phase_reward.params["module_depth_progress_scale"] = float(
+        args.target_reward_cheatcode_module_depth_progress_scale
+    )
+    rewards.target_cheatcode_phase_reward.params["module_depth_progress_weight"] = float(
+        args.target_reward_cheatcode_module_depth_progress_weight
+    )
+    rewards.target_cheatcode_phase_reward.params["module_depth_loss_weight"] = float(
+        args.target_reward_cheatcode_module_depth_loss_weight
+    )
     rewards.target_cheatcode_phase_reward.params["orientation_error_mode"] = orientation_error_mode
+    rewards.target_cheatcode_phase_reward.params["episode_target_orientation_source"] = episode_target_orientation_source
     rewards.target_cheatcode_phase_reward.params["orientation_axis_local"] = orientation_axis_local
     success_axial_threshold = (
         float(args.target_success_termination_threshold)
@@ -2091,6 +5109,7 @@ def _configure_task_geometry_rewards(env_cfg: Any, args: argparse.Namespace) -> 
     )
     rewards.target_success_once_bonus.params["body_orientation_offset"] = body_orientation_offset
     rewards.target_success_once_bonus.params["target_orientation_offset"] = target_orientation_offset
+    rewards.target_success_once_bonus.params["episode_target_orientation_source"] = episode_target_orientation_source
     rewards.target_success_once_bonus.params["orientation_error_mode"] = orientation_error_mode
     rewards.target_success_once_bonus.params["orientation_axis_local"] = orientation_axis_local
     rewards.target_success_once_bonus.params["consistency_body_name"] = consistency_body
@@ -2141,6 +5160,7 @@ def _configure_task_geometry_rewards(env_cfg: Any, args: argparse.Namespace) -> 
         target_success.params["target_position_offset"] = target_position_offset
         target_success.params["body_position_offset"] = body_position_offset
         target_success.params["target_orientation_offset"] = target_orientation_offset
+        target_success.params["episode_target_orientation_source"] = episode_target_orientation_source
         target_success.params["body_orientation_offset"] = body_orientation_offset
         target_success.params["orientation_error_mode"] = orientation_error_mode
         target_success.params["orientation_axis_local"] = orientation_axis_local
@@ -2174,6 +5194,63 @@ def _configure_task_geometry_rewards(env_cfg: Any, args: argparse.Namespace) -> 
         target_success.params["threshold"] = (
             float(args.target_success_termination_threshold) if bool(args.terminate_on_target_success) else 0.0
         )
+    if terminations is not None and hasattr(terminations, "lateral_bypass_failure"):
+        lateral_bypass = terminations.lateral_bypass_failure
+        lateral_bypass.params["target_cfg"].name = target_scene_name
+        lateral_bypass.params["body_cfg"].name = "robot"
+        lateral_bypass.params["body_cfg"].body_names = target_body
+        lateral_bypass.params["target_position_offset"] = target_position_offset
+        lateral_bypass.params["body_position_offset"] = body_position_offset
+        lateral_bypass.params["target_orientation_offset"] = target_orientation_offset
+        lateral_bypass.params["episode_target_orientation_source"] = episode_target_orientation_source
+        lateral_bypass.params["insertion_axis"] = int(args.target_reward_insertion_axis)
+        lateral_bypass.params["activation_depth"] = float(args.lateral_bypass_termination_activation_depth_m)
+        lateral_bypass.params["min_episode_steps"] = int(args.lateral_bypass_termination_min_steps)
+        lateral_bypass.params["threshold"] = (
+            float(args.lateral_bypass_termination_threshold_m)
+            if bool(args.terminate_on_lateral_bypass)
+            else 0.0
+        )
+    if terminations is not None and hasattr(terminations, "offgate_depth_failure"):
+        offgate_depth = terminations.offgate_depth_failure
+        offgate_depth.params["target_cfg"].name = target_scene_name
+        offgate_depth.params["body_cfg"].name = "robot"
+        offgate_depth.params["body_cfg"].body_names = target_body
+        offgate_depth.params["target_position_offset"] = target_position_offset
+        offgate_depth.params["body_position_offset"] = body_position_offset
+        offgate_depth.params["body_orientation_offset"] = body_orientation_offset
+        offgate_depth.params["target_orientation_offset"] = target_orientation_offset
+        offgate_depth.params["episode_target_orientation_source"] = episode_target_orientation_source
+        offgate_depth.params["orientation_error_mode"] = orientation_error_mode
+        offgate_depth.params["orientation_axis_local"] = orientation_axis_local
+        offgate_depth.params["insertion_axis"] = int(args.target_reward_insertion_axis)
+        offgate_depth.params["activation_depth"] = (
+            float(args.offgate_depth_termination_activation_depth_m)
+            if bool(args.terminate_on_offgate_depth_progress)
+            else float("inf")
+        )
+        offgate_depth.params["lateral_threshold"] = float(args.offgate_depth_termination_lateral_threshold_m)
+        offgate_depth.params["orientation_threshold"] = float(
+            args.offgate_depth_termination_orientation_threshold_rad
+        )
+        offgate_depth.params["min_episode_steps"] = int(args.offgate_depth_termination_min_steps)
+    if terminations is not None and hasattr(terminations, "centered_lateral_sweep_failure"):
+        centered_sweep = terminations.centered_lateral_sweep_failure
+        centered_sweep.params["target_cfg"].name = target_scene_name
+        centered_sweep.params["body_cfg"].name = "robot"
+        centered_sweep.params["body_cfg"].body_names = target_body
+        centered_sweep.params["target_position_offset"] = target_position_offset
+        centered_sweep.params["body_position_offset"] = body_position_offset
+        centered_sweep.params["target_orientation_offset"] = target_orientation_offset
+        centered_sweep.params["episode_target_orientation_source"] = episode_target_orientation_source
+        centered_sweep.params["insertion_axis"] = int(args.target_reward_insertion_axis)
+        centered_sweep.params["center_threshold"] = float(args.centered_lateral_sweep_center_threshold_m)
+        centered_sweep.params["failure_threshold"] = (
+            float(args.centered_lateral_sweep_failure_threshold_m)
+            if bool(args.terminate_on_centered_lateral_sweep)
+            else 0.0
+        )
+        centered_sweep.params["min_episode_steps"] = int(args.centered_lateral_sweep_min_steps)
 
     if args.disable_command_pose_rewards:
         for name in (
@@ -2234,14 +5311,112 @@ def _configure_task_geometry_rewards(env_cfg: Any, args: argparse.Namespace) -> 
         ),
         "cheatcode_orientation_progress_scale": float(args.target_reward_cheatcode_orientation_progress_scale),
         "cheatcode_hover_depth": float(args.target_reward_cheatcode_hover_depth),
+        "cheatcode_near_gate_start": float(args.target_reward_cheatcode_near_gate_start),
+        "cheatcode_near_gate_scale": float(args.target_reward_cheatcode_near_gate_scale),
+        "cheatcode_near_misaligned_lateral_threshold": float(
+            args.target_reward_cheatcode_near_misaligned_lateral_threshold
+        ),
+        "cheatcode_near_misaligned_orientation_threshold": float(
+            args.target_reward_cheatcode_near_misaligned_orientation_threshold
+        ),
+        "cheatcode_near_misaligned_max": float(args.target_reward_cheatcode_near_misaligned_max),
+        "cheatcode_lateral_funnel_scale": float(args.target_reward_cheatcode_lateral_funnel_scale),
+        "cheatcode_lateral_funnel_max": float(args.target_reward_cheatcode_lateral_funnel_max),
+        "cheatcode_inside_alignment_max": float(args.target_reward_cheatcode_inside_alignment_max),
         "cheatcode_lateral_progress_weight": float(args.target_reward_cheatcode_lateral_progress_weight),
         "cheatcode_orientation_progress_weight": float(args.target_reward_cheatcode_orientation_progress_weight),
+        "stateful_phase_mode": bool(args.target_reward_stateful_phase_mode),
+        "stateful_lateral_enter_threshold": float(args.target_reward_stateful_lateral_enter_threshold),
+        "stateful_orientation_enter_threshold": float(args.target_reward_stateful_orientation_enter_threshold),
+        "stateful_axial_action_quiet_scale": float(args.target_reward_stateful_axial_action_quiet_scale),
+        "stateful_axial_lateral_action_penalty_weight": float(
+            args.target_reward_stateful_axial_lateral_action_penalty_weight
+        ),
+        "stateful_axial_lateral_action_scale": float(args.target_reward_stateful_axial_lateral_action_scale),
+        "stateful_axial_lateral_action_penalty_max": float(
+            args.target_reward_stateful_axial_lateral_action_penalty_max
+        ),
+        "stateful_axial_alignment_loss_penalty_weight": float(
+            args.target_reward_stateful_axial_alignment_loss_penalty_weight
+        ),
+        "stateful_axial_alignment_loss_lateral_scale": float(
+            args.target_reward_stateful_axial_alignment_loss_lateral_scale
+        ),
+        "stateful_axial_alignment_loss_orientation_scale": float(
+            args.target_reward_stateful_axial_alignment_loss_orientation_scale
+        ),
+        "stateful_axial_alignment_loss_penalty_max": float(
+            args.target_reward_stateful_axial_alignment_loss_penalty_max
+        ),
+        "stateful_axial_pure_action_weight": float(args.target_reward_stateful_axial_pure_action_weight),
+        "stateful_axial_impure_action_penalty_weight": float(
+            args.target_reward_stateful_axial_impure_action_penalty_weight
+        ),
+        "stateful_axial_impure_action_penalty_max": float(
+            args.target_reward_stateful_axial_impure_action_penalty_max
+        ),
+        "stateful_axial_rotation_action_penalty_weight": float(
+            args.target_reward_stateful_axial_rotation_action_penalty_weight
+        ),
+        "stateful_axial_rotation_action_scale": float(args.target_reward_stateful_axial_rotation_action_scale),
+        "stateful_axial_rotation_action_penalty_max": float(
+            args.target_reward_stateful_axial_rotation_action_penalty_max
+        ),
+        "stateful_axial_forward_action_penalty_weight": float(
+            args.target_reward_stateful_axial_forward_action_penalty_weight
+        ),
+        "stateful_axial_forward_action_scale": float(args.target_reward_stateful_axial_forward_action_scale),
+        "stateful_axial_forward_action_penalty_max": float(
+            args.target_reward_stateful_axial_forward_action_penalty_max
+        ),
+        "cheatcode_lateral_funnel_weight": float(args.target_reward_cheatcode_lateral_funnel_weight),
         "cheatcode_near_misaligned_weight": float(args.target_reward_cheatcode_near_misaligned_weight),
         "cheatcode_hover_weight": float(args.target_reward_cheatcode_hover_weight),
         "cheatcode_axial_progress_weight": float(args.target_reward_cheatcode_axial_progress_weight),
+        "cheatcode_lateral_alignment_action_weight": float(
+            args.target_reward_cheatcode_lateral_alignment_action_weight
+        ),
+        "cheatcode_lateral_alignment_action_scale": float(
+            args.target_reward_cheatcode_lateral_alignment_action_scale
+        ),
+        "cheatcode_lateral_alignment_require_axial_quiet": bool(
+            args.target_reward_cheatcode_lateral_alignment_require_axial_quiet
+        ),
+        "cheatcode_lateral_alignment_axial_quiet_scale": float(
+            args.target_reward_cheatcode_lateral_alignment_axial_quiet_scale
+        ),
+        "cheatcode_off_axis_axial_action_penalty_weight": float(
+            args.target_reward_cheatcode_off_axis_axial_action_penalty_weight
+        ),
+        "cheatcode_off_axis_axial_action_scale": float(
+            args.target_reward_cheatcode_off_axis_axial_action_scale
+        ),
+        "cheatcode_off_axis_axial_action_penalty_max": float(
+            args.target_reward_cheatcode_off_axis_axial_action_penalty_max
+        ),
+        "cheatcode_lateral_error_state_penalty_weight": float(
+            args.target_reward_cheatcode_lateral_error_state_penalty_weight
+        ),
+        "cheatcode_lateral_error_state_penalty_scale": float(
+            args.target_reward_cheatcode_lateral_error_state_penalty_scale
+        ),
+        "cheatcode_lateral_error_state_penalty_max": float(
+            args.target_reward_cheatcode_lateral_error_state_penalty_max
+        ),
+        "cheatcode_preinsert_aligned_axial_weight": float(
+            args.target_reward_cheatcode_preinsert_aligned_axial_weight
+        ),
+        "cheatcode_preinsert_aligned_axial_start": float(
+            args.target_reward_cheatcode_preinsert_aligned_axial_start
+        ),
+        "cheatcode_preinsert_aligned_axial_scale": float(
+            args.target_reward_cheatcode_preinsert_aligned_axial_scale
+        ),
+        "cheatcode_phase_gate_insertion_credit": bool(args.target_reward_cheatcode_phase_gate_insertion_credit),
         "cheatcode_corridor_weight": float(args.target_reward_cheatcode_corridor_weight),
         "cheatcode_inside_alignment_weight": float(args.target_reward_cheatcode_inside_alignment_weight),
         "cheatcode_retreat_weight": float(args.target_reward_cheatcode_retreat_weight),
+        "exp_gated_success_candidate_weight": float(args.target_reward_exp_gated_success_candidate_weight),
         "cheatcode_action_axis_gate": bool(args.target_reward_cheatcode_action_axis_gate),
         "cheatcode_action_axis_source": str(args.target_reward_cheatcode_action_axis_source),
         "cheatcode_action_lateral_sigma": float(args.target_reward_cheatcode_action_lateral_sigma),
@@ -2257,7 +5432,12 @@ def _configure_task_geometry_rewards(env_cfg: Any, args: argparse.Namespace) -> 
         "consistency_body": consistency_body,
         "consistency_axial_std": float(args.target_reward_consistency_axial_std),
         "consistency_lateral_sigma": float(args.target_reward_consistency_lateral_sigma),
+        "consistency_gate_mode": str(args.target_reward_consistency_gate_mode),
+        "cheatcode_module_depth_progress_scale": float(args.target_reward_cheatcode_module_depth_progress_scale),
+        "cheatcode_module_depth_progress_weight": float(args.target_reward_cheatcode_module_depth_progress_weight),
+        "cheatcode_module_depth_loss_weight": float(args.target_reward_cheatcode_module_depth_loss_weight),
         "orientation_error_mode": orientation_error_mode,
+        "episode_target_orientation_source": str(args.episode_target_orientation_source),
         "orientation_axis_local": [float(v) for v in orientation_axis_local],
         "success_consistency_axial_threshold": float(args.target_success_consistency_axial_threshold),
         "success_consistency_lateral_threshold": float(args.target_success_consistency_lateral_threshold),
@@ -2279,6 +5459,33 @@ def _configure_task_geometry_rewards(env_cfg: Any, args: argparse.Namespace) -> 
         "success_termination_threshold": (
             float(args.target_success_termination_threshold) if bool(args.terminate_on_target_success) else 0.0
         ),
+        "terminate_on_lateral_bypass": bool(args.terminate_on_lateral_bypass),
+        "lateral_bypass_termination_threshold_m": (
+            float(args.lateral_bypass_termination_threshold_m) if bool(args.terminate_on_lateral_bypass) else 0.0
+        ),
+        "lateral_bypass_termination_activation_depth_m": float(
+            args.lateral_bypass_termination_activation_depth_m
+        ),
+        "lateral_bypass_termination_min_steps": int(args.lateral_bypass_termination_min_steps),
+        "terminate_on_offgate_depth_progress": bool(args.terminate_on_offgate_depth_progress),
+        "offgate_depth_termination_activation_depth_m": float(
+            args.offgate_depth_termination_activation_depth_m
+        ),
+        "offgate_depth_termination_lateral_threshold_m": float(
+            args.offgate_depth_termination_lateral_threshold_m
+        ),
+        "offgate_depth_termination_orientation_threshold_rad": float(
+            args.offgate_depth_termination_orientation_threshold_rad
+        ),
+        "offgate_depth_termination_min_steps": int(args.offgate_depth_termination_min_steps),
+        "terminate_on_centered_lateral_sweep": bool(args.terminate_on_centered_lateral_sweep),
+        "centered_lateral_sweep_center_threshold_m": float(args.centered_lateral_sweep_center_threshold_m),
+        "centered_lateral_sweep_failure_threshold_m": (
+            float(args.centered_lateral_sweep_failure_threshold_m)
+            if bool(args.terminate_on_centered_lateral_sweep)
+            else 0.0
+        ),
+        "centered_lateral_sweep_min_steps": int(args.centered_lateral_sweep_min_steps),
         "success_axial_threshold": success_axial_threshold,
         "success_lateral_threshold": success_lateral_threshold,
         "success_orientation_threshold": (
@@ -2300,7 +5507,7 @@ def _configure_near_gate_reset(env_cfg: Any, args: argparse.Namespace) -> dict[s
     if params is None:
         return {"configured": False, "reason": "missing reset_robot_tcp_to_episode_start event"}
     before = dict(params)
-    if int(getattr(args, "near_gate_reset_max_iterations", 0)) > 0:
+    if int(getattr(args, "near_gate_reset_max_iterations", -1)) >= 0:
         params["max_iterations"] = int(args.near_gate_reset_max_iterations)
     if float(getattr(args, "near_gate_reset_position_tolerance", 0.0)) > 0.0:
         params["position_tolerance"] = float(args.near_gate_reset_position_tolerance)
@@ -2315,6 +5522,117 @@ class ReplayBuffer:
 
     def append(self, transition: dict[str, Any]) -> None:
         self.data.append({key: self._detach(value) for key, value in transition.items()})
+
+    def extend(self, transitions: list[dict[str, Any]]) -> int:
+        before = len(self.data)
+        for transition in transitions:
+            self.append(transition)
+        return len(self.data) - before
+
+    def _finite_metadata_value(self, value: Any, default: float = float("nan")) -> float:
+        if isinstance(value, list):
+            value = value[0] if value else default
+        try:
+            out = float(value)
+        except (TypeError, ValueError):
+            return default
+        return out if math.isfinite(out) else default
+
+    def _transition_matches_save_filter(self, transition: dict[str, Any], filter_name: str) -> bool:
+        if filter_name == "all":
+            return True
+        metadata = transition.get("metadata") or {}
+        geom = metadata.get("post_step_insertion_geometry") or {}
+        all_body = metadata.get("post_step_all_body_insertion_geometry") or {}
+        module = all_body.get("sfp_module_link") if isinstance(all_body, dict) else {}
+        module = module if isinstance(module, dict) else {}
+        env_index = int(metadata.get("env_index", 0) or 0)
+
+        def by_env(data: dict[str, Any], key: str) -> float:
+            values = data.get(f"{key}_by_env") if isinstance(data, dict) else None
+            if isinstance(values, list) and 0 <= env_index < len(values):
+                return self._finite_metadata_value(values[env_index])
+            if env_index == 0 and isinstance(data, dict):
+                return self._finite_metadata_value(data.get(f"{key}_env0", data.get(f"{key}_mean")))
+            if isinstance(data, dict):
+                return self._finite_metadata_value(data.get(f"{key}_mean"))
+            return float("nan")
+
+        s = by_env(geom, "signed_depth_m")
+        r = by_env(geom, "lateral_error_m")
+        theta = by_env(geom, "orientation_error_rad")
+        module_r = by_env(module, "lateral_error_m")
+        strict_value = geom.get("strict_success_by_env")
+        if isinstance(strict_value, list) and 0 <= env_index < len(strict_value):
+            strict = bool(strict_value[env_index])
+        elif isinstance(strict_value, list) and strict_value:
+            strict = bool(strict_value[0])
+        else:
+            strict = bool(strict_value)
+        if filter_name == "strict_success":
+            return strict
+        centered = r <= 0.0007 and module_r <= 0.0015
+        if filter_name == "strict_near_success":
+            return centered and theta <= 0.055 and s > -0.003
+        if filter_name == "positive_centered":
+            return centered and theta <= 0.060 and s > 0.0
+        if filter_name == "centered_high_theta_or_positive":
+            return centered and theta <= 0.070 and (theta > 0.030 or s > 0.0)
+        if filter_name == "deep_contact":
+            return s >= 0.044 and r <= 0.0025 and theta <= 0.070
+        raise ValueError(f"Unsupported replay save filter: {filter_name!r}")
+
+    def _filtered_transitions(self, filter_name: str) -> list[dict[str, Any]]:
+        return [item for item in self.data if self._transition_matches_save_filter(item, filter_name)]
+
+    def state_dict(self, *, filter_name: str = "all") -> dict[str, Any]:
+        transitions = self._filtered_transitions(filter_name)
+        return {
+            "capacity": int(self.data.maxlen or 0),
+            "size": len(self.data),
+            "filter": filter_name,
+            "saved_size": len(transitions),
+            "transitions": transitions,
+        }
+
+    def save(self, path: Path, *, filter_name: str = "all") -> dict[str, Any]:
+        path.parent.mkdir(parents=True, exist_ok=True)
+        tmp = path.with_suffix(path.suffix + f".tmp.{os.getpid()}")
+        payload = self.state_dict(filter_name=filter_name)
+        torch.save(payload, tmp)
+        os.replace(tmp, path)
+        return {
+            "path": str(path),
+            "size": len(self.data),
+            "saved_size": int(payload["saved_size"]),
+            "capacity": int(self.data.maxlen or 0),
+            "filter": filter_name,
+        }
+
+    def load(self, path: Path, *, max_transitions: int = 0) -> dict[str, Any]:
+        payload = torch.load(path, map_location="cpu")
+        if isinstance(payload, dict) and isinstance(payload.get("transitions"), list):
+            transitions = payload["transitions"]
+            source_size = int(payload.get("size", len(transitions)))
+            source_capacity = int(payload.get("capacity", 0))
+        elif isinstance(payload, list):
+            transitions = payload
+            source_size = len(transitions)
+            source_capacity = 0
+        else:
+            raise ValueError(f"Unsupported replay payload in {path}: {type(payload).__name__}")
+        if int(max_transitions) > 0:
+            transitions = transitions[-int(max_transitions) :]
+        loaded = self.extend(transitions)
+        return {
+            "path": str(path),
+            "source_size": source_size,
+            "source_capacity": source_capacity,
+            "requested_max_transitions": int(max_transitions),
+            "loaded": loaded,
+            "size_after_load": len(self.data),
+            "capacity": int(self.data.maxlen or 0),
+        }
 
     def _detach(self, value: Any) -> Any:
         if isinstance(value, torch.Tensor):
@@ -2338,6 +5656,14 @@ class ReplayBuffer:
         }
         if all("guide_action" in item for item in items):
             batch["guide_action"] = torch.stack([item["guide_action"] for item in items]).to(device)
+        if all("guide_weight" in item for item in items):
+            batch["guide_weight"] = torch.stack([item["guide_weight"] for item in items]).to(device)
+        if all("axial_purity_gate" in item and "axial_purity_axis" in item for item in items):
+            batch["axial_purity_gate"] = torch.stack([item["axial_purity_gate"] for item in items]).to(device)
+            batch["axial_purity_axis"] = torch.stack([item["axial_purity_axis"] for item in items]).to(device)
+        if all("lateral_alignment_gate" in item and "lateral_alignment_axis" in item for item in items):
+            batch["lateral_alignment_gate"] = torch.stack([item["lateral_alignment_gate"] for item in items]).to(device)
+            batch["lateral_alignment_axis"] = torch.stack([item["lateral_alignment_axis"] for item in items]).to(device)
         return batch
 
     def diagnostic_snapshot(self) -> dict[str, Any]:
@@ -2388,13 +5714,36 @@ class ReplayBuffer:
         return {"size": len(self.data), "samples": rows}
 
     def _stack_obs(self, obs_items: list[dict[str, Any]], device: torch.device) -> dict[str, Any]:
-        return {
+        out = {
             "state": torch.stack([item["state"] for item in obs_items]).to(device),
             "images": {
                 key: _unpack_replay_images([item["images"][key] for item in obs_items], device)
                 for key in CAMERA_KEYS
             },
         }
+        if all("critic_state" in item for item in obs_items):
+            critic_states = [item["critic_state"] for item in obs_items]
+            max_critic_state_dim = max(int(state.shape[-1]) for state in critic_states)
+            out["critic_state"] = torch.stack(
+                [
+                    state
+                    if int(state.shape[-1]) == max_critic_state_dim
+                    else F.pad(state, (0, max_critic_state_dim - int(state.shape[-1])))
+                    for state in critic_states
+                ]
+            ).to(device)
+        if all("actor_state" in item for item in obs_items):
+            actor_states = [item["actor_state"] for item in obs_items]
+            max_actor_state_dim = max(int(state.shape[-1]) for state in actor_states)
+            out["actor_state"] = torch.stack(
+                [
+                    state
+                    if int(state.shape[-1]) == max_actor_state_dim
+                    else F.pad(state, (0, max_actor_state_dim - int(state.shape[-1])))
+                    for state in actor_states
+                ]
+            ).to(device)
+        return out
 
 
 class ExpertActionPrior:
@@ -2417,19 +5766,31 @@ class ExpertActionPrior:
             action_horizon,
             max_samples=max_samples,
         )
-        if obs_all.shape[1] != state_dim:
-            raise ValueError(
-                f"Expert dataset state dim {obs_all.shape[1]} does not match online state dim {state_dim}"
-            )
+        expert_state_dim = int(obs_all.shape[1])
         if action_all.shape[1] != action_dim:
             raise ValueError(
                 f"Expert dataset action dim {action_all.shape[1]} does not match online action dim {action_dim}"
             )
         count = int(schema.get("num_frames", obs_all.shape[0]))
         indices = np.arange(obs_all.shape[0], dtype=np.int64)
-        selected_indices = [int(i) for i in state_indices if 0 <= int(i) < state_dim]
+        requested_indices = [int(i) for i in state_indices]
+        selected_indices = [i for i in requested_indices if 0 <= i < state_dim and i < expert_state_dim]
         if not selected_indices:
-            raise ValueError("expert BC state index set is empty")
+            raise ValueError(
+                "expert BC state index set is empty after intersecting requested indices "
+                f"with online state dim {state_dim} and expert dataset state dim {expert_state_dim}"
+            )
+        dropped_indices = [i for i in requested_indices if i not in selected_indices]
+        schema = dict(schema)
+        schema.update(
+            {
+                "online_state_dim": int(state_dim),
+                "expert_state_dim": int(expert_state_dim),
+                "selected_state_indices": selected_indices,
+                "dropped_state_indices": dropped_indices,
+                "state_dim_match_mode": "exact" if expert_state_dim == int(state_dim) else "shared_selected_indices",
+            }
+        )
         obs = obs_all[indices][:, selected_indices].astype(np.float32)
         mean = obs.mean(axis=0, keepdims=True)
         std = obs.std(axis=0, keepdims=True) + 1.0e-6
@@ -2556,6 +5917,30 @@ def _raw_camera_images(env, *, device: torch.device) -> dict[str, torch.Tensor]:
     }
 
 
+def _camera_rgb_uint8(env, sensor_name: str) -> torch.Tensor:
+    sensor = env.unwrapped.scene.sensors.get(sensor_name)
+    if sensor is None:
+        raise RuntimeError(f"Camera sensor {sensor_name!r} is not present in the scene")
+    output = sensor.data.output
+    if "rgb" not in output:
+        raise RuntimeError(f"Camera sensor {sensor_name!r} does not expose rgb output keys: {sorted(output)}")
+    image = output["rgb"].detach()
+    if image.ndim != 4:
+        raise RuntimeError(f"Camera sensor {sensor_name!r} rgb output has unexpected shape: {tuple(image.shape)}")
+    if image.shape[-1] in (3, 4):
+        image = image[..., :3]
+    elif image.shape[1] in (3, 4):
+        image = image[:, :3].permute(0, 2, 3, 1).contiguous()
+    else:
+        raise RuntimeError(f"Camera sensor {sensor_name!r} rgb output has unexpected shape: {tuple(image.shape)}")
+    if image.dtype == torch.uint8:
+        return image.cpu()
+    image_f = image.float()
+    if image_f.numel() and float(image_f.max().detach().cpu()) <= 2.0:
+        image_f = image_f * 255.0
+    return image_f.clamp(0.0, 255.0).to(torch.uint8).cpu()
+
+
 def _tensor_stats(value: torch.Tensor) -> dict[str, Any]:
     detached = value.detach()
     finite = torch.isfinite(detached)
@@ -2591,6 +5976,11 @@ def _sample_vector(value: torch.Tensor, *, row: int = 0, limit: int = 12) -> lis
 
 def _tensor_1d_list(value: torch.Tensor) -> list[float]:
     return [float(v) for v in value.detach().reshape(-1).cpu().tolist()]
+
+
+def _tensor_2d_list(value: torch.Tensor) -> list[list[float]]:
+    rows = value.detach().reshape(value.shape[0], -1).cpu().tolist()
+    return [[float(v) for v in row] for row in rows]
 
 
 def _tensor_bool_list(value: torch.Tensor) -> list[bool]:
@@ -2764,6 +6154,819 @@ def _jsonable(value: Any) -> Any:
     if isinstance(value, (str, int, float, bool)) or value is None:
         return value
     return str(value)
+
+
+def _disable_matching_collision_prims(run_dir: Path) -> dict[str, Any]:
+    patterns = [str(pattern) for pattern in (args_cli.disable_collision_prim_regex or []) if str(pattern).strip()]
+    if not patterns:
+        return {"enabled": False, "patterns": [], "matched": [], "matched_count": 0}
+    try:
+        compiled = [re.compile(pattern) for pattern in patterns]
+    except re.error as exc:
+        raise ValueError(f"invalid --disable_collision_prim_regex: {exc}") from exc
+    stage = omni.usd.get_context().get_stage()
+    if stage is None:
+        raise RuntimeError("USD stage unavailable for collision toggle")
+    matched: list[dict[str, Any]] = []
+    for prim in stage.Traverse():
+        path = str(prim.GetPath())
+        if not any(pattern.search(path) for pattern in compiled):
+            continue
+        collision_api = UsdPhysics.CollisionAPI.Apply(prim)
+        attr = collision_api.GetCollisionEnabledAttr()
+        previous = attr.Get() if attr and attr.HasValue() else None
+        if attr:
+            attr.Set(False)
+        else:
+            collision_api.CreateCollisionEnabledAttr(False)
+        matched.append({"path": path, "type": prim.GetTypeName(), "previous_collision_enabled": previous})
+    report = {"enabled": True, "patterns": patterns, "matched": matched, "matched_count": len(matched)}
+    (run_dir / "collision_toggle_report.json").write_text(
+        json.dumps(_jsonable(report), indent=2, sort_keys=True) + "\n",
+        encoding="utf-8",
+    )
+    return report
+
+
+def _tune_matching_collision_contact_offsets(run_dir: Path) -> dict[str, Any]:
+    patterns = [str(pattern) for pattern in (args_cli.collision_contact_tune_prim_regex or []) if str(pattern).strip()]
+    contact_offset = float(args_cli.collision_contact_offset_m)
+    rest_offset = float(args_cli.collision_rest_offset_m)
+    if not patterns or (math.isnan(contact_offset) and math.isnan(rest_offset)):
+        return {"enabled": False, "patterns": patterns, "matched": [], "matched_count": 0}
+    try:
+        compiled = [re.compile(pattern) for pattern in patterns]
+    except re.error as exc:
+        raise ValueError(f"invalid --collision_contact_tune_prim_regex: {exc}") from exc
+    stage = omni.usd.get_context().get_stage()
+    if stage is None:
+        raise RuntimeError("USD stage unavailable for collision contact tuning")
+    matched: list[dict[str, Any]] = []
+    for prim in stage.Traverse():
+        path = str(prim.GetPath())
+        if not any(pattern.search(path) for pattern in compiled):
+            continue
+        if not prim.HasAPI(UsdPhysics.CollisionAPI):
+            continue
+        physx_api = PhysxSchema.PhysxCollisionAPI.Apply(prim)
+        contact_attr = physx_api.GetContactOffsetAttr()
+        rest_attr = physx_api.GetRestOffsetAttr()
+        previous_contact = contact_attr.Get() if contact_attr and contact_attr.HasValue() else None
+        previous_rest = rest_attr.Get() if rest_attr and rest_attr.HasValue() else None
+        if not math.isnan(contact_offset):
+            if contact_attr:
+                contact_attr.Set(contact_offset)
+            else:
+                physx_api.CreateContactOffsetAttr(contact_offset)
+        if not math.isnan(rest_offset):
+            if rest_attr:
+                rest_attr.Set(rest_offset)
+            else:
+                physx_api.CreateRestOffsetAttr(rest_offset)
+        matched.append(
+            {
+                "path": path,
+                "type": prim.GetTypeName(),
+                "previous_contact_offset_m": previous_contact,
+                "previous_rest_offset_m": previous_rest,
+                "new_contact_offset_m": None if math.isnan(contact_offset) else contact_offset,
+                "new_rest_offset_m": None if math.isnan(rest_offset) else rest_offset,
+            }
+        )
+    report = {
+        "enabled": True,
+        "patterns": patterns,
+        "contact_offset_m": None if math.isnan(contact_offset) else contact_offset,
+        "rest_offset_m": None if math.isnan(rest_offset) else rest_offset,
+        "matched": matched,
+        "matched_count": len(matched),
+    }
+    (run_dir / "collision_contact_tuning_report.json").write_text(
+        json.dumps(_jsonable(report), indent=2, sort_keys=True) + "\n",
+        encoding="utf-8",
+    )
+    return report
+
+
+def _tune_matching_collision_materials(run_dir: Path) -> dict[str, Any]:
+    patterns = [str(pattern) for pattern in (args_cli.collision_material_tune_prim_regex or []) if str(pattern).strip()]
+    static_friction = float(args_cli.collision_static_friction)
+    dynamic_friction = float(args_cli.collision_dynamic_friction)
+    restitution = float(args_cli.collision_restitution)
+    if not patterns or (math.isnan(static_friction) and math.isnan(dynamic_friction) and math.isnan(restitution)):
+        return {"enabled": False, "patterns": patterns, "matched": [], "matched_count": 0}
+    try:
+        compiled = [re.compile(pattern) for pattern in patterns]
+    except re.error as exc:
+        raise ValueError(f"invalid --collision_material_tune_prim_regex: {exc}") from exc
+    stage = omni.usd.get_context().get_stage()
+    if stage is None:
+        raise RuntimeError("USD stage unavailable for collision material tuning")
+
+    material_path = "/World/aic_runtime_collision_material"
+    material = UsdShade.Material.Define(stage, material_path)
+    material_api = UsdPhysics.MaterialAPI.Apply(material.GetPrim())
+    if not math.isnan(static_friction):
+        material_api.CreateStaticFrictionAttr(static_friction).Set(static_friction)
+    if not math.isnan(dynamic_friction):
+        material_api.CreateDynamicFrictionAttr(dynamic_friction).Set(dynamic_friction)
+    if not math.isnan(restitution):
+        material_api.CreateRestitutionAttr(restitution).Set(restitution)
+
+    matched: list[dict[str, Any]] = []
+    for prim in stage.Traverse():
+        path = str(prim.GetPath())
+        if not any(pattern.search(path) for pattern in compiled):
+            continue
+        if not prim.HasAPI(UsdPhysics.CollisionAPI):
+            continue
+        binding_api = UsdShade.MaterialBindingAPI.Apply(prim)
+        previous_binding = None
+        try:
+            previous_bound = binding_api.ComputeBoundMaterial()[0]
+            if previous_bound:
+                previous_binding = str(previous_bound.GetPath())
+        except Exception:
+            previous_binding = None
+        binding_api.Bind(material)
+        matched.append(
+            {
+                "path": path,
+                "type": prim.GetTypeName(),
+                "previous_material": previous_binding,
+                "new_material": material_path,
+            }
+        )
+
+    report = {
+        "enabled": True,
+        "patterns": patterns,
+        "static_friction": None if math.isnan(static_friction) else static_friction,
+        "dynamic_friction": None if math.isnan(dynamic_friction) else dynamic_friction,
+        "restitution": None if math.isnan(restitution) else restitution,
+        "matched": matched,
+        "matched_count": len(matched),
+    }
+    (run_dir / "collision_material_tuning_report.json").write_text(
+        json.dumps(_jsonable(report), indent=2, sort_keys=True) + "\n",
+        encoding="utf-8",
+    )
+    return report
+
+
+_SFP_MODULE_ALL_SDF_BOX_COLLIDERS: tuple[dict[str, Any], ...] = (
+    {
+        "name": "port_collider_box",
+        "translation_m": (-0.00571, 0.022559, -0.00275),
+        "rotation_rpy_rad": (1.570796, -0.0, 0.0),
+        "size_m": (0.00142, 0.00075, 0.020375),
+    },
+    {
+        "name": "port_collider_box_001",
+        "translation_m": (-0.0, 0.022559, -0.00275),
+        "rotation_rpy_rad": (1.570796, -0.0, 0.0),
+        "size_m": (0.0025, 0.00075, 0.020375),
+    },
+    {
+        "name": "port_collider_box_002",
+        "translation_m": (0.0, 0.02732, -0.00447),
+        "rotation_rpy_rad": (1.570796, -0.0, 0.0),
+        "size_m": (0.01284, 0.00019, 0.007302),
+    },
+    {
+        "name": "port_collider_box_003",
+        "translation_m": (0.00596, 0.022559, -0.000087),
+        "rotation_rpy_rad": (1.570796, -0.0, 0.0),
+        "size_m": (0.00092, 0.008279, 0.020375),
+    },
+    {
+        "name": "port_collider_box_004",
+        "translation_m": (0.0, 0.022559, 0.003049),
+        "rotation_rpy_rad": (1.570796, -0.0, 0.0),
+        "size_m": (0.01284, 0.001348, 0.020375),
+    },
+    {
+        "name": "port_collider_box_005",
+        "translation_m": (-0.00596, 0.022559, -0.000087),
+        "rotation_rpy_rad": (1.570796, -0.0, 0.0),
+        "size_m": (0.00092, 0.008279, 0.020375),
+    },
+    {
+        "name": "port_collider_box_006",
+        "translation_m": (0.00571, 0.022559, -0.00275),
+        "rotation_rpy_rad": (1.570796, -0.0, 0.0),
+        "size_m": (0.00142, 0.00075, 0.020375),
+    },
+    {
+        "name": "port_collider_box_007",
+        "translation_m": (0.0, 0.022559, -0.000239),
+        "rotation_rpy_rad": (1.570796, -0.0, 0.0),
+        "size_m": (0.0015, 0.007747, 0.020375),
+    },
+    {
+        "name": "port_collider_box_008",
+        "translation_m": (-0.00571, 0.018813, -0.003546),
+        "rotation_rpy_rad": (1.570796, -0.0, 0.0),
+        "size_m": (0.00142, 0.001006, 0.012883),
+    },
+    {
+        "name": "port_collider_box_009",
+        "translation_m": (0.00571, 0.018813, -0.003546),
+        "rotation_rpy_rad": (1.570796, -0.0, 0.0),
+        "size_m": (0.00142, 0.001006, 0.012883),
+    },
+    {
+        "name": "latch_collider_box",
+        "translation_m": (0.0, 0.029531, -0.005175),
+        "rotation_rpy_rad": (1.570796, -0.0, 0.0),
+        "size_m": (0.01384, 0.001601, 0.003426),
+    },
+    {
+        "name": "latch_collider_box_001",
+        "translation_m": (0.006405, 0.030896, 0.000207),
+        "rotation_rpy_rad": (1.570796, -0.0, 0.0),
+        "size_m": (0.001029, 0.009544, 0.0037),
+    },
+    {
+        "name": "latch_collider_box_002",
+        "translation_m": (0.0, 0.030896, 0.004716),
+        "rotation_rpy_rad": (1.570796, -0.0, 0.0),
+        "size_m": (0.01384, 0.002383, 0.0037),
+    },
+    {
+        "name": "latch_collider_box_003",
+        "translation_m": (-0.006437, 0.030896, 0.000207),
+        "rotation_rpy_rad": (1.570796, -0.0, 0.0),
+        "size_m": (0.000965, 0.009544, 0.0037),
+    },
+    {
+        "name": "head_collider_box",
+        "translation_m": (0.006358, 0.026353, 0.000375),
+        "rotation_rpy_rad": (1.570796, -0.0, 0.0),
+        "size_m": (0.001284, 0.01025, 0.0054),
+    },
+    {
+        "name": "head_collider_box_001",
+        "translation_m": (-0.006358, 0.026353, 0.000765),
+        "rotation_rpy_rad": (1.570796, -0.0, 0.0),
+        "size_m": (0.001284, 0.01097, 0.0054),
+    },
+    {
+        "name": "head_collider_box_002",
+        "translation_m": (0.0, 0.026353, 0.005128),
+        "rotation_rpy_rad": (1.570796, -0.0, 0.0),
+        "size_m": (0.014, 0.002245, 0.0054),
+    },
+    {
+        "name": "head_collider_box_003",
+        "translation_m": (0.0, 0.026353, -0.004563),
+        "rotation_rpy_rad": (1.570796, -0.0, 0.0),
+        "size_m": (0.014, 0.000375, 0.0054),
+    },
+    {
+        "name": "body_collider_box",
+        "translation_m": (0.0, 0.001, 0.00383),
+        "rotation_rpy_rad": (0.0, 0.0, 0.0),
+        "size_m": (0.01375, 0.0473, 0.000789),
+    },
+    {
+        "name": "body_collider_box_001",
+        "translation_m": (0.0, 0.001, -0.004138),
+        "rotation_rpy_rad": (0.0, 0.0, 0.0),
+        "size_m": (0.01375, 0.0473, 0.000178),
+    },
+    {
+        "name": "body_collider_box_002",
+        "translation_m": (-0.006588, 0.001, 0.0),
+        "rotation_rpy_rad": (0.0, 0.0, 0.0),
+        "size_m": (0.000574, 0.0473, 0.00845),
+    },
+    {
+        "name": "body_collider_box_003",
+        "translation_m": (0.00647, 0.001, 0.0),
+        "rotation_rpy_rad": (0.0, 0.0, 0.0),
+        "size_m": (0.000811, 0.0473, 0.00845),
+    },
+    {
+        "name": "port_collider_box_010",
+        "translation_m": (0.0, 0.01229, 0.000119),
+        "rotation_rpy_rad": (1.570796, -0.0, 0.0),
+        "size_m": (0.01284, 0.007763, 0.011729),
+    },
+    {
+        "name": "port_collider_box002_collider_box",
+        "translation_m": (0.0, 0.024453, -0.004254),
+        "rotation_rpy_rad": (1.570796, -0.0, 0.0),
+        "size_m": (0.01284, 0.000409, 0.001601),
+    },
+    {
+        "name": "port_collider_box_011",
+        "translation_m": (0.0, 0.018813, -0.003546),
+        "rotation_rpy_rad": (1.570796, -0.0, 0.0),
+        "size_m": (0.0025, 0.001006, 0.012883),
+    },
+)
+
+_SFP_BODY_SDF_BOX_COLLIDERS: tuple[dict[str, Any], ...] = tuple(
+    box for box in _SFP_MODULE_ALL_SDF_BOX_COLLIDERS if str(box["name"]).startswith("body_collider_box")
+)
+
+_SFP_SC_CABLE_REMOVED_SFP_MODULE_BOXES: frozenset[str] = frozenset(
+    {
+        "port_collider_box",
+        "port_collider_box_001",
+        "port_collider_box_002",
+        "port_collider_box_003",
+        "port_collider_box_004",
+        "port_collider_box_005",
+        "port_collider_box_006",
+        "port_collider_box_007",
+        "latch_collider_box",
+        "latch_collider_box_001",
+        "latch_collider_box_002",
+        "latch_collider_box_003",
+        "head_collider_box",
+        "head_collider_box_001",
+        "head_collider_box_002",
+        "head_collider_box_003",
+    }
+)
+
+_SFP_MODULE_ACTIVE_SDF_BOX_COLLIDERS: tuple[dict[str, Any], ...] = tuple(
+    box for box in _SFP_MODULE_ALL_SDF_BOX_COLLIDERS if str(box["name"]) not in _SFP_SC_CABLE_REMOVED_SFP_MODULE_BOXES
+)
+
+
+def _replace_sfp_body_sdf_collision_with_sdf_boxes(run_dir: Path) -> dict[str, Any]:
+    full_replacement = bool(args_cli.replace_sfp_module_sdf_collision_with_all_sdf_boxes)
+    active_replacement = bool(args_cli.replace_sfp_module_sdf_collision_with_active_sdf_boxes)
+    body_replacement = bool(args_cli.replace_sfp_body_sdf_collision_with_sdf_boxes)
+    shrunk_body_replacement = bool(args_cli.replace_sfp_body_sdf_collision_with_shrunk_sdf_boxes)
+    if not body_replacement and not shrunk_body_replacement and not full_replacement and not active_replacement:
+        return {"enabled": False, "matched": [], "matched_count": 0, "created": [], "created_count": 0}
+    if sum(bool(v) for v in (body_replacement, shrunk_body_replacement, full_replacement, active_replacement)) > 1:
+        raise ValueError(
+            "SFP collision replacement modes are mutually exclusive: choose only one of "
+            "--replace_sfp_body_sdf_collision_with_sdf_boxes, "
+            "--replace_sfp_body_sdf_collision_with_shrunk_sdf_boxes, "
+            "--replace_sfp_module_sdf_collision_with_all_sdf_boxes, or "
+            "--replace_sfp_module_sdf_collision_with_active_sdf_boxes"
+        )
+    if full_replacement:
+        boxes = _SFP_MODULE_ALL_SDF_BOX_COLLIDERS
+        mode = "all_sfp_module_link_boxes"
+        source = "aic_assets/models/SFP Module/model.sdf all sfp_module_link box collisions"
+    elif active_replacement:
+        boxes = _SFP_MODULE_ACTIVE_SDF_BOX_COLLIDERS
+        mode = "gazebo_active_sfp_module_link_boxes"
+        source = "aic_assets/models/sfp_sc_cable/model.sdf active sfp_module_link box collisions"
+    else:
+        boxes = list(_SFP_BODY_SDF_BOX_COLLIDERS)
+        if shrunk_body_replacement:
+            margins = [max(float(v), 0.0) for v in args_cli.sfp_shrunk_box_margin_m]
+            shrunk_boxes: list[dict[str, Any]] = []
+            for box in boxes:
+                size = [float(v) for v in box["size_m"]]
+                shrunk = dict(box)
+                shrunk["name"] = f"{box['name']}_shrunk"
+                shrunk["size_m"] = [max(size[i] - 2.0 * margins[i], 1.0e-6) for i in range(3)]
+                shrunk["original_size_m"] = size
+                shrunk["shrink_margin_m"] = margins
+                shrunk_boxes.append(shrunk)
+            boxes = shrunk_boxes
+            mode = "shrunk_body_boxes"
+        else:
+            mode = "body_boxes_only"
+        source = "aic_assets/models/SFP Module/model.sdf body_collider_box*"
+    stage = omni.usd.get_context().get_stage()
+    if stage is None:
+        raise RuntimeError("USD stage unavailable for SFP collision replacement")
+    matched: list[dict[str, Any]] = []
+    created: list[dict[str, Any]] = []
+    for prim in list(stage.Traverse()):
+        path = str(prim.GetPath())
+        if not path.endswith("/body_sdf_collision") or "/sfp_module/sfp_module_link/collisions/" not in path:
+            continue
+        collision_api = UsdPhysics.CollisionAPI.Apply(prim)
+        attr = collision_api.GetCollisionEnabledAttr()
+        previous = attr.Get() if attr and attr.HasValue() else None
+        if attr:
+            attr.Set(False)
+        else:
+            collision_api.CreateCollisionEnabledAttr(False)
+        matched.append({"path": path, "type": prim.GetTypeName(), "previous_collision_enabled": previous})
+
+        parent_path = str(prim.GetParent().GetPath())
+        for box in boxes:
+            box_path = f"{parent_path}/runtime_sdf_{box['name']}"
+            cube = UsdGeom.Cube.Define(stage, box_path)
+            cube.CreateSizeAttr(1.0)
+            xform = UsdGeom.Xformable(cube.GetPrim())
+            xform.ClearXformOpOrder()
+            tx, ty, tz = box["translation_m"]
+            rx, ry, rz = box["rotation_rpy_rad"]
+            sx, sy, sz = box["size_m"]
+            xform.AddTranslateOp().Set(Gf.Vec3d(float(tx), float(ty), float(tz)))
+            xform.AddRotateXYZOp().Set(
+                Gf.Vec3f(float(math.degrees(rx)), float(math.degrees(ry)), float(math.degrees(rz)))
+            )
+            xform.AddScaleOp().Set(Gf.Vec3f(float(sx), float(sy), float(sz)))
+            box_collision_api = UsdPhysics.CollisionAPI.Apply(cube.GetPrim())
+            box_collision_api.CreateCollisionEnabledAttr(True)
+            created.append(
+                {
+                    "path": box_path,
+                    "source_sdf_collision": box["name"],
+                    "translation_m": list(box["translation_m"]),
+                    "rotation_rpy_rad": list(box["rotation_rpy_rad"]),
+                    "size_m": list(box["size_m"]),
+                }
+            )
+    report = {
+        "enabled": True,
+        "mode": mode,
+        "matched": matched,
+        "matched_count": len(matched),
+        "created": created,
+        "created_count": len(created),
+        "source": source,
+    }
+    (run_dir / "sfp_body_collision_replacement_report.json").write_text(
+        json.dumps(_jsonable(report), indent=2, sort_keys=True) + "\n",
+        encoding="utf-8",
+    )
+    return report
+
+
+def _matrix_rows(matrix: Gf.Matrix4d) -> list[list[float]]:
+    return [[float(matrix[i][j]) for j in range(4)] for i in range(4)]
+
+
+def _replace_nic_cage_p0_with_aligned_cubes(run_dir: Path) -> dict[str, Any]:
+    if not bool(args_cli.replace_nic_cage_p0_with_aligned_cubes):
+        return {"enabled": False, "matched": [], "matched_count": 0, "created": [], "created_count": 0}
+    stage = omni.usd.get_context().get_stage()
+    if stage is None:
+        raise RuntimeError("USD stage unavailable for NIC cage collision replacement")
+    matched: list[dict[str, Any]] = []
+    created: list[dict[str, Any]] = []
+    aligned_sources: list[dict[str, Any]] = []
+    for prim in list(stage.Traverse()):
+        path = str(prim.GetPath())
+        if "/nic_card/collisions/cage_p0_" not in path:
+            continue
+        xform = UsdGeom.Xformable(prim)
+        local_matrix = xform.GetLocalTransformation() if xform else Gf.Matrix4d(1.0)
+        collision_api = UsdPhysics.CollisionAPI.Apply(prim)
+        attr = collision_api.GetCollisionEnabledAttr()
+        previous = attr.Get() if attr and attr.HasValue() else None
+        if attr:
+            attr.Set(False)
+        else:
+            collision_api.CreateCollisionEnabledAttr(False)
+        matched.append({"path": path, "type": prim.GetTypeName(), "previous_collision_enabled": previous})
+        aligned_sources.append(
+            {
+                "name": prim.GetName(),
+                "parent_path": str(prim.GetParent().GetPath()),
+                "local_matrix": local_matrix,
+            }
+        )
+    for source in aligned_sources:
+        box_path = f"{source['parent_path']}/runtime_aligned_cube_{source['name']}"
+        cube = UsdGeom.Cube.Define(stage, box_path)
+        cube.CreateSizeAttr(1.0)
+        xform = UsdGeom.Xformable(cube.GetPrim())
+        xform.ClearXformOpOrder()
+        xform.AddTransformOp().Set(source["local_matrix"])
+        UsdPhysics.CollisionAPI.Apply(cube.GetPrim()).CreateCollisionEnabledAttr(True)
+        created.append(
+            {
+                "path": box_path,
+                "source_isaac_collision": source["name"],
+                "parent_path": source["parent_path"],
+                "local_matrix": _matrix_rows(source["local_matrix"]),
+            }
+        )
+    report = {
+        "enabled": True,
+        "mode": "nic_cage_p0_aligned_cubes",
+        "matched": matched,
+        "matched_count": len(matched),
+        "created": created,
+        "created_count": len(created),
+    }
+    (run_dir / "nic_cage_p0_replacement_report.json").write_text(
+        json.dumps(_jsonable(report), indent=2, sort_keys=True) + "\n",
+        encoding="utf-8",
+    )
+    return report
+
+
+def _diagnostic_value_by_env(data: dict[str, Any] | None, key: str, env_index: int, default: float = float("nan")) -> float:
+    if not isinstance(data, dict):
+        return default
+    by_env = data.get(f"{key}_by_env")
+    value: Any
+    if isinstance(by_env, list) and env_index < len(by_env):
+        value = by_env[env_index]
+    elif env_index == 0 and f"{key}_env0" in data:
+        value = data.get(f"{key}_env0")
+    else:
+        value = data.get(f"{key}_mean", data.get(key, default))
+    if isinstance(value, list):
+        value = value[0] if value else default
+    try:
+        out = float(value)
+    except (TypeError, ValueError):
+        return default
+    return out if math.isfinite(out) else default
+
+
+def _guide_phase_weight_by_env(
+    *,
+    args: argparse.Namespace,
+    post_step_insertion_geometry: dict[str, Any] | None,
+    post_step_all_body_insertion_geometry: dict[str, Any] | None,
+    num_envs: int,
+    device: torch.device,
+    dtype: torch.dtype,
+) -> torch.Tensor | None:
+    filter_name = str(getattr(args, "target_action_guide_train_phase_filter", "all") or "all")
+    if filter_name == "all":
+        return None
+    weights = torch.zeros((num_envs, 1), dtype=dtype, device=device)
+    module_geom = {}
+    if isinstance(post_step_all_body_insertion_geometry, dict):
+        module_geom = post_step_all_body_insertion_geometry.get("sfp_module_link") or {}
+        if not isinstance(module_geom, dict):
+            module_geom = {}
+    lateral_gate = float(getattr(args, "target_action_guide_phase_lateral_gate_m", 0.0007))
+    module_lateral_gate = float(getattr(args, "target_action_guide_phase_module_lateral_gate_m", 0.0015))
+    theta_min = float(getattr(args, "target_action_guide_phase_theta_min_rad", 0.030))
+    theta_max = float(getattr(args, "target_action_guide_phase_theta_max_rad", 0.070))
+    min_s = float(getattr(args, "target_action_guide_phase_min_s_m", -0.003))
+    max_s = float(getattr(args, "target_action_guide_phase_max_s_m", 0.010))
+    selected_weight = float(getattr(args, "target_action_guide_phase_weight", 1.0))
+    for env_index in range(num_envs):
+        s = _diagnostic_value_by_env(post_step_insertion_geometry, "signed_depth_m", env_index)
+        r = _diagnostic_value_by_env(post_step_insertion_geometry, "lateral_error_m", env_index)
+        theta = _diagnostic_value_by_env(post_step_insertion_geometry, "orientation_error_rad", env_index)
+        module_r = _diagnostic_value_by_env(module_geom, "lateral_error_m", env_index)
+        centered = r <= lateral_gate and module_r <= module_lateral_gate
+        theta_window = theta_min <= theta <= theta_max
+        depth_window = min_s <= s <= max_s
+        selected = False
+        if filter_name == "centered":
+            selected = centered
+        elif filter_name == "centered_high_theta":
+            selected = centered and theta_window and depth_window
+        elif filter_name == "final_window":
+            selected = centered and theta <= theta_max and depth_window
+        elif filter_name == "positive_centered":
+            selected = centered and theta <= theta_max and s > 0.0
+        elif filter_name == "strict_near_success":
+            selected = centered and theta <= theta_max and s >= min_s
+        else:
+            raise ValueError(f"Unsupported target_action_guide_train_phase_filter: {filter_name!r}")
+        if selected:
+            weights[env_index, 0] = selected_weight
+    return weights
+
+
+def _axial_purity_replay_tensors(
+    env,
+    reward_config: dict[str, Any],
+    *,
+    action_frame: str,
+    lateral_gate_m: float,
+    orientation_gate_rad: float,
+    min_s_m: float,
+    max_s_m: float,
+    device: torch.device,
+    dtype: torch.dtype,
+) -> dict[str, torch.Tensor] | None:
+    body_name = str(reward_config.get("target_body") or "sfp_tip_link")
+    body_pos = _body_position_by_name(env, body_name, reward_config.get("body_position_offset"))
+    body_quat = _body_orientation_by_name(
+        env,
+        body_name,
+        _body_orientation_offset_for_target_orientation(reward_config, body_name),
+    )
+    entrance = _episode_entrance_position_from_yaml(env)
+    axis_w = _episode_insertion_axis_from_yaml(env)
+    theta = _body_target_orientation_error_from_config(env, body_name, reward_config, axis_w=axis_w)
+    if body_pos is None or entrance is None or axis_w is None or theta is None:
+        return None
+    body_pos = body_pos.to(device=device, dtype=dtype)
+    entrance = entrance.to(device=device, dtype=dtype)
+    axis_w = axis_w.to(device=device, dtype=dtype)
+    axis_w = axis_w / torch.linalg.norm(axis_w, dim=1, keepdim=True).clamp(min=1.0e-9)
+    theta = theta.to(device=device, dtype=dtype).reshape(-1, 1)
+    rel = body_pos - entrance
+    s = torch.sum(rel * axis_w, dim=1, keepdim=True)
+    lateral = rel - s * axis_w
+    r = torch.linalg.norm(lateral, dim=1, keepdim=True)
+    lateral_dir_w = -lateral / r.clamp(min=1.0e-9)
+    gate = (
+        (r <= max(float(lateral_gate_m), 0.0))
+        & (theta <= max(float(orientation_gate_rad), 0.0))
+        & (s >= float(min_s_m))
+        & (s <= float(max_s_m))
+    ).to(dtype=dtype)
+    lateral_gate = (
+        (r > max(float(lateral_gate_m), 0.0))
+        & (s >= float(min_s_m))
+        & (s <= float(max_s_m))
+    ).to(dtype=dtype)
+
+    robot = env.unwrapped.scene["robot"]
+    data = robot.data
+    root_quat_w = data.root_quat_w.to(device=device, dtype=dtype)
+    body_names = list(getattr(robot, "body_names", []))
+
+    def _world_dir_to_raw_action_frame(world_dir: torch.Tensor) -> torch.Tensor:
+        root_dir = math_utils.quat_apply_inverse(root_quat_w, world_dir)
+        if bool(args_cli.fix_isaac_ik_xy_sign):
+            root_dir = root_dir.clone()
+            sign_mask = _isaac_ik_xy_sign_fix_mask(env, root_dir.shape[0], device=root_dir.device)
+            root_dir[:, 0:2] = torch.where(sign_mask, -root_dir[:, 0:2], root_dir[:, 0:2])
+        if action_frame == "root":
+            return root_dir
+        frame_index = _named_index(body_names, action_frame)
+        _, frame_quat_b = math_utils.subtract_frame_transforms(
+            data.root_pos_w.to(device=device, dtype=dtype),
+            root_quat_w,
+            data.body_pos_w[:, frame_index].to(device=device, dtype=dtype),
+            data.body_quat_w[:, frame_index].to(device=device, dtype=dtype),
+        )
+        return math_utils.quat_apply_inverse(frame_quat_b, root_dir)
+
+    def _world_rotvec_to_raw_action_frame(rotvec_w: torch.Tensor) -> torch.Tensor:
+        root_rot = math_utils.quat_apply_inverse(root_quat_w, rotvec_w)
+        if action_frame == "root":
+            return root_rot
+        frame_index = _named_index(body_names, action_frame)
+        _, frame_quat_b = math_utils.subtract_frame_transforms(
+            data.root_pos_w.to(device=device, dtype=dtype),
+            root_quat_w,
+            data.body_pos_w[:, frame_index].to(device=device, dtype=dtype),
+            data.body_quat_w[:, frame_index].to(device=device, dtype=dtype),
+        )
+        return math_utils.quat_apply_inverse(frame_quat_b, root_rot)
+
+    axial_direction_sign = 1.0 if float(args_cli.actor_axial_direction_sign) >= 0.0 else -1.0
+    axis_action_frame = _world_dir_to_raw_action_frame(axis_w * axial_direction_sign)
+    axis_action_frame = axis_action_frame / torch.linalg.norm(axis_action_frame, dim=1, keepdim=True).clamp(min=1.0e-9)
+    lateral_axis_action_frame = _world_dir_to_raw_action_frame(lateral_dir_w)
+    lateral_axis_action_frame = lateral_axis_action_frame / torch.linalg.norm(
+        lateral_axis_action_frame, dim=1, keepdim=True
+    ).clamp(min=1.0e-9)
+    orientation_gate = (
+        (r <= max(float(lateral_gate_m), 0.0))
+        & (theta > max(float(orientation_gate_rad), 0.0))
+        & (s >= float(min_s_m))
+        & (s <= float(max_s_m))
+    ).to(dtype=dtype)
+    orientation_axis_action_frame = torch.zeros_like(axis_action_frame)
+    if body_quat is not None and str(reward_config.get("orientation_error_mode", "quat")).lower() == "axis":
+        body_quat = body_quat.to(device=device, dtype=dtype)
+        local_axis = torch.tensor(
+            reward_config.get("orientation_axis_local", (0.0, 1.0, 0.0)),
+            dtype=dtype,
+            device=device,
+        ).reshape(1, 3)
+        local_axis = local_axis / torch.linalg.norm(local_axis, dim=1, keepdim=True).clamp(min=1.0e-9)
+        body_axis_w = math_utils.quat_apply(body_quat, local_axis.expand(body_quat.shape[0], -1))
+        corrective_axis_w = torch.cross(body_axis_w, axis_w, dim=1)
+        corrective_axis_w = corrective_axis_w * (1.0 if float(args_cli.actor_orientation_direction_sign) >= 0.0 else -1.0)
+        corrective_axis_norm = torch.linalg.norm(corrective_axis_w, dim=1, keepdim=True)
+        corrective_axis_w = corrective_axis_w / corrective_axis_norm.clamp(min=1.0e-9)
+        corrective_axis_w = torch.where(
+            corrective_axis_norm > 1.0e-9,
+            corrective_axis_w,
+            torch.zeros_like(corrective_axis_w),
+        )
+        orientation_axis_action_frame = _world_rotvec_to_raw_action_frame(corrective_axis_w)
+        orientation_axis_action_frame = orientation_axis_action_frame / torch.linalg.norm(
+            orientation_axis_action_frame,
+            dim=1,
+            keepdim=True,
+        ).clamp(min=1.0e-9)
+    return {
+        "gate": gate.detach().clone(),
+        "axis": axis_action_frame.detach().clone(),
+        "lateral_gate": lateral_gate.detach().clone(),
+        "lateral_axis": lateral_axis_action_frame.detach().clone(),
+        "orientation_gate": orientation_gate.detach().clone(),
+        "orientation_axis": orientation_axis_action_frame.detach().clone(),
+        "s": s.detach().clone(),
+        "r": r.detach().clone(),
+        "theta": theta.detach().clone(),
+    }
+
+
+def _initialize_actor_axial_bias(
+    actor: IsaacACTAdapterActor,
+    env,
+    reward_config: dict[str, Any],
+    *,
+    action_frame: str,
+    single_action_dim: int,
+    magnitude_m: float,
+    lateral_gate_m: float,
+    orientation_gate_rad: float,
+    min_s_m: float,
+    max_s_m: float,
+    run_dir: Path,
+    device: torch.device,
+) -> dict[str, Any]:
+    report: dict[str, Any] = {
+        "requested_m": float(magnitude_m),
+        "applied": False,
+        "reason": "",
+    }
+    if float(magnitude_m) <= 0.0:
+        report["reason"] = "disabled"
+        return report
+    if actor.actor_mode != "act_direct":
+        report["reason"] = f"actor_mode={actor.actor_mode!r}; only act_direct is supported"
+        return report
+    if int(single_action_dim) < 3:
+        report["reason"] = f"single_action_dim={single_action_dim} has no xyz translation"
+        return report
+    if not isinstance(actor.adapter, nn.Sequential) or not isinstance(actor.adapter[-1], nn.Linear):
+        report["reason"] = "actor.adapter final module is not a Linear layer"
+        return report
+    tensors = _axial_purity_replay_tensors(
+        env,
+        reward_config,
+        action_frame=action_frame,
+        lateral_gate_m=lateral_gate_m,
+        orientation_gate_rad=orientation_gate_rad,
+        min_s_m=min_s_m,
+        max_s_m=max_s_m,
+        device=device,
+        dtype=torch.float32,
+    )
+    if tensors is None:
+        report["reason"] = "missing insertion geometry for axis conversion"
+        return report
+    gate = tensors["gate"].to(device=device, dtype=torch.float32)
+    gate_min = float(gate.min().detach().cpu()) if gate.numel() else 0.0
+    gate_mean = float(gate.float().mean().detach().cpu()) if gate.numel() else 0.0
+    report.update(
+        {
+            "gate_min": gate_min,
+            "gate_mean": gate_mean,
+            "s_mean_m": float(tensors["s"].float().mean().detach().cpu()),
+            "r_mean_m": float(tensors["r"].float().mean().detach().cpu()),
+            "theta_mean_rad": float(tensors["theta"].float().mean().detach().cpu()),
+        }
+    )
+    if gate_mean < 0.5:
+        report["reason"] = "reset state is outside axial bias gate"
+        (run_dir / "actor_initial_axial_bias_report.json").write_text(
+            json.dumps(_jsonable(report), indent=2, sort_keys=True) + "\n",
+            encoding="utf-8",
+        )
+        print("[AIC SERL][diagnostic] actor_initial_axial_bias " + json.dumps(_jsonable(report), sort_keys=True), flush=True)
+        return report
+    axis = tensors["axis"].to(device=device, dtype=torch.float32)
+    gate_mask = gate.reshape(-1) >= 0.5
+    axis_source = axis[gate_mask] if bool(gate_mask.any().detach().cpu()) else axis
+    axis_mean = axis_source.mean(dim=0)
+    axis_mean = axis_mean / torch.linalg.norm(axis_mean).clamp(min=1.0e-9)
+    action_horizon = max(1, actor.action_dim // int(single_action_dim))
+    bias = torch.zeros((actor.action_dim,), dtype=torch.float32, device=device)
+    for action_idx in range(action_horizon):
+        start = action_idx * int(single_action_dim)
+        bias[start : start + 3] = axis_mean * float(magnitude_m)
+    final = actor.adapter[-1]
+    with torch.no_grad():
+        final.bias.copy_(bias.to(device=final.bias.device, dtype=final.bias.dtype))
+    report.update(
+        {
+            "applied": True,
+            "reason": "ok",
+            "action_frame": str(action_frame),
+            "single_action_dim": int(single_action_dim),
+            "action_horizon": int(action_horizon),
+            "axis_mean_source_envs": int(axis_source.shape[0]),
+            "axis_action_frame_mean": [float(v) for v in axis_mean.detach().cpu().tolist()],
+            "axis_action_frame_by_env": [
+                [float(v) for v in row.detach().cpu().tolist()]
+                for row in axis[: min(int(axis.shape[0]), 8)]
+            ],
+            "bias_first6": [float(v) for v in bias[:6].detach().cpu().tolist()],
+        }
+    )
+    (run_dir / "actor_initial_axial_bias_report.json").write_text(
+        json.dumps(_jsonable(report), indent=2, sort_keys=True) + "\n",
+        encoding="utf-8",
+    )
+    print("[AIC SERL][diagnostic] actor_initial_axial_bias " + json.dumps(_jsonable(report), sort_keys=True), flush=True)
+    return report
 
 
 def _ids_jsonable(value: Any) -> Any:
@@ -3060,6 +7263,56 @@ def _reward_term_metrics(env, *, device: torch.device) -> dict[str, Any]:
             ).detach().cpu()
         )
     out["reward_terms_total_from_terms_mean"] = float(step_contrib.sum(dim=1).mean().detach().cpu())
+    components = getattr(env.unwrapped, "_aic_cheatcode_phase_reward_components", None)
+    if isinstance(components, dict):
+        component_metrics: dict[str, Any] = {}
+        for name in (
+            "total",
+            "lateral_progress",
+            "orientation_progress",
+            "lat_gate_phase",
+            "lateral_alignment_action",
+            "lateral_alignment_axial_quiet_gate",
+            "off_axis_axial_action_penalty",
+            "lateral_error_state_penalty",
+            "action_toward_axis",
+            "lateral_funnel",
+            "near_misaligned",
+            "preinsert_hover",
+            "axial_progress",
+            "preinsert_aligned_axial",
+            "corridor",
+            "inside_alignment",
+            "retreat",
+            "success_candidate",
+            "g_lat_pre",
+            "g_ori_pre",
+            "g_align_pre",
+            "g_lat_insert",
+            "g_ori_insert",
+            "g_align_insert",
+            "g_action_axis",
+            "g_insert_combined",
+            "action_axial",
+            "action_lateral",
+            "action_rotation",
+            "axial_forward_action_penalty",
+            "action_lateral_sigma",
+            "action_forward_gate",
+            "near_gate",
+            "inside_gate",
+        ):
+            value = components.get(name)
+            if torch.is_tensor(value):
+                tensor = value.to(device=device, dtype=torch.float32)
+                component_metrics[f"{name}_mean"] = float(tensor.mean().detach().cpu())
+                component_metrics[f"{name}_min"] = float(tensor.min().detach().cpu())
+                component_metrics[f"{name}_max"] = float(tensor.max().detach().cpu())
+        action_axis_source = components.get("action_axis_source")
+        if action_axis_source is not None:
+            component_metrics["action_axis_source"] = str(action_axis_source)
+        if component_metrics:
+            out["cheatcode_phase_components"] = component_metrics
     return out
 
 
@@ -3184,22 +7437,16 @@ def _overlay_insertion_debug(
         draw.line([projected["entrance"], projected["axis"]], fill=(255, 220, 40), width=2)
 
     all_geometry = _all_body_insertion_geometry_diagnostics(env, reward_config)
-    target_quat = _target_orientation_from_reward_config(env, reward_config)
     lines = [f"env{env_idx} {camera_name}"]
     for body_name in ("sfp_tip_link", "sfp_module_link"):
         geom = all_geometry.get(body_name) or {}
         depth = (geom.get("signed_depth_m_by_env") or [None] * (env_idx + 1))[env_idx]
         lateral = (geom.get("lateral_error_m_by_env") or [None] * (env_idx + 1))[env_idx]
         centered = (geom.get("centered_depth_fraction_by_env") or [None] * (env_idx + 1))[env_idx]
-        body_quat = _body_orientation_by_name(env, body_name)
+        orientation_error = _body_target_orientation_error_from_config(env, body_name, reward_config, axis_w=axis_all)
         orient = None
-        if target_quat is not None and body_quat is not None:
-            orient = float(
-                math_utils.quat_error_magnitude(body_quat[env_idx : env_idx + 1], target_quat[env_idx : env_idx + 1])
-                .detach()
-                .cpu()
-                .reshape(-1)[0]
-            )
+        if orientation_error is not None and env_idx < int(orientation_error.numel()):
+            orient = float(orientation_error[env_idx].detach().cpu())
         if depth is not None and lateral is not None:
             lines.append(
                 f"{body_name}: s={depth * 1000:+.1f}mm r={lateral * 1000:.1f}mm c={float(centered or 0.0):.2f}"
@@ -3231,14 +7478,31 @@ def _save_images(
         return
     if every <= 0 or step % every != 0:
         return
+    from PIL import Image
     from torchvision.transforms.functional import to_pil_image
 
+    video_frame_size_px = 448
+    resize_resample = getattr(getattr(Image, "Resampling", Image), "BICUBIC")
     image_dir = run_dir / "step_images" / f"step_{step:06d}"
     image_dir.mkdir(parents=True, exist_ok=True)
+    raw_images: dict[str, torch.Tensor] = {}
+    if env is not None:
+        for camera in ("center_camera", "left_camera", "right_camera"):
+            try:
+                raw_images[camera] = _camera_rgb_uint8(env, camera)
+            except Exception:
+                raw_images = {}
+                break
     for key, tensor in images.items():
         camera = key.rsplit(".", 1)[-1]
-        for env_idx in range(tensor.shape[0]):
-            image = to_pil_image(tensor[env_idx].detach().cpu().clamp(0.0, 1.0))
+        image_tensor = raw_images.get(camera, tensor)
+        for env_idx in range(image_tensor.shape[0]):
+            if camera in raw_images:
+                image = Image.fromarray(image_tensor[env_idx].numpy())
+            else:
+                image = to_pil_image(image_tensor[env_idx].detach().cpu().clamp(0.0, 1.0))
+            if image.size != (video_frame_size_px, video_frame_size_px):
+                image = image.resize((video_frame_size_px, video_frame_size_px), resize_resample)
             if (
                 bool(getattr(args_cli, "debug_visual_overlays", True))
                 and env is not None
@@ -3260,6 +7524,176 @@ def _save_images(
                     draw.rectangle([0, 0, min(image.size[0], 520), 20], fill=(255, 255, 255))
                     draw.text((4, 4), f"overlay failed: {type(exc).__name__}: {exc}", fill=(220, 0, 0))
             image.save(image_dir / f"env_{env_idx:04d}_{camera}.png")
+
+
+def _encode_step_videos(run_dir: Path) -> dict[str, Any]:
+    image_root = run_dir / "step_images"
+    if not image_root.exists():
+        return {"enabled": True, "videos": [], "warnings": ["no step_images directory"]}
+
+    cameras = ("center_camera", "left_camera", "right_camera")
+    env_indices: set[str] = set()
+    for path in image_root.glob("step_*/env_*_center_camera.png"):
+        name = path.name
+        if name.startswith("env_") and name.endswith("_center_camera.png"):
+            env_indices.add(name[len("env_") : len("env_0000")])
+
+    videos: list[str] = []
+    warnings: list[str] = []
+    fps = max(int(args_cli.video_fps), 1)
+    hold_s = max(float(args_cli.video_final_hold_s), 0.0)
+    crf = min(max(int(args_cli.video_crf), 0), 51)
+    for env_id in sorted(env_indices):
+        for camera in cameras:
+            image_files = sorted(image_root.glob(f"step_*/env_{env_id}_{camera}.png"))
+            if not image_files:
+                continue
+            camera_short = camera.removesuffix("_camera")
+            out_path = run_dir / f"env{env_id}_{camera_short}_full_episode_{fps}fps_quality448.mp4"
+            sequence_pattern = image_root / "step_%06d" / f"env_{env_id}_{camera}.png"
+            glob_pattern = image_root / "step_*" / f"env_{env_id}_{camera}.png"
+            input_args = ["-i", str(sequence_pattern)]
+            if not (image_root / "step_000000" / f"env_{env_id}_{camera}.png").exists():
+                input_args = ["-pattern_type", "glob", "-i", str(glob_pattern)]
+            vf_parts = ["scale=448:448:flags=lanczos"]
+            if hold_s > 0.0:
+                vf_parts.append(f"tpad=stop_mode=clone:stop_duration={hold_s:g}")
+            vf = ",".join(vf_parts)
+            ffmpeg_exe = _ffmpeg_executable()
+            cmd = [
+                ffmpeg_exe,
+                "-y",
+                "-framerate",
+                str(fps),
+                *input_args,
+                "-vf",
+                vf,
+                "-c:v",
+                "libx264",
+                "-profile:v",
+                "high",
+                "-level",
+                "3.1",
+                "-crf",
+                str(crf),
+                "-preset",
+                "slow",
+                "-color_primaries",
+                "bt709",
+                "-color_trc",
+                "bt709",
+                "-colorspace",
+                "bt709",
+                "-pix_fmt",
+                "yuv420p",
+                "-movflags",
+                "+faststart",
+                str(out_path),
+            ]
+            ffmpeg_error = ""
+            try:
+                result = subprocess.run(cmd, text=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, check=False)
+                ffmpeg_error = result.stdout[-1000:] if result.returncode else ""
+            except FileNotFoundError as exc:
+                result = None
+                ffmpeg_error = str(exc)
+            if result is not None and result.returncode == 0:
+                videos.append(str(out_path))
+                first_frame_result = _extract_video_first_frame(
+                    out_path,
+                    out_path.with_name(f"{out_path.stem}_first_frame.png"),
+                )
+                if first_frame_result:
+                    warnings.append(first_frame_result)
+                continue
+            try:
+                _encode_step_video_cv2(image_files, out_path, fps=fps, final_hold_s=hold_s)
+                videos.append(str(out_path))
+                first_frame_result = _extract_video_first_frame(
+                    out_path,
+                    out_path.with_name(f"{out_path.stem}_first_frame.png"),
+                )
+                if first_frame_result:
+                    warnings.append(first_frame_result)
+                warnings.append(f"ffmpeg unavailable/failed for env {env_id} {camera}; encoded with OpenCV fallback.")
+            except Exception as exc:
+                warnings.append(
+                    f"video encode failed for env {env_id} {camera}: "
+                    f"ffmpeg={ffmpeg_error}; cv2={type(exc).__name__}: {exc}"
+                )
+    return {
+        "enabled": True,
+        "videos": videos,
+        "warnings": warnings,
+        "fps": fps,
+        "final_hold_s": hold_s,
+        "crf": crf,
+        "video_resolution_px": 448,
+    }
+
+
+def _extract_video_first_frame(video_path: Path, out_path: Path) -> str:
+    ffmpeg_exe = _ffmpeg_executable()
+    cmd = [
+        ffmpeg_exe,
+        "-y",
+        "-i",
+        str(video_path),
+        "-frames:v",
+        "1",
+        str(out_path),
+    ]
+    try:
+        result = subprocess.run(cmd, text=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, check=False)
+    except FileNotFoundError as exc:
+        return f"first-frame extraction failed for {video_path.name}: {exc}"
+    if result.returncode != 0:
+        return f"first-frame extraction failed for {video_path.name}: {result.stdout[-1000:]}"
+    return ""
+
+
+def _ffmpeg_executable() -> str:
+    from shutil import which
+
+    ffmpeg = which("ffmpeg")
+    if ffmpeg:
+        return ffmpeg
+    try:
+        import imageio_ffmpeg
+
+        return str(imageio_ffmpeg.get_ffmpeg_exe())
+    except Exception:
+        return "ffmpeg"
+
+
+def _encode_step_video_cv2(image_files: list[Path], out_path: Path, *, fps: int, final_hold_s: float) -> None:
+    import cv2
+
+    if not image_files:
+        raise ValueError("no images to encode")
+    first = cv2.imread(str(image_files[0]), cv2.IMREAD_COLOR)
+    if first is None:
+        raise RuntimeError(f"failed to read {image_files[0]}")
+    width = height = 448
+    if first.shape[:2] != (height, width):
+        first = cv2.resize(first, (width, height), interpolation=cv2.INTER_CUBIC)
+    writer = cv2.VideoWriter(str(out_path), cv2.VideoWriter_fourcc(*"mp4v"), float(fps), (width, height))
+    if not writer.isOpened():
+        raise RuntimeError(f"failed to open video writer for {out_path}")
+    last = first
+    try:
+        for image_file in image_files:
+            frame = cv2.imread(str(image_file), cv2.IMREAD_COLOR)
+            if frame is None:
+                raise RuntimeError(f"failed to read {image_file}")
+            if frame.shape[:2] != (height, width):
+                frame = cv2.resize(frame, (width, height), interpolation=cv2.INTER_AREA)
+            writer.write(frame)
+            last = frame
+        for _ in range(int(round(max(final_hold_s, 0.0) * max(fps, 1)))):
+            writer.write(last)
+    finally:
+        writer.release()
 
 
 def _camera_freshness_diagnostics(
@@ -3290,8 +7724,49 @@ def _camera_freshness_diagnostics(
 def _selected_body_orientations(env) -> dict[str, torch.Tensor | None]:
     return {
         body_name: _body_orientation_by_name(env, body_name)
-        for body_name in ("wrist_3_link", "gripper_tcp", "sfp_tip_link", CONTROLLED_TCP_BODY)
+        for body_name in ("wrist_3_link", "gripper_tcp", "sfp_module_link", "sfp_tip_link", CONTROLLED_TCP_BODY)
     }
+
+
+def _selected_body_pose_lists(
+    positions: dict[str, torch.Tensor | None],
+    orientations: dict[str, torch.Tensor | None],
+) -> dict[str, Any]:
+    names = sorted(set(positions) | set(orientations))
+    return {
+        "positions_w_by_env": {
+            name: None if positions.get(name) is None else _tensor_2d_list(positions[name])
+            for name in names
+        },
+        "orientations_wxyz_by_env": {
+            name: None if orientations.get(name) is None else _tensor_2d_list(orientations[name])
+            for name in names
+        },
+    }
+
+
+def _robot_state_snapshot(env) -> dict[str, Any]:
+    robot = env.unwrapped.scene["robot"]
+    data = robot.data
+    out: dict[str, Any] = {
+        "joint_names": [str(name) for name in getattr(robot, "joint_names", [])],
+        "body_names": [str(name) for name in getattr(robot, "body_names", [])],
+        "joint_positions_by_env": _tensor_2d_list(data.joint_pos),
+        "joint_velocities_by_env": _tensor_2d_list(data.joint_vel),
+    }
+    root_pos = getattr(data, "root_pos_w", None)
+    root_quat = getattr(data, "root_quat_w", None)
+    root_lin_vel = getattr(data, "root_lin_vel_w", None)
+    root_ang_vel = getattr(data, "root_ang_vel_w", None)
+    if root_pos is not None:
+        out["root_positions_w_by_env"] = _tensor_2d_list(root_pos)
+    if root_quat is not None:
+        out["root_orientations_wxyz_by_env"] = _tensor_2d_list(root_quat)
+    if root_lin_vel is not None:
+        out["root_linear_velocities_w_by_env"] = _tensor_2d_list(root_lin_vel)
+    if root_ang_vel is not None:
+        out["root_angular_velocities_w_by_env"] = _tensor_2d_list(root_ang_vel)
+    return out
 
 
 def _realized_rotation_diagnostics(
@@ -3392,6 +7867,7 @@ def _tcp_delta_action_to_isaac_base_action(
     *,
     action_frame: str = "gripper_tcp",
     apply_ik_sign_fix: bool = True,
+    absolute_target_pose: bool | None = None,
 ) -> torch.Tensor:
     """Convert Gazebo/LeRobot gripper-tcp delta actions to Isaac IK root-frame deltas."""
     if action_frame == "root":
@@ -3414,7 +7890,54 @@ def _tcp_delta_action_to_isaac_base_action(
         action = action.clone()
         sign_mask = _isaac_ik_xy_sign_fix_mask(env, action.shape[0], device=action.device)
         action[:, 0:2] = torch.where(sign_mask, -action[:, 0:2], action[:, 0:2])
+    use_absolute_target_pose = bool(args_cli.absolute_ik_target_pose) if absolute_target_pose is None else bool(absolute_target_pose)
+    if use_absolute_target_pose:
+        robot = env.unwrapped.scene["robot"]
+        body_names = list(getattr(robot, "body_names", []))
+        wrist_index = _named_index(body_names, "wrist_3_link")
+        data = robot.data
+        root_pos_w = data.root_pos_w.to(device=action.device, dtype=action.dtype)
+        root_quat_w = data.root_quat_w.to(device=action.device, dtype=action.dtype)
+        wrist_pos_w = data.body_pos_w[:, wrist_index].to(device=action.device, dtype=action.dtype)
+        wrist_quat_w = data.body_quat_w[:, wrist_index].to(device=action.device, dtype=action.dtype)
+        delta_pos_w = math_utils.quat_apply(root_quat_w, action[:, :3])
+        target_pos_root = math_utils.quat_apply_inverse(root_quat_w, wrist_pos_w + delta_pos_w - root_pos_w)
+        if action.shape[1] >= 6:
+            rotvec_w = math_utils.quat_apply(root_quat_w, action[:, 3:6])
+            target_quat_w = math_utils.quat_mul(_quat_from_rotvec(rotvec_w), wrist_quat_w)
+        else:
+            target_quat_w = wrist_quat_w
+        target_quat_root = math_utils.quat_mul(math_utils.quat_inv(root_quat_w), target_quat_w)
+        return torch.cat([target_pos_root, target_quat_root], dim=-1)
     return action
+
+
+def _tcp_delta_action_translation_to_world(
+    env,
+    tcp_action: torch.Tensor,
+    *,
+    action_frame: str = "gripper_tcp",
+) -> torch.Tensor:
+    """Convert the executed TCP translation delta to world-frame meters."""
+    robot = env.unwrapped.scene["robot"]
+    data = robot.data
+    root_quat_w = data.root_quat_w.to(device=tcp_action.device, dtype=tcp_action.dtype)
+    if action_frame == "root":
+        delta_root = tcp_action[:, :3].clone()
+    else:
+        body_names = list(getattr(robot, "body_names", []))
+        frame_index = _named_index(body_names, action_frame)
+        _, frame_quat_b = math_utils.subtract_frame_transforms(
+            data.root_pos_w.to(device=tcp_action.device, dtype=tcp_action.dtype),
+            root_quat_w,
+            data.body_pos_w[:, frame_index].to(device=tcp_action.device, dtype=tcp_action.dtype),
+            data.body_quat_w[:, frame_index].to(device=tcp_action.device, dtype=tcp_action.dtype),
+        )
+        delta_root = math_utils.quat_apply(frame_quat_b, tcp_action[:, :3])
+    if bool(args_cli.fix_isaac_ik_xy_sign):
+        sign_mask = _isaac_ik_xy_sign_fix_mask(env, delta_root.shape[0], device=delta_root.device)
+        delta_root[:, 0:2] = torch.where(sign_mask, -delta_root[:, 0:2], delta_root[:, 0:2])
+    return math_utils.quat_apply(root_quat_w, delta_root)
 
 
 def _isaac_ik_xy_sign_fix_mask(env, batch_size: int, *, device: torch.device) -> torch.Tensor:
@@ -3529,8 +8052,17 @@ def _cheatcode_transform_guided_policy_action(
     body_names = list(getattr(robot, "body_names", []))
     batch_size = int(robot.data.root_pos_w.shape[0])
     guide = torch.zeros((batch_size, 6), dtype=torch.float32, device=device)
-    body_name = str(task_geometry_reward_config.get("target_body") or "sfp_tip_link")
-    if body_name not in body_names or CONTROLLED_TCP_BODY not in body_names:
+    reward_body_name = str(task_geometry_reward_config.get("target_body") or "sfp_tip_link")
+    body_name = str(args_cli.target_action_guide_target_tip_body_name or reward_body_name)
+    orientation_body_name = str(args_cli.target_action_guide_target_tip_orientation_body_name or reward_body_name)
+    deep_translation_body_name = str(args_cli.target_action_guide_deep_translation_body_name or "")
+    if (
+        body_name not in body_names
+        or reward_body_name not in body_names
+        or orientation_body_name not in body_names
+        or (deep_translation_body_name and deep_translation_body_name not in body_names)
+        or CONTROLLED_TCP_BODY not in body_names
+    ):
         return guide, {"target_action_guide_missing_geometry": 1.0}
 
     target_pos_w = _target_position_from_reward_config(env, task_geometry_reward_config)
@@ -3539,9 +8071,28 @@ def _cheatcode_transform_guided_policy_action(
         return guide, {"target_action_guide_missing_geometry": 1.0}
 
     body_idx = _named_index(body_names, body_name)
+    reward_body_idx = _named_index(body_names, reward_body_name)
+    orientation_body_idx = _named_index(body_names, orientation_body_name)
+    deep_translation_body_idx = (
+        _named_index(body_names, deep_translation_body_name) if deep_translation_body_name else None
+    )
     controlled_idx = _named_index(body_names, CONTROLLED_TCP_BODY)
     body_pos_w = robot.data.body_pos_w[:, body_idx].to(device=device, dtype=guide.dtype)
     body_quat_w = robot.data.body_quat_w[:, body_idx].to(device=device, dtype=guide.dtype)
+    reward_body_pos_w = robot.data.body_pos_w[:, reward_body_idx].to(device=device, dtype=guide.dtype)
+    reward_body_quat_w = robot.data.body_quat_w[:, reward_body_idx].to(device=device, dtype=guide.dtype)
+    orientation_body_pos_w = robot.data.body_pos_w[:, orientation_body_idx].to(device=device, dtype=guide.dtype)
+    orientation_body_quat_w = robot.data.body_quat_w[:, orientation_body_idx].to(device=device, dtype=guide.dtype)
+    deep_translation_body_pos_w = (
+        robot.data.body_pos_w[:, deep_translation_body_idx].to(device=device, dtype=guide.dtype)
+        if deep_translation_body_idx is not None
+        else None
+    )
+    deep_translation_body_quat_w = (
+        robot.data.body_quat_w[:, deep_translation_body_idx].to(device=device, dtype=guide.dtype)
+        if deep_translation_body_idx is not None
+        else None
+    )
     controlled_pos_w = robot.data.body_pos_w[:, controlled_idx].to(device=device, dtype=guide.dtype)
     controlled_quat_w = robot.data.body_quat_w[:, controlled_idx].to(device=device, dtype=guide.dtype)
     target_pos_w = target_pos_w.to(device=device, dtype=guide.dtype)
@@ -3549,17 +8100,35 @@ def _cheatcode_transform_guided_policy_action(
     body_point_w = _offset_position_w(
         body_pos_w,
         body_quat_w,
+        task_geometry_reward_config.get("body_position_offset") if body_name == reward_body_name else None,
+    )
+    reward_body_point_w = _offset_position_w(
+        reward_body_pos_w,
+        reward_body_quat_w,
         task_geometry_reward_config.get("body_position_offset"),
     )
-    body_frame_quat_w = _offset_quat_w(
-        body_quat_w,
-        task_geometry_reward_config.get("body_orientation_offset"),
+    orientation_body_frame_quat_w = _offset_quat_w(
+        orientation_body_quat_w,
+        task_geometry_reward_config.get("body_orientation_offset")
+        if orientation_body_name == reward_body_name
+        else None,
     )
+    deep_translation_body_point_w = None
+    if deep_translation_body_pos_w is not None and deep_translation_body_quat_w is not None:
+        deep_translation_body_point_w = _offset_position_w(
+            deep_translation_body_pos_w,
+            deep_translation_body_quat_w,
+            task_geometry_reward_config.get("body_position_offset")
+            if deep_translation_body_name == reward_body_name
+            else None,
+        )
     orientation_aligned = torch.ones((batch_size, 1), dtype=torch.bool, device=device)
     orientation_error_for_phase = torch.zeros((batch_size, 1), dtype=guide.dtype, device=device)
     final_orientation_active = torch.zeros((batch_size, 1), dtype=torch.bool, device=device)
     body_axis_w_for_probe = None
     target_axis_w_for_probe = None
+    body_quat_w_for_probe = None
+    target_quat_w_for_probe = None
     lateral_error_for_probe = None
     rel_for_probe = None
     axis_w_for_probe = None
@@ -3569,16 +8138,20 @@ def _cheatcode_transform_guided_policy_action(
     axis_desired_controlled_quat_w = None
     if target_quat_w is not None and float(rotation_step_size) > 0.0:
         target_quat_w = target_quat_w.to(device=device, dtype=guide.dtype)
-        orientation_error = math_utils.quat_error_magnitude(body_frame_quat_w, target_quat_w).view(batch_size, 1)
+        orientation_error = math_utils.quat_error_magnitude(orientation_body_frame_quat_w, target_quat_w).view(batch_size, 1)
         orientation_error_for_phase = orientation_error
+        body_quat_w_for_probe = orientation_body_frame_quat_w
+        target_quat_w_for_probe = target_quat_w
         if float(orientation_switch_rad) > 0.0:
             orientation_aligned = orientation_error <= float(orientation_switch_rad)
-        q_diff_w = math_utils.quat_mul(target_quat_w, math_utils.quat_inv(body_frame_quat_w))
+        q_diff_w = math_utils.quat_mul(target_quat_w, math_utils.quat_inv(orientation_body_frame_quat_w))
         desired_controlled_quat_w = math_utils.quat_mul(q_diff_w, controlled_quat_w)
 
     rotation_gate = torch.ones((batch_size, 1), dtype=guide.dtype, device=device)
     entrance_w = _episode_entrance_position_from_yaml(env)
     axis_w = _episode_insertion_axis_from_yaml(env)
+    active_body_point_w = body_point_w
+    deep_translation_active = torch.zeros((batch_size, 1), dtype=torch.bool, device=device)
     if entrance_w is not None and axis_w is not None:
         entrance_w = entrance_w.to(device=device, dtype=guide.dtype)
         axis_w = axis_w.to(device=device, dtype=guide.dtype)
@@ -3589,7 +8162,7 @@ def _cheatcode_transform_guided_policy_action(
                 device=device,
             ).reshape(1, 3)
             local_axis = local_axis / torch.linalg.norm(local_axis, dim=1, keepdim=True).clamp(min=1.0e-9)
-            body_axis_w = math_utils.quat_apply(body_frame_quat_w, local_axis.expand(batch_size, -1))
+            body_axis_w = math_utils.quat_apply(orientation_body_frame_quat_w, local_axis.expand(batch_size, -1))
             body_axis_w_for_probe = body_axis_w
             target_axis_w_for_probe = axis_w
             axis_error = torch.acos(torch.sum(body_axis_w * axis_w, dim=1, keepdim=True).clamp(min=-1.0, max=1.0))
@@ -3602,7 +8175,78 @@ def _cheatcode_transform_guided_policy_action(
                 if bool(axis_only_orientation):
                     desired_controlled_quat_w = axis_desired_controlled_quat_w
         target_depth = torch.sum((target_pos_w - entrance_w) * axis_w, dim=1, keepdim=True)
-        tip_delta = body_point_w - entrance_w
+        target_lateral_w = target_pos_w - entrance_w - target_depth * axis_w
+        if body_name != reward_body_name:
+            reward_tip_delta = reward_body_point_w - entrance_w
+            reward_axial_depth = torch.sum(reward_tip_delta * axis_w, dim=1, keepdim=True)
+            body_tip_delta = body_point_w - entrance_w
+            body_axial_depth = torch.sum(body_tip_delta * axis_w, dim=1, keepdim=True)
+            reference_gap_attr = f"_aic_cheatcode_transform_reference_gap_{body_name.replace('/', '_')}"
+            reference_gap = getattr(env, reference_gap_attr, None)
+            reset_mask = getattr(env.unwrapped, "episode_length_buf", None)
+            current_gap = reward_axial_depth - body_axial_depth
+            if reference_gap is None or reference_gap.shape != current_gap.shape:
+                reference_gap = current_gap.detach().clone()
+            elif reset_mask is not None:
+                reference_gap = reference_gap.to(device=device, dtype=guide.dtype)
+                reference_gap = torch.where(
+                    reset_mask.to(device=device).view(-1, 1) <= 1,
+                    current_gap.detach(),
+                    reference_gap,
+                )
+            setattr(env, reference_gap_attr, reference_gap.detach().clone())
+            target_pos_w = entrance_w + (target_depth - reference_gap.to(device=device, dtype=guide.dtype)) * axis_w + target_lateral_w
+            target_depth = torch.sum((target_pos_w - entrance_w) * axis_w, dim=1, keepdim=True)
+        active_target_depth = target_depth
+        if (
+            deep_translation_body_point_w is not None
+            and math.isfinite(float(args_cli.target_action_guide_deep_translation_activation_depth_m))
+        ):
+            reward_tip_delta = reward_body_point_w - entrance_w
+            reward_axial_depth = torch.sum(reward_tip_delta * axis_w, dim=1, keepdim=True)
+            deep_activation = reward_axial_depth >= float(args_cli.target_action_guide_deep_translation_activation_depth_m)
+            active_attr = (
+                f"_aic_cheatcode_transform_deep_active_{deep_translation_body_name.replace('/', '_')}"
+            )
+            latched_active = getattr(env, active_attr, None)
+            reset_mask = getattr(env.unwrapped, "episode_length_buf", None)
+            if latched_active is None or latched_active.shape != deep_activation.shape:
+                latched_active = torch.zeros_like(deep_activation)
+            else:
+                latched_active = latched_active.to(device=device)
+                if reset_mask is not None:
+                    latched_active = torch.where(
+                        reset_mask.to(device=device).view(-1, 1) <= 1,
+                        torch.zeros_like(latched_active),
+                        latched_active,
+                    )
+            deep_translation_active = latched_active | deep_activation
+            setattr(env, active_attr, deep_translation_active.detach().clone())
+            deep_tip_delta = deep_translation_body_point_w - entrance_w
+            deep_axial_depth = torch.sum(deep_tip_delta * axis_w, dim=1, keepdim=True)
+            reference_gap_attr = (
+                f"_aic_cheatcode_transform_deep_reference_gap_{deep_translation_body_name.replace('/', '_')}"
+            )
+            deep_reference_gap = getattr(env, reference_gap_attr, None)
+            current_gap = reward_axial_depth - deep_axial_depth
+            if deep_reference_gap is None or deep_reference_gap.shape != current_gap.shape:
+                deep_reference_gap = current_gap.detach().clone()
+            elif reset_mask is not None:
+                deep_reference_gap = deep_reference_gap.to(device=device, dtype=guide.dtype)
+                deep_reference_gap = torch.where(
+                    reset_mask.to(device=device).view(-1, 1) <= 1,
+                    current_gap.detach(),
+                    deep_reference_gap,
+                )
+            setattr(env, reference_gap_attr, deep_reference_gap.detach().clone())
+            deep_target_depth = target_depth - deep_reference_gap.to(device=device, dtype=guide.dtype)
+            active_body_point_w = torch.where(
+                deep_translation_active.expand_as(body_point_w),
+                deep_translation_body_point_w,
+                body_point_w,
+            )
+            active_target_depth = torch.where(deep_translation_active, deep_target_depth, target_depth)
+        tip_delta = active_body_point_w - entrance_w
         axial_depth = torch.sum(tip_delta * axis_w, dim=1, keepdim=True)
         lateral_vec = tip_delta - axial_depth * axis_w
         lateral_distance = torch.linalg.norm(lateral_vec, dim=1, keepdim=True)
@@ -3627,10 +8271,17 @@ def _cheatcode_transform_guided_policy_action(
             lateral_direction = lateral_direction * (1.0 if float(lateral_direction_sign) >= 0.0 else -1.0)
         axial_step = lateral_step if axial_step_size is None or float(axial_step_size) <= 0.0 else float(axial_step_size)
         lateral_move = lateral_direction * torch.minimum(lateral_distance, torch.full_like(lateral_distance, lateral_step))
-        axial_delta = (target_depth - axial_depth).clamp(min=0.0) * axis_w
+        axial_delta = (active_target_depth - axial_depth).clamp(min=0.0) * axis_w
         axial_distance = torch.linalg.norm(axial_delta, dim=1, keepdim=True)
         axial_direction = axial_delta / axial_distance.clamp(min=1.0e-9)
-        axial_move = axial_direction * torch.minimum(axial_distance, torch.full_like(axial_distance, max(axial_step, 0.0)))
+        axial_step_limit = torch.full_like(axial_distance, max(axial_step, 0.0))
+        if math.isfinite(float(args_cli.target_action_guide_deep_translation_axial_step_size)):
+            deep_axial_step_limit = torch.full_like(
+                axial_distance,
+                max(float(args_cli.target_action_guide_deep_translation_axial_step_size), 0.0),
+            )
+            axial_step_limit = torch.where(deep_translation_active, deep_axial_step_limit, axial_step_limit)
+        axial_move = axial_direction * torch.minimum(axial_distance, axial_step_limit)
         axial_move = torch.where(orientation_aligned, axial_move, torch.zeros_like(axial_move))
         hover_move = torch.zeros_like(axial_move)
         if preinsert_hover_depth is not None and math.isfinite(float(preinsert_hover_depth)):
@@ -3713,10 +8364,11 @@ def _cheatcode_transform_guided_policy_action(
         guide_rot_frame = _clip_vector_norm(delta_rot_frame, rotation_step_size)
     probe_best_predicted_error = orientation_error_for_phase
     probe_selected_axis = torch.full((batch_size, 1), -1.0, dtype=guide.dtype, device=device)
+    has_axis_orientation_probe = body_axis_w_for_probe is not None and target_axis_w_for_probe is not None
+    has_quat_orientation_probe = body_quat_w_for_probe is not None and target_quat_w_for_probe is not None
     if (
         bool(orientation_probe_basis)
-        and body_axis_w_for_probe is not None
-        and target_axis_w_for_probe is not None
+        and (has_axis_orientation_probe or has_quat_orientation_probe)
         and lateral_error_for_probe is not None
         and rel_for_probe is not None
         and axis_w_for_probe is not None
@@ -3740,14 +8392,24 @@ def _cheatcode_transform_guided_policy_action(
             candidate_rot_frame.reshape(-1, 3),
         ).reshape(batch_size, basis.shape[0], 3)
         candidate_q_w = _quat_from_rotvec(candidate_rot_w.reshape(-1, 3)).reshape(batch_size, basis.shape[0], 4)
-        candidate_axis_w = math_utils.quat_apply(
-            candidate_q_w.reshape(-1, 4),
-            body_axis_w_for_probe.unsqueeze(1).expand(-1, basis.shape[0], -1).reshape(-1, 3),
-        ).reshape(batch_size, basis.shape[0], 3)
-        candidate_error = torch.acos(
-            torch.sum(candidate_axis_w * target_axis_w_for_probe.unsqueeze(1), dim=2).clamp(min=-1.0, max=1.0)
-        )
-        tip_from_controlled_w = body_point_w - controlled_pos_w
+        if has_axis_orientation_probe:
+            candidate_axis_w = math_utils.quat_apply(
+                candidate_q_w.reshape(-1, 4),
+                body_axis_w_for_probe.unsqueeze(1).expand(-1, basis.shape[0], -1).reshape(-1, 3),
+            ).reshape(batch_size, basis.shape[0], 3)
+            candidate_error = torch.acos(
+                torch.sum(candidate_axis_w * target_axis_w_for_probe.unsqueeze(1), dim=2).clamp(min=-1.0, max=1.0)
+            )
+        else:
+            candidate_body_quat_w = math_utils.quat_mul(
+                candidate_q_w.reshape(-1, 4),
+                body_quat_w_for_probe.unsqueeze(1).expand(-1, basis.shape[0], -1).reshape(-1, 4),
+            )
+            candidate_error = math_utils.quat_error_magnitude(
+                candidate_body_quat_w,
+                target_quat_w_for_probe.unsqueeze(1).expand(-1, basis.shape[0], -1).reshape(-1, 4),
+            ).reshape(batch_size, basis.shape[0])
+        tip_from_controlled_w = active_body_point_w - controlled_pos_w
         candidate_tip_delta_w = (
             math_utils.quat_apply(
                 candidate_q_w.reshape(-1, 4),
@@ -3797,6 +8459,12 @@ def _cheatcode_transform_guided_policy_action(
     else:
         sign_tensor = torch.full((batch_size, 1), sign, dtype=guide.dtype, device=device)
     guide_rot_frame = guide_rot_frame * rotation_gate * sign_tensor
+    if bool(args_cli.target_action_guide_zero_rotation_when_deep_translation_active):
+        guide_rot_frame = torch.where(
+            deep_translation_active.expand_as(guide_rot_frame),
+            torch.zeros_like(guide_rot_frame),
+            guide_rot_frame,
+        )
 
     delta_pos_w = desired_controlled_pos_w - controlled_pos_w
     if bool(separate_rotation_compensation):
@@ -3804,7 +8472,7 @@ def _cheatcode_transform_guided_policy_action(
     if float(rotation_step_size) > 0.0:
         rotvec_w = math_utils.quat_apply(frame_quat_w, guide_rot_frame)
         q_step_w = _quat_from_rotvec(rotvec_w)
-        tip_from_controlled_w = body_point_w - controlled_pos_w
+        tip_from_controlled_w = active_body_point_w - controlled_pos_w
         induced_tip_delta_w = math_utils.quat_apply(q_step_w, tip_from_controlled_w) - tip_from_controlled_w
         compensation_w = -induced_tip_delta_w
         if bool(separate_rotation_compensation):
@@ -3825,10 +8493,14 @@ def _cheatcode_transform_guided_policy_action(
     translation_clip = max(float(step_size), 0.0)
     if bool(separate_rotation_compensation):
         translation_clip += max(float(rotation_compensation_clip_m), 0.0)
-    if action_frame == "root":
-        guide[:, :3] = _clip_vector_norm(delta_pos_b, translation_clip)
-    else:
-        guide[:, :3] = _clip_vector_norm(math_utils.quat_apply_inverse(frame_quat_b, delta_pos_b), translation_clip)
+    guide[:, :3] = _clip_vector_norm(
+        _root_translation_delta_to_policy_frame(
+            env,
+            delta_pos_b,
+            action_frame=action_frame,
+        ),
+        translation_clip,
+    )
 
     guide[:, 3:6] = guide_rot_frame
     if previous_orientation_error is not None and previous_orientation_error.shape == orientation_error_for_phase.shape:
@@ -3843,6 +8515,9 @@ def _cheatcode_transform_guided_policy_action(
             1.0
             if orientation_sign_state is None
             else float(orientation_sign_state.float().mean().detach().cpu())
+        ),
+        "target_action_guide_deep_translation_active_fraction": float(
+            deep_translation_active.float().mean().detach().cpu()
         ),
         "target_action_guide_rotation_norm_mean": float(torch.linalg.norm(guide_rot_frame, dim=1).mean().detach().cpu()),
         "target_action_guide_orientation_probe_best_predicted_error_rad_mean": float(
@@ -3924,13 +8599,54 @@ def _target_guided_policy_action(
             action_frame=action_frame,
             device=device,
         )
+    if mode == "target_tip_stabilize":
+        return _target_tip_stabilize_guided_policy_action(
+            env,
+            task_geometry_reward_config,
+            step_size=step_size,
+            lateral_direction_sign=lateral_direction_sign,
+            action_frame=action_frame,
+            device=device,
+        )
+    if mode == "target_module_stabilize":
+        return _target_module_stabilize_guided_policy_action(
+            env,
+            task_geometry_reward_config,
+            step_size=step_size,
+            rotation_sign=rotation_sign,
+            adaptive_orientation_sign=adaptive_orientation_sign,
+            orientation_sign_state=orientation_sign_state,
+            previous_orientation_error=previous_orientation_error,
+            adaptive_orientation_flip_margin_rad=adaptive_orientation_flip_margin_rad,
+            action_frame=action_frame,
+            device=device,
+        )
+    if mode == "target_tip_then_module_stabilize":
+        return _target_tip_then_module_guided_policy_action(
+            env,
+            task_geometry_reward_config,
+            step_size=step_size,
+            rotation_sign=rotation_sign,
+            adaptive_orientation_sign=adaptive_orientation_sign,
+            orientation_sign_state=orientation_sign_state,
+            previous_orientation_error=previous_orientation_error,
+            adaptive_orientation_flip_margin_rad=adaptive_orientation_flip_margin_rad,
+            action_frame=action_frame,
+            device=device,
+        )
 
     target_pos_w = _target_position_from_reward_config(env, task_geometry_reward_config)
-    body_name = str(task_geometry_reward_config.get("target_body") or "sfp_tip_link")
+    body_name = str(
+        args_cli.target_action_guide_target_tip_body_name
+        or task_geometry_reward_config.get("target_body")
+        or "sfp_tip_link"
+    )
     body_pos_w = _body_position_by_name(
         env,
         body_name,
-        task_geometry_reward_config.get("body_position_offset"),
+        task_geometry_reward_config.get("body_position_offset")
+        if body_name == str(task_geometry_reward_config.get("target_body") or "sfp_tip_link")
+        else None,
     )
     robot = env.unwrapped.scene["robot"]
     batch_size = int(robot.data.root_pos_w.shape[0])
@@ -3968,18 +8684,11 @@ def _target_guided_policy_action(
         move_w = delta_w / distance * torch.minimum(distance, torch.full_like(distance, float(step_size)))
     root_quat_w = robot.data.root_quat_w.to(device)
     desired_root_delta = math_utils.quat_apply_inverse(root_quat_w, move_w)
-    if action_frame == "root":
-        guide[:, :3] = desired_root_delta
-    else:
-        body_names = list(getattr(robot, "body_names", []))
-        frame_index = _named_index(body_names, action_frame)
-        _, frame_quat_b = math_utils.subtract_frame_transforms(
-            robot.data.root_pos_w.to(device),
-            robot.data.root_quat_w.to(device),
-            robot.data.body_pos_w[:, frame_index].to(device),
-            robot.data.body_quat_w[:, frame_index].to(device),
-        )
-        guide[:, :3] = math_utils.quat_apply_inverse(frame_quat_b, desired_root_delta)
+    guide[:, :3] = _root_translation_delta_to_policy_frame(
+        env,
+        desired_root_delta,
+        action_frame=action_frame,
+    )
     if float(rotation_step_size) > 0.0:
         target_quat_w = _target_orientation_from_reward_config(env, task_geometry_reward_config)
         body_quat_w = _body_orientation_by_name(
@@ -3998,10 +8707,1916 @@ def _target_guided_policy_action(
             desired_frame_quat_w = math_utils.quat_mul(q_diff_w, frame_quat_w)
             delta_quat_frame = math_utils.quat_mul(math_utils.quat_inv(frame_quat_w), desired_frame_quat_w)
             delta_rot_frame = math_utils.axis_angle_from_quat(delta_quat_frame)
+            delta_rot_frame = delta_rot_frame * float(args_cli.target_action_guide_rotation_sign)
             rot_norm = torch.linalg.norm(delta_rot_frame, dim=1, keepdim=True).clamp(min=1.0e-9)
             rot_step = torch.full_like(rot_norm, max(float(rotation_step_size), 0.0))
             guide[:, 3:6] = delta_rot_frame / rot_norm * torch.minimum(rot_norm, rot_step)
     return guide, {"target_action_guide_missing_geometry": 0.0}
+
+
+def _target_module_stabilize_guided_policy_action(
+    env,
+    task_geometry_reward_config: dict[str, Any],
+    *,
+    step_size: float,
+    rotation_sign: float,
+    adaptive_orientation_sign: bool,
+    orientation_sign_state: torch.Tensor | None,
+    previous_orientation_error: torch.Tensor | None,
+    adaptive_orientation_flip_margin_rad: float,
+    action_frame: str,
+    device: torch.device,
+) -> tuple[torch.Tensor, dict[str, float]]:
+    """Teacher guide matching the successful diagnostic module-stabilizer."""
+    target_body_name = str(task_geometry_reward_config.get("target_body") or "sfp_tip_link")
+    module_body_name = str(args_cli.target_action_guide_target_module_body_name or "sfp_module_link")
+    tip_pos_w = _body_position_by_name(
+        env,
+        target_body_name,
+        task_geometry_reward_config.get("body_position_offset"),
+    )
+    module_pos_w = _body_position_by_name(env, module_body_name, None)
+    entrance_w = _episode_entrance_position_from_yaml(env)
+    axis_w = _episode_insertion_axis_from_yaml(env)
+    target_pos_w = _target_position_from_reward_config(env, task_geometry_reward_config)
+    robot = env.unwrapped.scene["robot"]
+    batch_size = int(robot.data.root_pos_w.shape[0])
+    guide = torch.zeros((batch_size, 6), dtype=torch.float32, device=device)
+    if tip_pos_w is None or module_pos_w is None or entrance_w is None or axis_w is None or target_pos_w is None:
+        return guide, {"target_action_guide_missing_geometry": 1.0}
+
+    tip_pos_w = tip_pos_w.to(device=device, dtype=guide.dtype)
+    module_pos_w = module_pos_w.to(device=device, dtype=guide.dtype)
+    entrance_w = entrance_w.to(device=device, dtype=guide.dtype)
+    axis_w = axis_w.to(device=device, dtype=guide.dtype)
+    target_pos_w = target_pos_w.to(device=device, dtype=guide.dtype)
+    axis_w = axis_w / torch.linalg.norm(axis_w, dim=1, keepdim=True).clamp(min=1.0e-9)
+
+    tip_rel = tip_pos_w - entrance_w
+    tip_depth = torch.sum(tip_rel * axis_w, dim=1, keepdim=True)
+    tip_lateral_vec = tip_depth * axis_w - tip_rel
+    tip_lateral_error = torch.linalg.norm(tip_lateral_vec, dim=1, keepdim=True)
+
+    module_rel = module_pos_w - entrance_w
+    module_depth = torch.sum(module_rel * axis_w, dim=1, keepdim=True)
+    module_lateral_vec = module_depth * axis_w - module_rel
+    module_lateral_error = torch.linalg.norm(module_lateral_vec, dim=1, keepdim=True)
+
+    if math.isfinite(float(args_cli.target_action_guide_target_module_goal_depth_m)):
+        module_target_depth = torch.full_like(module_depth, float(args_cli.target_action_guide_target_module_goal_depth_m))
+    else:
+        target_depth = torch.sum((target_pos_w - entrance_w) * axis_w, dim=1, keepdim=True)
+        current_gap = tip_depth - module_depth
+        attr_name = f"_aic_target_module_stabilize_reference_gap_{module_body_name.replace('/', '_')}"
+        reference_gap = getattr(env, attr_name, None)
+        if reference_gap is None or reference_gap.shape != current_gap.shape:
+            reference_gap = current_gap.detach().clone()
+        else:
+            reference_gap = reference_gap.to(device=device, dtype=guide.dtype)
+        reset_mask = getattr(env.unwrapped, "episode_length_buf", None)
+        if reset_mask is not None:
+            reset = reset_mask.to(device=device).view(-1, 1) <= 1
+            reference_gap = torch.where(reset, current_gap.detach(), reference_gap)
+        setattr(env, attr_name, reference_gap.detach().clone())
+        module_target_depth = target_depth - reference_gap
+
+    axial_error = module_target_depth - module_depth
+    axial_clip = (
+        float(args_cli.target_action_guide_target_module_axial_step_m)
+        if math.isfinite(float(args_cli.target_action_guide_target_module_axial_step_m))
+        else float(step_size)
+    )
+    tip_lateral_clip = (
+        float(args_cli.target_action_guide_target_module_tip_lateral_step_m)
+        if math.isfinite(float(args_cli.target_action_guide_target_module_tip_lateral_step_m))
+        else float(step_size)
+    )
+    module_lateral_clip = max(float(args_cli.target_action_guide_target_module_lateral_step_m), 0.0)
+
+    axial_delta_scalar = torch.clamp(
+        axial_error,
+        min=-max(float(axial_clip), 0.0),
+        max=max(float(axial_clip), 0.0),
+    )
+    tip_theta = None
+    target_quat_w = _target_orientation_from_reward_config(env, task_geometry_reward_config)
+    tip_quat_w = _body_orientation_by_name(
+        env,
+        target_body_name,
+        task_geometry_reward_config.get("body_orientation_offset"),
+    )
+    orientation_error = torch.zeros_like(tip_depth)
+    if target_quat_w is not None and tip_quat_w is not None:
+        target_quat_w = target_quat_w.to(device=device, dtype=guide.dtype)
+        tip_quat_w = tip_quat_w.to(device=device, dtype=guide.dtype)
+        if str(task_geometry_reward_config.get("orientation_error_mode", "quat")).lower() == "axis":
+            local_axis = torch.tensor(
+                task_geometry_reward_config.get("orientation_axis_local", (0.0, 1.0, 0.0)),
+                dtype=guide.dtype,
+                device=device,
+            ).reshape(1, 3)
+            local_axis = local_axis / torch.linalg.norm(local_axis, dim=1, keepdim=True).clamp(min=1.0e-9)
+            tip_axis_w = math_utils.quat_apply(tip_quat_w, local_axis.expand(batch_size, -1))
+            target_axis_w = axis_w / torch.linalg.norm(axis_w, dim=1, keepdim=True).clamp(min=1.0e-9)
+            tip_theta = torch.acos(torch.sum(tip_axis_w * target_axis_w, dim=1, keepdim=True).clamp(min=-1.0, max=1.0))
+            orientation_error = tip_theta
+        else:
+            q_diff_w = math_utils.quat_mul(target_quat_w, math_utils.quat_inv(tip_quat_w))
+            tip_theta = torch.linalg.norm(math_utils.axis_angle_from_quat(q_diff_w), dim=1, keepdim=True)
+            orientation_error = tip_theta
+
+    axial_gate_active = torch.ones_like(axial_delta_scalar, dtype=torch.bool)
+    tip_lateral_gate = float(args_cli.target_action_guide_target_module_tip_lateral_gate_m)
+    if math.isfinite(tip_lateral_gate):
+        axial_gate_active = axial_gate_active & (tip_lateral_error <= max(tip_lateral_gate, 0.0))
+    tip_theta_gate = float(args_cli.target_action_guide_target_module_tip_theta_gate_rad)
+    if tip_theta is not None and math.isfinite(tip_theta_gate):
+        axial_gate_active = axial_gate_active & (tip_theta <= max(tip_theta_gate, 0.0))
+    axial_delta_scalar = torch.where(
+        (axial_delta_scalar > 0.0) & (~axial_gate_active),
+        torch.zeros_like(axial_delta_scalar),
+        axial_delta_scalar,
+    )
+    polish_active = torch.zeros_like(axial_delta_scalar, dtype=torch.bool)
+    if bool(args_cli.target_action_guide_target_module_polish_after_near_success):
+        polish_active = (
+            (tip_depth >= float(args_cli.target_action_guide_target_module_polish_min_tip_depth_m))
+            & (tip_lateral_error <= max(float(args_cli.target_action_guide_target_module_polish_max_tip_lateral_m), 0.0))
+        )
+        if tip_theta is None or not math.isfinite(float(args_cli.target_action_guide_target_module_polish_max_tip_theta_rad)):
+            theta_ok = torch.ones_like(polish_active, dtype=torch.bool)
+        else:
+            theta_ok = tip_theta <= max(float(args_cli.target_action_guide_target_module_polish_max_tip_theta_rad), 0.0)
+        polish_active = polish_active & theta_ok
+        if bool(args_cli.target_action_guide_target_module_polish_latch):
+            latch = getattr(env.unwrapped, "_aic_target_action_guide_target_module_polish_latch", None)
+            if latch is None or latch.shape != polish_active.shape:
+                latch = torch.zeros_like(polish_active, dtype=torch.bool)
+            else:
+                latch = latch.to(device=device, dtype=torch.bool)
+            polish_active = polish_active | latch
+            setattr(env.unwrapped, "_aic_target_action_guide_target_module_polish_latch", polish_active.detach().clone())
+        polish_axial_clip = max(float(args_cli.target_action_guide_target_module_polish_axial_step_m), 0.0)
+        axial_delta_scalar = torch.where(
+            polish_active & (axial_delta_scalar > polish_axial_clip),
+            torch.full_like(axial_delta_scalar, polish_axial_clip),
+            axial_delta_scalar,
+        )
+
+    world_delta = (
+        axial_delta_scalar * axis_w
+        + _clip_vector_norm(tip_lateral_vec, max(float(tip_lateral_clip), 0.0))
+        + _clip_vector_norm(module_lateral_vec, module_lateral_clip)
+    )
+
+    rotation_step = max(float(args_cli.target_action_guide_target_module_orientation_step_rad), 0.0)
+    orientation_active = torch.zeros_like(axial_delta_scalar, dtype=torch.bool)
+    orientation_improves = torch.zeros_like(axial_delta_scalar, dtype=torch.bool)
+    orientation_selected_index = torch.zeros_like(axial_delta_scalar)
+    orientation_predicted_error = orientation_error
+    orientation_predicted_module_lateral = module_lateral_error
+    orientation_predicted_module_lateral_increase = torch.zeros_like(module_lateral_error)
+    orientation_sign_flip = torch.zeros((batch_size, 1), dtype=torch.bool, device=device)
+    rotvec_w = torch.zeros((batch_size, 3), dtype=guide.dtype, device=device)
+    if rotation_step > 0.0 and target_quat_w is not None and tip_quat_w is not None:
+        orientation_active = (
+            (tip_lateral_error <= max(float(args_cli.target_action_guide_target_module_orientation_lateral_gate_m), 0.0))
+            & (tip_depth >= float(args_cli.target_action_guide_target_module_orientation_activation_depth_m))
+            & (orientation_error > max(float(args_cli.target_action_guide_target_module_orientation_threshold_rad), 0.0))
+        )
+        if action_frame == "root":
+            frame_pos_w = robot.data.root_pos_w.to(device=device, dtype=guide.dtype)
+            frame_quat_w = robot.data.root_quat_w.to(device=device, dtype=guide.dtype)
+        else:
+            body_names = list(getattr(robot, "body_names", []))
+            frame_index = _named_index(body_names, action_frame)
+            frame_pos_w = robot.data.body_pos_w[:, frame_index].to(device=device, dtype=guide.dtype)
+            frame_quat_w = robot.data.body_quat_w[:, frame_index].to(device=device, dtype=guide.dtype)
+        orientation_mode = str(args_cli.target_action_guide_target_module_orientation_mode)
+        if orientation_mode == "direct_quat":
+            q_diff_w = math_utils.quat_mul(target_quat_w, math_utils.quat_inv(tip_quat_w))
+            rotvec_w = math_utils.axis_angle_from_quat(q_diff_w)
+            rot_norm = torch.linalg.norm(rotvec_w, dim=1, keepdim=True).clamp(min=1.0e-9)
+            rotvec_w = rotvec_w / rot_norm * torch.minimum(rot_norm, torch.full_like(rot_norm, rotation_step))
+            orientation_improves = orientation_active
+            orientation_predicted_error = (orientation_error - rotation_step).clamp(min=0.0)
+        elif orientation_mode == "axis_cross":
+            local_axis = torch.tensor(
+                task_geometry_reward_config.get("orientation_axis_local", (0.0, 1.0, 0.0)),
+                dtype=guide.dtype,
+                device=device,
+            ).reshape(1, 3)
+            local_axis = local_axis / torch.linalg.norm(local_axis, dim=1, keepdim=True).clamp(min=1.0e-9)
+            tip_axis_w = math_utils.quat_apply(tip_quat_w, local_axis.expand(batch_size, -1))
+            target_axis_w = axis_w / torch.linalg.norm(axis_w, dim=1, keepdim=True).clamp(min=1.0e-9)
+            current_error = torch.acos(
+                torch.sum(tip_axis_w * target_axis_w, dim=1, keepdim=True).clamp(min=-1.0, max=1.0)
+            )
+            rot_axis_w = torch.linalg.cross(tip_axis_w, target_axis_w, dim=1)
+            rot_norm = torch.linalg.norm(rot_axis_w, dim=1, keepdim=True).clamp(min=1.0e-9)
+            rot_mag = torch.minimum(current_error, torch.full_like(current_error, rotation_step))
+            rotvec_w = rot_axis_w / rot_norm * rot_mag
+            orientation_improves = current_error > 1.0e-7
+            orientation_predicted_error = (current_error - rot_mag).clamp(min=0.0)
+            orientation_predicted_module_lateral = module_lateral_error
+            orientation_predicted_module_lateral_increase = torch.zeros_like(module_lateral_error)
+            orientation_selected_index = torch.full_like(orientation_selected_index, -1.0)
+        else:
+            candidate_axes_w = torch.tensor(
+                (
+                    (1.0, 0.0, 0.0),
+                    (-1.0, 0.0, 0.0),
+                    (0.0, 1.0, 0.0),
+                    (0.0, -1.0, 0.0),
+                    (0.0, 0.0, 1.0),
+                    (0.0, 0.0, -1.0),
+                ),
+                dtype=guide.dtype,
+                device=device,
+            )
+            candidate_rotvec_w = candidate_axes_w.reshape(1, 6, 3).expand(batch_size, -1, -1) * rotation_step
+            q_candidate = _quat_from_rotvec(candidate_rotvec_w.reshape(-1, 3))
+            if orientation_mode == "candidate_axis_best":
+                local_axis = torch.tensor(
+                    task_geometry_reward_config.get("orientation_axis_local", (0.0, 1.0, 0.0)),
+                    dtype=guide.dtype,
+                    device=device,
+                ).reshape(1, 3)
+                local_axis = local_axis / torch.linalg.norm(local_axis, dim=1, keepdim=True).clamp(min=1.0e-9)
+                tip_axis_w = math_utils.quat_apply(tip_quat_w, local_axis.expand(batch_size, -1))
+                target_axis_w = axis_w / torch.linalg.norm(axis_w, dim=1, keepdim=True).clamp(min=1.0e-9)
+                predicted_axis_w = math_utils.quat_apply(
+                    q_candidate,
+                    tip_axis_w[:, None, :].expand(-1, 6, -1).reshape(-1, 3),
+                ).reshape(batch_size, 6, 3)
+                candidate_errors = torch.acos(
+                    torch.sum(predicted_axis_w * target_axis_w[:, None, :], dim=2).clamp(min=-1.0, max=1.0)
+                )
+                current_error = torch.acos(
+                    torch.sum(tip_axis_w * target_axis_w, dim=1, keepdim=True).clamp(min=-1.0, max=1.0)
+                )
+            else:
+                predicted_tip_quat_w = math_utils.quat_mul(
+                    q_candidate,
+                    tip_quat_w[:, None, :].expand(-1, 6, -1).reshape(-1, 4),
+                ).reshape(batch_size, 6, 4)
+                candidate_errors = math_utils.quat_error_magnitude(
+                    predicted_tip_quat_w.reshape(-1, 4),
+                    target_quat_w[:, None, :].expand(-1, 6, -1).reshape(-1, 4),
+                ).reshape(batch_size, 6)
+                current_error = math_utils.quat_error_magnitude(tip_quat_w, target_quat_w).view(-1, 1)
+            module_penalty = max(float(args_cli.target_action_guide_target_module_orientation_module_lateral_penalty), 0.0)
+            if module_penalty > 0.0:
+                predicted_module = (
+                    frame_pos_w[:, None, :]
+                    + math_utils.quat_apply(
+                        q_candidate,
+                        (module_pos_w - frame_pos_w)[:, None, :].expand(-1, 6, -1).reshape(-1, 3),
+                    ).reshape(batch_size, 6, 3)
+                    + world_delta[:, None, :]
+                )
+                pred_rel = predicted_module - entrance_w[:, None, :]
+                pred_depth = torch.sum(pred_rel * axis_w[:, None, :], dim=2, keepdim=True)
+                pred_lateral = torch.linalg.norm(pred_rel - pred_depth * axis_w[:, None, :], dim=2)
+                margin = max(float(args_cli.target_action_guide_target_module_orientation_module_lateral_margin_m), 0.0)
+                module_lateral_increase = (pred_lateral - module_lateral_error - margin).clamp(min=0.0)
+                candidate_scores = candidate_errors + module_penalty * module_lateral_increase
+            else:
+                pred_lateral = module_lateral_error.expand(-1, 6)
+                module_lateral_increase = torch.zeros_like(pred_lateral)
+                candidate_scores = candidate_errors
+            _, best_idx = torch.min(candidate_scores, dim=1, keepdim=True)
+            rotvec_w = torch.gather(
+                candidate_rotvec_w,
+                1,
+                best_idx[:, :, None].expand(-1, -1, 3),
+            ).squeeze(1)
+            orientation_predicted_error = torch.gather(candidate_errors, 1, best_idx).view(-1, 1)
+            orientation_predicted_module_lateral = torch.gather(pred_lateral, 1, best_idx).view(-1, 1)
+            orientation_predicted_module_lateral_increase = torch.gather(
+                module_lateral_increase,
+                1,
+                best_idx,
+            ).view(-1, 1)
+            orientation_selected_index = best_idx.to(dtype=guide.dtype)
+            orientation_improves = orientation_predicted_error < current_error
+            rotvec_w = torch.where(orientation_improves.expand_as(rotvec_w), rotvec_w, torch.zeros_like(rotvec_w))
+        orientation_active = orientation_active & orientation_improves
+        rotvec_w = torch.where(orientation_active.expand_as(rotvec_w), rotvec_w, torch.zeros_like(rotvec_w))
+        if (
+            bool(adaptive_orientation_sign)
+            and orientation_sign_state is not None
+            and previous_orientation_error is not None
+            and orientation_sign_state.shape == orientation_error.shape
+            and previous_orientation_error.shape == orientation_error.shape
+        ):
+            reset_mask = getattr(env.unwrapped, "episode_length_buf", None)
+            if reset_mask is not None:
+                reset = reset_mask.to(device=device).view(-1, 1) <= 1
+                orientation_sign_state[reset] = 1.0
+                previous_orientation_error[reset] = float("nan")
+            worsened = (
+                orientation_active
+                & torch.isfinite(previous_orientation_error)
+                & (orientation_error > previous_orientation_error + max(float(adaptive_orientation_flip_margin_rad), 0.0))
+            )
+            if bool(worsened.any().detach().cpu()):
+                orientation_sign_state[worsened] *= -1.0
+            orientation_sign_flip = worsened
+        sign = float(rotation_sign)
+        if orientation_sign_state is not None and orientation_sign_state.shape == orientation_error.shape:
+            sign_tensor = orientation_sign_state.to(device=device, dtype=guide.dtype) * sign
+        else:
+            sign_tensor = torch.full((batch_size, 1), sign, dtype=guide.dtype, device=device)
+        rotvec_w = rotvec_w * sign_tensor
+        q_step_w = _quat_from_rotvec(rotvec_w)
+        tip_from_frame_w = tip_pos_w - frame_pos_w
+        induced_tip_delta_w = math_utils.quat_apply(q_step_w, tip_from_frame_w) - tip_from_frame_w
+        compensation_w = _clip_vector_norm(
+            -induced_tip_delta_w,
+            max(float(args_cli.target_action_guide_target_module_rotation_compensation_clip_m), 0.0),
+        )
+        world_delta = world_delta + compensation_w
+        rotvec_frame = math_utils.quat_apply_inverse(frame_quat_w, rotvec_w)
+        guide[:, 3:6] = rotvec_frame
+        if previous_orientation_error is not None and previous_orientation_error.shape == orientation_error.shape:
+            previous_orientation_error.copy_(orientation_error.detach())
+
+    emit_isaac_root_action = bool(args_cli.target_action_guide_target_module_emit_isaac_root_action)
+    if emit_isaac_root_action:
+        guide = _world_delta_to_signed_isaac_root_action(env, world_delta, rotvec_w)
+    else:
+        root_delta = math_utils.quat_apply_inverse(
+            robot.data.root_quat_w.to(device=device, dtype=guide.dtype),
+            world_delta,
+        )
+        guide[:, :3] = _clip_vector_norm(
+            _root_translation_delta_to_policy_frame(env, root_delta, action_frame=action_frame),
+            max(float(step_size), 0.0) + max(float(args_cli.target_action_guide_target_module_lateral_step_m), 0.0),
+        )
+    return guide, {
+        "target_action_guide_missing_geometry": 0.0,
+        "target_action_guide_emits_isaac_root_action": float(emit_isaac_root_action),
+        "target_action_guide_target_module_tip_depth_m_mean": float(tip_depth.mean().detach().cpu()),
+        "target_action_guide_target_module_depth_m_mean": float(module_depth.mean().detach().cpu()),
+        "target_action_guide_target_module_target_depth_m_mean": float(module_target_depth.mean().detach().cpu()),
+        "target_action_guide_target_module_axial_error_m_mean": float(axial_error.mean().detach().cpu()),
+        "target_action_guide_target_module_tip_lateral_error_m_mean": float(tip_lateral_error.mean().detach().cpu()),
+        "target_action_guide_target_module_lateral_error_m_mean": float(module_lateral_error.mean().detach().cpu()),
+        "target_action_guide_target_module_axial_gate_active_frac": float(
+            axial_gate_active.to(dtype=guide.dtype).mean().detach().cpu()
+        ),
+        "target_action_guide_target_module_positive_axial_frac": float(
+            (axial_delta_scalar > 0.0).to(dtype=guide.dtype).mean().detach().cpu()
+        ),
+        "target_action_guide_target_module_polish_active_frac": float(
+            polish_active.to(dtype=guide.dtype).mean().detach().cpu()
+        ),
+        "target_action_guide_target_module_orientation_active_frac": float(
+            orientation_active.to(dtype=guide.dtype).mean().detach().cpu()
+        ),
+        "target_action_guide_target_module_orientation_improves_frac": float(
+            orientation_improves.to(dtype=guide.dtype).mean().detach().cpu()
+        ),
+        "target_action_guide_target_module_orientation_selected_index_mean": float(
+            orientation_selected_index.mean().detach().cpu()
+        ),
+        "target_action_guide_target_module_orientation_predicted_error_rad_mean": float(
+            orientation_predicted_error.mean().detach().cpu()
+        ),
+        "target_action_guide_target_module_orientation_predicted_module_lateral_m_mean": float(
+            orientation_predicted_module_lateral.mean().detach().cpu()
+        ),
+        "target_action_guide_target_module_orientation_predicted_module_lateral_increase_m_mean": float(
+            orientation_predicted_module_lateral_increase.mean().detach().cpu()
+        ),
+        "target_action_guide_adaptive_orientation_sign_flip_fraction": float(
+            orientation_sign_flip.float().mean().detach().cpu()
+        ),
+        "target_action_guide_adaptive_orientation_sign_mean": (
+            1.0
+            if orientation_sign_state is None
+            else float(orientation_sign_state.float().mean().detach().cpu())
+        ),
+        "target_action_guide_target_module_world_delta_norm_m_mean": float(
+            world_delta.norm(dim=1).mean().detach().cpu()
+        ),
+    }
+
+
+def _target_tip_then_module_guided_policy_action(
+    env,
+    task_geometry_reward_config: dict[str, Any],
+    *,
+    step_size: float,
+    rotation_sign: float,
+    adaptive_orientation_sign: bool,
+    orientation_sign_state: torch.Tensor | None,
+    previous_orientation_error: torch.Tensor | None,
+    adaptive_orientation_flip_margin_rad: float,
+    action_frame: str,
+    device: torch.device,
+) -> tuple[torch.Tensor, dict[str, float]]:
+    """Latch from semantic-tip centering into module-depth insertion."""
+    target_body_name = str(task_geometry_reward_config.get("target_body") or "sfp_tip_link")
+    tip_pos_w = _body_position_by_name(
+        env,
+        target_body_name,
+        task_geometry_reward_config.get("body_position_offset"),
+    )
+    entrance_w = _episode_entrance_position_from_yaml(env)
+    axis_w = _episode_insertion_axis_from_yaml(env)
+    robot = env.unwrapped.scene["robot"]
+    batch_size = int(robot.data.root_pos_w.shape[0])
+    if tip_pos_w is None or entrance_w is None or axis_w is None:
+        guide = torch.zeros((batch_size, 6), dtype=torch.float32, device=device)
+        return guide, {
+            "target_action_guide_missing_geometry": 1.0,
+            "target_action_guide_tip_then_module_module_active_frac": 0.0,
+        }
+
+    tip_pos_w = tip_pos_w.to(device=device, dtype=torch.float32)
+    entrance_w = entrance_w.to(device=device, dtype=torch.float32)
+    axis_w = axis_w.to(device=device, dtype=torch.float32)
+    axis_w = axis_w / torch.linalg.norm(axis_w, dim=1, keepdim=True).clamp(min=1.0e-9)
+    tip_rel = tip_pos_w - entrance_w
+    tip_depth = torch.sum(tip_rel * axis_w, dim=1, keepdim=True)
+    tip_lateral_vec = tip_rel - tip_depth * axis_w
+    tip_lateral_error = torch.linalg.norm(tip_lateral_vec, dim=1, keepdim=True)
+
+    tip_theta = torch.full_like(tip_depth, float("inf"))
+    target_quat_w = _target_orientation_from_reward_config(env, task_geometry_reward_config)
+    tip_quat_w = _body_orientation_by_name(
+        env,
+        target_body_name,
+        task_geometry_reward_config.get("body_orientation_offset"),
+    )
+    if target_quat_w is not None and tip_quat_w is not None:
+        target_quat_w = target_quat_w.to(device=device, dtype=torch.float32)
+        tip_quat_w = tip_quat_w.to(device=device, dtype=torch.float32)
+        q_diff_w = math_utils.quat_mul(target_quat_w, math_utils.quat_inv(tip_quat_w))
+        tip_theta = torch.linalg.norm(math_utils.axis_angle_from_quat(q_diff_w), dim=1, keepdim=True)
+
+    switch_ready = (
+        (tip_depth >= float(args_cli.target_action_guide_tip_then_module_switch_depth_m))
+        & (tip_lateral_error <= max(float(args_cli.target_action_guide_tip_then_module_switch_lateral_m), 0.0))
+        & (tip_theta <= max(float(args_cli.target_action_guide_tip_then_module_switch_theta_rad), 0.0))
+    )
+    latch = getattr(env.unwrapped, "_aic_target_action_guide_tip_then_module_latch", None)
+    if latch is None or latch.shape != switch_ready.shape:
+        latch = torch.zeros_like(switch_ready, dtype=torch.bool)
+    else:
+        latch = latch.to(device=device, dtype=torch.bool)
+    reset_mask = getattr(env.unwrapped, "episode_length_buf", None)
+    if reset_mask is not None:
+        reset = reset_mask.to(device=device).view(-1, 1) <= 1
+        latch = torch.where(reset, torch.zeros_like(latch), latch)
+    latch = latch | switch_ready
+    setattr(env.unwrapped, "_aic_target_action_guide_tip_then_module_latch", latch.detach().clone())
+
+    tip_action, tip_metrics = _target_tip_stabilize_guided_policy_action(
+        env,
+        task_geometry_reward_config,
+        step_size=step_size,
+        action_frame=action_frame,
+        device=device,
+    )
+    module_action, module_metrics = _target_module_stabilize_guided_policy_action(
+        env,
+        task_geometry_reward_config,
+        step_size=step_size,
+        rotation_sign=rotation_sign,
+        adaptive_orientation_sign=adaptive_orientation_sign,
+        orientation_sign_state=orientation_sign_state,
+        previous_orientation_error=previous_orientation_error,
+        adaptive_orientation_flip_margin_rad=adaptive_orientation_flip_margin_rad,
+        action_frame=action_frame,
+        device=device,
+    )
+    action = torch.where(latch.expand_as(module_action), module_action, tip_action)
+    metrics = {
+        "target_action_guide_missing_geometry": 0.0,
+        "target_action_guide_tip_then_module_module_active_frac": float(
+            latch.to(dtype=action.dtype).mean().detach().cpu()
+        ),
+        "target_action_guide_tip_then_module_switch_ready_frac": float(
+            switch_ready.to(dtype=action.dtype).mean().detach().cpu()
+        ),
+        "target_action_guide_tip_then_module_tip_depth_m_mean": float(tip_depth.mean().detach().cpu()),
+        "target_action_guide_tip_then_module_tip_lateral_error_m_mean": float(
+            tip_lateral_error.mean().detach().cpu()
+        ),
+        "target_action_guide_tip_then_module_tip_theta_rad_mean": float(tip_theta.mean().detach().cpu()),
+    }
+    for key, value in tip_metrics.items():
+        if key != "target_action_guide_missing_geometry" and isinstance(value, (int, float)):
+            metrics[f"target_action_guide_tip_phase_{key}"] = float(value)
+    for key, value in module_metrics.items():
+        if key != "target_action_guide_missing_geometry" and isinstance(value, (int, float)):
+            metrics[f"target_action_guide_module_phase_{key}"] = float(value)
+    return action, metrics
+
+
+def _world_delta_to_signed_isaac_root_action(
+    env,
+    world_delta: torch.Tensor,
+    rotvec_world: torch.Tensor | None,
+) -> torch.Tensor:
+    robot = env.unwrapped.scene["robot"]
+    device = world_delta.device
+    dtype = world_delta.dtype
+    root_quat = robot.data.root_quat_w.to(device=device, dtype=dtype)
+    root_delta = math_utils.quat_apply_inverse(root_quat, world_delta)
+    if bool(args_cli.fix_isaac_ik_xy_sign):
+        root_delta = root_delta.clone()
+        sign_mask = _isaac_ik_xy_sign_fix_mask(env, root_delta.shape[0], device=device)
+        root_delta[:, 0:2] = torch.where(sign_mask, -root_delta[:, 0:2], root_delta[:, 0:2])
+    if rotvec_world is None:
+        root_rot = torch.zeros_like(root_delta)
+    else:
+        root_rot = math_utils.quat_apply_inverse(root_quat, rotvec_world.to(device=device, dtype=dtype))
+    return torch.cat([root_delta, root_rot], dim=1)
+
+
+def _target_tip_stabilize_guided_policy_action(
+    env,
+    task_geometry_reward_config: dict[str, Any],
+    *,
+    step_size: float,
+    lateral_direction_sign: float,
+    action_frame: str,
+    device: torch.device,
+) -> tuple[torch.Tensor, dict[str, float]]:
+    """Privileged semantic-tip translation guide used for near-final imitation.
+
+    This mirrors the diagnostic target-tip stabilizer: command a bounded world
+    translation that reduces semantic tip lateral error and signed-depth error.
+    Rotation is deliberately left at zero; final-orientation experiments remain
+    separate guard modes.
+    """
+    target_body_name = str(task_geometry_reward_config.get("target_body") or "sfp_tip_link")
+    body_name = str(args_cli.target_action_guide_target_tip_body_name or target_body_name)
+    body_pos_w = _body_position_by_name(
+        env,
+        body_name,
+        task_geometry_reward_config.get("body_position_offset") if body_name == target_body_name else None,
+    )
+    lateral_body_name = str(args_cli.target_action_guide_target_tip_lateral_body_name or body_name)
+    lateral_body_pos_w = _body_position_by_name(
+        env,
+        lateral_body_name,
+        task_geometry_reward_config.get("body_position_offset") if lateral_body_name == target_body_name else None,
+    )
+    secondary_lateral_body_name = str(args_cli.target_action_guide_target_tip_secondary_lateral_body_name or "")
+    secondary_lateral_body_pos_w = (
+        _body_position_by_name(
+            env,
+            secondary_lateral_body_name,
+            task_geometry_reward_config.get("body_position_offset")
+            if secondary_lateral_body_name == target_body_name
+            else None,
+        )
+        if secondary_lateral_body_name
+        else None
+    )
+    entrance_w = _episode_entrance_position_from_yaml(env)
+    axis_w = _episode_insertion_axis_from_yaml(env)
+    target_pos_w = _target_position_from_reward_config(env, task_geometry_reward_config)
+    robot = env.unwrapped.scene["robot"]
+    batch_size = int(robot.data.root_pos_w.shape[0])
+    guide = torch.zeros((batch_size, 6), dtype=torch.float32, device=device)
+    if body_pos_w is None or lateral_body_pos_w is None or entrance_w is None or axis_w is None:
+        return guide, {"target_action_guide_missing_geometry": 1.0}
+    body_pos_w = body_pos_w.to(device=device, dtype=guide.dtype)
+    lateral_body_pos_w = lateral_body_pos_w.to(device=device, dtype=guide.dtype)
+    if secondary_lateral_body_pos_w is not None:
+        secondary_lateral_body_pos_w = secondary_lateral_body_pos_w.to(device=device, dtype=guide.dtype)
+    entrance_w = entrance_w.to(device=device, dtype=guide.dtype)
+    axis_w = axis_w.to(device=device, dtype=guide.dtype)
+    axis_w = axis_w / torch.linalg.norm(axis_w, dim=1, keepdim=True).clamp(min=1.0e-9)
+    phase_body_pos_w = body_pos_w
+    if body_name != target_body_name:
+        phase_body_pos_candidate = _body_position_by_name(
+            env,
+            target_body_name,
+            task_geometry_reward_config.get("body_position_offset"),
+        )
+        if phase_body_pos_candidate is not None:
+            phase_body_pos_w = phase_body_pos_candidate.to(device=device, dtype=guide.dtype)
+    if math.isfinite(float(args_cli.target_action_guide_target_tip_goal_depth_m)):
+        target_depth = torch.full(
+            (batch_size, 1),
+            float(args_cli.target_action_guide_target_tip_goal_depth_m),
+            dtype=guide.dtype,
+            device=device,
+        )
+    elif target_pos_w is not None:
+        target_pos_w = target_pos_w.to(device=device, dtype=guide.dtype)
+        target_depth = torch.sum((target_pos_w - entrance_w) * axis_w, dim=1, keepdim=True)
+        consistency_body = str(task_geometry_reward_config.get("consistency_body") or "")
+        if body_name and consistency_body and body_name == consistency_body and body_name != target_body_name:
+            target_body_pos_w = _body_position_by_name(
+                env,
+                target_body_name,
+                task_geometry_reward_config.get("body_position_offset"),
+            )
+            if target_body_pos_w is not None:
+                target_body_pos_w = target_body_pos_w.to(device=device, dtype=guide.dtype)
+                target_rel = target_body_pos_w - entrance_w
+                target_body_depth = torch.sum(target_rel * axis_w, dim=1, keepdim=True)
+                body_rel_for_gap = body_pos_w - entrance_w
+                body_depth_for_gap = torch.sum(body_rel_for_gap * axis_w, dim=1, keepdim=True)
+                current_gap = target_body_depth - body_depth_for_gap
+                attr_name = f"_aic_target_tip_stabilize_reference_gap_{body_name.replace('/', '_')}"
+                reference_gap = getattr(env, attr_name, None)
+                if reference_gap is None or reference_gap.shape != current_gap.shape:
+                    reference_gap = current_gap.detach().clone()
+                reset_mask = getattr(env.unwrapped, "episode_length_buf", None)
+                if reset_mask is not None:
+                    reset = reset_mask.to(device=device).view(-1, 1) <= 1
+                    reference_gap = torch.where(reset, current_gap.detach(), reference_gap.to(device=device, dtype=guide.dtype))
+                setattr(env, attr_name, reference_gap.detach().clone())
+                target_depth = target_depth - reference_gap.to(device=device, dtype=guide.dtype)
+    else:
+        return guide, {"target_action_guide_missing_geometry": 1.0}
+
+    rel = body_pos_w - entrance_w
+    axial_depth = torch.sum(rel * axis_w, dim=1, keepdim=True)
+    lateral_rel = lateral_body_pos_w - entrance_w
+    lateral_body_depth = torch.sum(lateral_rel * axis_w, dim=1, keepdim=True)
+    centerline = entrance_w + lateral_body_depth * axis_w
+    lateral_error_vec = centerline - lateral_body_pos_w
+    lateral_error = torch.linalg.norm(lateral_error_vec, dim=1, keepdim=True)
+    secondary_lateral_error = torch.zeros_like(lateral_error)
+    secondary_lateral_error_vec = torch.zeros_like(lateral_error_vec)
+    if secondary_lateral_body_pos_w is not None:
+        secondary_lateral_rel = secondary_lateral_body_pos_w - entrance_w
+        secondary_lateral_depth = torch.sum(secondary_lateral_rel * axis_w, dim=1, keepdim=True)
+        secondary_centerline = entrance_w + secondary_lateral_depth * axis_w
+        secondary_lateral_error_vec = secondary_centerline - secondary_lateral_body_pos_w
+        secondary_lateral_error = torch.linalg.norm(secondary_lateral_error_vec, dim=1, keepdim=True)
+    phase_rel = phase_body_pos_w - entrance_w
+    phase_axial_depth = torch.sum(phase_rel * axis_w, dim=1, keepdim=True)
+    phase_lateral_vec = phase_rel - phase_axial_depth * axis_w
+    phase_lateral_error = torch.linalg.norm(phase_lateral_vec, dim=1, keepdim=True)
+    phase_axial_switch_depth = float(args_cli.target_action_guide_target_tip_phase_axial_switch_depth_m)
+    phase_axial_active = torch.zeros_like(axial_depth, dtype=torch.bool)
+    phase_axial_body_depth = axial_depth
+    phase_axial_target_depth = target_depth
+    if math.isfinite(phase_axial_switch_depth):
+        phase_axial_body_name = str(args_cli.target_action_guide_target_tip_phase_axial_body_name).strip()
+        if not phase_axial_body_name:
+            phase_axial_body_name = str(task_geometry_reward_config.get("consistency_body") or "").strip()
+        if not phase_axial_body_name:
+            phase_axial_body_name = secondary_lateral_body_name
+        phase_axial_body_pos_w = (
+            _body_position_by_name(env, phase_axial_body_name, None)
+            if phase_axial_body_name
+            else None
+        )
+        if phase_axial_body_pos_w is not None:
+            phase_axial_body_pos_w = phase_axial_body_pos_w.to(device=device, dtype=guide.dtype)
+            phase_axial_body_rel = phase_axial_body_pos_w - entrance_w
+            phase_axial_body_depth = torch.sum(phase_axial_body_rel * axis_w, dim=1, keepdim=True)
+            current_gap = phase_axial_depth - phase_axial_body_depth
+            attr_name = f"_aic_target_tip_stabilize_phase_axial_reference_gap_{phase_axial_body_name.replace('/', '_')}"
+            reference_gap = getattr(env, attr_name, None)
+            if reference_gap is None or reference_gap.shape != current_gap.shape:
+                reference_gap = current_gap.detach().clone()
+            else:
+                reference_gap = reference_gap.to(device=device, dtype=guide.dtype)
+            reset_mask = getattr(env.unwrapped, "episode_length_buf", None)
+            if reset_mask is not None:
+                reset = reset_mask.to(device=device).view(-1, 1) <= 1
+                reference_gap = torch.where(reset, current_gap.detach(), reference_gap)
+            setattr(env, attr_name, reference_gap.detach().clone())
+            phase_axial_target_depth = target_depth - reference_gap
+            phase_axial_active = phase_axial_depth >= phase_axial_switch_depth
+            if bool(args_cli.target_action_guide_target_tip_phase_axial_latch):
+                latch_attr = (
+                    f"_aic_target_tip_stabilize_phase_axial_latched_"
+                    f"{phase_axial_body_name.replace('/', '_')}"
+                )
+                latched = getattr(env, latch_attr, None)
+                if latched is None or latched.shape != phase_axial_active.shape:
+                    latched = torch.zeros_like(phase_axial_active, dtype=torch.bool)
+                else:
+                    latched = latched.to(device=device)
+                reset_mask = getattr(env.unwrapped, "episode_length_buf", None)
+                if reset_mask is not None:
+                    reset = reset_mask.to(device=device).view(-1, 1) <= 1
+                    latched = torch.where(reset, torch.zeros_like(latched), latched)
+                latched = latched | phase_axial_active
+                setattr(env, latch_attr, latched.detach().clone())
+                phase_axial_active = latched
+    axial_depth_for_error = torch.where(phase_axial_active, phase_axial_body_depth, axial_depth)
+    target_depth_for_error = torch.where(phase_axial_active, phase_axial_target_depth, target_depth)
+    axial_error = target_depth_for_error - axial_depth_for_error
+    lateral_step_clip = (
+        float(args_cli.target_action_guide_target_tip_lateral_step_m)
+        if math.isfinite(float(args_cli.target_action_guide_target_tip_lateral_step_m))
+        else float(step_size)
+    )
+    axial_step_clip = (
+        float(args_cli.target_action_guide_target_tip_axial_step_m)
+        if math.isfinite(float(args_cli.target_action_guide_target_tip_axial_step_m))
+        else float(step_size)
+    )
+    lateral_delta = _clip_vector_norm(lateral_error_vec, max(float(lateral_step_clip), 0.0))
+    secondary_lateral_step_clip = (
+        float(args_cli.target_action_guide_target_tip_secondary_lateral_step_m)
+        if math.isfinite(float(args_cli.target_action_guide_target_tip_secondary_lateral_step_m))
+        else 0.0
+    )
+    secondary_lateral_extra_step_clip = max(
+        float(args_cli.target_action_guide_target_tip_secondary_lateral_extra_step_m),
+        0.0,
+    )
+    secondary_lateral_active = torch.zeros_like(lateral_error, dtype=torch.bool)
+    if secondary_lateral_body_pos_w is not None and secondary_lateral_step_clip > 0.0:
+        lateral_delta = lateral_delta + _clip_vector_norm(
+            secondary_lateral_error_vec,
+            max(float(secondary_lateral_step_clip), 0.0),
+        )
+    if secondary_lateral_body_pos_w is not None and secondary_lateral_extra_step_clip > 0.0:
+        secondary_lateral_active = (
+            (phase_axial_depth >= float(args_cli.target_action_guide_target_tip_secondary_lateral_activation_depth_m))
+            & (
+                secondary_lateral_error
+                > max(float(args_cli.target_action_guide_target_tip_secondary_lateral_activation_error_m), 0.0)
+            )
+        )
+        secondary_lateral_delta = _clip_vector_norm(
+            secondary_lateral_error_vec,
+            max(float(secondary_lateral_extra_step_clip), 0.0),
+        )
+        lateral_delta = lateral_delta + torch.where(
+            secondary_lateral_active.expand_as(secondary_lateral_delta),
+            secondary_lateral_delta,
+            torch.zeros_like(secondary_lateral_delta),
+        )
+    phase_lateral_dither_active = torch.zeros_like(lateral_error, dtype=torch.bool)
+    phase_lateral_dither_delta = torch.zeros_like(lateral_delta)
+    phase_lateral_dither_amp = max(float(args_cli.target_action_guide_target_tip_phase_lateral_dither_m), 0.0)
+    if secondary_lateral_body_pos_w is not None and phase_lateral_dither_amp > 0.0:
+        phase_lateral_dither_active = (
+            phase_axial_active
+            & (phase_axial_depth >= float(args_cli.target_action_guide_target_tip_phase_lateral_dither_activation_depth_m))
+            & (
+                secondary_lateral_error
+                >= max(float(args_cli.target_action_guide_target_tip_phase_lateral_dither_secondary_min_m), 0.0)
+            )
+        )
+        dither_dir = secondary_lateral_error_vec / secondary_lateral_error.clamp(min=1.0e-9)
+        episode_length_buf = getattr(env.unwrapped, "episode_length_buf", None)
+        if episode_length_buf is None:
+            dither_sign = torch.ones_like(secondary_lateral_error)
+        else:
+            period = max(int(args_cli.target_action_guide_target_tip_phase_lateral_dither_period_steps), 1)
+            phase_index = (episode_length_buf.to(device=device).view(-1, 1) // period) % 2
+            dither_sign = torch.where(
+                phase_index == 0,
+                torch.ones_like(secondary_lateral_error),
+                -torch.ones_like(secondary_lateral_error),
+            )
+        phase_lateral_dither_delta = dither_dir * dither_sign * phase_lateral_dither_amp
+        lateral_delta = lateral_delta + torch.where(
+            phase_lateral_dither_active.expand_as(phase_lateral_dither_delta),
+            phase_lateral_dither_delta,
+            torch.zeros_like(phase_lateral_dither_delta),
+        )
+    target_tip_lateral_direction_sign = 1.0 if float(lateral_direction_sign) >= 0.0 else -1.0
+    lateral_delta = lateral_delta * target_tip_lateral_direction_sign
+    target_quat_w = _target_orientation_from_reward_config(env, task_geometry_reward_config)
+    orientation_body_name = str(args_cli.target_action_guide_target_tip_orientation_body_name).strip() or target_body_name
+    body_quat_w = _body_orientation_by_name(
+        env,
+        orientation_body_name,
+        task_geometry_reward_config.get("body_orientation_offset"),
+    )
+    orientation_error = None
+    body_axis_w_for_final = None
+    target_axis_w_for_final = None
+    axis_orientation_error_for_final = None
+    if target_quat_w is not None and body_quat_w is not None:
+        target_quat_w = target_quat_w.to(device=device, dtype=guide.dtype)
+        body_quat_w = body_quat_w.to(device=device, dtype=guide.dtype)
+        q_diff_w = math_utils.quat_mul(target_quat_w, math_utils.quat_inv(body_quat_w))
+        orientation_delta_w = math_utils.axis_angle_from_quat(q_diff_w)
+        orientation_error = torch.linalg.norm(orientation_delta_w, dim=1, keepdim=True)
+        if bool(args_cli.target_action_guide_final_axis_only_orientation):
+            local_axis = torch.tensor(
+                task_geometry_reward_config.get("orientation_axis_local", (0.0, 1.0, 0.0)),
+                dtype=guide.dtype,
+                device=device,
+            ).reshape(1, 3)
+            local_axis = local_axis / torch.linalg.norm(local_axis, dim=1, keepdim=True).clamp(min=1.0e-9)
+            body_axis_w_for_final = math_utils.quat_apply(
+                body_quat_w,
+                local_axis.expand(body_quat_w.shape[0], -1),
+            )
+            target_axis_w_for_final = axis_w
+            axis_orientation_error_for_final = torch.acos(
+                torch.sum(body_axis_w_for_final * target_axis_w_for_final, dim=1, keepdim=True).clamp(
+                    min=-1.0,
+                    max=1.0,
+                )
+            )
+
+    axial_step_limit = torch.full_like(axial_error, max(float(axial_step_clip), 0.0))
+    phase_axial_step = float(args_cli.target_action_guide_target_tip_phase_axial_step_m)
+    if math.isfinite(phase_axial_step):
+        axial_step_limit = torch.where(
+            phase_axial_active,
+            torch.full_like(axial_step_limit, max(float(phase_axial_step), 0.0)),
+            axial_step_limit,
+        )
+    axial_delta_scalar = torch.clamp(axial_error, min=-axial_step_limit, max=axial_step_limit)
+    preinsert_alignment_ready = torch.ones_like(axial_depth, dtype=torch.bool)
+    preinsert_hover_active = torch.zeros_like(axial_depth, dtype=torch.bool)
+    preinsert_hover_depth = float(args_cli.target_action_guide_preinsert_hover_depth)
+    preinsert_hover_depth_ready = torch.ones_like(axial_depth, dtype=torch.bool)
+    blocked_axial_step_size = float(args_cli.target_action_guide_blocked_axial_step_size)
+    preinsert_primary_gate = float(args_cli.target_action_guide_target_tip_axial_lateral_gate_m)
+    if math.isfinite(preinsert_primary_gate) and preinsert_primary_gate >= 0.0:
+        preinsert_alignment_ready = preinsert_alignment_ready & (lateral_error <= preinsert_primary_gate)
+    preinsert_secondary_gate = float(args_cli.target_action_guide_target_tip_secondary_axial_lateral_gate_m)
+    if (
+        secondary_lateral_body_pos_w is not None
+        and math.isfinite(preinsert_secondary_gate)
+        and preinsert_secondary_gate >= 0.0
+    ):
+        preinsert_secondary_gate_active = phase_axial_depth >= float(
+            args_cli.target_action_guide_target_tip_secondary_axial_lateral_gate_activation_depth_m
+        )
+        preinsert_alignment_ready = preinsert_alignment_ready & (
+            ~preinsert_secondary_gate_active | (secondary_lateral_error <= preinsert_secondary_gate)
+        )
+    preinsert_orientation_switch = float(args_cli.target_action_guide_orientation_switch_rad)
+    preinsert_orientation_error = (
+        axis_orientation_error_for_final
+        if bool(args_cli.target_action_guide_final_axis_only_orientation)
+        and axis_orientation_error_for_final is not None
+        else orientation_error
+    )
+    if preinsert_orientation_error is not None and preinsert_orientation_switch > 0.0:
+        preinsert_alignment_ready = preinsert_alignment_ready & (
+            preinsert_orientation_error <= max(preinsert_orientation_switch, 0.0)
+        )
+    hover_ready_tolerance = float(args_cli.target_action_guide_preinsert_hover_ready_tolerance_m)
+    if math.isfinite(preinsert_hover_depth) and math.isfinite(hover_ready_tolerance):
+        preinsert_hover_depth_ready = phase_axial_depth <= (
+            torch.full_like(phase_axial_depth, float(preinsert_hover_depth))
+            + max(float(hover_ready_tolerance), 0.0)
+        )
+        preinsert_alignment_ready = preinsert_alignment_ready & preinsert_hover_depth_ready
+        if bool(args_cli.target_action_guide_preinsert_hover_zero_lateral_until_depth_ready):
+            lateral_delta = torch.where(
+                preinsert_hover_depth_ready.expand_as(lateral_delta),
+                lateral_delta,
+                torch.zeros_like(lateral_delta),
+            )
+    preinsert_alignment_ready_now = preinsert_alignment_ready.clone()
+    preinsert_latched_off_gate = torch.zeros_like(preinsert_alignment_ready, dtype=torch.bool)
+    if bool(args_cli.target_action_guide_preinsert_alignment_latch):
+        latch_attr = "_aic_target_tip_stabilize_preinsert_alignment_latched"
+        latched = getattr(env, latch_attr, None)
+        if latched is None or latched.shape != preinsert_alignment_ready.shape:
+            latched = torch.zeros_like(preinsert_alignment_ready, dtype=torch.bool)
+        else:
+            latched = latched.to(device=device)
+        reset_mask = getattr(env.unwrapped, "episode_length_buf", None)
+        if reset_mask is not None:
+            reset = reset_mask.to(device=device).view(-1, 1) <= 1
+            latched = torch.where(reset, torch.zeros_like(latched), latched)
+        latched = latched | preinsert_alignment_ready
+        setattr(env, latch_attr, latched.detach().clone())
+        preinsert_latched_off_gate = latched & ~preinsert_alignment_ready_now
+        preinsert_alignment_ready = latched
+    if math.isfinite(preinsert_hover_depth):
+        preinsert_hover_active = ~preinsert_alignment_ready
+        hover_error = torch.full_like(phase_axial_depth, float(preinsert_hover_depth)) - phase_axial_depth
+        hover_step = float(args_cli.target_action_guide_preinsert_hover_step_m)
+        hover_step_limit = (
+            torch.full_like(axial_step_limit, max(float(hover_step), 0.0))
+            if math.isfinite(hover_step)
+            else axial_step_limit
+        )
+        hover_delta_scalar = torch.clamp(hover_error, min=-hover_step_limit, max=hover_step_limit)
+        axial_delta_scalar = torch.where(preinsert_hover_active, hover_delta_scalar, axial_delta_scalar)
+    elif math.isfinite(blocked_axial_step_size):
+        preinsert_hover_active = ~preinsert_alignment_ready
+        blocked_delta_scalar = torch.full_like(axial_delta_scalar, float(blocked_axial_step_size))
+        blocked_delta_scalar = torch.clamp(blocked_delta_scalar, min=-axial_step_limit, max=axial_step_limit)
+        axial_delta_scalar = torch.where(preinsert_hover_active, blocked_delta_scalar, axial_delta_scalar)
+    realized_r_recovery_trigger = torch.zeros_like(axial_depth, dtype=torch.bool)
+    realized_r_recovery_active = torch.zeros_like(axial_depth, dtype=torch.bool)
+    realized_r_recovery_cooldown = torch.zeros_like(axial_depth)
+    realized_r_recovery_theta_trigger = torch.zeros_like(axial_depth, dtype=torch.bool)
+    realized_r_recovery_secondary_lateral_trigger = torch.zeros_like(axial_depth, dtype=torch.bool)
+    if bool(args_cli.target_action_guide_target_tip_realized_r_recovery):
+        attr_prefix = "_aic_target_tip_stabilize_realized_r_recovery"
+        prev_lateral_error = getattr(env, f"{attr_prefix}_prev_lateral_error", None)
+        prev_phase_axial_depth = getattr(env, f"{attr_prefix}_prev_phase_axial_depth", None)
+        prev_positive_axial = getattr(env, f"{attr_prefix}_prev_positive_axial", None)
+        cooldown = getattr(env, f"{attr_prefix}_cooldown", None)
+        if prev_lateral_error is None or prev_lateral_error.shape != lateral_error.shape:
+            prev_lateral_error = lateral_error.detach().clone()
+        else:
+            prev_lateral_error = prev_lateral_error.to(device=device, dtype=guide.dtype)
+        if prev_phase_axial_depth is None or prev_phase_axial_depth.shape != phase_axial_depth.shape:
+            prev_phase_axial_depth = phase_axial_depth.detach().clone()
+        else:
+            prev_phase_axial_depth = prev_phase_axial_depth.to(device=device, dtype=guide.dtype)
+        if prev_positive_axial is None or prev_positive_axial.shape != lateral_error.shape:
+            prev_positive_axial = torch.zeros_like(lateral_error, dtype=torch.bool)
+        else:
+            prev_positive_axial = prev_positive_axial.to(device=device, dtype=torch.bool)
+        if cooldown is None or cooldown.shape != lateral_error.shape:
+            cooldown = torch.zeros_like(lateral_error)
+        else:
+            cooldown = cooldown.to(device=device, dtype=guide.dtype)
+        episode_length_buf = getattr(env.unwrapped, "episode_length_buf", None)
+        if episode_length_buf is not None:
+            reset = episode_length_buf.to(device=device).view(-1, 1) <= 1
+            prev_lateral_error = torch.where(reset, lateral_error.detach(), prev_lateral_error)
+            prev_phase_axial_depth = torch.where(reset, phase_axial_depth.detach(), prev_phase_axial_depth)
+            prev_positive_axial = torch.where(reset, torch.zeros_like(prev_positive_axial), prev_positive_axial)
+            cooldown = torch.where(reset, torch.zeros_like(cooldown), cooldown)
+        measured_depth_progress = (
+            phase_axial_depth
+            > prev_phase_axial_depth
+            + max(float(args_cli.target_action_guide_target_tip_realized_r_recovery_depth_progress_m), 0.0)
+        )
+        theta_recovery = torch.zeros_like(lateral_error, dtype=torch.bool)
+        theta_gate = float(args_cli.target_action_guide_target_tip_realized_r_recovery_theta_gate_rad)
+        if orientation_error is not None and math.isfinite(theta_gate):
+            theta_recovery = measured_depth_progress & (orientation_error > max(theta_gate, 0.0))
+        realized_r_recovery_theta_trigger = theta_recovery
+        secondary_lateral_recovery = torch.zeros_like(lateral_error, dtype=torch.bool)
+        secondary_lateral_gate_for_recovery = float(
+            args_cli.target_action_guide_target_tip_realized_r_recovery_secondary_lateral_gate_m
+        )
+        if math.isfinite(secondary_lateral_gate_for_recovery):
+            secondary_lateral_recovery = measured_depth_progress & (
+                secondary_lateral_error > max(secondary_lateral_gate_for_recovery, 0.0)
+            )
+        realized_r_recovery_secondary_lateral_trigger = secondary_lateral_recovery
+        realized_r_recovery_trigger = (
+            (
+                (
+                    (prev_positive_axial | measured_depth_progress)
+                    & (
+                        lateral_error
+                        > prev_lateral_error
+                        + max(float(args_cli.target_action_guide_target_tip_realized_r_recovery_margin_m), 0.0)
+                    )
+                )
+                | theta_recovery
+                | secondary_lateral_recovery
+            )
+            & (phase_axial_depth >= float(args_cli.target_action_guide_target_tip_realized_r_recovery_activation_depth_m))
+        )
+        cooldown_steps = max(int(args_cli.target_action_guide_target_tip_realized_r_recovery_cooldown_steps), 0)
+        cooldown = torch.where(
+            realized_r_recovery_trigger,
+            torch.full_like(cooldown, float(cooldown_steps)),
+            cooldown,
+        )
+        realized_r_recovery_active = cooldown > 0.0
+        realized_r_recovery_cooldown = cooldown
+        axial_delta_scalar = torch.where(
+            realized_r_recovery_active,
+            -torch.full_like(
+                axial_delta_scalar,
+                max(float(args_cli.target_action_guide_target_tip_realized_r_recovery_backoff_m), 0.0),
+            ),
+            axial_delta_scalar,
+        )
+    contact_force_recovery_trigger = torch.zeros_like(axial_depth, dtype=torch.bool)
+    contact_force_recovery_active = torch.zeros_like(axial_depth, dtype=torch.bool)
+    contact_force_recovery_cooldown = torch.zeros_like(axial_depth)
+    contact_force_recovery_force_norm = torch.zeros_like(axial_depth)
+    if bool(args_cli.target_action_guide_target_tip_contact_force_recovery):
+        attr_prefix = "_aic_target_tip_stabilize_contact_force_recovery"
+        cooldown = getattr(env, f"{attr_prefix}_cooldown", None)
+        if cooldown is None or cooldown.shape != lateral_error.shape:
+            cooldown = torch.zeros_like(lateral_error)
+        else:
+            cooldown = cooldown.to(device=device, dtype=guide.dtype)
+        episode_length_buf = getattr(env.unwrapped, "episode_length_buf", None)
+        if episode_length_buf is not None:
+            reset = episode_length_buf.to(device=device).view(-1, 1) <= 1
+            cooldown = torch.where(reset, torch.zeros_like(cooldown), cooldown)
+        wrench, _force_source = _isaac_wrench_observation(env, device=device)
+        contact_force_recovery_force_norm = torch.linalg.norm(
+            wrench[:, :3].to(device=device, dtype=guide.dtype),
+            dim=1,
+            keepdim=True,
+        )
+        max_secondary_lateral = float(args_cli.target_action_guide_target_tip_contact_force_recovery_max_secondary_lateral_m)
+        secondary_force_gate_ok = (
+            torch.ones_like(secondary_lateral_error, dtype=torch.bool)
+            if secondary_lateral_body_pos_w is None
+            else (secondary_lateral_error <= max(max_secondary_lateral, 0.0))
+        )
+        contact_force_recovery_trigger = (
+            (contact_force_recovery_force_norm >= max(float(args_cli.target_action_guide_target_tip_contact_force_recovery_threshold), 0.0))
+            & (phase_axial_depth >= float(args_cli.target_action_guide_target_tip_contact_force_recovery_activation_depth_m))
+            & (lateral_error <= max(float(args_cli.target_action_guide_target_tip_contact_force_recovery_max_lateral_m), 0.0))
+            & secondary_force_gate_ok
+        )
+        cooldown_steps = max(int(args_cli.target_action_guide_target_tip_contact_force_recovery_cooldown_steps), 0)
+        cooldown = torch.where(
+            contact_force_recovery_trigger,
+            torch.full_like(cooldown, float(cooldown_steps)),
+            cooldown,
+        )
+        contact_force_recovery_active = cooldown > 0.0
+        contact_force_recovery_cooldown = cooldown
+        axial_delta_scalar = torch.where(
+            contact_force_recovery_active,
+            -torch.full_like(
+                axial_delta_scalar,
+                max(float(args_cli.target_action_guide_target_tip_contact_force_recovery_backoff_m), 0.0),
+            ),
+            axial_delta_scalar,
+        )
+        lateral_delta = torch.where(
+            contact_force_recovery_active.expand_as(lateral_delta),
+            torch.zeros_like(lateral_delta),
+            lateral_delta,
+        )
+    shallow_bypass_recovery_active = torch.zeros_like(axial_depth, dtype=torch.bool)
+    if bool(args_cli.target_action_guide_target_tip_shallow_bypass_recovery):
+        shallow_bypass_recovery_active = (
+            (phase_axial_depth >= float(args_cli.target_action_guide_target_tip_shallow_bypass_activation_depth_m))
+            & (axial_error > max(float(args_cli.target_action_guide_target_tip_shallow_bypass_module_gap_m), 0.0))
+        )
+        axial_delta_scalar = torch.where(
+            shallow_bypass_recovery_active,
+            -torch.full_like(
+                axial_delta_scalar,
+                max(float(args_cli.target_action_guide_target_tip_shallow_bypass_backoff_m), 0.0),
+            ),
+            axial_delta_scalar,
+        )
+    orientation_switch = float(args_cli.target_action_guide_orientation_switch_rad)
+    axial_orientation_gate_error = (
+        axis_orientation_error_for_final
+        if bool(args_cli.target_action_guide_final_axis_only_orientation)
+        and axis_orientation_error_for_final is not None
+        else orientation_error
+    )
+    if axial_orientation_gate_error is not None and orientation_switch > 0.0:
+        axial_delta_scalar = torch.where(
+            (axial_orientation_gate_error > orientation_switch) & (axial_delta_scalar > 0.0),
+            torch.zeros_like(axial_delta_scalar),
+            axial_delta_scalar,
+        )
+    axial_lateral_gate = float(args_cli.target_action_guide_target_tip_axial_lateral_gate_m)
+    primary_axial_gate_blocked = torch.zeros_like(axial_delta_scalar, dtype=torch.bool)
+    if math.isfinite(axial_lateral_gate) and axial_lateral_gate >= 0.0:
+        primary_axial_gate_blocked = (lateral_error > axial_lateral_gate) & (axial_delta_scalar > 0.0)
+        axial_delta_scalar = torch.where(
+            primary_axial_gate_blocked,
+            torch.zeros_like(axial_delta_scalar),
+            axial_delta_scalar,
+        )
+    secondary_axial_lateral_gate = float(args_cli.target_action_guide_target_tip_secondary_axial_lateral_gate_m)
+    secondary_axial_gate_blocked = torch.zeros_like(axial_delta_scalar, dtype=torch.bool)
+    if (
+        secondary_lateral_body_pos_w is not None
+        and math.isfinite(secondary_axial_lateral_gate)
+        and secondary_axial_lateral_gate >= 0.0
+    ):
+        secondary_axial_gate_active = phase_axial_depth >= float(
+            args_cli.target_action_guide_target_tip_secondary_axial_lateral_gate_activation_depth_m
+        )
+        secondary_axial_gate_blocked = (
+            secondary_axial_gate_active
+            & (secondary_lateral_error > secondary_axial_lateral_gate)
+            & (axial_delta_scalar > 0.0)
+        )
+        axial_delta_scalar = torch.where(
+            secondary_axial_gate_blocked,
+            torch.zeros_like(axial_delta_scalar),
+            axial_delta_scalar,
+        )
+    commanded_axial_delta_scalar = axial_delta_scalar * (
+        1.0 if float(args_cli.target_action_guide_target_tip_axial_direction_sign) >= 0.0 else -1.0
+    )
+    axial_delta = commanded_axial_delta_scalar * axis_w
+    world_delta = lateral_delta + axial_delta
+
+    final_depth = float(args_cli.target_action_guide_final_orientation_depth_m)
+    final_lateral = max(float(args_cli.target_action_guide_final_orientation_lateral_m), 0.0)
+    final_threshold = max(float(args_cli.target_action_guide_final_orientation_threshold_rad), 0.0)
+    final_rot_step = max(float(args_cli.target_action_guide_final_orientation_rotation_step_size), 0.0)
+    rotation_compensation = torch.zeros_like(world_delta)
+    dual_lateral_rotation_compensation = torch.zeros_like(world_delta)
+    dual_lateral_rotation_active = torch.zeros_like(axial_depth, dtype=torch.bool)
+    dual_lateral_rotation_predicted_primary = lateral_error
+    dual_lateral_rotation_predicted_secondary = secondary_lateral_error
+    dual_lateral_rot_cmd = torch.zeros_like(guide[:, 3:6])
+    dual_lateral_rot_step = max(float(args_cli.target_action_guide_target_tip_dual_lateral_rotation_step_rad), 0.0)
+    if (
+        secondary_lateral_body_pos_w is not None
+        and dual_lateral_rot_step > 0.0
+        and action_frame != ""
+    ):
+        if action_frame == "root":
+            frame_pos_w = robot.data.root_pos_w.to(device=device, dtype=guide.dtype)
+            frame_quat_w = robot.data.root_quat_w.to(device=device, dtype=guide.dtype)
+        else:
+            body_names = list(getattr(robot, "body_names", []))
+            frame_index = _named_index(body_names, action_frame)
+            frame_pos_w = robot.data.body_pos_w[:, frame_index].to(device=device, dtype=guide.dtype)
+            frame_quat_w = robot.data.body_quat_w[:, frame_index].to(device=device, dtype=guide.dtype)
+        basis = torch.tensor(
+            (
+                (1.0, 0.0, 0.0),
+                (-1.0, 0.0, 0.0),
+                (0.0, 1.0, 0.0),
+                (0.0, -1.0, 0.0),
+                (0.0, 0.0, 1.0),
+                (0.0, 0.0, -1.0),
+            ),
+            dtype=guide.dtype,
+            device=device,
+        )
+        candidate_rot_frame = (
+            basis.reshape(1, 6, 3).expand(batch_size, -1, -1)
+            * dual_lateral_rot_step
+            * float(args_cli.target_action_guide_rotation_sign)
+        )
+        candidate_rot_w = math_utils.quat_apply(
+            frame_quat_w[:, None, :].expand(-1, 6, -1).reshape(-1, 4),
+            candidate_rot_frame.reshape(-1, 3),
+        )
+        q_candidate_w = _quat_from_rotvec(candidate_rot_w).reshape(batch_size, 6, 4)
+        primary_from_frame_w = lateral_body_pos_w - frame_pos_w
+        secondary_from_frame_w = secondary_lateral_body_pos_w - frame_pos_w
+        primary_delta_all = (
+            math_utils.quat_apply(
+                q_candidate_w.reshape(-1, 4),
+                primary_from_frame_w[:, None, :].expand(-1, 6, -1).reshape(-1, 3),
+            ).reshape(batch_size, 6, 3)
+            - primary_from_frame_w[:, None, :]
+        )
+        secondary_delta_all = (
+            math_utils.quat_apply(
+                q_candidate_w.reshape(-1, 4),
+                secondary_from_frame_w[:, None, :].expand(-1, 6, -1).reshape(-1, 3),
+            ).reshape(batch_size, 6, 3)
+            - secondary_from_frame_w[:, None, :]
+        )
+        compensation_all = -_clip_vector_norm(
+            primary_delta_all.reshape(-1, 3),
+            max(float(args_cli.target_action_guide_target_tip_dual_lateral_rotation_compensation_clip_m), 0.0),
+        ).reshape(batch_size, 6, 3)
+        primary_rel_all = lateral_rel[:, None, :] + world_delta[:, None, :] + primary_delta_all + compensation_all
+        primary_depth_all = torch.sum(primary_rel_all * axis_w[:, None, :], dim=2, keepdim=True)
+        primary_lateral_all = torch.linalg.norm(
+            primary_rel_all - primary_depth_all * axis_w[:, None, :],
+            dim=2,
+        )
+        secondary_rel = secondary_lateral_body_pos_w - entrance_w
+        secondary_rel_all = secondary_rel[:, None, :] + world_delta[:, None, :] + secondary_delta_all + compensation_all
+        secondary_depth_all = torch.sum(secondary_rel_all * axis_w[:, None, :], dim=2, keepdim=True)
+        secondary_lateral_all = torch.linalg.norm(
+            secondary_rel_all - secondary_depth_all * axis_w[:, None, :],
+            dim=2,
+        )
+        candidate_score = torch.maximum(primary_lateral_all, secondary_lateral_all)
+        best_score, best_idx = torch.min(candidate_score, dim=1, keepdim=True)
+        current_score = torch.maximum(lateral_error, secondary_lateral_error)
+        primary_gate = max(float(args_cli.target_action_guide_target_tip_dual_lateral_rotation_primary_gate_m), 0.0)
+        secondary_threshold = max(
+            float(args_cli.target_action_guide_target_tip_dual_lateral_rotation_secondary_threshold_m),
+            0.0,
+        )
+        dual_lateral_rotation_active = (
+            (lateral_error <= primary_gate)
+            & (secondary_lateral_error > secondary_threshold)
+            & (best_score.view(-1, 1) < current_score)
+            & (
+                bool(args_cli.target_action_guide_target_tip_dual_lateral_rotation_allow_positive_axial)
+                | (axial_delta_scalar <= 0.0)
+                | secondary_axial_gate_blocked
+            )
+        )
+        dual_lateral_rot_cmd = torch.gather(
+            candidate_rot_frame,
+            1,
+            best_idx[:, :, None].expand(-1, -1, 3),
+        ).squeeze(1)
+        selected_compensation = torch.gather(
+            compensation_all,
+            1,
+            best_idx[:, :, None].expand(-1, -1, 3),
+        ).squeeze(1)
+        dual_lateral_rotation_compensation = torch.where(
+            dual_lateral_rotation_active.expand_as(selected_compensation),
+            selected_compensation,
+            torch.zeros_like(selected_compensation),
+        )
+        dual_lateral_rot_cmd = torch.where(
+            dual_lateral_rotation_active.expand_as(dual_lateral_rot_cmd),
+            dual_lateral_rot_cmd,
+            torch.zeros_like(dual_lateral_rot_cmd),
+        )
+        dual_lateral_rotation_predicted_primary = torch.gather(primary_lateral_all, 1, best_idx)
+        dual_lateral_rotation_predicted_secondary = torch.gather(secondary_lateral_all, 1, best_idx)
+        guide[:, 3:6] = torch.where(
+            dual_lateral_rotation_active.expand_as(guide[:, 3:6]),
+            dual_lateral_rot_cmd,
+            guide[:, 3:6],
+        )
+        world_delta = world_delta + dual_lateral_rotation_compensation
+    final_orientation_active = torch.zeros_like(axial_depth, dtype=torch.bool)
+    final_orientation_command_active = torch.zeros_like(axial_depth, dtype=torch.bool)
+    final_orientation_selected_basis = torch.full_like(axial_depth, -1.0)
+    final_orientation_predicted_error = torch.full_like(axial_depth, float("nan"))
+    final_orientation_predicted_improves = torch.zeros_like(axial_depth, dtype=torch.bool)
+    final_orientation_rot_cmd = torch.zeros_like(guide[:, 3:6])
+    orientation_realized_reject_trigger = torch.zeros_like(axial_depth, dtype=torch.bool)
+    orientation_realized_cooldown_active = torch.zeros_like(axial_depth, dtype=torch.bool)
+    orientation_realized_cooldown = torch.zeros_like(axial_depth)
+    orientation_realized_theta_increase = torch.zeros_like(axial_depth)
+    orientation_realized_lateral_increase = torch.zeros_like(axial_depth)
+    orientation_realized_secondary_increase = torch.zeros_like(axial_depth)
+    orientation_realized_basis_cooldown = torch.zeros((batch_size, 6), dtype=guide.dtype, device=device)
+    orientation_realized_basis_reject_trigger = torch.zeros_like(axial_depth, dtype=torch.bool)
+    orientation_realized_sign = torch.ones_like(axial_depth)
+    orientation_realized_sign_flip_trigger = torch.zeros_like(axial_depth, dtype=torch.bool)
+    final_orientation_gate_error = (
+        axis_orientation_error_for_final
+        if bool(args_cli.target_action_guide_final_axis_only_orientation)
+        and axis_orientation_error_for_final is not None
+        else orientation_error
+    )
+    if bool(args_cli.target_action_guide_target_tip_orientation_realized_reject):
+        attr_prefix = "_aic_target_tip_orientation_realized_reject"
+        prev_theta = getattr(env, f"{attr_prefix}_prev_theta", None)
+        prev_lateral = getattr(env, f"{attr_prefix}_prev_lateral", None)
+        prev_secondary = getattr(env, f"{attr_prefix}_prev_secondary_lateral", None)
+        prev_command_active = getattr(env, f"{attr_prefix}_prev_command_active", None)
+        prev_basis = getattr(env, f"{attr_prefix}_prev_basis", None)
+        cooldown = getattr(env, f"{attr_prefix}_cooldown", None)
+        basis_cooldown = getattr(env, f"{attr_prefix}_basis_cooldown", None)
+        if prev_theta is None or prev_theta.shape != axial_depth.shape:
+            prev_theta = (
+                final_orientation_gate_error.detach().clone()
+                if final_orientation_gate_error is not None
+                else torch.zeros_like(axial_depth)
+            )
+        else:
+            prev_theta = prev_theta.to(device=device, dtype=guide.dtype)
+        if prev_lateral is None or prev_lateral.shape != lateral_error.shape:
+            prev_lateral = lateral_error.detach().clone()
+        else:
+            prev_lateral = prev_lateral.to(device=device, dtype=guide.dtype)
+        if prev_secondary is None or prev_secondary.shape != secondary_lateral_error.shape:
+            prev_secondary = secondary_lateral_error.detach().clone()
+        else:
+            prev_secondary = prev_secondary.to(device=device, dtype=guide.dtype)
+        if prev_command_active is None or prev_command_active.shape != axial_depth.shape:
+            prev_command_active = torch.zeros_like(axial_depth, dtype=torch.bool)
+        else:
+            prev_command_active = prev_command_active.to(device=device, dtype=torch.bool)
+        if prev_basis is None or prev_basis.shape != axial_depth.shape:
+            prev_basis = torch.full_like(axial_depth, -1.0)
+        else:
+            prev_basis = prev_basis.to(device=device, dtype=guide.dtype)
+        if cooldown is None or cooldown.shape != axial_depth.shape:
+            cooldown = torch.zeros_like(axial_depth)
+        else:
+            cooldown = cooldown.to(device=device, dtype=guide.dtype)
+        if basis_cooldown is None or basis_cooldown.shape != orientation_realized_basis_cooldown.shape:
+            basis_cooldown = torch.zeros_like(orientation_realized_basis_cooldown)
+        else:
+            basis_cooldown = basis_cooldown.to(device=device, dtype=guide.dtype)
+        episode_length_buf = getattr(env.unwrapped, "episode_length_buf", None)
+        if episode_length_buf is not None:
+            reset = episode_length_buf.to(device=device).view(-1, 1) <= 1
+            if final_orientation_gate_error is not None:
+                prev_theta = torch.where(reset, final_orientation_gate_error.detach(), prev_theta)
+            prev_lateral = torch.where(reset, lateral_error.detach(), prev_lateral)
+            prev_secondary = torch.where(reset, secondary_lateral_error.detach(), prev_secondary)
+            prev_command_active = torch.where(reset, torch.zeros_like(prev_command_active), prev_command_active)
+            prev_basis = torch.where(reset, torch.full_like(prev_basis, -1.0), prev_basis)
+            cooldown = torch.where(reset, torch.zeros_like(cooldown), cooldown)
+            basis_cooldown = torch.where(reset.expand_as(basis_cooldown), torch.zeros_like(basis_cooldown), basis_cooldown)
+        if final_orientation_gate_error is not None:
+            orientation_realized_theta_increase = final_orientation_gate_error - prev_theta
+            theta_bad = orientation_realized_theta_increase > max(
+                float(args_cli.target_action_guide_target_tip_orientation_realized_theta_margin_rad),
+                0.0,
+            )
+        else:
+            theta_bad = torch.zeros_like(axial_depth, dtype=torch.bool)
+        orientation_realized_lateral_increase = lateral_error - prev_lateral
+        orientation_realized_secondary_increase = secondary_lateral_error - prev_secondary
+        lateral_bad = orientation_realized_lateral_increase > max(
+            float(args_cli.target_action_guide_target_tip_orientation_realized_lateral_margin_m),
+            0.0,
+        )
+        secondary_bad = orientation_realized_secondary_increase > max(
+            float(args_cli.target_action_guide_target_tip_orientation_realized_secondary_margin_m),
+            0.0,
+        )
+        orientation_realized_reject_trigger = prev_command_active & (theta_bad | lateral_bad | secondary_bad)
+        cooldown = torch.where(
+            orientation_realized_reject_trigger,
+            torch.full_like(
+                cooldown,
+                float(max(int(args_cli.target_action_guide_target_tip_orientation_realized_cooldown_steps), 0)),
+            ),
+            cooldown,
+        )
+        basis_cooldown_steps = max(
+            int(args_cli.target_action_guide_target_tip_orientation_realized_basis_cooldown_steps),
+            0,
+        )
+        if basis_cooldown_steps > 0:
+            valid_prev_basis = (prev_basis >= 0.0) & (prev_basis < 6.0)
+            orientation_realized_basis_reject_trigger = orientation_realized_reject_trigger & valid_prev_basis
+            basis_idx = prev_basis.to(dtype=torch.long).clamp(min=0, max=5)
+            selected_basis_cooldown = torch.gather(basis_cooldown, 1, basis_idx)
+            selected_basis_cooldown = torch.where(
+                orientation_realized_basis_reject_trigger,
+                torch.full_like(selected_basis_cooldown, float(basis_cooldown_steps)),
+                selected_basis_cooldown,
+            )
+            basis_cooldown = basis_cooldown.clone()
+            basis_cooldown.scatter_(1, basis_idx, selected_basis_cooldown)
+        orientation_realized_basis_cooldown = basis_cooldown
+        orientation_realized_cooldown = cooldown
+        orientation_realized_cooldown_active = cooldown > 0.0
+    if bool(args_cli.target_action_guide_target_tip_orientation_realized_sign_flip):
+        attr_prefix = "_aic_target_tip_orientation_realized_sign_flip"
+        current_sign = getattr(env, f"{attr_prefix}_sign", None)
+        prev_theta_for_sign = getattr(env, f"{attr_prefix}_prev_theta", None)
+        prev_command_active_for_sign = getattr(env, f"{attr_prefix}_prev_command_active", None)
+        if current_sign is None or current_sign.shape != axial_depth.shape:
+            current_sign = torch.ones_like(axial_depth)
+        else:
+            current_sign = current_sign.to(device=device, dtype=guide.dtype)
+            current_sign = torch.where(current_sign >= 0.0, torch.ones_like(current_sign), -torch.ones_like(current_sign))
+        if prev_theta_for_sign is None or prev_theta_for_sign.shape != axial_depth.shape:
+            prev_theta_for_sign = (
+                final_orientation_gate_error.detach().clone()
+                if final_orientation_gate_error is not None
+                else torch.zeros_like(axial_depth)
+            )
+        else:
+            prev_theta_for_sign = prev_theta_for_sign.to(device=device, dtype=guide.dtype)
+        if prev_command_active_for_sign is None or prev_command_active_for_sign.shape != axial_depth.shape:
+            prev_command_active_for_sign = torch.zeros_like(axial_depth, dtype=torch.bool)
+        else:
+            prev_command_active_for_sign = prev_command_active_for_sign.to(device=device, dtype=torch.bool)
+        episode_length_buf = getattr(env.unwrapped, "episode_length_buf", None)
+        if episode_length_buf is not None:
+            reset = episode_length_buf.to(device=device).view(-1, 1) <= 1
+            current_sign = torch.where(reset, torch.ones_like(current_sign), current_sign)
+            if final_orientation_gate_error is not None:
+                prev_theta_for_sign = torch.where(reset, final_orientation_gate_error.detach(), prev_theta_for_sign)
+            prev_command_active_for_sign = torch.where(
+                reset,
+                torch.zeros_like(prev_command_active_for_sign),
+                prev_command_active_for_sign,
+            )
+        if final_orientation_gate_error is not None:
+            sign_theta_increase = final_orientation_gate_error - prev_theta_for_sign
+            orientation_realized_sign_flip_trigger = prev_command_active_for_sign & (
+                sign_theta_increase
+                > max(float(args_cli.target_action_guide_target_tip_orientation_realized_sign_flip_margin_rad), 0.0)
+            )
+            current_sign = torch.where(
+                orientation_realized_sign_flip_trigger,
+                -current_sign,
+                current_sign,
+            )
+        orientation_realized_sign = current_sign
+        setattr(env, f"{attr_prefix}_sign", current_sign.detach().clone())
+    if (
+        final_orientation_gate_error is not None
+        and math.isfinite(final_depth)
+        and final_rot_step > 0.0
+        and target_quat_w is not None
+        and body_quat_w is not None
+    ):
+        final_orientation_active = (
+            (phase_axial_depth >= final_depth)
+            & (phase_lateral_error <= final_lateral)
+            & (final_orientation_gate_error > final_threshold)
+            & ~dual_lateral_rotation_active
+            & ~orientation_realized_cooldown_active
+            & (
+                ~(shallow_bypass_recovery_active | realized_r_recovery_active | contact_force_recovery_active)
+                | bool(args_cli.target_action_guide_target_tip_shallow_bypass_allow_final_orientation)
+            )
+        )
+        if bool(final_orientation_active.any()):
+            if action_frame == "root":
+                frame_pos_w = robot.data.root_pos_w.to(device=device, dtype=guide.dtype)
+                frame_quat_w = robot.data.root_quat_w.to(device=device, dtype=guide.dtype)
+            else:
+                body_names = list(getattr(robot, "body_names", []))
+                frame_index = _named_index(body_names, action_frame)
+                frame_pos_w = robot.data.body_pos_w[:, frame_index].to(device=device, dtype=guide.dtype)
+                frame_quat_w = robot.data.body_quat_w[:, frame_index].to(device=device, dtype=guide.dtype)
+            if bool(args_cli.target_action_guide_orientation_probe_basis):
+                basis = torch.tensor(
+                    (
+                        (1.0, 0.0, 0.0),
+                        (-1.0, 0.0, 0.0),
+                        (0.0, 1.0, 0.0),
+                        (0.0, -1.0, 0.0),
+                        (0.0, 0.0, 1.0),
+                        (0.0, 0.0, -1.0),
+                    ),
+                    dtype=guide.dtype,
+                    device=device,
+                )
+                candidate_rot_frame = (
+                    basis.reshape(1, 6, 3).expand(batch_size, -1, -1)
+                    * final_rot_step
+                    * float(args_cli.target_action_guide_rotation_sign)
+                )
+                candidate_rot_w = math_utils.quat_apply(
+                    frame_quat_w[:, None, :].expand(-1, 6, -1).reshape(-1, 4),
+                    candidate_rot_frame.reshape(-1, 3),
+                )
+                q_candidate_w = _quat_from_rotvec(candidate_rot_w)
+                if body_axis_w_for_final is not None and target_axis_w_for_final is not None:
+                    candidate_axis_w = math_utils.quat_apply(
+                        q_candidate_w.reshape(-1, 4),
+                        body_axis_w_for_final[:, None, :].expand(-1, 6, -1).reshape(-1, 3),
+                    ).reshape(batch_size, 6, 3)
+                    candidate_error = torch.acos(
+                        torch.sum(candidate_axis_w * target_axis_w_for_final[:, None, :], dim=2).clamp(
+                            min=-1.0,
+                            max=1.0,
+                        )
+                    )
+                else:
+                    predicted_quat_w = math_utils.quat_mul(
+                        q_candidate_w,
+                        body_quat_w[:, None, :].expand(-1, 6, -1).reshape(-1, 4),
+                    ).reshape(batch_size, 6, 4)
+                    target_quat_flat = target_quat_w[:, None, :].expand(-1, 6, -1).reshape(-1, 4)
+                    candidate_error = math_utils.quat_error_magnitude(
+                        predicted_quat_w.reshape(-1, 4),
+                        target_quat_flat,
+                    ).reshape(batch_size, 6)
+                pred_lateral = None
+                pred_secondary_lateral = None
+                if (
+                    float(args_cli.target_action_guide_orientation_probe_lateral_penalty) > 0.0
+                    or bool(args_cli.target_action_guide_orientation_probe_strict_lateral_gate)
+                    or float(args_cli.target_action_guide_orientation_probe_secondary_lateral_penalty) > 0.0
+                    or bool(args_cli.target_action_guide_orientation_probe_strict_secondary_lateral_gate)
+                ):
+                    tip_from_frame_w = phase_body_pos_w - frame_pos_w
+                    q_candidate_w_reshaped = q_candidate_w.reshape(batch_size, 6, 4)
+                    predicted_tip_delta_all = (
+                        math_utils.quat_apply(
+                            q_candidate_w_reshaped.reshape(-1, 4),
+                            tip_from_frame_w[:, None, :].expand(-1, 6, -1).reshape(-1, 3),
+                        ).reshape(batch_size, 6, 3)
+                        - tip_from_frame_w[:, None, :]
+                    )
+                    compensated_world_delta = world_delta[:, None, :] - _clip_vector_norm(
+                        predicted_tip_delta_all.reshape(-1, 3),
+                        max(float(args_cli.target_action_guide_rotation_compensation_clip_m), 0.0),
+                    ).reshape(batch_size, 6, 3)
+                    pred_rel = phase_rel[:, None, :] + compensated_world_delta
+                    pred_depth = torch.sum(pred_rel * axis_w[:, None, :], dim=2, keepdim=True)
+                    pred_lateral = torch.linalg.norm(pred_rel - pred_depth * axis_w[:, None, :], dim=2)
+                    if secondary_lateral_body_pos_w is not None:
+                        secondary_from_frame_w = secondary_lateral_body_pos_w - frame_pos_w
+                        predicted_secondary_delta_all = (
+                            math_utils.quat_apply(
+                                q_candidate_w_reshaped.reshape(-1, 4),
+                                secondary_from_frame_w[:, None, :].expand(-1, 6, -1).reshape(-1, 3),
+                            ).reshape(batch_size, 6, 3)
+                            - secondary_from_frame_w[:, None, :]
+                        )
+                        secondary_rel_for_probe = secondary_lateral_body_pos_w - entrance_w
+                        pred_secondary_rel = (
+                            secondary_rel_for_probe[:, None, :]
+                            + compensated_world_delta
+                            + predicted_secondary_delta_all
+                        )
+                        pred_secondary_depth = torch.sum(
+                            pred_secondary_rel * axis_w[:, None, :],
+                            dim=2,
+                            keepdim=True,
+                        )
+                        pred_secondary_lateral = torch.linalg.norm(
+                            pred_secondary_rel - pred_secondary_depth * axis_w[:, None, :],
+                            dim=2,
+                        )
+                if (
+                    pred_lateral is not None
+                    and float(args_cli.target_action_guide_orientation_probe_lateral_penalty) > 0.0
+                ):
+                    lateral_increase = (pred_lateral - phase_lateral_error).clamp(min=0.0)
+                    candidate_error = candidate_error + (
+                        float(args_cli.target_action_guide_orientation_probe_lateral_penalty) * lateral_increase
+                    )
+                if (
+                    pred_secondary_lateral is not None
+                    and float(args_cli.target_action_guide_orientation_probe_secondary_lateral_penalty) > 0.0
+                ):
+                    secondary_lateral_increase = (
+                        pred_secondary_lateral - secondary_lateral_error
+                    ).clamp(min=0.0)
+                    candidate_error = candidate_error + (
+                        float(args_cli.target_action_guide_orientation_probe_secondary_lateral_penalty)
+                        * secondary_lateral_increase
+                    )
+                if pred_lateral is not None and bool(args_cli.target_action_guide_orientation_probe_strict_lateral_gate):
+                    strict_lateral_limit = torch.minimum(
+                        torch.full_like(phase_lateral_error, final_lateral),
+                        phase_lateral_error
+                        + torch.full_like(
+                            lateral_error,
+                            max(float(args_cli.target_action_guide_orientation_probe_lateral_margin_m), 0.0),
+                        ),
+                    )
+                    candidate_error = torch.where(
+                        pred_lateral <= strict_lateral_limit,
+                        candidate_error,
+                            torch.full_like(candidate_error, float("inf")),
+                    )
+                if int(args_cli.target_action_guide_target_tip_orientation_realized_basis_cooldown_steps) > 0:
+                    candidate_error = torch.where(
+                        orientation_realized_basis_cooldown > 0.0,
+                        torch.full_like(candidate_error, float("inf")),
+                        candidate_error,
+                    )
+                if (
+                    pred_secondary_lateral is not None
+                    and bool(args_cli.target_action_guide_orientation_probe_strict_secondary_lateral_gate)
+                ):
+                    secondary_gate = float(args_cli.target_action_guide_orientation_probe_secondary_max_lateral_m)
+                    if not math.isfinite(secondary_gate):
+                        secondary_gate = float(args_cli.target_action_guide_target_tip_secondary_axial_lateral_gate_m)
+                    if not math.isfinite(secondary_gate):
+                        secondary_gate = float("inf")
+                    strict_secondary_limit = torch.minimum(
+                        torch.full_like(secondary_lateral_error, max(float(secondary_gate), 0.0)),
+                        secondary_lateral_error
+                        + torch.full_like(
+                            secondary_lateral_error,
+                            max(float(args_cli.target_action_guide_orientation_probe_secondary_lateral_margin_m), 0.0),
+                        ),
+                    )
+                    candidate_error = torch.where(
+                        pred_secondary_lateral <= strict_secondary_limit,
+                        candidate_error,
+                        torch.full_like(candidate_error, float("inf")),
+                    )
+                best_error, best_idx = torch.min(candidate_error, dim=1, keepdim=True)
+                final_orientation_selected_basis = best_idx.to(dtype=guide.dtype)
+                final_orientation_predicted_error = best_error.view(-1, 1)
+                rot_cmd = torch.gather(
+                    candidate_rot_frame,
+                    1,
+                    best_idx[:, :, None].expand(-1, -1, 3),
+                ).squeeze(1)
+                current_probe_error = (
+                    axis_orientation_error_for_final
+                    if axis_orientation_error_for_final is not None
+                    else orientation_error
+                )
+                improves = torch.isfinite(best_error.view(-1, 1)) & (
+                    best_error.view(-1, 1) < current_probe_error
+                )
+                final_orientation_predicted_improves = improves
+                rot_cmd = torch.where(improves.expand_as(rot_cmd), rot_cmd, torch.zeros_like(rot_cmd))
+            else:
+                if (
+                    bool(args_cli.target_action_guide_final_axis_only_orientation)
+                    and body_axis_w_for_final is not None
+                    and target_axis_w_for_final is not None
+                ):
+                    axis_cross_w = torch.linalg.cross(
+                        body_axis_w_for_final,
+                        target_axis_w_for_final,
+                        dim=1,
+                    )
+                    sin_angle = torch.linalg.norm(axis_cross_w, dim=1, keepdim=True)
+                    cos_angle = torch.sum(
+                        body_axis_w_for_final * target_axis_w_for_final,
+                        dim=1,
+                        keepdim=True,
+                    ).clamp(min=-1.0, max=1.0)
+                    axis_angle = torch.atan2(sin_angle, cos_angle)
+                    rotvec_w = axis_cross_w / sin_angle.clamp(min=1.0e-9) * axis_angle
+                    rotvec_w = torch.where(
+                        sin_angle > 1.0e-9,
+                        rotvec_w,
+                        torch.zeros_like(rotvec_w),
+                    )
+                    delta_rot_frame = math_utils.quat_apply(
+                        math_utils.quat_inv(frame_quat_w),
+                        rotvec_w,
+                    )
+                    current_direct_error = axis_orientation_error_for_final
+                else:
+                    q_diff_w = math_utils.quat_mul(target_quat_w, math_utils.quat_inv(body_quat_w))
+                    desired_frame_quat_w = math_utils.quat_mul(q_diff_w, frame_quat_w)
+                    delta_quat_frame = math_utils.quat_mul(math_utils.quat_inv(frame_quat_w), desired_frame_quat_w)
+                    delta_rot_frame = math_utils.axis_angle_from_quat(delta_quat_frame)
+                    current_direct_error = orientation_error
+                delta_rot_frame = delta_rot_frame * float(args_cli.target_action_guide_rotation_sign)
+                rot_norm = torch.linalg.norm(delta_rot_frame, dim=1, keepdim=True).clamp(min=1.0e-9)
+                rot_step = torch.full_like(rot_norm, final_rot_step)
+                rot_cmd = delta_rot_frame / rot_norm * torch.minimum(rot_norm, rot_step)
+                final_orientation_selected_basis = torch.full_like(final_orientation_selected_basis, -2.0)
+                final_orientation_predicted_error = (current_direct_error - final_rot_step).clamp(min=0.0)
+                final_orientation_predicted_improves = final_orientation_predicted_error < current_direct_error
+            if bool(args_cli.target_action_guide_target_tip_orientation_realized_sign_flip):
+                rot_cmd = rot_cmd * orientation_realized_sign
+            final_orientation_command_active = final_orientation_active & (
+                torch.linalg.norm(rot_cmd, dim=1, keepdim=True) > 1.0e-9
+            )
+            final_stop_rotation_theta_gate = float(
+                args_cli.target_action_guide_final_orientation_stop_rotation_theta_gate_rad
+            )
+            if math.isfinite(final_stop_rotation_theta_gate):
+                final_stop_rotation = final_orientation_active & (
+                    final_orientation_gate_error <= max(final_stop_rotation_theta_gate, 0.0)
+                )
+                rot_cmd = torch.where(
+                    final_stop_rotation.expand_as(rot_cmd),
+                    torch.zeros_like(rot_cmd),
+                    rot_cmd,
+                )
+                final_orientation_command_active = final_orientation_command_active & ~final_stop_rotation
+            final_orientation_rot_cmd = torch.where(
+                final_orientation_active.expand_as(rot_cmd),
+                rot_cmd,
+                torch.zeros_like(rot_cmd),
+            )
+            guide[:, 3:6] = torch.where(final_orientation_active, rot_cmd, guide[:, 3:6])
+            rotvec_w = math_utils.quat_apply(frame_quat_w, rot_cmd)
+            q_step_w = _quat_from_rotvec(rotvec_w)
+            tip_from_frame_w = phase_body_pos_w - frame_pos_w
+            predicted_tip_delta = math_utils.quat_apply(q_step_w, tip_from_frame_w) - tip_from_frame_w
+            rotation_compensation = _clip_vector_norm(
+                -predicted_tip_delta,
+                max(float(args_cli.target_action_guide_rotation_compensation_clip_m), 0.0),
+            )
+            rotation_compensation = torch.where(
+                final_orientation_active.expand_as(rotation_compensation),
+                rotation_compensation,
+                torch.zeros_like(rotation_compensation),
+            )
+            world_delta = world_delta + rotation_compensation
+
+    clamp_positive_axial_active = torch.zeros_like(axial_depth, dtype=torch.bool)
+    if bool(args_cli.target_action_guide_target_tip_clamp_positive_axial_when_gated):
+        world_delta_axial = torch.sum(world_delta * axis_w, dim=1, keepdim=True)
+        clamp_positive_axial_active = (axial_delta_scalar <= 0.0) & (world_delta_axial > 0.0)
+        world_delta = torch.where(
+            clamp_positive_axial_active.expand_as(world_delta),
+            world_delta - world_delta_axial.clamp(min=0.0) * axis_w,
+            world_delta,
+        )
+    if bool(args_cli.target_action_guide_target_tip_realized_r_recovery):
+        attr_prefix = "_aic_target_tip_stabilize_realized_r_recovery"
+        next_cooldown = torch.clamp(realized_r_recovery_cooldown - 1.0, min=0.0)
+        final_world_delta_axial = torch.sum(world_delta * axis_w, dim=1, keepdim=True)
+        setattr(env, f"{attr_prefix}_prev_lateral_error", lateral_error.detach().clone())
+        setattr(env, f"{attr_prefix}_prev_phase_axial_depth", phase_axial_depth.detach().clone())
+        setattr(env, f"{attr_prefix}_prev_positive_axial", (final_world_delta_axial > 1.0e-8).detach().clone())
+        setattr(env, f"{attr_prefix}_cooldown", next_cooldown.detach().clone())
+    if bool(args_cli.target_action_guide_target_tip_contact_force_recovery):
+        attr_prefix = "_aic_target_tip_stabilize_contact_force_recovery"
+        next_cooldown = torch.clamp(contact_force_recovery_cooldown - 1.0, min=0.0)
+        setattr(env, f"{attr_prefix}_cooldown", next_cooldown.detach().clone())
+    if bool(args_cli.target_action_guide_target_tip_orientation_realized_reject):
+        attr_prefix = "_aic_target_tip_orientation_realized_reject"
+        next_cooldown = torch.clamp(orientation_realized_cooldown - 1.0, min=0.0)
+        next_basis_cooldown = torch.clamp(orientation_realized_basis_cooldown - 1.0, min=0.0)
+        if final_orientation_gate_error is not None:
+            setattr(env, f"{attr_prefix}_prev_theta", final_orientation_gate_error.detach().clone())
+        setattr(env, f"{attr_prefix}_prev_lateral", lateral_error.detach().clone())
+        setattr(env, f"{attr_prefix}_prev_secondary_lateral", secondary_lateral_error.detach().clone())
+        setattr(env, f"{attr_prefix}_prev_command_active", final_orientation_command_active.detach().clone())
+        setattr(env, f"{attr_prefix}_prev_basis", final_orientation_selected_basis.detach().clone())
+        setattr(env, f"{attr_prefix}_cooldown", next_cooldown.detach().clone())
+        setattr(env, f"{attr_prefix}_basis_cooldown", next_basis_cooldown.detach().clone())
+    if bool(args_cli.target_action_guide_target_tip_orientation_realized_sign_flip):
+        attr_prefix = "_aic_target_tip_orientation_realized_sign_flip"
+        if final_orientation_gate_error is not None:
+            setattr(env, f"{attr_prefix}_prev_theta", final_orientation_gate_error.detach().clone())
+        setattr(env, f"{attr_prefix}_prev_command_active", final_orientation_command_active.detach().clone())
+
+    root_delta = math_utils.quat_apply_inverse(
+        robot.data.root_quat_w.to(device=device, dtype=guide.dtype),
+        world_delta,
+    )
+    guide[:, :3] = _root_translation_delta_to_policy_frame(
+        env,
+        root_delta,
+        action_frame=action_frame,
+    )
+
+    metrics = {
+        "target_action_guide_missing_geometry": 0.0,
+        "target_action_guide_emits_isaac_root_action": 0.0,
+        "target_action_guide_target_tip_body_is_consistency": float(
+            body_name == str(task_geometry_reward_config.get("consistency_body") or "")
+        ),
+        "target_action_guide_target_tip_axial_error_m_mean": float(axial_error.mean().detach().cpu()),
+        "target_action_guide_target_tip_phase_axial_active_frac": float(
+            phase_axial_active.to(dtype=guide.dtype).mean().detach().cpu()
+        ),
+        "target_action_guide_target_tip_phase_axial_body_depth_m_mean": float(
+            phase_axial_body_depth.mean().detach().cpu()
+        ),
+        "target_action_guide_target_tip_phase_axial_target_depth_m_mean": float(
+            phase_axial_target_depth.mean().detach().cpu()
+        ),
+        "target_action_guide_target_tip_axial_step_limit_m_mean": float(
+            axial_step_limit.mean().detach().cpu()
+        ),
+        "target_action_guide_target_tip_lateral_error_m_mean": float(lateral_error.mean().detach().cpu()),
+        "target_action_guide_target_tip_secondary_lateral_error_m_mean": float(
+            secondary_lateral_error.mean().detach().cpu()
+        ),
+        "target_action_guide_target_tip_secondary_lateral_active_frac": float(
+            secondary_lateral_active.to(dtype=guide.dtype).mean().detach().cpu()
+        ),
+        "target_action_guide_target_tip_phase_lateral_dither_active_frac": float(
+            phase_lateral_dither_active.to(dtype=guide.dtype).mean().detach().cpu()
+        ),
+        "target_action_guide_target_tip_phase_lateral_dither_norm_m_mean": float(
+            torch.linalg.norm(phase_lateral_dither_delta, dim=1).mean().detach().cpu()
+        ),
+        "target_action_guide_target_tip_preinsert_alignment_ready_frac": float(
+            preinsert_alignment_ready.to(dtype=guide.dtype).mean().detach().cpu()
+        ),
+        "target_action_guide_target_tip_preinsert_hover_depth_ready_frac": float(
+            preinsert_hover_depth_ready.to(dtype=guide.dtype).mean().detach().cpu()
+        ),
+        "target_action_guide_target_tip_preinsert_hover_active_frac": float(
+            preinsert_hover_active.to(dtype=guide.dtype).mean().detach().cpu()
+        ),
+        "target_action_guide_target_tip_positive_axial_fraction": float(
+            (axial_delta_scalar > 0.0).to(dtype=guide.dtype).mean().detach().cpu()
+        ),
+        "target_action_guide_target_tip_axial_delta_scalar_m_mean": float(
+            axial_delta_scalar.mean().detach().cpu()
+        ),
+        "target_action_guide_target_tip_commanded_positive_axial_fraction": float(
+            (commanded_axial_delta_scalar > 0.0).to(dtype=guide.dtype).mean().detach().cpu()
+        ),
+        "target_action_guide_target_tip_commanded_axial_delta_scalar_m_mean": float(
+            commanded_axial_delta_scalar.mean().detach().cpu()
+        ),
+        "target_action_guide_target_tip_axial_direction_sign": float(
+            1.0 if float(args_cli.target_action_guide_target_tip_axial_direction_sign) >= 0.0 else -1.0
+        ),
+        "target_action_guide_target_tip_final_world_positive_axial_fraction": float(
+            (torch.sum(world_delta * axis_w, dim=1, keepdim=True) > 1.0e-8)
+            .to(dtype=guide.dtype)
+            .mean()
+            .detach()
+            .cpu()
+        ),
+        "target_action_guide_target_tip_final_world_axial_delta_m_mean": float(
+            torch.sum(world_delta * axis_w, dim=1, keepdim=True).mean().detach().cpu()
+        ),
+        "target_action_guide_target_tip_clamp_positive_axial_active_frac": float(
+            clamp_positive_axial_active.to(dtype=guide.dtype).mean().detach().cpu()
+        ),
+        "target_action_guide_target_tip_primary_axial_gate_blocked_frac": float(
+            primary_axial_gate_blocked.to(dtype=guide.dtype).mean().detach().cpu()
+        ),
+        "target_action_guide_target_tip_secondary_axial_gate_blocked_frac": float(
+            secondary_axial_gate_blocked.to(dtype=guide.dtype).mean().detach().cpu()
+        ),
+        "target_action_guide_target_tip_shallow_bypass_recovery_active_frac": float(
+            shallow_bypass_recovery_active.to(dtype=guide.dtype).mean().detach().cpu()
+        ),
+        "target_action_guide_target_tip_realized_r_recovery_trigger_frac": float(
+            realized_r_recovery_trigger.to(dtype=guide.dtype).mean().detach().cpu()
+        ),
+        "target_action_guide_target_tip_realized_r_recovery_theta_trigger_frac": float(
+            realized_r_recovery_theta_trigger.to(dtype=guide.dtype).mean().detach().cpu()
+        ),
+        "target_action_guide_target_tip_realized_r_recovery_secondary_lateral_trigger_frac": float(
+            realized_r_recovery_secondary_lateral_trigger.to(dtype=guide.dtype).mean().detach().cpu()
+        ),
+        "target_action_guide_target_tip_realized_r_recovery_active_frac": float(
+            realized_r_recovery_active.to(dtype=guide.dtype).mean().detach().cpu()
+        ),
+        "target_action_guide_target_tip_realized_r_recovery_cooldown_mean": float(
+            realized_r_recovery_cooldown.mean().detach().cpu()
+        ),
+        "target_action_guide_target_tip_contact_force_recovery_trigger_frac": float(
+            contact_force_recovery_trigger.to(dtype=guide.dtype).mean().detach().cpu()
+        ),
+        "target_action_guide_target_tip_contact_force_recovery_active_frac": float(
+            contact_force_recovery_active.to(dtype=guide.dtype).mean().detach().cpu()
+        ),
+        "target_action_guide_target_tip_contact_force_recovery_cooldown_mean": float(
+            contact_force_recovery_cooldown.mean().detach().cpu()
+        ),
+        "target_action_guide_target_tip_contact_force_recovery_force_norm_mean": float(
+            contact_force_recovery_force_norm.mean().detach().cpu()
+        ),
+        "target_action_guide_target_tip_phase_axial_depth_m_mean": float(
+            phase_axial_depth.mean().detach().cpu()
+        ),
+        "target_action_guide_target_tip_dual_lateral_rotation_active_frac": float(
+            dual_lateral_rotation_active.to(dtype=guide.dtype).mean().detach().cpu()
+        ),
+        "target_action_guide_target_tip_dual_lateral_rotation_norm_rad_mean": float(
+            torch.linalg.norm(dual_lateral_rot_cmd, dim=1).mean().detach().cpu()
+        ),
+        "target_action_guide_target_tip_dual_lateral_rotation_predicted_primary_m_mean": float(
+            dual_lateral_rotation_predicted_primary.mean().detach().cpu()
+        ),
+        "target_action_guide_target_tip_dual_lateral_rotation_predicted_secondary_m_mean": float(
+            dual_lateral_rotation_predicted_secondary.mean().detach().cpu()
+        ),
+        "target_action_guide_target_tip_world_delta_norm_m_mean": float(
+            torch.linalg.norm(world_delta, dim=1).mean().detach().cpu()
+        ),
+        "target_action_guide_target_tip_rotation_compensation_norm_m_mean": float(
+            torch.linalg.norm(rotation_compensation, dim=1).mean().detach().cpu()
+        ),
+        "target_action_guide_target_tip_final_orientation_selected_basis_mean": float(
+            final_orientation_selected_basis.mean().detach().cpu()
+        ),
+        "target_action_guide_target_tip_final_orientation_predicted_error_rad_mean": float(
+            torch.nan_to_num(final_orientation_predicted_error, nan=0.0).mean().detach().cpu()
+        ),
+        "target_action_guide_target_tip_final_orientation_predicted_improves_frac": float(
+            final_orientation_predicted_improves.to(dtype=guide.dtype).mean().detach().cpu()
+        ),
+        "target_action_guide_target_tip_final_orientation_rot_cmd_norm_rad_mean": float(
+            torch.linalg.norm(final_orientation_rot_cmd, dim=1).mean().detach().cpu()
+        ),
+        "target_action_guide_target_tip_final_orientation_rot_cmd_x_mean": float(
+            final_orientation_rot_cmd[:, 0].mean().detach().cpu()
+        ),
+        "target_action_guide_target_tip_final_orientation_rot_cmd_y_mean": float(
+            final_orientation_rot_cmd[:, 1].mean().detach().cpu()
+        ),
+        "target_action_guide_target_tip_final_orientation_rot_cmd_z_mean": float(
+            final_orientation_rot_cmd[:, 2].mean().detach().cpu()
+        ),
+        "target_action_guide_target_tip_orientation_realized_reject_trigger_frac": float(
+            orientation_realized_reject_trigger.to(dtype=guide.dtype).mean().detach().cpu()
+        ),
+        "target_action_guide_target_tip_orientation_realized_cooldown_frac": float(
+            orientation_realized_cooldown_active.to(dtype=guide.dtype).mean().detach().cpu()
+        ),
+        "target_action_guide_target_tip_orientation_realized_cooldown_mean": float(
+            orientation_realized_cooldown.mean().detach().cpu()
+        ),
+        "target_action_guide_target_tip_orientation_realized_basis_reject_trigger_frac": float(
+            orientation_realized_basis_reject_trigger.to(dtype=guide.dtype).mean().detach().cpu()
+        ),
+        "target_action_guide_target_tip_orientation_realized_basis_cooldown_mean": float(
+            orientation_realized_basis_cooldown.mean().detach().cpu()
+        ),
+        "target_action_guide_target_tip_orientation_realized_sign_mean": float(
+            orientation_realized_sign.mean().detach().cpu()
+        ),
+        "target_action_guide_target_tip_orientation_realized_sign_flip_trigger_frac": float(
+            orientation_realized_sign_flip_trigger.to(dtype=guide.dtype).mean().detach().cpu()
+        ),
+        "target_action_guide_target_tip_orientation_realized_theta_increase_rad_mean": float(
+            orientation_realized_theta_increase.mean().detach().cpu()
+        ),
+        "target_action_guide_target_tip_orientation_realized_lateral_increase_m_mean": float(
+            orientation_realized_lateral_increase.mean().detach().cpu()
+        ),
+        "target_action_guide_target_tip_orientation_realized_secondary_increase_m_mean": float(
+            orientation_realized_secondary_increase.mean().detach().cpu()
+        ),
+    }
+    if orientation_error is not None:
+        metrics["target_action_guide_target_tip_orientation_error_rad_mean"] = float(
+            orientation_error.mean().detach().cpu()
+        )
+        metrics["target_action_guide_target_tip_final_orientation_active_frac"] = float(
+            final_orientation_active.to(dtype=guide.dtype).mean().detach().cpu()
+        )
+        metrics["target_action_guide_target_tip_final_orientation_command_active_frac"] = float(
+            final_orientation_command_active.to(dtype=guide.dtype).mean().detach().cpu()
+        )
+    return guide, metrics
 
 
 def _root_translation_delta_to_policy_frame(
@@ -4043,6 +10658,7 @@ def _apply_insertion_action_guard(
     adaptive_lateral_sign: bool = False,
     lateral_direction_sign: float = 1.0,
     adaptive_lateral_flip_margin_m: float = 0.00005,
+    realized_lateral_sign_flip: bool = False,
     zero_rotation_when_offcenter: bool = False,
     rotation_lateral_threshold_m: float | None = None,
     activation_depth_m: float = -1.0e9,
@@ -4051,12 +10667,45 @@ def _apply_insertion_action_guard(
     centered_axial_step_m: float = 0.0,
     blocked_axial_step_m: float = 0.0,
     target_tip_servo_enabled: bool = False,
-    target_tip_servo_goal_depth_m: float = 0.008,
+    target_tip_servo_goal_depth_m: float = float("nan"),
     target_tip_servo_lateral_step_m: float = 0.00030,
+    target_tip_servo_gated_lateral_step_m: float = float("nan"),
     target_tip_servo_axial_step_m: float = 0.00002,
+    target_tip_servo_deep_axial_step_m: float = float("nan"),
+    target_tip_servo_deep_axial_activation_depth_m: float = float("inf"),
     target_tip_servo_axial_lateral_gate_m: float = 0.00050,
     target_tip_servo_axial_theta_gate_rad: float = 0.030,
+    target_tip_servo_orientation_mode: str = "inherit",
+    target_tip_servo_override_final_orientation_when_gated: bool = False,
+    target_tip_servo_override_final_orientation_max_depth_m: float = float("inf"),
+    target_tip_servo_zero_rotation_when_gated: bool = False,
+    target_tip_servo_zero_rotation_theta_gate_rad: float = float("inf"),
+    target_tip_servo_zero_rotation_only_deep_axial: bool = False,
+    target_tip_servo_depth_retention: bool = False,
+    target_tip_servo_depth_retention_margin_m: float = 0.00025,
+    target_tip_servo_max_depth: torch.Tensor | None = None,
+    target_tip_servo_plateau_pure_axial: bool = False,
+    target_tip_servo_plateau_activation_depth_m: float = 0.0,
+    target_tip_servo_plateau_realized_depth_threshold_m: float = 0.0,
+    target_tip_servo_plateau_lateral_gate_m: float = 0.00050,
+    target_tip_servo_plateau_theta_gate_rad: float = 0.080,
+    target_tip_servo_plateau_lateral_hold_scale: float = 0.0,
     target_tip_servo_min_consistency: float = 0.80,
+    target_tip_servo_consistency_body_axial: bool = False,
+    target_tip_servo_stable_steps: int = 0,
+    target_tip_servo_realized_depth_limit_m: float = 0.0,
+    target_tip_servo_realized_depth_backoff_m: float = 0.0,
+    target_tip_servo_realized_depth_recovery_lateral_scale: float = 1.0,
+    previous_axial_depth: torch.Tensor | None = None,
+    target_tip_servo_orientation_recovery: bool = False,
+    target_tip_servo_orientation_recovery_activation_depth_m: float = -0.006,
+    target_tip_servo_orientation_recovery_lateral_gate_m: float = 0.00050,
+    target_tip_servo_orientation_recovery_theta_limit_rad: float = 0.030,
+    target_tip_servo_orientation_recovery_worsen_margin_rad: float = 0.0010,
+    target_tip_servo_orientation_recovery_backoff_m: float = 0.0,
+    target_tip_servo_orientation_recovery_override_final_orientation: bool = False,
+    previous_orientation_error: torch.Tensor | None = None,
+    target_tip_servo_stable_count: torch.Tensor | None = None,
     retention_entered: torch.Tensor | None = None,
     retention_enabled: bool = False,
     retention_entry_depth_m: float = 0.0,
@@ -4072,6 +10721,7 @@ def _apply_insertion_action_guard(
     module_recovery_backout_lateral_scale: float = 1.0,
     module_recovery_backoff_direction_sign: float = -1.0,
     module_recovery_min_consistency: float = 0.80,
+    module_recovery_final_axial_error_gate_m: float = float("inf"),
     module_recovery_theta_threshold_rad: float = 0.040,
     module_recovery_lateral_threshold_m: float = 0.0005,
     module_recovery_zero_rotation: bool = False,
@@ -4080,9 +10730,11 @@ def _apply_insertion_action_guard(
     module_recovery_state_steps: torch.Tensor | None = None,
     module_recovery_retry_count: torch.Tensor | None = None,
     module_recovery_hold_steps: int = 25,
+    module_recovery_backout_max_steps: int = 0,
     module_recovery_max_retries: int = 2,
     module_recovery_reinsert_step_m: float = 0.000005,
     module_recovery_trim_lateral_step_m: float = 0.00002,
+    module_recovery_command_clip_m: float = 0.0,
     module_lateral_alignment_enabled: bool = False,
     module_lateral_alignment_activation_depth_m: float = 0.0070,
     module_lateral_alignment_tip_threshold_m: float = 0.0003,
@@ -4096,6 +10748,31 @@ def _apply_insertion_action_guard(
     module_lateral_alignment_rotation_command_sign: float = 1.0,
     module_lateral_alignment_rotation_compensation_clip_m: float = 0.00020,
     module_lateral_alignment_hold_depth_m: float | None = None,
+    final_two_stage_servo_enabled: bool = False,
+    final_two_stage_activation_depth_m: float = -0.035,
+    final_two_stage_lateral_gate_m: float = 0.0005,
+    final_two_stage_trim_theta_gate_rad: float = 0.055,
+    final_two_stage_trim_module_lateral_gate_m: float = 0.0015,
+    final_two_stage_reinsert_theta_gate_rad: float = 0.050,
+    final_two_stage_reinsert_module_lateral_gate_m: float = 0.0015,
+    final_two_stage_reinsert_module_axial_error_gate_m: float = float("inf"),
+    final_two_stage_reinsert_axial_step_m: float = 0.000003,
+    prelip_lateral_clamp: bool = False,
+    prelip_lateral_clamp_min_depth_m: float = -0.035,
+    prelip_lateral_clamp_max_depth_m: float = -0.020,
+    prelip_lateral_clamp_tip_threshold_m: float = 0.0005,
+    prelip_lateral_clamp_max_step_m: float = 0.00001,
+    prelip_lateral_clamp_backoff_m: float = 0.0,
+    prelip_lateral_clamp_preserve_axial: bool = False,
+    prelip_offgate_axial_lock: bool = False,
+    prelip_offgate_axial_lock_min_depth_m: float = -0.050,
+    prelip_offgate_axial_lock_max_depth_m: float = -0.006,
+    prelip_offgate_axial_lock_lateral_gate_m: float = 0.0005,
+    prelip_offgate_axial_lock_theta_gate_rad: float = 0.040,
+    prelip_offgate_axial_lock_max_inward_step_m: float = 0.0,
+    prelip_offgate_axial_lock_backoff_m: float = 0.0,
+    prelip_offgate_axial_lock_bidirectional: bool = False,
+    prelip_offgate_axial_lock_zero_lateral: bool = False,
     final_axis_alignment_rotation: bool = False,
     final_axis_alignment_rotation_step_rad: float = 0.0010,
     final_axis_alignment_rotation_command_sign: float = 1.0,
@@ -4105,7 +10782,13 @@ def _apply_insertion_action_guard(
     final_fixed_world_rotation_sign: float = 1.0,
     final_fixed_world_rotation_step_rad: float = 0.0010,
     final_fixed_world_rotation_compensation_clip_m: float = 0.00020,
+    final_fixed_world_rotation_pulse_on_steps: int = 0,
+    final_fixed_world_rotation_pulse_off_steps: int = 0,
     final_fixed_world_rotation_force: bool = False,
+    final_fixed_world_rotation_realized_reject: bool = False,
+    final_fixed_world_rotation_realized_reject_margin_rad: float = 0.00015,
+    final_fixed_world_rotation_realized_reject_cooldown_steps: int = 8,
+    final_fixed_world_rotation_realized_reject_cooldown: torch.Tensor | None = None,
     final_axis_alignment_strict_gate: bool = False,
     final_axis_alignment_strict_min_consistency: float = 0.80,
     final_axis_alignment_strict_max_lateral_m: float = 0.00050,
@@ -4114,6 +10797,11 @@ def _apply_insertion_action_guard(
     final_axis_alignment_strict_require_depth_hold: bool = True,
     final_orientation_compensation: bool = True,
     orientation_threshold_rad: float = 0.0,
+    prefinal_orientation_depth_m: float | None = None,
+    prefinal_orientation_lateral_m: float | None = None,
+    prefinal_orientation_threshold_rad: float | None = None,
+    prefinal_orientation_rotation_only: bool = False,
+    final_orientation_recovery_lateral_m: float | None = None,
     final_orientation_depth_m: float | None = None,
     final_orientation_lateral_m: float = 0.0003,
     final_orientation_threshold_rad: float = 0.03,
@@ -4122,13 +10810,67 @@ def _apply_insertion_action_guard(
     final_orientation_hold_margin_m: float = 0.00010,
     final_orientation_hold_backoff_step_m: float = 0.00002,
     final_orientation_hold_compensate_axial_sweep: bool = False,
+    final_orientation_hold_reject_predicted_depth: bool = False,
+    final_orientation_lateral_scale: float = 1.0,
+    final_orientation_lateral_scale_theta_gate_rad: float | None = None,
+    final_orientation_lateral_scale_after_theta_gate: float = 1.0,
+    final_orientation_lateral_bias_m: float = 0.0,
+    final_orientation_lateral_bias_max_lateral_m: float = float("inf"),
+    final_orientation_recover_lateral_after_theta_gate: bool = False,
     reject_predicted_r_increase: bool = False,
     predicted_r_increase_margin_m: float = 0.00005,
     predicted_r_reject_backoff_m: float = 0.00005,
+    final_post_override_r_reject: bool = False,
+    final_post_override_r_reject_margin_m: float = 0.00001,
+    final_post_override_r_reject_activation_depth_m: float = -1.0e9,
+    final_post_override_r_reject_lateral_gate_m: float = float("inf"),
+    final_post_override_r_reject_backoff_m: float = 0.00008,
+    final_post_override_r_reject_zero_rotation: bool = True,
+    reject_predicted_depth_when_offgate: bool = False,
+    predicted_depth_offgate_margin_m: float = 0.0,
+    predicted_depth_offgate_allow_final_two_stage_reinsert: bool = False,
     realized_r_recovery: bool = False,
     realized_r_recovery_margin_m: float = 0.00010,
     realized_r_recovery_backoff_m: float = 0.00002,
     realized_r_recovery_activation_depth_m: float = -0.004,
+    realized_r_accum_limit_m: float = 0.0,
+    realized_r_accum_max_depth_m: float = float("inf"),
+    realized_r_accum_lateral_gate_m: float = float("inf"),
+    realized_r_accum: torch.Tensor | None = None,
+    realized_r_recovery_cooldown_steps: int = 0,
+    realized_r_recovery_cooldown_zero_lateral: bool = False,
+    realized_r_recovery_cooldown: torch.Tensor | None = None,
+    offcenter_realized_depth_limit_m: float = 0.0,
+    offcenter_realized_depth_backoff_m: float = 0.0,
+    offcenter_realized_depth_accum_limit_m: float = 0.0,
+    offcenter_realized_depth_accum_lateral_gate_m: float = float("inf"),
+    offcenter_realized_depth_cooldown_steps: int = 0,
+    offcenter_realized_depth_cooldown_zero_lateral: bool = False,
+    recovery_zero_rotation: bool = False,
+    recovery_zero_axial: bool = False,
+    contact_force_recovery: bool = False,
+    contact_force_recovery_threshold: float = 12.0,
+    contact_force_recovery_activation_depth_m: float = -0.030,
+    contact_force_recovery_max_lateral_m: float = 0.0020,
+    contact_force_recovery_backoff_m: float = 0.00010,
+    contact_force_recovery_lateral_scale: float = 0.0,
+    contact_force_recovery_zero_rotation: bool = True,
+    contact_force_retreat_state_machine: bool = False,
+    contact_force_retreat_state: torch.Tensor | None = None,
+    contact_force_retreat_state_steps: torch.Tensor | None = None,
+    contact_force_retreat_retry_count: torch.Tensor | None = None,
+    contact_force_retreat_exit_depth_m: float = -0.043,
+    contact_force_retreat_backout_max_steps: int = 40,
+    contact_force_retreat_hold_steps: int = 12,
+    contact_force_retreat_force_clear_threshold: float = 6.0,
+    contact_force_retreat_recenter_lateral_gate_m: float = 0.0007,
+    contact_force_retreat_max_retries: int = 3,
+    contact_force_retreat_reapproach_steps: int = 0,
+    contact_force_retreat_reapproach_step_m: float = 0.0,
+    contact_force_retreat_abort_after_max_retries: bool = False,
+    contact_force_retreat_abort_max_steps: int = 40,
+    offcenter_realized_depth_cooldown: torch.Tensor | None = None,
+    offcenter_realized_depth_accum: torch.Tensor | None = None,
     settle_steps: int = 0,
     settle_activation_depth_m: float = -0.004,
     settle_max_lateral_m: float = 0.002,
@@ -4156,11 +10898,61 @@ def _apply_insertion_action_guard(
             "insertion_action_guard_guarded_world_delta_by_env": None,
             "insertion_action_guard_settle_active_fraction": 0.0,
             "insertion_action_guard_predicted_r_reject_fraction": 0.0,
+            "insertion_action_guard_final_post_override_r_reject_fraction": 0.0,
+            "insertion_action_guard_final_post_override_predicted_lateral_m_mean": 0.0,
+            "insertion_action_guard_predicted_depth_offgate_clamp_fraction": 0.0,
+            "insertion_action_guard_predicted_depth_offgate_clamp_m_mean": 0.0,
             "insertion_action_guard_realized_r_recovery_fraction": 0.0,
+            "insertion_action_guard_realized_r_accum_m_mean": 0.0,
+            "insertion_action_guard_realized_r_accum_recovery_fraction": 0.0,
+            "insertion_action_guard_realized_r_recovery_cooldown_fraction": 0.0,
+            "insertion_action_guard_realized_r_recovery_cooldown_steps_mean": 0.0,
+            "insertion_action_guard_offcenter_realized_depth_recovery_fraction": 0.0,
+            "insertion_action_guard_offcenter_realized_depth_delta_m_mean": 0.0,
+            "insertion_action_guard_offcenter_realized_depth_cooldown_fraction": 0.0,
+            "insertion_action_guard_offcenter_realized_depth_cooldown_steps_mean": 0.0,
+            "insertion_action_guard_offcenter_realized_depth_accum_m_mean": 0.0,
+            "insertion_action_guard_contact_force_recovery_fraction": 0.0,
+            "insertion_action_guard_contact_force_norm_mean": 0.0,
+            "insertion_action_guard_recovery_rotation_zeroed_fraction": 0.0,
+            "insertion_action_guard_recovery_axial_zeroed_fraction": 0.0,
+            "insertion_action_guard_target_tip_servo_active_fraction": 0.0,
+            "insertion_action_guard_target_tip_servo_axial_gate_fraction": 0.0,
+            "insertion_action_guard_target_tip_servo_axial_error_m_mean": 0.0,
+            "insertion_action_guard_target_tip_servo_deep_axial_fraction": 0.0,
+            "insertion_action_guard_target_tip_servo_commanded_axial_step_m_mean": 0.0,
+            "insertion_action_guard_target_tip_servo_intended_axial_component_m_mean": 0.0,
+            "insertion_action_guard_target_tip_servo_intended_lateral_component_m_mean": 0.0,
+            "insertion_action_guard_target_tip_servo_selected_fraction": 0.0,
+            "insertion_action_guard_target_tip_servo_selected_axial_component_m_mean": 0.0,
+            "insertion_action_guard_target_tip_servo_blocked_by_module_recovery_fraction": 0.0,
+            "insertion_action_guard_target_tip_servo_blocked_by_module_lateral_fraction": 0.0,
+            "insertion_action_guard_target_tip_servo_blocked_by_final_orientation_fraction": 0.0,
+            "insertion_action_guard_target_tip_servo_world_delta_env0": None,
+            "insertion_action_guard_target_tip_servo_stable_count_mean": 0.0,
+            "insertion_action_guard_target_tip_servo_depth_overshoot_fraction": 0.0,
+            "insertion_action_guard_target_tip_servo_depth_retention_fraction": 0.0,
+            "insertion_action_guard_target_tip_servo_max_depth_m_mean": 0.0,
+            "insertion_action_guard_target_tip_servo_realized_depth_delta_m_mean": 0.0,
+            "insertion_action_guard_target_tip_servo_plateau_pure_axial_fraction": 0.0,
+            "insertion_action_guard_target_tip_servo_orientation_recovery_fraction": 0.0,
+            "insertion_action_guard_target_tip_servo_rotation_zero_fraction": 0.0,
+            "insertion_action_guard_target_tip_servo_realized_orientation_delta_rad_mean": 0.0,
+            "insertion_action_guard_final_two_stage_window_fraction": 0.0,
+            "insertion_action_guard_final_two_stage_trim_fraction": 0.0,
+            "insertion_action_guard_final_two_stage_reinsert_ready_fraction": 0.0,
+            "insertion_action_guard_module_recovery_active_fraction": 0.0,
+            "insertion_action_guard_module_lateral_alignment_active_fraction": 0.0,
+            "insertion_action_guard_module_lateral_error_m_mean": 0.0,
             "insertion_action_guard_module_lateral_alignment_desired_dir_env0": None,
             "insertion_action_guard_module_lateral_alignment_desired_delta_env0": None,
             "insertion_action_guard_module_lateral_alignment_lateral_step_m_mean": 0.0,
             "insertion_action_guard_module_lateral_alignment_backoff_m_mean": 0.0,
+            "insertion_action_guard_prelip_lateral_clamp_active_fraction": 0.0,
+            "insertion_action_guard_prelip_lateral_clamp_lateral_m_mean": 0.0,
+            "insertion_action_guard_prelip_lateral_clamp_axial_m_mean": 0.0,
+            "insertion_action_guard_prelip_offgate_axial_lock_active_fraction": 0.0,
+            "insertion_action_guard_prelip_offgate_axial_lock_axial_m_mean": 0.0,
             "insertion_action_guard_module_lateral_alignment_rotation_active_fraction": 0.0,
             "insertion_action_guard_module_lateral_alignment_rotation_norm_rad_mean": 0.0,
             "insertion_action_guard_module_lateral_alignment_rotation_predicted_projection_m_mean": 0.0,
@@ -4170,13 +10962,19 @@ def _apply_insertion_action_guard(
             "insertion_action_guard_final_fixed_world_rotation_active_fraction": 0.0,
             "insertion_action_guard_final_fixed_world_rotation_norm_rad_mean": 0.0,
             "insertion_action_guard_final_fixed_world_rotation_predicted_error_rad_mean": 0.0,
+            "insertion_action_guard_final_fixed_world_rotation_pulse_gate_fraction": 1.0,
             "insertion_action_guard_final_fixed_world_rotation_strict_reject_fraction": 0.0,
+            "insertion_action_guard_final_fixed_world_rotation_realized_reject_fraction": 0.0,
+            "insertion_action_guard_final_fixed_world_rotation_realized_reject_cooldown_mean": 0.0,
             "insertion_action_guard_final_axis_alignment_strict_reject_fraction": 0.0,
             "insertion_action_guard_final_axis_alignment_strict_predicted_depth_m_mean": 0.0,
             "insertion_action_guard_final_axis_alignment_strict_predicted_lateral_m_mean": 0.0,
             "insertion_action_guard_final_orientation_depth_hold_fraction": 0.0,
             "insertion_action_guard_final_orientation_depth_backoff_fraction": 0.0,
+            "insertion_action_guard_final_orientation_recovery_lateral_fraction": 0.0,
             "insertion_action_guard_final_orientation_hold_axial_sweep_comp_m_mean": 0.0,
+            "insertion_action_guard_final_orientation_hold_depth_clamp_fraction": 0.0,
+            "insertion_action_guard_final_orientation_hold_depth_clamp_m_mean": 0.0,
             "insertion_action_guard_missing_geometry": 1.0,
         }
     device = policy_tcp_action.device
@@ -4217,12 +11015,28 @@ def _apply_insertion_action_guard(
         task_geometry_reward_config,
         axis_w=axis_w,
     )
-    if orientation_error is None or float(orientation_threshold_rad) <= 0.0:
+    if orientation_error is None:
         misoriented = torch.zeros_like(off_center)
         orientation_error_col = torch.zeros_like(lateral_error)
     else:
         orientation_error_col = orientation_error.to(device=device, dtype=dtype).view(-1, 1)
-        misoriented = guard_active & (orientation_error_col > float(orientation_threshold_rad))
+        if float(orientation_threshold_rad) > 0.0:
+            misoriented = guard_active & (orientation_error_col > float(orientation_threshold_rad))
+        else:
+            misoriented = torch.zeros_like(off_center)
+    servo_orientation_error_col = orientation_error_col
+    servo_orientation_mode = str(target_tip_servo_orientation_mode or "inherit").lower()
+    if servo_orientation_mode != "inherit":
+        servo_reward_config = dict(task_geometry_reward_config)
+        servo_reward_config["orientation_error_mode"] = servo_orientation_mode
+        servo_orientation_error = _body_target_orientation_error_from_config(
+            env,
+            body_name,
+            servo_reward_config,
+            axis_w=axis_w,
+        )
+        if servo_orientation_error is not None:
+            servo_orientation_error_col = servo_orientation_error.to(device=device, dtype=dtype).view(-1, 1)
     settle_active = torch.zeros_like(guard_active)
     if int(settle_steps) > 0:
         episode_length_buf = getattr(env.unwrapped, "episode_length_buf", None)
@@ -4238,8 +11052,18 @@ def _apply_insertion_action_guard(
     module_consistency_gate = torch.ones_like(lateral_error)
     module_lateral_error = torch.zeros_like(lateral_error)
     module_lateral_vec_to_center = torch.zeros_like(body_pos_w)
+    module_depth = axial_depth
+    module_expected_final_depth = target_depth
+    module_final_axial_error = torch.zeros_like(lateral_error)
     consistency_pos_w = None
-    if bool(module_recovery_enabled) or bool(module_lateral_alignment_enabled):
+    if (
+        bool(module_recovery_enabled)
+        or bool(module_lateral_alignment_enabled)
+        or float(target_tip_servo_min_consistency) > 0.0
+        or bool(target_tip_servo_consistency_body_axial)
+        or math.isfinite(float(module_recovery_final_axial_error_gate_m))
+        or math.isfinite(float(final_two_stage_reinsert_module_axial_error_gate_m))
+    ):
         consistency_body_name = task_geometry_reward_config.get("consistency_body")
         if consistency_body_name:
             consistency_pos_w = _body_position_by_name(env, str(consistency_body_name), None)
@@ -4267,7 +11091,14 @@ def _apply_insertion_action_guard(
             lateral_sigma = max(float(task_geometry_reward_config.get("consistency_lateral_sigma") or 0.0015), 1.0e-9)
             module_consistency_gate = torch.exp(-torch.square((current_gap - reference_gap.to(device=device, dtype=dtype)) / axial_std))
             module_consistency_gate = module_consistency_gate * torch.exp(-torch.square(module_lateral_error / lateral_sigma))
+            if target_depth is not None:
+                module_expected_final_depth = target_depth.to(device=device, dtype=dtype) - reference_gap.to(
+                    device=device,
+                    dtype=dtype,
+                )
+                module_final_axial_error = torch.abs(module_depth - module_expected_final_depth)
     lateral_sign_flip_fraction = 0.0
+    lateral_sign_worsen = torch.zeros_like(lateral_error, dtype=torch.bool)
     if (
         bool(adaptive_lateral_sign)
         and lateral_sign_state is not None
@@ -4278,10 +11109,11 @@ def _apply_insertion_action_guard(
         worsen = off_center & torch.isfinite(prev_error) & (
             lateral_error > prev_error + max(float(adaptive_lateral_flip_margin_m), 0.0)
         )
-        if bool(worsen.any().detach().cpu()):
-            lateral_sign_state[worsen] *= -1.0
+        lateral_sign_worsen = worsen
         lateral_sign_flip_fraction = float(worsen.float().mean().detach().cpu())
     realized_r_recovery_active = torch.zeros_like(lateral_error, dtype=torch.bool)
+    realized_r_accum_active = torch.zeros_like(lateral_error, dtype=torch.bool)
+    realized_r_recovery_cooldown_active = torch.zeros_like(lateral_error, dtype=torch.bool)
     if bool(realized_r_recovery) and previous_lateral_error is not None and previous_lateral_error.shape == lateral_error.shape:
         prev_error = previous_lateral_error.to(device=device, dtype=dtype)
         realized_r_recovery_active = (
@@ -4290,15 +11122,390 @@ def _apply_insertion_action_guard(
             & (axial_depth >= float(realized_r_recovery_activation_depth_m))
             & (lateral_error > prev_error + max(float(realized_r_recovery_margin_m), 0.0))
         )
+        if (
+            float(realized_r_accum_limit_m) > 0.0
+            and realized_r_accum is not None
+            and realized_r_accum.shape == lateral_error.shape
+        ):
+            reset_mask = getattr(env.unwrapped, "episode_length_buf", None)
+            if reset_mask is not None:
+                reset = reset_mask.to(device=device).view(-1, 1) <= 1
+                realized_r_accum[reset] = 0.0
+            accum_max_depth = float(realized_r_accum_max_depth_m)
+            accum_lateral_gate = float(realized_r_accum_lateral_gate_m)
+            within_depth_window = axial_depth >= float(realized_r_recovery_activation_depth_m)
+            if math.isfinite(accum_max_depth):
+                within_depth_window = within_depth_window & (axial_depth <= accum_max_depth)
+            within_lateral_gate = (
+                torch.ones_like(lateral_error, dtype=torch.bool)
+                if not math.isfinite(accum_lateral_gate)
+                else lateral_error <= max(accum_lateral_gate, 0.0)
+            )
+            valid_r_accum = (
+                guard_active
+                & torch.isfinite(prev_error)
+                & within_depth_window
+                & within_lateral_gate
+            )
+            r_delta = lateral_error - prev_error
+            r_accum_next = torch.where(
+                valid_r_accum,
+                realized_r_accum.to(device=device, dtype=dtype) + torch.clamp(r_delta, min=0.0),
+                torch.zeros_like(realized_r_accum, dtype=dtype, device=device),
+            )
+            r_accum_next = torch.where(
+                valid_r_accum & (r_delta <= 0.0),
+                torch.zeros_like(r_accum_next),
+                r_accum_next,
+            )
+            realized_r_accum.copy_(r_accum_next.to(dtype=realized_r_accum.dtype))
+            realized_r_accum_active = valid_r_accum & (
+                realized_r_accum.to(device=device, dtype=dtype) > max(float(realized_r_accum_limit_m), 0.0)
+            )
+            realized_r_recovery_active = realized_r_recovery_active | realized_r_accum_active
+        if (
+            int(realized_r_recovery_cooldown_steps) > 0
+            and realized_r_recovery_cooldown is not None
+            and realized_r_recovery_cooldown.shape == lateral_error.shape
+        ):
+            reset_mask = getattr(env.unwrapped, "episode_length_buf", None)
+            if reset_mask is not None:
+                reset = reset_mask.to(device=device).view(-1, 1) <= 1
+                realized_r_recovery_cooldown[reset] = 0
+            realized_r_recovery_cooldown_active = (
+                guard_active & (realized_r_recovery_cooldown.to(device=device) > 0)
+            )
+            next_cooldown = torch.where(
+                realized_r_recovery_active,
+                torch.full_like(
+                    realized_r_recovery_cooldown,
+                    max(int(realized_r_recovery_cooldown_steps), 0),
+                ),
+                torch.clamp(realized_r_recovery_cooldown - 1, min=0),
+            )
+            realized_r_recovery_cooldown.copy_(next_cooldown)
+            realized_r_recovery_cooldown_active = (
+                guard_active
+                & (
+                    realized_r_recovery_active
+                    | (realized_r_recovery_cooldown.to(device=device) > 0)
+                )
+            )
+            realized_r_recovery_active = realized_r_recovery_active | realized_r_recovery_cooldown_active
+    offcenter_realized_depth_recovery_active = torch.zeros_like(lateral_error, dtype=torch.bool)
+    offcenter_realized_depth_delta = torch.zeros_like(axial_depth)
+    offcenter_realized_depth_cooldown_active = torch.zeros_like(lateral_error, dtype=torch.bool)
+    offcenter_realized_depth_accum_active = torch.zeros_like(lateral_error, dtype=torch.bool)
+    if (
+        float(offcenter_realized_depth_limit_m) > 0.0
+        and previous_axial_depth is not None
+        and previous_axial_depth.shape == axial_depth.shape
+    ):
+        prev_depth_for_offcenter = previous_axial_depth.to(device=device, dtype=dtype)
+        offcenter_realized_depth_delta = axial_depth - prev_depth_for_offcenter
+        offgate_for_realized_depth = off_center | misoriented
+        offcenter_realized_depth_recovery_active = (
+            guard_active
+            & offgate_for_realized_depth
+            & torch.isfinite(prev_depth_for_offcenter)
+            & (offcenter_realized_depth_delta > max(float(offcenter_realized_depth_limit_m), 0.0))
+        )
+        if (
+            float(offcenter_realized_depth_accum_limit_m) > 0.0
+            and offcenter_realized_depth_accum is not None
+            and offcenter_realized_depth_accum.shape == axial_depth.shape
+        ):
+            reset_mask = getattr(env.unwrapped, "episode_length_buf", None)
+            if reset_mask is not None:
+                reset = reset_mask.to(device=device).view(-1, 1) <= 1
+                offcenter_realized_depth_accum[reset] = 0.0
+            accum_lateral_gate = float(offcenter_realized_depth_accum_lateral_gate_m)
+            near_center_for_accum = (
+                torch.ones_like(lateral_error, dtype=torch.bool)
+                if not math.isfinite(accum_lateral_gate)
+                else lateral_error <= max(accum_lateral_gate, 0.0)
+            )
+            valid_offgate = (
+                guard_active
+                & offgate_for_realized_depth
+                & near_center_for_accum
+                & torch.isfinite(prev_depth_for_offcenter)
+            )
+            positive_drift = torch.clamp(offcenter_realized_depth_delta, min=0.0)
+            accum_next = torch.where(
+                valid_offgate,
+                offcenter_realized_depth_accum.to(device=device, dtype=dtype) + positive_drift,
+                torch.zeros_like(offcenter_realized_depth_accum, dtype=dtype, device=device),
+            )
+            accum_next = torch.where(
+                valid_offgate & (offcenter_realized_depth_delta <= 0.0),
+                torch.zeros_like(accum_next),
+                accum_next,
+            )
+            offcenter_realized_depth_accum.copy_(accum_next.to(dtype=offcenter_realized_depth_accum.dtype))
+            offcenter_realized_depth_accum_active = (
+                valid_offgate
+                & (
+                    offcenter_realized_depth_accum.to(device=device, dtype=dtype)
+                    > max(float(offcenter_realized_depth_accum_limit_m), 0.0)
+                )
+            )
+            offcenter_realized_depth_recovery_active = (
+                offcenter_realized_depth_recovery_active | offcenter_realized_depth_accum_active
+            )
+        if (
+            int(offcenter_realized_depth_cooldown_steps) > 0
+            and offcenter_realized_depth_cooldown is not None
+            and offcenter_realized_depth_cooldown.shape == axial_depth.shape
+        ):
+            reset_mask = getattr(env.unwrapped, "episode_length_buf", None)
+            if reset_mask is not None:
+                reset = reset_mask.to(device=device).view(-1, 1) <= 1
+                offcenter_realized_depth_cooldown[reset] = 0
+            offcenter_realized_depth_cooldown_active = (
+                guard_active & (offcenter_realized_depth_cooldown.to(device=device) > 0)
+            )
+            next_cooldown = torch.where(
+                offcenter_realized_depth_recovery_active,
+                torch.full_like(
+                    offcenter_realized_depth_cooldown,
+                    max(int(offcenter_realized_depth_cooldown_steps), 0),
+                ),
+                torch.clamp(offcenter_realized_depth_cooldown - 1, min=0),
+            )
+            offcenter_realized_depth_cooldown.copy_(next_cooldown)
+            offcenter_realized_depth_cooldown_active = (
+                guard_active
+                & (
+                    offcenter_realized_depth_recovery_active
+                    | (offcenter_realized_depth_cooldown.to(device=device) > 0)
+                )
+            )
+            offcenter_realized_depth_recovery_active = (
+                offcenter_realized_depth_recovery_active | offcenter_realized_depth_cooldown_active
+            )
+    contact_force_norm = torch.zeros_like(axial_depth)
+    contact_force_recovery_active = torch.zeros_like(lateral_error, dtype=torch.bool)
+    if bool(contact_force_recovery):
+        try:
+            wrench_for_guard, _ = _isaac_wrench_observation(env, device=device)
+            contact_force_norm = torch.linalg.norm(
+                wrench_for_guard[:, :3].to(device=device, dtype=dtype),
+                dim=1,
+                keepdim=True,
+            )
+            contact_force_recovery_active = (
+                guard_active
+                & (contact_force_norm >= max(float(contact_force_recovery_threshold), 0.0))
+                & (axial_depth >= float(contact_force_recovery_activation_depth_m))
+                & (lateral_error <= max(float(contact_force_recovery_max_lateral_m), 0.0))
+            )
+        except Exception:
+            contact_force_norm = torch.zeros_like(axial_depth)
+            contact_force_recovery_active = torch.zeros_like(lateral_error, dtype=torch.bool)
+    contact_force_retreat_backout_active = torch.zeros_like(contact_force_recovery_active)
+    contact_force_retreat_hold_active = torch.zeros_like(contact_force_recovery_active)
+    contact_force_retreat_reapproach_active = torch.zeros_like(contact_force_recovery_active)
+    contact_force_retreat_abort_active = torch.zeros_like(contact_force_recovery_active)
+    contact_force_retreat_active = torch.zeros_like(contact_force_recovery_active)
+    if bool(contact_force_retreat_state_machine):
+        if (
+            contact_force_retreat_state is None
+            or contact_force_retreat_state_steps is None
+            or contact_force_retreat_retry_count is None
+        ):
+            raise ValueError(
+                "contact-force retreat state machine requires state, state_steps, and retry_count tensors"
+            )
+        if contact_force_retreat_state.shape != axial_depth.shape:
+            raise ValueError(
+                "contact-force retreat state shape does not match env count: "
+                f"{tuple(contact_force_retreat_state.shape)} vs {tuple(axial_depth.shape)}"
+            )
+        reset_mask = getattr(env.unwrapped, "episode_length_buf", None)
+        if reset_mask is not None:
+            reset = reset_mask.to(device=device).view(-1, 1) <= 1
+            contact_force_retreat_state[reset] = 0
+            contact_force_retreat_state_steps[reset] = 0
+            contact_force_retreat_retry_count[reset] = 0
+        normal = contact_force_retreat_state == 0
+        may_retry = contact_force_retreat_retry_count < max(int(contact_force_retreat_max_retries), 0)
+        trigger = contact_force_recovery_active & normal & may_retry
+        contact_force_retreat_state[trigger] = 1
+        contact_force_retreat_state_steps[trigger] = 0
+        contact_force_retreat_retry_count[trigger] += 1
+        exhausted_trigger = (
+            contact_force_recovery_active
+            & normal
+            & ~may_retry
+            & bool(contact_force_retreat_abort_after_max_retries)
+        )
+        contact_force_retreat_state[exhausted_trigger] = 4
+        contact_force_retreat_state_steps[exhausted_trigger] = 0
+        in_backout = contact_force_retreat_state == 1
+        backout_done = in_backout & (axial_depth <= float(contact_force_retreat_exit_depth_m))
+        if int(contact_force_retreat_backout_max_steps) > 0:
+            backout_done = backout_done | (
+                in_backout
+                & (contact_force_retreat_state_steps >= int(contact_force_retreat_backout_max_steps))
+            )
+        contact_force_retreat_state[backout_done] = 2
+        contact_force_retreat_state_steps[backout_done] = 0
+        in_hold = contact_force_retreat_state == 2
+        hold_safe = (
+            (contact_force_norm <= max(float(contact_force_retreat_force_clear_threshold), 0.0))
+            & (lateral_error <= max(float(contact_force_retreat_recenter_lateral_gate_m), 0.0))
+        )
+        hold_done = in_hold & hold_safe & (
+            contact_force_retreat_state_steps >= max(int(contact_force_retreat_hold_steps), 0)
+        )
+        retrigger = in_hold & contact_force_recovery_active & may_retry
+        hold_next_state = 3 if int(contact_force_retreat_reapproach_steps) > 0 else 0
+        contact_force_retreat_state[hold_done] = hold_next_state
+        contact_force_retreat_state_steps[hold_done] = 0
+        contact_force_retreat_state[retrigger] = 1
+        contact_force_retreat_state_steps[retrigger] = 0
+        contact_force_retreat_retry_count[retrigger] += 1
+        force_blocked_after_retries = (
+            in_hold
+            & contact_force_recovery_active
+            & ~may_retry
+            & bool(contact_force_retreat_abort_after_max_retries)
+        )
+        contact_force_retreat_state[force_blocked_after_retries] = 4
+        contact_force_retreat_state_steps[force_blocked_after_retries] = 0
+        in_reapproach = contact_force_retreat_state == 3
+        reapproach_done = in_reapproach & (
+            contact_force_retreat_state_steps >= max(int(contact_force_retreat_reapproach_steps), 0)
+        )
+        reapproach_unsafe = in_reapproach & contact_force_recovery_active
+        reapproach_retry = reapproach_unsafe & may_retry
+        contact_force_retreat_state[reapproach_done] = 0
+        contact_force_retreat_state_steps[reapproach_done] = 0
+        contact_force_retreat_state[reapproach_retry] = 1
+        contact_force_retreat_state_steps[reapproach_retry] = 0
+        contact_force_retreat_retry_count[reapproach_retry] += 1
+        reapproach_abort = (
+            reapproach_unsafe
+            & ~may_retry
+            & bool(contact_force_retreat_abort_after_max_retries)
+        )
+        contact_force_retreat_state[reapproach_abort] = 4
+        contact_force_retreat_state_steps[reapproach_abort] = 0
+        in_abort = contact_force_retreat_state == 4
+        abort_done = in_abort & (axial_depth <= float(contact_force_retreat_exit_depth_m))
+        if int(contact_force_retreat_abort_max_steps) > 0:
+            abort_done = abort_done | (
+                in_abort
+                & (contact_force_retreat_state_steps >= int(contact_force_retreat_abort_max_steps))
+            )
+        contact_force_retreat_state[abort_done] = 0
+        contact_force_retreat_state_steps[abort_done] = 0
+        contact_force_retreat_state_steps[contact_force_retreat_state > 0] += 1
+        contact_force_retreat_backout_active = contact_force_retreat_state == 1
+        contact_force_retreat_hold_active = contact_force_retreat_state == 2
+        contact_force_retreat_reapproach_active = contact_force_retreat_state == 3
+        contact_force_retreat_abort_active = contact_force_retreat_state == 4
+        contact_force_retreat_active = (
+            contact_force_retreat_backout_active
+            | contact_force_retreat_hold_active
+            | contact_force_retreat_reapproach_active
+            | contact_force_retreat_abort_active
+        )
+    target_tip_servo_orientation_recovery_active = torch.zeros_like(lateral_error, dtype=torch.bool)
+    target_tip_servo_realized_orientation_delta = torch.zeros_like(lateral_error)
+    if (
+        bool(target_tip_servo_orientation_recovery)
+        and previous_orientation_error is not None
+        and previous_orientation_error.shape == servo_orientation_error_col.shape
+    ):
+        prev_theta = previous_orientation_error.to(device=device, dtype=dtype)
+        target_tip_servo_realized_orientation_delta = servo_orientation_error_col - prev_theta
+        target_tip_servo_orientation_recovery_active = (
+            guard_active
+            & bool(target_tip_servo_enabled)
+            & torch.isfinite(prev_theta)
+            & (axial_depth >= float(target_tip_servo_orientation_recovery_activation_depth_m))
+            & (lateral_error <= max(float(target_tip_servo_orientation_recovery_lateral_gate_m), 0.0))
+            & (
+                (servo_orientation_error_col > max(float(target_tip_servo_orientation_recovery_theta_limit_rad), 0.0))
+                | (
+                    target_tip_servo_realized_orientation_delta
+                    > max(float(target_tip_servo_orientation_recovery_worsen_margin_rad), 0.0)
+                )
+            )
+    )
     centered = guard_active & ~(off_center | misoriented)
     final_orientation_active = torch.zeros_like(centered)
+    prefinal_orientation_active = torch.zeros_like(centered)
+    final_orientation_recovery_lateral_active = torch.zeros_like(centered)
+    final_orientation_theta_good_lateral_recovery_active = torch.zeros_like(centered)
+    final_orientation_recovery_lateral_limit = None
+    if (
+        final_orientation_recovery_lateral_m is not None
+        and math.isfinite(float(final_orientation_recovery_lateral_m))
+    ):
+        final_orientation_recovery_lateral_limit = max(float(final_orientation_recovery_lateral_m), 0.0)
     if final_orientation_depth_m is not None and math.isfinite(float(final_orientation_depth_m)):
+        final_lateral_limit = max(float(final_orientation_lateral_m), 0.0)
+        final_recovery_lateral_gate = lateral_error <= final_lateral_limit
+        if final_orientation_recovery_lateral_limit is not None:
+            final_recovery_lateral_gate = lateral_error <= max(
+                final_lateral_limit,
+                final_orientation_recovery_lateral_limit,
+            )
         final_orientation_active = (
             guard_active
             & (axial_depth >= float(final_orientation_depth_m))
-            & (lateral_error <= max(float(final_orientation_lateral_m), 0.0))
+            & final_recovery_lateral_gate
             & (orientation_error_col > max(float(final_orientation_threshold_rad), 0.0))
         )
+        final_orientation_recovery_lateral_active = final_orientation_recovery_lateral_active | (
+            final_orientation_active & (lateral_error > final_lateral_limit)
+        )
+        if bool(final_orientation_recover_lateral_after_theta_gate):
+            final_orientation_theta_good_lateral_recovery_active = (
+                guard_active
+                & (axial_depth >= float(final_orientation_depth_m))
+                & final_recovery_lateral_gate
+                & (orientation_error_col <= max(float(final_orientation_threshold_rad), 0.0))
+                & (lateral_error > final_lateral_limit)
+            )
+            final_orientation_recovery_lateral_active = (
+                final_orientation_recovery_lateral_active
+                | final_orientation_theta_good_lateral_recovery_active
+            )
+            final_orientation_active = final_orientation_active | final_orientation_theta_good_lateral_recovery_active
+    if prefinal_orientation_depth_m is not None and math.isfinite(float(prefinal_orientation_depth_m)):
+        prefinal_lateral_limit = (
+            float(prefinal_orientation_lateral_m)
+            if prefinal_orientation_lateral_m is not None
+            and math.isfinite(float(prefinal_orientation_lateral_m))
+            else float(final_orientation_lateral_m)
+        )
+        prefinal_lateral_limit = max(prefinal_lateral_limit, 0.0)
+        prefinal_recovery_lateral_gate = lateral_error <= prefinal_lateral_limit
+        if final_orientation_recovery_lateral_limit is not None:
+            prefinal_recovery_lateral_gate = lateral_error <= max(
+                prefinal_lateral_limit,
+                final_orientation_recovery_lateral_limit,
+            )
+        prefinal_theta_limit = (
+            float(prefinal_orientation_threshold_rad)
+            if prefinal_orientation_threshold_rad is not None
+            and math.isfinite(float(prefinal_orientation_threshold_rad))
+            else float(final_orientation_threshold_rad)
+        )
+        prefinal_orientation_active = (
+            guard_active
+            & (axial_depth >= float(prefinal_orientation_depth_m))
+            & prefinal_recovery_lateral_gate
+            & (orientation_error_col > max(prefinal_theta_limit, 0.0))
+        )
+        final_orientation_recovery_lateral_active = final_orientation_recovery_lateral_active | (
+            prefinal_orientation_active & (lateral_error > prefinal_lateral_limit)
+        )
+        final_orientation_active = final_orientation_active | prefinal_orientation_active
     retention_active = torch.zeros_like(centered)
     if bool(retention_enabled) and retention_entered is not None:
         if retention_entered.shape[0] != axial_depth.shape[0]:
@@ -4315,6 +11522,11 @@ def _apply_insertion_action_guard(
         retention_axial_active = retention_axial_active & ~misoriented
     module_recovery_active = torch.zeros_like(centered)
     if bool(module_recovery_enabled):
+        module_final_axial_blocked = (
+            torch.zeros_like(module_recovery_active)
+            if not math.isfinite(float(module_recovery_final_axial_error_gate_m))
+            else module_final_axial_error > max(float(module_recovery_final_axial_error_gate_m), 0.0)
+        )
         module_recovery_active = (
             guard_active
             & (axial_depth >= float(module_recovery_activation_depth_m))
@@ -4322,6 +11534,7 @@ def _apply_insertion_action_guard(
             & (
                 (orientation_error_col > max(float(module_recovery_theta_threshold_rad), 0.0))
                 | (module_consistency_gate < max(float(module_recovery_min_consistency), 0.0))
+                | module_final_axial_blocked
             )
         )
         retention_axial_active = retention_axial_active & ~module_recovery_active
@@ -4350,6 +11563,10 @@ def _apply_insertion_action_guard(
         module_recovery_retry_count[trigger] += 1
         in_backout = module_recovery_state == 1
         backout_done = in_backout & (axial_depth <= float(module_recovery_target_depth_m))
+        if int(module_recovery_backout_max_steps) > 0:
+            backout_done = backout_done | (
+                in_backout & (module_recovery_state_steps >= int(module_recovery_backout_max_steps))
+            )
         module_recovery_state[backout_done] = 2
         module_recovery_state_steps[backout_done] = 0
         in_trim = module_recovery_state == 2
@@ -4357,17 +11574,34 @@ def _apply_insertion_action_guard(
         module_recovery_state[trim_done] = 3
         module_recovery_state_steps[trim_done] = 0
         in_reinsert = module_recovery_state == 3
+        module_recovery_final_axial_ok = (
+            torch.ones_like(module_recovery_active, dtype=torch.bool)
+            if not math.isfinite(float(module_recovery_final_axial_error_gate_m))
+            else module_final_axial_error <= max(float(module_recovery_final_axial_error_gate_m), 0.0)
+        )
         reinsert_done = in_reinsert & (
             (axial_depth >= float(module_recovery_activation_depth_m))
             & (orientation_error_col <= max(float(module_recovery_theta_threshold_rad), 0.0))
             & (module_consistency_gate >= max(float(module_recovery_min_consistency), 0.0))
+            & module_recovery_final_axial_ok
         )
         module_recovery_state[reinsert_done] = 0
         module_recovery_state_steps[reinsert_done] = 0
-        reinsert_failed = in_reinsert & module_recovery_active & may_retry
+        reinsert_unstable = in_reinsert & (
+            (lateral_error > max(float(module_recovery_lateral_threshold_m), 0.0))
+            | (orientation_error_col > max(float(module_recovery_theta_threshold_rad), 0.0))
+            | (module_consistency_gate < max(float(module_recovery_min_consistency), 0.0))
+        )
+        reinsert_failed = in_reinsert & (module_recovery_active | reinsert_unstable) & may_retry
         module_recovery_state[reinsert_failed] = 1
         module_recovery_state_steps[reinsert_failed] = 0
         module_recovery_retry_count[reinsert_failed] += 1
+        reinsert_unsafe = in_reinsert & ~may_retry & (
+            (lateral_error > max(float(module_recovery_lateral_threshold_m), 0.0))
+            | (orientation_error_col > max(float(module_recovery_theta_threshold_rad), 0.0))
+        )
+        module_recovery_state[reinsert_unsafe] = 1
+        module_recovery_state_steps[reinsert_unsafe] = 0
         module_recovery_state_steps[module_recovery_state > 0] += 1
         module_recovery_backout_active = module_recovery_state == 1
         module_recovery_trim_active = module_recovery_state == 2
@@ -4383,18 +11617,128 @@ def _apply_insertion_action_guard(
             & (module_lateral_error > max(float(module_lateral_alignment_threshold_m), 0.0))
             & ~module_recovery_active
         )
+    final_two_stage_window_active = torch.zeros_like(centered)
+    final_two_stage_trim_active = torch.zeros_like(centered)
+    final_two_stage_trim_theta_active = torch.zeros_like(centered)
+    final_two_stage_trim_module_active = torch.zeros_like(centered)
+    final_two_stage_reinsert_ready = torch.zeros_like(centered)
+    if bool(final_two_stage_servo_enabled):
+        final_two_stage_window_active = (
+            guard_active
+            & (axial_depth >= float(final_two_stage_activation_depth_m))
+            & (lateral_error <= max(float(final_two_stage_lateral_gate_m), 0.0))
+            & ~module_recovery_active
+        )
+        trim_theta_gate = max(float(final_two_stage_trim_theta_gate_rad), 0.0)
+        trim_module_gate = max(float(final_two_stage_trim_module_lateral_gate_m), 0.0)
+        final_two_stage_trim_theta_active = final_two_stage_window_active & (
+            orientation_error_col > trim_theta_gate
+        )
+        final_two_stage_trim_module_active = final_two_stage_window_active & (
+            module_lateral_error > trim_module_gate
+        )
+        final_two_stage_trim_active = final_two_stage_trim_theta_active | final_two_stage_trim_module_active
+        final_two_stage_reinsert_ready = final_two_stage_window_active & (
+            (orientation_error_col <= max(float(final_two_stage_reinsert_theta_gate_rad), 0.0))
+            & (module_lateral_error <= max(float(final_two_stage_reinsert_module_lateral_gate_m), 0.0))
+            & (
+                torch.ones_like(final_two_stage_window_active, dtype=torch.bool)
+                if not math.isfinite(float(final_two_stage_reinsert_module_axial_error_gate_m))
+                else module_final_axial_error
+                <= max(float(final_two_stage_reinsert_module_axial_error_gate_m), 0.0)
+            )
+        )
+        final_orientation_active = final_orientation_active | final_two_stage_trim_theta_active
+        module_lateral_alignment_active = module_lateral_alignment_active | (
+            final_two_stage_trim_module_active
+            & bool(module_lateral_alignment_enabled)
+        )
+    prefinal_orientation_rotation_only_active = (
+        prefinal_orientation_active & bool(prefinal_orientation_rotation_only)
+    )
+    final_orientation_blocking_active = (
+        final_orientation_active & ~prefinal_orientation_rotation_only_active
+    )
     target_tip_servo_active = guard_active & bool(target_tip_servo_enabled)
-    target_tip_servo_axial_gate = (
+    target_tip_servo_realized_depth_delta = torch.zeros_like(axial_depth)
+    target_tip_servo_depth_overshoot = torch.zeros_like(target_tip_servo_active)
+    if (
+        target_tip_servo_active.any()
+        and previous_axial_depth is not None
+        and previous_axial_depth.shape == axial_depth.shape
+    ):
+        prev_depth = previous_axial_depth.to(device=device, dtype=dtype)
+        target_tip_servo_realized_depth_delta = axial_depth - prev_depth
+        if float(target_tip_servo_realized_depth_limit_m) > 0.0:
+            target_tip_servo_depth_overshoot = (
+                target_tip_servo_active
+                & torch.isfinite(prev_depth)
+                & (target_tip_servo_realized_depth_delta > float(target_tip_servo_realized_depth_limit_m))
+            )
+    target_tip_servo_in_gate = (
         target_tip_servo_active
         & (lateral_error <= max(float(target_tip_servo_axial_lateral_gate_m), 0.0))
-        & (orientation_error_col <= max(float(target_tip_servo_axial_theta_gate_rad), 0.0))
+        & (servo_orientation_error_col <= max(float(target_tip_servo_axial_theta_gate_rad), 0.0))
         & (module_consistency_gate >= max(float(target_tip_servo_min_consistency), 0.0))
+        & ~target_tip_servo_depth_overshoot
     )
-    enforce_centered_axial = centered & ~final_orientation_active & (float(centered_axial_step_m) > 0.0)
+    if target_tip_servo_stable_count is not None:
+        if target_tip_servo_stable_count.shape != axial_depth.shape:
+            raise ValueError(
+                "target-tip servo stable-count state shape does not match env count: "
+                f"{tuple(target_tip_servo_stable_count.shape)} vs {tuple(axial_depth.shape)}"
+            )
+        stable_candidate = (
+            (target_tip_servo_in_gate & ~target_tip_servo_orientation_recovery_active)
+            | final_two_stage_reinsert_ready
+        )
+        next_stable = torch.where(
+            stable_candidate,
+            target_tip_servo_stable_count + 1,
+            torch.zeros_like(target_tip_servo_stable_count),
+        )
+        target_tip_servo_stable_count.copy_(next_stable)
+        target_tip_servo_stable_enough = target_tip_servo_stable_count >= max(int(target_tip_servo_stable_steps), 0)
+    else:
+        target_tip_servo_stable_enough = torch.ones_like(target_tip_servo_active)
+    target_tip_servo_axial_gate = (
+        target_tip_servo_in_gate
+        & target_tip_servo_stable_enough
+    )
+    target_tip_servo_axial_gate = target_tip_servo_axial_gate | (
+        target_tip_servo_active
+        & final_two_stage_reinsert_ready
+        & target_tip_servo_stable_enough
+        & ~target_tip_servo_depth_overshoot
+    )
+    target_tip_servo_depth_retention_active = torch.zeros_like(target_tip_servo_active)
+    target_tip_servo_max_depth_value = torch.full_like(axial_depth, float("-inf"))
+    if target_tip_servo_max_depth is not None and target_tip_servo_max_depth.shape == axial_depth.shape:
+        target_tip_servo_max_depth_value = target_tip_servo_max_depth.to(device=device, dtype=dtype)
+        target_tip_servo_depth_retention_active = (
+            target_tip_servo_in_gate
+            & bool(target_tip_servo_depth_retention)
+            & torch.isfinite(target_tip_servo_max_depth_value)
+            & (
+                axial_depth
+                < target_tip_servo_max_depth_value
+                - max(float(target_tip_servo_depth_retention_margin_m), 0.0)
+            )
+        )
+    target_tip_servo_final_orientation_override = (
+        (target_tip_servo_axial_gate | target_tip_servo_depth_retention_active)
+        & bool(target_tip_servo_override_final_orientation_when_gated)
+        & (axial_depth <= float(target_tip_servo_override_final_orientation_max_depth_m))
+    )
+    enforce_centered_axial = centered & ~final_orientation_blocking_active & (float(centered_axial_step_m) > 0.0)
     rotation_guard_active = rotation_off_center & bool(zero_rotation_when_offcenter)
-    if not bool((off_center | misoriented | enforce_centered_axial | final_orientation_active | retention_active | rotation_guard_active | settle_active | realized_r_recovery_active | module_recovery_active | module_lateral_alignment_active | target_tip_servo_active).any().detach().cpu()):
+    if not bool((off_center | misoriented | enforce_centered_axial | final_orientation_active | retention_active | rotation_guard_active | settle_active | realized_r_recovery_active | offcenter_realized_depth_recovery_active | contact_force_retreat_active | target_tip_servo_orientation_recovery_active | module_recovery_active | module_lateral_alignment_active | target_tip_servo_active).any().detach().cpu()):
         if previous_lateral_error is not None and previous_lateral_error.shape == lateral_error.shape:
             previous_lateral_error.copy_(lateral_error.detach())
+        if previous_axial_depth is not None and previous_axial_depth.shape == axial_depth.shape:
+            previous_axial_depth.copy_(axial_depth.detach())
+        if previous_orientation_error is not None and previous_orientation_error.shape == servo_orientation_error_col.shape:
+            previous_orientation_error.copy_(servo_orientation_error_col.detach())
         return policy_tcp_action, {
             "insertion_action_guard_applied_fraction": 0.0,
             "insertion_action_guard_centered_axial_fraction": 0.0,
@@ -4413,14 +11757,92 @@ def _apply_insertion_action_guard(
             "insertion_action_guard_guarded_world_delta_by_env": None,
             "insertion_action_guard_settle_active_fraction": 0.0,
             "insertion_action_guard_predicted_r_reject_fraction": 0.0,
+            "insertion_action_guard_final_post_override_r_reject_fraction": 0.0,
+            "insertion_action_guard_final_post_override_predicted_lateral_m_mean": 0.0,
+            "insertion_action_guard_predicted_depth_offgate_clamp_fraction": 0.0,
+            "insertion_action_guard_predicted_depth_offgate_clamp_m_mean": 0.0,
             "insertion_action_guard_realized_r_recovery_fraction": 0.0,
+            "insertion_action_guard_realized_r_accum_m_mean": (
+                0.0
+                if realized_r_accum is None
+                else float(realized_r_accum.float().mean().detach().cpu())
+            ),
+            "insertion_action_guard_realized_r_accum_recovery_fraction": 0.0,
+            "insertion_action_guard_realized_r_recovery_cooldown_fraction": (
+                0.0
+                if realized_r_recovery_cooldown is None
+                else float((realized_r_recovery_cooldown > 0).float().mean().detach().cpu())
+            ),
+            "insertion_action_guard_realized_r_recovery_cooldown_steps_mean": (
+                0.0
+                if realized_r_recovery_cooldown is None
+                else float(realized_r_recovery_cooldown.float().mean().detach().cpu())
+            ),
+            "insertion_action_guard_offcenter_realized_depth_recovery_fraction": 0.0,
+            "insertion_action_guard_offcenter_realized_depth_delta_m_mean": 0.0,
+            "insertion_action_guard_offcenter_realized_depth_cooldown_fraction": (
+                0.0
+                if offcenter_realized_depth_cooldown is None
+                else float((offcenter_realized_depth_cooldown > 0).float().mean().detach().cpu())
+            ),
+            "insertion_action_guard_offcenter_realized_depth_cooldown_steps_mean": (
+                0.0
+                if offcenter_realized_depth_cooldown is None
+                else float(offcenter_realized_depth_cooldown.float().mean().detach().cpu())
+            ),
+            "insertion_action_guard_offcenter_realized_depth_accum_m_mean": (
+                0.0
+                if offcenter_realized_depth_accum is None
+                else float(offcenter_realized_depth_accum.float().mean().detach().cpu())
+            ),
+            "insertion_action_guard_contact_force_recovery_fraction": 0.0,
+            "insertion_action_guard_contact_force_norm_mean": 0.0,
+            "insertion_action_guard_recovery_rotation_zeroed_fraction": 0.0,
+            "insertion_action_guard_recovery_axial_zeroed_fraction": 0.0,
+            "insertion_action_guard_target_tip_servo_active_fraction": 0.0,
+            "insertion_action_guard_target_tip_servo_axial_gate_fraction": 0.0,
+            "insertion_action_guard_target_tip_servo_stable_count_mean": (
+                0.0
+                if target_tip_servo_stable_count is None
+                else float(target_tip_servo_stable_count.float().mean().detach().cpu())
+            ),
+            "insertion_action_guard_target_tip_servo_deep_axial_fraction": 0.0,
+            "insertion_action_guard_target_tip_servo_commanded_axial_step_m_mean": 0.0,
+            "insertion_action_guard_target_tip_servo_intended_axial_component_m_mean": 0.0,
+            "insertion_action_guard_target_tip_servo_intended_lateral_component_m_mean": 0.0,
+            "insertion_action_guard_target_tip_servo_selected_fraction": 0.0,
+            "insertion_action_guard_target_tip_servo_selected_axial_component_m_mean": 0.0,
+            "insertion_action_guard_target_tip_servo_blocked_by_module_recovery_fraction": 0.0,
+            "insertion_action_guard_target_tip_servo_blocked_by_module_lateral_fraction": 0.0,
+            "insertion_action_guard_target_tip_servo_blocked_by_final_orientation_fraction": 0.0,
+            "insertion_action_guard_target_tip_servo_world_delta_env0": None,
+            "insertion_action_guard_target_tip_servo_depth_overshoot_fraction": 0.0,
+            "insertion_action_guard_target_tip_servo_depth_retention_fraction": 0.0,
+            "insertion_action_guard_target_tip_servo_max_depth_m_mean": 0.0,
+            "insertion_action_guard_target_tip_servo_realized_depth_delta_m_mean": 0.0,
+            "insertion_action_guard_target_tip_servo_orientation_recovery_fraction": 0.0,
+            "insertion_action_guard_target_tip_servo_rotation_zero_fraction": 0.0,
+            "insertion_action_guard_target_tip_servo_realized_orientation_delta_rad_mean": 0.0,
+            "insertion_action_guard_final_two_stage_window_fraction": 0.0,
+            "insertion_action_guard_final_two_stage_trim_fraction": 0.0,
+            "insertion_action_guard_final_two_stage_reinsert_ready_fraction": 0.0,
             "insertion_action_guard_module_recovery_active_fraction": 0.0,
             "insertion_action_guard_module_lateral_alignment_active_fraction": 0.0,
             "insertion_action_guard_module_lateral_error_m_mean": float(module_lateral_error.mean().detach().cpu()),
+            "insertion_action_guard_module_final_axial_error_m_mean": float(
+                module_final_axial_error.mean().detach().cpu()
+            ),
+            "insertion_action_guard_target_tip_servo_axial_depth_m_mean": 0.0,
+            "insertion_action_guard_target_tip_servo_target_depth_m_mean": 0.0,
             "insertion_action_guard_module_lateral_alignment_desired_dir_env0": None,
             "insertion_action_guard_module_lateral_alignment_desired_delta_env0": None,
             "insertion_action_guard_module_lateral_alignment_lateral_step_m_mean": 0.0,
             "insertion_action_guard_module_lateral_alignment_backoff_m_mean": 0.0,
+            "insertion_action_guard_prelip_lateral_clamp_active_fraction": 0.0,
+            "insertion_action_guard_prelip_lateral_clamp_lateral_m_mean": 0.0,
+            "insertion_action_guard_prelip_lateral_clamp_axial_m_mean": 0.0,
+            "insertion_action_guard_prelip_offgate_axial_lock_active_fraction": 0.0,
+            "insertion_action_guard_prelip_offgate_axial_lock_axial_m_mean": 0.0,
             "insertion_action_guard_module_lateral_alignment_rotation_active_fraction": 0.0,
             "insertion_action_guard_module_lateral_alignment_rotation_norm_rad_mean": 0.0,
             "insertion_action_guard_module_lateral_alignment_rotation_predicted_projection_m_mean": 0.0,
@@ -4430,13 +11852,19 @@ def _apply_insertion_action_guard(
             "insertion_action_guard_final_fixed_world_rotation_active_fraction": 0.0,
             "insertion_action_guard_final_fixed_world_rotation_norm_rad_mean": 0.0,
             "insertion_action_guard_final_fixed_world_rotation_predicted_error_rad_mean": 0.0,
+            "insertion_action_guard_final_fixed_world_rotation_pulse_gate_fraction": 1.0,
             "insertion_action_guard_final_fixed_world_rotation_strict_reject_fraction": 0.0,
+            "insertion_action_guard_final_fixed_world_rotation_realized_reject_fraction": 0.0,
+            "insertion_action_guard_final_fixed_world_rotation_realized_reject_cooldown_mean": 0.0,
             "insertion_action_guard_final_axis_alignment_strict_reject_fraction": 0.0,
             "insertion_action_guard_final_axis_alignment_strict_predicted_depth_m_mean": 0.0,
             "insertion_action_guard_final_axis_alignment_strict_predicted_lateral_m_mean": 0.0,
             "insertion_action_guard_final_orientation_depth_hold_fraction": 0.0,
             "insertion_action_guard_final_orientation_depth_backoff_fraction": 0.0,
+            "insertion_action_guard_final_orientation_recovery_lateral_fraction": 0.0,
             "insertion_action_guard_final_orientation_hold_axial_sweep_comp_m_mean": 0.0,
+            "insertion_action_guard_final_orientation_hold_depth_clamp_fraction": 0.0,
+            "insertion_action_guard_final_orientation_hold_depth_clamp_m_mean": 0.0,
             "insertion_action_guard_module_recovery_backout_fraction": 0.0,
             "insertion_action_guard_module_recovery_trim_fraction": 0.0,
             "insertion_action_guard_module_recovery_reinsert_fraction": 0.0,
@@ -4467,6 +11895,7 @@ def _apply_insertion_action_guard(
         policy_tcp_action,
         action_frame=action_frame,
         apply_ik_sign_fix=True,
+        absolute_target_pose=False,
     )[:, :3]
     robot = env.unwrapped.scene["robot"]
     world_delta = math_utils.quat_apply(robot.data.root_quat_w.to(device=device, dtype=dtype), root_delta)
@@ -4499,10 +11928,19 @@ def _apply_insertion_action_guard(
         lateral_pos = torch.linalg.norm(rel_pos - axial_pos * axis_w, dim=1, keepdim=True)
         lateral_neg = torch.linalg.norm(rel_neg - axial_neg * axis_w, dim=1, keepdim=True)
         choose_neg = lateral_neg < lateral_pos
-        lateral_dir = torch.where(choose_neg, -lateral_dir, lateral_dir)
+        predicted_sign = torch.where(
+            choose_neg,
+            -torch.ones_like(lateral_error),
+            torch.ones_like(lateral_error),
+        )
+        if bool(realized_lateral_sign_flip):
+            predicted_sign = torch.where(lateral_sign_worsen, -predicted_sign, predicted_sign)
         if lateral_sign_state is not None:
-            lateral_sign_state.copy_(torch.where(choose_neg, -torch.ones_like(lateral_sign_state), torch.ones_like(lateral_sign_state)))
-        lateral_sign_flip_fraction = float(choose_neg.float().mean().detach().cpu())
+            lateral_sign_state.copy_(predicted_sign)
+            lateral_dir = lateral_dir * lateral_sign_state.to(device=device, dtype=dtype)
+        else:
+            lateral_dir = lateral_dir * predicted_sign
+            lateral_sign_flip_fraction = float(choose_neg.float().mean().detach().cpu())
     else:
         lateral_dir = lateral_dir * (1.0 if float(lateral_direction_sign) >= 0.0 else -1.0)
     guarded_world_delta = lateral_dir * lateral_step + guarded_axial
@@ -4528,32 +11966,149 @@ def _apply_insertion_action_guard(
         lateral_error,
         torch.full_like(lateral_error, max(float(target_tip_servo_lateral_step_m), 0.0)),
     )
-    target_tip_servo_target_depth = torch.full_like(
-        axial_depth,
-        float(target_tip_servo_goal_depth_m),
+    if math.isfinite(float(target_tip_servo_gated_lateral_step_m)):
+        target_tip_servo_lateral_step = torch.where(
+            (target_tip_servo_axial_gate | target_tip_servo_depth_retention_active),
+            torch.minimum(
+                lateral_error,
+                torch.full_like(
+                    lateral_error,
+                    max(float(target_tip_servo_gated_lateral_step_m), 0.0),
+                ),
+            ),
+            target_tip_servo_lateral_step,
+        )
+    if math.isfinite(float(target_tip_servo_goal_depth_m)):
+        target_tip_servo_target_depth = torch.full_like(axial_depth, float(target_tip_servo_goal_depth_m))
+    else:
+        target_tip_servo_target_depth = torch.where(
+            torch.isfinite(target_depth),
+            target_depth,
+            torch.full_like(axial_depth, 0.0458),
+        )
+    target_tip_servo_axial_depth = axial_depth
+    if bool(target_tip_servo_consistency_body_axial) and consistency_pos_w is not None:
+        target_tip_servo_axial_depth = module_depth
+        target_tip_servo_target_depth = module_expected_final_depth
+    target_tip_servo_axial_error = target_tip_servo_target_depth - target_tip_servo_axial_depth
+    target_tip_servo_deep_axial_active = (
+        target_tip_servo_active
+        & math.isfinite(float(target_tip_servo_deep_axial_step_m))
+        & (float(target_tip_servo_deep_axial_step_m) > 0.0)
+        & (axial_depth >= float(target_tip_servo_deep_axial_activation_depth_m))
     )
-    target_tip_servo_axial_error = target_tip_servo_target_depth - axial_depth
+    target_tip_servo_commanded_axial_step_limit = torch.full_like(
+        axial_depth,
+        max(float(target_tip_servo_axial_step_m), 0.0),
+    )
+    target_tip_servo_commanded_axial_step_limit = torch.where(
+        target_tip_servo_deep_axial_active,
+        torch.full_like(axial_depth, max(float(target_tip_servo_deep_axial_step_m), 0.0)),
+        target_tip_servo_commanded_axial_step_limit,
+    )
+    if float(final_two_stage_reinsert_axial_step_m) > 0.0:
+        target_tip_servo_commanded_axial_step_limit = torch.where(
+            target_tip_servo_active & final_two_stage_reinsert_ready,
+            torch.full_like(
+                axial_depth,
+                max(float(final_two_stage_reinsert_axial_step_m), 0.0),
+            ),
+            target_tip_servo_commanded_axial_step_limit,
+        )
     target_tip_servo_axial_step = torch.minimum(
         target_tip_servo_axial_error.clamp(min=0.0),
-        torch.full_like(axial_depth, max(float(target_tip_servo_axial_step_m), 0.0)),
+        target_tip_servo_commanded_axial_step_limit,
     )
+    if target_tip_servo_max_depth is not None and target_tip_servo_max_depth.shape == axial_depth.shape:
+        retained_depth_error = (
+            target_tip_servo_max_depth_value
+            - axial_depth
+            + max(float(target_tip_servo_depth_retention_margin_m), 0.0)
+        ).clamp(min=0.0)
+        retained_axial_step = torch.minimum(
+            retained_depth_error,
+            target_tip_servo_commanded_axial_step_limit,
+        )
+        target_tip_servo_axial_step = torch.where(
+            target_tip_servo_depth_retention_active,
+            torch.maximum(target_tip_servo_axial_step, retained_axial_step),
+            target_tip_servo_axial_step,
+        )
     target_tip_servo_world_delta = (
         lateral_dir * target_tip_servo_lateral_step
         + torch.where(
-            target_tip_servo_axial_gate,
+            target_tip_servo_axial_gate | target_tip_servo_depth_retention_active,
             target_tip_servo_axial_step,
             torch.zeros_like(target_tip_servo_axial_step),
         )
         * axis_w
+    )
+    target_tip_servo_plateau_pure_axial_active = (
+        target_tip_servo_axial_gate
+        & target_tip_servo_deep_axial_active
+        & bool(target_tip_servo_plateau_pure_axial)
+        & (axial_depth >= float(target_tip_servo_plateau_activation_depth_m))
+        & (target_tip_servo_realized_depth_delta <= float(target_tip_servo_plateau_realized_depth_threshold_m))
+        & (lateral_error <= max(float(target_tip_servo_plateau_lateral_gate_m), 0.0))
+        & (servo_orientation_error_col <= max(float(target_tip_servo_plateau_theta_gate_rad), 0.0))
+    )
+    plateau_lateral_scale = min(max(float(target_tip_servo_plateau_lateral_hold_scale), 0.0), 1.0)
+    target_tip_servo_plateau_world_delta = (
+        lateral_dir * target_tip_servo_lateral_step * plateau_lateral_scale
+        + target_tip_servo_axial_step * axis_w
+    )
+    target_tip_servo_world_delta = torch.where(
+        target_tip_servo_plateau_pure_axial_active.expand_as(target_tip_servo_world_delta),
+        target_tip_servo_plateau_world_delta,
+        target_tip_servo_world_delta,
     )
     guarded_world_delta = torch.where(
         (
             target_tip_servo_active
             & ~module_recovery_active
             & ~module_lateral_alignment_active
-            & ~final_orientation_active
+            & (~final_orientation_blocking_active | target_tip_servo_final_orientation_override)
         ).expand_as(guarded_world_delta),
         target_tip_servo_world_delta,
+        guarded_world_delta,
+    )
+    target_tip_servo_depth_recovery_lateral_scale = min(
+        max(float(target_tip_servo_realized_depth_recovery_lateral_scale), 0.0),
+        1.0,
+    )
+    target_tip_servo_depth_recovery_world_delta = (
+        lateral_dir * target_tip_servo_lateral_step * target_tip_servo_depth_recovery_lateral_scale
+        - torch.full_like(axial_component, max(float(target_tip_servo_realized_depth_backoff_m), 0.0)) * axis_w
+    )
+    guarded_world_delta = torch.where(
+        (
+            target_tip_servo_depth_overshoot
+            & ~module_recovery_active
+            & ~module_lateral_alignment_active
+            & ~final_orientation_blocking_active
+        ).expand_as(guarded_world_delta),
+        target_tip_servo_depth_recovery_world_delta,
+        guarded_world_delta,
+    )
+    target_tip_servo_orientation_recovery_world_delta = (
+        lateral_dir * target_tip_servo_lateral_step
+        - torch.full_like(
+            axial_component,
+            max(float(target_tip_servo_orientation_recovery_backoff_m), 0.0),
+        )
+        * axis_w
+    )
+    guarded_world_delta = torch.where(
+        (
+            target_tip_servo_orientation_recovery_active
+            & ~module_recovery_active
+            & ~module_lateral_alignment_active
+            & (
+                ~final_orientation_blocking_active
+                | bool(target_tip_servo_orientation_recovery_override_final_orientation)
+            )
+        ).expand_as(guarded_world_delta),
+        target_tip_servo_orientation_recovery_world_delta,
         guarded_world_delta,
     )
     recovery_lateral_step = torch.minimum(
@@ -4570,6 +12125,11 @@ def _apply_insertion_action_guard(
         lateral_dir * recovery_lateral_step * recovery_lateral_scale
         + recovery_backoff_sign * recovery_backoff * axis_w
     )
+    if float(module_recovery_command_clip_m) > 0.0:
+        module_recovery_world_delta = _clip_vector_norm(
+            module_recovery_world_delta,
+            max(float(module_recovery_command_clip_m), 0.0),
+        )
     guarded_world_delta = torch.where(
         module_recovery_backout_active.expand_as(guarded_world_delta),
         module_recovery_world_delta,
@@ -4580,6 +12140,11 @@ def _apply_insertion_action_guard(
         torch.full_like(lateral_error, max(float(module_recovery_trim_lateral_step_m), 0.0)),
     )
     module_recovery_trim_world_delta = lateral_dir * recovery_trim_lateral_step
+    if float(module_recovery_command_clip_m) > 0.0:
+        module_recovery_trim_world_delta = _clip_vector_norm(
+            module_recovery_trim_world_delta,
+            max(float(module_recovery_command_clip_m), 0.0),
+        )
     guarded_world_delta = torch.where(
         module_recovery_trim_active.expand_as(guarded_world_delta),
         module_recovery_trim_world_delta,
@@ -4593,6 +12158,16 @@ def _apply_insertion_action_guard(
     reinsert_axial = torch.full_like(axial_component, max(float(module_recovery_reinsert_step_m), 0.0)) * axis_w
     module_recovery_reinsert_world_delta = lateral_dir * recovery_trim_lateral_step + reinsert_axial
     module_recovery_reinsert_hold_delta = lateral_dir * recovery_trim_lateral_step
+    if float(module_recovery_command_clip_m) > 0.0:
+        command_clip = max(float(module_recovery_command_clip_m), 0.0)
+        module_recovery_reinsert_world_delta = _clip_vector_norm(
+            module_recovery_reinsert_world_delta,
+            command_clip,
+        )
+        module_recovery_reinsert_hold_delta = _clip_vector_norm(
+            module_recovery_reinsert_hold_delta,
+            command_clip,
+        )
     guarded_world_delta = torch.where(
         reinsert_gate.expand_as(guarded_world_delta),
         module_recovery_reinsert_world_delta,
@@ -4615,7 +12190,7 @@ def _apply_insertion_action_guard(
         float(module_lateral_alignment_hold_depth_m)
     ):
         module_lateral_target_depth = torch.full_like(
-            axial_depth, max(float(module_lateral_alignment_hold_depth_m), 0.0)
+            axial_depth, float(module_lateral_alignment_hold_depth_m)
         )
     else:
         module_lateral_target_depth = target_depth
@@ -4683,6 +12258,11 @@ def _apply_insertion_action_guard(
         module_lateral_alignment_world_delta,
         guarded_world_delta,
     )
+    prelip_lateral_clamp_active = torch.zeros_like(lateral_error, dtype=torch.bool)
+    prelip_lateral_clamp_lateral = torch.zeros_like(lateral_error)
+    prelip_lateral_clamp_axial = torch.zeros_like(axial_depth)
+    prelip_offgate_axial_lock_active = torch.zeros_like(lateral_error, dtype=torch.bool)
+    prelip_offgate_axial_lock_axial = torch.zeros_like(axial_depth)
     final_orientation_induced_tip_delta = torch.zeros_like(guarded_world_delta)
     final_orientation_hold_axial_sweep_comp = torch.zeros_like(guarded_world_delta)
     final_axis_rotation_active = torch.zeros_like(final_orientation_active)
@@ -4696,8 +12276,86 @@ def _apply_insertion_action_guard(
     final_fixed_world_rotation_frame = torch.zeros_like(policy_tcp_action[:, 3:6])
     final_fixed_world_rotation_norm = torch.zeros_like(orientation_error_col)
     final_fixed_world_rotation_predicted_error = orientation_error_col
+    final_fixed_world_rotation_pulse_gate = torch.ones_like(final_orientation_active)
     final_fixed_world_rotation_strict_reject = torch.zeros_like(final_orientation_active)
-    if final_orientation_depth_m is not None and math.isfinite(float(final_orientation_depth_m)):
+    final_fixed_world_rotation_realized_reject_active = torch.zeros_like(final_orientation_active)
+    final_fixed_world_rotation_realized_reject_cooldown_metric = torch.zeros_like(orientation_error_col)
+    final_orientation_lateral_scale_col = torch.full_like(
+        lateral_error,
+        min(max(float(final_orientation_lateral_scale), 0.0), 1.0),
+    )
+    if (
+        final_orientation_lateral_scale_theta_gate_rad is not None
+        and math.isfinite(float(final_orientation_lateral_scale_theta_gate_rad))
+    ):
+        after_gate_scale = min(max(float(final_orientation_lateral_scale_after_theta_gate), 0.0), 1.0)
+        final_orientation_lateral_scale_col = torch.where(
+            orientation_error_col <= max(float(final_orientation_lateral_scale_theta_gate_rad), 0.0),
+            torch.full_like(final_orientation_lateral_scale_col, after_gate_scale),
+            final_orientation_lateral_scale_col,
+        )
+    final_orientation_lateral_component = centered_lateral_component * final_orientation_lateral_scale_col
+    final_orientation_lateral_bias_component = torch.zeros_like(final_orientation_lateral_component)
+    final_orientation_lateral_bias_active = torch.zeros_like(final_orientation_active)
+    final_orientation_lateral_bias_step = float(final_orientation_lateral_bias_m)
+    if final_orientation_lateral_bias_step != 0.0:
+        bias_max_lateral = max(float(final_orientation_lateral_bias_max_lateral_m), 0.0)
+        bias_gate = final_orientation_active & ~final_orientation_theta_good_lateral_recovery_active
+        if math.isfinite(bias_max_lateral):
+            bias_gate = bias_gate & (lateral_error <= bias_max_lateral)
+        current_lateral_dir = (-lateral_vec) / lateral_error.clamp(min=1.0e-9)
+        final_orientation_lateral_bias_component = (
+            current_lateral_dir
+            * torch.full_like(lateral_error, final_orientation_lateral_bias_step)
+        )
+        final_orientation_lateral_bias_component = torch.where(
+            bias_gate.expand_as(final_orientation_lateral_bias_component),
+            final_orientation_lateral_bias_component,
+            torch.zeros_like(final_orientation_lateral_bias_component),
+        )
+        final_orientation_lateral_bias_active = bias_gate
+        final_orientation_lateral_component = (
+            final_orientation_lateral_component + final_orientation_lateral_bias_component
+        )
+    if bool(final_fixed_world_rotation_realized_reject):
+        realized_reject_trigger = torch.zeros_like(final_orientation_active)
+        if previous_orientation_error is not None and previous_orientation_error.shape == orientation_error_col.shape:
+            prev_theta_for_fixed = previous_orientation_error.to(device=device, dtype=dtype)
+            realized_reject_trigger = (
+                final_orientation_active
+                & torch.isfinite(prev_theta_for_fixed)
+                & (
+                    orientation_error_col
+                    > prev_theta_for_fixed
+                    + max(float(final_fixed_world_rotation_realized_reject_margin_rad), 0.0)
+                )
+            )
+        cooldown_steps = max(int(final_fixed_world_rotation_realized_reject_cooldown_steps), 0)
+        if (
+            final_fixed_world_rotation_realized_reject_cooldown is not None
+            and final_fixed_world_rotation_realized_reject_cooldown.shape == orientation_error_col.shape
+        ):
+            current_cooldown = final_fixed_world_rotation_realized_reject_cooldown.to(device=device)
+            next_cooldown = torch.clamp(current_cooldown - 1, min=0)
+            if cooldown_steps > 0:
+                next_cooldown = torch.where(
+                    realized_reject_trigger,
+                    torch.full_like(next_cooldown, cooldown_steps),
+                    next_cooldown,
+                )
+                final_fixed_world_rotation_realized_reject_active = next_cooldown > 0
+            else:
+                next_cooldown = torch.zeros_like(next_cooldown)
+                final_fixed_world_rotation_realized_reject_active = realized_reject_trigger
+            final_fixed_world_rotation_realized_reject_cooldown.copy_(next_cooldown)
+            final_fixed_world_rotation_realized_reject_cooldown_metric = next_cooldown.to(dtype=dtype)
+        else:
+            final_fixed_world_rotation_realized_reject_active = realized_reject_trigger
+    orientation_refinement_configured = (
+        (final_orientation_depth_m is not None and math.isfinite(float(final_orientation_depth_m)))
+        or (prefinal_orientation_depth_m is not None and math.isfinite(float(prefinal_orientation_depth_m)))
+    )
+    if orientation_refinement_configured:
         # During final orientation refinement the rotational command pivots the
         # tip around the controlled TCP. Compensate that induced tip motion so
         # a nominal axial hold really keeps the tip at the current depth.
@@ -4784,7 +12442,7 @@ def _apply_insertion_action_guard(
                         ):
                             hold_depth_for_gate = torch.full_like(
                                 axial_depth,
-                                max(float(final_orientation_hold_depth_m), 0.0),
+                                float(final_orientation_hold_depth_m),
                             )
                             hold_margin_for_gate = max(float(final_orientation_hold_margin_m), 0.0)
                             over_hold_for_gate = (
@@ -4817,7 +12475,11 @@ def _apply_insertion_action_guard(
                                 axial_depth,
                                 max(float(final_axis_alignment_strict_max_depth_m), 0.0),
                             )
-                        candidate_delta = centered_lateral_component + hold_axial_for_gate * axis_w - axis_tip_compensation
+                        candidate_delta = (
+                            final_orientation_lateral_component
+                            + hold_axial_for_gate * axis_w
+                            - axis_tip_compensation
+                        )
                         if bool(final_orientation_hold_compensate_axial_sweep):
                             induced_axial_for_gate = torch.sum(axis_tip_delta * axis_w, dim=1, keepdim=True)
                             candidate_delta = candidate_delta - induced_axial_for_gate * axis_w
@@ -4891,7 +12553,9 @@ def _apply_insertion_action_guard(
                     )
                     target_axis_w = axis_w / torch.linalg.norm(axis_w, dim=1, keepdim=True).clamp(min=1.0e-9)
                     axis_name = str(final_fixed_world_rotation_axis).lower()
-                    if axis_name == "best":
+                    frame_axis_mode = axis_name.startswith("frame_")
+                    axis_score_name = axis_name[6:] if frame_axis_mode else axis_name
+                    if axis_score_name in {"best", "quat_best"}:
                         candidate_axes_w = torch.tensor(
                             (
                                 (1.0, 0.0, 0.0),
@@ -4905,38 +12569,153 @@ def _apply_insertion_action_guard(
                             device=device,
                         )
                         fixed_step = max(float(final_fixed_world_rotation_step_rad), 0.0)
-                        candidate_rotvec_w = (
-                            candidate_axes_w.reshape(1, 6, 3).expand(body_axis_w.shape[0], -1, -1)
+                        candidate_rotvec = candidate_axes_w.reshape(1, 6, 3).expand(body_axis_w.shape[0], -1, -1)
+                        candidate_rotvec = (
+                            candidate_rotvec
                             * fixed_step
+                            * (1.0 if float(final_fixed_world_rotation_sign) >= 0.0 else -1.0)
+                        )
+                        candidate_rotvec_w = (
+                            math_utils.quat_apply(
+                                frame_quat_w[:, None, :].expand(-1, 6, -1).reshape(-1, 4),
+                                candidate_rotvec.reshape(-1, 3),
+                            ).reshape(body_axis_w.shape[0], 6, 3)
+                            if frame_axis_mode
+                            else candidate_rotvec
                         )
                         q_candidate_step_w = _quat_from_rotvec(candidate_rotvec_w.reshape(-1, 3))
-                        predicted_candidate_axis_w = math_utils.quat_apply(
-                            q_candidate_step_w,
-                            body_axis_w[:, None, :].expand(-1, 6, -1).reshape(-1, 3),
-                        ).reshape(body_axis_w.shape[0], 6, 3)
-                        candidate_errors = torch.acos(
-                            torch.sum(
-                                predicted_candidate_axis_w * target_axis_w[:, None, :],
+                        if axis_score_name == "quat_best":
+                            target_quat_w = _target_orientation_from_reward_config(env, task_geometry_reward_config)
+                            if target_quat_w is not None:
+                                target_quat_w = target_quat_w.to(device=device, dtype=dtype)
+                                predicted_candidate_quat_w = math_utils.quat_mul(
+                                    q_candidate_step_w,
+                                    body_quat_axis_w[:, None, :].expand(-1, 6, -1).reshape(-1, 4),
+                                ).reshape(body_quat_axis_w.shape[0], 6, 4)
+                                candidate_errors = math_utils.quat_error_magnitude(
+                                    predicted_candidate_quat_w.reshape(-1, 4),
+                                    target_quat_w[:, None, :].expand(-1, 6, -1).reshape(-1, 4),
+                                ).reshape(body_quat_axis_w.shape[0], 6)
+                            else:
+                                candidate_errors = torch.full(
+                                    (body_axis_w.shape[0], 6),
+                                    float("inf"),
+                                    dtype=dtype,
+                                    device=device,
+                                )
+                        else:
+                            predicted_candidate_axis_w = math_utils.quat_apply(
+                                q_candidate_step_w,
+                                body_axis_w[:, None, :].expand(-1, 6, -1).reshape(-1, 3),
+                            ).reshape(body_axis_w.shape[0], 6, 3)
+                            candidate_errors = torch.acos(
+                                torch.sum(
+                                    predicted_candidate_axis_w * target_axis_w[:, None, :],
+                                    dim=2,
+                                ).clamp(min=-1.0, max=1.0)
+                            )
+                        candidate_score = candidate_errors
+                        if bool(final_axis_alignment_strict_gate):
+                            candidate_tip_delta = (
+                                math_utils.quat_apply(
+                                    q_candidate_step_w,
+                                    tip_from_frame_w[:, None, :].expand(-1, 6, -1).reshape(-1, 3),
+                                ).reshape(body_axis_w.shape[0], 6, 3)
+                                - tip_from_frame_w[:, None, :]
+                            )
+                            candidate_tip_compensation = _clip_vector_norm(
+                                candidate_tip_delta.reshape(-1, 3),
+                                max(float(final_fixed_world_rotation_compensation_clip_m), 0.0),
+                            ).reshape(body_axis_w.shape[0], 6, 3)
+                            candidate_translation = (
+                                final_orientation_lateral_component[:, None, :]
+                                + torch.full_like(axial_depth, float(final_orientation_axial_step_m))[:, None]
+                                * axis_w[:, None, :]
+                                - candidate_tip_compensation
+                            )
+                            candidate_tip_rel = rel[:, None, :] + candidate_translation + candidate_tip_delta
+                            candidate_tip_depth = torch.sum(candidate_tip_rel * axis_w[:, None, :], dim=2)
+                            candidate_tip_lateral = torch.linalg.norm(
+                                candidate_tip_rel - candidate_tip_depth[:, :, None] * axis_w[:, None, :],
                                 dim=2,
-                            ).clamp(min=-1.0, max=1.0)
-                        )
-                        best_error, best_idx = torch.min(candidate_errors, dim=1, keepdim=True)
+                            )
+                            lateral_limit = torch.minimum(
+                                torch.full_like(
+                                    lateral_error,
+                                    max(float(final_axis_alignment_strict_max_lateral_m), 0.0),
+                                ),
+                                lateral_error
+                                + torch.full_like(
+                                    lateral_error,
+                                    max(float(final_axis_alignment_strict_lateral_margin_m), 0.0),
+                                ),
+                            )
+                            if (
+                                final_axis_alignment_strict_max_depth_m is not None
+                                and math.isfinite(float(final_axis_alignment_strict_max_depth_m))
+                            ):
+                                depth_limit = torch.full_like(
+                                    axial_depth,
+                                    max(float(final_axis_alignment_strict_max_depth_m), 0.0),
+                                )
+                            else:
+                                depth_limit = target_depth + max(float(final_orientation_hold_margin_m), 0.0)
+                            violation = (candidate_tip_lateral - lateral_limit).clamp(min=0.0)
+                            violation = violation + (candidate_tip_depth - depth_limit).clamp(min=0.0)
+                            if consistency_pos_w is not None:
+                                module_from_frame_w = consistency_pos_w - frame_pos_w
+                                candidate_module_delta = (
+                                    math_utils.quat_apply(
+                                        q_candidate_step_w,
+                                        module_from_frame_w[:, None, :].expand(-1, 6, -1).reshape(-1, 3),
+                                    ).reshape(body_axis_w.shape[0], 6, 3)
+                                    - module_from_frame_w[:, None, :]
+                                )
+                                module_rel = consistency_pos_w - entrance_w
+                                candidate_module_rel = module_rel[:, None, :] + candidate_translation + candidate_module_delta
+                                candidate_module_depth = torch.sum(candidate_module_rel * axis_w[:, None, :], dim=2)
+                                candidate_module_lateral = torch.linalg.norm(
+                                    candidate_module_rel
+                                    - candidate_module_depth[:, :, None] * axis_w[:, None, :],
+                                    dim=2,
+                                )
+                                module_lateral_limit = torch.full_like(
+                                    candidate_module_lateral,
+                                    max(
+                                        float(
+                                            task_geometry_reward_config.get(
+                                                "success_consistency_lateral_threshold",
+                                                0.0015,
+                                            )
+                                        ),
+                                        0.0,
+                                    ),
+                                )
+                                violation = violation + (candidate_module_lateral - module_lateral_limit).clamp(min=0.0)
+                            candidate_score = candidate_score + 1000.0 * violation
+                        best_error, best_idx = torch.min(candidate_score, dim=1, keepdim=True)
+                        selected_error = torch.gather(candidate_errors, 1, best_idx)
                         selected_rotvec = torch.gather(
                             candidate_rotvec_w,
                             1,
                             best_idx[:, :, None].expand(-1, -1, 3),
                         ).squeeze(1)
                         signed_fixed_rotvec_w = selected_rotvec
+                        selected_rotvec_frame = torch.gather(
+                            candidate_rotvec,
+                            1,
+                            best_idx[:, :, None].expand(-1, -1, 3),
+                        ).squeeze(1)
                         q_fixed_step_w = _quat_from_rotvec(signed_fixed_rotvec_w)
-                        final_fixed_world_rotation_predicted_error = best_error
+                        final_fixed_world_rotation_predicted_error = selected_error
                     else:
-                        if axis_name == "x":
+                        if axis_score_name == "x":
                             fixed_axis_values = (1.0, 0.0, 0.0)
-                        elif axis_name == "z":
+                        elif axis_score_name == "z":
                             fixed_axis_values = (0.0, 0.0, 1.0)
                         else:
                             fixed_axis_values = (0.0, 1.0, 0.0)
-                        fixed_axis_w = torch.tensor(
+                        fixed_axis = torch.tensor(
                             fixed_axis_values,
                             dtype=dtype,
                             device=device,
@@ -4945,11 +12724,17 @@ def _apply_insertion_action_guard(
                             orientation_error_col,
                             max(float(final_fixed_world_rotation_step_rad), 0.0),
                         )
-                        signed_fixed_rotvec_w = (
-                            fixed_axis_w
+                        signed_fixed_rotvec = (
+                            fixed_axis
                             * fixed_step
                             * (1.0 if float(final_fixed_world_rotation_sign) >= 0.0 else -1.0)
                         )
+                        signed_fixed_rotvec_w = (
+                            math_utils.quat_apply(frame_quat_w, signed_fixed_rotvec)
+                            if frame_axis_mode
+                            else signed_fixed_rotvec
+                        )
+                        selected_rotvec_frame = signed_fixed_rotvec if frame_axis_mode else None
                         q_fixed_step_w = _quat_from_rotvec(signed_fixed_rotvec_w)
                         predicted_fixed_axis_w = math_utils.quat_apply(q_fixed_step_w, body_axis_w)
                         final_fixed_world_rotation_predicted_error = torch.acos(
@@ -4968,7 +12753,7 @@ def _apply_insertion_action_guard(
                         ):
                             hold_depth_for_gate = torch.full_like(
                                 axial_depth,
-                                max(float(final_orientation_hold_depth_m), 0.0),
+                                float(final_orientation_hold_depth_m),
                             )
                             hold_margin_for_gate = max(float(final_orientation_hold_margin_m), 0.0)
                             over_hold_for_gate = (
@@ -5001,7 +12786,11 @@ def _apply_insertion_action_guard(
                                 axial_depth,
                                 max(float(final_axis_alignment_strict_max_depth_m), 0.0),
                             )
-                        candidate_delta = centered_lateral_component + hold_axial_for_gate * axis_w - fixed_tip_compensation
+                        candidate_delta = (
+                            final_orientation_lateral_component
+                            + hold_axial_for_gate * axis_w
+                            - fixed_tip_compensation
+                        )
                         if bool(final_orientation_hold_compensate_axial_sweep):
                             induced_axial_for_gate = torch.sum(fixed_tip_delta * axis_w, dim=1, keepdim=True)
                             candidate_delta = candidate_delta - induced_axial_for_gate * axis_w
@@ -5035,6 +12824,18 @@ def _apply_insertion_action_guard(
                     fixed_improves = (
                         final_fixed_world_rotation_predicted_error < orientation_error_col
                     ) | bool(final_fixed_world_rotation_force)
+                    pulse_on = max(int(final_fixed_world_rotation_pulse_on_steps), 0)
+                    pulse_off = max(int(final_fixed_world_rotation_pulse_off_steps), 0)
+                    if pulse_on > 0 and pulse_off > 0:
+                        episode_length_buf = getattr(env.unwrapped, "episode_length_buf", None)
+                        if episode_length_buf is not None:
+                            phase = torch.remainder(
+                                episode_length_buf.to(device=device).view(-1, 1),
+                                pulse_on + pulse_off,
+                            )
+                            final_fixed_world_rotation_pulse_gate = phase < pulse_on
+                        else:
+                            final_fixed_world_rotation_pulse_gate = torch.ones_like(final_orientation_active)
                     final_fixed_world_rotation_active = (
                         final_orientation_active
                         & ~module_recovery_active
@@ -5042,6 +12843,8 @@ def _apply_insertion_action_guard(
                         & ~final_axis_rotation_active
                         & fixed_improves
                         & strict_gate
+                        & final_fixed_world_rotation_pulse_gate
+                        & ~final_fixed_world_rotation_realized_reject_active
                     )
                     final_fixed_world_rotation_strict_reject = (
                         final_orientation_active
@@ -5060,6 +12863,8 @@ def _apply_insertion_action_guard(
                         frame_quat_w,
                         signed_fixed_rotvec_w,
                     )
+                    if frame_axis_mode and selected_rotvec_frame is not None:
+                        final_fixed_world_rotation_frame = selected_rotvec_frame
                     final_fixed_world_rotation_norm = torch.linalg.norm(
                         final_fixed_world_rotation_frame,
                         dim=1,
@@ -5068,9 +12873,13 @@ def _apply_insertion_action_guard(
     final_orientation_axial_component = torch.full_like(axial_component, float(final_orientation_axial_step_m))
     final_orientation_depth_hold_active = torch.zeros_like(final_orientation_active)
     final_orientation_depth_backoff_active = torch.zeros_like(final_orientation_active)
+    final_orientation_hold_depth_clamp_active = torch.zeros_like(final_orientation_active)
+    final_orientation_hold_depth_clamp = torch.zeros_like(axial_depth)
+    final_orientation_hold_depth_limit = None
     if final_orientation_hold_depth_m is not None and math.isfinite(float(final_orientation_hold_depth_m)):
-        hold_depth = torch.full_like(axial_depth, max(float(final_orientation_hold_depth_m), 0.0))
+        hold_depth = torch.full_like(axial_depth, float(final_orientation_hold_depth_m))
         hold_margin = max(float(final_orientation_hold_margin_m), 0.0)
+        final_orientation_hold_depth_limit = hold_depth + hold_margin
         over_hold_depth = (axial_depth - hold_depth - hold_margin).clamp(min=0.0)
         final_orientation_depth_hold_active = final_orientation_active & (axial_depth >= hold_depth - hold_margin)
         final_orientation_depth_backoff_active = final_orientation_active & (over_hold_depth > 0.0)
@@ -5086,7 +12895,7 @@ def _apply_insertion_action_guard(
             final_orientation_axial_component,
         )
     final_orientation_world_delta = (
-        centered_lateral_component
+        final_orientation_lateral_component
         + final_orientation_axial_component * axis_w
         - final_orientation_induced_tip_delta
         - torch.where(
@@ -5095,8 +12904,31 @@ def _apply_insertion_action_guard(
             torch.zeros_like(final_orientation_hold_axial_sweep_comp),
         )
     )
+    if (
+        bool(final_orientation_hold_reject_predicted_depth)
+        and final_orientation_hold_depth_limit is not None
+    ):
+        final_orientation_pred_rel = rel + final_orientation_world_delta
+        final_orientation_pred_depth = torch.sum(final_orientation_pred_rel * axis_w, dim=1, keepdim=True)
+        final_orientation_hold_depth_clamp = (
+            final_orientation_pred_depth - final_orientation_hold_depth_limit
+        ).clamp(min=0.0)
+        final_orientation_hold_depth_clamp_active = final_orientation_active & (
+            final_orientation_hold_depth_clamp > 0.0
+        )
+        final_orientation_world_delta = torch.where(
+            final_orientation_hold_depth_clamp_active.expand_as(final_orientation_world_delta),
+            final_orientation_world_delta - final_orientation_hold_depth_clamp * axis_w,
+            final_orientation_world_delta,
+        )
+    final_orientation_translation_active = final_orientation_blocking_active
     guarded_world_delta = torch.where(
-        (final_orientation_active & ~module_recovery_active & ~module_lateral_alignment_active).expand_as(guarded_world_delta),
+        (
+            final_orientation_translation_active
+            & ~target_tip_servo_final_orientation_override
+            & ~module_recovery_active
+            & ~module_lateral_alignment_active
+        ).expand_as(guarded_world_delta),
         final_orientation_world_delta,
         guarded_world_delta,
     )
@@ -5106,7 +12938,7 @@ def _apply_insertion_action_guard(
         (
             retention_axial_active
             & ~off_center
-            & ~final_orientation_active
+            & ~final_orientation_blocking_active
             & ~module_recovery_active
             & ~module_lateral_alignment_active
         ).expand_as(guarded_world_delta),
@@ -5129,19 +12961,312 @@ def _apply_insertion_action_guard(
             backoff_world_delta,
             guarded_world_delta,
         )
+    predicted_depth_offgate_clamp_active = torch.zeros_like(lateral_error, dtype=torch.bool)
+    predicted_depth_offgate_clamp = torch.zeros_like(axial_depth)
+    if bool(reject_predicted_depth_when_offgate):
+        pred_rel = rel + guarded_world_delta
+        pred_axial_depth = torch.sum(pred_rel * axis_w, dim=1, keepdim=True)
+        offgate = (
+            guard_active
+            & (
+                (lateral_error > max(float(target_tip_servo_axial_lateral_gate_m), 0.0))
+                | (servo_orientation_error_col > max(float(target_tip_servo_axial_theta_gate_rad), 0.0))
+                | (module_consistency_gate < max(float(target_tip_servo_min_consistency), 0.0))
+            )
+            & (axial_depth >= float(activation_depth_m))
+        )
+        if bool(predicted_depth_offgate_allow_final_two_stage_reinsert):
+            offgate = offgate & ~final_two_stage_reinsert_ready
+        allowed_depth = axial_depth + max(float(predicted_depth_offgate_margin_m), 0.0)
+        predicted_depth_offgate_clamp = (pred_axial_depth - allowed_depth).clamp(min=0.0)
+        predicted_depth_offgate_clamp_active = offgate & (predicted_depth_offgate_clamp > 0.0)
+        guarded_world_delta = torch.where(
+            predicted_depth_offgate_clamp_active.expand_as(guarded_world_delta),
+            guarded_world_delta - predicted_depth_offgate_clamp * axis_w,
+            guarded_world_delta,
+        )
     realized_r_recovery_world_delta = (
         lateral_dir * lateral_step
         - torch.full_like(axial_component, max(float(realized_r_recovery_backoff_m), 0.0)) * axis_w
     )
+    if bool(realized_r_recovery_cooldown_zero_lateral):
+        realized_r_recovery_world_delta = torch.where(
+            realized_r_recovery_cooldown_active.expand_as(realized_r_recovery_world_delta),
+            -torch.full_like(
+                axial_component,
+                max(float(realized_r_recovery_backoff_m), 0.0),
+            )
+            * axis_w,
+            realized_r_recovery_world_delta,
+        )
     guarded_world_delta = torch.where(
         realized_r_recovery_active.expand_as(guarded_world_delta),
         realized_r_recovery_world_delta,
+        guarded_world_delta,
+    )
+    offcenter_depth_recovery_world_delta = (
+        lateral_dir * lateral_step
+        - torch.full_like(
+            axial_component,
+            max(float(offcenter_realized_depth_backoff_m), 0.0),
+        )
+        * axis_w
+    )
+    if bool(offcenter_realized_depth_cooldown_zero_lateral):
+        offcenter_depth_recovery_world_delta = torch.where(
+            offcenter_realized_depth_cooldown_active.expand_as(offcenter_depth_recovery_world_delta),
+            -torch.full_like(
+                axial_component,
+                max(float(offcenter_realized_depth_backoff_m), 0.0),
+            )
+            * axis_w,
+            offcenter_depth_recovery_world_delta,
+        )
+    guarded_world_delta = torch.where(
+        offcenter_realized_depth_recovery_active.expand_as(guarded_world_delta),
+        offcenter_depth_recovery_world_delta,
+        guarded_world_delta,
+    )
+    contact_force_lateral_scale = min(max(float(contact_force_recovery_lateral_scale), 0.0), 1.0)
+    contact_force_recovery_world_delta = (
+        lateral_dir * lateral_step * contact_force_lateral_scale
+        - torch.full_like(
+            axial_component,
+            max(float(contact_force_recovery_backoff_m), 0.0),
+        )
+        * axis_w
+    )
+    contact_force_retreat_hold_world_delta = lateral_dir * lateral_step * contact_force_lateral_scale
+    contact_force_retreat_reapproach_gate = (
+        (lateral_error <= max(float(contact_force_retreat_recenter_lateral_gate_m), 0.0))
+        & (servo_orientation_error_col <= max(float(target_tip_servo_axial_theta_gate_rad), 0.0))
+        & (module_consistency_gate >= max(float(target_tip_servo_min_consistency), 0.0))
+        & (contact_force_norm <= max(float(contact_force_retreat_force_clear_threshold), 0.0))
+    )
+    contact_force_retreat_reapproach_world_delta = (
+        lateral_dir * lateral_step * contact_force_lateral_scale
+        + torch.where(
+            contact_force_retreat_reapproach_gate,
+            torch.full_like(
+                axial_component,
+                max(float(contact_force_retreat_reapproach_step_m), 0.0),
+            ),
+            torch.zeros_like(axial_component),
+        )
+        * axis_w
+    )
+    guarded_world_delta = torch.where(
+        contact_force_recovery_active.expand_as(guarded_world_delta),
+        contact_force_recovery_world_delta,
+        guarded_world_delta,
+    )
+    if bool(prelip_lateral_clamp):
+        prelip_min_depth = min(
+            float(prelip_lateral_clamp_min_depth_m),
+            float(prelip_lateral_clamp_max_depth_m),
+        )
+        prelip_max_depth = max(
+            float(prelip_lateral_clamp_min_depth_m),
+            float(prelip_lateral_clamp_max_depth_m),
+        )
+        guarded_delta_axial_col = torch.sum(guarded_world_delta * axis_w, dim=1, keepdim=True)
+        guarded_delta_lateral_vec = guarded_world_delta - guarded_delta_axial_col * axis_w
+        guarded_delta_lateral_norm = torch.linalg.norm(guarded_delta_lateral_vec, dim=1, keepdim=True)
+        max_prelip_lateral = max(float(prelip_lateral_clamp_max_step_m), 0.0)
+        prelip_lateral_clamp_active = (
+            guard_active
+            & (axial_depth >= prelip_min_depth)
+            & (axial_depth <= prelip_max_depth)
+            & (lateral_error <= max(float(prelip_lateral_clamp_tip_threshold_m), 0.0))
+            & (guarded_delta_lateral_norm > max_prelip_lateral)
+        )
+        clamped_lateral = _clip_vector_norm(guarded_delta_lateral_vec, max_prelip_lateral)
+        if bool(prelip_lateral_clamp_preserve_axial):
+            clamped_axial = guarded_delta_axial_col
+        else:
+            clamped_axial = torch.minimum(
+                guarded_delta_axial_col,
+                -torch.full_like(guarded_delta_axial_col, max(float(prelip_lateral_clamp_backoff_m), 0.0)),
+            )
+        clamped_world_delta = clamped_lateral + clamped_axial * axis_w
+        guarded_world_delta = torch.where(
+            prelip_lateral_clamp_active.expand_as(guarded_world_delta),
+            clamped_world_delta,
+            guarded_world_delta,
+        )
+        prelip_lateral_clamp_lateral = torch.linalg.norm(clamped_lateral, dim=1, keepdim=True)
+        prelip_lateral_clamp_axial = clamped_axial
+    if bool(prelip_offgate_axial_lock):
+        lock_min_depth = min(
+            float(prelip_offgate_axial_lock_min_depth_m),
+            float(prelip_offgate_axial_lock_max_depth_m),
+        )
+        lock_max_depth = max(
+            float(prelip_offgate_axial_lock_min_depth_m),
+            float(prelip_offgate_axial_lock_max_depth_m),
+        )
+        guarded_delta_axial_col = torch.sum(guarded_world_delta * axis_w, dim=1, keepdim=True)
+        guarded_delta_lateral_vec = guarded_world_delta - guarded_delta_axial_col * axis_w
+        guarded_delta_lateral_norm = torch.linalg.norm(guarded_delta_lateral_vec, dim=1, keepdim=True)
+        offgate = (
+            (lateral_error > max(float(prelip_offgate_axial_lock_lateral_gate_m), 0.0))
+            | (servo_orientation_error_col > max(float(prelip_offgate_axial_lock_theta_gate_rad), 0.0))
+        )
+        max_inward = max(float(prelip_offgate_axial_lock_max_inward_step_m), 0.0)
+        locked_axial_limit = torch.full_like(guarded_delta_axial_col, max_inward)
+        backoff = max(float(prelip_offgate_axial_lock_backoff_m), 0.0)
+        if backoff > 0.0:
+            locked_axial_limit = -torch.full_like(guarded_delta_axial_col, backoff)
+        if bool(prelip_offgate_axial_lock_bidirectional) and backoff <= 0.0:
+            locked_axial_col = torch.clamp(guarded_delta_axial_col, min=-max_inward, max=max_inward)
+            axial_lock_violation = torch.abs(guarded_delta_axial_col) > max_inward
+        else:
+            locked_axial_col = locked_axial_limit
+            axial_lock_violation = guarded_delta_axial_col > locked_axial_limit
+        prelip_offgate_axial_lock_active = (
+            guard_active
+            & (axial_depth >= lock_min_depth)
+            & (axial_depth <= lock_max_depth)
+            & offgate
+            & (
+                axial_lock_violation
+                | (bool(prelip_offgate_axial_lock_zero_lateral) & (guarded_delta_lateral_norm > 0.0))
+            )
+        )
+        locked_lateral_vec = (
+            torch.zeros_like(guarded_delta_lateral_vec)
+            if bool(prelip_offgate_axial_lock_zero_lateral)
+            else guarded_delta_lateral_vec
+        )
+        locked_world_delta = locked_lateral_vec + locked_axial_col * axis_w
+        guarded_world_delta = torch.where(
+            prelip_offgate_axial_lock_active.expand_as(guarded_world_delta),
+            locked_world_delta,
+            guarded_world_delta,
+        )
+        prelip_offgate_axial_lock_axial = locked_axial_col
+    # Recovery state machines should dominate late guard clamps. Otherwise a
+    # pre-lip/contact clamp can keep the state in backout while replacing the
+    # requested retreat command with a much smaller hold command.
+    guarded_world_delta = torch.where(
+        module_recovery_backout_active.expand_as(guarded_world_delta),
+        module_recovery_world_delta,
+        guarded_world_delta,
+    )
+    guarded_world_delta = torch.where(
+        module_recovery_trim_active.expand_as(guarded_world_delta),
+        module_recovery_trim_world_delta,
+        guarded_world_delta,
+    )
+    guarded_world_delta = torch.where(
+        reinsert_gate.expand_as(guarded_world_delta),
+        module_recovery_reinsert_world_delta,
+        guarded_world_delta,
+    )
+    guarded_world_delta = torch.where(
+        (module_recovery_reinsert_active & ~reinsert_gate).expand_as(guarded_world_delta),
+        module_recovery_reinsert_hold_delta,
+        guarded_world_delta,
+    )
+    guarded_world_delta = torch.where(
+        contact_force_retreat_backout_active.expand_as(guarded_world_delta),
+        contact_force_recovery_world_delta,
+        guarded_world_delta,
+    )
+    guarded_world_delta = torch.where(
+        contact_force_retreat_hold_active.expand_as(guarded_world_delta),
+        contact_force_retreat_hold_world_delta,
+        guarded_world_delta,
+    )
+    guarded_world_delta = torch.where(
+        contact_force_retreat_reapproach_active.expand_as(guarded_world_delta),
+        contact_force_retreat_reapproach_world_delta,
+        guarded_world_delta,
+    )
+    guarded_world_delta = torch.where(
+        contact_force_retreat_abort_active.expand_as(guarded_world_delta),
+        contact_force_recovery_world_delta,
         guarded_world_delta,
     )
     guarded_world_delta = torch.where(
         settle_active.expand_as(guarded_world_delta),
         torch.zeros_like(guarded_world_delta),
         guarded_world_delta,
+    )
+    recovery_axial_zero_active = (
+        realized_r_recovery_active
+        | offcenter_realized_depth_recovery_active
+        | target_tip_servo_depth_overshoot
+        | target_tip_servo_orientation_recovery_active
+        | module_recovery_backout_active
+    ) & bool(recovery_zero_axial)
+    if bool(recovery_zero_axial):
+        guarded_delta_axial_col = torch.sum(guarded_world_delta * axis_w, dim=1, keepdim=True)
+        guarded_lateral_only_delta = guarded_world_delta - guarded_delta_axial_col * axis_w
+        guarded_world_delta = torch.where(
+            recovery_axial_zero_active.expand_as(guarded_world_delta),
+            guarded_lateral_only_delta,
+            guarded_world_delta,
+        )
+    final_post_override_r_reject_active = torch.zeros_like(lateral_error, dtype=torch.bool)
+    final_post_override_predicted_lateral = lateral_error
+    if bool(final_post_override_r_reject):
+        final_post_rel = rel + guarded_world_delta
+        final_post_depth = torch.sum(final_post_rel * axis_w, dim=1, keepdim=True)
+        final_post_lateral_vec = final_post_rel - final_post_depth * axis_w
+        final_post_override_predicted_lateral = torch.linalg.norm(
+            final_post_lateral_vec,
+            dim=1,
+            keepdim=True,
+        )
+        final_lateral_gate = float(final_post_override_r_reject_lateral_gate_m)
+        within_lateral_gate = (
+            torch.ones_like(lateral_error, dtype=torch.bool)
+            if not math.isfinite(final_lateral_gate)
+            else lateral_error <= max(final_lateral_gate, 0.0)
+        )
+        final_post_override_r_reject_active = (
+            guard_active
+            & (axial_depth >= float(final_post_override_r_reject_activation_depth_m))
+            & within_lateral_gate
+            & (
+                final_post_override_predicted_lateral
+                > lateral_error + max(float(final_post_override_r_reject_margin_m), 0.0)
+            )
+        )
+        final_post_backoff_delta = (
+            lateral_dir * lateral_step
+            - torch.full_like(
+                axial_component,
+                max(float(final_post_override_r_reject_backoff_m), 0.0),
+            )
+            * axis_w
+        )
+        guarded_world_delta = torch.where(
+            final_post_override_r_reject_active.expand_as(guarded_world_delta),
+            final_post_backoff_delta,
+            guarded_world_delta,
+        )
+    target_tip_servo_intended_axial_component = torch.sum(target_tip_servo_world_delta * axis_w, dim=1)
+    target_tip_servo_intended_lateral_component = torch.linalg.norm(
+        target_tip_servo_world_delta
+        - target_tip_servo_intended_axial_component.unsqueeze(1) * axis_w,
+        dim=1,
+    )
+    target_tip_servo_delta_error = torch.linalg.norm(
+        guarded_world_delta - target_tip_servo_world_delta,
+        dim=1,
+        keepdim=True,
+    )
+    target_tip_servo_selected_translation = target_tip_servo_active & (target_tip_servo_delta_error <= 1.0e-9)
+    target_tip_servo_blocked_by_module_recovery = target_tip_servo_active & module_recovery_active
+    target_tip_servo_blocked_by_module_lateral = target_tip_servo_active & module_lateral_alignment_active
+    target_tip_servo_blocked_by_final_orientation = (
+        target_tip_servo_active
+        & final_orientation_blocking_active
+        & ~target_tip_servo_final_orientation_override
+        & ~target_tip_servo_blocked_by_module_recovery
+        & ~target_tip_servo_blocked_by_module_lateral
     )
     guarded_root_delta = math_utils.quat_apply_inverse(
         robot.data.root_quat_w.to(device=device, dtype=dtype),
@@ -5162,14 +13287,20 @@ def _apply_insertion_action_guard(
         off_center
         | misoriented
         | enforce_centered_axial
-        | final_orientation_active
+        | final_orientation_blocking_active
         | retention_active
         | predicted_r_reject
+        | prelip_lateral_clamp_active
         | settle_active
         | realized_r_recovery_active
+        | offcenter_realized_depth_recovery_active
+        | contact_force_recovery_active
+        | contact_force_retreat_active
+        | target_tip_servo_orientation_recovery_active
         | module_recovery_active
         | module_lateral_alignment_active
         | target_tip_servo_active
+        | target_tip_servo_depth_overshoot
     )
     apply_mask = apply_scalar_mask.expand_as(guarded_policy_translation)
     guarded_action[:, :3] = torch.where(apply_mask, guarded_policy_translation, guarded_action[:, :3])
@@ -5201,14 +13332,73 @@ def _apply_insertion_action_guard(
         guarded_action[:, 3:6],
     )
     guarded_action[:, 3:6] = torch.where(
+        (
+            target_tip_servo_orientation_recovery_active
+            & bool(target_tip_servo_orientation_recovery_override_final_orientation)
+        ).expand_as(guarded_action[:, 3:6]),
+        torch.zeros_like(guarded_action[:, 3:6]),
+        guarded_action[:, 3:6],
+    )
+    zero_rotation_theta_gate = max(float(target_tip_servo_zero_rotation_theta_gate_rad), 0.0)
+    target_tip_servo_rotation_zero_active = (
+        (target_tip_servo_axial_gate | target_tip_servo_depth_retention_active)
+        & bool(target_tip_servo_zero_rotation_when_gated)
+        & (servo_orientation_error_col <= zero_rotation_theta_gate)
+    )
+    if bool(target_tip_servo_zero_rotation_only_deep_axial):
+        target_tip_servo_rotation_zero_active = (
+            target_tip_servo_rotation_zero_active & target_tip_servo_deep_axial_active
+        )
+    guarded_action[:, 3:6] = torch.where(
+        target_tip_servo_rotation_zero_active.expand_as(guarded_action[:, 3:6]),
+        torch.zeros_like(guarded_action[:, 3:6]),
+        guarded_action[:, 3:6],
+    )
+    recovery_rotation_zero_active = (
+        (
+            (realized_r_recovery_active | offcenter_realized_depth_recovery_active)
+            & bool(recovery_zero_rotation)
+        )
+        | (contact_force_recovery_active & bool(contact_force_recovery_zero_rotation))
+        | (contact_force_retreat_active & bool(contact_force_recovery_zero_rotation))
+    )
+    guarded_action[:, 3:6] = torch.where(
+        recovery_rotation_zero_active.expand_as(guarded_action[:, 3:6]),
+        torch.zeros_like(guarded_action[:, 3:6]),
+        guarded_action[:, 3:6],
+    )
+    guarded_action[:, 3:6] = torch.where(
         settle_active.expand_as(guarded_action[:, 3:6]),
         torch.zeros_like(guarded_action[:, 3:6]),
         guarded_action[:, 3:6],
     )
+    if bool(final_post_override_r_reject_zero_rotation):
+        guarded_action[:, 3:6] = torch.where(
+            final_post_override_r_reject_active.expand_as(guarded_action[:, 3:6]),
+            torch.zeros_like(guarded_action[:, 3:6]),
+            guarded_action[:, 3:6],
+        )
     correction_norm = torch.linalg.norm(guarded_action[:, :3] - policy_tcp_action[:, :3], dim=1)
     max_envs_for_guard_sample = min(int(guarded_world_delta.shape[0]), 8)
     if previous_lateral_error is not None and previous_lateral_error.shape == lateral_error.shape:
         previous_lateral_error.copy_(lateral_error.detach())
+    if previous_axial_depth is not None and previous_axial_depth.shape == axial_depth.shape:
+        previous_axial_depth.copy_(axial_depth.detach())
+    if previous_orientation_error is not None and previous_orientation_error.shape == servo_orientation_error_col.shape:
+        previous_orientation_error.copy_(servo_orientation_error_col.detach())
+    if target_tip_servo_max_depth is not None and target_tip_servo_max_depth.shape == axial_depth.shape:
+        next_max_depth = torch.where(
+            torch.isfinite(target_tip_servo_max_depth_value),
+            torch.maximum(target_tip_servo_max_depth_value, axial_depth),
+            axial_depth,
+        )
+        target_tip_servo_max_depth.copy_(
+            torch.where(
+                target_tip_servo_active,
+                next_max_depth.detach(),
+                torch.full_like(target_tip_servo_max_depth, float("-inf")),
+            )
+        )
     return guarded_action, {
         "insertion_action_guard_applied_fraction": float((apply_scalar_mask | rotation_guard_active).float().mean().detach().cpu()),
         "insertion_action_guard_centered_axial_fraction": float(enforce_centered_axial.float().mean().detach().cpu()),
@@ -5238,8 +13428,95 @@ def _apply_insertion_action_guard(
         ],
         "insertion_action_guard_settle_active_fraction": float(settle_active.float().mean().detach().cpu()),
         "insertion_action_guard_predicted_r_reject_fraction": float(predicted_r_reject.float().mean().detach().cpu()),
+        "insertion_action_guard_final_post_override_r_reject_fraction": float(
+            final_post_override_r_reject_active.float().mean().detach().cpu()
+        ),
+        "insertion_action_guard_final_post_override_predicted_lateral_m_mean": float(
+            final_post_override_predicted_lateral.mean().detach().cpu()
+        ),
+        "insertion_action_guard_predicted_depth_offgate_clamp_fraction": float(
+            predicted_depth_offgate_clamp_active.float().mean().detach().cpu()
+        ),
+        "insertion_action_guard_predicted_depth_offgate_clamp_m_mean": float(
+            predicted_depth_offgate_clamp.mean().detach().cpu()
+        ),
         "insertion_action_guard_realized_r_recovery_fraction": float(
             realized_r_recovery_active.float().mean().detach().cpu()
+        ),
+        "insertion_action_guard_realized_r_accum_m_mean": (
+            0.0
+            if realized_r_accum is None
+            else float(realized_r_accum.float().mean().detach().cpu())
+        ),
+        "insertion_action_guard_realized_r_accum_recovery_fraction": float(
+            realized_r_accum_active.float().mean().detach().cpu()
+        ),
+        "insertion_action_guard_realized_r_recovery_cooldown_fraction": float(
+            realized_r_recovery_cooldown_active.float().mean().detach().cpu()
+        ),
+        "insertion_action_guard_realized_r_recovery_cooldown_steps_mean": (
+            0.0
+            if realized_r_recovery_cooldown is None
+            else float(realized_r_recovery_cooldown.float().mean().detach().cpu())
+        ),
+        "insertion_action_guard_offcenter_realized_depth_recovery_fraction": float(
+            offcenter_realized_depth_recovery_active.float().mean().detach().cpu()
+        ),
+        "insertion_action_guard_offcenter_realized_depth_delta_m_mean": float(
+            offcenter_realized_depth_delta.mean().detach().cpu()
+        ),
+        "insertion_action_guard_offcenter_realized_depth_cooldown_fraction": float(
+            offcenter_realized_depth_cooldown_active.float().mean().detach().cpu()
+        ),
+        "insertion_action_guard_offcenter_realized_depth_cooldown_steps_mean": (
+            0.0
+            if offcenter_realized_depth_cooldown is None
+            else float(offcenter_realized_depth_cooldown.float().mean().detach().cpu())
+        ),
+        "insertion_action_guard_offcenter_realized_depth_accum_m_mean": (
+            0.0
+            if offcenter_realized_depth_accum is None
+            else float(offcenter_realized_depth_accum.float().mean().detach().cpu())
+        ),
+        "insertion_action_guard_contact_force_recovery_fraction": float(
+            contact_force_recovery_active.float().mean().detach().cpu()
+        ),
+        "insertion_action_guard_contact_force_retreat_active_fraction": float(
+            contact_force_retreat_active.float().mean().detach().cpu()
+        ),
+        "insertion_action_guard_contact_force_retreat_backout_fraction": float(
+            contact_force_retreat_backout_active.float().mean().detach().cpu()
+        ),
+        "insertion_action_guard_contact_force_retreat_hold_fraction": float(
+            contact_force_retreat_hold_active.float().mean().detach().cpu()
+        ),
+        "insertion_action_guard_contact_force_retreat_reapproach_fraction": float(
+            contact_force_retreat_reapproach_active.float().mean().detach().cpu()
+        ),
+        "insertion_action_guard_contact_force_retreat_reapproach_gate_fraction": float(
+            contact_force_retreat_reapproach_gate.float().mean().detach().cpu()
+        ),
+        "insertion_action_guard_contact_force_retreat_abort_fraction": float(
+            contact_force_retreat_abort_active.float().mean().detach().cpu()
+        ),
+        "insertion_action_guard_contact_force_retreat_state_mean": (
+            0.0
+            if contact_force_retreat_state is None
+            else float(contact_force_retreat_state.float().mean().detach().cpu())
+        ),
+        "insertion_action_guard_contact_force_retreat_retry_mean": (
+            0.0
+            if contact_force_retreat_retry_count is None
+            else float(contact_force_retreat_retry_count.float().mean().detach().cpu())
+        ),
+        "insertion_action_guard_contact_force_norm_mean": float(
+            contact_force_norm.mean().detach().cpu()
+        ),
+        "insertion_action_guard_recovery_rotation_zeroed_fraction": float(
+            recovery_rotation_zero_active.float().mean().detach().cpu()
+        ),
+        "insertion_action_guard_recovery_axial_zeroed_fraction": float(
+            recovery_axial_zero_active.float().mean().detach().cpu()
         ),
         "insertion_action_guard_target_tip_servo_active_fraction": float(
             target_tip_servo_active.float().mean().detach().cpu()
@@ -5250,6 +13527,82 @@ def _apply_insertion_action_guard(
         "insertion_action_guard_target_tip_servo_axial_error_m_mean": float(
             target_tip_servo_axial_error.mean().detach().cpu()
         ),
+        "insertion_action_guard_target_tip_servo_deep_axial_fraction": float(
+            target_tip_servo_deep_axial_active.float().mean().detach().cpu()
+        ),
+        "insertion_action_guard_target_tip_servo_commanded_axial_step_m_mean": float(
+            target_tip_servo_axial_step.mean().detach().cpu()
+        ),
+        "insertion_action_guard_target_tip_servo_intended_axial_component_m_mean": float(
+            target_tip_servo_intended_axial_component.mean().detach().cpu()
+        ),
+        "insertion_action_guard_target_tip_servo_intended_lateral_component_m_mean": float(
+            target_tip_servo_intended_lateral_component.mean().detach().cpu()
+        ),
+        "insertion_action_guard_target_tip_servo_selected_fraction": float(
+            target_tip_servo_selected_translation.float().mean().detach().cpu()
+        ),
+        "insertion_action_guard_target_tip_servo_selected_axial_component_m_mean": float(
+            torch.where(
+                target_tip_servo_active.view(-1),
+                guarded_axial_component,
+                torch.zeros_like(guarded_axial_component),
+            ).mean().detach().cpu()
+        ),
+        "insertion_action_guard_target_tip_servo_blocked_by_module_recovery_fraction": float(
+            target_tip_servo_blocked_by_module_recovery.float().mean().detach().cpu()
+        ),
+        "insertion_action_guard_target_tip_servo_blocked_by_module_lateral_fraction": float(
+            target_tip_servo_blocked_by_module_lateral.float().mean().detach().cpu()
+        ),
+        "insertion_action_guard_target_tip_servo_blocked_by_final_orientation_fraction": float(
+            target_tip_servo_blocked_by_final_orientation.float().mean().detach().cpu()
+        ),
+        "insertion_action_guard_target_tip_servo_world_delta_env0": _sample_vector(
+            target_tip_servo_world_delta, limit=3
+        ),
+        "insertion_action_guard_target_tip_servo_stable_count_mean": (
+            0.0
+            if target_tip_servo_stable_count is None
+            else float(target_tip_servo_stable_count.float().mean().detach().cpu())
+        ),
+        "insertion_action_guard_target_tip_servo_depth_overshoot_fraction": float(
+            target_tip_servo_depth_overshoot.float().mean().detach().cpu()
+        ),
+        "insertion_action_guard_target_tip_servo_depth_retention_fraction": float(
+            target_tip_servo_depth_retention_active.float().mean().detach().cpu()
+        ),
+        "insertion_action_guard_target_tip_servo_max_depth_m_mean": float(
+            torch.where(
+                torch.isfinite(target_tip_servo_max_depth_value),
+                target_tip_servo_max_depth_value,
+                torch.zeros_like(target_tip_servo_max_depth_value),
+            ).mean().detach().cpu()
+        ),
+        "insertion_action_guard_target_tip_servo_realized_depth_delta_m_mean": float(
+            target_tip_servo_realized_depth_delta.mean().detach().cpu()
+        ),
+        "insertion_action_guard_target_tip_servo_plateau_pure_axial_fraction": float(
+            target_tip_servo_plateau_pure_axial_active.float().mean().detach().cpu()
+        ),
+        "insertion_action_guard_target_tip_servo_orientation_recovery_fraction": float(
+            target_tip_servo_orientation_recovery_active.float().mean().detach().cpu()
+        ),
+        "insertion_action_guard_target_tip_servo_rotation_zero_fraction": float(
+            target_tip_servo_rotation_zero_active.float().mean().detach().cpu()
+        ),
+        "insertion_action_guard_target_tip_servo_realized_orientation_delta_rad_mean": float(
+            target_tip_servo_realized_orientation_delta.mean().detach().cpu()
+        ),
+        "insertion_action_guard_final_two_stage_window_fraction": float(
+            final_two_stage_window_active.float().mean().detach().cpu()
+        ),
+        "insertion_action_guard_final_two_stage_trim_fraction": float(
+            final_two_stage_trim_active.float().mean().detach().cpu()
+        ),
+        "insertion_action_guard_final_two_stage_reinsert_ready_fraction": float(
+            final_two_stage_reinsert_ready.float().mean().detach().cpu()
+        ),
         "insertion_action_guard_module_recovery_active_fraction": float(
             module_recovery_active.float().mean().detach().cpu()
         ),
@@ -5258,6 +13611,15 @@ def _apply_insertion_action_guard(
         ),
         "insertion_action_guard_module_lateral_error_m_mean": float(
             module_lateral_error.mean().detach().cpu()
+        ),
+        "insertion_action_guard_module_final_axial_error_m_mean": float(
+            module_final_axial_error.mean().detach().cpu()
+        ),
+        "insertion_action_guard_target_tip_servo_axial_depth_m_mean": float(
+            target_tip_servo_axial_depth.mean().detach().cpu()
+        ),
+        "insertion_action_guard_target_tip_servo_target_depth_m_mean": float(
+            target_tip_servo_target_depth.mean().detach().cpu()
         ),
         "insertion_action_guard_module_lateral_alignment_desired_dir_env0": _sample_vector(
             signed_module_lateral_dir, limit=3
@@ -5270,6 +13632,21 @@ def _apply_insertion_action_guard(
         ),
         "insertion_action_guard_module_lateral_alignment_backoff_m_mean": float(
             module_lateral_backoff.mean().detach().cpu()
+        ),
+        "insertion_action_guard_prelip_lateral_clamp_active_fraction": float(
+            prelip_lateral_clamp_active.float().mean().detach().cpu()
+        ),
+        "insertion_action_guard_prelip_lateral_clamp_lateral_m_mean": float(
+            prelip_lateral_clamp_lateral.mean().detach().cpu()
+        ),
+        "insertion_action_guard_prelip_lateral_clamp_axial_m_mean": float(
+            prelip_lateral_clamp_axial.mean().detach().cpu()
+        ),
+        "insertion_action_guard_prelip_offgate_axial_lock_active_fraction": float(
+            prelip_offgate_axial_lock_active.float().mean().detach().cpu()
+        ),
+        "insertion_action_guard_prelip_offgate_axial_lock_axial_m_mean": float(
+            prelip_offgate_axial_lock_axial.mean().detach().cpu()
         ),
         "insertion_action_guard_module_lateral_alignment_rotation_active_fraction": float(
             module_lateral_rotation_active.float().mean().detach().cpu()
@@ -5298,8 +13675,17 @@ def _apply_insertion_action_guard(
         "insertion_action_guard_final_fixed_world_rotation_predicted_error_rad_mean": float(
             final_fixed_world_rotation_predicted_error.mean().detach().cpu()
         ),
+        "insertion_action_guard_final_fixed_world_rotation_pulse_gate_fraction": float(
+            final_fixed_world_rotation_pulse_gate.float().mean().detach().cpu()
+        ),
         "insertion_action_guard_final_fixed_world_rotation_strict_reject_fraction": float(
             final_fixed_world_rotation_strict_reject.float().mean().detach().cpu()
+        ),
+        "insertion_action_guard_final_fixed_world_rotation_realized_reject_fraction": float(
+            final_fixed_world_rotation_realized_reject_active.float().mean().detach().cpu()
+        ),
+        "insertion_action_guard_final_fixed_world_rotation_realized_reject_cooldown_mean": float(
+            final_fixed_world_rotation_realized_reject_cooldown_metric.float().mean().detach().cpu()
         ),
         "insertion_action_guard_final_axis_alignment_strict_reject_fraction": float(
             final_axis_strict_reject.float().mean().detach().cpu()
@@ -5316,8 +13702,32 @@ def _apply_insertion_action_guard(
         "insertion_action_guard_final_orientation_depth_backoff_fraction": float(
             final_orientation_depth_backoff_active.float().mean().detach().cpu()
         ),
+        "insertion_action_guard_final_orientation_recovery_lateral_fraction": float(
+            final_orientation_recovery_lateral_active.float().mean().detach().cpu()
+        ),
+        "insertion_action_guard_final_orientation_theta_good_lateral_recovery_fraction": float(
+            final_orientation_theta_good_lateral_recovery_active.float().mean().detach().cpu()
+        ),
         "insertion_action_guard_final_orientation_hold_axial_sweep_comp_m_mean": float(
             torch.linalg.norm(final_orientation_hold_axial_sweep_comp, dim=1).mean().detach().cpu()
+        ),
+        "insertion_action_guard_final_orientation_hold_depth_clamp_fraction": float(
+            final_orientation_hold_depth_clamp_active.float().mean().detach().cpu()
+        ),
+        "insertion_action_guard_final_orientation_hold_depth_clamp_m_mean": float(
+            final_orientation_hold_depth_clamp.mean().detach().cpu()
+        ),
+        "insertion_action_guard_final_orientation_lateral_scale": float(
+            min(max(float(final_orientation_lateral_scale), 0.0), 1.0)
+        ),
+        "insertion_action_guard_final_orientation_lateral_scale_effective_mean": float(
+            final_orientation_lateral_scale_col.mean().detach().cpu()
+        ),
+        "insertion_action_guard_final_orientation_lateral_bias_active_fraction": float(
+            final_orientation_lateral_bias_active.float().mean().detach().cpu()
+        ),
+        "insertion_action_guard_final_orientation_lateral_bias_m_mean": float(
+            torch.linalg.norm(final_orientation_lateral_bias_component, dim=1).mean().detach().cpu()
         ),
         "insertion_action_guard_module_recovery_backout_fraction": float(
             module_recovery_backout_active.float().mean().detach().cpu()
@@ -5456,10 +13866,21 @@ def _episode_target_orientation_from_yaml(env) -> torch.Tensor | None:
         return None
     origins = env.unwrapped.scene.env_origins
     rows: list[torch.Tensor] = []
+    source = str(getattr(args_cli, "episode_target_orientation_source", "target_pose") or "target_pose")
     for env_id in range(env.unwrapped.num_envs):
         episode = episodes.get(env_id)
-        target = (((episode or {}).get("scene") or {}).get("target") or {}).get("target_pose_world") or {}
-        orientation = target.get("orientation_wxyz")
+        scene = (episode or {}).get("scene") or {}
+        target = scene.get("target") or {}
+        start = scene.get("start_near_gate") or (episode or {}).get("start_near_gate") or {}
+        target_pose = target.get("target_pose_world") or {}
+        reference_orientation = start.get("reference_reward_body_start_orientation_wxyz")
+        target_orientation = target_pose.get("orientation_wxyz")
+        if source == "reference_reward_body_start":
+            orientation = reference_orientation
+        elif source == "auto_reference_then_target":
+            orientation = reference_orientation or target_orientation
+        else:
+            orientation = target_orientation
         if orientation is None:
             return None
         quat = torch.tensor(orientation, dtype=origins.dtype, device=origins.device)
@@ -5486,6 +13907,14 @@ def _target_orientation_from_reward_config(env, reward_config: dict[str, Any]) -
     except Exception:
         return None
     return _offset_quat_w(target.data.root_quat_w, reward_config.get("target_orientation_offset"))
+
+
+def _body_orientation_offset_for_target_orientation(reward_config: dict[str, Any], body_name: str) -> Any:
+    source = str(reward_config.get("episode_target_orientation_source", "target_pose") or "target_pose")
+    target_body = str(reward_config.get("target_body") or "")
+    if source in {"reference_reward_body_start", "auto_reference_then_target"} and body_name == target_body:
+        return None
+    return reward_config.get("body_orientation_offset")
 
 
 def _body_position_by_name(env, body_name: str, body_offset: Any = None) -> torch.Tensor | None:
@@ -5517,7 +13946,11 @@ def _body_target_orientation_error_from_config(
     *,
     axis_w: torch.Tensor | None = None,
 ) -> torch.Tensor | None:
-    body_quat = _body_orientation_by_name(env, body_name, reward_config.get("body_orientation_offset"))
+    body_quat = _body_orientation_by_name(
+        env,
+        body_name,
+        _body_orientation_offset_for_target_orientation(reward_config, body_name),
+    )
     if body_quat is None:
         return None
     target_quat = _target_orientation_from_reward_config(env, reward_config)
@@ -5626,11 +14059,11 @@ def _pose_reward_diagnostics(env, reward_config: dict[str, Any]) -> dict[str, An
     out: dict[str, Any] = {
         "target_scene_name": reward_config.get("target_scene_name"),
         "target_reward_body_arg": reward_config.get("target_body"),
-        "target_position_offset": reward_config.get("target_position_offset"),
-        "body_position_offset": body_offset,
-        "target_orientation_offset": reward_config.get("target_orientation_offset"),
-        "body_orientation_offset": body_orientation_offset,
-        "orientation_error_mode": reward_config.get("orientation_error_mode", "quat"),
+            "target_position_offset": reward_config.get("target_position_offset"),
+            "body_position_offset": body_offset,
+            "target_orientation_offset": reward_config.get("target_orientation_offset"),
+            "body_orientation_offset": body_orientation_offset,
+            "orientation_error_mode": reward_config.get("orientation_error_mode", "quat"),
         "orientation_axis_local": reward_config.get("orientation_axis_local", (0.0, 1.0, 0.0)),
         "target_position_world_env0": None if target_pos is None else _sample_vector(target_pos, limit=3),
         "target_orientation_wxyz_env0": None if target_quat is None else _sample_vector(target_quat, limit=4),
@@ -5687,12 +14120,12 @@ def _insertion_geometry_diagnostics(env, reward_config: dict[str, Any]) -> dict[
     body_pos = _body_position_by_name(env, body_name, reward_config.get("body_position_offset"))
     axis_w = _episode_insertion_axis_from_yaml(env)
     out: dict[str, Any] = {
-        "body_name": body_name,
-        "has_target": target_pos is not None,
-        "has_body": body_pos is not None,
-        "has_episode_axis": axis_w is not None,
-        "target_world_env0": None if target_pos is None else _sample_vector(target_pos, limit=3),
-        "body_world_env0": None if body_pos is None else _sample_vector(body_pos, limit=3),
+            "body_name": body_name,
+            "has_target": target_pos is not None,
+            "has_body": body_pos is not None,
+            "has_episode_axis": axis_w is not None,
+            "target_world_env0": None if target_pos is None else _sample_vector(target_pos, limit=3),
+            "body_world_env0": None if body_pos is None else _sample_vector(body_pos, limit=3),
     }
     if target_pos is None or body_pos is None or axis_w is None:
         return out
@@ -5727,7 +14160,11 @@ def _insertion_geometry_diagnostics(env, reward_config: dict[str, Any]) -> dict[
     lateral_gate = geometry.lateral_gate
     depth_fraction = geometry.depth_fraction
     target_quat = _target_orientation_from_reward_config(env, reward_config)
-    body_quat = _body_orientation_by_name(env, body_name, reward_config.get("body_orientation_offset"))
+    body_quat = _body_orientation_by_name(
+        env,
+        body_name,
+        _body_orientation_offset_for_target_orientation(reward_config, body_name),
+    )
     orientation_error = None
     orientation_gate = None
     orientation_gate_std = float(reward_config.get("insertion_orientation_gate_std", 0.0) or 0.0)
@@ -5745,6 +14182,8 @@ def _insertion_geometry_diagnostics(env, reward_config: dict[str, Any]) -> dict[
     consistency_gate = None
     consistency_axial_error = None
     consistency_expected_depth = None
+    consistency_final_expected_depth = None
+    consistency_final_axial_error = None
     consistency_signed_depth = None
     consistency_lateral_error = None
     if consistency_body:
@@ -5776,10 +14215,16 @@ def _insertion_geometry_diagnostics(env, reward_config: dict[str, Any]) -> dict[
                     reference_gap.to(current_gap.device),
                 )
             setattr(env, attr_name, reference_gap.detach().clone())
-            consistency_expected_depth = target_depth - reference_gap.to(target_depth.device)
+            reference_gap = reference_gap.to(target_depth.device)
+            if str(reward_config.get("consistency_gate_mode", "target_depth") or "target_depth") == "current_depth":
+                consistency_expected_depth = signed_depth.to(target_depth.device) - reference_gap
+            else:
+                consistency_expected_depth = target_depth - reference_gap
+            consistency_final_expected_depth = target_depth - reference_gap
             consistency_signed_depth = consistency_geometry.axial_depth
             consistency_lateral_error = consistency_geometry.lateral_error
             consistency_axial_error = torch.abs(consistency_signed_depth - consistency_expected_depth)
+            consistency_final_axial_error = torch.abs(consistency_signed_depth - consistency_final_expected_depth)
             consistency_gate = torch.exp(
                 -torch.square(
                     consistency_axial_error
@@ -5789,6 +14234,66 @@ def _insertion_geometry_diagnostics(env, reward_config: dict[str, Any]) -> dict[
             if float(reward_config.get("consistency_axial_std", 0.0) or 0.0) > 0.0:
                 semantic_gate = semantic_gate * consistency_gate
     centered_depth_fraction = depth_fraction * semantic_gate
+    success_axial_threshold = float(
+        reward_config.get(
+            "success_axial_threshold",
+            reward_config.get("success_termination_threshold", 0.0005),
+        )
+    )
+    success_lateral_threshold = float(
+        reward_config.get(
+            "success_lateral_threshold",
+            reward_config.get("success_termination_threshold", 0.0005),
+        )
+    )
+    success_orientation_threshold = float(reward_config.get("success_orientation_threshold", 0.03) or 0.03)
+    raw_success_consistency_axial_threshold = reward_config.get(
+        "success_consistency_axial_threshold",
+        0.0,
+    )
+    raw_success_consistency_lateral_threshold = reward_config.get(
+        "success_consistency_lateral_threshold",
+        0.0,
+    )
+    success_consistency_axial_threshold = (
+        None
+        if raw_success_consistency_axial_threshold is None
+        or float(raw_success_consistency_axial_threshold) <= 0.0
+        else float(raw_success_consistency_axial_threshold)
+    )
+    success_consistency_lateral_threshold = (
+        None
+        if raw_success_consistency_lateral_threshold is None
+        or float(raw_success_consistency_lateral_threshold) <= 0.0
+        else float(raw_success_consistency_lateral_threshold)
+    )
+    inside_success_axial = (target_depth - signed_depth).abs() <= success_axial_threshold
+    inside_success_lateral = lateral_error <= success_lateral_threshold
+    inside_success_orientation = (
+        torch.zeros_like(signed_depth, dtype=torch.bool)
+        if orientation_error is None
+        else orientation_error.reshape(-1) <= success_orientation_threshold
+    )
+    if success_consistency_axial_threshold is None and success_consistency_lateral_threshold is None:
+        inside_success_consistency = torch.ones_like(signed_depth, dtype=torch.bool)
+    elif consistency_final_axial_error is None or consistency_lateral_error is None:
+        inside_success_consistency = torch.zeros_like(signed_depth, dtype=torch.bool)
+    else:
+        inside_success_consistency = torch.ones_like(signed_depth, dtype=torch.bool)
+        if success_consistency_axial_threshold is not None:
+            inside_success_consistency = inside_success_consistency & (
+                consistency_final_axial_error.reshape(-1) <= success_consistency_axial_threshold
+            )
+        if success_consistency_lateral_threshold is not None:
+            inside_success_consistency = inside_success_consistency & (
+                consistency_lateral_error.reshape(-1) <= success_consistency_lateral_threshold
+            )
+    strict_success = (
+        inside_success_axial
+        & inside_success_lateral
+        & inside_success_orientation
+        & inside_success_consistency
+    )
     out.update(
         {
             "has_entrance": True,
@@ -5800,6 +14305,14 @@ def _insertion_geometry_diagnostics(env, reward_config: dict[str, Any]) -> dict[
             "target_depth_m_mean": float(target_depth.mean().detach().cpu()),
             "target_depth_m_env0": float(target_depth[0].detach().cpu()),
             "target_depth_m_by_env": _tensor_1d_list(target_depth),
+            "target_world_by_env": _tensor_2d_list(target_pos),
+            "body_world_by_env": _tensor_2d_list(body_pos),
+            "target_orientation_wxyz_by_env": None
+            if target_quat is None
+            else _tensor_2d_list(target_quat),
+            "body_orientation_wxyz_by_env": None
+            if body_quat is None
+            else _tensor_2d_list(body_quat),
             "target_lateral_residual_m_mean": float(target_lateral_residual.mean().detach().cpu()),
             "target_lateral_residual_m_env0": float(target_lateral_residual[0].detach().cpu()),
             "target_lateral_residual_m_by_env": _tensor_1d_list(target_lateral_residual),
@@ -5830,6 +14343,7 @@ def _insertion_geometry_diagnostics(env, reward_config: dict[str, Any]) -> dict[
             "semantic_gate_env0": float(semantic_gate[0].detach().cpu()),
             "semantic_gate_by_env": _tensor_1d_list(semantic_gate),
             "consistency_body": consistency_body,
+            "consistency_gate_mode": str(reward_config.get("consistency_gate_mode", "target_depth") or "target_depth"),
             "consistency_gate_mean": None if consistency_gate is None else float(consistency_gate.mean().detach().cpu()),
             "consistency_gate_env0": None if consistency_gate is None else float(consistency_gate[0].detach().cpu()),
             "consistency_gate_by_env": None if consistency_gate is None else _tensor_1d_list(consistency_gate),
@@ -5842,50 +14356,39 @@ def _insertion_geometry_diagnostics(env, reward_config: dict[str, Any]) -> dict[
             "consistency_axial_error_m_env0": None
             if consistency_axial_error is None
             else float(consistency_axial_error[0].detach().cpu()),
+            "consistency_final_expected_depth_m_env0": None
+            if consistency_final_expected_depth is None
+            else float(consistency_final_expected_depth[0].detach().cpu()),
+            "consistency_final_axial_error_m_env0": None
+            if consistency_final_axial_error is None
+            else float(consistency_final_axial_error[0].detach().cpu()),
+            "consistency_final_axial_error_m_by_env": None
+            if consistency_final_axial_error is None
+            else _tensor_1d_list(consistency_final_axial_error),
             "consistency_lateral_error_m_env0": None
             if consistency_lateral_error is None
             else float(consistency_lateral_error[0].detach().cpu()),
+            "consistency_lateral_error_m_by_env": None
+            if consistency_lateral_error is None
+            else _tensor_1d_list(consistency_lateral_error),
             "distance_to_target_m_mean": float(torch.linalg.norm(body_pos - target_pos, dim=1).mean().detach().cpu()),
             "distance_to_target_m_env0": float(torch.linalg.norm(body_pos[0] - target_pos[0]).detach().cpu()),
             "distance_to_target_m_by_env": _tensor_1d_list(torch.linalg.norm(body_pos - target_pos, dim=1)),
             "inside_2mm_fraction": float((lateral_error <= 0.002).float().mean().detach().cpu()),
             "inside_3mm_fraction": float((lateral_error <= 0.003).float().mean().detach().cpu()),
-            "inside_success_lateral_threshold_by_env": _tensor_bool_list(
-                lateral_error
-                <= float(
-                    reward_config.get(
-                        "success_lateral_threshold",
-                        reward_config.get("success_termination_threshold", 0.0005),
-                    )
-                )
-            ),
-            "inside_success_axial_threshold_by_env": _tensor_bool_list(
-                (target_depth - signed_depth).abs()
-                <= float(
-                    reward_config.get(
-                        "success_axial_threshold",
-                        reward_config.get("success_termination_threshold", 0.0005),
-                    )
-                )
-            ),
+            "inside_success_lateral_threshold_by_env": _tensor_bool_list(inside_success_lateral),
+            "inside_success_axial_threshold_by_env": _tensor_bool_list(inside_success_axial),
+            "inside_success_orientation_threshold_by_env": _tensor_bool_list(inside_success_orientation),
+            "inside_success_consistency_threshold_by_env": _tensor_bool_list(inside_success_consistency),
+            "strict_success_axial_threshold_m": success_axial_threshold,
+            "strict_success_lateral_threshold_m": success_lateral_threshold,
+            "strict_success_orientation_threshold_rad": success_orientation_threshold,
+            "strict_success_consistency_axial_threshold_m": success_consistency_axial_threshold,
+            "strict_success_consistency_lateral_threshold_m": success_consistency_lateral_threshold,
             "success_geometry_by_env": _tensor_bool_list(
-                torch.logical_and(
-                    lateral_error
-                    <= float(
-                        reward_config.get(
-                            "success_lateral_threshold",
-                            reward_config.get("success_termination_threshold", 0.0005),
-                        )
-                    ),
-                    (target_depth - signed_depth).abs()
-                    <= float(
-                        reward_config.get(
-                            "success_axial_threshold",
-                            reward_config.get("success_termination_threshold", 0.0005),
-                        )
-                    ),
-                )
+                torch.logical_and(inside_success_lateral, inside_success_axial)
             ),
+            "strict_success_by_env": _tensor_bool_list(strict_success),
             "strict_partial_insertion_by_env": _tensor_bool_list(
                 torch.logical_and(
                     torch.logical_and(signed_depth > 0.0, signed_depth < target_depth + 0.0005),
@@ -6219,6 +14722,7 @@ def _episode_scene_diagnostics(env, reward_config: dict[str, Any], *, device: to
         context = (episode or {}).get("task_context") or {}
         scene = (episode or {}).get("scene") or {}
         target = (scene.get("target") or {}).get("target_pose_world") or {}
+        start = scene.get("start_near_gate") or (episode or {}).get("start_near_gate") or {}
         if context:
             vector = _task_vector_from_contexts([_episode_context_tuple(episode)], device=device)[0].detach().cpu().tolist()
         else:
@@ -6240,6 +14744,10 @@ def _episode_scene_diagnostics(env, reward_config: dict[str, Any], *, device: to
                 "task_vector": [float(v) for v in vector],
                 "episode_target_position_local": target.get("position"),
                 "episode_target_orientation_wxyz": target.get("orientation_wxyz"),
+                "episode_reference_reward_body_start_orientation_wxyz": start.get(
+                    "reference_reward_body_start_orientation_wxyz"
+                ),
+                "episode_target_orientation_source": str(args_cli.episode_target_orientation_source),
                 "reward_target_position_world": None if target_pos is None else _sample_vector(target_pos[env_id : env_id + 1], limit=3),
                 "reward_target_orientation_wxyz": None if target_quat is None else _sample_vector(target_quat[env_id : env_id + 1], limit=4),
                 "start_near_gate": scene.get("start_near_gate"),
@@ -6374,9 +14882,22 @@ def _target_source_diagnostics(env, reward_config: dict[str, Any]) -> dict[str, 
     episodes = _current_episode_by_env(env)
     episode = episodes.get(0)
     target = (((episode or {}).get("scene") or {}).get("target") or {})
+    scene = ((episode or {}).get("scene") or {})
+    start = scene.get("start_near_gate") or (episode or {}).get("start_near_gate") or {}
     episode_target = target.get("target_pose_world") or {}
     uses_episode_position = episode is not None and episode_target.get("position") is not None
-    uses_episode_orientation = episode is not None and episode_target.get("orientation_wxyz") is not None
+    requested_orientation_source = str(args_cli.episode_target_orientation_source)
+    reference_orientation = start.get("reference_reward_body_start_orientation_wxyz")
+    target_pose_orientation = episode_target.get("orientation_wxyz")
+    if requested_orientation_source == "reference_reward_body_start":
+        uses_episode_orientation = episode is not None and reference_orientation is not None
+        resolved_orientation_source = "reference_reward_body_start"
+    elif requested_orientation_source == "auto_reference_then_target":
+        uses_episode_orientation = episode is not None and (reference_orientation is not None or target_pose_orientation is not None)
+        resolved_orientation_source = "reference_reward_body_start" if reference_orientation is not None else "target_pose"
+    else:
+        uses_episode_orientation = episode is not None and target_pose_orientation is not None
+        resolved_orientation_source = "target_pose"
     uses_entrance = episode is not None and (target.get("entrance_pose_world") or {}).get("position") is not None
     uses_axis = episode is not None and target.get("insertion_axis_world") is not None
     warnings: list[str] = []
@@ -6402,10 +14923,14 @@ def _target_source_diagnostics(env, reward_config: dict[str, Any]) -> dict[str, 
         )
     return {
         "target_position_source": "episode_yaml" if uses_episode_position else "target_asset_root_plus_offset",
-        "target_orientation_source": "episode_yaml" if uses_episode_orientation else "target_asset_root_plus_offset",
+        "target_orientation_source": (
+            f"episode_yaml:{resolved_orientation_source}" if uses_episode_orientation else "target_asset_root_plus_offset"
+        ),
+        "requested_episode_target_orientation_source": requested_orientation_source,
         "has_episode_entrance_pose_world": uses_entrance,
         "has_episode_insertion_axis_world": uses_axis,
         "episode_target_pose_world_env0": episode_target or None,
+        "episode_reference_reward_body_start_orientation_wxyz_env0": reference_orientation,
         "notes": notes,
         "warnings": warnings,
     }
@@ -6976,6 +15501,7 @@ class IsaacACTAdapterActor(nn.Module):
         act_base: torch.jit.ScriptModule,
         act_torchscript_path: Path,
         state_dim: int,
+        adapter_state_dim: int | None,
         action_dim: int,
         action_horizon: int,
         hidden_dim: int,
@@ -6999,6 +15525,7 @@ class IsaacACTAdapterActor(nn.Module):
         self.act_torchscript_path = Path(act_torchscript_path)
         self.act_base_device = torch.device("cpu")
         self.state_dim = int(state_dim)
+        self.adapter_state_dim = int(adapter_state_dim or state_dim)
         self.action_dim = int(action_dim)
         self.action_horizon = int(action_horizon)
         self.act_normalizer = ACTRuntimeNormalizer(
@@ -7018,7 +15545,7 @@ class IsaacACTAdapterActor(nn.Module):
             raise ValueError(f"Unsupported ACT-backed actor mode: {actor_mode}")
         self.actor_mode = actor_mode
         self.state_encoder, encoded_state_dim = _make_state_encoder(
-            state_dim=self.state_dim,
+            state_dim=self.adapter_state_dim,
             state_encoding=state_encoding,
             state_encoding_indices=state_encoding_indices,
             state_encoding_num_bands=state_encoding_num_bands,
@@ -7055,7 +15582,13 @@ class IsaacACTAdapterActor(nn.Module):
         )
         base_action = self.act_normalizer.unnormalize_action(chunk).to(output_device)
         base_action = base_action[:, : self.action_horizon, :].reshape(obs["state"].shape[0], -1)
-        encoded_state = self.state_encoder(obs["state"])
+        adapter_state = obs.get("actor_state", obs["state"])
+        if adapter_state.shape[-1] != self.adapter_state_dim:
+            if adapter_state.shape[-1] > self.adapter_state_dim:
+                adapter_state = adapter_state[..., : self.adapter_state_dim]
+            else:
+                adapter_state = F.pad(adapter_state, (0, self.adapter_state_dim - int(adapter_state.shape[-1])))
+        encoded_state = self.state_encoder(adapter_state)
         raw_delta_action = self.adapter(torch.cat([encoded_state, base_action], dim=-1))
         if self.actor_mode == "act_adapter":
             if self.adapter_delta_clip is not None and self.adapter_delta_clip > 0.0:
@@ -7070,7 +15603,14 @@ class IsaacACTAdapterActor(nn.Module):
         else:
             # Direct mode trains the head to emit the executed TCP delta pose itself.
             # ACT remains a frozen contextual input, but is not added as a residual.
-            delta_action = raw_delta_action
+            if self.adapter_delta_clip is not None and self.adapter_delta_clip > 0.0:
+                delta_action = _straight_through_clamp(
+                    raw_delta_action,
+                    -self.adapter_delta_clip,
+                    self.adapter_delta_clip,
+                )
+            else:
+                delta_action = raw_delta_action
             unclipped_final_action = delta_action
         translation_clipped_action = (
             _clip_tcp_translation_norm(
@@ -7180,7 +15720,13 @@ class ImageStateEncoder(nn.Module):
 
     def forward(self, obs: dict[str, Any]) -> torch.Tensor:
         image_features = [self.image_encoder(obs["images"][key]) for key in self.camera_keys]
-        return self.proj(torch.cat([self.state_encoder(obs["state"]), *image_features], dim=-1))
+        state = obs.get("critic_state", obs["state"])
+        if state.shape[-1] != self.state_dim:
+            if state.shape[-1] > self.state_dim:
+                state = state[..., : self.state_dim]
+            else:
+                state = F.pad(state, (0, self.state_dim - state.shape[-1]))
+        return self.proj(torch.cat([self.state_encoder(state), *image_features], dim=-1))
 
 
 class VisionCritic(nn.Module):
@@ -7333,7 +15879,16 @@ class OnlineSERLTrainer:
         adapter_penalty_weight: float,
         act_preservation_weight: float,
         actor_q_weight: float,
+        actor_axial_purity_weight: float,
+        actor_axial_purity_lateral_weight: float,
+        actor_axial_purity_rotation_weight: float,
+        actor_axial_purity_forward_weight: float,
+        actor_axial_purity_backward_weight: float,
+        actor_axial_purity_lateral_scale: float,
+        actor_axial_purity_rotation_scale: float,
+        actor_axial_purity_forward_scale: float,
         target_action_guide_weight: float,
+        target_action_guide_rotation_loss_weight: float,
         target_action_guide_prefix_decay: bool,
         bc_weight: float,
         expert_prior: ExpertActionPrior | None,
@@ -7358,7 +15913,16 @@ class OnlineSERLTrainer:
         self.adapter_penalty_weight = adapter_penalty_weight
         self.act_preservation_weight = act_preservation_weight
         self.actor_q_weight = float(actor_q_weight)
+        self.actor_axial_purity_weight = float(actor_axial_purity_weight)
+        self.actor_axial_purity_lateral_weight = float(actor_axial_purity_lateral_weight)
+        self.actor_axial_purity_rotation_weight = float(actor_axial_purity_rotation_weight)
+        self.actor_axial_purity_forward_weight = float(actor_axial_purity_forward_weight)
+        self.actor_axial_purity_backward_weight = float(actor_axial_purity_backward_weight)
+        self.actor_axial_purity_lateral_scale = max(float(actor_axial_purity_lateral_scale), 1.0e-9)
+        self.actor_axial_purity_rotation_scale = max(float(actor_axial_purity_rotation_scale), 1.0e-9)
+        self.actor_axial_purity_forward_scale = max(float(actor_axial_purity_forward_scale), 1.0e-9)
         self.target_action_guide_weight = float(target_action_guide_weight)
+        self.target_action_guide_rotation_loss_weight = float(target_action_guide_rotation_loss_weight)
         self.target_action_guide_prefix_decay = bool(target_action_guide_prefix_decay)
         self.bc_weight = float(bc_weight)
         self.expert_prior = expert_prior
@@ -7393,6 +15957,7 @@ class OnlineSERLTrainer:
         base_action = components["base_action"]
         delta_action = components["delta_action"]
         raw_delta_action = components.get("raw_delta_action", delta_action)
+        axial_purity_action_full = components.get("unclipped_final_action", actor_action_full)
         q_actions = []
         max_action_steps = min(
             self.actor_update_action_steps,
@@ -7448,9 +16013,24 @@ class OnlineSERLTrainer:
                 guide_prefix_steps,
                 self.single_action_dim,
             )
-            guide_translation_loss = F.l1_loss(actor_action_prefix_steps[:, :, :3], guide_action_prefix_steps[:, :, :3])
-            guide_rotation_loss = F.l1_loss(actor_action_prefix_steps[:, :, 3:], guide_action_prefix_steps[:, :, 3:])
-            guide_loss = guide_translation_loss + 0.1 * guide_rotation_loss
+            guide_weight = batch.get("guide_weight")
+            if guide_weight is None:
+                guide_weight = torch.ones(
+                    (actor_action_prefix_steps.shape[0], 1, 1),
+                    dtype=actor_action_prefix_steps.dtype,
+                    device=actor_action_prefix_steps.device,
+                )
+            else:
+                guide_weight = guide_weight.to(dtype=actor_action_prefix_steps.dtype, device=actor_action_prefix_steps.device)
+                guide_weight = guide_weight.reshape(-1, 1, 1)
+            guide_den = guide_weight.sum().clamp(min=1.0)
+            guide_translation_loss = (
+                torch.abs(actor_action_prefix_steps[:, :, :3] - guide_action_prefix_steps[:, :, :3]) * guide_weight
+            ).sum() / (guide_den * float(guide_prefix_steps * 3))
+            guide_rotation_loss = (
+                torch.abs(actor_action_prefix_steps[:, :, 3:] - guide_action_prefix_steps[:, :, 3:]) * guide_weight
+            ).sum() / (guide_den * float(guide_prefix_steps * 3))
+            guide_loss = guide_translation_loss + self.target_action_guide_rotation_loss_weight * guide_rotation_loss
         else:
             guide_prefix_steps = 0
             actor_action_prefix = None
@@ -7460,12 +16040,123 @@ class OnlineSERLTrainer:
             guide_loss = torch.zeros((), dtype=actor_action_full.dtype, device=actor_action_full.device)
         bc_loss_weighted = self.bc_weight * bc_loss
         guide_loss_weighted = self.target_action_guide_weight * guide_loss
+        axial_purity_gate = batch.get("axial_purity_gate")
+        axial_purity_axis = batch.get("axial_purity_axis")
+        axial_purity_loss = torch.zeros((), dtype=actor_action_full.dtype, device=actor_action_full.device)
+        axial_purity_lateral_loss = torch.zeros_like(axial_purity_loss)
+        axial_purity_rotation_loss = torch.zeros_like(axial_purity_loss)
+        axial_purity_forward_loss = torch.zeros_like(axial_purity_loss)
+        axial_purity_backward_loss = torch.zeros_like(axial_purity_loss)
+        axial_purity_gate_mean = 0.0
+        lateral_alignment_loss = torch.zeros_like(axial_purity_loss)
+        lateral_alignment_side_loss = torch.zeros_like(axial_purity_loss)
+        lateral_alignment_rotation_loss = torch.zeros_like(axial_purity_loss)
+        lateral_alignment_toward_loss = torch.zeros_like(axial_purity_loss)
+        lateral_alignment_axial_quiet_loss = torch.zeros_like(axial_purity_loss)
+        lateral_alignment_gate_mean = 0.0
+        axial_purity_action_steps = None
+        axial_purity_axis_unit = None
+        if (
+            self.actor_axial_purity_weight > 0.0
+            and axial_purity_gate is not None
+            and axial_purity_axis is not None
+        ):
+            gate = axial_purity_gate.to(dtype=actor_action_full.dtype, device=actor_action_full.device).reshape(-1, 1, 1)
+            axis = axial_purity_axis.to(dtype=actor_action_full.dtype, device=actor_action_full.device).reshape(-1, 1, 3)
+            axis = axis / torch.linalg.norm(axis, dim=2, keepdim=True).clamp(min=1.0e-9)
+            action_steps = axial_purity_action_full.reshape(
+                axial_purity_action_full.shape[0],
+                axial_purity_action_full.shape[-1] // self.single_action_dim,
+                self.single_action_dim,
+            )[:, :max_action_steps, :]
+            axial_purity_action_steps = action_steps
+            axial_purity_axis_unit = axis
+            trans = action_steps[:, :, :3]
+            rot = action_steps[:, :, 3:6]
+            axial = torch.sum(trans * axis, dim=2, keepdim=True)
+            lateral = trans - axial * axis
+            denom = gate.sum().clamp(min=1.0)
+            lateral_ratio = torch.linalg.norm(lateral, dim=2, keepdim=True) / self.actor_axial_purity_lateral_scale
+            rotation_ratio = torch.linalg.norm(rot, dim=2, keepdim=True) / self.actor_axial_purity_rotation_scale
+            forward_ratio = (axial - self.actor_axial_purity_forward_scale) / self.actor_axial_purity_forward_scale
+            zero = torch.zeros_like(lateral_ratio)
+            lateral_term = F.smooth_l1_loss(lateral_ratio, zero, reduction="none")
+            rotation_term = F.smooth_l1_loss(rotation_ratio, torch.zeros_like(rotation_ratio), reduction="none")
+            forward_term = F.smooth_l1_loss(forward_ratio, torch.zeros_like(forward_ratio), reduction="none")
+            backward_term = torch.relu(-axial) / self.actor_axial_purity_forward_scale
+            axial_purity_lateral_loss = (gate * lateral_term).sum() / (denom * float(max_action_steps))
+            axial_purity_rotation_loss = (gate * rotation_term).sum() / (denom * float(max_action_steps))
+            axial_purity_forward_loss = (gate * forward_term).sum() / (denom * float(max_action_steps))
+            axial_purity_backward_loss = (gate * backward_term).sum() / (denom * float(max_action_steps))
+            axial_purity_loss = (
+                self.actor_axial_purity_lateral_weight * axial_purity_lateral_loss
+                + self.actor_axial_purity_rotation_weight * axial_purity_rotation_loss
+                + self.actor_axial_purity_forward_weight * axial_purity_forward_loss
+                + self.actor_axial_purity_backward_weight * axial_purity_backward_loss
+            )
+            axial_purity_gate_mean = float(gate.mean().detach().cpu())
+        lateral_alignment_gate = batch.get("lateral_alignment_gate")
+        lateral_alignment_axis = batch.get("lateral_alignment_axis")
+        if (
+            self.actor_axial_purity_weight > 0.0
+            and lateral_alignment_gate is not None
+            and lateral_alignment_axis is not None
+        ):
+            lat_gate = lateral_alignment_gate.to(
+                dtype=actor_action_full.dtype, device=actor_action_full.device
+            ).reshape(-1, 1, 1)
+            lat_axis = lateral_alignment_axis.to(
+                dtype=actor_action_full.dtype, device=actor_action_full.device
+            ).reshape(-1, 1, 3)
+            lat_axis = lat_axis / torch.linalg.norm(lat_axis, dim=2, keepdim=True).clamp(min=1.0e-9)
+            action_steps = axial_purity_action_steps
+            if action_steps is None:
+                action_steps = axial_purity_action_full.reshape(
+                    axial_purity_action_full.shape[0],
+                    axial_purity_action_full.shape[-1] // self.single_action_dim,
+                    self.single_action_dim,
+                )[:, :max_action_steps, :]
+            trans = action_steps[:, :, :3]
+            rot = action_steps[:, :, 3:6]
+            toward = torch.sum(trans * lat_axis, dim=2, keepdim=True)
+            side = trans - toward * lat_axis
+            if axial_purity_axis_unit is None:
+                axial_quiet = torch.zeros_like(toward)
+            else:
+                axial_quiet = torch.sum(trans * axial_purity_axis_unit, dim=2, keepdim=True)
+            denom = lat_gate.sum().clamp(min=1.0)
+            side_ratio = torch.linalg.norm(side, dim=2, keepdim=True) / self.actor_axial_purity_lateral_scale
+            rotation_ratio = torch.linalg.norm(rot, dim=2, keepdim=True) / self.actor_axial_purity_rotation_scale
+            toward_ratio = (toward - self.actor_axial_purity_forward_scale) / self.actor_axial_purity_forward_scale
+            axial_quiet_ratio = torch.abs(axial_quiet) / self.actor_axial_purity_forward_scale
+            zero = torch.zeros_like(side_ratio)
+            lateral_alignment_side_loss = (lat_gate * F.smooth_l1_loss(side_ratio, zero, reduction="none")).sum() / (
+                denom * float(max_action_steps)
+            )
+            lateral_alignment_rotation_loss = (
+                lat_gate * F.smooth_l1_loss(rotation_ratio, torch.zeros_like(rotation_ratio), reduction="none")
+            ).sum() / (denom * float(max_action_steps))
+            lateral_alignment_toward_loss = (
+                lat_gate * F.smooth_l1_loss(toward_ratio, torch.zeros_like(toward_ratio), reduction="none")
+            ).sum() / (denom * float(max_action_steps))
+            lateral_alignment_axial_quiet_loss = (
+                lat_gate * F.smooth_l1_loss(axial_quiet_ratio, torch.zeros_like(axial_quiet_ratio), reduction="none")
+            ).sum() / (denom * float(max_action_steps))
+            lateral_alignment_loss = (
+                self.actor_axial_purity_lateral_weight * lateral_alignment_side_loss
+                + self.actor_axial_purity_rotation_weight * lateral_alignment_rotation_loss
+                + self.actor_axial_purity_forward_weight * lateral_alignment_toward_loss
+                + self.actor_axial_purity_backward_weight * lateral_alignment_axial_quiet_loss
+            )
+            lateral_alignment_gate_mean = float(lat_gate.mean().detach().cpu())
         q_actor_loss = -actor_q.mean()
         q_actor_loss_weighted = self.actor_q_weight * q_actor_loss
+        axial_purity_loss_weighted = self.actor_axial_purity_weight * (axial_purity_loss + lateral_alignment_loss)
         adapter_penalty_weighted = self.adapter_penalty_weight * adapter_penalty
         act_preservation_loss_weighted = self.act_preservation_weight * act_preservation_loss
         actor_loss = (
             q_actor_loss_weighted
+            + axial_purity_loss_weighted
             + adapter_penalty_weighted
             + act_preservation_loss_weighted
             + bc_loss_weighted
@@ -7514,6 +16205,21 @@ class OnlineSERLTrainer:
             "actor_q_loss": float(q_actor_loss.detach().cpu()),
             "actor_q_loss_weighted": float(q_actor_loss_weighted.detach().cpu()),
             "actor_q_weight": float(self.actor_q_weight),
+            "actor_axial_purity_loss": float(axial_purity_loss.detach().cpu()),
+            "actor_axial_purity_loss_weighted": float(axial_purity_loss_weighted.detach().cpu()),
+            "actor_axial_purity_gate_mean": axial_purity_gate_mean,
+            "actor_axial_purity_lateral_loss": float(axial_purity_lateral_loss.detach().cpu()),
+            "actor_axial_purity_rotation_loss": float(axial_purity_rotation_loss.detach().cpu()),
+            "actor_axial_purity_forward_loss": float(axial_purity_forward_loss.detach().cpu()),
+            "actor_axial_purity_backward_loss": float(axial_purity_backward_loss.detach().cpu()),
+            "actor_lateral_alignment_loss": float(lateral_alignment_loss.detach().cpu()),
+            "actor_lateral_alignment_gate_mean": lateral_alignment_gate_mean,
+            "actor_lateral_alignment_side_loss": float(lateral_alignment_side_loss.detach().cpu()),
+            "actor_lateral_alignment_rotation_loss": float(lateral_alignment_rotation_loss.detach().cpu()),
+            "actor_lateral_alignment_toward_loss": float(lateral_alignment_toward_loss.detach().cpu()),
+            "actor_lateral_alignment_axial_quiet_loss": float(
+                lateral_alignment_axial_quiet_loss.detach().cpu()
+            ),
             "critic_loss": float(critic_loss.detach().cpu()),
             "batch_reward_mean": float(reward.mean().detach().cpu()),
             "batch_reward_std": float(reward.std(unbiased=False).detach().cpu()) if reward.numel() > 1 else 0.0,
@@ -7577,6 +16283,7 @@ class OnlineSERLTrainer:
             "target_action_guide_loss": float(guide_loss.detach().cpu()),
             "target_action_guide_loss_weighted": float(guide_loss_weighted.detach().cpu()),
             "target_action_guide_weight": float(self.target_action_guide_weight),
+            "target_action_guide_rotation_loss_weight": float(self.target_action_guide_rotation_loss_weight),
             "target_action_guide_prefix_decay": float(self.target_action_guide_prefix_decay),
             "target_action_guide_prefix_steps": float(guide_prefix_steps),
             "target_action_guide_prefix_l1": (
@@ -7645,6 +16352,7 @@ def _load_adapter_actor(
     *,
     act_torchscript: Path,
     state_dim: int,
+    adapter_state_dim: int | None,
     action_dim: int,
     action_horizon: int,
     device: torch.device,
@@ -7654,16 +16362,21 @@ def _load_adapter_actor(
     tcp_rotation_action_clip: float | None,
     action_clip: float | None,
     normalized_state_clip: float | None,
+    actor_mode_override: str | None = None,
+    reset_actor_head: bool = False,
 ) -> IsaacACTAdapterActor:
     actor_state = checkpoint["actor"]
     hidden_dim, num_layers = _infer_adapter_shape(actor_state)
     offline_cfg, _, warmstart = _checkpoint_training_context(checkpoint)
     adapter_scale = float(warmstart.get("adapter_scale", 1.0))
     act_base = _load_act_base(act_torchscript, act_torchscript_device)
+    checkpoint_actor_mode = str(offline_cfg.get("actor_mode", "act_adapter"))
+    actor_mode = str(actor_mode_override or checkpoint_actor_mode)
     actor = IsaacACTAdapterActor(
         act_base=act_base,
         act_torchscript_path=act_torchscript,
         state_dim=state_dim,
+        adapter_state_dim=adapter_state_dim,
         action_dim=action_dim,
         action_horizon=action_horizon,
         hidden_dim=hidden_dim,
@@ -7675,7 +16388,7 @@ def _load_adapter_actor(
         action_clip=action_clip,
         normalized_state_clip=normalized_state_clip,
         adapter_activation=str(offline_cfg.get("adapter_activation", "relu")),
-        actor_mode=str(offline_cfg.get("actor_mode", "act_adapter")),
+        actor_mode=actor_mode,
         state_encoding=str(offline_cfg.get("state_encoding", "none")),
         state_encoding_indices=tuple(int(i) for i in offline_cfg.get("state_encoding_indices", ())),
         state_encoding_num_bands=int(offline_cfg.get("state_encoding_num_bands", 4)),
@@ -7685,7 +16398,19 @@ def _load_adapter_actor(
     actor.act_base = _load_act_base(actor.act_torchscript_path, act_torchscript_device)
     actor.act_base_device = act_torchscript_device
     own_state = actor.state_dict()
-    compatible = {key: value for key, value in actor_state.items() if key in own_state and tuple(value.shape) == tuple(own_state[key].shape)}
+    compatible = {
+        key: value
+        for key, value in actor_state.items()
+        if key in own_state and tuple(value.shape) == tuple(own_state[key].shape)
+    }
+    if actor_mode != checkpoint_actor_mode or reset_actor_head:
+        # A residual adapter and a direct-action head have identical tensor shapes but
+        # different semantics. Keep the frozen ACT context and initialize the head fresh.
+        compatible = {
+            key: value
+            for key, value in compatible.items()
+            if not (key.startswith("adapter.") or key == "log_std")
+        }
     own_state.update(compatible)
     actor.load_state_dict(own_state, strict=True)
     actor.act_base = _load_act_base(actor.act_torchscript_path, act_torchscript_device)
@@ -7751,6 +16476,7 @@ def _init_zero_act_adapter_actor(
     *,
     act_torchscript: Path,
     state_dim: int,
+    adapter_state_dim: int | None,
     action_dim: int,
     action_horizon: int,
     device: torch.device,
@@ -7766,6 +16492,7 @@ def _init_zero_act_adapter_actor(
         act_base=act_base,
         act_torchscript_path=act_torchscript,
         state_dim=state_dim,
+        adapter_state_dim=adapter_state_dim,
         action_dim=action_dim,
         action_horizon=action_horizon,
         hidden_dim=int(args.act_only_adapter_hidden_dim),
@@ -7809,6 +16536,73 @@ def _save_checkpoint(path: Path, trainer: OnlineSERLTrainer, train_config: dict[
         tmp,
     )
     os.replace(tmp, path)
+
+
+def _state_dict_shape_compatible(module: nn.Module, state_dict: dict[str, Any] | None) -> bool:
+    if not isinstance(state_dict, dict):
+        return False
+    own = module.state_dict()
+    if set(state_dict.keys()) != set(own.keys()):
+        return False
+    return all(tuple(value.shape) == tuple(own[key].shape) for key, value in state_dict.items())
+
+
+def _restore_online_state_if_compatible(
+    trainer: OnlineSERLTrainer,
+    checkpoint: dict[str, Any] | None,
+    *,
+    restore: bool,
+) -> dict[str, Any]:
+    report: dict[str, Any] = {
+        "requested": bool(restore),
+        "critic_restored": False,
+        "target_critic_restored": False,
+        "actor_optimizer_restored": False,
+        "critic_optimizer_restored": False,
+        "warnings": [],
+    }
+    if not restore or checkpoint is None:
+        return report
+    critic_ok = _state_dict_shape_compatible(trainer.critic1, checkpoint.get("critic1")) and _state_dict_shape_compatible(
+        trainer.critic2, checkpoint.get("critic2")
+    )
+    if critic_ok:
+        trainer.critic1.load_state_dict(checkpoint["critic1"])
+        trainer.critic2.load_state_dict(checkpoint["critic2"])
+        report["critic_restored"] = True
+    else:
+        report["warnings"].append("critic state dict shape/key mismatch; initialized fresh critics")
+    target_ok = _state_dict_shape_compatible(
+        trainer.target_critic1, checkpoint.get("target_critic1")
+    ) and _state_dict_shape_compatible(trainer.target_critic2, checkpoint.get("target_critic2"))
+    if target_ok:
+        trainer.target_critic1.load_state_dict(checkpoint["target_critic1"])
+        trainer.target_critic2.load_state_dict(checkpoint["target_critic2"])
+        report["target_critic_restored"] = True
+    elif critic_ok:
+        trainer.target_critic1.load_state_dict(trainer.critic1.state_dict())
+        trainer.target_critic2.load_state_dict(trainer.critic2.state_dict())
+        report["warnings"].append("target critic mismatch; copied restored critics into target critics")
+    else:
+        report["warnings"].append("target critic state dict shape/key mismatch; initialized from fresh critics")
+    actor_ok = _state_dict_shape_compatible(trainer.actor, checkpoint.get("actor"))
+    if actor_ok and "actor_optimizer" in checkpoint:
+        try:
+            trainer.actor_opt.load_state_dict(checkpoint["actor_optimizer"])
+            report["actor_optimizer_restored"] = True
+        except Exception as exc:
+            report["warnings"].append(f"actor optimizer restore failed: {type(exc).__name__}: {exc}")
+    elif "actor_optimizer" in checkpoint:
+        report["warnings"].append("actor state was partially loaded; actor optimizer kept fresh")
+    if critic_ok and "critic_optimizer" in checkpoint:
+        try:
+            trainer.critic_opt.load_state_dict(checkpoint["critic_optimizer"])
+            report["critic_optimizer_restored"] = True
+        except Exception as exc:
+            report["warnings"].append(f"critic optimizer restore failed: {type(exc).__name__}: {exc}")
+    elif "critic_optimizer" in checkpoint:
+        report["warnings"].append("critic optimizer kept fresh because critics were not restored")
+    return report
 
 
 def _progress_result(stop_reason: str, step: int, updates_done: int) -> dict[str, Any]:
@@ -7872,8 +16666,14 @@ def _transition_payload(
     *,
     act_obs: dict[str, Any],
     next_act_obs: dict[str, Any],
+    critic_state: torch.Tensor | None,
+    next_critic_state: torch.Tensor | None,
+    actor_state: torch.Tensor | None,
+    next_actor_state: torch.Tensor | None,
     action_for_critic: torch.Tensor,
     guide_action: torch.Tensor | None,
+    guide_weight: torch.Tensor | None,
+    axial_purity_tensors: dict[str, torch.Tensor] | None,
     reward: torch.Tensor,
     done: torch.Tensor,
     env_index: int,
@@ -7893,8 +16693,31 @@ def _transition_payload(
             "done": done[env_index],
             "metadata": metadata,
     }
+    if critic_state is not None and next_critic_state is not None:
+        payload["obs"]["critic_state"] = critic_state[env_index]
+        payload["next_obs"]["critic_state"] = next_critic_state[env_index]
+    if actor_state is not None and next_actor_state is not None:
+        payload["obs"]["actor_state"] = actor_state[env_index]
+        payload["next_obs"]["actor_state"] = next_actor_state[env_index]
     if guide_action is not None:
         payload["guide_action"] = guide_action[env_index]
+    if guide_weight is not None:
+        payload["guide_weight"] = guide_weight[env_index]
+    if axial_purity_tensors is not None:
+        payload["axial_purity_gate"] = axial_purity_tensors["gate"][env_index]
+        payload["axial_purity_axis"] = axial_purity_tensors["axis"][env_index]
+        payload["lateral_alignment_gate"] = axial_purity_tensors["lateral_gate"][env_index]
+        payload["lateral_alignment_axis"] = axial_purity_tensors["lateral_axis"][env_index]
+        payload["metadata"]["axial_purity"] = {
+            "gate": float(axial_purity_tensors["gate"][env_index].detach().cpu().reshape(-1)[0]),
+            "s_m": float(axial_purity_tensors["s"][env_index].detach().cpu().reshape(-1)[0]),
+            "r_m": float(axial_purity_tensors["r"][env_index].detach().cpu().reshape(-1)[0]),
+            "theta_rad": float(axial_purity_tensors["theta"][env_index].detach().cpu().reshape(-1)[0]),
+            "axis_action_frame": [
+                float(v)
+                for v in axial_purity_tensors["axis"][env_index].detach().cpu().reshape(-1).tolist()
+            ],
+        }
     return _cpu_tree(payload)
 
 
@@ -7936,6 +16759,10 @@ def main() -> None:
         checkpoint_path = Path(args_cli.checkpoint)
         checkpoint = torch.load(checkpoint_path, map_location="cpu")
         offline_cfg, dataset_summary, warmstart = _checkpoint_training_context(checkpoint)
+    offline_cfg = dict(offline_cfg)
+    critic_image_encoder_override = str(getattr(args_cli, "critic_image_encoder_override", "") or "")
+    if critic_image_encoder_override:
+        offline_cfg["critic_image_encoder"] = critic_image_encoder_override
     state_dim = int(offline_cfg["state_dim"])
     action_horizon = int(offline_cfg["action_horizon"])
     single_action_dim = int(offline_cfg["action_dim"] // action_horizon)
@@ -7945,6 +16772,8 @@ def main() -> None:
         raise ValueError(f"--n_action_steps must be >= 1, got {n_action_steps}")
     if n_action_steps > action_horizon:
         raise ValueError(f"--n_action_steps={n_action_steps} exceeds action_horizon/chunk_size={action_horizon}")
+    actor_state_history_steps = max(1, int(args_cli.actor_state_history_steps))
+    actor_state_dim = state_dim * actor_state_history_steps
 
     device = torch.device(args_cli.device)
     act_torchscript_path = Path(args_cli.act_torchscript)
@@ -7958,6 +16787,7 @@ def main() -> None:
             checkpoint,
             act_torchscript=act_torchscript_path,
             state_dim=state_dim,
+            adapter_state_dim=actor_state_dim,
             action_dim=int(offline_cfg["action_dim"]),
             action_horizon=action_horizon,
             device=device,
@@ -7967,6 +16797,8 @@ def main() -> None:
             tcp_rotation_action_clip=args_cli.tcp_rotation_action_clip,
             action_clip=args_cli.action_clip,
             normalized_state_clip=args_cli.act_normalized_state_clip,
+            actor_mode_override=str(args_cli.act_only_actor_mode),
+            reset_actor_head=bool(args_cli.reset_actor_head),
         )
         print(f"[AIC SERL] Resumed ACT-adapter actor from checkpoint: {checkpoint_path}", flush=True)
     elif args_cli.act_only:
@@ -7974,6 +16806,7 @@ def main() -> None:
             args_cli,
             act_torchscript=act_torchscript_path,
             state_dim=state_dim,
+            adapter_state_dim=actor_state_dim,
             action_dim=int(offline_cfg["action_dim"]),
             action_horizon=action_horizon,
             device=device,
@@ -7999,8 +16832,10 @@ def main() -> None:
     state_encoding_num_bands = int(offline_cfg.get("state_encoding_num_bands", 4))
     state_encoding_max_freq = float(offline_cfg.get("state_encoding_max_freq", 8.0))
     state_encoding_scale = float(offline_cfg.get("state_encoding_scale", 1.0))
+    critic_state_history_steps = max(1, int(args_cli.critic_state_history_steps))
+    critic_state_dim = state_dim * critic_state_history_steps
     critic1 = VisionCritic(
-        state_dim=state_dim,
+        state_dim=critic_state_dim,
         camera_keys=CAMERA_KEYS,
         action_dim=critic_action_dim,
         feature_dim=critic_feature_dim,
@@ -8018,7 +16853,7 @@ def main() -> None:
         state_encoding_scale=state_encoding_scale,
     )
     critic2 = VisionCritic(
-        state_dim=state_dim,
+        state_dim=critic_state_dim,
         camera_keys=CAMERA_KEYS,
         action_dim=critic_action_dim,
         feature_dim=critic_feature_dim,
@@ -8071,7 +16906,16 @@ def main() -> None:
         adapter_penalty_weight=args_cli.adapter_penalty_weight,
         act_preservation_weight=args_cli.act_preservation_weight,
         actor_q_weight=args_cli.actor_q_weight,
+        actor_axial_purity_weight=args_cli.actor_axial_purity_weight,
+        actor_axial_purity_lateral_weight=args_cli.actor_axial_purity_lateral_weight,
+        actor_axial_purity_rotation_weight=args_cli.actor_axial_purity_rotation_weight,
+        actor_axial_purity_forward_weight=args_cli.actor_axial_purity_forward_weight,
+        actor_axial_purity_backward_weight=args_cli.actor_axial_purity_backward_weight,
+        actor_axial_purity_lateral_scale=args_cli.actor_axial_purity_lateral_scale,
+        actor_axial_purity_rotation_scale=args_cli.actor_axial_purity_rotation_scale,
+        actor_axial_purity_forward_scale=args_cli.actor_axial_purity_forward_scale,
         target_action_guide_weight=args_cli.target_action_guide_weight,
+        target_action_guide_rotation_loss_weight=args_cli.target_action_guide_rotation_loss_weight,
         target_action_guide_prefix_decay=args_cli.target_action_guide_prefix_decay,
         bc_weight=expert_bc_weight,
         expert_prior=expert_prior,
@@ -8082,7 +16926,12 @@ def main() -> None:
         act_torchscript_device=act_torchscript_device,
         device=device,
     )
-    if checkpoint is not None and (
+    online_resume_report = _restore_online_state_if_compatible(
+        trainer,
+        checkpoint,
+        restore=bool(args_cli.resume_online_state),
+    )
+    if checkpoint is not None and not bool(args_cli.resume_online_state) and (
         "actor_optimizer" in checkpoint
         or "critic_optimizer" in checkpoint
         or "target_critic1" in checkpoint
@@ -8091,6 +16940,12 @@ def main() -> None:
         print(
             "[AIC SERL][diagnostic] Preserving actor weights only; optimizer and target critic state are fresh "
             "because online Q uses the executed first 6D action.",
+            flush=True,
+        )
+    elif bool(args_cli.resume_online_state):
+        print(
+            "[AIC SERL][diagnostic] online_resume_state "
+            + json.dumps(_jsonable(online_resume_report), sort_keys=True),
             flush=True,
         )
 
@@ -8144,7 +16999,11 @@ def main() -> None:
         env_cfg.observations.policy.left_rgb = None
         env_cfg.observations.policy.right_rgb = None
     env_cfg_arm_action_scale_before = getattr(env_cfg.actions.arm_action, "scale", None)
-    env_cfg.actions.arm_action.scale = args_cli.isaac_action_scale
+    if bool(args_cli.absolute_ik_target_pose):
+        env_cfg.actions.arm_action.controller.use_relative_mode = False
+        env_cfg.actions.arm_action.scale = 1.0
+    else:
+        env_cfg.actions.arm_action.scale = args_cli.isaac_action_scale
     near_gate_reset_config = _configure_near_gate_reset(env_cfg, args_cli)
     task_geometry_reward_config = _configure_task_geometry_rewards(env_cfg, args_cli)
     print(
@@ -8184,21 +17043,61 @@ def main() -> None:
         + json.dumps(_jsonable(_resolved_reward_terms(env)), sort_keys=True),
         flush=True,
     )
-    replay = ReplayBuffer(args_cli.replay_capacity)
-
     if int(args_cli.debug_audit_steps) > 0:
         run_dir = Path(args_cli.output_dir) / f"{datetime.now().strftime('%Y-%m-%d_%H-%M-%S')}_{args_cli.run_name}"
     else:
         run_dir = Path(args_cli.output_dir) / f"{datetime.now().strftime('%Y-%m-%d_%H-%M-%S')}_{args_cli.run_name}"
     run_dir.mkdir(parents=True, exist_ok=True)
+    collision_toggle_report = _disable_matching_collision_prims(run_dir)
+    sfp_body_collision_replacement_report = _replace_sfp_body_sdf_collision_with_sdf_boxes(run_dir)
+    nic_cage_p0_replacement_report = _replace_nic_cage_p0_with_aligned_cubes(run_dir)
+    collision_contact_tuning_report = _tune_matching_collision_contact_offsets(run_dir)
+    collision_material_tuning_report = _tune_matching_collision_materials(run_dir)
     metrics_path = run_dir / "metrics.jsonl"
+    replay = ReplayBuffer(args_cli.replay_capacity)
+    replay_load_report = None
+    if str(args_cli.load_replay_path or ""):
+        replay_load_report = replay.load(
+            Path(args_cli.load_replay_path),
+            max_transitions=int(args_cli.load_replay_max_transitions),
+        )
+        print(
+            "[AIC SERL][diagnostic] replay_load "
+            + json.dumps(_jsonable(replay_load_report), sort_keys=True),
+            flush=True,
+        )
     train_config = {
         "argv": list(sys.argv),
         "command": " ".join(shlex.quote(str(part)) for part in sys.argv),
         "cwd": str(Path.cwd()),
         "checkpoint_path": None if checkpoint_path is None else str(checkpoint_path),
         "act_only": bool(args_cli.act_only),
-        "checkpoint": {
+        "replay_io": {
+            "capacity": int(args_cli.replay_capacity),
+            "load_replay_path": str(args_cli.load_replay_path or ""),
+            "load_replay_max_transitions": int(args_cli.load_replay_max_transitions),
+            "load_report": replay_load_report,
+            "save_replay_at_end": bool(args_cli.save_replay_at_end),
+            "save_replay_path": str(args_cli.save_replay_path or ""),
+            "save_replay_filter": str(args_cli.save_replay_filter),
+        },
+        "target_action_guide_distillation": {
+            "weight": float(args_cli.target_action_guide_weight),
+            "rotation_loss_weight": float(args_cli.target_action_guide_rotation_loss_weight),
+            "train_executed": bool(args_cli.target_action_guide_train_executed),
+            "phase_filter": str(args_cli.target_action_guide_train_phase_filter),
+            "phase_lateral_gate_m": float(args_cli.target_action_guide_phase_lateral_gate_m),
+            "phase_module_lateral_gate_m": float(args_cli.target_action_guide_phase_module_lateral_gate_m),
+            "phase_theta_min_rad": float(args_cli.target_action_guide_phase_theta_min_rad),
+            "phase_theta_max_rad": float(args_cli.target_action_guide_phase_theta_max_rad),
+            "phase_min_s_m": float(args_cli.target_action_guide_phase_min_s_m),
+            "phase_max_s_m": float(args_cli.target_action_guide_phase_max_s_m),
+            "phase_weight": float(args_cli.target_action_guide_phase_weight),
+            "phase_repeat": int(args_cli.target_action_guide_train_phase_repeat),
+            "train_env_ids": sorted(TARGET_ACTION_GUIDE_TRAIN_ENV_IDS),
+            "train_env_repeat": int(args_cli.target_action_guide_train_env_repeat),
+        },
+            "checkpoint": {
             "vision_offline_serl_config": offline_cfg,
             "dataset_summary": dataset_summary,
             "warmstart_report": warmstart,
@@ -8218,6 +17117,10 @@ def main() -> None:
             ),
             "isaac_force_observation_clip_n": float(args_cli.isaac_force_observation_clip_n),
             "state_dim": state_dim,
+            "actor_state_dim": actor_state_dim,
+            "actor_state_history_steps": actor_state_history_steps,
+            "critic_state_dim": critic_state_dim,
+            "critic_state_history_steps": critic_state_history_steps,
             "state_schema_ranges": _state_schema_ranges(state_dim),
             "state_feature_names": _state_feature_names(state_dim),
             "image_source": "raw_isaac_camera_sensor_rgb_resized_to_3x256x288",
@@ -8239,6 +17142,11 @@ def main() -> None:
             "adapter_delta_clip": args_cli.adapter_delta_clip,
             "tcp_translation_action_clip": args_cli.tcp_translation_action_clip,
             "tcp_rotation_action_clip": args_cli.tcp_rotation_action_clip,
+            "actor_exploration_noise_std": args_cli.actor_exploration_noise_std,
+            "actor_exploration_noise_steps": args_cli.actor_exploration_noise_steps,
+            "actor_exploration_noise_mode": args_cli.actor_exploration_noise_mode,
+            "actor_exploration_phase_lateral_multiplier": args_cli.actor_exploration_phase_lateral_multiplier,
+            "actor_exploration_phase_orientation_std": args_cli.actor_exploration_phase_orientation_std,
             "fix_isaac_ik_xy_sign": bool(args_cli.fix_isaac_ik_xy_sign),
             "isaac_ik_xy_sign_by_target_card": bool(args_cli.isaac_ik_xy_sign_by_target_card),
             "insertion_action_guard": bool(args_cli.insertion_action_guard),
@@ -8249,6 +17157,30 @@ def main() -> None:
             ),
             "insertion_action_guard_adaptive_lateral_flip_margin_m": float(
                 args_cli.insertion_action_guard_adaptive_lateral_flip_margin_m
+            ),
+            "insertion_action_guard_realized_lateral_sign_flip": bool(
+                args_cli.insertion_action_guard_realized_lateral_sign_flip
+            ),
+            "insertion_action_guard_offcenter_realized_depth_limit_m": float(
+                args_cli.insertion_action_guard_offcenter_realized_depth_limit_m
+            ),
+            "insertion_action_guard_offcenter_realized_depth_backoff_m": float(
+                args_cli.insertion_action_guard_offcenter_realized_depth_backoff_m
+            ),
+            "insertion_action_guard_realized_r_accum_limit_m": float(
+                args_cli.insertion_action_guard_realized_r_accum_limit_m
+            ),
+            "insertion_action_guard_realized_r_accum_max_depth_m": float(
+                args_cli.insertion_action_guard_realized_r_accum_max_depth_m
+            ),
+            "insertion_action_guard_realized_r_accum_lateral_gate_m": float(
+                args_cli.insertion_action_guard_realized_r_accum_lateral_gate_m
+            ),
+            "insertion_action_guard_realized_r_recovery_cooldown_steps": int(
+                args_cli.insertion_action_guard_realized_r_recovery_cooldown_steps
+            ),
+            "insertion_action_guard_realized_r_recovery_cooldown_zero_lateral": bool(
+                args_cli.insertion_action_guard_realized_r_recovery_cooldown_zero_lateral
             ),
             "insertion_action_guard_centered_axial_step_m": float(args_cli.insertion_action_guard_centered_axial_step_m),
             "insertion_action_guard_retention_require_orientation_gate": bool(
@@ -8267,8 +17199,17 @@ def main() -> None:
             "insertion_action_guard_module_recovery_min_consistency": float(
                 args_cli.insertion_action_guard_module_recovery_min_consistency
             ),
+            "insertion_action_guard_module_recovery_final_axial_error_gate_m": float(
+                args_cli.insertion_action_guard_module_recovery_final_axial_error_gate_m
+            ),
+            "insertion_action_guard_target_tip_servo_consistency_body_axial": bool(
+                args_cli.insertion_action_guard_target_tip_servo_consistency_body_axial
+            ),
             "insertion_action_guard_module_recovery_theta_threshold_rad": float(
                 args_cli.insertion_action_guard_module_recovery_theta_threshold_rad
+            ),
+            "insertion_action_guard_module_recovery_command_clip_m": float(
+                args_cli.insertion_action_guard_module_recovery_command_clip_m
             ),
             "insertion_action_guard_module_recovery_lateral_threshold_m": float(
                 args_cli.insertion_action_guard_module_recovery_lateral_threshold_m
@@ -8284,6 +17225,15 @@ def main() -> None:
             ),
             "insertion_action_guard_predicted_r_reject_backoff_m": float(
                 args_cli.insertion_action_guard_predicted_r_reject_backoff_m
+            ),
+            "insertion_action_guard_reject_predicted_depth_when_offgate": bool(
+                args_cli.insertion_action_guard_reject_predicted_depth_when_offgate
+            ),
+            "insertion_action_guard_predicted_depth_offgate_margin_m": float(
+                args_cli.insertion_action_guard_predicted_depth_offgate_margin_m
+            ),
+            "insertion_action_guard_predicted_depth_offgate_allow_final_two_stage_reinsert": bool(
+                args_cli.insertion_action_guard_predicted_depth_offgate_allow_final_two_stage_reinsert
             ),
             "insertion_action_guard_module_lateral_alignment": bool(
                 args_cli.insertion_action_guard_module_lateral_alignment
@@ -8315,6 +17265,120 @@ def main() -> None:
             "insertion_action_guard_module_lateral_alignment_rotation_compensation_clip_m": float(
                 args_cli.insertion_action_guard_module_lateral_alignment_rotation_compensation_clip_m
             ),
+            "insertion_action_guard_prelip_lateral_clamp": bool(
+                args_cli.insertion_action_guard_prelip_lateral_clamp
+            ),
+            "insertion_action_guard_prelip_lateral_clamp_min_depth_m": float(
+                args_cli.insertion_action_guard_prelip_lateral_clamp_min_depth_m
+            ),
+            "insertion_action_guard_prelip_lateral_clamp_max_depth_m": float(
+                args_cli.insertion_action_guard_prelip_lateral_clamp_max_depth_m
+            ),
+            "insertion_action_guard_prelip_lateral_clamp_tip_threshold_m": float(
+                args_cli.insertion_action_guard_prelip_lateral_clamp_tip_threshold_m
+            ),
+            "insertion_action_guard_prelip_lateral_clamp_max_step_m": float(
+                args_cli.insertion_action_guard_prelip_lateral_clamp_max_step_m
+            ),
+            "insertion_action_guard_prelip_lateral_clamp_backoff_m": float(
+                args_cli.insertion_action_guard_prelip_lateral_clamp_backoff_m
+            ),
+            "insertion_action_guard_prelip_lateral_clamp_preserve_axial": bool(
+                args_cli.insertion_action_guard_prelip_lateral_clamp_preserve_axial
+            ),
+            "insertion_action_guard_prelip_offgate_axial_lock": bool(
+                args_cli.insertion_action_guard_prelip_offgate_axial_lock
+            ),
+            "insertion_action_guard_prelip_offgate_axial_lock_min_depth_m": float(
+                args_cli.insertion_action_guard_prelip_offgate_axial_lock_min_depth_m
+            ),
+            "insertion_action_guard_prelip_offgate_axial_lock_max_depth_m": float(
+                args_cli.insertion_action_guard_prelip_offgate_axial_lock_max_depth_m
+            ),
+            "insertion_action_guard_prelip_offgate_axial_lock_lateral_gate_m": float(
+                args_cli.insertion_action_guard_prelip_offgate_axial_lock_lateral_gate_m
+            ),
+            "insertion_action_guard_prelip_offgate_axial_lock_theta_gate_rad": float(
+                args_cli.insertion_action_guard_prelip_offgate_axial_lock_theta_gate_rad
+            ),
+            "insertion_action_guard_prelip_offgate_axial_lock_max_inward_step_m": float(
+                args_cli.insertion_action_guard_prelip_offgate_axial_lock_max_inward_step_m
+            ),
+            "insertion_action_guard_prelip_offgate_axial_lock_backoff_m": float(
+                args_cli.insertion_action_guard_prelip_offgate_axial_lock_backoff_m
+            ),
+            "insertion_action_guard_prelip_offgate_axial_lock_bidirectional": bool(
+                args_cli.insertion_action_guard_prelip_offgate_axial_lock_bidirectional
+            ),
+            "insertion_action_guard_prelip_offgate_axial_lock_zero_lateral": bool(
+                args_cli.insertion_action_guard_prelip_offgate_axial_lock_zero_lateral
+            ),
+            "insertion_action_guard_offcenter_realized_depth_accum_limit_m": float(
+                args_cli.insertion_action_guard_offcenter_realized_depth_accum_limit_m
+            ),
+            "insertion_action_guard_offcenter_realized_depth_accum_lateral_gate_m": float(
+                args_cli.insertion_action_guard_offcenter_realized_depth_accum_lateral_gate_m
+            ),
+            "insertion_action_guard_recovery_zero_rotation": bool(
+                args_cli.insertion_action_guard_recovery_zero_rotation
+            ),
+            "insertion_action_guard_recovery_zero_axial": bool(
+                args_cli.insertion_action_guard_recovery_zero_axial
+            ),
+            "insertion_action_guard_contact_force_recovery": bool(
+                args_cli.insertion_action_guard_contact_force_recovery
+            ),
+            "insertion_action_guard_contact_force_recovery_threshold": float(
+                args_cli.insertion_action_guard_contact_force_recovery_threshold
+            ),
+            "insertion_action_guard_contact_force_recovery_activation_depth_m": float(
+                args_cli.insertion_action_guard_contact_force_recovery_activation_depth_m
+            ),
+            "insertion_action_guard_contact_force_recovery_max_lateral_m": float(
+                args_cli.insertion_action_guard_contact_force_recovery_max_lateral_m
+            ),
+            "insertion_action_guard_contact_force_recovery_backoff_m": float(
+                args_cli.insertion_action_guard_contact_force_recovery_backoff_m
+            ),
+            "insertion_action_guard_contact_force_recovery_lateral_scale": float(
+                args_cli.insertion_action_guard_contact_force_recovery_lateral_scale
+            ),
+            "insertion_action_guard_contact_force_recovery_zero_rotation": bool(
+                args_cli.insertion_action_guard_contact_force_recovery_zero_rotation
+            ),
+            "insertion_action_guard_contact_force_retreat_state_machine": bool(
+                args_cli.insertion_action_guard_contact_force_retreat_state_machine
+            ),
+            "insertion_action_guard_contact_force_retreat_exit_depth_m": float(
+                args_cli.insertion_action_guard_contact_force_retreat_exit_depth_m
+            ),
+            "insertion_action_guard_contact_force_retreat_backout_max_steps": int(
+                args_cli.insertion_action_guard_contact_force_retreat_backout_max_steps
+            ),
+            "insertion_action_guard_contact_force_retreat_hold_steps": int(
+                args_cli.insertion_action_guard_contact_force_retreat_hold_steps
+            ),
+            "insertion_action_guard_contact_force_retreat_force_clear_threshold": float(
+                args_cli.insertion_action_guard_contact_force_retreat_force_clear_threshold
+            ),
+            "insertion_action_guard_contact_force_retreat_recenter_lateral_gate_m": float(
+                args_cli.insertion_action_guard_contact_force_retreat_recenter_lateral_gate_m
+            ),
+            "insertion_action_guard_contact_force_retreat_max_retries": int(
+                args_cli.insertion_action_guard_contact_force_retreat_max_retries
+            ),
+            "insertion_action_guard_contact_force_retreat_reapproach_steps": int(
+                args_cli.insertion_action_guard_contact_force_retreat_reapproach_steps
+            ),
+            "insertion_action_guard_contact_force_retreat_reapproach_step_m": float(
+                args_cli.insertion_action_guard_contact_force_retreat_reapproach_step_m
+            ),
+            "insertion_action_guard_contact_force_retreat_abort_after_max_retries": bool(
+                args_cli.insertion_action_guard_contact_force_retreat_abort_after_max_retries
+            ),
+            "insertion_action_guard_contact_force_retreat_abort_max_steps": int(
+                args_cli.insertion_action_guard_contact_force_retreat_abort_max_steps
+            ),
             "insertion_action_guard_final_fixed_world_rotation": bool(
                 args_cli.insertion_action_guard_final_fixed_world_rotation
             ),
@@ -8330,11 +17394,67 @@ def main() -> None:
             "insertion_action_guard_final_fixed_world_rotation_compensation_clip_m": float(
                 args_cli.insertion_action_guard_final_fixed_world_rotation_compensation_clip_m
             ),
+            "insertion_action_guard_final_fixed_world_rotation_pulse_on_steps": int(
+                args_cli.insertion_action_guard_final_fixed_world_rotation_pulse_on_steps
+            ),
+            "insertion_action_guard_final_fixed_world_rotation_pulse_off_steps": int(
+                args_cli.insertion_action_guard_final_fixed_world_rotation_pulse_off_steps
+            ),
+            "insertion_action_guard_final_fixed_world_rotation_realized_reject": bool(
+                args_cli.insertion_action_guard_final_fixed_world_rotation_realized_reject
+            ),
+            "insertion_action_guard_final_fixed_world_rotation_realized_reject_margin_rad": float(
+                args_cli.insertion_action_guard_final_fixed_world_rotation_realized_reject_margin_rad
+            ),
+            "insertion_action_guard_final_fixed_world_rotation_realized_reject_cooldown_steps": int(
+                args_cli.insertion_action_guard_final_fixed_world_rotation_realized_reject_cooldown_steps
+            ),
             "action_clip": args_cli.action_clip,
             "actor_q_weight": args_cli.actor_q_weight,
+            "actor_axial_purity": {
+                "weight": float(args_cli.actor_axial_purity_weight),
+                "lateral_weight": float(args_cli.actor_axial_purity_lateral_weight),
+                "rotation_weight": float(args_cli.actor_axial_purity_rotation_weight),
+                "forward_weight": float(args_cli.actor_axial_purity_forward_weight),
+                "backward_weight": float(args_cli.actor_axial_purity_backward_weight),
+                "lateral_scale": float(args_cli.actor_axial_purity_lateral_scale),
+                "rotation_scale": float(args_cli.actor_axial_purity_rotation_scale),
+                "forward_scale": float(args_cli.actor_axial_purity_forward_scale),
+                "lateral_gate_m": float(args_cli.actor_axial_purity_lateral_gate_m),
+                "orientation_gate_rad": float(args_cli.actor_axial_purity_orientation_gate_rad),
+                "min_s_m": float(args_cli.actor_axial_purity_min_s_m),
+                "max_s_m": float(args_cli.actor_axial_purity_max_s_m),
+            },
             "actor_update_end_steps": args_cli.actor_update_end_steps,
             "target_action_guide_mode": args_cli.target_action_guide_mode,
             "target_action_guide_orientation_switch_rad": float(args_cli.target_action_guide_orientation_switch_rad),
+            "target_action_guide_target_tip_axial_lateral_gate_m": float(
+                args_cli.target_action_guide_target_tip_axial_lateral_gate_m
+            ),
+            "target_action_guide_target_tip_orientation_body_name": str(
+                args_cli.target_action_guide_target_tip_orientation_body_name
+            ),
+            "target_action_guide_target_tip_secondary_lateral_body_name": str(
+                args_cli.target_action_guide_target_tip_secondary_lateral_body_name
+            ),
+            "target_action_guide_target_tip_secondary_axial_lateral_gate_m": float(
+                args_cli.target_action_guide_target_tip_secondary_axial_lateral_gate_m
+            ),
+            "target_action_guide_target_tip_secondary_axial_lateral_gate_activation_depth_m": float(
+                args_cli.target_action_guide_target_tip_secondary_axial_lateral_gate_activation_depth_m
+            ),
+            "target_action_guide_target_tip_dual_lateral_rotation_step_rad": float(
+                args_cli.target_action_guide_target_tip_dual_lateral_rotation_step_rad
+            ),
+            "target_action_guide_target_tip_dual_lateral_rotation_primary_gate_m": float(
+                args_cli.target_action_guide_target_tip_dual_lateral_rotation_primary_gate_m
+            ),
+            "target_action_guide_target_tip_dual_lateral_rotation_secondary_threshold_m": float(
+                args_cli.target_action_guide_target_tip_dual_lateral_rotation_secondary_threshold_m
+            ),
+            "target_action_guide_target_tip_clamp_positive_axial_when_gated": bool(
+                args_cli.target_action_guide_target_tip_clamp_positive_axial_when_gated
+            ),
             "target_action_guide_rotate_while_lateral": bool(args_cli.target_action_guide_rotate_while_lateral),
             "target_action_guide_axis_only_orientation": bool(args_cli.target_action_guide_axis_only_orientation),
             "target_action_guide_final_axis_only_orientation": bool(
@@ -8368,6 +17488,8 @@ def main() -> None:
                 "target_card_index": args_cli.target_card_index,
                 "target_card_valid": args_cli.target_card_valid,
             },
+            "collision_contact_tuning_report": collision_contact_tuning_report,
+            "collision_material_tuning_report": collision_material_tuning_report,
             "task_distribution_yaml": args_cli.task_distribution_yaml,
             "task_distribution": TASK_DISTRIBUTION,
             "episode_config_dir": args_cli.episode_config_dir,
@@ -8396,6 +17518,15 @@ def main() -> None:
                 "save_step_images": args_cli.save_step_images,
                 "image_log_every": args_cli.image_log_every,
                 "max_logged_image_steps": args_cli.max_logged_image_steps,
+                "save_videos": args_cli.save_videos,
+                "video_fps": args_cli.video_fps,
+                "video_final_hold_s": args_cli.video_final_hold_s,
+                "video_crf": args_cli.video_crf,
+                "camera_render_resolution": int(args_cli.camera_render_resolution),
+                "camera_render_resolution_env": os.environ.get("AIC_ISAAC_CAMERA_RESOLUTION"),
+                "simulation_app_width": getattr(args_cli, "width", None),
+                "simulation_app_height": getattr(args_cli, "height", None),
+                "kit_args": getattr(args_cli, "kit_args", ""),
                 "note": "Replay stores image tensors in memory for training; PNG logging is for audit/debug artifacts.",
             },
             "terminal_handling": {
@@ -8406,6 +17537,9 @@ def main() -> None:
                     else "terminated_only"
                 ),
             },
+            "collision_toggle_report": collision_toggle_report,
+            "sfp_body_collision_replacement_report": sfp_body_collision_replacement_report,
+            "nic_cage_p0_replacement_report": nic_cage_p0_replacement_report,
             "frequency": _frequency_diagnostics(
                 env_cfg,
                 env,
@@ -8425,13 +17559,60 @@ def main() -> None:
 
     print("[AIC SERL] Resetting Isaac env", flush=True)
     obs, _ = env.reset()
+    reset_settle_steps = max(0, int(args_cli.reset_settle_steps))
+    if reset_settle_steps > 0:
+        settle_action_dim = None
+        single_action_space = getattr(env, "single_action_space", None)
+        if single_action_space is not None and getattr(single_action_space, "shape", None):
+            settle_action_dim = int(single_action_space.shape[0])
+        if settle_action_dim is None:
+            action_space = getattr(env, "action_space", None)
+            shape = getattr(action_space, "shape", None)
+            if shape:
+                settle_action_dim = int(shape[-1])
+        if settle_action_dim is None:
+            settle_action_dim = 7
+        settle_num_envs = int(getattr(env, "num_envs", getattr(env.unwrapped, "num_envs", 1)))
+        settle_action = torch.zeros((settle_num_envs, settle_action_dim), dtype=torch.float32, device=device)
+        if settle_action_dim >= 7:
+            settle_action[:, 6] = float(args_cli.gripper_joint_position)
+        for _ in range(reset_settle_steps):
+            obs, _, terminated, truncated, _ = env.step(settle_action)
+            if bool((terminated | truncated).any().detach().cpu()):
+                obs, _ = env.reset()
+                break
+        print(f"[AIC SERL] reset settle complete steps={reset_settle_steps}", flush=True)
     if hasattr(_isaac_contact_recovery_features, "_computers"):
         delattr(_isaac_contact_recovery_features, "_computers")
     setattr(_isaac_contact_recovery_features, "_step_count", 0)
     print("[AIC SERL] Isaac env reset complete", flush=True)
+    _initialize_actor_axial_bias(
+        trainer.actor,
+        env,
+        task_geometry_reward_config,
+        action_frame=str(args_cli.tcp_action_frame),
+        single_action_dim=single_action_dim,
+        magnitude_m=float(args_cli.actor_initial_axial_bias_m),
+        lateral_gate_m=float(args_cli.actor_axial_purity_lateral_gate_m),
+        orientation_gate_rad=float(args_cli.actor_axial_purity_orientation_gate_rad),
+        min_s_m=float(args_cli.actor_axial_purity_min_s_m),
+        max_s_m=float(args_cli.actor_axial_purity_max_s_m),
+        run_dir=run_dir,
+        device=device,
+    )
     policy_obs = _policy_tensor(obs).to(device)
     print(f"[AIC SERL] Policy obs shape: {tuple(policy_obs.shape)}", flush=True)
     current_images = _raw_camera_images(env, device=device)
+    initial_history_state = _act_obs_from_env(
+        env,
+        policy_obs,
+        current_images,
+        args_cli,
+        device=device,
+        state_dim=state_dim,
+    )["state"]
+    critic_state_history = initial_history_state.repeat(1, critic_state_history_steps)
+    actor_state_history = initial_history_state.repeat(1, actor_state_history_steps)
     if args_cli.save_step_images:
         _save_images(
             current_images,
@@ -8445,6 +17626,7 @@ def main() -> None:
     print("[AIC SERL] Initial raw camera read complete", flush=True)
     diagnostics_enabled = bool(args_cli.debug_diagnostics or int(args_cli.debug_audit_steps) > 0)
     diagnostics_every = max(1, int(args_cli.diagnostics_every))
+    log_robot_state_every = max(0, int(args_cli.log_robot_state_every))
     audit_log_path = run_dir / "audit_log.jsonl"
     diagnostics_summary_path = run_dir / "diagnostics_summary.json"
     if diagnostics_enabled:
@@ -8566,6 +17748,54 @@ def main() -> None:
         dtype=torch.float32,
         device=device,
     )
+    insertion_action_guard_realized_r_accum = torch.zeros(
+        (policy_obs.shape[0], 1),
+        dtype=torch.float32,
+        device=device,
+    )
+    insertion_action_guard_realized_r_recovery_cooldown = torch.zeros(
+        (policy_obs.shape[0], 1),
+        dtype=torch.int64,
+        device=device,
+    )
+    insertion_action_guard_previous_axial_depth = torch.full(
+        (policy_obs.shape[0], 1),
+        float("nan"),
+        dtype=torch.float32,
+        device=device,
+    )
+    insertion_action_guard_offcenter_realized_depth_cooldown = torch.zeros(
+        (policy_obs.shape[0], 1),
+        dtype=torch.int64,
+        device=device,
+    )
+    insertion_action_guard_offcenter_realized_depth_accum = torch.zeros(
+        (policy_obs.shape[0], 1),
+        dtype=torch.float32,
+        device=device,
+    )
+    insertion_action_guard_previous_orientation_error = torch.full(
+        (policy_obs.shape[0], 1),
+        float("nan"),
+        dtype=torch.float32,
+        device=device,
+    )
+    insertion_action_guard_final_fixed_world_rotation_realized_reject_cooldown = torch.zeros(
+        (policy_obs.shape[0], 1),
+        dtype=torch.int64,
+        device=device,
+    )
+    insertion_action_guard_target_tip_servo_stable_count = torch.zeros(
+        (policy_obs.shape[0], 1),
+        dtype=torch.int64,
+        device=device,
+    )
+    insertion_action_guard_target_tip_servo_max_depth = torch.full(
+        (policy_obs.shape[0], 1),
+        float("-inf"),
+        dtype=torch.float32,
+        device=device,
+    )
     insertion_action_guard_module_recovery_state = torch.zeros(
         (policy_obs.shape[0], 1),
         dtype=torch.int64,
@@ -8577,6 +17807,21 @@ def main() -> None:
         device=device,
     )
     insertion_action_guard_module_recovery_retry_count = torch.zeros(
+        (policy_obs.shape[0], 1),
+        dtype=torch.int64,
+        device=device,
+    )
+    insertion_action_guard_contact_force_retreat_state = torch.zeros(
+        (policy_obs.shape[0], 1),
+        dtype=torch.int64,
+        device=device,
+    )
+    insertion_action_guard_contact_force_retreat_state_steps = torch.zeros(
+        (policy_obs.shape[0], 1),
+        dtype=torch.int64,
+        device=device,
+    )
+    insertion_action_guard_contact_force_retreat_retry_count = torch.zeros(
         (policy_obs.shape[0], 1),
         dtype=torch.int64,
         device=device,
@@ -8627,20 +17872,39 @@ def main() -> None:
             device=device,
             state_dim=state_dim,
         )
+        if actor_state_history_steps > 1:
+            act_obs["actor_state"] = actor_state_history
         _timing_log(args_cli.debug_timing and step == 1, "build_act_obs", t0)
         t0 = time.monotonic()
         audit_started = int(args_cli.debug_audit_steps) > 0 and step >= max(int(args_cli.debug_audit_start_step), 1)
         constant_audit_action = getattr(args_cli, "debug_audit_constant_action", None)
-        constant_audit_enabled = audit_started and constant_audit_action is not None
+        episode_constant_audit_enabled = audit_started and bool(args_cli.debug_audit_episode_constant_action)
+        episode_constant_action = (
+            _episode_constant_action_chunk(
+                env,
+                step=step,
+                audit_start_step=max(int(args_cli.debug_audit_start_step), 1),
+                device=device,
+                batch_size=policy_obs.shape[0],
+                action_dim=int(offline_cfg["action_dim"]),
+                single_action_dim=single_action_dim,
+                n_action_steps=n_action_steps,
+            )
+            if episode_constant_audit_enabled
+            else None
+        )
+        constant_audit_enabled = audit_started and episode_constant_action is None and constant_audit_action is not None
         insertion_axis_audit_enabled = (
             audit_started
             and not constant_audit_enabled
+            and episode_constant_action is None
             and str(args_cli.debug_audit_insertion_axis_action) != "none"
             and float(args_cli.debug_audit_insertion_axis_magnitude) > 0.0
         )
         axis_audit_enabled = (
             audit_started
             and not constant_audit_enabled
+            and episode_constant_action is None
             and not insertion_axis_audit_enabled
             and float(args_cli.debug_audit_axis_magnitude) > 0.0
         )
@@ -8648,7 +17912,15 @@ def main() -> None:
         recompute_chunk = queued_policy_actions.shape[1] == 0
         if recompute_chunk:
             with torch.no_grad():
-                if constant_audit_enabled:
+                if episode_constant_action is not None:
+                    action_components = {
+                        "base_action": episode_constant_action,
+                        "raw_delta_action": torch.zeros_like(episode_constant_action),
+                        "delta_action": torch.zeros_like(episode_constant_action),
+                        "final_action": episode_constant_action,
+                    }
+                    action_chunk = episode_constant_action
+                elif constant_audit_enabled:
                     axis_action = torch.zeros(
                         (policy_obs.shape[0], int(offline_cfg["action_dim"])),
                         dtype=torch.float32,
@@ -8738,6 +18010,7 @@ def main() -> None:
         actor_policy_tcp_action = policy_tcp_action.clone()
         queued_policy_actions = queued_policy_actions[:, 1:, :]
         guide_action_for_transition = None
+        guide_action_is_isaac_root_action = False
         effective_guide_collect_blend = 0.0
         target_action_guide_metrics = {
             "target_action_guide_missing_geometry": 0.0,
@@ -8757,6 +18030,8 @@ def main() -> None:
             "insertion_action_guard_retention_active_fraction": 0.0,
             "insertion_action_guard_retention_entered_fraction": 0.0,
             "insertion_action_guard_correction_norm_mean": 0.0,
+            "insertion_action_guard_realized_r_accum_m_mean": 0.0,
+            "insertion_action_guard_realized_r_accum_recovery_fraction": 0.0,
             "insertion_action_guard_module_recovery_active_fraction": 0.0,
             "insertion_action_guard_module_lateral_alignment_active_fraction": 0.0,
             "insertion_action_guard_module_lateral_error_m_mean": 0.0,
@@ -8787,20 +18062,40 @@ def main() -> None:
             or float(args_cli.target_action_guide_collect_blend) > 0.0
         )
         if guide_needed:
-            guide_action_for_transition, target_action_guide_metrics = _target_guided_policy_action(
-                env,
-                task_geometry_reward_config,
-                step_size=float(args_cli.target_action_guide_step_size),
-                rotation_step_size=float(args_cli.target_action_guide_rotation_step_size),
-                axial_step_size=float(args_cli.target_action_guide_axial_step_size),
-                lateral_switch_m=float(args_cli.target_action_guide_lateral_switch_m),
-                axial_blend_lateral_m=float(args_cli.target_action_guide_axial_blend_lateral_m),
-                orientation_switch_rad=float(args_cli.target_action_guide_orientation_switch_rad),
-                rotate_while_lateral=bool(args_cli.target_action_guide_rotate_while_lateral),
-                axis_only_orientation=bool(args_cli.target_action_guide_axis_only_orientation),
-                final_axis_only_orientation=bool(args_cli.target_action_guide_final_axis_only_orientation),
-                separate_rotation_compensation=bool(args_cli.target_action_guide_separate_rotation_compensation),
-                rotation_compensation_clip_m=float(args_cli.target_action_guide_rotation_compensation_clip_m),
+            if bool(args_cli.target_action_guide_use_episode_constant_action):
+                guide_action_for_transition = _episode_constant_action_chunk(
+                    env,
+                    step=step,
+                    audit_start_step=1,
+                    device=device,
+                    batch_size=policy_obs.shape[0],
+                    action_dim=int(offline_cfg["action_dim"]),
+                    single_action_dim=single_action_dim,
+                    n_action_steps=n_action_steps,
+                )
+                if guide_action_for_transition is not None:
+                    guide_action_for_transition = guide_action_for_transition.reshape(
+                        policy_obs.shape[0], action_horizon, single_action_dim
+                    )[:, 0, :]
+                    target_action_guide_metrics = {
+                        **target_action_guide_metrics,
+                        "target_action_guide_episode_constant_action_fraction": 1.0,
+                    }
+            if guide_action_for_transition is None:
+                guide_action_for_transition, target_action_guide_metrics = _target_guided_policy_action(
+                    env,
+                    task_geometry_reward_config,
+                    step_size=float(args_cli.target_action_guide_step_size),
+                    rotation_step_size=float(args_cli.target_action_guide_rotation_step_size),
+                    axial_step_size=float(args_cli.target_action_guide_axial_step_size),
+                    lateral_switch_m=float(args_cli.target_action_guide_lateral_switch_m),
+                    axial_blend_lateral_m=float(args_cli.target_action_guide_axial_blend_lateral_m),
+                    orientation_switch_rad=float(args_cli.target_action_guide_orientation_switch_rad),
+                    rotate_while_lateral=bool(args_cli.target_action_guide_rotate_while_lateral),
+                    axis_only_orientation=bool(args_cli.target_action_guide_axis_only_orientation),
+                    final_axis_only_orientation=bool(args_cli.target_action_guide_final_axis_only_orientation),
+                    separate_rotation_compensation=bool(args_cli.target_action_guide_separate_rotation_compensation),
+                    rotation_compensation_clip_m=float(args_cli.target_action_guide_rotation_compensation_clip_m),
             preinsert_hover_depth=(
                 None
                 if not math.isfinite(float(args_cli.target_action_guide_preinsert_hover_depth))
@@ -8833,7 +18128,10 @@ def main() -> None:
             adaptive_lateral_sign=bool(args_cli.target_action_guide_adaptive_lateral_sign),
             action_frame=str(args_cli.tcp_action_frame),
             mode=str(args_cli.target_action_guide_mode),
-            device=device,
+	            device=device,
+	                )
+            guide_action_is_isaac_root_action = (
+                float(target_action_guide_metrics.get("target_action_guide_emits_isaac_root_action", 0.0)) > 0.5
             )
         collect_steps = int(args_cli.target_action_guide_collect_steps)
         collect_blend = float(args_cli.target_action_guide_collect_blend)
@@ -8844,12 +18142,91 @@ def main() -> None:
         ):
             blend = min(max(collect_blend, 0.0), 1.0)
             if bool(args_cli.target_action_guide_collect_decay) and collect_steps > 0:
-                blend *= max(0.0, 1.0 - (float(step) - 1.0) / max(float(collect_steps), 1.0))
+                floor = min(max(float(args_cli.target_action_guide_collect_decay_floor), 0.0), blend)
+                decay_start = max(int(args_cli.target_action_guide_collect_decay_start_step), 1)
+                decay_steps = int(args_cli.target_action_guide_collect_decay_steps)
+                if decay_steps <= 0:
+                    decay_steps = max(collect_steps - decay_start + 1, 1)
+                decay = max(0.0, 1.0 - max(0.0, float(step - decay_start)) / max(float(decay_steps), 1.0))
+                blend = floor + (blend - floor) * decay
             effective_guide_collect_blend = blend
             policy_tcp_action = (1.0 - blend) * policy_tcp_action + blend * guide_action_for_transition
+            guide_action_is_isaac_root_action = guide_action_is_isaac_root_action and blend >= 1.0
+        else:
+            guide_action_is_isaac_root_action = False
+        exploration_noise = torch.zeros_like(policy_tcp_action)
+        exploration_std = max(float(args_cli.actor_exploration_noise_std), 0.0)
+        exploration_steps = int(args_cli.actor_exploration_noise_steps)
+        exploration_active = exploration_std > 0.0 and (exploration_steps <= 0 or step <= exploration_steps)
+        if exploration_active:
+            exploration_mode = str(args_cli.actor_exploration_noise_mode)
+            if exploration_mode == "isotropic":
+                exploration_noise = torch.randn_like(policy_tcp_action) * exploration_std
+            else:
+                tensors = _axial_purity_replay_tensors(
+                    env,
+                    task_geometry_reward_config,
+                    action_frame=str(args_cli.tcp_action_frame),
+                    lateral_gate_m=float(args_cli.actor_axial_purity_lateral_gate_m),
+                    orientation_gate_rad=float(args_cli.actor_axial_purity_orientation_gate_rad),
+                    min_s_m=float(args_cli.actor_axial_purity_min_s_m),
+                    max_s_m=float(args_cli.actor_axial_purity_max_s_m),
+                    device=device,
+                    dtype=policy_tcp_action.dtype,
+                )
+                if tensors is None:
+                    exploration_noise = torch.randn_like(policy_tcp_action) * exploration_std
+                else:
+                    axis = tensors["axis"].to(device=device, dtype=policy_tcp_action.dtype)
+                    axial_noise = torch.randn(
+                        (policy_tcp_action.shape[0], 1),
+                        device=device,
+                        dtype=policy_tcp_action.dtype,
+                    )
+                    if exploration_mode in {"axial_positive", "phase_positive"}:
+                        axial_noise = torch.abs(axial_noise)
+                    exploration_noise = torch.zeros_like(policy_tcp_action)
+                    if exploration_mode == "phase_positive":
+                        lateral_axis = tensors["lateral_axis"].to(device=device, dtype=policy_tcp_action.dtype)
+                        orientation_axis = tensors["orientation_axis"].to(device=device, dtype=policy_tcp_action.dtype)
+                        axial_gate = tensors["gate"].to(device=device, dtype=policy_tcp_action.dtype)
+                        lateral_gate = tensors["lateral_gate"].to(device=device, dtype=policy_tcp_action.dtype)
+                        orientation_gate = tensors["orientation_gate"].to(device=device, dtype=policy_tcp_action.dtype)
+                        lateral_noise = torch.abs(
+                            torch.randn(
+                                (policy_tcp_action.shape[0], 1),
+                                device=device,
+                                dtype=policy_tcp_action.dtype,
+                            )
+                        )
+                        lateral_scale = max(float(args_cli.actor_exploration_phase_lateral_multiplier), 0.0)
+                        exploration_noise[:, :3] = (
+                            axis * (axial_noise * exploration_std) * axial_gate
+                            + lateral_axis * (lateral_noise * exploration_std * lateral_scale) * lateral_gate
+                        )
+                        orientation_std = max(float(args_cli.actor_exploration_phase_orientation_std), 0.0)
+                        if orientation_std > 0.0 and policy_tcp_action.shape[1] >= 6:
+                            orientation_noise = torch.abs(
+                                torch.randn(
+                                    (policy_tcp_action.shape[0], 1),
+                                    device=device,
+                                    dtype=policy_tcp_action.dtype,
+                                )
+                            )
+                            exploration_noise[:, 3:6] = (
+                                orientation_axis * (orientation_noise * orientation_std) * orientation_gate
+                            )
+                    else:
+                        exploration_noise[:, :3] = axis * (axial_noise * exploration_std)
+            policy_tcp_action = policy_tcp_action + exploration_noise
         insertion_guard_enabled_this_step = bool(args_cli.insertion_action_guard) and not (
             bool(args_cli.insertion_action_guard_disable_after_debug_audit_start) and bool(audit_started)
         )
+        if guide_action_is_isaac_root_action and insertion_guard_enabled_this_step:
+            raise RuntimeError(
+                "--target_action_guide_target_module_emit_isaac_root_action is incompatible with "
+                "--insertion_action_guard because the guard expects TCP-frame policy actions."
+            )
         if insertion_guard_enabled_this_step:
             policy_tcp_action, insertion_action_guard_metrics = _apply_insertion_action_guard(
                 env,
@@ -8862,6 +18239,9 @@ def main() -> None:
                 lateral_direction_sign=float(args_cli.insertion_action_guard_lateral_direction_sign),
                 adaptive_lateral_flip_margin_m=float(
                     args_cli.insertion_action_guard_adaptive_lateral_flip_margin_m
+                ),
+                realized_lateral_sign_flip=bool(
+                    args_cli.insertion_action_guard_realized_lateral_sign_flip
                 ),
                 zero_rotation_when_offcenter=bool(args_cli.insertion_action_guard_zero_rotation_when_offcenter),
                 rotation_lateral_threshold_m=(
@@ -8881,8 +18261,17 @@ def main() -> None:
                 target_tip_servo_lateral_step_m=float(
                     args_cli.insertion_action_guard_target_tip_servo_lateral_step_m
                 ),
+                target_tip_servo_gated_lateral_step_m=float(
+                    args_cli.insertion_action_guard_target_tip_servo_gated_lateral_step_m
+                ),
                 target_tip_servo_axial_step_m=float(
                     args_cli.insertion_action_guard_target_tip_servo_axial_step_m
+                ),
+                target_tip_servo_deep_axial_step_m=float(
+                    args_cli.insertion_action_guard_target_tip_servo_deep_axial_step_m
+                ),
+                target_tip_servo_deep_axial_activation_depth_m=float(
+                    args_cli.insertion_action_guard_target_tip_servo_deep_axial_activation_depth_m
                 ),
                 target_tip_servo_axial_lateral_gate_m=float(
                     args_cli.insertion_action_guard_target_tip_servo_axial_lateral_gate_m
@@ -8890,9 +18279,91 @@ def main() -> None:
                 target_tip_servo_axial_theta_gate_rad=float(
                     args_cli.insertion_action_guard_target_tip_servo_axial_theta_gate_rad
                 ),
+                target_tip_servo_orientation_mode=str(
+                    args_cli.insertion_action_guard_target_tip_servo_orientation_mode
+                ),
+                target_tip_servo_override_final_orientation_when_gated=bool(
+                    args_cli.insertion_action_guard_target_tip_servo_override_final_orientation_when_gated
+                ),
+                target_tip_servo_override_final_orientation_max_depth_m=float(
+                    args_cli.insertion_action_guard_target_tip_servo_override_final_orientation_max_depth_m
+                ),
+                target_tip_servo_zero_rotation_when_gated=bool(
+                    args_cli.insertion_action_guard_target_tip_servo_zero_rotation_when_gated
+                ),
+                target_tip_servo_zero_rotation_theta_gate_rad=float(
+                    args_cli.insertion_action_guard_target_tip_servo_zero_rotation_theta_gate_rad
+                ),
+                target_tip_servo_zero_rotation_only_deep_axial=bool(
+                    args_cli.insertion_action_guard_target_tip_servo_zero_rotation_only_deep_axial
+                ),
+                target_tip_servo_depth_retention=bool(
+                    args_cli.insertion_action_guard_target_tip_servo_depth_retention
+                ),
+                target_tip_servo_depth_retention_margin_m=float(
+                    args_cli.insertion_action_guard_target_tip_servo_depth_retention_margin_m
+                ),
+                target_tip_servo_max_depth=insertion_action_guard_target_tip_servo_max_depth,
+                target_tip_servo_plateau_pure_axial=bool(
+                    args_cli.insertion_action_guard_target_tip_servo_plateau_pure_axial
+                ),
+                target_tip_servo_plateau_activation_depth_m=float(
+                    args_cli.insertion_action_guard_target_tip_servo_plateau_activation_depth_m
+                ),
+                target_tip_servo_plateau_realized_depth_threshold_m=float(
+                    args_cli.insertion_action_guard_target_tip_servo_plateau_realized_depth_threshold_m
+                ),
+                target_tip_servo_plateau_lateral_gate_m=float(
+                    args_cli.insertion_action_guard_target_tip_servo_plateau_lateral_gate_m
+                ),
+                target_tip_servo_plateau_theta_gate_rad=float(
+                    args_cli.insertion_action_guard_target_tip_servo_plateau_theta_gate_rad
+                ),
+                target_tip_servo_plateau_lateral_hold_scale=float(
+                    args_cli.insertion_action_guard_target_tip_servo_plateau_lateral_hold_scale
+                ),
                 target_tip_servo_min_consistency=float(
                     args_cli.insertion_action_guard_target_tip_servo_min_consistency
                 ),
+                target_tip_servo_consistency_body_axial=bool(
+                    args_cli.insertion_action_guard_target_tip_servo_consistency_body_axial
+                ),
+                target_tip_servo_stable_steps=int(
+                    args_cli.insertion_action_guard_target_tip_servo_stable_steps
+                ),
+                target_tip_servo_realized_depth_limit_m=float(
+                    args_cli.insertion_action_guard_target_tip_servo_realized_depth_limit_m
+                ),
+                target_tip_servo_realized_depth_backoff_m=float(
+                    args_cli.insertion_action_guard_target_tip_servo_realized_depth_backoff_m
+                ),
+                target_tip_servo_realized_depth_recovery_lateral_scale=float(
+                    args_cli.insertion_action_guard_target_tip_servo_realized_depth_recovery_lateral_scale
+                ),
+                previous_axial_depth=insertion_action_guard_previous_axial_depth,
+                target_tip_servo_orientation_recovery=bool(
+                    args_cli.insertion_action_guard_target_tip_servo_orientation_recovery
+                ),
+                target_tip_servo_orientation_recovery_activation_depth_m=float(
+                    args_cli.insertion_action_guard_target_tip_servo_orientation_recovery_activation_depth_m
+                ),
+                target_tip_servo_orientation_recovery_lateral_gate_m=float(
+                    args_cli.insertion_action_guard_target_tip_servo_orientation_recovery_lateral_gate_m
+                ),
+                target_tip_servo_orientation_recovery_theta_limit_rad=float(
+                    args_cli.insertion_action_guard_target_tip_servo_orientation_recovery_theta_limit_rad
+                ),
+                target_tip_servo_orientation_recovery_worsen_margin_rad=float(
+                    args_cli.insertion_action_guard_target_tip_servo_orientation_recovery_worsen_margin_rad
+                ),
+                target_tip_servo_orientation_recovery_backoff_m=float(
+                    args_cli.insertion_action_guard_target_tip_servo_orientation_recovery_backoff_m
+                ),
+                target_tip_servo_orientation_recovery_override_final_orientation=bool(
+                    args_cli.insertion_action_guard_target_tip_servo_orientation_recovery_override_final_orientation
+                ),
+                previous_orientation_error=insertion_action_guard_previous_orientation_error,
+                target_tip_servo_stable_count=insertion_action_guard_target_tip_servo_stable_count,
                 retention_entered=insertion_action_guard_retention_entered,
                 retention_enabled=bool(args_cli.insertion_action_guard_retention),
                 retention_entry_depth_m=float(args_cli.insertion_action_guard_retention_entry_depth_m),
@@ -8918,6 +18389,9 @@ def main() -> None:
                     args_cli.insertion_action_guard_module_recovery_backoff_direction_sign
                 ),
                 module_recovery_min_consistency=float(args_cli.insertion_action_guard_module_recovery_min_consistency),
+                module_recovery_final_axial_error_gate_m=float(
+                    args_cli.insertion_action_guard_module_recovery_final_axial_error_gate_m
+                ),
                 module_recovery_theta_threshold_rad=float(
                     args_cli.insertion_action_guard_module_recovery_theta_threshold_rad
                 ),
@@ -8932,12 +18406,18 @@ def main() -> None:
                 module_recovery_state_steps=insertion_action_guard_module_recovery_state_steps,
                 module_recovery_retry_count=insertion_action_guard_module_recovery_retry_count,
                 module_recovery_hold_steps=int(args_cli.insertion_action_guard_module_recovery_hold_steps),
+                module_recovery_backout_max_steps=int(
+                    args_cli.insertion_action_guard_module_recovery_backout_max_steps
+                ),
                 module_recovery_max_retries=int(args_cli.insertion_action_guard_module_recovery_max_retries),
                 module_recovery_reinsert_step_m=float(
                     args_cli.insertion_action_guard_module_recovery_reinsert_step_m
                 ),
                 module_recovery_trim_lateral_step_m=float(
                     args_cli.insertion_action_guard_module_recovery_trim_lateral_step_m
+                ),
+                module_recovery_command_clip_m=float(
+                    args_cli.insertion_action_guard_module_recovery_command_clip_m
                 ),
                 module_lateral_alignment_enabled=bool(args_cli.insertion_action_guard_module_lateral_alignment),
                 module_lateral_alignment_activation_depth_m=float(
@@ -8974,6 +18454,79 @@ def main() -> None:
                 module_lateral_alignment_hold_depth_m=float(
                     args_cli.insertion_action_guard_module_lateral_alignment_hold_depth_m
                 ),
+                final_two_stage_servo_enabled=bool(
+                    args_cli.insertion_action_guard_final_two_stage_servo
+                ),
+                final_two_stage_activation_depth_m=float(
+                    args_cli.insertion_action_guard_final_two_stage_activation_depth_m
+                ),
+                final_two_stage_lateral_gate_m=float(
+                    args_cli.insertion_action_guard_final_two_stage_lateral_gate_m
+                ),
+                final_two_stage_trim_theta_gate_rad=float(
+                    args_cli.insertion_action_guard_final_two_stage_trim_theta_gate_rad
+                ),
+                final_two_stage_trim_module_lateral_gate_m=float(
+                    args_cli.insertion_action_guard_final_two_stage_trim_module_lateral_gate_m
+                ),
+                final_two_stage_reinsert_theta_gate_rad=float(
+                    args_cli.insertion_action_guard_final_two_stage_reinsert_theta_gate_rad
+                ),
+                final_two_stage_reinsert_module_lateral_gate_m=float(
+                    args_cli.insertion_action_guard_final_two_stage_reinsert_module_lateral_gate_m
+                ),
+                final_two_stage_reinsert_module_axial_error_gate_m=float(
+                    args_cli.insertion_action_guard_final_two_stage_reinsert_module_axial_error_gate_m
+                ),
+                final_two_stage_reinsert_axial_step_m=float(
+                    args_cli.insertion_action_guard_final_two_stage_reinsert_axial_step_m
+                ),
+                prelip_lateral_clamp=bool(args_cli.insertion_action_guard_prelip_lateral_clamp),
+                prelip_lateral_clamp_min_depth_m=float(
+                    args_cli.insertion_action_guard_prelip_lateral_clamp_min_depth_m
+                ),
+                prelip_lateral_clamp_max_depth_m=float(
+                    args_cli.insertion_action_guard_prelip_lateral_clamp_max_depth_m
+                ),
+                prelip_lateral_clamp_tip_threshold_m=float(
+                    args_cli.insertion_action_guard_prelip_lateral_clamp_tip_threshold_m
+                ),
+                prelip_lateral_clamp_max_step_m=float(
+                    args_cli.insertion_action_guard_prelip_lateral_clamp_max_step_m
+                ),
+                prelip_lateral_clamp_backoff_m=float(
+                    args_cli.insertion_action_guard_prelip_lateral_clamp_backoff_m
+                ),
+                prelip_lateral_clamp_preserve_axial=bool(
+                    args_cli.insertion_action_guard_prelip_lateral_clamp_preserve_axial
+                ),
+                prelip_offgate_axial_lock=bool(
+                    args_cli.insertion_action_guard_prelip_offgate_axial_lock
+                ),
+                prelip_offgate_axial_lock_min_depth_m=float(
+                    args_cli.insertion_action_guard_prelip_offgate_axial_lock_min_depth_m
+                ),
+                prelip_offgate_axial_lock_max_depth_m=float(
+                    args_cli.insertion_action_guard_prelip_offgate_axial_lock_max_depth_m
+                ),
+                prelip_offgate_axial_lock_lateral_gate_m=float(
+                    args_cli.insertion_action_guard_prelip_offgate_axial_lock_lateral_gate_m
+                ),
+                prelip_offgate_axial_lock_theta_gate_rad=float(
+                    args_cli.insertion_action_guard_prelip_offgate_axial_lock_theta_gate_rad
+                ),
+                prelip_offgate_axial_lock_max_inward_step_m=float(
+                    args_cli.insertion_action_guard_prelip_offgate_axial_lock_max_inward_step_m
+                ),
+                prelip_offgate_axial_lock_backoff_m=float(
+                    args_cli.insertion_action_guard_prelip_offgate_axial_lock_backoff_m
+                ),
+                prelip_offgate_axial_lock_bidirectional=bool(
+                    args_cli.insertion_action_guard_prelip_offgate_axial_lock_bidirectional
+                ),
+                prelip_offgate_axial_lock_zero_lateral=bool(
+                    args_cli.insertion_action_guard_prelip_offgate_axial_lock_zero_lateral
+                ),
                 final_axis_alignment_rotation=bool(
                     args_cli.insertion_action_guard_final_axis_alignment_rotation
                 ),
@@ -9001,8 +18554,26 @@ def main() -> None:
                 final_fixed_world_rotation_compensation_clip_m=float(
                     args_cli.insertion_action_guard_final_fixed_world_rotation_compensation_clip_m
                 ),
+                final_fixed_world_rotation_pulse_on_steps=int(
+                    args_cli.insertion_action_guard_final_fixed_world_rotation_pulse_on_steps
+                ),
+                final_fixed_world_rotation_pulse_off_steps=int(
+                    args_cli.insertion_action_guard_final_fixed_world_rotation_pulse_off_steps
+                ),
                 final_fixed_world_rotation_force=bool(
                     args_cli.insertion_action_guard_final_fixed_world_rotation_force
+                ),
+                final_fixed_world_rotation_realized_reject=bool(
+                    args_cli.insertion_action_guard_final_fixed_world_rotation_realized_reject
+                ),
+                final_fixed_world_rotation_realized_reject_margin_rad=float(
+                    args_cli.insertion_action_guard_final_fixed_world_rotation_realized_reject_margin_rad
+                ),
+                final_fixed_world_rotation_realized_reject_cooldown_steps=int(
+                    args_cli.insertion_action_guard_final_fixed_world_rotation_realized_reject_cooldown_steps
+                ),
+                final_fixed_world_rotation_realized_reject_cooldown=(
+                    insertion_action_guard_final_fixed_world_rotation_realized_reject_cooldown
                 ),
                 final_axis_alignment_strict_gate=bool(
                     args_cli.insertion_action_guard_final_axis_alignment_strict_gate
@@ -9028,6 +18599,29 @@ def main() -> None:
                     args_cli.insertion_action_guard_final_orientation_compensation
                 ),
                 orientation_threshold_rad=float(args_cli.target_action_guide_orientation_switch_rad),
+                prefinal_orientation_depth_m=(
+                    None
+                    if not math.isfinite(float(args_cli.insertion_action_guard_prefinal_orientation_depth_m))
+                    else float(args_cli.insertion_action_guard_prefinal_orientation_depth_m)
+                ),
+                prefinal_orientation_lateral_m=(
+                    None
+                    if not math.isfinite(float(args_cli.insertion_action_guard_prefinal_orientation_lateral_m))
+                    else float(args_cli.insertion_action_guard_prefinal_orientation_lateral_m)
+                ),
+                prefinal_orientation_threshold_rad=(
+                    None
+                    if not math.isfinite(float(args_cli.insertion_action_guard_prefinal_orientation_threshold_rad))
+                    else float(args_cli.insertion_action_guard_prefinal_orientation_threshold_rad)
+                ),
+                prefinal_orientation_rotation_only=bool(
+                    args_cli.insertion_action_guard_prefinal_orientation_rotation_only
+                ),
+                final_orientation_recovery_lateral_m=(
+                    None
+                    if not math.isfinite(float(args_cli.insertion_action_guard_final_orientation_recovery_lateral_m))
+                    else float(args_cli.insertion_action_guard_final_orientation_recovery_lateral_m)
+                ),
                 final_orientation_depth_m=(
                     None
                     if not math.isfinite(float(args_cli.target_action_guide_final_orientation_depth_m))
@@ -9050,9 +18644,59 @@ def main() -> None:
                 final_orientation_hold_compensate_axial_sweep=bool(
                     args_cli.insertion_action_guard_final_orientation_hold_compensate_axial_sweep
                 ),
+                final_orientation_hold_reject_predicted_depth=bool(
+                    args_cli.insertion_action_guard_final_orientation_hold_reject_predicted_depth
+                ),
+                final_orientation_lateral_scale=float(
+                    args_cli.insertion_action_guard_final_orientation_lateral_scale
+                ),
+                final_orientation_lateral_scale_theta_gate_rad=(
+                    None
+                    if not math.isfinite(
+                        float(args_cli.insertion_action_guard_final_orientation_lateral_scale_theta_gate_rad)
+                    )
+                    else float(args_cli.insertion_action_guard_final_orientation_lateral_scale_theta_gate_rad)
+                ),
+                final_orientation_lateral_scale_after_theta_gate=float(
+                    args_cli.insertion_action_guard_final_orientation_lateral_scale_after_theta_gate
+                ),
+                final_orientation_lateral_bias_m=float(
+                    args_cli.insertion_action_guard_final_orientation_lateral_bias_m
+                ),
+                final_orientation_lateral_bias_max_lateral_m=float(
+                    args_cli.insertion_action_guard_final_orientation_lateral_bias_max_lateral_m
+                ),
+                final_orientation_recover_lateral_after_theta_gate=bool(
+                    args_cli.insertion_action_guard_final_orientation_recover_lateral_after_theta_gate
+                ),
                 reject_predicted_r_increase=bool(args_cli.insertion_action_guard_reject_predicted_r_increase),
                 predicted_r_increase_margin_m=float(args_cli.insertion_action_guard_predicted_r_increase_margin_m),
                 predicted_r_reject_backoff_m=float(args_cli.insertion_action_guard_predicted_r_reject_backoff_m),
+                final_post_override_r_reject=bool(args_cli.insertion_action_guard_final_post_override_r_reject),
+                final_post_override_r_reject_margin_m=float(
+                    args_cli.insertion_action_guard_final_post_override_r_reject_margin_m
+                ),
+                final_post_override_r_reject_activation_depth_m=float(
+                    args_cli.insertion_action_guard_final_post_override_r_reject_activation_depth_m
+                ),
+                final_post_override_r_reject_lateral_gate_m=float(
+                    args_cli.insertion_action_guard_final_post_override_r_reject_lateral_gate_m
+                ),
+                final_post_override_r_reject_backoff_m=float(
+                    args_cli.insertion_action_guard_final_post_override_r_reject_backoff_m
+                ),
+                final_post_override_r_reject_zero_rotation=bool(
+                    args_cli.insertion_action_guard_final_post_override_r_reject_zero_rotation
+                ),
+                reject_predicted_depth_when_offgate=bool(
+                    args_cli.insertion_action_guard_reject_predicted_depth_when_offgate
+                ),
+                predicted_depth_offgate_margin_m=float(
+                    args_cli.insertion_action_guard_predicted_depth_offgate_margin_m
+                ),
+                predicted_depth_offgate_allow_final_two_stage_reinsert=bool(
+                    args_cli.insertion_action_guard_predicted_depth_offgate_allow_final_two_stage_reinsert
+                ),
                 realized_r_recovery=bool(args_cli.insertion_action_guard_realized_r_recovery),
                 realized_r_recovery_margin_m=float(
                     args_cli.insertion_action_guard_realized_r_recovery_margin_m
@@ -9063,6 +18707,106 @@ def main() -> None:
                 realized_r_recovery_activation_depth_m=float(
                     args_cli.insertion_action_guard_realized_r_recovery_activation_depth_m
                 ),
+                realized_r_accum_limit_m=float(
+                    args_cli.insertion_action_guard_realized_r_accum_limit_m
+                ),
+                realized_r_accum_max_depth_m=float(
+                    args_cli.insertion_action_guard_realized_r_accum_max_depth_m
+                ),
+                realized_r_accum_lateral_gate_m=float(
+                    args_cli.insertion_action_guard_realized_r_accum_lateral_gate_m
+                ),
+                realized_r_accum=insertion_action_guard_realized_r_accum,
+                realized_r_recovery_cooldown_steps=int(
+                    args_cli.insertion_action_guard_realized_r_recovery_cooldown_steps
+                ),
+                realized_r_recovery_cooldown_zero_lateral=bool(
+                    args_cli.insertion_action_guard_realized_r_recovery_cooldown_zero_lateral
+                ),
+                realized_r_recovery_cooldown=insertion_action_guard_realized_r_recovery_cooldown,
+                offcenter_realized_depth_limit_m=float(
+                    args_cli.insertion_action_guard_offcenter_realized_depth_limit_m
+                ),
+                offcenter_realized_depth_backoff_m=float(
+                    args_cli.insertion_action_guard_offcenter_realized_depth_backoff_m
+                ),
+                offcenter_realized_depth_accum_limit_m=float(
+                    args_cli.insertion_action_guard_offcenter_realized_depth_accum_limit_m
+                ),
+                offcenter_realized_depth_accum_lateral_gate_m=float(
+                    args_cli.insertion_action_guard_offcenter_realized_depth_accum_lateral_gate_m
+                ),
+                offcenter_realized_depth_cooldown_steps=int(
+                    args_cli.insertion_action_guard_offcenter_realized_depth_cooldown_steps
+                ),
+                offcenter_realized_depth_cooldown_zero_lateral=bool(
+                    args_cli.insertion_action_guard_offcenter_realized_depth_cooldown_zero_lateral
+                ),
+                recovery_zero_rotation=bool(args_cli.insertion_action_guard_recovery_zero_rotation),
+                recovery_zero_axial=bool(args_cli.insertion_action_guard_recovery_zero_axial),
+                contact_force_recovery=bool(args_cli.insertion_action_guard_contact_force_recovery),
+                contact_force_recovery_threshold=float(
+                    args_cli.insertion_action_guard_contact_force_recovery_threshold
+                ),
+                contact_force_recovery_activation_depth_m=float(
+                    args_cli.insertion_action_guard_contact_force_recovery_activation_depth_m
+                ),
+                contact_force_recovery_max_lateral_m=float(
+                    args_cli.insertion_action_guard_contact_force_recovery_max_lateral_m
+                ),
+                contact_force_recovery_backoff_m=float(
+                    args_cli.insertion_action_guard_contact_force_recovery_backoff_m
+                ),
+                contact_force_recovery_lateral_scale=float(
+                    args_cli.insertion_action_guard_contact_force_recovery_lateral_scale
+                ),
+                contact_force_recovery_zero_rotation=bool(
+                    args_cli.insertion_action_guard_contact_force_recovery_zero_rotation
+                ),
+                contact_force_retreat_state_machine=bool(
+                    args_cli.insertion_action_guard_contact_force_retreat_state_machine
+                ),
+                contact_force_retreat_state=insertion_action_guard_contact_force_retreat_state,
+                contact_force_retreat_state_steps=(
+                    insertion_action_guard_contact_force_retreat_state_steps
+                ),
+                contact_force_retreat_retry_count=(
+                    insertion_action_guard_contact_force_retreat_retry_count
+                ),
+                contact_force_retreat_exit_depth_m=float(
+                    args_cli.insertion_action_guard_contact_force_retreat_exit_depth_m
+                ),
+                contact_force_retreat_backout_max_steps=int(
+                    args_cli.insertion_action_guard_contact_force_retreat_backout_max_steps
+                ),
+                contact_force_retreat_hold_steps=int(
+                    args_cli.insertion_action_guard_contact_force_retreat_hold_steps
+                ),
+                contact_force_retreat_force_clear_threshold=float(
+                    args_cli.insertion_action_guard_contact_force_retreat_force_clear_threshold
+                ),
+                contact_force_retreat_recenter_lateral_gate_m=float(
+                    args_cli.insertion_action_guard_contact_force_retreat_recenter_lateral_gate_m
+                ),
+                contact_force_retreat_max_retries=int(
+                    args_cli.insertion_action_guard_contact_force_retreat_max_retries
+                ),
+                contact_force_retreat_reapproach_steps=int(
+                    args_cli.insertion_action_guard_contact_force_retreat_reapproach_steps
+                ),
+                contact_force_retreat_reapproach_step_m=float(
+                    args_cli.insertion_action_guard_contact_force_retreat_reapproach_step_m
+                ),
+                contact_force_retreat_abort_after_max_retries=bool(
+                    args_cli.insertion_action_guard_contact_force_retreat_abort_after_max_retries
+                ),
+                contact_force_retreat_abort_max_steps=int(
+                    args_cli.insertion_action_guard_contact_force_retreat_abort_max_steps
+                ),
+                offcenter_realized_depth_cooldown=(
+                    insertion_action_guard_offcenter_realized_depth_cooldown
+                ),
+                offcenter_realized_depth_accum=insertion_action_guard_offcenter_realized_depth_accum,
                 settle_steps=int(args_cli.insertion_action_guard_settle_steps),
                 settle_activation_depth_m=float(args_cli.insertion_action_guard_settle_activation_depth_m),
                 settle_max_lateral_m=float(args_cli.insertion_action_guard_settle_max_lateral_m),
@@ -9083,23 +18827,48 @@ def main() -> None:
         if float(args_cli.action_clip) > 0.0:
             policy_tcp_action = policy_tcp_action.clamp(-float(args_cli.action_clip), float(args_cli.action_clip))
         t0 = time.monotonic()
-        desired_root_action = _tcp_delta_action_to_isaac_base_action(
-            env,
-            policy_tcp_action,
-            action_frame=str(args_cli.tcp_action_frame),
-            apply_ik_sign_fix=False,
-        )
-        env_action = _tcp_delta_action_to_isaac_base_action(
-            env,
-            policy_tcp_action,
-            action_frame=str(args_cli.tcp_action_frame),
-            apply_ik_sign_fix=True,
-        )
+        if guide_action_is_isaac_root_action:
+            gripper_action = torch.full(
+                (policy_tcp_action.shape[0], 1),
+                float(args_cli.gripper_joint_position),
+                dtype=policy_tcp_action.dtype,
+                device=policy_tcp_action.device,
+            )
+            desired_root_action = torch.cat([policy_tcp_action[:, :6], gripper_action], dim=1)
+            env_action = desired_root_action
+        else:
+            desired_root_action = _tcp_delta_action_to_isaac_base_action(
+                env,
+                policy_tcp_action,
+                action_frame=str(args_cli.tcp_action_frame),
+                apply_ik_sign_fix=False,
+            )
+            env_action = _tcp_delta_action_to_isaac_base_action(
+                env,
+                policy_tcp_action,
+                action_frame=str(args_cli.tcp_action_frame),
+                apply_ik_sign_fix=True,
+            )
         _timing_log(args_cli.debug_timing and step == 1, "tcp_to_isaac_action", t0)
         t0 = time.monotonic()
-        before_positions = _selected_body_positions(env) if diagnostics_enabled and (step == 1 or step % diagnostics_every == 0) else {}
+        diagnostic_sample_step = diagnostics_enabled and (step == 1 or step % diagnostics_every == 0)
+        robot_state_sample_step = diagnostic_sample_step or (
+            log_robot_state_every > 0 and (step == 1 or step % log_robot_state_every == 0)
+        )
+        before_positions = _selected_body_positions(env) if diagnostic_sample_step else {}
         before_orientations = _selected_body_orientations(env) if before_positions else {}
+        before_robot_state = _robot_state_snapshot(env) if robot_state_sample_step else None
         before_target = _target_position_from_reward_config(env, task_geometry_reward_config) if before_positions else None
+        reward_policy_tcp_delta_w = _tcp_delta_action_translation_to_world(
+            env,
+            policy_tcp_action,
+            action_frame=str(args_cli.tcp_action_frame),
+        ).detach().clone() * (1.0 if float(args_cli.target_reward_policy_tcp_delta_sign) >= 0.0 else -1.0)
+        reward_policy_tcp_rotation_norm = torch.linalg.norm(policy_tcp_action[:, 3:6], dim=1).detach().clone()
+        setattr(env, "_aic_reward_policy_tcp_delta_w", reward_policy_tcp_delta_w)
+        setattr(env.unwrapped, "_aic_reward_policy_tcp_delta_w", reward_policy_tcp_delta_w)
+        setattr(env, "_aic_reward_policy_tcp_rotation_norm", reward_policy_tcp_rotation_norm)
+        setattr(env.unwrapped, "_aic_reward_policy_tcp_rotation_norm", reward_policy_tcp_rotation_norm)
         pre_step_insertion_geometry = (
             _insertion_geometry_diagnostics(env, task_geometry_reward_config) if diagnostics_enabled else None
         )
@@ -9107,6 +18876,19 @@ def main() -> None:
             _all_body_insertion_geometry_diagnostics(env, task_geometry_reward_config) if diagnostics_enabled else None
         )
         pre_step_body_frame_offsets = _body_frame_offset_diagnostics(env) if diagnostics_enabled else None
+        axial_purity_tensors = None
+        if float(args_cli.actor_axial_purity_weight) > 0.0:
+            axial_purity_tensors = _axial_purity_replay_tensors(
+                env,
+                task_geometry_reward_config,
+                action_frame=str(args_cli.tcp_action_frame),
+                lateral_gate_m=float(args_cli.actor_axial_purity_lateral_gate_m),
+                orientation_gate_rad=float(args_cli.actor_axial_purity_orientation_gate_rad),
+                min_s_m=float(args_cli.actor_axial_purity_min_s_m),
+                max_s_m=float(args_cli.actor_axial_purity_max_s_m),
+                device=device,
+                dtype=policy_tcp_action.dtype,
+            )
         episode_metadata_before = [_episode_metadata(env, idx) for idx in range(policy_obs.shape[0])]
         episode_length_before = getattr(env.unwrapped, "episode_length_buf", None)
         episode_length_before_cpu = None if episode_length_before is None else episode_length_before.detach().cpu().clone()
@@ -9114,6 +18896,7 @@ def main() -> None:
         next_obs, reward, terminated, truncated, _ = env.step(env_action)
         after_positions = _selected_body_positions(env) if before_positions else {}
         after_orientations = _selected_body_orientations(env) if before_positions else {}
+        after_robot_state = _robot_state_snapshot(env) if robot_state_sample_step else None
         after_target = _target_position_from_reward_config(env, task_geometry_reward_config) if before_positions else None
         post_step_insertion_geometry = (
             _insertion_geometry_diagnostics(env, task_geometry_reward_config) if diagnostics_enabled else None
@@ -9194,6 +18977,23 @@ def main() -> None:
                 torch.zeros_like(insertion_action_guard_module_recovery_retry_count),
                 insertion_action_guard_module_recovery_retry_count,
             )
+        if bool(args_cli.insertion_action_guard_contact_force_retreat_state_machine):
+            done_mask = done_for_bootstrap_bool.to(device=device, dtype=torch.bool).view(-1, 1)
+            insertion_action_guard_contact_force_retreat_state = torch.where(
+                done_mask,
+                torch.zeros_like(insertion_action_guard_contact_force_retreat_state),
+                insertion_action_guard_contact_force_retreat_state,
+            )
+            insertion_action_guard_contact_force_retreat_state_steps = torch.where(
+                done_mask,
+                torch.zeros_like(insertion_action_guard_contact_force_retreat_state_steps),
+                insertion_action_guard_contact_force_retreat_state_steps,
+            )
+            insertion_action_guard_contact_force_retreat_retry_count = torch.where(
+                done_mask,
+                torch.zeros_like(insertion_action_guard_contact_force_retreat_retry_count),
+                insertion_action_guard_contact_force_retreat_retry_count,
+            )
         if bool(args_cli.insertion_action_guard_adaptive_lateral_sign):
             done_mask = done_for_bootstrap_bool.to(device=device, dtype=torch.bool).view(-1, 1)
             insertion_action_guard_lateral_sign = torch.where(
@@ -9206,6 +19006,69 @@ def main() -> None:
                 torch.full_like(insertion_action_guard_previous_lateral_error, float("nan")),
                 insertion_action_guard_previous_lateral_error,
             )
+            insertion_action_guard_realized_r_accum = torch.where(
+                done_mask,
+                torch.zeros_like(insertion_action_guard_realized_r_accum),
+                insertion_action_guard_realized_r_accum,
+            )
+            insertion_action_guard_realized_r_recovery_cooldown = torch.where(
+                done_mask,
+                torch.zeros_like(insertion_action_guard_realized_r_recovery_cooldown),
+                insertion_action_guard_realized_r_recovery_cooldown,
+            )
+        if bool(args_cli.insertion_action_guard):
+            done_mask = done_for_bootstrap_bool.to(device=device, dtype=torch.bool).view(-1, 1)
+            insertion_action_guard_previous_axial_depth = torch.where(
+                done_mask,
+                torch.full_like(insertion_action_guard_previous_axial_depth, float("nan")),
+                insertion_action_guard_previous_axial_depth,
+            )
+            insertion_action_guard_realized_r_accum = torch.where(
+                done_mask,
+                torch.zeros_like(insertion_action_guard_realized_r_accum),
+                insertion_action_guard_realized_r_accum,
+            )
+            insertion_action_guard_realized_r_recovery_cooldown = torch.where(
+                done_mask,
+                torch.zeros_like(insertion_action_guard_realized_r_recovery_cooldown),
+                insertion_action_guard_realized_r_recovery_cooldown,
+            )
+            insertion_action_guard_offcenter_realized_depth_cooldown = torch.where(
+                done_mask,
+                torch.zeros_like(insertion_action_guard_offcenter_realized_depth_cooldown),
+                insertion_action_guard_offcenter_realized_depth_cooldown,
+            )
+            insertion_action_guard_offcenter_realized_depth_accum = torch.where(
+                done_mask,
+                torch.zeros_like(insertion_action_guard_offcenter_realized_depth_accum),
+                insertion_action_guard_offcenter_realized_depth_accum,
+            )
+            insertion_action_guard_previous_orientation_error = torch.where(
+                done_mask,
+                torch.full_like(insertion_action_guard_previous_orientation_error, float("nan")),
+                insertion_action_guard_previous_orientation_error,
+            )
+            insertion_action_guard_final_fixed_world_rotation_realized_reject_cooldown = torch.where(
+                done_mask,
+                torch.zeros_like(insertion_action_guard_final_fixed_world_rotation_realized_reject_cooldown),
+                insertion_action_guard_final_fixed_world_rotation_realized_reject_cooldown,
+            )
+            insertion_action_guard_target_tip_servo_stable_count = torch.where(
+                done_mask,
+                torch.zeros_like(insertion_action_guard_target_tip_servo_stable_count),
+                insertion_action_guard_target_tip_servo_stable_count,
+            )
+            insertion_action_guard_target_tip_servo_max_depth = torch.where(
+                done_mask,
+                torch.full_like(insertion_action_guard_target_tip_servo_max_depth, float("-inf")),
+                insertion_action_guard_target_tip_servo_max_depth,
+            )
+            if not bool(args_cli.insertion_action_guard_adaptive_lateral_sign):
+                insertion_action_guard_previous_lateral_error = torch.where(
+                    done_mask,
+                    torch.full_like(insertion_action_guard_previous_lateral_error, float("nan")),
+                    insertion_action_guard_previous_lateral_error,
+                )
         if bool(args_cli.target_action_guide_adaptive_orientation_sign):
             done_mask = done_for_bootstrap_bool.to(device=device, dtype=torch.bool).view(-1, 1)
             target_action_guide_orientation_sign = torch.where(
@@ -9219,17 +19082,59 @@ def main() -> None:
                 target_action_guide_previous_orientation_error,
             )
         reward = reward.reshape(-1, 1).to(device)
+        if critic_state_history_steps > 1:
+            next_critic_state_history = torch.cat(
+                [
+                    next_act_obs["state"],
+                    critic_state_history[:, : state_dim * (critic_state_history_steps - 1)],
+                ],
+                dim=1,
+            )
+        else:
+            next_critic_state_history = next_act_obs["state"]
+        if actor_state_history_steps > 1:
+            next_actor_state_history = torch.cat(
+                [
+                    next_act_obs["state"],
+                    actor_state_history[:, : state_dim * (actor_state_history_steps - 1)],
+                ],
+                dim=1,
+            )
+            next_act_obs["actor_state"] = next_actor_state_history
+        else:
+            next_actor_state_history = next_act_obs["state"]
         action_for_critic = policy_tcp_action
         guide_action = guide_action_for_transition
         if guide_action is not None and bool(args_cli.target_action_guide_train_executed):
             guide_action = policy_tcp_action.detach().clone()
+        guide_weight = None
+        if guide_action is not None:
+            phase_weight = _guide_phase_weight_by_env(
+                args=args_cli,
+                post_step_insertion_geometry=post_step_insertion_geometry,
+                post_step_all_body_insertion_geometry=post_step_all_body_insertion_geometry,
+                num_envs=policy_obs.shape[0],
+                device=guide_action.device,
+                dtype=guide_action.dtype,
+            )
+            if phase_weight is not None:
+                guide_weight = phase_weight
+        if guide_action is not None and TARGET_ACTION_GUIDE_TRAIN_ENV_IDS:
+            env_weight = torch.zeros((policy_obs.shape[0], 1), dtype=guide_action.dtype, device=guide_action.device)
+            for selected_env_id in TARGET_ACTION_GUIDE_TRAIN_ENV_IDS:
+                if 0 <= int(selected_env_id) < env_weight.shape[0]:
+                    env_weight[int(selected_env_id), 0] = 1.0
+            guide_weight = env_weight if guide_weight is None else guide_weight * env_weight
         for env_index in range(policy_obs.shape[0]):
             metadata = _episode_metadata(env, env_index)
+            metadata["env_index"] = int(env_index)
             metadata["inserted_env_step"] = int(step)
             metadata["episode_before_step"] = episode_metadata_before[env_index]
             metadata["terminated"] = bool(terminated[env_index].detach().cpu())
             metadata["truncated"] = bool(truncated[env_index].detach().cpu())
             metadata["done_for_bootstrap"] = bool(done_for_bootstrap_bool[env_index].detach().cpu())
+            metadata["post_step_insertion_geometry"] = _jsonable(post_step_insertion_geometry)
+            metadata["post_step_all_body_insertion_geometry"] = _jsonable(post_step_all_body_insertion_geometry)
             if after_target is not None and after_positions.get(CONTROLLED_TCP_BODY) is not None:
                 metadata["distance_to_target_after"] = float(
                     torch.norm(after_positions[CONTROLLED_TCP_BODY][env_index] - after_target[env_index]).detach().cpu()
@@ -9237,16 +19142,42 @@ def main() -> None:
             transition = _transition_payload(
                 act_obs=act_obs,
                 next_act_obs=next_act_obs,
+                critic_state=critic_state_history,
+                next_critic_state=next_critic_state_history,
+                actor_state=(actor_state_history if actor_state_history_steps > 1 else None),
+                next_actor_state=(next_actor_state_history if actor_state_history_steps > 1 else None),
                 action_for_critic=action_for_critic,
                 guide_action=guide_action,
+                guide_weight=guide_weight,
+                axial_purity_tensors=axial_purity_tensors,
                 reward=reward,
                 done=done,
                 env_index=env_index,
                 metadata=metadata,
             )
-            replay.append(transition)
+            replay_repeat = 1
+            if TARGET_ACTION_GUIDE_TRAIN_ENV_IDS and env_index in TARGET_ACTION_GUIDE_TRAIN_ENV_IDS:
+                replay_repeat = max(1, int(args_cli.target_action_guide_train_env_repeat))
+            if guide_weight is not None and float(guide_weight[env_index, 0].detach().cpu()) > 0.0:
+                replay_repeat = max(replay_repeat, max(1, int(args_cli.target_action_guide_train_phase_repeat)))
+            for _ in range(replay_repeat):
+                replay.append(transition)
         policy_obs = next_policy_obs
         current_images = next_images
+        critic_state_history = next_critic_state_history
+        actor_state_history = next_actor_state_history
+        reset_history_mask = (terminated | truncated).to(device=device).reshape(-1, 1)
+        if bool(reset_history_mask.any()):
+            critic_state_history = torch.where(
+                reset_history_mask.expand_as(critic_state_history),
+                next_act_obs["state"].repeat(1, critic_state_history_steps),
+                critic_state_history,
+            )
+            actor_state_history = torch.where(
+                reset_history_mask.expand_as(actor_state_history),
+                next_act_obs["state"].repeat(1, actor_state_history_steps),
+                actor_state_history,
+            )
 
         if (
             int(args_cli.debug_audit_steps) <= 0
@@ -9255,42 +19186,46 @@ def main() -> None:
             and len(replay) >= args_cli.warmup_steps
             and updates_done < args_cli.updates
         ):
-            t0 = time.monotonic()
-            batch = replay.sample(args_cli.batch_size, device)
-            _timing_log(args_cli.debug_timing and step == 1, "sample_replay", t0)
-            t0 = time.monotonic()
-            actor_update_end_steps = int(args_cli.actor_update_end_steps)
-            actor_update_enabled = step >= int(args_cli.actor_update_start_steps) and (
-                actor_update_end_steps <= 0 or step <= actor_update_end_steps
-            )
-            last_metrics = trainer.train_step(batch, update_actor=actor_update_enabled)
-            _timing_log(args_cli.debug_timing and step == 1, "train_step", t0)
-            updates_done += 1
-            if diagnostics_enabled and (
-                float(last_metrics.get("adapter_clipped_fraction", 0.0)) > 0.5
-                or (
-                    updates_done < 500
-                    and float(last_metrics.get("final_minus_act_norm", 0.0)) > max(float(args_cli.adapter_delta_clip), 1.0e-6) * 3.0
+            for _gradient_update_index in range(max(1, int(args_cli.gradient_updates_per_step))):
+                if updates_done >= args_cli.updates:
+                    break
+                t0 = time.monotonic()
+                batch = replay.sample(args_cli.batch_size, device)
+                _timing_log(args_cli.debug_timing and step == 1, "sample_replay", t0)
+                t0 = time.monotonic()
+                actor_update_end_steps = int(args_cli.actor_update_end_steps)
+                actor_update_enabled = step >= int(args_cli.actor_update_start_steps) and (
+                    actor_update_end_steps <= 0 or step <= actor_update_end_steps
                 )
-                or abs(float(last_metrics.get("q_mean", 0.0))) > 50.0
-            ):
-                print(
-                    "[AIC SERL][diagnostic][warning] "
-                    + json.dumps(
-                        {
-                            "step": step,
-                            "updates_done": updates_done,
-                            "adapter_clipped_fraction": last_metrics.get("adapter_clipped_fraction"),
-                            "final_minus_act_norm": last_metrics.get("final_minus_act_norm"),
-                            "q_mean": last_metrics.get("q_mean"),
-                            "reward_mean": float(reward.mean().detach().cpu()),
-                            "replay_size": len(replay),
-                        },
-                        sort_keys=True,
-                        default=str,
-                    ),
-                    flush=True,
-                )
+                last_metrics = trainer.train_step(batch, update_actor=actor_update_enabled)
+                _timing_log(args_cli.debug_timing and step == 1, "train_step", t0)
+                updates_done += 1
+                if diagnostics_enabled and (
+                    float(last_metrics.get("adapter_clipped_fraction", 0.0)) > 0.5
+                    or (
+                        updates_done < 500
+                        and float(last_metrics.get("final_minus_act_norm", 0.0))
+                        > max(float(args_cli.adapter_delta_clip), 1.0e-6) * 3.0
+                    )
+                    or abs(float(last_metrics.get("q_mean", 0.0))) > 50.0
+                ):
+                    print(
+                        "[AIC SERL][diagnostic][warning] "
+                        + json.dumps(
+                            {
+                                "step": step,
+                                "updates_done": updates_done,
+                                "adapter_clipped_fraction": last_metrics.get("adapter_clipped_fraction"),
+                                "final_minus_act_norm": last_metrics.get("final_minus_act_norm"),
+                                "q_mean": last_metrics.get("q_mean"),
+                                "reward_mean": float(reward.mean().detach().cpu()),
+                                "replay_size": len(replay),
+                            },
+                            sort_keys=True,
+                            default=str,
+                        ),
+                        flush=True,
+                    )
 
         diagnostic_row: dict[str, Any] = {}
         if diagnostics_enabled and (step == 1 or step % diagnostics_every == 0):
@@ -9424,6 +19359,7 @@ def main() -> None:
                         "debug_audit_axis_magnitude": float(args_cli.debug_audit_axis_magnitude),
                         "debug_audit_rotation_axes": bool(args_cli.debug_audit_rotation_axes),
                         "debug_audit_constant_action": constant_audit_action,
+                        "debug_audit_episode_constant_action": bool(args_cli.debug_audit_episode_constant_action),
                         "debug_audit_insertion_axis_action": str(args_cli.debug_audit_insertion_axis_action),
                         "debug_audit_insertion_axis_magnitude": float(
                             args_cli.debug_audit_insertion_axis_magnitude
@@ -9481,6 +19417,7 @@ def main() -> None:
             "force_body": str(force_metrics.get("force_body", FORCE_WRENCH_BODY)),
             "target_action_guide_collect_blend_effective": float(effective_guide_collect_blend),
             "debug_audit_insertion_axis_action": str(args_cli.debug_audit_insertion_axis_action),
+            "debug_audit_episode_constant_action": bool(args_cli.debug_audit_episode_constant_action),
             "debug_audit_world_delta_env0": (
                 None
                 if debug_audit_world_delta_for_step is None
@@ -9531,6 +19468,18 @@ def main() -> None:
             "executed_policy_tcp_action_rotation_norm_mean": float(
                 torch.norm(policy_tcp_action[:, 3:], dim=1).mean().detach().cpu()
             ),
+            "actor_exploration_noise_active": bool(exploration_active),
+            "actor_exploration_noise_mode": str(args_cli.actor_exploration_noise_mode),
+            "actor_exploration_phase_lateral_multiplier": float(args_cli.actor_exploration_phase_lateral_multiplier),
+            "actor_exploration_phase_orientation_std": float(args_cli.actor_exploration_phase_orientation_std),
+            "actor_exploration_noise_std": float(exploration_std),
+            "actor_exploration_noise_norm_mean": float(torch.norm(exploration_noise, dim=1).mean().detach().cpu()),
+            "actor_exploration_noise_translation_norm_mean": float(
+                torch.norm(exploration_noise[:, :3], dim=1).mean().detach().cpu()
+            ),
+            "actor_exploration_noise_rotation_norm_mean": float(
+                torch.norm(exploration_noise[:, 3:], dim=1).mean().detach().cpu()
+            ),
             "guide_action_translation_norm_mean": (
                 None
                 if guide_action_for_transition is None
@@ -9540,6 +19489,25 @@ def main() -> None:
                 None
                 if guide_action_for_transition is None
                 else float(torch.norm(guide_action_for_transition[:, 3:], dim=1).mean().detach().cpu())
+            ),
+            "target_action_guide_train_phase_filter": str(args_cli.target_action_guide_train_phase_filter),
+            "target_action_guide_train_phase_weight_mean": (
+                None
+                if guide_action_for_transition is None
+                else (
+                    1.0
+                    if guide_weight is None
+                    else float(guide_weight.mean().detach().cpu())
+                )
+            ),
+            "target_action_guide_train_phase_selected_fraction": (
+                None
+                if guide_action_for_transition is None
+                else (
+                    1.0
+                    if guide_weight is None
+                    else float((guide_weight > 0.0).float().mean().detach().cpu())
+                )
             ),
             "actor_to_guide_l1_mean": (
                 None
@@ -9673,9 +19641,21 @@ def main() -> None:
             "pre_step_insertion_geometry": pre_step_insertion_geometry,
             "pre_step_all_body_insertion_geometry": pre_step_all_body_insertion_geometry,
             "pre_step_body_frame_offsets": pre_step_body_frame_offsets,
+            "pre_step_selected_body_poses": (
+                _selected_body_pose_lists(before_positions, before_orientations)
+                if before_positions
+                else None
+            ),
+            "pre_step_robot_state": before_robot_state,
             "post_step_insertion_geometry": post_step_insertion_geometry,
             "post_step_all_body_insertion_geometry": post_step_all_body_insertion_geometry,
             "post_step_body_frame_offsets": post_step_body_frame_offsets,
+            "post_step_selected_body_poses": (
+                _selected_body_pose_lists(after_positions, after_orientations)
+                if after_positions
+                else None
+            ),
+            "post_step_robot_state": after_robot_state,
             "treat_time_limit_truncation_as_terminal": bool(args_cli.treat_time_limit_truncation_as_terminal),
             "step_wall_s": time.monotonic() - step_start_time,
             "env_steps_per_s": float(policy_obs.shape[0]) / max(time.monotonic() - step_start_time, 1.0e-9),
@@ -9683,6 +19663,9 @@ def main() -> None:
             **last_metrics,
             **diagnostic_row,
         }
+        if bool(args_cli.log_policy_actions_by_env):
+            row["actor_policy_tcp_action_by_env"] = actor_policy_tcp_action.detach().cpu().tolist()
+            row["executed_policy_tcp_action_by_env"] = policy_tcp_action.detach().cpu().tolist()
         with metrics_path.open("a", encoding="utf-8") as f:
             f.write(json.dumps(_jsonable(row), sort_keys=True) + "\n")
         if args_cli.log_every > 0 and (step == 1 or step % args_cli.log_every == 0):
@@ -9715,12 +19698,29 @@ def main() -> None:
     final_step = step if stop_reason != "max_wall_time" else max(step - 1, 0)
     train_config["result"] = _progress_result(stop_reason, final_step, updates_done)
     (run_dir / "train_config.json").write_text(json.dumps(train_config, indent=2, sort_keys=True), encoding="utf-8")
-    _save_checkpoint(run_dir / "checkpoint_latest.pt", trainer, train_config, train_config["result"]["steps_completed"])
-    print(f"Wrote online SERL checkpoint: {run_dir / 'checkpoint_latest.pt'}")
+    if bool(args_cli.save_final_checkpoint):
+        _save_checkpoint(run_dir / "checkpoint_latest.pt", trainer, train_config, train_config["result"]["steps_completed"])
+        print(f"Wrote online SERL checkpoint: {run_dir / 'checkpoint_latest.pt'}")
+    else:
+        print("[AIC SERL] Skipped final checkpoint because --no-save_final_checkpoint is set.", flush=True)
     print(f"Wrote metrics: {metrics_path}")
+    if bool(args_cli.save_replay_at_end):
+        replay_path = Path(args_cli.save_replay_path) if str(args_cli.save_replay_path or "") else run_dir / "replay_buffer.pt"
+        replay_save_report = replay.save(replay_path, filter_name=str(args_cli.save_replay_filter))
+        train_config["replay_io"]["save_report"] = replay_save_report
+        (run_dir / "train_config.json").write_text(json.dumps(train_config, indent=2, sort_keys=True), encoding="utf-8")
+        print(
+            "[AIC SERL][diagnostic] replay_save "
+            + json.dumps(_jsonable(replay_save_report), sort_keys=True),
+            flush=True,
+        )
     cheatcode_summary = _write_cheatcode_phase_summary(metrics_path, run_dir / "cheatcode_phase_summary.json")
     if cheatcode_summary is not None:
         print(f"Wrote cheatcode phase summary: {run_dir / 'cheatcode_phase_summary.json'}")
+    if args_cli.save_step_images and bool(args_cli.save_videos):
+        video_summary = _encode_step_videos(run_dir)
+        (run_dir / "video_summary.json").write_text(json.dumps(video_summary, indent=2, sort_keys=True), encoding="utf-8")
+        print(f"Wrote video summary: {run_dir / 'video_summary.json'}")
     env.close()
 
 

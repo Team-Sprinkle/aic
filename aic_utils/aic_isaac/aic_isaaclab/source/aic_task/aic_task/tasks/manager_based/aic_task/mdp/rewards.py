@@ -14,6 +14,8 @@ Includes:
 
 from __future__ import annotations
 
+import math
+
 from typing import TYPE_CHECKING
 
 import torch
@@ -231,7 +233,10 @@ def _episode_insertion_axis_w(env: ManagerBasedRLEnv) -> torch.Tensor | None:
     return torch.stack(rows, dim=0)
 
 
-def _episode_target_orientation_w(env: ManagerBasedRLEnv) -> torch.Tensor | None:
+def _episode_target_orientation_w(
+    env: ManagerBasedRLEnv,
+    episode_target_orientation_source: str = "target_pose",
+) -> torch.Tensor | None:
     episode_by_env = getattr(env, "_aic_current_episode_by_env", None)
     if not episode_by_env:
         return None
@@ -242,8 +247,19 @@ def _episode_target_orientation_w(env: ManagerBasedRLEnv) -> torch.Tensor | None
         episode = episode_by_env.get(env_id)
         if not episode:
             return None
-        target = ((episode.get("scene") or {}).get("target") or {}).get("target_pose_world") or {}
-        orientation = target.get("orientation_wxyz")
+        scene = episode.get("scene") or {}
+        target = scene.get("target") or {}
+        start_near_gate = scene.get("start_near_gate") or episode.get("start_near_gate") or {}
+        target_pose = target.get("target_pose_world") or {}
+        target_orientation = target_pose.get("orientation_wxyz")
+        reference_orientation = start_near_gate.get("reference_reward_body_start_orientation_wxyz")
+        source = str(episode_target_orientation_source or "target_pose")
+        if source == "reference_reward_body_start":
+            orientation = reference_orientation
+        elif source == "auto_reference_then_target":
+            orientation = reference_orientation or target_orientation
+        else:
+            orientation = target_orientation
         if orientation is None:
             return None
         rows.append(torch.tensor(orientation, dtype=dtype, device=device))
@@ -296,11 +312,24 @@ def _target_orientation_w(
     env: ManagerBasedRLEnv,
     target_asset: RigidObject,
     target_orientation_offset: tuple[float, float, float, float] | list[float] | None,
+    episode_target_orientation_source: str = "target_pose",
 ) -> torch.Tensor:
-    episode_orientations = _episode_target_orientation_w(env)
+    episode_orientations = _episode_target_orientation_w(env, episode_target_orientation_source)
     if episode_orientations is not None:
         return episode_orientations.to(device=target_asset.data.root_quat_w.device, dtype=target_asset.data.root_quat_w.dtype)
     return _offset_quat_w(target_asset.data.root_quat_w, target_orientation_offset)
+
+
+def _body_orientation_offset_for_episode_target(
+    body_orientation_offset: tuple[float, float, float, float] | list[float] | None,
+    episode_target_orientation_source: str,
+) -> tuple[float, float, float, float] | list[float] | None:
+    if str(episode_target_orientation_source or "target_pose") in {
+        "reference_reward_body_start",
+        "auto_reference_then_target",
+    }:
+        return None
+    return body_orientation_offset
 
 
 def _orientation_gate(
@@ -312,6 +341,7 @@ def _orientation_gate(
     orientation_gate_std: float | None,
     body_orientation_offset: tuple[float, float, float, float] | list[float] | None,
     target_orientation_offset: tuple[float, float, float, float] | list[float] | None,
+    episode_target_orientation_source: str = "target_pose",
     orientation_error_mode: str = "quat",
     orientation_axis_local: tuple[float, float, float] | list[float] = (0.0, 1.0, 0.0),
     insertion_axis_w: torch.Tensor | None = None,
@@ -325,6 +355,7 @@ def _orientation_gate(
         target_asset,
         body_orientation_offset=body_orientation_offset,
         target_orientation_offset=target_orientation_offset,
+        episode_target_orientation_source=episode_target_orientation_source,
         orientation_error_mode=orientation_error_mode,
         orientation_axis_local=orientation_axis_local,
         insertion_axis_w=insertion_axis_w,
@@ -343,15 +374,24 @@ def _body_target_orientation_error(
     *,
     body_orientation_offset: tuple[float, float, float, float] | list[float] | None,
     target_orientation_offset: tuple[float, float, float, float] | list[float] | None,
+    episode_target_orientation_source: str = "target_pose",
     orientation_error_mode: str = "quat",
     orientation_axis_local: tuple[float, float, float] | list[float] = (0.0, 1.0, 0.0),
     insertion_axis_w: torch.Tensor | None = None,
 ) -> torch.Tensor | None:
     body_quat_w = _offset_quat_w(
         body_asset.data.body_quat_w[:, body_id],  # type: ignore
-        body_orientation_offset,
+        _body_orientation_offset_for_episode_target(
+            body_orientation_offset,
+            episode_target_orientation_source,
+        ),
     )
-    target_quat_w = _target_orientation_w(env, target_asset, target_orientation_offset)
+    target_quat_w = _target_orientation_w(
+        env,
+        target_asset,
+        target_orientation_offset,
+        episode_target_orientation_source,
+    )
     if str(orientation_error_mode).lower() == "axis":
         axis = insertion_axis_w
         if axis is None:
@@ -383,14 +423,15 @@ def _plug_consistency_gate_from_entrance(
     consistency_body_name: str | None,
     consistency_axial_std: float | None,
     consistency_lateral_sigma: float | None,
+    consistency_gate_mode: str = "target_depth",
 ) -> torch.Tensor | None:
     """Gate tip insertion by a trailing plug body being near its seated depth.
 
     The reference axial separation between the rewarded tip and the consistency
-    body is captured at episode start.  This keeps the gate task-agnostic: if
-    the tip should be seated at ``target_depth``, the trailing body should be at
-    ``target_depth - reference_tip_to_body_depth`` and laterally close to the
-    same port centerline.
+    body is captured at episode start.  ``target_depth`` mode checks the final
+    seated body depth.  ``current_depth`` mode checks that the body maintains
+    its calibrated axial offset from the tip during partial insertion, which
+    keeps tip-only bypass penalized without suppressing valid shallow progress.
     """
     if consistency_axial_std is None or float(consistency_axial_std) <= 0.0:
         return None
@@ -415,7 +456,11 @@ def _plug_consistency_gate_from_entrance(
         reference_gap = reference_gap.to(current_gap.device)
         reference_gap = torch.where(reset_mask.to(current_gap.device) <= 1, current_gap.detach(), reference_gap)
     setattr(env, attr_name, reference_gap.detach().clone())
-    expected_consistency_depth = target_depth - reference_gap.to(target_depth.device)
+    reference_gap = reference_gap.to(target_depth.device)
+    if str(consistency_gate_mode or "target_depth") == "current_depth":
+        expected_consistency_depth = primary_depth.to(target_depth.device) - reference_gap
+    else:
+        expected_consistency_depth = target_depth - reference_gap
     axial_error = torch.abs(geometry.axial_depth - expected_consistency_depth)
     axial_gate = torch.exp(-torch.square(axial_error / max(float(consistency_axial_std), 1.0e-9)))
     return axial_gate * geometry.lateral_gate
@@ -434,10 +479,16 @@ def _target_frame_delta(
     target_position_offset: tuple[float, float, float] | list[float] | None,
     body_position_offset: tuple[float, float, float] | list[float] | None,
     target_orientation_offset: tuple[float, float, float, float] | list[float] | None,
+    episode_target_orientation_source: str = "target_pose",
 ) -> torch.Tensor:
     body_pos_w = _body_position_w(body_asset, body_id, body_position_offset)
     target_pos_w = _target_position_w(env, target_asset, target_position_offset)
-    target_quat_w = _target_orientation_w(env, target_asset, target_orientation_offset)
+    target_quat_w = _target_orientation_w(
+        env,
+        target_asset,
+        target_orientation_offset,
+        episode_target_orientation_source,
+    )
     return quat_apply(_quat_conjugate_wxyz(target_quat_w), body_pos_w - target_pos_w)
 
 
@@ -467,6 +518,7 @@ def _semantic_axial_lateral_errors(
     target_position_offset: tuple[float, float, float] | list[float] | None,
     body_position_offset: tuple[float, float, float] | list[float] | None,
     target_orientation_offset: tuple[float, float, float, float] | list[float] | None,
+    episode_target_orientation_source: str = "target_pose",
 ) -> tuple[torch.Tensor, torch.Tensor]:
     """Return absolute axial and lateral error using episode insertion-axis metadata when present."""
     axis_w = _episode_insertion_axis_w(env)
@@ -487,6 +539,7 @@ def _semantic_axial_lateral_errors(
         target_position_offset=target_position_offset,
         body_position_offset=body_position_offset,
         target_orientation_offset=target_orientation_offset,
+        episode_target_orientation_source=episode_target_orientation_source,
     )
     axis = int(insertion_axis)
     if axis < 0 or axis > 2:
@@ -504,6 +557,7 @@ def _semantic_lateral_error(
     target_position_offset: tuple[float, float, float] | list[float] | None,
     body_position_offset: tuple[float, float, float] | list[float] | None,
     target_orientation_offset: tuple[float, float, float, float] | list[float] | None,
+    episode_target_orientation_source: str = "target_pose",
 ) -> torch.Tensor:
     axis_w = _episode_insertion_axis_w(env)
     if axis_w is not None:
@@ -518,6 +572,7 @@ def _semantic_lateral_error(
         target_position_offset=target_position_offset,
         body_position_offset=body_position_offset,
         target_orientation_offset=target_orientation_offset,
+        episode_target_orientation_source=episode_target_orientation_source,
     )
     return _lateral_error_from_delta(delta_target, insertion_axis)
 
@@ -603,6 +658,7 @@ def body_to_object_distance_tanh(
     target_position_offset: tuple[float, float, float] | list[float] | None = None,
     body_position_offset: tuple[float, float, float] | list[float] | None = None,
     target_orientation_offset: tuple[float, float, float, float] | list[float] | None = None,
+    episode_target_orientation_source: str = "target_pose",
 ) -> torch.Tensor:
     """Reward a body approaching a target object's root pose.
 
@@ -628,6 +684,7 @@ def body_to_object_distance_tanh(
         target_position_offset=target_position_offset,
         body_position_offset=body_position_offset,
         target_orientation_offset=target_orientation_offset,
+        episode_target_orientation_source=episode_target_orientation_source,
     )
     return _positive_reward_lateral_gate(reward, lateral_error, lateral_gate_sigma)
 
@@ -642,6 +699,7 @@ def body_to_object_distance_exp(
     target_position_offset: tuple[float, float, float] | list[float] | None = None,
     body_position_offset: tuple[float, float, float] | list[float] | None = None,
     target_orientation_offset: tuple[float, float, float, float] | list[float] | None = None,
+    episode_target_orientation_source: str = "target_pose",
 ) -> torch.Tensor:
     """Reward precise body-to-target proximity using an exponential kernel."""
     body_asset: RigidObject = env.scene[body_cfg.name]
@@ -661,6 +719,7 @@ def body_to_object_distance_exp(
         target_position_offset=target_position_offset,
         body_position_offset=body_position_offset,
         target_orientation_offset=target_orientation_offset,
+        episode_target_orientation_source=episode_target_orientation_source,
     )
     return _positive_reward_lateral_gate(reward, lateral_error, lateral_gate_sigma)
 
@@ -675,6 +734,7 @@ def body_to_object_distance_progress(
     target_position_offset: tuple[float, float, float] | list[float] | None = None,
     body_position_offset: tuple[float, float, float] | list[float] | None = None,
     target_orientation_offset: tuple[float, float, float, float] | list[float] | None = None,
+    episode_target_orientation_source: str = "target_pose",
 ) -> torch.Tensor:
     """Reward one-step progress toward the semantic target point.
 
@@ -707,6 +767,7 @@ def body_to_object_distance_progress(
         target_position_offset=target_position_offset,
         body_position_offset=body_position_offset,
         target_orientation_offset=target_orientation_offset,
+        episode_target_orientation_source=episode_target_orientation_source,
     )
     return _insertion_progress_lateral_gate(progress, lateral_error, lateral_gate_sigma)
 
@@ -721,6 +782,7 @@ def body_to_object_motion_projection(
     target_position_offset: tuple[float, float, float] | list[float] | None = None,
     body_position_offset: tuple[float, float, float] | list[float] | None = None,
     target_orientation_offset: tuple[float, float, float, float] | list[float] | None = None,
+    episode_target_orientation_source: str = "target_pose",
 ) -> torch.Tensor:
     """Reward actual tip motion whose realized displacement points toward the target.
 
@@ -756,6 +818,7 @@ def body_to_object_motion_projection(
         target_position_offset=target_position_offset,
         body_position_offset=body_position_offset,
         target_orientation_offset=target_orientation_offset,
+        episode_target_orientation_source=episode_target_orientation_source,
     )
     return _insertion_progress_lateral_gate(reward, lateral_error, lateral_gate_sigma)
 
@@ -769,6 +832,7 @@ def body_to_object_lateral_progress(
     target_position_offset: tuple[float, float, float] | list[float] | None = None,
     body_position_offset: tuple[float, float, float] | list[float] | None = None,
     target_orientation_offset: tuple[float, float, float, float] | list[float] | None = None,
+    episode_target_orientation_source: str = "target_pose",
 ) -> torch.Tensor:
     """Reward reduction of lateral error in the target/port frame."""
     body_asset: RigidObject = env.scene[body_cfg.name]
@@ -782,6 +846,7 @@ def body_to_object_lateral_progress(
         target_position_offset=target_position_offset,
         body_position_offset=body_position_offset,
         target_orientation_offset=target_orientation_offset,
+        episode_target_orientation_source=episode_target_orientation_source,
     )
     previous = getattr(env, "_aic_previous_target_lateral_error", None)
     reset_mask = getattr(env, "episode_length_buf", None)
@@ -809,13 +874,18 @@ def body_to_object_axial_progress(
     consistency_body_name: str | None = None,
     consistency_axial_std: float | None = None,
     consistency_lateral_sigma: float | None = None,
+    consistency_gate_mode: str = "target_depth",
     semantic_progress_scale: float = 0.10,
     semantic_progress_weight: float = 0.0,
     semantic_loss_weight: float = 0.0,
+    module_depth_progress_scale: float = 0.001,
+    module_depth_progress_weight: float = 0.0,
+    module_depth_loss_weight: float = 0.0,
     target_position_offset: tuple[float, float, float] | list[float] | None = None,
     body_position_offset: tuple[float, float, float] | list[float] | None = None,
     body_orientation_offset: tuple[float, float, float, float] | list[float] | None = None,
     target_orientation_offset: tuple[float, float, float, float] | list[float] | None = None,
+    episode_target_orientation_source: str = "target_pose",
     orientation_error_mode: str = "quat",
     orientation_axis_local: tuple[float, float, float] | list[float] = (0.0, 1.0, 0.0),
 ) -> torch.Tensor:
@@ -859,6 +929,7 @@ def body_to_object_axial_progress(
             orientation_gate_std=orientation_gate_std,
             body_orientation_offset=body_orientation_offset,
             target_orientation_offset=target_orientation_offset,
+            episode_target_orientation_source=episode_target_orientation_source,
             orientation_error_mode=orientation_error_mode,
             orientation_axis_local=orientation_axis_local,
             insertion_axis_w=geometry.axis,
@@ -876,6 +947,7 @@ def body_to_object_axial_progress(
             consistency_lateral_sigma=consistency_lateral_sigma
             if consistency_lateral_sigma is not None
             else lateral_gate_sigma,
+            consistency_gate_mode=consistency_gate_mode,
         )
         if consistency_gate is not None:
             semantic_gate = consistency_gate if semantic_gate is None else semantic_gate * consistency_gate
@@ -904,6 +976,7 @@ def body_to_object_axial_progress(
             target_position_offset=target_position_offset,
             body_position_offset=body_position_offset,
             target_orientation_offset=target_orientation_offset,
+            episode_target_orientation_source=episode_target_orientation_source,
         )
         axis = int(insertion_axis)
         if axis < 0 or axis > 2:
@@ -930,17 +1003,23 @@ def body_to_object_insertion_corridor(
     insertion_axis: int = 0,
     lateral_gate_sigma: float = 0.0025,
     bypass_penalty_scale: float = 1.0,
+    bypass_gate_tolerance: float = 0.0,
     orientation_gate_std: float | None = None,
     consistency_body_name: str | None = None,
     consistency_axial_std: float | None = None,
     consistency_lateral_sigma: float | None = None,
+    consistency_gate_mode: str = "target_depth",
     semantic_progress_scale: float = 0.10,
     semantic_progress_weight: float = 0.0,
     semantic_loss_weight: float = 0.0,
+    module_depth_progress_scale: float = 0.001,
+    module_depth_progress_weight: float = 0.0,
+    module_depth_loss_weight: float = 0.0,
     target_position_offset: tuple[float, float, float] | list[float] | None = None,
     body_position_offset: tuple[float, float, float] | list[float] | None = None,
     body_orientation_offset: tuple[float, float, float, float] | list[float] | None = None,
     target_orientation_offset: tuple[float, float, float, float] | list[float] | None = None,
+    episode_target_orientation_source: str = "target_pose",
     orientation_error_mode: str = "quat",
     orientation_axis_local: tuple[float, float, float] | list[float] = (0.0, 1.0, 0.0),
 ) -> torch.Tensor:
@@ -973,6 +1052,7 @@ def body_to_object_insertion_corridor(
             orientation_gate_std=orientation_gate_std,
             body_orientation_offset=body_orientation_offset,
             target_orientation_offset=target_orientation_offset,
+            episode_target_orientation_source=episode_target_orientation_source,
             orientation_error_mode=orientation_error_mode,
             orientation_axis_local=orientation_axis_local,
             insertion_axis_w=geometry.axis,
@@ -988,12 +1068,14 @@ def body_to_object_insertion_corridor(
             consistency_body_name=consistency_body_name,
             consistency_axial_std=consistency_axial_std,
             consistency_lateral_sigma=consistency_lateral_sigma if consistency_lateral_sigma is not None else lateral_gate_sigma,
+            consistency_gate_mode=consistency_gate_mode,
         )
         if consistency_gate is not None:
             semantic_gate = consistency_gate if semantic_gate is None else semantic_gate * consistency_gate
         return insertion_corridor_reward(
             geometry,
             bypass_penalty_scale=bypass_penalty_scale,
+            bypass_gate_tolerance=bypass_gate_tolerance,
             semantic_gate=semantic_gate,
         )
     else:
@@ -1005,6 +1087,7 @@ def body_to_object_insertion_corridor(
             target_position_offset=target_position_offset,
             body_position_offset=body_position_offset,
             target_orientation_offset=target_orientation_offset,
+            episode_target_orientation_source=episode_target_orientation_source,
         )
         axis = int(insertion_axis)
         if axis < 0 or axis > 2:
@@ -1016,7 +1099,10 @@ def body_to_object_insertion_corridor(
     depth_fraction = (depth / target_depth).clamp(min=0.0, max=1.0)
     gate = torch.exp(-torch.square(lateral_error / max(float(lateral_gate_sigma), 1.0e-9)))
     centered_depth_reward = depth_fraction * gate
-    bypass_penalty = depth_fraction * (1.0 - gate) * max(float(bypass_penalty_scale), 0.0)
+    tolerance = min(max(float(bypass_gate_tolerance), 0.0), 0.99)
+    effective_tolerance = tolerance * depth_fraction
+    gate_failure = torch.relu((1.0 - gate) - effective_tolerance) / (1.0 - effective_tolerance).clamp(min=1.0e-9)
+    bypass_penalty = depth_fraction * gate_failure * max(float(bypass_penalty_scale), 0.0)
     orientation_gate = _orientation_gate(
         env,
         body_asset,
@@ -1025,13 +1111,18 @@ def body_to_object_insertion_corridor(
         orientation_gate_std=orientation_gate_std,
         body_orientation_offset=body_orientation_offset,
         target_orientation_offset=target_orientation_offset,
+        episode_target_orientation_source=episode_target_orientation_source,
         orientation_error_mode=orientation_error_mode,
         orientation_axis_local=orientation_axis_local,
     )
     if orientation_gate is not None:
         gate = gate * orientation_gate
         centered_depth_reward = depth_fraction * gate
-        bypass_penalty = depth_fraction * (1.0 - gate) * max(float(bypass_penalty_scale), 0.0)
+        effective_tolerance = tolerance * depth_fraction
+        gate_failure = torch.relu((1.0 - gate) - effective_tolerance) / (
+            1.0 - effective_tolerance
+        ).clamp(min=1.0e-9)
+        bypass_penalty = depth_fraction * gate_failure * max(float(bypass_penalty_scale), 0.0)
     return centered_depth_reward - bypass_penalty
 
 
@@ -1066,17 +1157,58 @@ def body_to_object_cheatcode_phase_reward(
     inside_gate_scale: float = 0.001,
     near_misaligned_lateral_threshold: float = 0.0015,
     near_misaligned_orientation_threshold: float = 0.06,
+    near_misaligned_max: float = 25.0,
+    lateral_funnel_scale: float = 0.010,
+    lateral_funnel_max: float = 4.0,
     inside_lateral_scale: float = 0.001,
     inside_orientation_scale: float = 0.04,
+    inside_alignment_max: float = 25.0,
     bypass_penalty_scale: float = 6.0,
+    bypass_gate_tolerance: float = 0.0,
     success_depth_fraction: float = 0.9,
     success_lateral_threshold: float = 0.0005,
     success_orientation_threshold: float = 0.03,
+    success_candidate_weight: float = 1.0,
     lateral_progress_weight: float = 0.40,
     orientation_progress_weight: float = 0.30,
+    lateral_funnel_weight: float = 0.0,
     near_misaligned_weight: float = 0.25,
     hover_weight: float = 0.15,
     axial_progress_weight: float = 0.30,
+    lateral_alignment_action_weight: float = 0.0,
+    lateral_alignment_action_scale: float = 0.001,
+    lateral_alignment_require_axial_quiet: bool = False,
+    lateral_alignment_axial_quiet_scale: float = 0.0005,
+    off_axis_axial_action_penalty_weight: float = 0.0,
+    off_axis_axial_action_scale: float = 0.001,
+    off_axis_axial_action_penalty_max: float = 0.0,
+    lateral_error_state_penalty_weight: float = 0.0,
+    lateral_error_state_penalty_scale: float = 0.010,
+    lateral_error_state_penalty_max: float = 4.0,
+    preinsert_aligned_axial_weight: float = 0.0,
+    preinsert_aligned_axial_start: float = -0.035,
+    preinsert_aligned_axial_scale: float = 0.005,
+    phase_gate_insertion_credit: bool = False,
+    stateful_phase_mode: bool = False,
+    stateful_lateral_enter_threshold: float = 0.0010,
+    stateful_orientation_enter_threshold: float = 0.035,
+    stateful_axial_action_quiet_scale: float = 0.0005,
+    stateful_axial_lateral_action_penalty_weight: float = 0.0,
+    stateful_axial_lateral_action_scale: float = 0.00015,
+    stateful_axial_lateral_action_penalty_max: float = 4.0,
+    stateful_axial_alignment_loss_penalty_weight: float = 0.0,
+    stateful_axial_alignment_loss_lateral_scale: float = 0.0005,
+    stateful_axial_alignment_loss_orientation_scale: float = 0.02,
+    stateful_axial_alignment_loss_penalty_max: float = 8.0,
+    stateful_axial_pure_action_weight: float = 0.0,
+    stateful_axial_impure_action_penalty_weight: float = 0.0,
+    stateful_axial_impure_action_penalty_max: float = 4.0,
+    stateful_axial_rotation_action_penalty_weight: float = 0.0,
+    stateful_axial_rotation_action_scale: float = 0.00015,
+    stateful_axial_rotation_action_penalty_max: float = 4.0,
+    stateful_axial_forward_action_penalty_weight: float = 0.0,
+    stateful_axial_forward_action_scale: float = 0.00005,
+    stateful_axial_forward_action_penalty_max: float = 4.0,
     corridor_weight: float = 1.50,
     inside_alignment_weight: float = 0.20,
     retreat_weight: float = 0.20,
@@ -1091,17 +1223,22 @@ def body_to_object_cheatcode_phase_reward(
     consistency_body_name: str | None = None,
     consistency_axial_std: float | None = None,
     consistency_lateral_sigma: float | None = None,
+    consistency_gate_mode: str = "target_depth",
     semantic_progress_scale: float = 0.10,
     semantic_progress_weight: float = 0.0,
     semantic_loss_weight: float = 0.0,
+    module_depth_progress_scale: float = 0.001,
+    module_depth_progress_weight: float = 0.0,
+    module_depth_loss_weight: float = 0.0,
     target_position_offset: tuple[float, float, float] | list[float] | None = None,
     body_position_offset: tuple[float, float, float] | list[float] | None = None,
     body_orientation_offset: tuple[float, float, float, float] | list[float] | None = None,
     target_orientation_offset: tuple[float, float, float, float] | list[float] | None = None,
+    episode_target_orientation_source: str = "target_pose",
     orientation_error_mode: str = "quat",
     orientation_axis_local: tuple[float, float, float] | list[float] = (0.0, 1.0, 0.0),
 ) -> torch.Tensor:
-    """CheatCode-style phase reward: align first, insert only through a tight corridor."""
+    """Multiplicative exponential-gated insertion reward."""
     body_asset: RigidObject = env.scene[body_cfg.name]
     target_asset: RigidObject = env.scene[target_cfg.name]
     body_pos_w = _body_position_w(body_asset, body_cfg.body_ids[0], body_position_offset)
@@ -1124,6 +1261,7 @@ def body_to_object_cheatcode_phase_reward(
         target_asset,
         body_orientation_offset=body_orientation_offset,
         target_orientation_offset=target_orientation_offset,
+        episode_target_orientation_source=episode_target_orientation_source,
         orientation_error_mode=orientation_error_mode,
         orientation_axis_local=orientation_axis_local,
         insertion_axis_w=geometry.axis,
@@ -1132,7 +1270,19 @@ def body_to_object_cheatcode_phase_reward(
         orientation_error = torch.zeros_like(geometry.axial_depth)
 
     semantic_gate = None
+    consistency_depth = None
     if consistency_body_name:
+        consistency_body_id = _body_id_by_name(body_asset, consistency_body_name)
+        if consistency_body_id is not None:
+            consistency_pos_w = _body_position_w(body_asset, consistency_body_id, None)
+            consistency_geometry = compute_insertion_geometry(
+                body_pos_w=consistency_pos_w,
+                entrance_pos_w=entrance_w,
+                target_pos_w=target_pos_w,
+                axis_w=axis_w,
+                lateral_gate_sigma=0.0 if consistency_lateral_sigma is None else float(consistency_lateral_sigma),
+            )
+            consistency_depth = consistency_geometry.axial_depth
         semantic_gate = _plug_consistency_gate_from_entrance(
             env,
             primary_depth=geometry.axial_depth,
@@ -1144,12 +1294,14 @@ def body_to_object_cheatcode_phase_reward(
             consistency_body_name=consistency_body_name,
             consistency_axial_std=consistency_axial_std,
             consistency_lateral_sigma=consistency_lateral_sigma,
+            consistency_gate_mode=consistency_gate_mode,
         )
 
     reset_mask = getattr(env, "episode_length_buf", None)
     previous_depth = getattr(env, "_aic_previous_cheatcode_phase_depth", None)
     previous_lateral = getattr(env, "_aic_previous_cheatcode_phase_lateral", None)
     previous_orientation = getattr(env, "_aic_previous_cheatcode_phase_orientation", None)
+    previous_module_depth = getattr(env, "_aic_previous_cheatcode_phase_module_depth", None)
     if previous_depth is None or previous_depth.shape != geometry.axial_depth.shape:
         previous_depth = geometry.axial_depth.detach().clone()
     else:
@@ -1162,6 +1314,12 @@ def body_to_object_cheatcode_phase_reward(
         previous_orientation = orientation_error.detach().clone()
     else:
         previous_orientation = _reset_previous_on_episode_start(previous_orientation, orientation_error, reset_mask)
+    if consistency_depth is None:
+        previous_module_depth = None
+    elif previous_module_depth is None or previous_module_depth.shape != consistency_depth.shape:
+        previous_module_depth = consistency_depth.detach().clone()
+    else:
+        previous_module_depth = _reset_previous_on_episode_start(previous_module_depth, consistency_depth, reset_mask)
     previous_semantic_gate = getattr(env, "_aic_previous_cheatcode_phase_semantic_gate", None)
     if semantic_gate is None:
         previous_semantic_gate = None
@@ -1176,8 +1334,8 @@ def body_to_object_cheatcode_phase_reward(
         action_manager = getattr(env, "action_manager", None)
         manager_action = None if action_manager is None else getattr(action_manager, "action", None)
         requested_source = str(action_axis_source)
-        if requested_source not in {"action_manager", "body_delta"}:
-            raise ValueError("action_axis_source must be 'action_manager' or 'body_delta'")
+        if requested_source not in {"action_manager", "body_delta", "policy_tcp_delta"}:
+            raise ValueError("action_axis_source must be 'action_manager', 'body_delta', or 'policy_tcp_delta'")
         if (
             requested_source == "action_manager"
             and torch.is_tensor(manager_action)
@@ -1186,6 +1344,19 @@ def body_to_object_cheatcode_phase_reward(
         ):
             action_delta_w = manager_action[:, :3]
             action_source = "action_manager.action"
+        elif requested_source == "policy_tcp_delta":
+            policy_delta_w = getattr(env, "_aic_reward_policy_tcp_delta_w", None)
+            if (
+                torch.is_tensor(policy_delta_w)
+                and policy_delta_w.ndim == 2
+                and policy_delta_w.shape[0] == env.num_envs
+                and policy_delta_w.shape[1] >= 3
+            ):
+                action_delta_w = policy_delta_w[:, :3].to(device=body_pos_w.device, dtype=body_pos_w.dtype)
+                action_source = "policy_tcp_delta_w"
+            else:
+                action_delta_w = torch.zeros_like(body_pos_w)
+                action_source = "policy_tcp_delta_missing"
         else:
             previous_body_pos = getattr(env, "_aic_previous_cheatcode_phase_body_pos", None)
             if previous_body_pos is None or previous_body_pos.shape != body_pos_w.shape:
@@ -1227,21 +1398,63 @@ def body_to_object_cheatcode_phase_reward(
         inside_gate_scale=inside_gate_scale,
         near_misaligned_lateral_threshold=near_misaligned_lateral_threshold,
         near_misaligned_orientation_threshold=near_misaligned_orientation_threshold,
+        near_misaligned_max=near_misaligned_max,
+        lateral_funnel_scale=lateral_funnel_scale,
+        lateral_funnel_max=lateral_funnel_max,
         inside_lateral_scale=inside_lateral_scale,
         inside_orientation_scale=inside_orientation_scale,
+        inside_alignment_max=inside_alignment_max,
         bypass_penalty_scale=bypass_penalty_scale,
+        bypass_gate_tolerance=bypass_gate_tolerance,
         success_depth_fraction=success_depth_fraction,
         success_lateral_threshold=success_lateral_threshold,
         success_orientation_threshold=success_orientation_threshold,
+        success_candidate_weight=success_candidate_weight,
         lateral_progress_weight=lateral_progress_weight,
         orientation_progress_weight=orientation_progress_weight,
+        lateral_funnel_weight=lateral_funnel_weight,
         near_misaligned_weight=near_misaligned_weight,
         hover_weight=hover_weight,
         axial_progress_weight=axial_progress_weight,
+        lateral_alignment_action_weight=lateral_alignment_action_weight,
+        lateral_alignment_action_scale=lateral_alignment_action_scale,
+        lateral_alignment_require_axial_quiet=lateral_alignment_require_axial_quiet,
+        lateral_alignment_axial_quiet_scale=lateral_alignment_axial_quiet_scale,
+        off_axis_axial_action_penalty_weight=off_axis_axial_action_penalty_weight,
+        off_axis_axial_action_scale=off_axis_axial_action_scale,
+        off_axis_axial_action_penalty_max=off_axis_axial_action_penalty_max,
+        lateral_error_state_penalty_weight=lateral_error_state_penalty_weight,
+        lateral_error_state_penalty_scale=lateral_error_state_penalty_scale,
+        lateral_error_state_penalty_max=lateral_error_state_penalty_max,
+        preinsert_aligned_axial_weight=preinsert_aligned_axial_weight,
+        preinsert_aligned_axial_start=preinsert_aligned_axial_start,
+        preinsert_aligned_axial_scale=preinsert_aligned_axial_scale,
+        phase_gate_insertion_credit=phase_gate_insertion_credit,
+        stateful_phase_mode=stateful_phase_mode,
+        stateful_lateral_enter_threshold=stateful_lateral_enter_threshold,
+        stateful_orientation_enter_threshold=stateful_orientation_enter_threshold,
+        stateful_axial_action_quiet_scale=stateful_axial_action_quiet_scale,
+        stateful_axial_lateral_action_penalty_weight=stateful_axial_lateral_action_penalty_weight,
+        stateful_axial_lateral_action_scale=stateful_axial_lateral_action_scale,
+        stateful_axial_lateral_action_penalty_max=stateful_axial_lateral_action_penalty_max,
+        stateful_axial_alignment_loss_penalty_weight=stateful_axial_alignment_loss_penalty_weight,
+        stateful_axial_alignment_loss_lateral_scale=stateful_axial_alignment_loss_lateral_scale,
+        stateful_axial_alignment_loss_orientation_scale=stateful_axial_alignment_loss_orientation_scale,
+        stateful_axial_alignment_loss_penalty_max=stateful_axial_alignment_loss_penalty_max,
+        stateful_axial_pure_action_weight=stateful_axial_pure_action_weight,
+        stateful_axial_impure_action_penalty_weight=stateful_axial_impure_action_penalty_weight,
+        stateful_axial_impure_action_penalty_max=stateful_axial_impure_action_penalty_max,
+        stateful_axial_rotation_action_penalty_weight=stateful_axial_rotation_action_penalty_weight,
+        stateful_axial_rotation_action_scale=stateful_axial_rotation_action_scale,
+        stateful_axial_rotation_action_penalty_max=stateful_axial_rotation_action_penalty_max,
+        stateful_axial_forward_action_penalty_weight=stateful_axial_forward_action_penalty_weight,
+        stateful_axial_forward_action_scale=stateful_axial_forward_action_scale,
+        stateful_axial_forward_action_penalty_max=stateful_axial_forward_action_penalty_max,
         corridor_weight=corridor_weight,
         inside_alignment_weight=inside_alignment_weight,
         retreat_weight=retreat_weight,
         action_delta_w=action_delta_w,
+        action_rotation_norm=getattr(env, "_aic_reward_policy_tcp_rotation_norm", None),
         action_axis_gate=action_axis_gate,
         action_lateral_sigma=action_lateral_sigma,
         action_lateral_sigma_far=action_lateral_sigma_far,
@@ -1254,6 +1467,11 @@ def body_to_object_cheatcode_phase_reward(
         semantic_progress_scale=semantic_progress_scale,
         semantic_progress_weight=semantic_progress_weight,
         semantic_loss_weight=semantic_loss_weight,
+        module_depth=consistency_depth,
+        previous_module_depth=previous_module_depth,
+        module_depth_progress_scale=module_depth_progress_scale,
+        module_depth_progress_weight=module_depth_progress_weight,
+        module_depth_loss_weight=module_depth_loss_weight,
     )
     setattr(env, "_aic_previous_cheatcode_phase_depth", geometry.axial_depth.detach().clone())
     setattr(env, "_aic_previous_cheatcode_phase_lateral", geometry.lateral_error.detach().clone())
@@ -1261,6 +1479,8 @@ def body_to_object_cheatcode_phase_reward(
     setattr(env, "_aic_previous_cheatcode_phase_body_pos", body_pos_w.detach().clone())
     if semantic_gate is not None:
         setattr(env, "_aic_previous_cheatcode_phase_semantic_gate", semantic_gate.detach().clone())
+    if consistency_depth is not None:
+        setattr(env, "_aic_previous_cheatcode_phase_module_depth", consistency_depth.detach().clone())
     setattr(
         env,
         "_aic_cheatcode_phase_reward_components",
@@ -1279,6 +1499,7 @@ def body_to_object_orientation_tanh(
     target_cfg: SceneEntityCfg,
     body_orientation_offset: tuple[float, float, float, float] | list[float] | None = None,
     target_orientation_offset: tuple[float, float, float, float] | list[float] | None = None,
+    episode_target_orientation_source: str = "target_pose",
     orientation_error_mode: str = "quat",
     orientation_axis_local: tuple[float, float, float] | list[float] = (0.0, 1.0, 0.0),
 ) -> torch.Tensor:
@@ -1292,6 +1513,7 @@ def body_to_object_orientation_tanh(
         target_asset,
         body_orientation_offset=body_orientation_offset,
         target_orientation_offset=target_orientation_offset,
+        episode_target_orientation_source=episode_target_orientation_source,
         orientation_error_mode=orientation_error_mode,
         orientation_axis_local=orientation_axis_local,
     )
@@ -1310,6 +1532,7 @@ def body_to_object_orientation_gated_exp(
     target_orientation_offset: tuple[float, float, float, float] | list[float] | None = None,
     target_position_offset: tuple[float, float, float] | list[float] | None = None,
     body_position_offset: tuple[float, float, float] | list[float] | None = None,
+    episode_target_orientation_source: str = "target_pose",
     orientation_error_mode: str = "quat",
     orientation_axis_local: tuple[float, float, float] | list[float] = (0.0, 1.0, 0.0),
 ) -> torch.Tensor:
@@ -1326,6 +1549,7 @@ def body_to_object_orientation_gated_exp(
         target_asset,
         body_orientation_offset=body_orientation_offset,
         target_orientation_offset=target_orientation_offset,
+        episode_target_orientation_source=episode_target_orientation_source,
         orientation_error_mode=orientation_error_mode,
         orientation_axis_local=orientation_axis_local,
         insertion_axis_w=axis_w,
@@ -1372,6 +1596,7 @@ def body_to_object_success(
     body_position_offset: tuple[float, float, float] | list[float] | None = None,
     body_orientation_offset: tuple[float, float, float, float] | list[float] | None = None,
     target_orientation_offset: tuple[float, float, float, float] | list[float] | None = None,
+    episode_target_orientation_source: str = "target_pose",
     orientation_error_mode: str = "quat",
     orientation_axis_local: tuple[float, float, float] | list[float] = (0.0, 1.0, 0.0),
 ) -> torch.Tensor:
@@ -1395,6 +1620,7 @@ def body_to_object_success(
         target_position_offset=target_position_offset,
         body_position_offset=body_position_offset,
         target_orientation_offset=target_orientation_offset,
+        episode_target_orientation_source=episode_target_orientation_source,
     )
     axial_limit = float(threshold if axial_threshold is None else axial_threshold)
     lateral_limit = float(threshold if lateral_threshold is None else lateral_threshold)
@@ -1409,6 +1635,7 @@ def body_to_object_success(
             target_asset,
             body_orientation_offset=body_orientation_offset,
             target_orientation_offset=target_orientation_offset,
+            episode_target_orientation_source=episode_target_orientation_source,
             orientation_error_mode=orientation_error_mode,
             orientation_axis_local=orientation_axis_local,
             insertion_axis_w=orientation_axis_w,
@@ -1461,6 +1688,193 @@ def body_to_object_success(
     return success
 
 
+def body_to_object_lateral_bypass_failure(
+    env: ManagerBasedRLEnv,
+    threshold: float,
+    body_cfg: SceneEntityCfg,
+    target_cfg: SceneEntityCfg,
+    insertion_axis: int = 0,
+    activation_depth: float = float("-inf"),
+    min_episode_steps: int = 0,
+    target_position_offset: tuple[float, float, float] | list[float] | None = None,
+    body_position_offset: tuple[float, float, float] | list[float] | None = None,
+    target_orientation_offset: tuple[float, float, float, float] | list[float] | None = None,
+    episode_target_orientation_source: str = "target_pose",
+) -> torch.Tensor:
+    """Terminate when a near-gate insertion episode has clearly bypassed laterally."""
+    if float(threshold) <= 0.0:
+        return torch.zeros(env.num_envs, dtype=torch.bool, device=env.device)
+    body_asset: RigidObject = env.scene[body_cfg.name]
+    target_asset: RigidObject = env.scene[target_cfg.name]
+    body_pos_w = _body_position_w(body_asset, body_cfg.body_ids[0], body_position_offset)
+    target_pos_w = _target_position_w(env, target_asset, target_position_offset)
+    entrance_axis = _episode_entrance_position_axis_w(env, target_pos_w=target_pos_w)
+    if entrance_axis is None:
+        axial_error, lateral_error = _semantic_axial_lateral_errors(
+            env,
+            body_asset,
+            body_cfg.body_ids[0],
+            target_asset,
+            insertion_axis=insertion_axis,
+            target_position_offset=target_position_offset,
+            body_position_offset=body_position_offset,
+            target_orientation_offset=target_orientation_offset,
+            episode_target_orientation_source=episode_target_orientation_source,
+        )
+        axial_depth = -axial_error
+    else:
+        entrance_w, axis_w = entrance_axis
+        geometry = compute_insertion_geometry(
+            body_pos_w=body_pos_w,
+            entrance_pos_w=entrance_w,
+            target_pos_w=target_pos_w,
+            axis_w=axis_w,
+            lateral_gate_sigma=0.0,
+        )
+        axial_depth = geometry.axial_depth
+        lateral_error = geometry.lateral_error
+    failure = (lateral_error > float(threshold)) & (axial_depth >= float(activation_depth))
+    if int(min_episode_steps) > 0:
+        episode_steps = getattr(env, "episode_length_buf", None)
+        if episode_steps is not None:
+            failure = failure & (episode_steps.to(device=failure.device) >= int(min_episode_steps))
+    return failure
+
+
+def body_to_object_offgate_depth_failure(
+    env: ManagerBasedRLEnv,
+    activation_depth: float,
+    lateral_threshold: float,
+    orientation_threshold: float,
+    body_cfg: SceneEntityCfg,
+    target_cfg: SceneEntityCfg,
+    insertion_axis: int = 0,
+    min_episode_steps: int = 0,
+    target_position_offset: tuple[float, float, float] | list[float] | None = None,
+    body_position_offset: tuple[float, float, float] | list[float] | None = None,
+    body_orientation_offset: tuple[float, float, float, float] | list[float] | None = None,
+    target_orientation_offset: tuple[float, float, float, float] | list[float] | None = None,
+    episode_target_orientation_source: str = "target_pose",
+    orientation_error_mode: str = "quat",
+    orientation_axis_local: tuple[float, float, float] | list[float] = (0.0, 1.0, 0.0),
+) -> torch.Tensor:
+    """Terminate when depth progresses before semantic lateral/orientation gates are satisfied."""
+    if not math.isfinite(float(activation_depth)):
+        return torch.zeros(env.num_envs, dtype=torch.bool, device=env.device)
+    body_asset: RigidObject = env.scene[body_cfg.name]
+    target_asset: RigidObject = env.scene[target_cfg.name]
+    body_pos_w = _body_position_w(body_asset, body_cfg.body_ids[0], body_position_offset)
+    target_pos_w = _target_position_w(env, target_asset, target_position_offset)
+    entrance_axis = _episode_entrance_position_axis_w(env, target_pos_w=target_pos_w)
+    if entrance_axis is None:
+        axial_error, lateral_error = _semantic_axial_lateral_errors(
+            env,
+            body_asset,
+            body_cfg.body_ids[0],
+            target_asset,
+            insertion_axis=insertion_axis,
+            target_position_offset=target_position_offset,
+            body_position_offset=body_position_offset,
+            target_orientation_offset=target_orientation_offset,
+            episode_target_orientation_source=episode_target_orientation_source,
+        )
+        axial_depth = -axial_error
+        orientation_axis_w = None
+    else:
+        entrance_w, axis_w = entrance_axis
+        geometry = compute_insertion_geometry(
+            body_pos_w=body_pos_w,
+            entrance_pos_w=entrance_w,
+            target_pos_w=target_pos_w,
+            axis_w=axis_w,
+            lateral_gate_sigma=0.0,
+        )
+        axial_depth = geometry.axial_depth
+        lateral_error = geometry.lateral_error
+        orientation_axis_w = axis_w
+    orientation_error = _body_target_orientation_error(
+        env,
+        body_asset,
+        body_cfg.body_ids[0],
+        target_asset,
+        body_orientation_offset=body_orientation_offset,
+        target_orientation_offset=target_orientation_offset,
+        episode_target_orientation_source=episode_target_orientation_source,
+        orientation_error_mode=orientation_error_mode,
+        orientation_axis_local=orientation_axis_local,
+        insertion_axis_w=orientation_axis_w,
+    )
+    if orientation_error is None:
+        orientation_error = torch.full_like(axial_depth, float("inf"))
+    off_lateral = lateral_error > float(lateral_threshold)
+    off_orientation = orientation_error > float(orientation_threshold)
+    failure = (axial_depth >= float(activation_depth)) & (off_lateral | off_orientation)
+    if int(min_episode_steps) > 0:
+        episode_steps = getattr(env, "episode_length_buf", None)
+        if episode_steps is not None:
+            failure = failure & (episode_steps.to(device=failure.device) >= int(min_episode_steps))
+    return failure
+
+
+def body_to_object_centered_lateral_sweep_failure(
+    env: ManagerBasedRLEnv,
+    center_threshold: float,
+    failure_threshold: float,
+    body_cfg: SceneEntityCfg,
+    target_cfg: SceneEntityCfg,
+    insertion_axis: int = 0,
+    min_episode_steps: int = 0,
+    target_position_offset: tuple[float, float, float] | list[float] | None = None,
+    body_position_offset: tuple[float, float, float] | list[float] | None = None,
+    target_orientation_offset: tuple[float, float, float, float] | list[float] | None = None,
+    episode_target_orientation_source: str = "target_pose",
+) -> torch.Tensor:
+    """Terminate when a centered semantic tip later sweeps far off the port centerline."""
+    if float(failure_threshold) <= 0.0:
+        return torch.zeros(env.num_envs, dtype=torch.bool, device=env.device)
+    body_asset: RigidObject = env.scene[body_cfg.name]
+    target_asset: RigidObject = env.scene[target_cfg.name]
+    body_pos_w = _body_position_w(body_asset, body_cfg.body_ids[0], body_position_offset)
+    target_pos_w = _target_position_w(env, target_asset, target_position_offset)
+    entrance_axis = _episode_entrance_position_axis_w(env, target_pos_w=target_pos_w)
+    if entrance_axis is None:
+        _, lateral_error = _semantic_axial_lateral_errors(
+            env,
+            body_asset,
+            body_cfg.body_ids[0],
+            target_asset,
+            insertion_axis=insertion_axis,
+            target_position_offset=target_position_offset,
+            body_position_offset=body_position_offset,
+            target_orientation_offset=target_orientation_offset,
+            episode_target_orientation_source=episode_target_orientation_source,
+        )
+    else:
+        entrance_w, axis_w = entrance_axis
+        geometry = compute_insertion_geometry(
+            body_pos_w=body_pos_w,
+            entrance_pos_w=entrance_w,
+            target_pos_w=target_pos_w,
+            axis_w=axis_w,
+            lateral_gate_sigma=0.0,
+        )
+        lateral_error = geometry.lateral_error
+    attr_name = f"_aic_centered_lateral_sweep_seen_{body_cfg.name}_{body_cfg.body_ids[0]}"
+    seen_centered = getattr(env, attr_name, None)
+    if seen_centered is None or seen_centered.shape != lateral_error.shape:
+        seen_centered = torch.zeros_like(lateral_error, dtype=torch.bool)
+    episode_steps = getattr(env, "episode_length_buf", None)
+    if episode_steps is not None:
+        reset_mask = episode_steps.to(device=lateral_error.device) <= 1
+        seen_centered = torch.where(reset_mask, torch.zeros_like(seen_centered), seen_centered)
+    seen_centered = seen_centered | (lateral_error <= float(center_threshold))
+    setattr(env, attr_name, seen_centered.detach().clone())
+    failure = seen_centered & (lateral_error > float(failure_threshold))
+    if int(min_episode_steps) > 0 and episode_steps is not None:
+        failure = failure & (episode_steps.to(device=failure.device) >= int(min_episode_steps))
+    return failure
+
+
 def body_to_object_success_once_bonus(
     env: ManagerBasedRLEnv,
     threshold: float,
@@ -1477,6 +1891,7 @@ def body_to_object_success_once_bonus(
     body_position_offset: tuple[float, float, float] | list[float] | None = None,
     body_orientation_offset: tuple[float, float, float, float] | list[float] | None = None,
     target_orientation_offset: tuple[float, float, float, float] | list[float] | None = None,
+    episode_target_orientation_source: str = "target_pose",
     orientation_error_mode: str = "quat",
     orientation_axis_local: tuple[float, float, float] | list[float] = (0.0, 1.0, 0.0),
 ) -> torch.Tensor:
@@ -1497,6 +1912,7 @@ def body_to_object_success_once_bonus(
         body_position_offset=body_position_offset,
         body_orientation_offset=body_orientation_offset,
         target_orientation_offset=target_orientation_offset,
+        episode_target_orientation_source=episode_target_orientation_source,
         orientation_error_mode=orientation_error_mode,
         orientation_axis_local=orientation_axis_local,
     )
@@ -1522,6 +1938,7 @@ def body_to_object_lateral_error(
     target_position_offset: tuple[float, float, float] | list[float] | None = None,
     body_position_offset: tuple[float, float, float] | list[float] | None = None,
     target_orientation_offset: tuple[float, float, float, float] | list[float] | None = None,
+    episode_target_orientation_source: str = "target_pose",
 ) -> torch.Tensor:
     """Normalized lateral error in the target/port frame.
 
@@ -1540,6 +1957,7 @@ def body_to_object_lateral_error(
         target_position_offset=target_position_offset,
         body_position_offset=body_position_offset,
         target_orientation_offset=target_orientation_offset,
+        episode_target_orientation_source=episode_target_orientation_source,
     )
     return torch.tanh(lateral_error / max(float(scale), 1.0e-9))
 

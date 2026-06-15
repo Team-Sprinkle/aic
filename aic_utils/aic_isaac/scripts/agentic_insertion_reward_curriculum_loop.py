@@ -214,7 +214,7 @@ def _module_consistency_by_env(row: dict[str, Any], all_body: dict[str, Any], ti
         return [0.0 for _ in tip_depths]
     target_depths = _by_env(geom, "target_depth_m") or _by_env(module, "target_depth_m")
     if not target_depths:
-        target_depths = [0.008 for _ in module_depths]
+        target_depths = [0.0458 for _ in module_depths]
     out: list[float] = []
     for idx, depth in enumerate(module_depths):
         tip = tip_depths[min(idx, len(tip_depths) - 1)] if tip_depths else 0.0

@@ -48,7 +48,7 @@ class GazeboRewardConfig:
     force_delta_reference: float = 20.0
     force_delta_saturation: float = 30.0
     force_delta_knee_penalty_fraction: float = 0.1
-    insertion_target_depth_m: float = 0.010
+    insertion_target_depth_m: float = 0.0458
 
     def as_dict(self) -> dict[str, Any]:
         return asdict(self)
@@ -103,7 +103,7 @@ def compute_insertion_geometry(
     target_delta = target - entrance
     target_depth = float(np.dot(target_delta, axis))
     target_lateral = float(np.linalg.norm(target_delta - target_depth * axis))
-    if target_depth < 0.003 or target_depth > 0.030 or target_lateral > 0.002:
+    if target_depth < 0.003 or target_depth > 0.060 or target_lateral > 0.002:
         raise RuntimeError(
             "Invalid insertion geometry: target/entrance/axis are inconsistent "
             f"(target_depth_m={target_depth:.6f}, target_lateral_residual_m={target_lateral:.6f})"
@@ -433,7 +433,7 @@ def _target_position(target: dict[str, Any], obs: dict[str, Any] | None, cfg: Ga
         delta = pos - entrance
         depth = float(np.dot(delta, axis))
         lateral = float(np.linalg.norm(delta - depth * axis))
-        if 0.003 <= depth <= 0.030 and lateral <= 0.002:
+        if 0.003 <= depth <= 0.060 and lateral <= 0.002:
             return pos
         depth = float(target.get("insertion_target_depth_m") or target.get("seated_depth_m") or cfg.insertion_target_depth_m)
         return entrance + axis * depth

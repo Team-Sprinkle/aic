@@ -1314,7 +1314,7 @@ def build_command(args: argparse.Namespace) -> tuple[list[str], dict[str, str]]:
     env["AIC_ISAAC_INSERTION_LATERAL_WEIGHT"] = str(args.insertion_lateral_weight)
     env["AIC_ISAAC_INSERTION_AXIAL_PROGRESS_WEIGHT"] = str(getattr(args, "insertion_axial_progress_weight", 0.0))
     env["AIC_ISAAC_FORCE_DELTA_PENALTY_WEIGHT"] = str(args.force_delta_penalty_weight)
-    if args.isaac_ik_body_name:
+    if getattr(args, "isaac_ik_body_name", None):
         env["AIC_ISAAC_IK_BODY_NAME"] = str(args.isaac_ik_body_name)
     if args.initial_arm_joint_pos:
         env["AIC_ISAAC_INITIAL_ARM_JOINT_POS"] = args.initial_arm_joint_pos

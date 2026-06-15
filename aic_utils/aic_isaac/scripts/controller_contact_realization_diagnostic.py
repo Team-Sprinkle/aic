@@ -34,7 +34,7 @@ DEFAULT_BASE_CONFIG = (
 
 @dataclass(frozen=True)
 class StrictThresholds:
-    min_depth_m: float = 0.008
+    min_depth_m: float = 0.0458
     max_lateral_m: float = 0.0005
     max_theta_rad: float = 0.030
     min_module_consistency: float = 0.80
@@ -50,6 +50,182 @@ class ProbeCase:
 
 
 DEFAULT_CASES: tuple[ProbeCase, ...] = (
+    ProbeCase(
+        name="nearfull_semantic_axis_forward_40um_start17",
+        hypothesis=(
+            "Starting on the action chunk boundary before the near-full transient, a tiny semantic-axis "
+            "inward command should show whether the controller can preserve full depth and improve module consistency."
+        ),
+        replacements={
+            "--debug_audit_steps": ["60"],
+            "--debug_audit_start_step": ["17"],
+            "--debug_audit_insertion_axis_action": ["forward"],
+            "--debug_audit_insertion_axis_magnitude": ["0.00004"],
+            "--debug_audit_axis_magnitude": ["0.0"],
+            "--max_logged_image_steps": ["60"],
+            "--image_log_every": ["5"],
+        },
+        remove_flags=("--debug_audit_rotation_axes",),
+    ),
+    ProbeCase(
+        name="nearfull_forward_40um_start17_disable_body_sdf_collision",
+        hypothesis=(
+            "If the converted SFP module body SDF collision is the near-full contact blocker, disabling only that "
+            "diagnostic collision prim should reduce ejection/backout while keeping strict geometry metrics unchanged."
+        ),
+        replacements={
+            "--debug_audit_steps": ["60"],
+            "--debug_audit_start_step": ["17"],
+            "--debug_audit_insertion_axis_action": ["forward"],
+            "--debug_audit_insertion_axis_magnitude": ["0.00004"],
+            "--debug_audit_axis_magnitude": ["0.0"],
+            "--disable_collision_prim_regex": ["body_sdf_collision"],
+            "--max_logged_image_steps": ["60"],
+            "--image_log_every": ["5"],
+        },
+        remove_flags=("--debug_audit_rotation_axes",),
+    ),
+    ProbeCase(
+        name="nearfull_rotation_axes_4mrad_start17",
+        hypothesis=(
+            "Starting on the action chunk boundary before the near-full transient, bounded wrist rotation "
+            "probes should reveal whether theta can be reduced without lateral sweep or module-consistency collapse."
+        ),
+        replacements={
+            "--debug_audit_steps": ["60"],
+            "--debug_audit_start_step": ["17"],
+            "--debug_audit_insertion_axis_action": ["none"],
+            "--debug_audit_insertion_axis_magnitude": ["0.0"],
+            "--debug_audit_axis_magnitude": ["0.004"],
+            "--max_logged_image_steps": ["60"],
+            "--image_log_every": ["5"],
+        },
+        add_flags=("--debug_audit_rotation_axes",),
+    ),
+    ProbeCase(
+        name="nearfull_rotation_axes_4mrad_start17_disable_body_sdf_collision",
+        hypothesis=(
+            "With the diagnostic SFP body SDF collision disabled, bounded wrist rotations should show whether the "
+            "remaining strict failure is primarily orientation control or module-consistency geometry."
+        ),
+        replacements={
+            "--debug_audit_steps": ["60"],
+            "--debug_audit_start_step": ["17"],
+            "--debug_audit_insertion_axis_action": ["none"],
+            "--debug_audit_insertion_axis_magnitude": ["0.0"],
+            "--debug_audit_axis_magnitude": ["0.004"],
+            "--disable_collision_prim_regex": ["body_sdf_collision"],
+            "--max_logged_image_steps": ["60"],
+            "--image_log_every": ["5"],
+        },
+        add_flags=("--debug_audit_rotation_axes",),
+    ),
+    ProbeCase(
+        name="nearfull_forward_40um_start17_replace_body_sdf_with_boxes",
+        hypothesis=(
+            "Replacing the converted SFP body SDF collision mesh with the official SDF thin body boxes should preserve "
+            "physical body contact without the mesh-conversion overconstraint seen near full insertion."
+        ),
+        replacements={
+            "--debug_audit_steps": ["60"],
+            "--debug_audit_start_step": ["17"],
+            "--debug_audit_insertion_axis_action": ["forward"],
+            "--debug_audit_insertion_axis_magnitude": ["0.00004"],
+            "--debug_audit_axis_magnitude": ["0.0"],
+            "--max_logged_image_steps": ["60"],
+            "--image_log_every": ["5"],
+        },
+        add_flags=("--replace_sfp_body_sdf_collision_with_sdf_boxes",),
+        remove_flags=("--debug_audit_rotation_axes",),
+    ),
+    ProbeCase(
+        name="nearfull_rotation_axes_4mrad_start17_replace_body_sdf_with_boxes",
+        hypothesis=(
+            "With the converted SFP body mesh replaced by the official SDF body boxes, bounded wrist rotations should "
+            "test whether the remaining theta floor is controllable without losing depth/module consistency."
+        ),
+        replacements={
+            "--debug_audit_steps": ["60"],
+            "--debug_audit_start_step": ["17"],
+            "--debug_audit_insertion_axis_action": ["none"],
+            "--debug_audit_insertion_axis_magnitude": ["0.0"],
+            "--debug_audit_axis_magnitude": ["0.004"],
+            "--max_logged_image_steps": ["60"],
+            "--image_log_every": ["5"],
+        },
+        add_flags=("--replace_sfp_body_sdf_collision_with_sdf_boxes", "--debug_audit_rotation_axes"),
+    ),
+    ProbeCase(
+        name="nearfull_forward_40um_start17_replace_all_sfp_sdf_boxes",
+        hypothesis=(
+            "Replacing the converted SFP body SDF collision mesh with all official SDF module box colliders should "
+            "better match Gazebo contact geometry than the body-only diagnostic and test whether the near-full depth "
+            "collapse is a mesh-conversion artifact."
+        ),
+        replacements={
+            "--debug_audit_steps": ["60"],
+            "--debug_audit_start_step": ["17"],
+            "--debug_audit_insertion_axis_action": ["forward"],
+            "--debug_audit_insertion_axis_magnitude": ["0.00004"],
+            "--debug_audit_axis_magnitude": ["0.0"],
+            "--max_logged_image_steps": ["60"],
+            "--image_log_every": ["5"],
+        },
+        add_flags=("--replace_sfp_module_sdf_collision_with_all_sdf_boxes",),
+        remove_flags=("--debug_audit_rotation_axes",),
+    ),
+    ProbeCase(
+        name="nearfull_rotation_axes_4mrad_start17_replace_all_sfp_sdf_boxes",
+        hypothesis=(
+            "With all official SDF module boxes restored at runtime, bounded wrist rotation probes should show whether "
+            "strict theta can be improved without reintroducing lateral sweep or module-consistency collapse."
+        ),
+        replacements={
+            "--debug_audit_steps": ["60"],
+            "--debug_audit_start_step": ["17"],
+            "--debug_audit_insertion_axis_action": ["none"],
+            "--debug_audit_insertion_axis_magnitude": ["0.0"],
+            "--debug_audit_axis_magnitude": ["0.004"],
+            "--max_logged_image_steps": ["60"],
+            "--image_log_every": ["5"],
+        },
+        add_flags=("--replace_sfp_module_sdf_collision_with_all_sdf_boxes", "--debug_audit_rotation_axes"),
+    ),
+    ProbeCase(
+        name="nearfull_semantic_axis_forward_40um_start20",
+        hypothesis=(
+            "When the replay briefly reaches near-full tip depth, a tiny semantic-axis inward command "
+            "should improve module consistency without worsening lateral/orientation metrics."
+        ),
+        replacements={
+            "--debug_audit_steps": ["60"],
+            "--debug_audit_start_step": ["20"],
+            "--debug_audit_insertion_axis_action": ["forward"],
+            "--debug_audit_insertion_axis_magnitude": ["0.00004"],
+            "--debug_audit_axis_magnitude": ["0.0"],
+            "--max_logged_image_steps": ["60"],
+            "--image_log_every": ["5"],
+        },
+        remove_flags=("--debug_audit_rotation_axes",),
+    ),
+    ProbeCase(
+        name="nearfull_rotation_axes_4mrad_start20",
+        hypothesis=(
+            "When the replay briefly reaches near-full tip depth with tight lateral error but high theta, "
+            "bounded wrist rotation probes should show whether semantic orientation can improve without "
+            "rotation-induced lateral sweep or module-consistency loss."
+        ),
+        replacements={
+            "--debug_audit_steps": ["60"],
+            "--debug_audit_start_step": ["20"],
+            "--debug_audit_insertion_axis_action": ["none"],
+            "--debug_audit_insertion_axis_magnitude": ["0.0"],
+            "--debug_audit_axis_magnitude": ["0.004"],
+            "--max_logged_image_steps": ["60"],
+            "--image_log_every": ["5"],
+        },
+        add_flags=("--debug_audit_rotation_axes",),
+    ),
     ProbeCase(
         name="semantic_axis_backout_300um_start105",
         hypothesis="A direct semantic-axis backout should reduce tip and module signed depth under contact; failure indicates contact/IK realization mismatch.",
@@ -87,6 +263,22 @@ DEFAULT_CASES: tuple[ProbeCase, ...] = (
             "--debug_audit_insertion_axis_action": ["none"],
             "--debug_audit_insertion_axis_magnitude": ["0.0"],
             "--debug_audit_axis_magnitude": ["0.004"],
+            "--max_logged_image_steps": ["126"],
+            "--image_log_every": ["10"],
+        },
+        add_flags=("--debug_audit_rotation_axes",),
+    ),
+    ProbeCase(
+        name="pure_rotation_axes_20mrad_start103",
+        hypothesis="A larger bounded wrist rotation probe tests whether the remaining semantic theta error is controllable at all, while exposing any lateral sweep cost.",
+        replacements={
+            "--debug_audit_steps": ["126"],
+            "--debug_audit_start_step": ["103"],
+            "--debug_audit_insertion_axis_action": ["none"],
+            "--debug_audit_insertion_axis_magnitude": ["0.0"],
+            "--debug_audit_axis_magnitude": ["0.020"],
+            "--tcp_rotation_action_clip": ["0.020"],
+            "--action_clip": ["0.025"],
             "--max_logged_image_steps": ["126"],
             "--image_log_every": ["10"],
         },
@@ -181,10 +373,19 @@ def _ensure_flag(argv: list[str], flag: str) -> list[str]:
     return [*argv, flag]
 
 
-def _case_argv(base_argv: list[str], case: ProbeCase, output_dir_in_container: str, run_name: str) -> list[str]:
+def _case_argv(
+    base_argv: list[str],
+    case: ProbeCase,
+    output_dir_in_container: str,
+    run_name: str,
+    *,
+    num_envs: int | None = None,
+) -> list[str]:
     argv = list(base_argv)
     argv = _replace_flag(argv, "--output_dir", [output_dir_in_container])
     argv = _replace_flag(argv, "--run_name", [run_name])
+    if num_envs is not None and int(num_envs) > 0:
+        argv = _replace_flag(argv, "--num_envs", [str(int(num_envs))])
     argv = _replace_flag(argv, "--updates", [case.replacements.get("--debug_audit_steps", ["130"])[0]])
     argv = _replace_flag(argv, "--diagnostics_every", ["1"])
     for flag in case.remove_flags:
@@ -455,9 +656,9 @@ def _classify(
     ds = _num(delta.get("s_m"), 0.0)
     dtheta = _num(delta.get("theta_rad"), 0.0)
     dmodule = _num(delta.get("module_consistency"), 0.0)
-    if s >= 0.008 and r <= 0.0005 and module >= 0.80 and theta > 0.030:
+    if s >= 0.0458 and r <= 0.0005 and module >= 0.80 and theta > 0.030:
         return "near_success_orientation_blocked"
-    if s >= 0.008 and r <= 0.0005 and theta <= 0.030 and module < 0.80:
+    if s >= 0.0458 and r <= 0.0005 and theta <= 0.030 and module < 0.80:
         return "near_success_module_consistency_blocked"
     if s > 0.0 and module < 0.40:
         return "tip_depth_false_positive"
@@ -465,7 +666,7 @@ def _classify(
         return "lateral_bypass"
     if abs(ds) < 0.00005 and abs(dtheta) < 0.001 and abs(dmodule) < 0.02:
         return "controller_realization_mismatch"
-    if s < 0.008 and r <= 0.0005 and theta <= 0.040:
+    if s < 0.0458 and r <= 0.0005 and theta <= 0.040:
         return "no_axial_progress"
     if best_audit and _num(best_audit.get("theta_rad"), 1.0) < 0.035 and _num(best_audit.get("r_m"), 1.0) > 0.0005:
         return "rotation_induced_lateral_sweep"
@@ -489,7 +690,7 @@ def _write_summary_md(output_root: Path, run_summaries: list[dict[str, Any]], dr
         "",
         f"Generated: {datetime.now(timezone.utc).isoformat()}",
         "",
-        "Strict success requires post-step depth >= 8 mm, r <= 0.5 mm, theta <= 0.030 rad, and module consistency >= 0.80.",
+        "Strict success requires post-step depth >= 45.8 mm, r <= 0.5 mm, theta <= 0.030 rad, and module consistency >= 0.80.",
         "",
     ]
     if dry_run_commands:
@@ -598,7 +799,13 @@ def main() -> int:
         base_argv = _load_base_argv(args.base_config)
         for case in cases:
             run_name = case.name
-            train_argv = _case_argv(base_argv, case, f"aic/{runs_dir.relative_to(REPO_ROOT)}", run_name)
+            train_argv = _case_argv(
+                base_argv,
+                case,
+                f"aic/{runs_dir.relative_to(REPO_ROOT)}",
+                run_name,
+                num_envs=int(args.num_envs),
+            )
             docker_cmd = _docker_command(args.container, train_argv, gpu=str(args.gpu), num_envs=args.num_envs)
             commands.append(" ".join(shlex.quote(x) for x in docker_cmd))
             decision = {

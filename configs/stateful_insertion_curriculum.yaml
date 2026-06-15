@@ -1,0 +1,35 @@
+base_config_dir: outputs/agentic_reward_curriculum_20260529/generated_episode_configs/v1260_selected_tip_preserving_true40x10_initial_randomized
+output_root: outputs/agentic_reward_curriculum_20260529/generated_episode_configs/stateful_3x0_to_40x10
+episodes: 2000
+seed: 20260613
+
+start_near_gate:
+  axial_distance_m:
+    initial: 0.003
+    terminal: 0.040
+  lateral_distance_m:
+    initial: 0.0
+    terminal: 0.010
+  orientation_error_rad:
+    initial: 0.0
+    terminal: 0.060
+
+progression:
+  # scheduled always reaches the terminal difficulty on the final generated
+  # episode. promotion_gated should be used by a training wrapper that only
+  # advances level when eval succeeds; it can spend the full budget on an easy
+  # level if the policy fails to solve it.
+  policy: promotion_gated
+  eval_every_episodes: 10
+  promotion_success_rate: 0.8
+  demotion_on_consecutive_failures: 3
+
+reward:
+  preset: stateful_insertion_v1
+  lateral_enter_threshold_m: 0.001
+  orientation_enter_threshold_rad: 0.040
+  axial_progress_weight: 8.0
+  preinsert_aligned_axial_weight: 8.0
+  corridor_weight: 10.0
+  inside_alignment_weight: 0.5
+  success_candidate_weight: 32.0

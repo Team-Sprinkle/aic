@@ -45,7 +45,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--target-depth-m",
         type=float,
-        default=0.008,
+        default=0.0458,
         help=(
             "Seated depth from entrance along the insertion axis. The reward helper "
             "intentionally rejects collapsed geometry below 3 mm."

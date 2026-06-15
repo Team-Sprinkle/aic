@@ -83,6 +83,147 @@ def _phase(
     )
 
 
+def _stateful_phase(
+    depth: float,
+    lateral: float,
+    theta: float,
+    *,
+    prev_depth: float,
+    prev_lateral: float,
+    prev_theta: float,
+    action_delta: tuple[float, float, float],
+):
+    return insertion_geometry.cheatcode_insertion_phase_reward(
+        geometry=_geom10(depth, lateral),
+        previous_depth=torch.tensor([prev_depth], dtype=torch.float32),
+        previous_lateral_error=torch.tensor([prev_lateral], dtype=torch.float32),
+        orientation_error=torch.tensor([theta], dtype=torch.float32),
+        previous_orientation_error=torch.tensor([prev_theta], dtype=torch.float32),
+        action_delta_w=torch.tensor([action_delta], dtype=torch.float32),
+        action_axis_gate=True,
+        stateful_phase_mode=True,
+        stateful_lateral_enter_threshold=0.001,
+        stateful_orientation_enter_threshold=0.040,
+        lateral_progress_weight=6.0,
+        lateral_alignment_action_weight=6.0,
+        lateral_alignment_action_scale=0.00025,
+        lateral_alignment_require_axial_quiet=True,
+        lateral_alignment_axial_quiet_scale=0.0005,
+        off_axis_axial_action_penalty_weight=16.0,
+        off_axis_axial_action_penalty_max=4.0,
+        lateral_error_state_penalty_weight=1.0,
+        lateral_error_state_penalty_scale=0.010,
+        orientation_progress_weight=8.0,
+        orientation_progress_scale=0.005,
+        axial_progress_weight=1.0,
+        corridor_weight=1.0,
+        success_candidate_weight=8.0,
+    )
+
+
+def test_stateful_reward_lateral_phase_blocks_axial_motion() -> None:
+    lateral = _stateful_phase(
+        -0.040,
+        0.010,
+        0.02,
+        prev_depth=-0.040,
+        prev_lateral=0.010,
+        prev_theta=0.02,
+        action_delta=(0.0, -0.001, 0.0),
+    )
+    axial = _stateful_phase(
+        -0.039,
+        0.010,
+        0.02,
+        prev_depth=-0.040,
+        prev_lateral=0.010,
+        prev_theta=0.02,
+        action_delta=(0.001, 0.0, 0.0),
+    )
+    assert lateral.total.item() > 0.0
+    assert axial.total.item() < -10.0
+    assert lateral.total.item() > axial.total.item()
+
+
+def test_stateful_reward_orientation_phase_blocks_axial_motion() -> None:
+    rotate_better = _stateful_phase(
+        -0.004,
+        0.0005,
+        0.050,
+        prev_depth=-0.004,
+        prev_lateral=0.0005,
+        prev_theta=0.070,
+        action_delta=(0.0, 0.0, 0.0),
+    )
+    axial = _stateful_phase(
+        -0.003,
+        0.0005,
+        0.050,
+        prev_depth=-0.004,
+        prev_lateral=0.0005,
+        prev_theta=0.050,
+        action_delta=(0.001, 0.0, 0.0),
+    )
+    assert rotate_better.total.item() > 0.0
+    assert axial.total.item() < 0.0
+
+
+def test_stateful_reward_axial_phase_unlocks_when_lateral_and_orientation_aligned() -> None:
+    hold = _stateful_phase(
+        -0.004,
+        0.0005,
+        0.020,
+        prev_depth=-0.004,
+        prev_lateral=0.0005,
+        prev_theta=0.020,
+        action_delta=(0.0, 0.0, 0.0),
+    )
+    axial = _stateful_phase(
+        -0.003,
+        0.0005,
+        0.020,
+        prev_depth=-0.004,
+        prev_lateral=0.0005,
+        prev_theta=0.020,
+        action_delta=(0.001, 0.0, 0.0),
+    )
+    assert axial.total.item() > hold.total.item()
+    assert axial.total.item() > 0.0
+
+
+def test_stateful_reward_axial_phase_rejects_alignment_worsening() -> None:
+    clean = _stateful_phase(
+        -0.003,
+        0.0005,
+        0.020,
+        prev_depth=-0.004,
+        prev_lateral=0.0005,
+        prev_theta=0.020,
+        action_delta=(0.001, 0.0, 0.0),
+    )
+    lateral_worse = _stateful_phase(
+        -0.003,
+        0.0008,
+        0.020,
+        prev_depth=-0.004,
+        prev_lateral=0.0005,
+        prev_theta=0.020,
+        action_delta=(0.001, 0.0, 0.0),
+    )
+    orientation_worse = _stateful_phase(
+        -0.003,
+        0.0005,
+        0.035,
+        prev_depth=-0.004,
+        prev_lateral=0.0005,
+        prev_theta=0.020,
+        action_delta=(0.001, 0.0, 0.0),
+    )
+    assert clean.total.item() > 0.0
+    assert lateral_worse.total.item() < clean.total.item()
+    assert orientation_worse.total.item() < clean.total.item()
+
+
 def test_on_center_forward_motion_is_positive() -> None:
     geom = _geom(0.001, 0.0)
     reward = insertion_geometry.signed_axial_progress_reward(
@@ -206,6 +347,31 @@ def test_cheatcode_aligned_preentry_inward_motion_is_positive() -> None:
     assert reward.axial_progress.item() > 0.0
 
 
+def test_cheatcode_preinsert_aligned_axial_unlock_is_gated() -> None:
+    aligned = insertion_geometry.cheatcode_insertion_phase_reward(
+        geometry=_geom10(-0.028, 0.0005),
+        previous_depth=torch.tensor([-0.029], dtype=torch.float32),
+        previous_lateral_error=torch.tensor([0.0005], dtype=torch.float32),
+        orientation_error=torch.tensor([0.04], dtype=torch.float32),
+        previous_orientation_error=torch.tensor([0.04], dtype=torch.float32),
+        action_delta_w=torch.tensor([[0.001, 0.0, 0.0]], dtype=torch.float32),
+        action_axis_gate=True,
+        preinsert_aligned_axial_weight=1.0,
+    )
+    off_axis = insertion_geometry.cheatcode_insertion_phase_reward(
+        geometry=_geom10(-0.028, 0.004),
+        previous_depth=torch.tensor([-0.029], dtype=torch.float32),
+        previous_lateral_error=torch.tensor([0.004], dtype=torch.float32),
+        orientation_error=torch.tensor([0.04], dtype=torch.float32),
+        previous_orientation_error=torch.tensor([0.04], dtype=torch.float32),
+        action_delta_w=torch.tensor([[0.001, 0.0, 0.0]], dtype=torch.float32),
+        action_axis_gate=True,
+        preinsert_aligned_axial_weight=1.0,
+    )
+    assert aligned.preinsert_aligned_axial.item() > 0.0
+    assert off_axis.preinsert_aligned_axial.item() < aligned.preinsert_aligned_axial.item() * 0.1
+
+
 def test_cheatcode_laterally_misaligned_inward_motion_is_negative() -> None:
     reward = _phase(-0.003, 0.003, 0.03, prev_depth=-0.004, prev_lateral=0.003, prev_theta=0.03)
     assert reward.axial_progress.item() < 0.0
@@ -296,6 +462,35 @@ def test_cheatcode_seated_laterally_bad_is_not_success_and_penalized() -> None:
     assert reward.corridor.item() < 0.0
 
 
+def test_cheatcode_bypass_gate_tolerance_preserves_near_strict_but_penalizes_bypass() -> None:
+    near_strict = insertion_geometry.cheatcode_insertion_phase_reward(
+        geometry=_geom10(0.010, 0.00035),
+        previous_depth=torch.tensor([0.0098], dtype=torch.float32),
+        previous_lateral_error=torch.tensor([0.00035], dtype=torch.float32),
+        orientation_error=torch.tensor([0.025], dtype=torch.float32),
+        previous_orientation_error=torch.tensor([0.028], dtype=torch.float32),
+        action_delta_w=torch.tensor([[0.00002, 0.0, 0.0]], dtype=torch.float32),
+        action_axis_gate=True,
+        semantic_gate=torch.tensor([1.0], dtype=torch.float32),
+        bypass_penalty_scale=30.0,
+        bypass_gate_tolerance=0.80,
+    )
+    bypass = insertion_geometry.cheatcode_insertion_phase_reward(
+        geometry=_geom10(0.010, 0.024),
+        previous_depth=torch.tensor([0.0098], dtype=torch.float32),
+        previous_lateral_error=torch.tensor([0.020], dtype=torch.float32),
+        orientation_error=torch.tensor([0.10], dtype=torch.float32),
+        previous_orientation_error=torch.tensor([0.10], dtype=torch.float32),
+        action_delta_w=torch.tensor([[0.00002, 0.0, 0.0]], dtype=torch.float32),
+        action_axis_gate=True,
+        semantic_gate=torch.tensor([0.0], dtype=torch.float32),
+        bypass_penalty_scale=30.0,
+        bypass_gate_tolerance=0.80,
+    )
+    assert near_strict.corridor.item() > 0.0
+    assert bypass.corridor.item() < -20.0
+
+
 def test_cheatcode_action_aligned_forward_preserves_insert_reward() -> None:
     reward = _phase(
         -0.003,
@@ -375,6 +570,18 @@ def test_off_axis_target_fails_loudly() -> None:
             axis_w=torch.tensor([[1.0, 0.0, 0.0]], dtype=torch.float32),
             lateral_gate_sigma=0.0025,
         )
+
+
+def test_gazebo_sfp_full_depth_target_is_valid() -> None:
+    geom = insertion_geometry.compute_insertion_geometry(
+        body_pos_w=torch.tensor([[0.0458, 0.0, 0.0]], dtype=torch.float32),
+        entrance_pos_w=torch.tensor([[0.0, 0.0, 0.0]], dtype=torch.float32),
+        target_pos_w=torch.tensor([[0.0458, 0.0, 0.0]], dtype=torch.float32),
+        axis_w=torch.tensor([[1.0, 0.0, 0.0]], dtype=torch.float32),
+        lateral_gate_sigma=0.0025,
+    )
+    assert geom.target_depth.item() == pytest.approx(0.0458)
+    assert geom.depth_fraction.item() == pytest.approx(1.0)
 
 
 def test_reward_geometry_audit_default_depth_is_valid(tmp_path: Path) -> None:

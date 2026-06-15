@@ -36,7 +36,7 @@ from insertion_geometry import cheatcode_insertion_phase_reward, compute_inserti
 
 @dataclass
 class FunnelConfig:
-    target_depth_m: float = 0.010
+    target_depth_m: float = 0.0458
     lateral_gate_width_m: float = 0.0006
     lateral_gate_width_far_m: float = 0.0040
     orientation_gate_width_rad: float = 0.030
@@ -93,7 +93,7 @@ def _geometry(s: torch.Tensor, r: torch.Tensor, cfg: FunnelConfig):
 
 
 def _reward_grid(cfg: FunnelConfig, theta: float, action_lateral_m: float) -> tuple[np.ndarray, np.ndarray, np.ndarray, dict[str, Any]]:
-    s_values = torch.linspace(-0.006, 0.012, 161)
+    s_values = torch.linspace(-0.006, max(0.012, float(cfg.target_depth_m) * 1.10), 181)
     r_values = torch.linspace(0.0, 0.010, 141)
     s_grid, r_grid = torch.meshgrid(s_values, r_values, indexing="ij")
     s_flat = s_grid.reshape(-1)
@@ -186,6 +186,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--run-name", default=None)
     parser.add_argument("--version", choices=["hand_tuned", "auto_from_servo"], default="hand_tuned")
     parser.add_argument("--servo-metrics-json", type=Path, default=None)
+    parser.add_argument("--target-depth-m", type=float, default=None)
     parser.add_argument("--lateral-gate-width-m", type=float, default=None)
     parser.add_argument("--orientation-gate-width-rad", type=float, default=None)
     return parser.parse_args()
@@ -200,6 +201,8 @@ def main() -> int:
         cfg = _load_auto_config(args.servo_metrics_json)
     if args.lateral_gate_width_m is not None:
         cfg.lateral_gate_width_m = float(args.lateral_gate_width_m)
+    if args.target_depth_m is not None:
+        cfg.target_depth_m = float(args.target_depth_m)
     if args.orientation_gate_width_rad is not None:
         cfg.orientation_gate_width_rad = float(args.orientation_gate_width_rad)
 

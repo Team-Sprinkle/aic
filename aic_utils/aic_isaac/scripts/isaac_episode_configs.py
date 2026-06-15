@@ -24,17 +24,19 @@ DEFAULT_PARTS = {
     "nic_card": {"scene_name": "nic_card", "offset": (-0.03235, 0.02329, 0.0743), "pose_range": {}, "snap_step": {"y": 0.04}},
 }
 NIC_CARD_ROT_WXYZ = (0.0, 0.0, -0.7068252, 0.7073883)
-SFP_PORT_SEATED_TARGET_ROOT_LOCAL = {
-    0: (0.01059, -0.07594, 0.01540),
-    1: (-0.01261, -0.07594, 0.01540),
-}
 SFP_PORT_LOCAL = {
     0: (0.01295, -0.031572, 0.00501),
     1: (-0.01025, -0.031572, 0.00501),
 }
+SFP_PORT_SEATED_TARGET_ROOT_LOCAL = SFP_PORT_LOCAL
 SFP_PORT_RPY = (4.69895, 0.0, 0.0)
+SFP_PORT_CAGE_DEPTH_M = 0.04872
+# Gazebo defines sfp_port_*_link_entrance at local z=-45.8 mm.  The
+# collision cage is 48.72 mm deep, so full seating lies about +2.92 mm
+# past the nominal port frame along local +Z.
 SFP_PORT_ENTRANCE_LOCAL = (0.0, 0.0, -0.0458)
-SFP_TIP_LOCAL = (0.0, 0.02365, 0.0)
+SFP_PORT_INSERTION_AXIS_LOCAL = (0.0, 0.0, 1.0)
+SFP_TIP_LOCAL = (0.0, -0.02365, 0.0)
 SC_PORT_TARGET_LOCAL = (0.093, 0.140, 0.020)
 SC_INSERTION_AXIS_WORLD = (0.0, 1.0, 0.0)
 
@@ -91,6 +93,11 @@ def validate_request(request: dict[str, Any]) -> None:
         offset = start.get("reset_body_offset_from_reference_world")
         if offset is not None and (not isinstance(offset, (list, tuple)) or len(offset) != 3):
             raise ValueError("scene.start_near_gate.reset_body_offset_from_reference_world must be a 3-value list")
+        lateral_direction = start.get("lateral_direction_world")
+        if lateral_direction is not None and (
+            not isinstance(lateral_direction, (list, tuple)) or len(lateral_direction) != 3
+        ):
+            raise ValueError("scene.start_near_gate.lateral_direction_world must be a 3-value list")
         orientation = start.get("reset_body_orientation_wxyz")
         if orientation is not None and (not isinstance(orientation, (list, tuple)) or len(orientation) != 4):
             raise ValueError("scene.start_near_gate.reset_body_orientation_wxyz must be a 4-value list")
@@ -230,6 +237,24 @@ def _perpendicular(axis: tuple[float, float, float], rng: random.Random) -> tupl
     b = _cross(axis, a)
     theta = rng.uniform(0.0, 2.0 * math.pi)
     return _vadd(_vscale(a, math.cos(theta)), _vscale(b, math.sin(theta)))
+
+
+def _configured_lateral_direction(
+    start: dict[str, Any],
+    axis: tuple[float, float, float],
+    rng: random.Random,
+) -> tuple[float, float, float]:
+    raw_direction = start.get("lateral_direction_world")
+    if raw_direction is None:
+        return _perpendicular(axis, rng)
+    if not isinstance(raw_direction, (list, tuple)) or len(raw_direction) != 3:
+        raise ValueError("scene.start_near_gate.lateral_direction_world must be a 3-value list")
+    raw = (float(raw_direction[0]), float(raw_direction[1]), float(raw_direction[2]))
+    axis = _normalize(axis)
+    projected = _vsub(raw, _vscale(axis, _vdot(raw, axis)))
+    if _vnorm(projected) < 1e-8:
+        raise ValueError("scene.start_near_gate.lateral_direction_world must not be parallel to the insertion axis")
+    return _normalize(projected)
 
 
 def _round3(value: tuple[float, float, float]) -> list[float]:
@@ -383,7 +408,7 @@ def _target_spec(
             _matvec(port_rotation, SFP_PORT_ENTRANCE_LOCAL),
         )
         entrance_position = _vadd(root_position, _quat_apply_wxyz(NIC_CARD_ROT_WXYZ, entrance_offset_local))
-        entrance_axis = _normalize(_quat_apply_wxyz(NIC_CARD_ROT_WXYZ, _matvec(port_rotation, (0.0, 0.0, 1.0))))
+        entrance_axis = _normalize(_quat_apply_wxyz(NIC_CARD_ROT_WXYZ, _matvec(port_rotation, SFP_PORT_INSERTION_AXIS_LOCAL)))
         if entrance_axis_offset_m:
             entrance_position = _vadd(entrance_position, _vscale(entrance_axis, entrance_axis_offset_m))
         seated_depth_m = target_cfg.get("seated_depth_m")
@@ -392,6 +417,8 @@ def _target_spec(
             if seated_depth <= 0.0:
                 raise ValueError("scene.target.seated_depth_m must be positive")
             position = _vadd(entrance_position, _vscale(entrance_axis, seated_depth))
+        else:
+            position = _vadd(entrance_position, _vscale(entrance_axis, SFP_PORT_CAGE_DEPTH_M))
         tip_body = _tip_body("sfp_tip_link")
         tip_offset = _tip_offset((0.0, 0.0, 0.0) if tip_body == "sfp_tip_link" else SFP_TIP_LOCAL)
         return {
@@ -482,7 +509,7 @@ def _apply_start_near_gate(
             raise ValueError("scene.start_near_gate.lateral_distance_m must be non-negative")
         if math.sqrt(axial * axial + lateral * lateral) < min_clearance:
             raise ValueError("scene.start_near_gate combined distance must be at least min_clearance_m")
-        lateral_dir = _perpendicular(axis, rng)
+        lateral_dir = _configured_lateral_direction(start, axis, rng)
         reference_raw = start.get("reference_body_position") or start.get("reference_tcp_position")
         if reference_raw is None:
             # ``axis`` points from the entrance into the port.  Near-gate

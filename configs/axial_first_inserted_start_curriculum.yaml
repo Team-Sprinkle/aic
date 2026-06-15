@@ -1,0 +1,62 @@
+base_config_dir: outputs/agentic_reward_curriculum_20260529/generated_episode_configs/v1260_selected_tip_preserving_true40x10_initial_randomized
+output_root: outputs/agentic_reward_curriculum_20260529/generated_episode_configs/axial_first_inserted_start
+episodes: 2000
+seed: 20260613
+
+start_near_gate:
+  # Signed depth is measured along the port axis from the entrance. Negative
+  # starts are before the entrance and farther from the final inserted target.
+  # Inserted positive starts proved contact-preloaded and laterally ejected on
+  # zero-action rollout, so the axial-first curriculum starts just outside.
+  signed_axial_distance: true
+  # Full axis-at-zero correction made the initial insertion gate collapse in
+  # runtime probes, even after moving the active schedule farther pre-entrance.
+  # Preserve the measured low-theta source orientation for this curriculum.
+  align_orientation_axis_at_zero: false
+  orientation_alignment_blend: 0.0
+  orientation_axis_local: [0.0, 0.0, -1.0]
+  axial_distance_m:
+    initial: -0.020
+    terminal: -0.040
+  lateral_distance_m:
+    initial: 0.0
+    terminal: 0.010
+  orientation_error_rad:
+    initial: 0.0
+    terminal: 0.0
+  # Measured from zero-action Isaac settle probes at the aligned pre-entrance
+  # levels.  This shifts only the reset body/TCP pose; the semantic reward
+  # reference remains at the requested signed depth/lateral/orientation target.
+  settle_compensation:
+    position_shift_world_m: [-0.00174427, 0.00150002, 0.00152091]
+    orientation_correction_wxyz: [0.999954797, -0.006697717, 0.006747961, 0.000101389]
+
+progression:
+  policy: promotion_gated
+  eval_every_episodes: 10
+  # Axial-first schedule: the near-entrance axial ramp proved contact-loaded
+  # before the policy acted, so train at the target axial distance and
+  # reintroduce lateral error gradually. This keeps level 2 away from the
+  # target-depth preload while preserving the terminal 40 mm / 10 mm task.
+  level_count: 6
+  promotion_success_rate: 0.8
+  demotion_on_consecutive_failures: 3
+  reintroduction_schedule:
+    - {name: preentrance_40mm_aligned, signed_depth_m: -0.0400, lateral_m: 0.0, theta_rad: 0.0}
+    - {name: preentrance_40mm_lat1mm, signed_depth_m: -0.0400, lateral_m: 0.001, theta_rad: 0.0}
+    - {name: preentrance_40mm_lat2mm, signed_depth_m: -0.0400, lateral_m: 0.002, theta_rad: 0.0}
+    - {name: preentrance_40mm_lat5mm, signed_depth_m: -0.0400, lateral_m: 0.005, theta_rad: 0.0}
+    - {name: preentrance_40mm_lat8mm, signed_depth_m: -0.0400, lateral_m: 0.008, theta_rad: 0.0}
+    - {name: preentrance_40mm_lat10mm, signed_depth_m: -0.0400, lateral_m: 0.010, theta_rad: 0.0}
+
+reward:
+  preset: stateful_insertion_v1
+  force_delta_penalty_weight: 0.0
+  lateral_enter_threshold_m: 0.0005
+  orientation_enter_threshold_rad: 0.040
+  axial_progress_weight: 8.0
+  preinsert_aligned_axial_weight: 8.0
+  corridor_weight: 10.0
+  inside_alignment_weight: 0.5
+  success_candidate_weight: 32.0
+  action_min_forward_m: 0.0

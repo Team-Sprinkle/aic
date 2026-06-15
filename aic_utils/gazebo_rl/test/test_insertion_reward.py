@@ -5,6 +5,7 @@ import pytest
 from gazebo_rl.insertion_reward import (
     GazeboRewardConfig,
     calculate_gazebo_insertion_reward,
+    compute_insertion_geometry,
     wxyz_to_xyzw,
     xyzw_to_wxyz,
 )
@@ -37,6 +38,18 @@ def _obs(position, quat_xyzw=(0.0, 0.0, 0.0, 1.0), force=(0.0, 0.0, 0.0)) -> dic
 def test_quaternion_xyzw_wxyz_conversion_round_trips() -> None:
     assert xyzw_to_wxyz([0.0, 0.0, 0.0, 1.0]) == [1.0, 0.0, 0.0, 0.0]
     assert wxyz_to_xyzw([1.0, 0.0, 0.0, 0.0]) == [0.0, 0.0, 0.0, 1.0]
+
+
+def test_full_sfp_port_depth_is_valid_geometry() -> None:
+    geom = compute_insertion_geometry(
+        body_pos_w=[0.0, 0.0, 0.0458],
+        entrance_pos_w=[0.0, 0.0, 0.0],
+        target_pos_w=[0.0, 0.0, 0.0458],
+        axis_w=[0.0, 0.0, 1.0],
+        lateral_gate_sigma=0.0025,
+    )
+    assert geom.target_depth == pytest.approx(0.0458)
+    assert geom.depth_fraction == pytest.approx(1.0)
 
 
 def test_aligned_near_entrance_has_positive_hover_alignment_reward() -> None:
