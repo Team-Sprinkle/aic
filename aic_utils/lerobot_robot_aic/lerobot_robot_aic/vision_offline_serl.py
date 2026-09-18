@@ -17,9 +17,11 @@ from torch.utils.data import Dataset
 from lerobot.datasets.lerobot_dataset import LeRobotDataset
 from lerobot.policies.factory import make_pre_post_processors
 from lerobot.policies.act.modeling_act import ACTPolicy
+from .act_backbone import load_act_policy
 from lerobot.utils.constants import OBS_IMAGES
 
 from .act_warmstart import inspect_act_checkpoint, resolve_act_checkpoint_dir
+from .direct_visual_actor import DirectVisualActor
 
 RewardMode = Literal["dataset", "final_success", "zero"]
 ActorUpdateMode = Literal["q_bc", "bc_only", "critic_only"]
@@ -671,6 +673,7 @@ class VisionOfflineSERLConfig:
     action_dim: int
     action_horizon: int
     camera_keys: list[str]
+    direct_visual_actor: dict[str, Any] | None = None
     gamma: float = 0.99
     tau: float = 0.005
     bc_weight: float = 1.0
@@ -710,6 +713,11 @@ class VisionOfflineSERLTrainer:
         self.config = config
         self.device = torch.device(device)
         self.actor = actor.to(self.device)
+        if isinstance(actor, DirectVisualActor):
+            if config.adapter_penalty_weight or config.act_preservation_weight:
+                raise ValueError("direct_visual has no residual or ACT preservation objective; set both weights to zero")
+            if config.action_horizon != 1 and config.actor_update_mode != "bc_only":
+                raise ValueError("One-step offline RL transitions require action_horizon=1; chunks are supported for BC only")
         self.critic1 = VisionCritic(
             state_dim=config.state_dim,
             camera_keys=config.camera_keys,
@@ -866,7 +874,8 @@ class VisionOfflineSERLTrainer:
         base_action = components["base_action"]
         actor_action = components["final_action"]
         actor_q = torch.minimum(self.critic1(obs, actor_action), self.critic2(obs, actor_action))
-        bc_loss = F.mse_loss(actor_action, action)
+        core_actor = _unwrap_module(self.actor)
+        bc_loss = core_actor.bc_loss(actor_action, action) if isinstance(core_actor, DirectVisualActor) else F.mse_loss(actor_action, action)
         adapter_penalty = delta_action.square().mean()
         act_preservation_loss = F.mse_loss(actor_action, base_action.detach())
         smoothness_loss = self._smoothness_loss(actor_action)
@@ -968,18 +977,20 @@ class VisionOfflineSERLTrainer:
         base_action = components["base_action"]
         actor_action = components["final_action"]
         actor_q = torch.minimum(self.critic1(obs, actor_action), self.critic2(obs, actor_action))
-        bc_loss = F.mse_loss(actor_action, action)
+        core_actor = _unwrap_module(self.actor)
+        bc_loss = core_actor.bc_loss(actor_action, action) if isinstance(core_actor, DirectVisualActor) else F.mse_loss(actor_action, action)
         adapter_penalty = delta_action.square().mean()
         act_preservation_loss = F.mse_loss(actor_action, base_action.detach())
         smoothness_loss = self._smoothness_loss(actor_action)
         q_actor_loss = -actor_q.mean()
         actor_loss = (
-            -actor_q.mean()
-            + self.config.bc_weight * bc_loss
+            self.config.bc_weight * bc_loss
             + self.config.adapter_penalty_weight * adapter_penalty
             + self.config.act_preservation_weight * act_preservation_loss
             + self.config.smoothness_weight * smoothness_loss
         )
+        if self.config.actor_update_mode != "bc_only":
+            actor_loss = actor_loss + q_actor_loss
 
         return {
             "actor_loss": float(actor_loss.detach().cpu()),
@@ -1073,7 +1084,7 @@ def load_act_actor(
     action_clip: float | None = None,
 ) -> tuple[ACTChunkActor, dict[str, Any]]:
     checkpoint_dir = resolve_act_checkpoint_dir(checkpoint)
-    policy = ACTPolicy.from_pretrained(checkpoint_dir, local_files_only=True)
+    policy = load_act_policy(checkpoint_dir, local_files_only=True)
     preprocessor, postprocessor = make_pre_post_processors(policy_cfg=policy.config, pretrained_path=checkpoint_dir)
     _set_processor_pipeline_device(preprocessor, device)
     _set_processor_pipeline_device(postprocessor, device)

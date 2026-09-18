@@ -64,6 +64,7 @@ if LEROBOT_AIC_PACKAGE_DIR.exists() and str(LEROBOT_AIC_PACKAGE_DIR) not in sys.
     sys.path.insert(0, str(LEROBOT_AIC_PACKAGE_DIR))
 
 from lerobot_robot_aic.runtime_features import AICRuntimeFeatureAssembler  # noqa: E402
+from lerobot_robot_aic.act_backbone import require_default_backbone_geometry  # noqa: E402
 
 
 DEFAULT_POLICY_REPO_ID = "grkw/aic_act_policy"
@@ -91,6 +92,14 @@ class RunACT(Policy):
         self.rotation_deadband = float(os.environ.get("AIC_ACT_ROTATION_DEADBAND", 1e-3))
 
         self.policy_path = self._resolve_policy_path()
+        require_default_backbone_geometry(self.policy_path)
+        aic_config_path = self.policy_path / "aic_action_config.json"
+        if aic_config_path.is_file():
+            aic_config = json.loads(aic_config_path.read_text())
+            if (aic_config.get("action_representation", "delta_pose") != "delta_pose"
+                    or aic_config.get("include_elapsed_sim_time") or aic_config.get("quaternion_sign", "w") != "w"
+                    or aic_config.get("image_channel_order", "rgb") != "rgb"):
+                raise ValueError("This ACT checkpoint needs RunACTTorchScript for its action, state, or camera conventions")
         config_dict = self._load_config_dict(self.policy_path)
         config = draccus.decode(ACTConfig, config_dict)
         config.device = str(self.device)

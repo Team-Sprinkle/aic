@@ -56,3 +56,22 @@ def test_send_delta_action_builds_gripper_tcp_motion_update():
     assert sent["motion_update"].header.frame_id == "gripper/tcp"
     assert sent["motion_update"].pose.position.x == pytest.approx(0.003)
     assert sent["motion_update"].pose.position.y == pytest.approx(-0.003)
+
+
+def test_explicit_hold_target_skips_only_zero_actions(monkeypatch):
+    monkeypatch.setenv("AIC_GAZEBO_RL_ZERO_ACTION_MODE", "hold_previous_target")
+    sent = []
+    def move_robot(**kwargs):
+        sent.append(kwargs["motion_update"])
+        return True
+    policy = _policy()
+    policy._send_delta_action(move_robot, [0.0] * 6)
+    assert sent == []
+    policy._send_delta_action(move_robot, [0.001, 0, 0, 0, 0, 0])
+    assert len(sent) == 1
+
+
+def test_invalid_zero_action_mode_fails(monkeypatch):
+    monkeypatch.setenv("AIC_GAZEBO_RL_ZERO_ACTION_MODE", "typo")
+    with pytest.raises(ValueError, match="Unknown zero action mode"):
+        _policy()._send_delta_action(lambda **kwargs: True, [0.0] * 6)

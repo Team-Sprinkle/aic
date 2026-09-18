@@ -234,14 +234,28 @@ class AicModel(LifecycleNode):
         goal_handle.publish_feedback(feedback_msg)
 
     def action_thread_func(self, goal_handle: ServerGoalHandle):
-        self._action_thread_result = self._policy.insert_cable(
-            task=goal_handle.request.task,
-            get_observation=lambda: self.observation_callable(),
-            move_robot=lambda motion_update=None, joint_motion_update=None: self.move_robot(
-                motion_update, joint_motion_update
-            ),
-            send_feedback=lambda feedback: self.send_feedback(goal_handle, feedback),
-        )
+        import os
+        snapshots = None
+        directory = os.environ.get("AIC_POLICY_RECORD_DIR")
+        try:
+            if directory:
+                from aic_model.rollout_recording import RolloutSnapshots
+                snapshots = RolloutSnapshots(directory)
+            self._action_thread_result = self._policy.insert_cable(
+                task=goal_handle.request.task,
+                get_observation=lambda: snapshots.capture(self.observation_callable()) if snapshots else self.observation_callable(),
+                move_robot=lambda motion_update=None, joint_motion_update=None: self.move_robot(
+                    motion_update, joint_motion_update
+                ),
+                send_feedback=lambda feedback: self.send_feedback(goal_handle, feedback),
+            )
+        except Exception:
+            import traceback
+            self.get_logger().error(f"Policy execution failed:\n{traceback.format_exc()}")
+            self._action_thread_result = False
+        finally:
+            if snapshots:
+                snapshots.close()
         if self._action_thread_result is None:
             self.get_logger().warn("insert_cable() returned None. Assuming False...")
             self._action_thread_result = False

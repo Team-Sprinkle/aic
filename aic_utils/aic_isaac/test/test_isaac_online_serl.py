@@ -17,6 +17,21 @@ sys.modules[spec.name] = isaac_online_serl
 spec.loader.exec_module(isaac_online_serl)
 
 
+def test_direct_visual_launch_needs_no_act_and_disables_residual_defaults(tmp_path: Path) -> None:
+    checkpoint = tmp_path / "direct.pt"
+    torch.save({"actor": {}, "vision_offline_serl_config": {
+        "actor_mode": "direct_visual", "state_dim": 82, "action_dim": 6, "action_horizon": 1,
+    }}, checkpoint)
+    args = isaac_online_serl.parse_args(["--checkpoint", str(checkpoint), "--dry-run"])
+    assert args.act_torchscript is None
+    assert args.n_action_steps == 1
+    assert args.adapter_penalty_weight == args.act_preservation_weight == 0
+    isaac_online_serl.validate_launch_inputs(args)
+    command, _ = isaac_online_serl.build_command(args)
+    assert "--act_torchscript" not in command
+    assert command[command.index("--n_action_steps") + 1] == "1"
+
+
 def test_isaac_serl_plan_inspects_adapter_checkpoint(tmp_path: Path) -> None:
     checkpoint = tmp_path / "adapter_serl.pt"
     torch.save(

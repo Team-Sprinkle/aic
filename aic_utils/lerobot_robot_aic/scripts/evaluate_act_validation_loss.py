@@ -6,6 +6,7 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import sys
 from pathlib import Path
 from typing import Any
 
@@ -19,8 +20,9 @@ from torch.utils.data import DataLoader, Subset
 from lerobot.datasets.dataset_metadata import LeRobotDatasetMetadata
 from lerobot.datasets.factory import resolve_delta_timestamps
 from lerobot.datasets.lerobot_dataset import LeRobotDataset
-from lerobot.policies.act.modeling_act import ACTPolicy
 from lerobot.policies.factory import make_pre_post_processors
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+from lerobot_robot_aic.act_backbone import load_act_policy
 
 
 def parse_args() -> argparse.Namespace:
@@ -80,7 +82,7 @@ def main() -> int:
 
     checkpoint = args.act_checkpoint
     dataset_root = args.dataset_root
-    policy = ACTPolicy.from_pretrained(checkpoint, local_files_only=True)
+    policy = load_act_policy(checkpoint, local_files_only=True)
     policy.to(device)
 
     ds_meta = LeRobotDatasetMetadata(f"local/{dataset_root.name}", root=dataset_root)

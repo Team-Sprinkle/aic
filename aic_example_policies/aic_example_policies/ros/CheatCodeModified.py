@@ -513,7 +513,11 @@ class CheatCodeModified(CheatCode):
             return False
         port_transform = port_tf_stamped.transform
 
-        z_offset = 0.2
+        try:
+            z_offset = self._initial_insertion_z_offset(port_transform, cable_tip_frame)
+        except (TransformException, ValueError) as ex:
+            self.get_logger().error(f"Could not validate insertion start: {ex}")
+            return False
         interpolation_duration_sec = 5.5
         dt = 0.05
         steps = int(interpolation_duration_sec / dt)
@@ -551,7 +555,7 @@ class CheatCodeModified(CheatCode):
 
         handoff_blend_sec = 2.0
         handoff_speed_mps = 0.02
-        start_descent_z_offset = 0.005
+        start_descent_z_offset = min(0.005, z_offset)
         rate_limited_handoff_sec = abs(z_offset - start_descent_z_offset) / handoff_speed_mps
         blend_steps = max(1, int(max(handoff_blend_sec, rate_limited_handoff_sec) / dt))
         for t in range(blend_steps):

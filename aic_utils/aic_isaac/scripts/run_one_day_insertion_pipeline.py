@@ -1844,11 +1844,8 @@ def main() -> int:
     args.output_root = args.output_root.resolve()
     run_output = args.output_root / "runs"
     log_dir = args.output_root / "logs"
-    report_path = (
-        REPO / "docs/curriculum_insertion_pipeline_20260515.md"
-        if args.curriculum_mode == "staged"
-        else REPO / "docs/one_day_insertion_pipeline_20260515.md"
-    )
+    # Keep generated reports with their run instead of overwriting dated docs.
+    report_path = args.output_root / "summary.md"
     args.output_root.mkdir(parents=True, exist_ok=True)
     (args.output_root / "pipeline_args.json").write_text(json.dumps({k: str(v) for k, v in vars(args).items()}, indent=2), encoding="utf-8")
 

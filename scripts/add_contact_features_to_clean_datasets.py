@@ -15,8 +15,8 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--input-root",
         type=Path,
-        default=Path("outputs/trajectory_datasets/clean"),
-        help="Root containing raw LeRobot datasets.",
+        default=Path("outputs/trajectory_datasets/clean_including_no_insert_trajs"),
+        help="Root containing raw LeRobot datasets. The historical default includes failed insertions; this conversion does not verify expert quality.",
     )
     parser.add_argument(
         "--output-root",

@@ -6,7 +6,7 @@ set -euo pipefail
 # force-delta reward penalty, then promote farther back and laterally outward.
 
 export AIC_STATEFUL_CONFIG="${AIC_STATEFUL_CONFIG:-aic/configs/axial_first_inserted_start_curriculum.yaml}"
-export AIC_STATEFUL_RUN_ROOT="${AIC_STATEFUL_RUN_ROOT:-/tmp/aic_axial_first_inserted_start_$(date -u +%Y%m%d_%H%M%S)}"
+export AIC_STATEFUL_RUN_ROOT="${AIC_STATEFUL_RUN_ROOT:-aic/outputs/experiments/$(date -u +%Y%m%d_%H%M%S)_axial_first}"
 export AIC_STATEFUL_FORCE_DELTA_PENALTY_WEIGHT="${AIC_STATEFUL_FORCE_DELTA_PENALTY_WEIGHT:-0.0}"
 export AIC_STATEFUL_NEAR_GATE_RESET_MAX_ITERATIONS="${AIC_STATEFUL_NEAR_GATE_RESET_MAX_ITERATIONS:-20}"
 export AIC_STATEFUL_RESET_SETTLE_STEPS="${AIC_STATEFUL_RESET_SETTLE_STEPS:-10}"

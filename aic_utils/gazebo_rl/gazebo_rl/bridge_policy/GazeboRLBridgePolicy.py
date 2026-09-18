@@ -95,7 +95,8 @@ class GazeboRLBridgePolicy(Policy):
         host = os.environ.get("AIC_GAZEBO_RL_HOST", "127.0.0.1")
         port = self._env_int("AIC_GAZEBO_RL_PORT", 8765)
         timeout = self._env_float("AIC_GAZEBO_RL_CONNECT_TIMEOUT_SEC", 60.0)
-        conn = connect_with_retry(host, port, timeout_sec=timeout)
+        conn = connect_with_retry(host, port, timeout_sec=timeout,
+                                  unix_path=os.environ.get("AIC_GAZEBO_RL_SOCKET"))
         conn.send(
             "hello",
             {
@@ -125,6 +126,12 @@ class GazeboRLBridgePolicy(Policy):
 
     def _send_delta_action(self, move_robot: MoveRobotCallback, raw_action: Any) -> None:
         delta = delta_tcp_action_from_array(raw_action)
+        zero_mode = os.environ.get("AIC_GAZEBO_RL_ZERO_ACTION_MODE", "retarget_current_tcp")
+        if zero_mode not in {"retarget_current_tcp", "hold_previous_target"}:
+            raise ValueError(f"Unknown zero action mode: {zero_mode}")
+        if zero_mode == "hold_previous_target" and not np.any(delta.clipped_action):
+            # Explicit diagnostic comparison: retain the existing controller goal.
+            return
         motion_update = pose_to_position_motion_update(
             build_pose_from_vectors(delta.delta_position_xyz, delta.delta_quaternion_xyzw),
             stamp=self._parent_node.get_clock().now().to_msg(),

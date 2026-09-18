@@ -1,6 +1,10 @@
 # ACT Warm-Start Smoke Pipeline
 
-This is the first minimal end-to-end imitation-learning path for AIC:
+> Legacy ACT workflow and historical smoke results. New experiments should use
+> the [direct visual policy](DIRECT_VISUAL_POLICY.md), which can initialize its
+> backbone from ACT without computing or correcting ACT actions.
+
+This was the first minimal end-to-end imitation-learning path for AIC:
 
 ```text
 Gazebo CheatCode expert rollouts -> native LeRobot dataset -> ACT smoke training -> offline SERL -> Isaac online SERL/SAC
@@ -21,9 +25,9 @@ The runtime policy/control interfaces are left untouched. In particular,
 `MotionUpdate` and joint-space `JointMotionUpdate` commands through
 `MoveRobotCallback`. Action mode is a recorder/dataset/training concern.
 
-For the current Stage 1-4 hybrid cleanup commands and 2026-04-30 runtime
+For the historical Stage 1-4 hybrid cleanup commands and 2026-04-30 runtime
 results, see
-[`hybrid_stage1_to_4_nominal_warmstart.md`](hybrid_stage1_to_4_nominal_warmstart.md).
+[`hybrid_stage1_to_4_nominal_warmstart.md`](../obsolete/docs/hybrid_stage1_to_4_nominal_warmstart.md).
 The current ACT-aligned offline SERL path is the vision trainer documented in
 [`offline_serl_pretrain.md`](offline_serl_pretrain.md#vision-offline-serl).
 
@@ -131,7 +135,7 @@ Use `--dry-run` to print the exact command first.
 3. Train ACT / BC warm-start policy on expert trajectories.
 4. Run offline SERL pretraining on Gazebo expert data. Two paths exist:
    lowdim SERL remains available for lightweight smoke checks, and vision SERL
-   now uses the ACT-adapter actor as the primary compatible path:
+   used the ACT-adapter actor in this historical recipe:
    `obs -> ACT -> a_ACT`, `state + a_ACT -> adapter -> delta`, and
    `a = a_ACT + scale * delta`. On the nominal n10 dataset, the adapter path
    loaded 153 compatible ACT trainable tensors, froze ACT by default, trained a
@@ -139,8 +143,9 @@ Use `--dry-run` to print the exact command first.
    51,679,718 actor parameters from ACT (99.80860576677296% coverage).
    Initial delta norm was 0.0; final step delta norm after 200 smoke steps was
    1.6950193643569946 over the flattened 48D action chunk.
-5. Train Isaac Lab online RL using the same ACT-adapter actor with an
-   off-policy SERL/SAC loop. Current implementation is short-run capable: it
+5. Train Isaac Lab online RL using the same ACT-adapter actor with the
+   historical off-policy loop named SERL/SAC. The implementation is a
+   deterministic actor-critic, without full SAC entropy learning. It
    collects Isaac replay, updates twin critics plus the adapter actor, keeps ACT
    frozen by default, and saves real checkpoints. PPO/RSL-RL remains implemented
    as a smoke/baseline/backup path, but is not the primary compatible
@@ -162,7 +167,7 @@ Use `--dry-run` to print the exact command first.
 10. Repeat coarse Isaac <-> Gazebo loop.
 11. Final official Gazebo eval.
 
-Future work: tune and scale Isaac SERL/SAC around the ACT-adapter actor and
-implement same-state Gazebo recovery automation. The PPO actor uses a different
-camera-feature-conditioned MLP architecture, so PPO is retained as a legacy
-smoke/baseline path rather than the main hybrid-transfer target.
+For current next steps, follow [status](STATUS.md) and the
+[direct visual comparison plan](DIRECT_VISUAL_POLICY.md#next-comparisons).
+Same-state Gazebo recovery automation and live validation remain open. The PPO
+actor uses a separate camera-feature-conditioned MLP architecture.

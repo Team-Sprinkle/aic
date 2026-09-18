@@ -254,3 +254,12 @@ def test_cleanup_stale_zenoh_kills_host_and_distrobox(monkeypatch):
     assert ["pkill", "-f", "rmw_zenohd"] in calls
     assert ["pkill", "-f", "rmw_zenoh_cpp rmw_zenohd"] in calls
     assert any(call[:6] == ["distrobox", "enter", "-r", "--no-tty", "my_box", "--"] for call in calls)
+
+
+def test_docker_cleanup_does_not_kill_host_processes(monkeypatch):
+    calls = []
+    monkeypatch.setattr(runner_module.subprocess, "run", lambda cmd, **kwargs: calls.append(cmd))
+    monkeypatch.setattr(runner_module.time, "sleep", lambda *_: None)
+    _docker_runner()._cleanup_stale_zenoh_router()
+    assert calls
+    assert all(cmd[0] == "docker" and "exec" in cmd for cmd in calls)

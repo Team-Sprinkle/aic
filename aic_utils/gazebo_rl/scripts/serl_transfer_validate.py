@@ -25,7 +25,9 @@ def classify_rollout(score: dict, *, success_threshold: float) -> str:
     total = score.get("total_score", score.get("total"))
     if total is None:
         return "no_score"
-    if float(total) >= success_threshold:
+    if not score.get("trial_count") or score.get("scored_trial_count") != score.get("trial_count"):
+        return "no_score"
+    if score.get("insertion_success") is True:
         return "success"
     return "transfer_failure"
 
@@ -43,9 +45,7 @@ def run_validation(args: argparse.Namespace) -> dict:
     )
     if args.policy_kind == "lowdim_serl":
         policy = OfflineSERLGazeboPolicy(args.checkpoint, device=args.device, task_vector=task_vector)
-    elif args.policy_kind == "act_adapter_serl":
-        if args.act_torchscript is None:
-            raise ValueError("--act-torchscript is required for --policy-kind act_adapter_serl")
+    elif args.policy_kind in {"act_adapter_serl", "direct_visual"}:
         policy = ACTAdapterSERLGazeboPolicy(
             args.checkpoint,
             act_torchscript=args.act_torchscript,
@@ -55,6 +55,8 @@ def run_validation(args: argparse.Namespace) -> dict:
             action_clip=args.action_clip,
             task_vector=task_vector,
         )
+        if args.policy_kind == "direct_visual" and policy.actor.actor_mode != "direct_visual":
+            raise ValueError("--policy-kind direct_visual requires a direct_visual checkpoint")
     else:
         raise ValueError(f"Unsupported policy kind: {args.policy_kind}")
     env = GazeboRLEnv(
@@ -140,7 +142,7 @@ def run_validation(args: argparse.Namespace) -> dict:
 def build_arg_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--checkpoint", required=True)
-    parser.add_argument("--policy-kind", choices=["lowdim_serl", "act_adapter_serl"], default="lowdim_serl")
+    parser.add_argument("--policy-kind", choices=["lowdim_serl", "act_adapter_serl", "direct_visual"], default="lowdim_serl")
     parser.add_argument("--act-torchscript", default=None)
     parser.add_argument(
         "--include-images",
@@ -171,10 +173,11 @@ def build_arg_parser() -> argparse.ArgumentParser:
     parser.add_argument("--launch-rviz", type=_bool, default=False)
     parser.add_argument("--max-steps", type=int, default=600)
     parser.add_argument("--per-trial-timeout-sec", type=float, default=900.0)
-    parser.add_argument("--success-threshold", type=float, default=90.0)
+    parser.add_argument("--success-threshold", type=float, default=90.0,
+                        help="Legacy option; classification now uses per-trial Tier 3 insertion outcomes.")
     parser.add_argument("--device", default="cpu")
-    parser.add_argument("--adapter-delta-clip", type=float, default=0.05)
-    parser.add_argument("--action-clip", type=float, default=0.05)
+    parser.add_argument("--adapter-delta-clip", type=float, default=None)
+    parser.add_argument("--action-clip", type=float, default=None)
     parser.add_argument("--task-family", choices=["sfp_to_nic", "sc_to_sc"], default=None)
     parser.add_argument("--target-port-index", type=int, default=None)
     parser.add_argument("--target-card-index", type=int, default=None)

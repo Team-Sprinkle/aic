@@ -1,5 +1,9 @@
 # Getting Started
 
+> For this branch on a machine without sudo, start with [local rootless workflow](LOCAL_WORKFLOW.md).
+> It incorporates the local Docker guide, distinguishes the two checkouts, and
+> gives an explicit saved-model evaluation command. The general toolkit setup follows.
+
 Welcome to the AI for Industry Challenge! Follow this guide to familiarize yourself with the toolkit structure, prepare  your environment, and confirm your setup by running a quickstart example before developing your solution.
 
 > [!NOTE]

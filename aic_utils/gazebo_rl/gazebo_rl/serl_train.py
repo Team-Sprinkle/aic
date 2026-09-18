@@ -203,6 +203,9 @@ class GazeboOnlineSERLTrainer:
     ):
         self.policy = policy
         self.actor = policy.actor.to(device)
+        self.actor.train()
+        if self.actor.actor_mode == "direct_visual" and (adapter_penalty_weight or act_preservation_weight):
+            raise ValueError("Direct visual policies have no adapter or ACT preservation loss")
         self.critic1 = critic1.to(device)
         self.critic2 = critic2.to(device)
         critic_kwargs = dict(critic_kwargs or {})
@@ -643,6 +646,11 @@ def load_trainer(args: argparse.Namespace) -> tuple[GazeboOnlineSERLTrainer, dic
         action_clip=args.action_clip,
         task_vector=task_vector,
     )
+    if policy.actor.actor_mode == "direct_visual":
+        args.adapter_penalty_weight = 0.0
+        args.act_preservation_weight = 0.0
+        if policy.action_horizon != 1:
+            raise ValueError("Gazebo online RL requires a one-step direct visual actor")
     checkpoint = torch.load(args.checkpoint, map_location="cpu")
     offline_cfg = checkpoint.get("vision_offline_serl_config") or (
         (checkpoint.get("online_serl_config") or {}).get("checkpoint") or {}
@@ -691,13 +699,12 @@ def load_trainer(args: argparse.Namespace) -> tuple[GazeboOnlineSERLTrainer, dic
     train_config = {
         "checkpoint_path": str(Path(args.checkpoint).resolve()),
         "checkpoint": {
-            "vision_offline_serl_config": policy.dataset_summary.get("vision_offline_serl_config")
-            or (checkpoint.get("vision_offline_serl_config") or {}),
+            "vision_offline_serl_config": offline_cfg,
             "dataset_summary": policy.dataset_summary,
             "warmstart_report": policy.warmstart_report,
         },
         "gazebo_adapter": {
-            "act_torchscript": str(Path(args.act_torchscript).resolve()),
+            "act_torchscript": str(Path(args.act_torchscript).resolve()) if args.act_torchscript else None,
             "image_source": "gazebo_bridge_live_rgb_jpeg_resized_to_3x256x288",
             "action_executed": "first_action_from_flattened_chunk",
             "adapter_delta_clip": args.adapter_delta_clip,
@@ -746,7 +753,7 @@ def run_training(args: argparse.Namespace) -> dict[str, Any]:
         summary = {
             "status": "dry_run",
             "checkpoint": str(Path(args.checkpoint).resolve()),
-            "act_torchscript": str(Path(args.act_torchscript).resolve()),
+            "act_torchscript": str(Path(args.act_torchscript).resolve()) if args.act_torchscript else None,
             "state_dim": trainer.policy.state_dim,
             "action_dim": trainer.policy.action_dim,
             "single_action_dim": trainer.policy.single_action_dim,
@@ -807,11 +814,9 @@ def run_training(args: argparse.Namespace) -> dict[str, Any]:
                 sys.executable,
                 str(Path(__file__).resolve().parents[1] / "scripts" / "serl_transfer_validate.py"),
                 "--policy-kind",
-                "act_adapter_serl",
+                "direct_visual" if trainer.actor.actor_mode == "direct_visual" else "act_adapter_serl",
                 "--checkpoint",
                 str(checkpoint),
-                "--act-torchscript",
-                str(args.act_torchscript),
                 "--output-dir",
                 str(eval_dir),
                 "--workspace-dir",
@@ -824,10 +829,6 @@ def run_training(args: argparse.Namespace) -> dict[str, Any]:
                 str(args.eval_timeout_sec),
                 "--device",
                 str(args.device),
-                "--adapter-delta-clip",
-                str(args.adapter_delta_clip),
-                "--action-clip",
-                str(args.action_clip),
                 "--task-family",
                 str(args.task_family),
                 "--target-port-index",
@@ -837,6 +838,11 @@ def run_training(args: argparse.Namespace) -> dict[str, Any]:
                 "--target-card-valid",
                 str(args.target_card_valid),
             ]
+            for flag, value in (("--act-torchscript", args.act_torchscript),
+                                ("--adapter-delta-clip", args.adapter_delta_clip),
+                                ("--action-clip", args.action_clip)):
+                if value is not None:
+                    cmd.extend([flag, str(value)])
             if args.sim_docker_container:
                 cmd.extend(["--sim-docker-container", str(args.sim_docker_container)])
             if args.docker_host:
@@ -1043,7 +1049,7 @@ def _bool(value: str) -> bool:
 def build_arg_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description="Train ACT-adapter SERL online through GazeboRLEnv.")
     parser.add_argument("--checkpoint", required=True)
-    parser.add_argument("--act-torchscript", required=True)
+    parser.add_argument("--act-torchscript", default=None)
     parser.add_argument("--output-dir", default="outputs/gazebo_rl/online_serl/latest")
     parser.add_argument("--workspace-dir", default=".")
     parser.add_argument("--engine-config", default=None)
@@ -1069,8 +1075,8 @@ def build_arg_parser() -> argparse.ArgumentParser:
     parser.add_argument("--critic-lr", type=float, default=1e-4)
     parser.add_argument("--adapter-penalty-weight", type=float, default=1e-2)
     parser.add_argument("--act-preservation-weight", type=float, default=1e-1)
-    parser.add_argument("--adapter-delta-clip", type=float, default=0.05)
-    parser.add_argument("--action-clip", type=float, default=0.05)
+    parser.add_argument("--adapter-delta-clip", type=float, default=None)
+    parser.add_argument("--action-clip", type=float, default=None)
     parser.add_argument(
         "--reward-preset",
         choices=["default", "near_gate_corridor_v1", "cheatcode_insertion_v1", "cheatcode_alignment_v1"],

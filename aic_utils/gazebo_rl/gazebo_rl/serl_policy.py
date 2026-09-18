@@ -25,6 +25,7 @@ ACT_CAMERA_KEYS = [
 ]
 
 from lerobot_robot_aic.runtime_features import AICRuntimeFeatureAssembler, base_state_from_gazebo_observation
+from lerobot_robot_aic.direct_visual_actor import load_direct_visual_actor
 
 
 def task_vector_from_context(
@@ -622,13 +623,13 @@ def _gazebo_images_from_observation(
 
 
 class ACTAdapterSERLGazeboPolicy:
-    """Gazebo inference wrapper for offline/online ACT-adapter SERL checkpoints."""
+    """Gazebo inference for direct visual policies and legacy ACT checkpoints."""
 
     def __init__(
         self,
         checkpoint: str | Path,
         *,
-        act_torchscript: str | Path,
+        act_torchscript: str | Path | None = None,
         device: str = "cpu",
         allow_zero_images: bool = False,
         adapter_delta_clip: float | None = None,
@@ -638,7 +639,7 @@ class ACTAdapterSERLGazeboPolicy:
         self.device = torch.device(device)
         self.allow_zero_images = bool(allow_zero_images)
         self.checkpoint_path = Path(checkpoint)
-        self.act_torchscript = Path(act_torchscript)
+        self.act_torchscript = Path(act_torchscript) if act_torchscript else None
         ckpt = torch.load(self.checkpoint_path, map_location="cpu")
         cfg, self.dataset_summary, self.warmstart_report = _checkpoint_training_context(ckpt)
         online_adapter_cfg = ((ckpt.get("online_serl_config") or {}).get("isaac_adapter") or {})
@@ -656,16 +657,24 @@ class ACTAdapterSERLGazeboPolicy:
                 f"action_dim={self.action_dim} is not divisible by action_horizon={self.action_horizon}"
             )
         self.single_action_dim = self.action_dim // self.action_horizon
-        self.actor = _load_adapter_actor(
-            ckpt,
-            act_torchscript=self.act_torchscript,
-            state_dim=self.state_dim,
-            action_dim=self.action_dim,
-            action_horizon=self.action_horizon,
-            device=self.device,
-            adapter_delta_clip=adapter_delta_clip,
-            action_clip=action_clip,
-        )
+        if cfg.get("actor_mode") == "direct_visual":
+            if adapter_delta_clip is not None or action_clip is not None:
+                raise ValueError("Direct visual action limits are stored in the checkpoint; adapter/action clip overrides are unsupported")
+            self.actor = load_direct_visual_actor(ckpt, device=self.device).eval()
+        else:
+            if self.act_torchscript is None:
+                raise ValueError("Legacy ACT actor requires act_torchscript")
+            self.actor = _load_adapter_actor(
+                ckpt,
+                act_torchscript=self.act_torchscript,
+                state_dim=self.state_dim,
+                action_dim=self.action_dim,
+                action_horizon=self.action_horizon,
+                device=self.device,
+                adapter_delta_clip=adapter_delta_clip,
+                action_clip=action_clip,
+            )
+        self.actor.eval()
         self.last_action_components: dict[str, float] = {}
         self.task_vector = None if task_vector is None else torch.as_tensor(
             task_vector, dtype=torch.float32, device=self.device

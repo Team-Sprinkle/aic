@@ -53,6 +53,8 @@ class GazeboRLRunnerConfig:
     per_trial_timeout_sec: float = 300.0
     host: str = "127.0.0.1"
     port: int = 8765
+    ipc_socket_path: Path | None = None
+    zero_action_mode: str = "retarget_current_tcp"
     command_dt_sec: float = 0.05
     results_dir: Path = field(default_factory=lambda: Path("outputs/gazebo_rl/results"))
     record_lerobot: bool = False
@@ -152,6 +154,7 @@ class GazeboRLRunner:
             "AIC_GAZEBO_RL_MAX_STEPS": env["AIC_GAZEBO_RL_MAX_STEPS"],
             "AIC_GAZEBO_RL_GROUND_TRUTH": env["AIC_GAZEBO_RL_GROUND_TRUTH"],
             "AIC_GAZEBO_RL_INCLUDE_IMAGES": env["AIC_GAZEBO_RL_INCLUDE_IMAGES"],
+            "AIC_GAZEBO_RL_ZERO_ACTION_MODE": self.config.zero_action_mode,
             "AIC_RESULTS_DIR": self._container_path(self.config.results_dir),
             "AIC_GAZEBO_RL_PREPOSITION_START_NEAR_GATE": env["AIC_GAZEBO_RL_PREPOSITION_START_NEAR_GATE"],
             "AIC_GAZEBO_RL_START_NEAR_GATE_MODE": env["AIC_GAZEBO_RL_START_NEAR_GATE_MODE"],
@@ -162,6 +165,8 @@ class GazeboRLRunner:
         }
         if self.config.episode_config is not None:
             runtime_env["AIC_GAZEBO_RL_EPISODE_CONFIG"] = self._container_path(self.config.episode_config)
+        if self.config.ipc_socket_path is not None:
+            runtime_env["AIC_GAZEBO_RL_SOCKET"] = self._container_path(self.config.ipc_socket_path)
         exports = [f"export {key}={shlex_quote(value)}" for key, value in runtime_env.items()]
         exports.append(f"export PYTHONPATH={shlex_quote(pythonpath_prefix)}:${{PYTHONPATH:-}}")
         return "\n".join(exports)
@@ -255,7 +260,13 @@ class GazeboRLRunner:
         if self.config.sim_docker_container:
             return self._docker_exec_cmd(
                 self._runtime_bash(
-                    "pixi run ros2 run aic_model aic_model --ros-args "
+                    "export LD_LIBRARY_PATH=\"$PWD/.pixi/envs/default/lib:${LD_LIBRARY_PATH:-}\"\n"
+                    "export PYTHONPATH=\"$PWD/aic_model:$PWD/scripts/pythonpath_bootstrap:"
+                    "$PWD/.pixi/envs/default/lib/python3.12/site-packages:${PYTHONPATH:-}\"\n"
+                    "export AIC_CHECKOUT_PYTHONPATH=\"$PWD/aic_model:$PWD/aic_utils/gazebo_rl:$PWD/aic_example_policies\"\n"
+                    "if [ -x .pixi/envs/default/bin/ros2 ]; then AIC_ROS2=.pixi/envs/default/bin/ros2; "
+                    "else AIC_ROS2='pixi run ros2'; fi\n"
+                    "$AIC_ROS2 run aic_model aic_model --ros-args "
                     "-p use_sim_time:=true "
                     "-p policy:=gazebo_rl.bridge_policy.GazeboRLBridgePolicy "
                     "-r __node:=aic_model_gazebo_rl"
@@ -440,7 +451,9 @@ class GazeboRLRunner:
 
     def _cleanup_stale_zenoh_router(self) -> None:
         patterns = ["rmw_zenohd", "rmw_zenoh_cpp rmw_zenohd"]
-        for pattern in patterns:
+        # A dedicated Docker runtime owns only its own process namespace.
+        host_patterns = [] if self.config.sim_docker_container else patterns
+        for pattern in host_patterns:
             try:
                 subprocess.run(
                     ["pkill", "-f", pattern],

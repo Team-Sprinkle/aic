@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import time
+import uuid
 from pathlib import Path
 from typing import Any
 
@@ -52,7 +53,14 @@ class GazeboRLEnv:
         self.workspace_dir = Path(workspace_dir).resolve()
         self.max_steps = int(max_steps)
         self.per_trial_timeout_sec = float(per_trial_timeout_sec)
-        self._server = IPCServer(host=host, port=port)
+        ipc_socket_path = None
+        if sim_docker_container:
+            # Rootless Docker's host network is distinct from the learner's.
+            # A socket in the bind-mounted checkout works without exposed ports.
+            directory = self.workspace_dir / "outputs" / ".ipc"
+            directory.mkdir(parents=True, exist_ok=True)
+            ipc_socket_path = directory / f"{uuid.uuid4().hex[:12]}.sock"
+        self._server = IPCServer(host=host, port=port, unix_path=ipc_socket_path)
         self._conn: JsonLineConnection | None = None
         self._hello: dict[str, Any] | None = None
         self._preposition: dict[str, Any] | None = None
@@ -90,6 +98,7 @@ class GazeboRLEnv:
                 per_trial_timeout_sec=per_trial_timeout_sec,
                 host=host,
                 port=self._server.port,
+                ipc_socket_path=ipc_socket_path,
                 command_dt_sec=command_dt_sec,
                 results_dir=Path(results_dir).resolve(),
                 record_lerobot=record_lerobot,

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Vision offline SERL pretraining using a LeRobot ACT checkpoint as actor."""
+"""Offline learning with a direct visual actor or an explicit legacy ACT mode."""
 
 from __future__ import annotations
 
@@ -16,6 +16,7 @@ os.environ.setdefault("PYGAME_HIDE_SUPPORT_PROMPT", "1")
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 import torch
+import numpy as np
 import torch.distributed as dist
 from torch import nn
 from torch.nn.parallel import DistributedDataParallel
@@ -24,6 +25,7 @@ from torch.utils.data import Subset
 from torch.utils.data.distributed import DistributedSampler
 
 from lerobot_robot_aic.act_warmstart import inspect_act_checkpoint
+from lerobot_robot_aic.direct_visual_actor import BACKBONES, DirectVisualActor, DirectVisualActorConfig
 from lerobot_robot_aic.vision_offline_serl import (
     VisionOfflineSERLConfig,
     VisionOfflineSERLDataset,
@@ -40,12 +42,13 @@ def _unwrap_module(module: nn.Module) -> nn.Module:
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--dataset-root", type=Path, required=True)
-    parser.add_argument("--act-checkpoint", type=Path, required=True)
+    parser.add_argument("--act-checkpoint", type=Path, default=None, help="Required only by legacy ACT actor modes.")
     parser.add_argument("--output-dir", type=Path, required=True)
     parser.add_argument("--job-name", default="vision_offline_serl_smoke")
     parser.add_argument("--steps", type=int, default=1000)
     parser.add_argument("--batch-size", type=int, default=2)
     parser.add_argument("--device", default="cuda")
+    parser.add_argument("--seed", type=int, default=17)
     parser.add_argument("--lr", type=float, default=1e-4)
     parser.add_argument("--adapter-lr", type=float, default=1e-4)
     parser.add_argument("--act-lr", type=float, default=1e-5)
@@ -54,11 +57,17 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--tau", type=float, default=0.005)
     parser.add_argument("--bc-weight", type=float, default=1.0)
     parser.add_argument("--cql-weight", type=float, default=0.0)
-    parser.add_argument("--adapter-penalty-weight", type=float, default=1e-3)
-    parser.add_argument("--act-preservation-weight", type=float, default=1e-2)
+    parser.add_argument("--adapter-penalty-weight", type=float, default=None)
+    parser.add_argument("--act-preservation-weight", type=float, default=None)
     parser.add_argument("--smoothness-weight", type=float, default=0.0)
-    parser.add_argument("--action-horizon", type=int, default=8)
-    parser.add_argument("--actor-mode", choices=["act_direct", "act_adapter"], default="act_adapter")
+    parser.add_argument("--action-horizon", type=int, default=1)
+    parser.add_argument("--actor-mode", choices=["direct_visual", "act_direct", "act_adapter"], default="direct_visual")
+    parser.add_argument("--actor-backbone", choices=BACKBONES, default="resnet18")
+    parser.add_argument("--actor-backbone-checkpoint", type=Path, help="Optional ACT pretrained directory; copies only its ResNet weights.")
+    parser.add_argument("--actor-image-size", type=int, default=224)
+    parser.add_argument("--freeze-backbone", action=argparse.BooleanOptionalAction, default=False)
+    parser.add_argument("--action-limits", type=float, nargs="+", default=[0.02, 0.02, 0.02, 0.2, 0.2, 0.2],
+                        help="Per-coordinate physical command limits, repeated over the action horizon.")
     parser.add_argument(
         "--actor-update-mode",
         choices=["q_bc", "bc_only", "critic_only"],
@@ -154,7 +163,23 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--early-stopping-min-delta", type=float, default=0.0)
     parser.add_argument("--max-wall-time-minutes", type=float, default=0.0)
     parser.add_argument("--dry-run", action="store_true")
-    return parser.parse_args()
+    args = parser.parse_args()
+    direct = args.actor_mode == "direct_visual"
+    if not direct and args.act_checkpoint is None:
+        parser.error("Legacy ACT modes require --act-checkpoint")
+    if direct and args.act_checkpoint is not None:
+        parser.error("Use --actor-backbone-checkpoint to copy ACT visual features into direct_visual")
+    if args.adapter_penalty_weight is None:
+        args.adapter_penalty_weight = 0.0 if direct else 1e-3
+    if args.act_preservation_weight is None:
+        args.act_preservation_weight = 0.0 if direct else 1e-2
+    if direct and (args.adapter_penalty_weight or args.act_preservation_weight or args.adapter_delta_clip is not None):
+        parser.error("direct_visual does not accept residual penalties, ACT preservation, or adapter clipping")
+    if direct and args.action_horizon != 1 and args.actor_update_mode != "bc_only":
+        parser.error("One-step offline RL requires --action-horizon 1; use bc_only for chunks")
+    if int(os.environ.get("WORLD_SIZE", "1")) > 4:
+        parser.error("This shared-server workflow supports at most 4 GPUs/processes at once")
+    return args
 
 
 def _ddp_env() -> dict[str, int]:
@@ -211,6 +236,12 @@ def _wrap_ddp(trainer: VisionOfflineSERLTrainer, device: torch.device) -> None:
 def _camera_keys(args: argparse.Namespace) -> list[str]:
     if args.camera_keys:
         return list(args.camera_keys)
+    if args.actor_mode == "direct_visual":
+        metadata = json.loads((args.dataset_root / "meta/info.json").read_text())
+        keys = sorted(key for key in metadata["features"] if key.startswith("observation.images."))
+        if not keys:
+            raise ValueError("No image observations in dataset metadata")
+        return keys
     metadata = inspect_act_checkpoint(args.act_checkpoint)
     keys = metadata.get("camera_keys") or []
     if not keys:
@@ -221,12 +252,13 @@ def _camera_keys(args: argparse.Namespace) -> list[str]:
 def _train_config(args: argparse.Namespace, dataset_summary: dict[str, Any], warmstart: dict[str, Any]) -> dict[str, Any]:
     return {
         "dataset_root": str(args.dataset_root),
-        "act_checkpoint": str(args.act_checkpoint),
+        "act_checkpoint": str(args.act_checkpoint) if args.act_checkpoint else None,
         "output_dir": str(args.output_dir),
         "job_name": args.job_name,
         "steps": args.steps,
         "batch_size": args.batch_size,
         "device": args.device,
+        "seed": args.seed,
         "lr": args.lr,
         "adapter_lr": args.adapter_lr,
         "act_lr": args.act_lr,
@@ -240,8 +272,13 @@ def _train_config(args: argparse.Namespace, dataset_summary: dict[str, Any], war
         "smoothness_weight": args.smoothness_weight,
         "action_horizon": args.action_horizon,
         "actor_mode": args.actor_mode,
+        "actor_backbone": args.actor_backbone,
+        "actor_backbone_checkpoint": str(args.actor_backbone_checkpoint) if args.actor_backbone_checkpoint else None,
+        "actor_image_size": args.actor_image_size,
+        "freeze_backbone": args.freeze_backbone,
+        "action_limits": args.action_limits,
         "actor_update_mode": args.actor_update_mode,
-        "freeze_act": args.freeze_act,
+        "freeze_act": args.freeze_act if args.actor_mode != "direct_visual" else None,
         "adapter_hidden_dim": args.adapter_hidden_dim,
         "adapter_num_layers": args.adapter_num_layers,
         "adapter_arch": args.adapter_arch,
@@ -296,7 +333,8 @@ def _model_summary(trainer: VisionOfflineSERLTrainer) -> dict[str, int]:
     return {
         "actor_parameters": int(sum(p.numel() for p in actor.parameters())),
         "actor_trainable_parameters": int(sum(p.numel() for p in actor.parameters() if p.requires_grad)),
-        "act_trainable_parameters": int(sum(p.numel() for p in actor.act_policy.parameters() if p.requires_grad)),
+        "act_trainable_parameters": int(sum(p.numel() for p in getattr(actor, "act_policy", nn.Module()).parameters() if p.requires_grad)),
+        "backbone_trainable_parameters": int(sum(p.numel() for p in getattr(actor, "backbone", nn.Module()).parameters() if p.requires_grad)),
         "adapter_parameters": adapter_params,
         "adapter_trainable_parameters": int(
             sum(p.numel() for p in getattr(actor, "adapter", nn.Module()).parameters() if p.requires_grad)
@@ -392,6 +430,10 @@ def _action_contract(
     camera_keys: list[str],
 ) -> dict[str, Any]:
     """Validate the ACT warm start can supply the SERL action chunk contract."""
+    if args.actor_mode == "direct_visual":
+        return {"actor_mode": "direct_visual", "uses_act_actions": False,
+                "action_horizon": args.action_horizon, "camera_keys": camera_keys,
+                "action_limits": args.action_limits, "warnings": [], "errors": []}
     errors: list[str] = []
     warnings: list[str] = []
     act_chunk_size = warmstart.get("chunk_size")
@@ -464,6 +506,8 @@ def _action_contract(
 
 def main() -> int:
     args = parse_args()
+    torch.manual_seed(args.seed)
+    np.random.seed(args.seed)
     distributed, device, distributed_summary = _setup_distributed(args.device)
     camera_keys = _camera_keys(args)
 
@@ -476,27 +520,44 @@ def main() -> int:
         swap_rgb_channels=args.swap_rgb_channels,
     )
     dataset_summary = asdict(dataset.summary)
-    actor, warmstart = load_act_actor(
-        args.act_checkpoint,
-        action_horizon=args.action_horizon,
-        device=device,
-        actor_mode=args.actor_mode,
-        state_dim=dataset.state_dim,
-        adapter_hidden_dim=args.adapter_hidden_dim,
-        adapter_num_layers=args.adapter_num_layers,
-        adapter_arch=args.adapter_arch,
-        adapter_layer_norm=args.adapter_layer_norm,
-        adapter_activation=args.adapter_activation,
-        state_encoding=args.state_encoding,
-        state_encoding_indices=_state_encoding_indices(args),
-        state_encoding_num_bands=args.state_encoding_num_bands,
-        state_encoding_max_freq=args.state_encoding_max_freq,
-        state_encoding_scale=args.state_encoding_scale,
-        adapter_scale=args.adapter_scale,
-        freeze_act=args.freeze_act,
-        adapter_delta_clip=args.adapter_delta_clip,
-        action_clip=args.action_clip,
-    )
+    train_indices, val_indices = _split_by_episode(dataset, args.val_fraction)
+    if args.actor_mode == "direct_visual":
+        actor = DirectVisualActor(DirectVisualActorConfig(
+            state_dim=dataset.state_dim, camera_keys=camera_keys,
+            single_action_dim=dataset.single_action_dim, action_horizon=args.action_horizon,
+            backbone=args.actor_backbone, image_size=args.actor_image_size,
+            freeze_backbone=args.freeze_backbone, action_limits=tuple(args.action_limits),
+        ))
+        states = np.stack(dataset.df.iloc[train_indices]["observation.state"].to_numpy())
+        actor.fit_normalization(states, dataset.actions[train_indices])
+        initialization = actor.initialize_act_backbone(args.actor_backbone_checkpoint) if args.actor_backbone_checkpoint else None
+        actor = actor.to(device)
+        warmstart = {"mode": "direct_visual", "uses_act_actions": False,
+                     "backbone_initialization": initialization,
+                     "normalization_source": "training_episodes_only",
+                     "direct_visual_actor": actor.architecture_config()}
+    else:
+        actor, warmstart = load_act_actor(
+            args.act_checkpoint,
+            action_horizon=args.action_horizon,
+            device=device,
+            actor_mode=args.actor_mode,
+            state_dim=dataset.state_dim,
+            adapter_hidden_dim=args.adapter_hidden_dim,
+            adapter_num_layers=args.adapter_num_layers,
+            adapter_arch=args.adapter_arch,
+            adapter_layer_norm=args.adapter_layer_norm,
+            adapter_activation=args.adapter_activation,
+            state_encoding=args.state_encoding,
+            state_encoding_indices=_state_encoding_indices(args),
+            state_encoding_num_bands=args.state_encoding_num_bands,
+            state_encoding_max_freq=args.state_encoding_max_freq,
+            state_encoding_scale=args.state_encoding_scale,
+            adapter_scale=args.adapter_scale,
+            freeze_act=args.freeze_act,
+            adapter_delta_clip=args.adapter_delta_clip,
+            action_clip=args.action_clip,
+        )
     contract = _action_contract(
         args=args,
         dataset_summary=dataset_summary,
@@ -511,6 +572,7 @@ def main() -> int:
         action_dim=dataset.action_dim,
         action_horizon=args.action_horizon,
         camera_keys=camera_keys,
+        direct_visual_actor=actor.architecture_config() if isinstance(actor, DirectVisualActor) else None,
         gamma=args.gamma,
         tau=args.tau,
         bc_weight=args.bc_weight,
@@ -625,14 +687,20 @@ def main() -> int:
     best_val_step = 0
     bad_val_checks = 0
     stop_reason = "max_steps"
+    stop_requested = False
     started = time.monotonic()
-    while step < args.steps:
+    while step < args.steps and not stop_requested:
         if sampler is not None:
             sampler.set_epoch(step)
         for batch in loader:
-            if args.max_wall_time_minutes > 0.0 and (time.monotonic() - started) >= args.max_wall_time_minutes * 60.0:
+            timed_out = args.max_wall_time_minutes > 0.0 and (time.monotonic() - started) >= args.max_wall_time_minutes * 60.0
+            if args.max_wall_time_minutes > 0.0 and dist.is_initialized():
+                timeout_flag = torch.tensor(int(timed_out), device=device)
+                dist.all_reduce(timeout_flag, op=dist.ReduceOp.MAX)
+                timed_out = bool(timeout_flag.item())
+            if timed_out:
                 stop_reason = "max_wall_time"
-                step = args.steps
+                stop_requested = True
                 break
             step += 1
             metrics = trainer.train_step(batch)
@@ -683,9 +751,10 @@ def main() -> int:
                     dist.broadcast_object_list(payload, src=0)
                     stop_now = bool(payload[0])
                 if stop_now:
-                    step = args.steps
+                    stop_requested = True
+                    stop_reason = "early_stopping"
                 _barrier_if_distributed()
-                if step >= args.steps:
+                if step >= args.steps or stop_requested:
                     break
             if step >= args.steps:
                 break
@@ -710,10 +779,14 @@ def main() -> int:
             "best_val_checkpoint": str(run_dir / "checkpoint_best_val.pt") if best_val_step else None,
             "actor_mode": args.actor_mode,
             "actor_update_mode": args.actor_update_mode,
-            "freeze_act": args.freeze_act,
-            "act_checkpoint": str(args.act_checkpoint),
+            "freeze_act": args.freeze_act if args.actor_mode != "direct_visual" else None,
+            "freeze_backbone": args.freeze_backbone if args.actor_mode == "direct_visual" else None,
+            "act_checkpoint": str(args.act_checkpoint) if args.act_checkpoint else None,
             "critic_init": "scratch",
-            "critic_initialization_note": "Critic/value is scratch; ACT is used only as an actor/action prior.",
+            "critic_initialization_note": (
+                "Critics start from scratch. The actor predicts full commands from visual features and state."
+                if args.actor_mode == "direct_visual" else "Critic/value is scratch; ACT is used only as an actor/action prior."
+            ),
             "model_summary": _model_summary(trainer),
             "dataset_summary": dataset_summary,
             "warmstart_report": warmstart,

@@ -32,6 +32,7 @@ from rclpy.time import Time
 from std_msgs.msg import String
 from tf2_ros import TransformException
 from transforms3d._gohlketransforms import quaternion_multiply, quaternion_slerp
+from .cheatcode_start import initial_insertion_z_offset
 
 QuaternionTuple = tuple[float, float, float, float]
 
@@ -252,6 +253,17 @@ class CheatCode(Policy):
             delta_pose=delta_pose,
         )
 
+    def _initial_insertion_z_offset(self, port_transform, cable_tip_frame):
+        tip = self._parent_node._tf_buffer.lookup_transform("base_link", cable_tip_frame, Time()).transform
+        def xyz(transform):
+            return (transform.translation.x, transform.translation.y, transform.translation.z)
+        def wxyz(transform):
+            return (transform.rotation.w, transform.rotation.x, transform.rotation.y, transform.rotation.z)
+        offset = initial_insertion_z_offset(xyz(port_transform), xyz(tip), wxyz(port_transform), wxyz(tip))
+        if offset != 0.2:
+            self.get_logger().info(f"[CheatCode] Aligned final-descent start: preserving Z offset {offset:.6f} m")
+        return offset
+
     def insert_cable(
         self,
         task: Task,
@@ -283,7 +295,11 @@ class CheatCode(Policy):
             return False
         port_transform = port_tf_stamped.transform
 
-        z_offset = 0.2
+        try:
+            z_offset = self._initial_insertion_z_offset(port_transform, cable_tip_frame)
+        except (TransformException, ValueError) as ex:
+            self.get_logger().error(f"Could not validate insertion start: {ex}")
+            return False
 
         # Over several seconds, smoothly interpolate from the current position to
         # a position above the port.
@@ -318,7 +334,7 @@ class CheatCode(Policy):
 
         handoff_blend_sec = 2.0
         handoff_speed_mps = 0.02
-        start_descent_z_offset = 0.005
+        start_descent_z_offset = min(0.005, z_offset)
         rate_limited_handoff_sec = abs(z_offset - start_descent_z_offset) / handoff_speed_mps
         blend_steps = max(1, int(max(handoff_blend_sec, rate_limited_handoff_sec) / dt))
         for t in range(blend_steps):

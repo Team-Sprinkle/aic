@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Launch Isaac online ACT-adapter SERL/SAC training."""
+"""Launch Isaac actor-critic training for direct visual or legacy ACT policies."""
 
 from __future__ import annotations
 
@@ -82,7 +82,7 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
             "delta action before final TCP caps."
         ),
     )
-    parser.add_argument("--act-torchscript", type=Path, required=True)
+    parser.add_argument("--act-torchscript", type=Path, default=None, help="Required only for legacy ACT actors.")
     parser.add_argument(
         "--act-torchscript-device",
         choices=["auto", "cpu", "cuda"],
@@ -537,6 +537,13 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         for arg in raw_args
         if arg.startswith("--")
     }
+    if parsed.checkpoint is not None and parsed.checkpoint.is_file():
+        info = inspect_checkpoint(parsed.checkpoint, required=True)
+        if (info.get("vision_offline_serl_config") or {}).get("actor_mode") == "direct_visual":
+            for name, value in (("n_action_steps", 1), ("adapter_penalty_weight", 0.0),
+                                ("act_preservation_weight", 0.0), ("adapter_delta_clip", 0.0)):
+                if "--" + name.replace("_", "-") not in parsed._explicit_cli_flags:
+                    setattr(parsed, name, value)
     return parsed
 
 
@@ -560,13 +567,15 @@ def inspect_checkpoint(path: Path, *, required: bool) -> dict[str, Any]:
     import torch
 
     checkpoint = torch.load(path, map_location="cpu")
+    context = checkpoint.get("online_serl_config") or checkpoint.get("online_gazebo_serl_config") or {}
+    source = context.get("checkpoint") or checkpoint
     return {
         "path": str(path),
         "exists": True,
         "step": checkpoint.get("step"),
-        "vision_offline_serl_config": checkpoint.get("vision_offline_serl_config"),
-        "dataset_summary": checkpoint.get("dataset_summary"),
-        "warmstart_report": checkpoint.get("warmstart_report"),
+        "vision_offline_serl_config": source.get("vision_offline_serl_config"),
+        "dataset_summary": source.get("dataset_summary"),
+        "warmstart_report": source.get("warmstart_report"),
         "has_actor": "actor" in checkpoint,
         "has_critics": "critic1" in checkpoint and "critic2" in checkpoint,
     }
@@ -615,8 +624,8 @@ def build_plan(args: argparse.Namespace, *, inspect_required: bool = True) -> di
     return {
         "status": "implemented_short_run_capable",
         "note": (
-            "This validates the ACT-adapter SERL checkpoint and records the intended "
-            "off-policy Isaac SERL/SAC configuration. Without --dry-run, this wrapper "
+            "This inspects a direct visual or legacy ACT checkpoint and records the intended "
+            "off-policy Isaac actor-critic configuration. Without --dry-run, this wrapper "
             "launches the Isaac Lab online SERL trainer."
         ),
         "task": args.task,
@@ -885,8 +894,6 @@ def build_command(args: argparse.Namespace) -> tuple[list[str], dict[str, str]]:
         str(args.num_envs),
         "--seed",
         str(args.seed),
-        "--act_torchscript",
-        str(args.act_torchscript),
         "--act_torchscript_device",
         args.act_torchscript_device,
         "--output_dir",
@@ -1223,6 +1230,8 @@ def build_command(args: argparse.Namespace) -> tuple[list[str], dict[str, str]]:
             cmd.extend(["--checkpoint", str(args.checkpoint)])
     else:
         cmd.extend(["--checkpoint", str(args.checkpoint)])
+    if args.act_torchscript is not None:
+        cmd.extend(["--act_torchscript", str(args.act_torchscript)])
     if expert_dataset_root is not None:
         cmd.extend(["--expert_dataset_root", str(expert_dataset_root)])
     if expert_bc_weight is not None:
@@ -1324,8 +1333,14 @@ def build_command(args: argparse.Namespace) -> tuple[list[str], dict[str, str]]:
 
 
 def validate_launch_inputs(args: argparse.Namespace) -> None:
-    if not args.act_torchscript.exists():
+    if args.act_torchscript is not None and not args.act_torchscript.exists():
         raise FileNotFoundError(f"ACT TorchScript checkpoint does not exist: {args.act_torchscript}")
+    if args.act_torchscript is None:
+        if args.checkpoint is None:
+            raise ValueError("A direct visual checkpoint or legacy ACT TorchScript is required")
+        cfg = inspect_checkpoint(args.checkpoint, required=True).get("vision_offline_serl_config") or {}
+        if cfg.get("actor_mode") != "direct_visual":
+            raise ValueError("Legacy ACT checkpoints require --act-torchscript")
     if bool(getattr(args, "act_only", False)):
         if args.checkpoint is not None and not args.checkpoint.exists():
             raise FileNotFoundError(f"Checkpoint does not exist: {args.checkpoint}")

@@ -1,8 +1,15 @@
 # Isaac Online RL
 
-Isaac online RL now treats online SERL/SAC with the ACT-adapter actor as the primary
-future hybrid path. The existing Isaac Lab + RSL-RL PPO stack remains available
-as a legacy smoke test, baseline, and backup trainer:
+> Historical implementation and smoke-run guide. The adapter-first “future”
+> direction below predates the June architecture review; use the
+> [direct visual policy](DIRECT_VISUAL_POLICY.md) and [current status](STATUS.md)
+> for design decisions, and [local workflow](LOCAL_WORKFLOW.md) for rootless
+> operation. Reward geometry, success checks, and actor modes changed in later
+> experiments; use each run's resolved config.
+
+The Isaac launcher now accepts direct visual checkpoints without an ACT export.
+This page retains ACT-adapter commands and results for historical reproduction.
+The existing Isaac Lab + RSL-RL PPO stack remains a separate baseline:
 
 ```text
 Gazebo expert data -> ACT -> offline ACT-adapter SERL -> Isaac online SERL/SAC
@@ -14,14 +21,14 @@ current PPO path still starts PPO from scratch, resumes an RSL-RL-native
 checkpoint, or applies a conservative offline SERL action-prior initialization
 before PPO training.
 
-## Primary Future Method: Online SERL/SAC
+## Legacy ACT-compatible online workflow
 
-- Intended actor: the same ACT-adapter actor produced by
+- Legacy actor: the same ACT-adapter actor produced by
   `train_vision_offline_serl.py --actor-mode act_adapter`.
-- Default training: ACT frozen, adapter and critics trainable.
+- Training in this legacy mode: ACT frozen, adapter and critics trainable.
 - Host launcher: `aic_utils/aic_isaac/scripts/train_isaac_online_serl.py`.
 - Isaac trainer: `aic_utils/aic_isaac/aic_isaaclab/scripts/serl/train.py`.
-- Design doc: `aic_utils/aic_isaac/docs/isaac_online_serl_design.md`.
+- Historical design: [original ACT-adapter proposal](../obsolete/aic_utils/aic_isaac/docs/isaac_online_serl_design.md).
 - Current status: short-run capable. It loads an ACT TorchScript export, keeps
   Isaac camera sensors enabled, reads raw camera RGB tensors, collects replay,
   updates critics and adapter, and saves a real online checkpoint.
@@ -289,11 +296,11 @@ Checkpoints are not fully interchangeable, but there is now a bounded bridge:
 - ACT produces a LeRobot ACT checkpoint.
 - Lowdim offline SERL can consume an ACT checkpoint through `--act-checkpoint`
   as a conservative action-prior bridge.
-- Vision offline SERL can consume an ACT checkpoint through `--act-checkpoint`
-  and, by default, trains an ACT-adapter actor with ACT frozen and a
-  zero-initialized correction adapter.
-- Offline SERL produces either a lowdim MLP actor-critic checkpoint or a vision
-  ACT-adapter actor-critic checkpoint.
+- Vision offline learning defaults to `direct_visual`; optional
+  `--actor-backbone-checkpoint` copies ACT visual weights only. Explicit legacy
+  `act_adapter` mode consumes `--act-checkpoint` and computes ACT corrections.
+- Offline learning produces a lowdim, direct visual, or legacy ACT checkpoint.
+  The direct visual loader is shared by the offline, Isaac, and Gazebo paths.
 - Isaac PPO uses RSL-RL's PPO actor-critic architecture.
 
 The Isaac online RL wrapper accepts `--init-policy-checkpoint` for an offline SERL
@@ -334,17 +341,21 @@ pixi run python aic_utils/aic_isaac/scripts/check_policy_checkpoint_compatibilit
 
 ## Current Limitations
 
-- Isaac online SERL/SAC is short-run capable, but not yet tuned or scaled.
+- The loop named SERL/SAC is a deterministic actor-critic, without full SAC
+  entropy learning. Legacy simulator smoke runs do not validate the new actor.
 - PPO/RSL-RL is implemented and useful for smoke/baseline runs, but it is no
   longer the primary hybrid-transfer architecture.
 - Lowdim offline SERL still exists; its ACT warm-start transfers only an output
   action prior, not full transformer weights.
-- Vision offline SERL now has an ACT-adapter actor with frozen ACT by default,
-  and Isaac online rollout/update code can now run that actor through ACT
-  TorchScript plus the trained adapter.
+- Direct visual inference/training and checkpoint loading passed model checks.
+  Isaac then loaded it for live zero-action reset/terminal diagnostics; learned
+  actions were not evaluated in those probes. Cameras and terminal accounting
+  ran, but resets drifted. See the [live report](experiments/2026-09-17-live-validation.md).
+  ACT TorchScript plus the trained adapter remains for explicit legacy checkpoints.
 - Isaac PPO warm-start from offline SERL is a partial action-prior
   initialization, not full actor-critic hidden-layer transfer for the current
   camera-enabled PPO architecture.
 - The optional insertion-aware rewards use approximate target object poses.
-- Gazebo online RL, recovery intervention, and Isaac-to-Gazebo recovery loops
-  are not implemented yet.
+- A Gazebo bridge and online learner exist under `aic_utils/gazebo_rl`.
+  Reliable automated recovery collection and Isaac-to-Gazebo recovery loops
+  still need validation and implementation work.

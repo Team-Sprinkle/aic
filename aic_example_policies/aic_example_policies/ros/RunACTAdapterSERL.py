@@ -74,6 +74,11 @@ DEFAULT_MAX_RUNTIME_SEC = 30.0
 
 
 class RunACTAdapterSERL(Policy):
+    ALLOW_ACT_EXPORT = True
+    DEFAULT_ACTION_STEPS = 4
+    DEFAULT_TRANSLATION_DEADBAND = 5e-4
+    DEFAULT_ROTATION_DEADBAND = 1e-3
+
     def __init__(self, parent_node: Node):
         super().__init__(parent_node)
         self.device = torch.device(
@@ -81,7 +86,10 @@ class RunACTAdapterSERL(Policy):
             or ("cuda" if torch.cuda.is_available() else "cpu")
         )
         self.checkpoint_path = self._required_path("AIC_SERL_CHECKPOINT")
-        self.act_torchscript = self._required_path("AIC_SERL_ACT_TORCHSCRIPT")
+        self.act_torchscript = (
+            self._required_path("AIC_SERL_ACT_TORCHSCRIPT")
+            if self.ALLOW_ACT_EXPORT and os.environ.get("AIC_SERL_ACT_TORCHSCRIPT") else None
+        )
         self.control_hz = float(os.environ.get("AIC_SERL_CONTROL_HZ", DEFAULT_CONTROL_HZ))
         self.max_runtime_sec = float(
             os.environ.get("AIC_SERL_MAX_RUNTIME_SEC", DEFAULT_MAX_RUNTIME_SEC)
@@ -91,12 +99,12 @@ class RunACTAdapterSERL(Policy):
         self.command_frame = os.environ.get("AIC_SERL_COMMAND_FRAME", "gripper/tcp")
         self.max_translation_delta = float(os.environ.get("AIC_SERL_MAX_TRANSLATION_DELTA", 0.02))
         self.max_rotation_delta = float(os.environ.get("AIC_SERL_MAX_ROTATION_DELTA", 0.2))
-        self.translation_deadband = float(os.environ.get("AIC_SERL_TRANSLATION_DEADBAND", 5e-4))
-        self.rotation_deadband = float(os.environ.get("AIC_SERL_ROTATION_DEADBAND", 1e-3))
+        self.translation_deadband = float(os.environ.get("AIC_SERL_TRANSLATION_DEADBAND", self.DEFAULT_TRANSLATION_DEADBAND))
+        self.rotation_deadband = float(os.environ.get("AIC_SERL_ROTATION_DEADBAND", self.DEFAULT_ROTATION_DEADBAND))
         self.adapter_delta_clip = self._optional_float("AIC_SERL_ADAPTER_DELTA_CLIP", None)
         self.action_clip = self._optional_float("AIC_SERL_ACTION_CLIP", None)
         self.allow_zero_images = self._bool_env("AIC_SERL_ALLOW_ZERO_IMAGES", False)
-        self.n_action_steps = int(os.environ.get("AIC_SERL_N_ACTION_STEPS", os.environ.get("AIC_ACT_N_ACTION_STEPS", "4")))
+        self.n_action_steps = int(os.environ.get("AIC_SERL_N_ACTION_STEPS", os.environ.get("AIC_ACT_N_ACTION_STEPS", self.DEFAULT_ACTION_STEPS)))
         if self.n_action_steps < 1:
             raise ValueError(f"AIC_SERL_N_ACTION_STEPS must be >= 1, got {self.n_action_steps}")
 
@@ -115,7 +123,7 @@ class RunACTAdapterSERL(Policy):
             )
         self._action_queue: list[np.ndarray] = []
         self.get_logger().info(
-            "ACT-adapter SERL policy loaded from "
+            f"{self.policy.actor.actor_mode} policy loaded from "
             f"{self.checkpoint_path} with ACT base {self.act_torchscript} on {self.device}; "
             f"state_dim={self.policy.state_dim}, action_dim={self.policy.action_dim}, "
             f"action_horizon={self.policy.action_horizon}, n_action_steps={self.n_action_steps}, "

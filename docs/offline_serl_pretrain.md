@@ -1,6 +1,11 @@
 # Offline SERL Pretraining
 
-This documents two offline SERL-style smoke paths:
+The vision CLI now defaults to a **direct visual actor**: camera backbone
+features and state feed a head that predicts the complete command. See
+[direct visual policy](DIRECT_VISUAL_POLICY.md) for current architecture,
+bounded training, checkpoint inspection, and runtime commands.
+
+The remainder documents the lowdim path and explicit legacy ACT experiments:
 
 ```text
 Gazebo expert LeRobot dataset -> lowdim replay transitions -> actor-critic + BC pretraining checkpoint
@@ -22,20 +27,20 @@ outputs/trajectory_datasets/sfp_to_nic/cheatcode/nic_cards_1/n10__act_smoke/acce
 
 The lowdim implementation uses `observation.state` and vector `action`
 columns. Images are left in the dataset but skipped by `--obs-mode lowdim`.
-The vision implementation uses `observation.state`, ACT camera keys, and vector
-`action` chunks through the official LeRobot dataset API. Its default actor is
-the ACT-adapter architecture: ACT produces a base action chunk and a small MLP
-adapter predicts a regularized correction.
+The vision implementation uses `observation.state`, camera images, and vector
+`action` through the official LeRobot dataset API. The legacy examples below
+explicitly select `act_adapter`; that mode produces corrections to ACT actions.
 
 Set `--action-horizon` to train the actor and critics on flattened future action
 chunks. The default is `1`, which is a single-step action. For example, a
 Cartesian action with six values and `--action-horizon 8` becomes a 48-value
 actor output while the runtime action schema metadata remains Cartesian.
 
-If the dataset has no `reward` column, `--reward-mode dataset` falls back to a
-final-success reward of `1.0` on each episode's last frame and `0.0` elsewhere.
-You can also set `--reward-mode final_success` or `--reward-mode zero`
-explicitly.
+Only the lowdim trainer falls back to final-success labels when dataset rewards
+are missing. The vision trainer rejects missing rewards with
+`--reward-mode dataset`. `final_success` labels every episode's last frame as
+successful, so use it only for verified successful demonstrations; `zero` is
+appropriate for the BC smoke command in the direct visual guide.
 
 ## Dry Run
 
@@ -107,9 +112,9 @@ checkpoint records this in `warmstart_metadata`.
 
 ## Vision Offline SERL
 
-`train_vision_offline_serl.py` keeps the lowdim path intact and adds a
-vision-capable actor-critic path. By default it reconstructs the LeRobot
-`ACTPolicy` from the ACT checkpoint, freezes ACT, and trains a small adapter:
+`train_vision_offline_serl.py --actor-mode act_adapter` reconstructs the LeRobot
+`ACTPolicy` from the ACT checkpoint, freezes ACT unless explicitly unfrozen,
+and trains a small adapter. This section describes that legacy mode:
 
 ```text
 obs -> ACT -> a_ACT
@@ -124,7 +129,7 @@ vision critics encode the same camera observations plus low-dimensional state
 and score flattened action chunks. `--actor-mode act_direct` remains available
 for the older direct-ACT actor.
 
-Default production settings for the current ACT -> offline SERL warm start are:
+Settings used by the historical ACT → offline SERL recipe were:
 
 ```text
 actor_update_mode: q_bc
@@ -297,17 +302,16 @@ by final action clipping, not adapter overwrite.
   applies to `train_offline_serl.py`, not the vision path.
 - Lowdim ACT warm-start transfers an output action prior only; it does not map
   ACT transformer hidden layers into the MLP.
-- Vision ACT-adapter warm-start uses frozen ACT as the base actor and trains a
-  small correction adapter by default. `--no-freeze-act` and `--act-lr` are
-  available for partial ACT finetuning experiments.
-- Rewards are replay-data rewards when present, otherwise final-success or zero
-  fallback modes.
+- Explicit `act_adapter` warm-start uses frozen ACT as the base actor.
+  `--no-freeze-act` and `--act-lr` support legacy ACT finetuning experiments.
+  The default `direct_visual` mode trains its backbone and complete action head.
+- Reward labels must match actual demonstration outcomes. The vision trainer
+  requires explicit selection of `final_success` or `zero` without dataset rewards.
 - The lowdim checkpoint can initialize Isaac PPO's action prior and can run
   through the Gazebo SERL transfer validator, but PPO is now a legacy
-  smoke/baseline path. The primary online path is Isaac SERL/SAC with the same
-  ACT-adapter actor.
-- Direct vision SERL -> Isaac PPO/RSL-RL weight transfer is no longer the
-  primary plan because the PPO actor architecture differs from the ACT-adapter
-  SERL actor. The intended path is online Isaac SERL/SAC using the same
-  ACT-adapter actor checkpoint.
+  smoke/baseline path. The new direct actor loads through the shared
+  offline/Isaac/Gazebo implementation; live simulator validation remains pending.
+- Vision actor checkpoints do not provide full weight transfer to the separate
+  PPO/RSL-RL architecture. The current deterministic actor-critic loop also
+  lacks the entropy objective needed to call it full SAC.
 - Runtime `policy.py` and command abstractions remain untouched.

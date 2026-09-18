@@ -109,8 +109,12 @@ def _quat_mul(q1: np.ndarray, q2: np.ndarray) -> np.ndarray:
 
 
 def _quat_apply(q: np.ndarray, v: np.ndarray) -> np.ndarray:
-    vq = np.array([v[0], v[1], v[2], 0.0], dtype=np.float64)
-    return _quat_mul(_quat_mul(q, vq), _quat_inv(q))[:3]
+    # _quat_mul normalizes quaternion operands; a vector quaternion must not
+    # pass through it, or millimeter translations become unit-length vectors.
+    q = _quat_normalize(q)
+    v = np.asarray(v, dtype=np.float64)
+    cross = np.cross(q[:3], v)
+    return v + 2 * (q[3] * cross + np.cross(q[:3], cross))
 
 
 def _axis_angle_from_quat(q: np.ndarray) -> np.ndarray:

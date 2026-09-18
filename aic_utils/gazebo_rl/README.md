@@ -1,17 +1,33 @@
 # Gazebo RL
 
+> For current limitations and direct rootless Docker commands, see
+> [status](../../docs/STATUS.md) and [local workflow](../../docs/LOCAL_WORKFLOW.md).
+> The September repair uses official per-trial Tier 3 insertion outcomes;
+> Tier 1 is model validity. Old summaries may contain the former incorrect label.
+
 `aic_utils/gazebo_rl` is the low-throughput, high-fidelity reinforcement learning path for AIC. It wraps the existing Gazebo, ROS, `aic_engine`, `aic_model.Policy`, `aic_controller`, and scoring stack instead of trying to turn Gazebo into a pure synchronous step simulator.
 
 Isaac Lab remains the high-throughput training environment under `aic_utils/aic_isaac`. This package is intended for short real rollouts, sim-to-sim adaptation checks, and validation against the same stack used by challenge evaluation.
 
 For a deeper architecture and file-by-file explanation, see [`PIPELINE.md`](PIPELINE.md).
 
+## Direct visual checkpoints
+
+The shared actor consumes camera features and state and predicts the entire TCP
+command. It needs no ACT export. Use `--policy-kind direct_visual` with the
+transfer validator, or `aic_example_policies.ros.RunDirectVisualSERL` for the
+official runtime evaluator. See the [direct visual guide](../../docs/DIRECT_VISUAL_POLICY.md)
+for commands, one-step execution, and checkpoint requirements. The actor
+completed a scored Gazebo trial without insertion; see the
+[live report and videos](../../docs/experiments/2026-09-17-live-validation.md).
+ACT export examples below apply to legacy modes.
+
 ## Architecture
 
 ```text
 trainer / GazeboRLEnv
       |
-      | newline-delimited JSON over localhost TCP
+      | newline-delimited JSON over TCP or a bind-mounted Unix socket (Docker)
       v
 gazebo_rl.bridge_policy.GazeboRLBridgePolicy
       |

@@ -17,6 +17,7 @@ import torch
 from torch.utils.data import DataLoader, Subset
 
 from lerobot_robot_aic.vision_offline_serl import VisionOfflineSERLDataset, load_act_actor
+from lerobot_robot_aic.direct_visual_actor import DirectVisualActor, load_direct_visual_actor
 
 
 def parse_args() -> argparse.Namespace:
@@ -36,6 +37,8 @@ def _split_by_episode(dataset: VisionOfflineSERLDataset, val_fraction: float) ->
     if val_fraction <= 0.0 or val_fraction >= 1.0:
         raise ValueError("val_fraction must be in (0, 1)")
     episodes = sorted(set(int(v) for v in dataset.episodes))
+    if len(episodes) < 2:
+        raise ValueError("A held-out split requires at least two episodes")
     val_count = max(1, int(round(len(episodes) * val_fraction)))
     val_count = min(val_count, len(episodes) - 1)
     val_episodes = set(episodes[-val_count:])
@@ -43,7 +46,7 @@ def _split_by_episode(dataset: VisionOfflineSERLDataset, val_fraction: float) ->
 
 
 def _mean(rows: list[dict[str, float]], key: str) -> float:
-    return float(sum(row[key] for row in rows) / max(len(rows), 1))
+    return float(sum(row[key] * row["frames"] for row in rows) / sum(row["frames"] for row in rows))
 
 
 @torch.no_grad()
@@ -75,36 +78,40 @@ def main() -> int:
         persistent_workers=args.num_workers > 0,
         prefetch_factor=2 if args.num_workers > 0 else None,
     )
-    actor, _ = load_act_actor(
-        Path(train_config["act_checkpoint"]),
-        action_horizon=action_horizon,
-        device=args.device,
-        actor_mode=train_config.get("actor_mode", "act_adapter"),
-        state_dim=int(dataset_summary.get("state_dim") or serl_config["state_dim"]),
-        adapter_hidden_dim=int(train_config.get("adapter_hidden_dim", 256)),
-        adapter_num_layers=int(train_config.get("adapter_num_layers", 2)),
-        adapter_arch=str(train_config.get("adapter_arch", "mlp")),
-        adapter_layer_norm=bool(train_config.get("adapter_layer_norm", False)),
-        adapter_activation=str(train_config.get("adapter_activation", serl_config.get("adapter_activation", "relu"))),
-        state_encoding=str(train_config.get("state_encoding", serl_config.get("state_encoding", "none"))),
-        state_encoding_indices=tuple(
-            int(i) for i in train_config.get("state_encoding_indices", serl_config.get("state_encoding_indices", []))
-        ),
-        state_encoding_num_bands=int(
-            train_config.get("state_encoding_num_bands", serl_config.get("state_encoding_num_bands", 4))
-        ),
-        state_encoding_max_freq=float(
-            train_config.get("state_encoding_max_freq", serl_config.get("state_encoding_max_freq", 8.0))
-        ),
-        state_encoding_scale=float(
-            train_config.get("state_encoding_scale", serl_config.get("state_encoding_scale", 1.0))
-        ),
-        adapter_scale=float(train_config.get("adapter_scale", 1.0)),
-        freeze_act=bool(train_config.get("freeze_act", True)),
-        adapter_delta_clip=train_config.get("adapter_delta_clip"),
-        action_clip=train_config.get("action_clip"),
-    )
-    missing, unexpected = actor.load_state_dict(payload["actor"], strict=False)
+    if serl_config.get("actor_mode") == "direct_visual":
+        actor = load_direct_visual_actor(payload, device=args.device)
+        missing, unexpected = [], []
+    else:
+        actor, _ = load_act_actor(
+            Path(train_config["act_checkpoint"]),
+            action_horizon=action_horizon,
+            device=args.device,
+            actor_mode=train_config.get("actor_mode", "act_adapter"),
+            state_dim=int(dataset_summary.get("state_dim") or serl_config["state_dim"]),
+            adapter_hidden_dim=int(train_config.get("adapter_hidden_dim", 256)),
+            adapter_num_layers=int(train_config.get("adapter_num_layers", 2)),
+            adapter_arch=str(train_config.get("adapter_arch", "mlp")),
+            adapter_layer_norm=bool(train_config.get("adapter_layer_norm", False)),
+            adapter_activation=str(train_config.get("adapter_activation", serl_config.get("adapter_activation", "relu"))),
+            state_encoding=str(train_config.get("state_encoding", serl_config.get("state_encoding", "none"))),
+            state_encoding_indices=tuple(
+                int(i) for i in train_config.get("state_encoding_indices", serl_config.get("state_encoding_indices", []))
+            ),
+            state_encoding_num_bands=int(
+                train_config.get("state_encoding_num_bands", serl_config.get("state_encoding_num_bands", 4))
+            ),
+            state_encoding_max_freq=float(
+                train_config.get("state_encoding_max_freq", serl_config.get("state_encoding_max_freq", 8.0))
+            ),
+            state_encoding_scale=float(
+                train_config.get("state_encoding_scale", serl_config.get("state_encoding_scale", 1.0))
+            ),
+            adapter_scale=float(train_config.get("adapter_scale", 1.0)),
+            freeze_act=bool(train_config.get("freeze_act", True)),
+            adapter_delta_clip=train_config.get("adapter_delta_clip"),
+            action_clip=train_config.get("action_clip"),
+        )
+        missing, unexpected = actor.load_state_dict(payload["actor"], strict=False)
     actor.to(args.device)
     actor.eval()
 
@@ -131,8 +138,19 @@ def main() -> int:
                 "delta_norm": float((final_action - base_action).norm(dim=-1).mean().detach().cpu()),
             }
         )
+        if isinstance(actor, DirectVisualActor):
+            blank = {"state": obs["state"], "images": {k: torch.zeros_like(v) for k, v in obs["images"].items()}}
+            rows[-1].update(
+                normalized_bc_loss=float(actor.bc_loss(final_action, target)),
+                zero_action_normalized_bc_loss=float(actor.bc_loss(torch.zeros_like(final_action), target)),
+                image_ablation_action_l1=float((final_action - actor.mean_action(blank)).abs().mean()),
+            )
 
+    if not rows:
+        raise ValueError("No held-out frames were evaluated")
     result = {
+        "evaluation_kind": "offline_imitation",
+        "actor_mode": serl_config.get("actor_mode"),
         "checkpoint": str(args.checkpoint),
         "dataset_root": str(args.dataset_root),
         "device": args.device,
@@ -151,6 +169,9 @@ def main() -> int:
         "missing_actor_keys": sorted(missing),
         "unexpected_actor_keys": sorted(unexpected),
     }
+    if isinstance(actor, DirectVisualActor):
+        for key in ("normalized_bc_loss", "zero_action_normalized_bc_loss", "image_ablation_action_l1"):
+            result[key] = _mean(rows, key)
     text = json.dumps(result, indent=2, sort_keys=True)
     print(text)
     if args.output_json is not None:

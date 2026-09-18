@@ -25,6 +25,7 @@ import numpy as np
 import cv2
 import draccus
 from pathlib import Path
+import sys
 from typing import Callable, Dict, Any, List
 from rclpy.node import Node
 
@@ -56,6 +57,9 @@ class RunOurACT(Policy):
         # Path to your checkpoint folder
         checkpoint_number = "045000"
         policy_path = Path(f"/home/jk/ws_aic/src/aic/outputs/train/act_fixed_sfp2nic_deltapose/checkpoints/{checkpoint_number}/pretrained_model")
+        sys.path.insert(0, str(Path(__file__).resolve().parents[3] / "aic_utils/lerobot_robot_aic"))
+        from lerobot_robot_aic.act_backbone import require_default_backbone_geometry
+        require_default_backbone_geometry(policy_path)
 
         # Load Config Manually (Fixes 'Draccus' error by removing unknown 'type' field)
         with open(policy_path / "config.json", "r") as f:

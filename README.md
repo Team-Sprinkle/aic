@@ -1,5 +1,13 @@
 # AI for Industry Challenge Toolkit
 
+> **Returning to `feat/hybrid-train`?** Start with the [working documentation](docs/README.md):
+> [current status](docs/STATUS.md), [experiment history](docs/EXPERIMENTS.md),
+> [rootless setup and local model testing](docs/LOCAL_WORKFLOW.md), and
+> [artifact locations](outputs_README.md). Reviewed 2026-09-17. The toolkit
+> documentation below describes the challenge infrastructure; older local
+> training reports are historical evidence, not a current performance claim.
+> Superseded plans, reports, and handoffs are in the [historical archive](obsolete/README.md).
+
 [![build](https://github.com/intrinsic-dev/aic/actions/workflows/build.yml/badge.svg)](https://github.com/intrinsic-dev/aic/actions/workflows/build.yml)
 [![style](https://github.com/intrinsic-dev/aic/actions/workflows/style.yml/badge.svg)](https://github.com/intrinsic-dev/aic/actions/workflows/style.yml)
 

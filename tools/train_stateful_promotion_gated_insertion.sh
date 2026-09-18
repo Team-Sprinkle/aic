@@ -1,30 +1,35 @@
 #!/usr/bin/env bash
 set -euo pipefail
+shopt -s inherit_errexit
 
 # Run inside the isaac-lab-base container from /workspace/isaaclab.
 # Actor-only online RL with the stateful insertion reward. No expert guide,
 # insertion guard, or hard-coded rollout policy override is enabled.
 
-cd /workspace/isaaclab
+cd "${AIC_STATEFUL_WORKSPACE:-/workspace/isaaclab}"
+ISAAC_PYTHON="${AIC_STATEFUL_PYTHON:-/workspace/isaaclab/_isaac_sim/python.sh}"
+RUNTIME_HELPER="aic/aic_utils/aic_isaac/scripts/stateful_curriculum_runtime.py"
 
 CONFIG_PATH="${AIC_STATEFUL_CONFIG:-aic/configs/stateful_insertion_curriculum.yaml}"
-RUN_ROOT="${AIC_STATEFUL_RUN_ROOT:-/tmp/aic_stateful_promotion_gated_3x0_to_40x10_2000eps_$(date -u +%Y%m%d_%H%M%S)}"
+RUN_ROOT="${AIC_STATEFUL_RUN_ROOT:-aic/outputs/experiments/$(date -u +%Y%m%d_%H%M%S)_stateful}"
+RUN_ROOT="$(readlink -m "$RUN_ROOT")"
 ACT_TS="${AIC_STATEFUL_ACT_TS:-aic/outputs/train/clean_sfp_sc/act/bc/20260510_clean_act_nact8_400k/act_policy_ts_175000_cuda0.pt}"
-BASE_CKPT="${AIC_STATEFUL_BASE_CKPT:-/tmp/aic_v1367_clean_v1077_v1254_true40x10_4h_segments_clip1mm/2026-06-05_03-42-24_2026-06-04_train_v1367_clean_v1077_v1254_clip1mm_constant40x10_seg08/checkpoint_latest.pt}"
-if [[ ! -f "$BASE_CKPT" ]]; then
-  BASE_CKPT="aic/outputs/agentic_reward_curriculum_20260529/policy_train_runs/2026-06-02_train_v1077_gentle_offline_true40x10/2026-06-02_23-44-40_isaac_online_serl/checkpoint_latest.pt"
-fi
+BASE_CKPT="${AIC_STATEFUL_BASE_CKPT:-aic/outputs/agentic_reward_curriculum_20260529/policy_train_runs/2026-06-02_train_v1077_gentle_offline_true40x10/2026-06-02_23-44-40_isaac_online_serl/checkpoint_latest.pt}"
 
 SEGMENT_SECONDS="${AIC_STATEFUL_SEGMENT_SECONDS:-1800}"
 TRAIN_STEPS_LIMIT="${AIC_STATEFUL_TRAIN_STEPS_LIMIT:-100000000}"
-EVAL_STEPS="${AIC_STATEFUL_EVAL_STEPS:-900}"
+EVAL_STEPS="${AIC_STATEFUL_EVAL_STEPS:-16000}"
+EVAL_SECONDS="${AIC_STATEFUL_EVAL_SECONDS:-1800}"
 TRAIN_EPISODE_VARIANTS="${AIC_STATEFUL_TRAIN_EPISODE_VARIANTS:-64}"
 EVAL_EPISODE_VARIANTS="${AIC_STATEFUL_EVAL_EPISODE_VARIANTS:-16}"
 NUM_ENVS="${AIC_STATEFUL_NUM_ENVS:-4}"
 EVAL_NUM_ENVS="${AIC_STATEFUL_EVAL_NUM_ENVS:-1}"
 SUCCESS_AXIAL_THRESHOLD="${AIC_STATEFUL_SUCCESS_AXIAL_THRESHOLD:-0.0005}"
 SUCCESS_LATERAL_THRESHOLD="${AIC_STATEFUL_SUCCESS_LATERAL_THRESHOLD:-0.0005}"
-SUCCESS_ORIENTATION_THRESHOLD="${AIC_STATEFUL_SUCCESS_ORIENTATION_THRESHOLD:-0.04}"
+SUCCESS_ORIENTATION_THRESHOLD="${AIC_STATEFUL_SUCCESS_ORIENTATION_THRESHOLD:-0.03}"
+SUCCESS_CONSISTENCY_AXIAL_THRESHOLD="${AIC_STATEFUL_SUCCESS_CONSISTENCY_AXIAL_THRESHOLD:-0.001}"
+SUCCESS_CONSISTENCY_LATERAL_THRESHOLD="${AIC_STATEFUL_SUCCESS_CONSISTENCY_LATERAL_THRESHOLD:-0.0015}"
+DIAGNOSTIC_COLLIDERS="${AIC_STATEFUL_DIAGNOSTIC_COLLIDERS:-0}"
 GRADIENT_UPDATES_PER_STEP="${AIC_STATEFUL_GRADIENT_UPDATES_PER_STEP:-1}"
 BATCH_SIZE="${AIC_STATEFUL_BATCH_SIZE:-32}"
 WARMUP_STEPS="${AIC_STATEFUL_WARMUP_STEPS:-1}"
@@ -38,6 +43,7 @@ DRY_RUN="${AIC_STATEFUL_DRY_RUN:-0}"
 START_CYCLE="${AIC_STATEFUL_START_CYCLE:-0}"
 START_LEVEL="${AIC_STATEFUL_START_LEVEL:-0}"
 START_EPISODES_USED="${AIC_STATEFUL_START_EPISODES_USED:-0}"
+START_FAILURES="${AIC_STATEFUL_START_FAILURES:-0}"
 FORCE_DELTA_PENALTY_WEIGHT="${AIC_STATEFUL_FORCE_DELTA_PENALTY_WEIGHT:-0.0}"
 NEAR_GATE_RESET_MAX_ITERATIONS="${AIC_STATEFUL_NEAR_GATE_RESET_MAX_ITERATIONS:-8}"
 RESET_SETTLE_STEPS="${AIC_STATEFUL_RESET_SETTLE_STEPS:-0}"
@@ -119,28 +125,31 @@ if [[ -n "${AIC_STATEFUL_EXTRA_EVAL_FLAGS:-}" ]]; then
   read -r -a EXTRA_EVAL_FLAGS <<<"${AIC_STATEFUL_EXTRA_EVAL_FLAGS}"
 fi
 
-mkdir -p "$RUN_ROOT"/{summaries,levels}
-cp "$CONFIG_PATH" "$RUN_ROOT/high_level_config.yaml"
-
-read -r TOTAL_EPISODES EVAL_EVERY LEVEL_COUNT POLICY <<<"$(
-  /workspace/isaaclab/_isaac_sim/python.sh - "$CONFIG_PATH" <<'PY'
-import math, sys, yaml
-cfg = yaml.safe_load(open(sys.argv[1], "r", encoding="utf-8"))
-episodes = int(cfg.get("episodes", 2000))
-progression = cfg.get("progression") or {}
-eval_every = int(progression.get("eval_every_episodes", 10))
-policy = str(progression.get("policy", "promotion_gated"))
-level_count = int(progression.get("level_count", max(1, math.ceil(episodes / max(1, eval_every)))))
-print(episodes, eval_every, max(1, level_count), policy)
-PY
-)"
-if [[ "$POLICY" != "promotion_gated" ]]; then
-  echo "[AIC stateful] config progression.policy must be promotion_gated, got: $POLICY" >&2
+if [[ -e "$RUN_ROOT/events.jsonl" && "$START_CYCLE" == "0" ]]; then
+  echo "Run already exists; choose a fresh AIC_STATEFUL_RUN_ROOT or explicit resume counters" >&2
   exit 2
 fi
+if [[ "$START_CYCLE" != "0" && -z "${AIC_STATEFUL_BASE_CKPT:-}" ]]; then
+  BASE_CKPT="$RUN_ROOT/checkpoint_latest.pt"
+fi
+if [[ "$DRY_RUN" != "1" ]]; then
+  for input in "$BASE_CKPT" "$ACT_TS"; do
+    [[ -f "$input" ]] || { echo "Missing input: $input" >&2; exit 2; }
+  done
+fi
+mkdir -p "$RUN_ROOT"/{summaries,levels}
+if [[ -f "$RUN_ROOT/high_level_config.yaml" ]]; then
+  cmp -s "$CONFIG_PATH" "$RUN_ROOT/high_level_config.yaml" || {
+    echo "Resume config differs from the saved run; use a new run root" >&2; exit 2;
+  }
+else
+  cp "$CONFIG_PATH" "$RUN_ROOT/high_level_config.yaml"
+fi
+settings="$("$ISAAC_PYTHON" "$RUNTIME_HELPER" settings "$CONFIG_PATH")"
+read -r TOTAL_EPISODES EVAL_EVERY LEVEL_COUNT PROMOTION_RATE DEMOTE_AFTER <<<"$settings"
 
 CONFIG_ACTION_MIN_FORWARD="$(
-  /workspace/isaaclab/_isaac_sim/python.sh - "$CONFIG_PATH" <<'PY'
+  "$ISAAC_PYTHON" - "$CONFIG_PATH" <<'PY'
 import sys, yaml
 cfg = yaml.safe_load(open(sys.argv[1], "r", encoding="utf-8"))
 value = (cfg.get("reward") or {}).get("action_min_forward_m")
@@ -206,18 +215,14 @@ COMMON_FLAGS=(
   --target_reward_stateful_orientation_enter_threshold "$STATEFUL_ORIENTATION_ENTER_THRESHOLD"
   --target_reward_exp_gated_sigma_theta_insert "$STATEFUL_SIGMA_THETA_INSERT"
   --target_reward_exp_gated_sigma_theta_insert_far "$STATEFUL_SIGMA_THETA_INSERT_FAR"
-  --target_reward_consistency_body none
-  --collision_contact_tune_prim_regex runtime_sdf_
-  --collision_contact_tune_prim_regex cage_p0
-  --replace_sfp_body_sdf_collision_with_shrunk_sdf_boxes
+  --target_reward_consistency_body sfp_module_link
+  --target_success_consistency_axial_threshold "$SUCCESS_CONSISTENCY_AXIAL_THRESHOLD"
+  --target_success_consistency_lateral_threshold "$SUCCESS_CONSISTENCY_LATERAL_THRESHOLD"
+  --terminate_on_target_success
   --near_gate_reset_max_iterations "$NEAR_GATE_RESET_MAX_ITERATIONS"
   --reset_settle_steps "$RESET_SETTLE_STEPS"
   --near_gate_reset_position_tolerance 0.00005
   --near_gate_reset_orientation_tolerance 0.0005
-  --sfp_shrunk_box_margin_m "$SFP_SHRUNK_BOX_MARGIN_X" "$SFP_SHRUNK_BOX_MARGIN_Y" "$SFP_SHRUNK_BOX_MARGIN_Z"
-  --collision_contact_offset_m 0.00002
-  --collision_rest_offset_m 0.0
-  --replace_nic_cage_p0_with_aligned_cubes
   --episode_length_s 45.0
   --device "$ISAAC_DEVICE"
   --force_delta_penalty_weight "$FORCE_DELTA_PENALTY_WEIGHT"
@@ -230,12 +235,21 @@ COMMON_FLAGS=(
 if [[ "$ABSOLUTE_IK_TARGET_POSE" == "1" || "$ABSOLUTE_IK_TARGET_POSE" == "true" || "$ABSOLUTE_IK_TARGET_POSE" == "TRUE" ]]; then
   COMMON_FLAGS+=(--absolute_ik_target_pose)
 fi
+if [[ "$DIAGNOSTIC_COLLIDERS" == "1" ]]; then
+  COMMON_FLAGS+=(--collision_contact_tune_prim_regex runtime_sdf_
+    --collision_contact_tune_prim_regex cage_p0
+    --replace_sfp_body_sdf_collision_with_shrunk_sdf_boxes
+    --sfp_shrunk_box_margin_m "$SFP_SHRUNK_BOX_MARGIN_X" "$SFP_SHRUNK_BOX_MARGIN_Y" "$SFP_SHRUNK_BOX_MARGIN_Z"
+    --collision_contact_offset_m 0.00002 --collision_rest_offset_m 0.0
+    --replace_nic_cage_p0_with_aligned_cubes)
+fi
+printf '%s\n' "${COMMON_FLAGS[@]}" > "$RUN_ROOT/common_flags.txt"
 write_level_config() {
   local level="$1"
   local count="$2"
   local output_root="$3"
   local out_config="$4"
-  /workspace/isaaclab/_isaac_sim/python.sh - "$CONFIG_PATH" "$level" "$LEVEL_COUNT" "$count" "$output_root" "$out_config" <<'PY'
+  "$ISAAC_PYTHON" - "$CONFIG_PATH" "$level" "$LEVEL_COUNT" "$count" "$output_root" "$out_config" <<'PY'
 import copy, sys, yaml
 src, level_raw, levels_raw, count_raw, output_root, out_config = sys.argv[1:7]
 level = int(level_raw)
@@ -284,11 +298,10 @@ materialize_level() {
   local root
   root="$(readlink -m "$RUN_ROOT/levels/level_$(printf '%03d' "$level")/$kind")"
   local cfg_path="$root/config.yaml"
-  rm -rf "$root"
   mkdir -p "$root"
   local values
   values="$(write_level_config "$level" "$count" "$root/generated" "$cfg_path")"
-  /workspace/isaaclab/_isaac_sim/python.sh - "$cfg_path" "$seed_offset" <<'PY'
+  "$ISAAC_PYTHON" - "$cfg_path" "$seed_offset" <<'PY'
 import sys, yaml
 path, seed_offset = sys.argv[1], int(sys.argv[2])
 cfg = yaml.safe_load(open(path, "r", encoding="utf-8"))
@@ -296,7 +309,11 @@ cfg["seed"] = int(cfg.get("seed", 20260613)) + seed_offset
 with open(path, "w", encoding="utf-8") as f:
     yaml.safe_dump(cfg, f, sort_keys=False)
 PY
-  (cd aic && /workspace/isaaclab/_isaac_sim/python.sh aic_utils/aic_isaac/scripts/build_stateful_insertion_curriculum.py --config "$cfg_path" --overwrite >/dev/null)
+  if compgen -G "$root/generated/episodes/episode_*.yaml" >/dev/null; then
+    printf '%s %s\n' "$root/generated/episodes" "$values"
+    return
+  fi
+  (cd aic && "$ISAAC_PYTHON" aic_utils/aic_isaac/scripts/build_stateful_insertion_curriculum.py --config "$cfg_path" --overwrite >/dev/null)
   if ! compgen -G "$root/generated/episodes/episode_*.yaml" >/dev/null; then
     echo "[AIC stateful] failed to generate $kind episodes for level $level under $root/generated/episodes" >&2
     exit 1
@@ -304,90 +321,13 @@ PY
   printf '%s %s\n' "$root/generated/episodes" "$values"
 }
 
-summarize_metrics() {
-  local metrics="$1"
-  local out_json="$2"
-  /workspace/isaaclab/_isaac_sim/python.sh - "$metrics" "$out_json" <<'PY'
-import json, math, sys
-metrics_path, out_path = sys.argv[1], sys.argv[2]
-rows = []
-with open(metrics_path, "r", encoding="utf-8") as f:
-    for line in f:
-        try:
-            rows.append(json.loads(line))
-        except Exception:
-            pass
-summary = {
-    "rows": len(rows),
-    "last_step": rows[-1].get("step") if rows else None,
-    "guide_blend_max": 0.0,
-    "guide_action_any": False,
-    "executed_minus_actor_max": 0.0,
-    "guard_max": 0.0,
-    "strict_success": False,
-    "strict_success_count": 0,
-    "best_depth_m": None,
-    "best_lateral_m": None,
-    "best_orientation_rad": None,
-    "best_partial_candidate": None,
-}
-best_depth = -math.inf
-best_lateral = math.inf
-best_orientation = math.inf
-best_score = math.inf
-for row in rows:
-    for key, dst in (
-        ("target_action_guide_collect_blend_effective", "guide_blend_max"),
-        ("executed_minus_actor_l1_mean", "executed_minus_actor_max"),
-        ("insertion_action_guard_applied_fraction", "guard_max"),
-    ):
-        value = row.get(key)
-        if isinstance(value, (int, float, bool)):
-            summary[dst] = max(float(summary[dst]), float(value))
-    summary["guide_action_any"] = summary["guide_action_any"] or row.get("guide_action_norm_mean") is not None
-    terminated = row.get("terminated_by_env") or []
-    for source in ("pre_step_insertion_geometry", "post_step_insertion_geometry"):
-        geom = row.get(source) or {}
-        strict = geom.get("strict_success_by_env") or []
-        depths = geom.get("signed_depth_m_by_env") or []
-        laterals = geom.get("lateral_error_m_by_env") or []
-        orientations = geom.get("orientation_error_rad_by_env") or []
-        n_env = max(len(depths), len(laterals), len(orientations), len(strict))
-        for env_id in range(n_env):
-            terminal_env = env_id < len(terminated) and bool(terminated[env_id])
-            if terminal_env and source == "post_step_insertion_geometry":
-                continue
-            if env_id < len(strict) and bool(strict[env_id]):
-                summary["strict_success_count"] += 1
-                summary["strict_success"] = True
-            d = float(depths[env_id]) if env_id < len(depths) and depths[env_id] is not None else None
-            lat = float(laterals[env_id]) if env_id < len(laterals) and laterals[env_id] is not None else None
-            ori = float(orientations[env_id]) if env_id < len(orientations) and orientations[env_id] is not None else None
-            if d is not None and d > best_depth:
-                best_depth = d
-                summary["best_depth_m"] = {"step": row.get("step"), "source": source, "env": env_id, "depth_m": d, "lateral_m": lat, "orientation_rad": ori}
-            if lat is not None and lat < best_lateral:
-                best_lateral = lat
-                summary["best_lateral_m"] = {"step": row.get("step"), "source": source, "env": env_id, "depth_m": d, "lateral_m": lat, "orientation_rad": ori}
-            if ori is not None and ori < best_orientation:
-                best_orientation = ori
-                summary["best_orientation_rad"] = {"step": row.get("step"), "source": source, "env": env_id, "depth_m": d, "lateral_m": lat, "orientation_rad": ori}
-            if d is not None and lat is not None and ori is not None:
-                score = max(0.0, 0.005 - d) / 0.005 + max(0.0, lat - 0.002) / 0.002 + max(0.0, ori - 0.06) / 0.06
-                if score < best_score:
-                    best_score = score
-                    summary["best_partial_candidate"] = {"step": row.get("step"), "source": source, "env": env_id, "score": score, "depth_m": d, "lateral_m": lat, "orientation_rad": ori}
-with open(out_path, "w", encoding="utf-8") as f:
-    json.dump(summary, f, indent=2, sort_keys=True)
-print(json.dumps(summary, sort_keys=True))
-PY
-}
 
 run_segment() {
   local cycle="$1"
   local level="$2"
   local checkpoint="$3"
   local train_episodes="$4"
+  local episode_budget="$5"
   if [[ -n "${AIC_STATEFUL_TRAIN_EPISODES_OVERRIDE:-}" ]]; then
     train_episodes="${AIC_STATEFUL_TRAIN_EPISODES_OVERRIDE}"
   fi
@@ -399,14 +339,16 @@ run_segment() {
   if [[ "$RESET_ACTOR_HEAD" =~ ^(1|true|TRUE|yes|YES)$ && "$cycle" -eq $((START_CYCLE + 1)) ]]; then
     reset_actor_flags+=(--reset_actor_head)
   fi
-  rm -rf "$out_dir"
+  [[ ! -e "$out_dir" ]] || { echo "Training cycle already exists: $out_dir" >&2; exit 2; }
   mkdir -p "$out_dir"
   set +e
-  CUDA_VISIBLE_DEVICES="$CUDA_VISIBLE_DEVICES_OVERRIDE" timeout --foreground --kill-after=300s "${SEGMENT_SECONDS}s" \
-    /workspace/isaaclab/_isaac_sim/python.sh \
+  CUDA_VISIBLE_DEVICES="$CUDA_VISIBLE_DEVICES_OVERRIDE" timeout --foreground --kill-after=60s "$((SEGMENT_SECONDS + 300))s" \
+    "$ISAAC_PYTHON" \
     aic/aic_utils/aic_isaac/aic_isaaclab/scripts/serl/train.py \
     "${COMMON_FLAGS[@]}" \
     --steps "$TRAIN_STEPS_LIMIT" \
+    --max_completed_episodes "$episode_budget" \
+    --max_wall_time_minutes "$(awk "BEGIN {print $SEGMENT_SECONDS / 60}")" \
     --updates 1000000 \
     --warmup_steps "$WARMUP_STEPS" \
     --actor_update_start_steps "$ACTOR_UPDATE_START_STEPS" \
@@ -469,12 +411,18 @@ run_segment() {
   pkill -TERM -f "$cleanup_pattern" || true
   sleep 5
   pkill -KILL -f "$cleanup_pattern" || true
+  if (( status != 0 )); then
+    echo "Training failed or was forcibly timed out (status $status); checkpoint is diagnostic only" >&2
+    exit "$status"
+  fi
   local new_checkpoint
   new_checkpoint="$(find "$out_dir" -maxdepth 2 -name checkpoint_latest.pt | head -n 1)"
   if [[ ! -f "$new_checkpoint" ]]; then
     echo "[AIC stateful] missing checkpoint after cycle $cycle level $level, train exit status $status" >&2
     exit 1
   fi
+  "$ISAAC_PYTHON" "$RUNTIME_HELPER" summarize "$(dirname "$new_checkpoint")" \
+    --output "$RUN_ROOT/summaries/train_cycle$(printf '%04d' "$cycle")_summary.json" >/dev/null
   printf '%s\n' "$new_checkpoint"
 }
 
@@ -486,16 +434,22 @@ run_eval() {
   local eval_root="$RUN_ROOT/eval_cycle$(printf '%04d' "$cycle")_level$(printf '%03d' "$level")"
   local summary_json="$RUN_ROOT/summaries/eval_cycle$(printf '%04d' "$cycle")_level$(printf '%03d' "$level")_summary.json"
   local log_file="$RUN_ROOT/eval_cycle$(printf '%04d' "$cycle")_level$(printf '%03d' "$level").log"
-  CUDA_VISIBLE_DEVICES="$CUDA_VISIBLE_DEVICES_OVERRIDE" /workspace/isaaclab/_isaac_sim/python.sh \
+  [[ ! -e "$eval_root" ]] || { echo "Evaluation cycle already exists: $eval_root" >&2; exit 2; }
+  CUDA_VISIBLE_DEVICES="$CUDA_VISIBLE_DEVICES_OVERRIDE" timeout --foreground --kill-after=60s "$((EVAL_SECONDS + 300))s" "$ISAAC_PYTHON" \
     aic/aic_utils/aic_isaac/aic_isaaclab/scripts/serl/train.py \
     "${COMMON_FLAGS[@]}" \
-    --updates 1000000 \
+    --updates 0 \
+    --actor_exploration_noise_std 0.0 \
+    --max_completed_episodes "$EVAL_EPISODE_VARIANTS" \
+    --max_wall_time_minutes "$(awk "BEGIN {print $EVAL_SECONDS / 60}")" \
     --warmup_steps 1000000 \
     --actor_update_start_steps 1000000 \
     --actor_update_end_steps 0 \
     --update_every_steps 1000000 \
     --batch_size 16 \
     --adapter_delta_clip "$ADAPTER_DELTA_CLIP" \
+    --tcp_translation_action_clip "$TCP_TRANSLATION_ACTION_CLIP" \
+    --tcp_rotation_action_clip "$TCP_ROTATION_ACTION_CLIP" \
     --adapter_lr 0.0 \
     --critic_lr 1e-5 \
     --actor_q_weight 0.0 \
@@ -513,13 +467,14 @@ run_eval() {
     --run_name "stateful_eval_cycle$(printf '%04d' "$cycle")_level$(printf '%03d' "$level")" \
     --checkpoint "$checkpoint" \
     --num_envs "$EVAL_NUM_ENVS" \
-    --seed $((EVAL_SEED_BASE + cycle)) \
+    --seed $((EVAL_SEED_BASE + level)) \
     --steps "$EVAL_STEPS" \
     "${EXTRA_EVAL_FLAGS[@]}" \
     > "$log_file" 2>&1
   local eval_dir
   eval_dir="$(find "$eval_root" -maxdepth 1 -mindepth 1 -type d | head -n 1)"
-  summarize_metrics "$eval_dir/metrics.jsonl" "$summary_json" >/dev/null
+  "$ISAAC_PYTHON" "$RUNTIME_HELPER" summarize "$eval_dir" --output "$summary_json" \
+    --min-episodes "$EVAL_EPISODE_VARIANTS" --evaluation --episode-config-dir "$eval_episodes" >/dev/null
   cp "$eval_dir/train_config.json" "$RUN_ROOT/summaries/eval_cycle$(printf '%04d' "$cycle")_level$(printf '%03d' "$level")_config.json" || true
   printf '%s\n' "$summary_json"
 }
@@ -527,6 +482,7 @@ run_eval() {
 event_log="$RUN_ROOT/events.jsonl"
 checkpoint="$BASE_CKPT"
 level="$START_LEVEL"
+consecutive_failures="$START_FAILURES"
 cycle="$START_CYCLE"
 episodes_used="$START_EPISODES_USED"
 last_promotion_epoch="$(date -u +%s)"
@@ -535,7 +491,7 @@ printf '{"time":"%s","event":"start","run_root":"%s","total_episodes":%d,"eval_e
 
 if [[ "$DRY_RUN" == "1" ]]; then
   train_line="$(materialize_level 0 train "$TRAIN_EPISODE_VARIANTS" 1001)"
-  eval_line="$(materialize_level 0 eval "$EVAL_EPISODE_VARIANTS" 2001)"
+  eval_line="$(materialize_level 0 eval "$EVAL_EPISODE_VARIANTS" 2000)"
   printf '{"time":"%s","event":"dry_run_done","train":"%s","eval":"%s"}\n' \
     "$(date -u +%FT%TZ)" "$train_line" "$eval_line" >> "$event_log"
   echo "[AIC stateful] dry run OK: run_root=$RUN_ROOT"
@@ -544,8 +500,8 @@ fi
 
 while (( episodes_used < TOTAL_EPISODES && level < LEVEL_COUNT )); do
   cycle=$((cycle + 1))
-  train_line="$(materialize_level "$level" train "$TRAIN_EPISODE_VARIANTS" $((1000 + cycle)))"
-  eval_line="$(materialize_level "$level" eval "$EVAL_EPISODE_VARIANTS" $((2000 + cycle)))"
+  train_line="$(materialize_level "$level" "train_cycle$(printf '%04d' "$cycle")" "$TRAIN_EPISODE_VARIANTS" $((1000 + cycle)))"
+  eval_line="$(materialize_level "$level" eval "$EVAL_EPISODE_VARIANTS" $((2000 + level)))"
   train_episodes="$(awk '{print $1}' <<<"$train_line")"
   eval_episodes="$(awk '{print $1}' <<<"$eval_line")"
   axial="$(awk '{print $2}' <<<"$train_line")"
@@ -554,9 +510,16 @@ while (( episodes_used < TOTAL_EPISODES && level < LEVEL_COUNT )); do
   interp_t="$(awk '{print $5}' <<<"$train_line")"
   printf '{"time":"%s","event":"train_start","cycle":%d,"level":%d,"episodes_used":%d,"axial_m":%s,"lateral_m":%s,"theta_rad":%s,"t":%s,"checkpoint":"%s"}\n' \
     "$(date -u +%FT%TZ)" "$cycle" "$level" "$episodes_used" "$axial" "$lateral" "$theta" "$interp_t" "$checkpoint" >> "$event_log"
-  checkpoint="$(run_segment "$cycle" "$level" "$checkpoint" "$train_episodes")"
+  episode_budget=$((TOTAL_EPISODES - episodes_used))
+  if (( episode_budget > EVAL_EVERY )); then episode_budget="$EVAL_EVERY"; fi
+  checkpoint="$(run_segment "$cycle" "$level" "$checkpoint" "$train_episodes" "$episode_budget")"
   cp "$checkpoint" "$RUN_ROOT/checkpoint_latest.pt"
-  episodes_used=$((episodes_used + EVAL_EVERY))
+  completed="$("$ISAAC_PYTHON" - "$RUN_ROOT/summaries/train_cycle$(printf '%04d' "$cycle")_summary.json" <<'COUNT'
+import json, sys
+print(json.load(open(sys.argv[1]))["completed_episodes"])
+COUNT
+)"
+  episodes_used=$((episodes_used + completed))
   printf '{"time":"%s","event":"train_done","cycle":%d,"level":%d,"episodes_used":%d,"checkpoint":"%s"}\n' \
     "$(date -u +%FT%TZ)" "$cycle" "$level" "$episodes_used" "$checkpoint" >> "$event_log"
   if [[ "$EXIT_AFTER_FIRST_TRAIN" =~ ^(1|true|TRUE|yes|YES)$ ]]; then
@@ -569,32 +532,22 @@ while (( episodes_used < TOTAL_EPISODES && level < LEVEL_COUNT )); do
   printf '{"time":"%s","event":"eval_start","cycle":%d,"level":%d,"checkpoint":"%s"}\n' \
     "$(date -u +%FT%TZ)" "$cycle" "$level" "$checkpoint" >> "$event_log"
   summary_path="$(run_eval "$cycle" "$level" "$checkpoint" "$eval_episodes")"
-  strict_success="$(/workspace/isaaclab/_isaac_sim/python.sh - "$summary_path" <<'PY'
-import json, sys
-summary = json.load(open(sys.argv[1], "r", encoding="utf-8"))
-print("1" if bool(summary.get("strict_success")) else "0")
-PY
-)"
-  if [[ "$strict_success" == "1" ]]; then
-    level=$((level + 1))
-    last_promotion_epoch="$(date -u +%s)"
-    promoted=true
-  else
-    promoted=false
-  fi
-  printf '{"time":"%s","event":"eval_done","cycle":%d,"level_after_eval":%d,"summary":"%s","strict_success":%s,"promoted":%s}\n' \
-    "$(date -u +%FT%TZ)" "$cycle" "$level" "$summary_path" "$strict_success" "$promoted" >> "$event_log"
+  decision="$("$ISAAC_PYTHON" "$RUNTIME_HELPER" decide "$summary_path" \
+    --level "$level" --level-count "$LEVEL_COUNT" --failures "$consecutive_failures" \
+    --success-rate "$PROMOTION_RATE" --demote-after "$DEMOTE_AFTER")"
+  read -r level consecutive_failures outcome <<<"$decision"
+  if [[ "$outcome" == "promoted" ]]; then last_promotion_epoch="$(date -u +%s)"; fi
+  printf '{"time":"%s","event":"eval_done","cycle":%d,"level_after_eval":%d,"summary":"%s","decision":"%s","consecutive_failures":%d}\n' \
+    "$(date -u +%FT%TZ)" "$cycle" "$level" "$summary_path" "$outcome" "$consecutive_failures" >> "$event_log"
 
   now_epoch="$(date -u +%s)"
-  if (( now_epoch - last_promotion_epoch >= NO_PROGRESS_ASSESS_SECONDS )); then
-    printf '{"time":"%s","event":"assessment_due_no_promotion","cycle":%d,"level":%d,"seconds_since_promotion":%d,"summary":"%s"}\n' \
+  if (( NO_PROGRESS_ASSESS_SECONDS > 0 && now_epoch - last_promotion_epoch >= NO_PROGRESS_ASSESS_SECONDS )); then
+    printf '{"time":"%s","event":"no_progress_stop","cycle":%d,"level":%d,"seconds_since_promotion":%d,"summary":"%s"}\n' \
       "$(date -u +%FT%TZ)" "$cycle" "$level" "$((now_epoch - last_promotion_epoch))" "$summary_path" >> "$event_log"
-    last_promotion_epoch="$now_epoch"
+    echo "Stopping: no promotion within ${NO_PROGRESS_ASSESS_SECONDS}s; review $summary_path" >&2
+    exit 3
   fi
 
-  if (( cycle > 3 )); then
-    rm -rf "$RUN_ROOT/train_cycle$(printf '%04d' $((cycle - 3)))"_level*
-  fi
 done
 
 printf '{"time":"%s","event":"done","cycle":%d,"level":%d,"episodes_used":%d,"checkpoint":"%s"}\n' \

@@ -1,8 +1,94 @@
 # Outputs Directory Guide
 
-`outputs/` contains generated configs, recorded datasets, training artifacts, and
-debug/evaluation runs. Most folders are reproducible artifacts from scripts in
-`scripts/` or `aic_utils/lerobot_robot_aic/scripts/`.
+Reviewed: 2026-09-18. Start with the [documentation index](docs/README.md) and
+[experiment ledger](docs/EXPERIMENTS.md) for the meaning and status of saved runs.
+
+## Current storage map
+
+| Location | What belongs here / what was found |
+| --- | --- |
+| `configs/` | Tracked recipe inputs. A config can still depend on ignored generated episodes, datasets, or checkpoints; inspect its paths before use. |
+| `outputs/hf_combined/`, `outputs/trajectory_datasets/` | Derived/recorded LeRobot data. `expert_verified/` is the canonical BC collection; `clean_including_no_insert_trajs/` preserves the original 668 episodes across 23 collections. Successful recordings with unreliable action labels are indexed separately in `successful_pending_label_repair/`. See [dataset membership and S3 paths](docs/DATASETS.md). |
+| `outputs/train/` | ACT, offline/online SERL, and legacy PPO training artifacts. It is not exclusively a PPO directory. |
+| `outputs/experiments/2026-09-17_live_validation/` | Live control/reset checks, dataset audit, runtime regressions, configs, and `review/index.html` with MP4s and one-second snapshots. ACT/direct raw policy trials stay under their respective model run roots; see the [run report](docs/experiments/2026-09-17-live-validation.md). |
+| `outputs/experiments/<run-id>/` | Default for the repaired stateful/axial wrappers: high-level config, common flags, generated per-level episodes, retained training/evaluation cycles, summaries, events, and latest checkpoint. |
+| `outputs/agentic_reward_curriculum_*/`, `outputs/one_day_insertion_pipeline/` | Historical generated episodes, commands, reset/controller diagnostics, rewards, checkpoints, metrics, and videos. Names/dates alone do not identify code or success criteria. |
+| `outputs/gazebo_rl/` and per-model `runtime_eval*` directories | Gazebo bridge and saved-policy evaluations. The ACT runtime evaluator saves numbered attempts; read `scoring_yaml` from the checkpoint's `eval_summary.json`. A summary can describe a failed run. |
+| `artifacts/` | Local diagnostic exports. June reset probes and video folders are present. This directory is also ignored. |
+| `outputs/reentry_audit_20260917/june_run/` | Recovered June `events.jsonl` and final eval summary/config; see [audit hashes](docs/experiments/2026-09-17-reentry-audit.md). Contains metadata, not a copied model bundle. |
+| `submission_handoff/` | Historical scripts. Handoff text is archived under `obsolete/submission_handoff/`. Referenced model/evaluation directories and `docker/aic_submission/Dockerfile` are missing locally; do not assume this is a complete submission bundle. |
+| `isaac-lab-base:/tmp/...` | Some June training outputs reside only in the stopped container's filesystem. A host `/tmp` path with the same name is a different location. Recover before container removal/recreation. |
+
+Exact baseline/run paths and checked availability are in the
+[ledger artifact table](docs/EXPERIMENTS.md#artifact-locators). The old
+`checkpoints/last` symlink in the ACT run currently resolves to step 375000;
+specify step 175000 explicitly when reproducing that baseline.
+
+## Storage convention for new experiments
+
+Use `outputs/experiments/<UTC-date>_<short-name>/` as a new run root, with a
+matching small report under `docs/experiments/`. Stateful/axial launchers now use
+this default. Other scripts may still need an explicit output directory.
+
+`run_one_day_insertion_pipeline.py` writes its generated `summary.md` under
+`--output-root`; its dated May reports are preserved in `obsolete/docs/`.
+
+Save the exact command, environment overrides, resolved configs, code commit
+and dirty diff, dependency/image identity, dataset/checkpoint lineage, metrics,
+scores, logs, and selected videos there. A portable policy bundle includes its
+checkpoint plus the matching ACT export if required, JSON metadata, observation
+normalizer/preprocessor, action schema, and evaluation config. Record a durable
+backup location and checksums for selected models; an ignored directory alone
+is not backed up by Git.
+
+New `direct_visual` checkpoints embed their backbone, action head, normalization,
+limits, and architecture metadata. They need no ACT export/normalizer at inference.
+Keep the implementation/environment with them; DINOv2 additionally needs its
+pinned model code/cache. See [direct visual policies](docs/DIRECT_VISUAL_POLICY.md).
+
+Inside Isaac, set `AIC_STATEFUL_RUN_ROOT` to
+`/workspace/isaaclab/aic/outputs/experiments/<run-id>` to write through the bind
+mount. The repaired wrappers retain all cycle directories; plan disk space and
+archive selected bundles deliberately. Old June artifacts still reside in
+container `/tmp` and need recovery before container removal. Keep a fresh run ID for
+reruns and configuration changes. Never use `latest`/`last` alone as model
+provenance.
+
+`.gitignore` excludes `outputs/`, `artifacts/`, `build/`, `install/`, `log/`,
+the Pixi environment/lock, Isaac's downloaded `Intrinsic_assets`, and large
+dataset/video/bag formats. A fresh clone needs these dependencies/artifacts
+restored separately. Record availability as present, missing, or not checked;
+retain missing-path references when they explain an old result.
+
+## September verified ACT artifacts
+
+`outputs/experiments/2026-09-17_act_verified_8h/` contains the score/image audit,
+causal image caches, ACT runs, official evaluations and videos. Start with its
+`results_latest.md`, `review/index.html`, and the
+[experiment report](docs/experiments/2026-09-17-act-verified-8h.md). Each run has
+training/normalization metadata, standard LeRobot checkpoints and source copies.
+The 87-recording cache references earlier image shards; preserve those parents.
+
+`selected_act_final/` contains the selected model, normalizer, export, frozen
+selection/scene hashes, training lineage, final official results and terminal
+review sheets. Read its `final_results.md` for the failed reliability target.
+`environment/` preserves the resolved package list and Pixi manifests;
+`source_snapshot/` records the dirty source/docs state and base commit.
+
+Forty-two completed simulation bags were losslessly archived to adjacent
+`.tar.zst` files after member-by-member decompression/hash verification, saving
+54.08 GB. `verification/archived_diagnostic_bags.json`,
+`verification/archived_completed_bags.json` and
+`verification/archived_pre_final_bags.json` record each original location,
+archive/member checksums and exact restore arguments. Frames, scores, caches
+and models remain expanded. No S3 upload or external backup was performed.
+
+## Historical detailed inventory
+
+The original inventory below is retained for locating earlier expert/data
+experiments. Its folder counts and words such as “current” describe the old
+inventory, not a refreshed September listing. Only the selected artifacts
+listed above and in the audit were checked in this review.
 
 ## Top-level folders
 

@@ -22,6 +22,9 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any
 
+sys.path.insert(0, str(Path(__file__).resolve().parents[3] / "scripts"))
+from stateful_curriculum_runtime import EpisodeTracker
+
 from isaaclab.app import AppLauncher
 
 parser = argparse.ArgumentParser(description=__doc__)
@@ -72,7 +75,7 @@ parser.add_argument("--act_only_state_encoding_indices", type=int, nargs="*", de
 parser.add_argument("--act_only_state_encoding_num_bands", type=int, default=4)
 parser.add_argument("--act_only_state_encoding_max_freq", type=float, default=8.0)
 parser.add_argument("--act_only_state_encoding_scale", type=float, default=10.0)
-parser.add_argument("--act_torchscript", type=str, required=True)
+parser.add_argument("--act_torchscript", type=str, default=None, help="Required by legacy ACT actors only.")
 parser.add_argument(
     "--act_torchscript_device",
     choices=["auto", "cpu", "cuda"],
@@ -82,6 +85,8 @@ parser.add_argument(
 parser.add_argument("--output_dir", type=str, default="outputs/train/isaac_online_serl")
 parser.add_argument("--run_name", default="isaac_online_serl")
 parser.add_argument("--steps", type=int, default=64)
+parser.add_argument("--max_completed_episodes", type=int, default=0,
+                    help="Stop after this many measured terminal episodes; 0 disables the limit. Vector steps may overshoot.")
 parser.add_argument("--updates", type=int, default=8)
 parser.add_argument(
     "--update_every_steps",
@@ -1228,8 +1233,8 @@ parser.add_argument(
     help="Replay insertion count for samples selected by --target_action_guide_train_phase_filter.",
 )
 parser.add_argument("--freeze_act", action=argparse.BooleanOptionalAction, default=True)
-parser.add_argument("--adapter_penalty_weight", type=float, default=1e-3)
-parser.add_argument("--act_preservation_weight", type=float, default=1e-2)
+parser.add_argument("--adapter_penalty_weight", type=float, default=None)
+parser.add_argument("--act_preservation_weight", type=float, default=None)
 parser.add_argument(
     "--actor_axial_purity_weight",
     type=float,
@@ -4118,6 +4123,7 @@ from contact_recovery_features import (
     CONTACT_RECOVERY_FEATURE_NAMES,
     ContactRecoveryFeatureComputer,
 )
+from lerobot_robot_aic.direct_visual_actor import DirectVisualActor, load_direct_visual_actor
 
 
 def _stack_vector_column(series: pd.Series, key: str) -> np.ndarray:
@@ -15086,6 +15092,10 @@ def _checkpoint_compatibility_diagnostics(
 
 
 def _act_freeze_diagnostics(trainer: OnlineSERLTrainer) -> dict[str, Any]:
+    if isinstance(trainer.actor, DirectVisualActor):
+        return {"actor_mode": "direct_visual", "uses_act_actions": False,
+                "backbone_frozen": trainer.actor.config.freeze_backbone,
+                "backbone_trainable_parameters": sum(p.numel() for p in trainer.actor.backbone.parameters() if p.requires_grad)}
     act_params = list(trainer.actor.act_base.parameters())
     adapter_params = list(trainer.actor.adapter.parameters())
     optimizer_param_ids = {id(param) for group in trainer.actor_opt.param_groups for param in group["params"]}
@@ -15584,10 +15594,10 @@ class IsaacACTAdapterActor(nn.Module):
         base_action = base_action[:, : self.action_horizon, :].reshape(obs["state"].shape[0], -1)
         adapter_state = obs.get("actor_state", obs["state"])
         if adapter_state.shape[-1] != self.adapter_state_dim:
-            if adapter_state.shape[-1] > self.adapter_state_dim:
-                adapter_state = adapter_state[..., : self.adapter_state_dim]
-            else:
-                adapter_state = F.pad(adapter_state, (0, self.adapter_state_dim - int(adapter_state.shape[-1])))
+            raise ValueError(
+                f"Actor state width {adapter_state.shape[-1]} != checkpoint width {self.adapter_state_dim}; "
+                "check state features and actor history configuration"
+            )
         encoded_state = self.state_encoder(adapter_state)
         raw_delta_action = self.adapter(torch.cat([encoded_state, base_action], dim=-1))
         if self.actor_mode == "act_adapter":
@@ -15900,8 +15910,12 @@ class OnlineSERLTrainer:
         device: torch.device,
     ):
         self.actor = actor.to(device)
-        self.actor.act_base = _load_act_base(self.actor.act_torchscript_path, act_torchscript_device)
-        self.actor.act_base_device = act_torchscript_device
+        if isinstance(self.actor, DirectVisualActor):
+            if adapter_penalty_weight or act_preservation_weight:
+                raise ValueError("Direct visual actor has no adapter or ACT preservation objective")
+        else:
+            self.actor.act_base = _load_act_base(self.actor.act_torchscript_path, act_torchscript_device)
+            self.actor.act_base_device = act_torchscript_device
         self.critic1 = critic1.to(device)
         self.critic2 = critic2.to(device)
         self.target_critic1 = copy.deepcopy(self.critic1).to(device)
@@ -16165,7 +16179,8 @@ class OnlineSERLTrainer:
         if update_actor:
             self.actor_opt.zero_grad(set_to_none=True)
             actor_loss.backward()
-            adapter_grad_norm = _grad_norm(self.actor.adapter.parameters())
+            trainable_head = self.actor.head if isinstance(self.actor, DirectVisualActor) else self.actor.adapter
+            adapter_grad_norm = _grad_norm(trainable_head.parameters())
             self.actor_opt.step()
         else:
             adapter_grad_norm = 0.0
@@ -16760,6 +16775,11 @@ def main() -> None:
         checkpoint = torch.load(checkpoint_path, map_location="cpu")
         offline_cfg, dataset_summary, warmstart = _checkpoint_training_context(checkpoint)
     offline_cfg = dict(offline_cfg)
+    direct_visual = offline_cfg.get("actor_mode") == "direct_visual"
+    if args_cli.adapter_penalty_weight is None:
+        args_cli.adapter_penalty_weight = 0.0 if direct_visual else 1e-3
+    if args_cli.act_preservation_weight is None:
+        args_cli.act_preservation_weight = 0.0 if direct_visual else 1e-2
     critic_image_encoder_override = str(getattr(args_cli, "critic_image_encoder_override", "") or "")
     if critic_image_encoder_override:
         offline_cfg["critic_image_encoder"] = critic_image_encoder_override
@@ -16776,13 +16796,26 @@ def main() -> None:
     actor_state_dim = state_dim * actor_state_history_steps
 
     device = torch.device(args_cli.device)
-    act_torchscript_path = Path(args_cli.act_torchscript)
-    act_torchscript_device = _resolve_act_torchscript_device(
-        act_torchscript_path,
-        args_cli.act_torchscript_device,
-        device,
-    )
-    if checkpoint is not None:
+    if direct_visual:
+        if args_cli.act_only or args_cli.reset_actor_head or actor_state_history_steps != 1:
+            raise ValueError("Direct visual checkpoints require their saved actor schema; ACT-only/reset-head/history overrides are unsupported")
+        if args_cli.action_clip or args_cli.tcp_translation_action_clip or args_cli.tcp_rotation_action_clip:
+            raise ValueError("Direct visual action limits are stored in the checkpoint; runtime clipping overrides are unsupported")
+        if action_horizon != 1:
+            raise ValueError("Isaac online RL currently requires a one-step direct visual actor")
+        args_cli.adapter_delta_clip = None
+        actor = load_direct_visual_actor(checkpoint, device=device)
+        actor.train()
+        act_torchscript_device = device
+        print(f"[AIC SERL] Loaded direct visual actor (no ACT actions): {checkpoint_path}", flush=True)
+    else:
+        if not args_cli.act_torchscript:
+            raise ValueError("Legacy ACT actor requires --act_torchscript")
+        act_torchscript_path = Path(args_cli.act_torchscript)
+        act_torchscript_device = _resolve_act_torchscript_device(
+            act_torchscript_path, args_cli.act_torchscript_device, device,
+        )
+    if checkpoint is not None and not direct_visual:
         actor = _load_adapter_actor(
             checkpoint,
             act_torchscript=act_torchscript_path,
@@ -16817,7 +16850,7 @@ def main() -> None:
             action_clip=args_cli.action_clip,
             normalized_state_clip=args_cli.act_normalized_state_clip,
         )
-    else:
+    elif not direct_visual:
         raise RuntimeError("Non-ACT-only training requires a checkpoint.")
     critic_image_encoder = str(offline_cfg.get("critic_image_encoder", "small_conv"))
     critic_arch = str(offline_cfg.get("critic_arch", "concat"))
@@ -17713,6 +17746,8 @@ def main() -> None:
             flush=True,
         )
     updates_done = 0
+    episode_tracker = EpisodeTracker(int(policy_obs.shape[0]))
+    steps_completed = 0
     last_metrics: dict[str, float] = {}
     stop_reason = "max_steps"
     max_loop_steps = int(args_cli.debug_audit_steps) if int(args_cli.debug_audit_steps) > 0 else int(args_cli.steps)
@@ -18894,6 +18929,28 @@ def main() -> None:
         episode_length_before_cpu = None if episode_length_before is None else episode_length_before.detach().cpu().clone()
         previous_images_for_diag = current_images
         next_obs, reward, terminated, truncated, _ = env.step(env_action)
+        # Isaac computes termination terms before automatic reset. get_term()
+        # retains those flags; post-step body geometry may already be a reset.
+        termination_manager = env.unwrapped.termination_manager
+        terminal_terms = {
+            name: _tensor_bool_list(termination_manager.get_term(name))
+            for name in termination_manager.active_terms
+        }
+        terminal_success = (
+            terminal_terms["target_success"]
+            if args_cli.terminate_on_target_success and "target_success" in terminal_terms
+            else [None] * int(policy_obs.shape[0])
+        )
+        episode_outcomes = episode_tracker.observe(
+            step=step,
+            terminated=_tensor_bool_list(terminated),
+            truncated=_tensor_bool_list(truncated),
+            success=terminal_success,
+            metadata=episode_metadata_before,
+            reasons=[[name for name, values in terminal_terms.items() if values[idx]]
+                     for idx in range(int(policy_obs.shape[0]))],
+        )
+        steps_completed = step
         after_positions = _selected_body_positions(env) if before_positions else {}
         after_orientations = _selected_body_orientations(env) if before_positions else {}
         after_robot_state = _robot_state_snapshot(env) if robot_state_sample_step else None
@@ -19632,6 +19689,8 @@ def main() -> None:
                 torch.mean(torch.abs(policy_tcp_action[:, 3:] - actor_policy_tcp_action[:, 3:])).detach().cpu()
             ),
             "episodes": [_episode_metadata(env, idx) for idx in range(policy_obs.shape[0])],
+            "episode_outcomes": episode_outcomes,
+            "completed_episodes_total": episode_tracker.completed,
             "terminated_mean": float(terminated.float().mean().detach().cpu()),
             "terminated_by_env": _tensor_bool_list(terminated),
             "truncated_mean": float(truncated.float().mean().detach().cpu()),
@@ -19689,14 +19748,21 @@ def main() -> None:
             }
             _save_checkpoint(run_dir / "checkpoint_latest.pt", trainer, latest_config, step)
             print(f"Wrote latest online SERL checkpoint: {run_dir / 'checkpoint_latest.pt'}", flush=True)
-        if int(args_cli.debug_audit_steps) <= 0 and updates_done >= args_cli.updates:
+        if args_cli.max_completed_episodes > 0 and episode_tracker.completed >= args_cli.max_completed_episodes:
+            stop_reason = "max_completed_episodes"
+            break
+        if int(args_cli.debug_audit_steps) <= 0 and args_cli.updates > 0 and updates_done >= args_cli.updates:
             stop_reason = "target_updates"
             break
 
     if int(args_cli.debug_audit_steps) > 0 and stop_reason == "max_steps":
         stop_reason = "debug_audit_complete"
-    final_step = step if stop_reason != "max_wall_time" else max(step - 1, 0)
+    final_step = steps_completed
     train_config["result"] = _progress_result(stop_reason, final_step, updates_done)
+    train_config["result"].update(
+        episodes_completed=episode_tracker.completed,
+        episodes_succeeded=episode_tracker.succeeded,
+    )
     (run_dir / "train_config.json").write_text(json.dumps(train_config, indent=2, sort_keys=True), encoding="utf-8")
     if bool(args_cli.save_final_checkpoint):
         _save_checkpoint(run_dir / "checkpoint_latest.pt", trainer, train_config, train_config["result"]["steps_completed"])

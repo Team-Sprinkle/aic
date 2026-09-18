@@ -74,7 +74,9 @@ rows = []
 for summary_path in sorted(eval_root.glob("*/eval_summary.json")):
     step = summary_path.parent.name
     summary = json.loads(summary_path.read_text())
-    scoring_path = summary_path.parent / "scoring.yaml"
+    if not summary.get("evaluation_complete"):
+        continue
+    scoring_path = Path(summary["scoring_yaml"])
     row = {
         "step": step,
         "checkpoint": str(run_dir / "checkpoints" / step / "pretrained_model"),

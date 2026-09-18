@@ -1,5 +1,12 @@
 # AIC Isaac Lab Integration
 
+> Local hybrid experiments: [status](../../docs/STATUS.md),
+> [history](../../docs/EXPERIMENTS.md), and [rootless workflow](../../docs/LOCAL_WORKFLOW.md).
+> New actor architecture and launcher usage: [direct visual policy](../../docs/DIRECT_VISUAL_POLICY.md).
+> The administrator setup commands below are not the routine path on the
+> already provisioned cluster. Isaac reward/success metrics are separate from
+> official Gazebo scoring.
+
 This package provides documentation, scripts, and utilities for setting up AI for Industry Challenge (AIC) environment in Isaac Lab.
 
 

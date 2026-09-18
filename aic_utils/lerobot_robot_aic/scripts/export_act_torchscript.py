@@ -19,6 +19,8 @@ from lerobot.policies.act.modeling_act import ACTPolicy
 from lerobot.utils.constants import OBS_IMAGES
 
 from lerobot_robot_aic.act_warmstart import inspect_act_checkpoint, resolve_act_checkpoint_dir
+from lerobot_robot_aic.act_state_contract import validate_act_state_contract
+from lerobot_robot_aic.act_backbone import load_act_policy, read_backbone_geometry
 
 
 class ACTTorchScriptWrapper(nn.Module):
@@ -51,6 +53,8 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--act-checkpoint", type=Path, required=True)
     parser.add_argument("--output", type=Path, required=True)
     parser.add_argument("--device", default="cpu")
+    parser.add_argument("--image-channel-order", choices=["rgb", "bgr"], default=None,
+                        help="Explicit audited convention for older checkpoints without camera metadata.")
     return parser.parse_args()
 
 
@@ -58,7 +62,15 @@ def main() -> int:
     args = parse_args()
     checkpoint_dir = resolve_act_checkpoint_dir(args.act_checkpoint)
     metadata = inspect_act_checkpoint(checkpoint_dir)
-    policy = ACTPolicy.from_pretrained(checkpoint_dir, local_files_only=True)
+    action_config = checkpoint_dir / "aic_action_config.json"
+    if action_config.is_file():
+        metadata.update(json.loads(action_config.read_text()))
+    # Fail before tracing if feature order differs from ROS runtime's contract.
+    metadata.update(validate_act_state_contract(metadata))
+    if args.image_channel_order:
+        metadata["image_channel_order"] = args.image_channel_order
+    metadata["backbone_geometry"] = read_backbone_geometry(checkpoint_dir)
+    policy = load_act_policy(checkpoint_dir, local_files_only=True)
     policy.eval().to(args.device)
     wrapper = ACTTorchScriptWrapper(policy).eval().to(args.device)
     state_dim = int(metadata["state_shape"][0])

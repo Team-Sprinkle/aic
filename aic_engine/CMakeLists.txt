@@ -66,4 +66,11 @@ install(
   DESTINATION share/${PROJECT_NAME}
 )
 
+include(CTest)
+if(BUILD_TESTING)
+  add_executable(test_joint_readiness test/test_joint_readiness.cpp)
+  target_compile_features(test_joint_readiness PRIVATE cxx_std_17)
+  add_test(NAME joint_readiness COMMAND test_joint_readiness)
+endif()
+
 ament_package()

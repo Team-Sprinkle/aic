@@ -16,6 +16,7 @@
  */
 
 #include "aic_engine.hpp"
+#include "joint_readiness.hpp"
 
 #include <chrono>
 #include <cmath>
@@ -307,6 +308,17 @@ Engine::Engine(const rclcpp::NodeOptions& options)
   node_->declare_parameter("config_file_path", std::string(""));
   node_->declare_parameter("endpoint_ready_timeout_seconds", 10);
   node_->declare_parameter("gripper_frame_name", std::string("gripper/tcp"));
+  node_->declare_parameter("home_position_tolerance_rad", 0.05);
+  node_->declare_parameter("settled_velocity_tolerance", 1e-3);
+  node_->declare_parameter("simulator_ready_wall_timeout_seconds", 30.0);
+  for (const auto* name : {"home_position_tolerance_rad",
+                           "settled_velocity_tolerance",
+                           "simulator_ready_wall_timeout_seconds"}) {
+    const auto value = node_->get_parameter(name).as_double();
+    if (!std::isfinite(value) || value <= 0.0) {
+      throw std::invalid_argument(std::string(name) + " must be finite and positive");
+    }
+  }
   ground_truth_ = node_->declare_parameter("ground_truth", false);
   skip_model_ready_ = node_->declare_parameter("skip_model_ready", false);
   skip_ready_simulator_ =
@@ -1258,41 +1270,64 @@ bool Engine::ready_simulator(Trial& trial) {
   // Wait for cable to be spawned. Sleep in sim time to ensure sim has advanced.
   node_->get_clock()->sleep_for(rclcpp::Duration::from_seconds(0.1));
 
-  RCLCPP_INFO(node_->get_logger(), "Waiting for robot arm to stabilize.");
+  RCLCPP_INFO(node_->get_logger(),
+              "Waiting for robot arm to stabilize near configured home.");
   // The end-effector dips when the cable is first attached.
-  // Wait for joints to settle by checking velocities.
-  std::condition_variable cv;
-  std::mutex mtx;
-  bool joints_settled = false;
+  // A reset service acknowledgement alone does not prove the reset was applied.
+  // Shared callback state also remains valid if a queued callback outlives this
+  // subscription's local owner while a timeout tears it down.
+  struct ReadinessState {
+    std::condition_variable cv;
+    std::mutex mutex;
+    bool ready = false;
+  };
+  const auto state = std::make_shared<ReadinessState>();
+  const auto home_names = home_reset_joints_request_->joint_names;
+  const auto home_positions = home_reset_joints_request_->initial_positions;
+  const double position_tolerance =
+      node_->get_parameter("home_position_tolerance_rad").as_double();
+  const double velocity_tolerance =
+      node_->get_parameter("settled_velocity_tolerance").as_double();
+  const double wall_timeout_seconds =
+      node_->get_parameter("simulator_ready_wall_timeout_seconds").as_double();
   const rclcpp::QoS reliable_qos = rclcpp::QoS(rclcpp::KeepLast(10)).reliable();
   auto joint_states_sub =
       node_->create_subscription<sensor_msgs::msg::JointState>(
           "/joint_states", reliable_qos,
-          [this, &joints_settled, &cv,
-           &mtx](const sensor_msgs::msg::JointState::SharedPtr msg) {
-            if (msg->velocity.empty()) return;
-            for (size_t i = 0; i < msg->velocity.size(); ++i) {
-              if (std::fabs(msg->velocity[i]) > 1e-3) return;
-            }
+          [state, home_names, home_positions, position_tolerance,
+           velocity_tolerance](const sensor_msgs::msg::JointState::SharedPtr msg) {
+            if (!detail::joints_ready_at_home(
+                    msg->name, msg->position, msg->velocity, home_names,
+                    home_positions, position_tolerance, velocity_tolerance)) return;
             {
-              std::unique_lock<std::mutex> lock(mtx);
-              joints_settled = true;
+              std::lock_guard<std::mutex> lock(state->mutex);
+              state->ready = true;
             }
-            cv.notify_one();
+            state->cv.notify_one();
           });
 
-  std::unique_lock<std::mutex> lock(mtx);
+  std::unique_lock<std::mutex> lock(state->mutex);
   const auto start = node_->now();
+  const auto wall_start = std::chrono::steady_clock::now();
   const auto timeout_duration = rclcpp::Duration::from_seconds(10);
-  while (rclcpp::ok() && !joints_settled &&
-         (node_->now() - start) < timeout_duration) {
-    cv.wait_for(lock, std::chrono::milliseconds(100),
-                [&joints_settled] { return joints_settled; });
+  while (rclcpp::ok() && !state->ready &&
+         (node_->now() - start) < timeout_duration &&
+         std::chrono::duration<double>(std::chrono::steady_clock::now() - wall_start)
+                 .count() < wall_timeout_seconds) {
+    state->cv.wait_for(lock, std::chrono::milliseconds(100),
+                      [&state] { return state->ready; });
   }
-
-  // TODO(Yadunund): Implement other simulator readiness checks.
-
-  return true;
+  const bool ready = state->ready && rclcpp::ok();
+  lock.unlock();
+  joint_states_sub.reset();
+  if (!ready) {
+    RCLCPP_ERROR(node_->get_logger(),
+                 "Robot did not settle near home before readiness timeout "
+                 "(position tolerance %.3f rad, velocity tolerance %.4f). "
+                 "Refusing to start trial '%s'.",
+                 position_tolerance, velocity_tolerance, trial.id.c_str());
+  }
+  return ready;
 }
 
 //==============================================================================
