@@ -269,6 +269,17 @@ def main():
     if distributed:
         dist.barrier()
     cache = json.loads((args.cache / "cache.json").read_text())
+    # A relative TCP command is tied to the observation at which it was
+    # recorded. Causal holding into synthetic 20 Hz rows repeats a physical
+    # displacement that the expert did not issue. The strict pilot must use
+    # its audited native observation-command pairs for delta training.
+    if (args.action_representation == "delta_pose" and cache.get("strict_pilot_split")
+            and not cache.get("native_observation_only")):
+        raise ValueError("Strict-pilot TCP delta training requires native observation-command rows")
+    if cache.get("native_observation_only") and (
+            args.action_representation != "delta_pose"
+            or cache.get("action_semantics") != "Native observed TCP-relative pose command; unchanged"):
+        raise ValueError("Native TCP-delta cache has an incompatible action contract")
     source_dataset = Path(cache["source_dataset"]) if cache.get("source_dataset") else None
     if source_dataset is not None:
         if (source_dataset / "BUILD_IN_PROGRESS.json").exists():
@@ -705,6 +716,9 @@ def main():
         (temporary / "aic_action_config.json").write_text(json.dumps({
             "backbone_geometry": geometry,
             "action_representation": args.action_representation,
+            "action_frame": "gripper/tcp" if args.action_representation == "delta_pose" else "base_link",
+            "delta_pose_reference": ("observation" if cache.get("native_observation_only") else None)
+                                    if args.action_representation == "delta_pose" else None,
             "absolute_rotation_encoding": "rotation_vector_with_target_quaternion_x_nonnegative" if args.action_representation == "absolute_pose" else None,
             "source_action_representation": "full_tcp_relative_pose_command",
             "state_shape": [states.shape[1]],

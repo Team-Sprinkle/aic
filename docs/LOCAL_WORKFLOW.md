@@ -1,16 +1,20 @@
 # Local testing and rootless operation
 
-Updated 2026-09-18. Dedicated rootless containers ran official policy trials,
+Updated 2026-09-19. Dedicated rootless containers ran official policy trials,
 Gazebo control probes and Isaac camera/terminal probes. The earlier
 [live validation](experiments/2026-09-17-live-validation.md) did not insert;
 the later [verified-data ACT experiment](experiments/2026-09-17-act-verified-8h.md)
 has learned insertions but has not established reliability. Examples using
-other scenes or settings remain separate evaluations. The active September 18
-ACT run uses **physical GPUs 0–1**. The user separately allowed GPUs 2–4 for
-the proposed world-model experiment after confirming its plan, for a maximum
-of five GPUs across both efforts. That world-model training is still pending
-confirmation. The completed earlier ACT experiment used GPUs 0–3 and released
-them; check current ownership before reusing a container.
+other scenes or settings remain separate evaluations. The September 18 ACT and
+world pilot runs are complete. The September 19 full-data world run is complete and used at most **physical
+GPUs 0–3**; GPU 7 was occupied by another user and was excluded. Bulk caches and
+intermediate checkpoints are under `/var/tmp/chmin_aic_20260919_full_world/`.
+Selected tokenizer, dynamics and control checkpoints, reports, reconstruction
+sheets, final videos, and hashes are under
+`outputs/experiments/2026-09-19_full_world_training/artifacts/`. The final
+simulator run is under
+`/var/tmp/chmin_aic_20260918_dreamer60/full_data_final20_20260919_v2/`.
+Check current ownership before reusing any GPU or container.
 
 ## 1. Identify the workspace and runtime
 

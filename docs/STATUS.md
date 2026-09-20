@@ -1,6 +1,170 @@
 # Current experiment status
 
-## Active September 18 work
+## TCP-delta commands and tracking: current decision
+
+**Train on the clean expert's commanded TCP-frame delta pose**, relative to the
+TCP pose in the same observation. This delta is a desired *controller pose
+reference*, not the displacement the TCP must achieve before the next image.
+For corrective recordings, use `teacher_target_pose` for policy supervision and
+`executed_target_pose` for action-conditioned dynamics; they can differ. Do not
+replace the command label with the difference between two measured TCP poses.
+The latter includes controller lag and contact and is useful for dynamics or
+path evaluation, not as a drop-in `MotionUpdate` target. See
+[`CollectCorrectiveCheatCode.py`](../aic_example_policies/aic_example_policies/ros/CollectCorrectiveCheatCode.py)
+and [dataset eligibility](DATASETS.md).
+
+An audit of **23,252 consecutive 50 ms observation pairs** in the 74 verified
+one-NIC, no-SC aligned/corrective SFP episodes found these median translation
+magnitudes: **9.83 mm** from the observed TCP to the *executed command target*,
+**0.64 mm** actual TCP displacement during the next 50 ms, and **9.35 mm**
+remaining from the next measured TCP pose to that same target. These are
+separate medians, so they need not subtract exactly. In the last three recorded
+seconds, the corresponding medians were 5.35 / 0.04 / 5.36 mm. The clean
+teacher delta was also 9.83 mm median across all 32,183 native observations.
+This is a target-tracking gap, **not** a 9.35 mm expert-label or model-prediction
+error. The consecutive-pair audit used the saved `states.npy`,
+`executed_physical.npy`, `teacher_physical.npy`, and each episode's native times
+and command indices under the [Dreamer pilot data](../outputs/experiments/2026-09-18_dreamer60_pilot/artifacts/data), retaining only 50 ms intervals with
+consecutive command indices. Position-delta magnitude is unchanged when a TCP
+delta is composed into an absolute `base_link` target.
+
+These episodes all have official full-insertion Tier 3 scores. They represent a
+restricted aligned scene without SC distractors, so they do not establish
+general performance in cluttered settings. The wider historical CheatCode SFP
+collection has **140/140 verified full insertions**; its action labels are much
+cleaner than the successful agent/VLM recordings with missing Cartesian labels.
+The CheatCode policy itself issues a smoothly changing target about every
+50 ms, including slow insertion and a settling phase. Its success despite the
+gap above argues **against** waiting for every commanded pose to be reached or
+shrinking the learned delta to the next observed displacement.
+
+The existing [AIC controller](aic_controller.md) already runs at **500 Hz**,
+interpolates position and orientation references, and applies Cartesian
+impedance control. Its tracking-error reset is a coarse stuck-target safeguard
+(`min_translation_error: 0.2 m`, timeout 2 s in
+[`aic_ros2_controllers.yaml`](../aic_bringup/config/aic_ros2_controllers.yaml));
+it is not a millimetre-level waypoint gate. The synchronized policy
+[`Observation`](policy.md) arrives at up to **20 Hz**. In `insert_cable()`, use a
+fresh observation as the inference event, publish the bounded Cartesian
+`MODE_POSITION` target at the 20 Hz cadence, and let the controller run its own
+fast loop. A chunked model may infer once per four commands, but every delta
+must retain its trained observation-reference convention. For an
+observation-relative delta, compose it with that observation's TCP pose and
+publish the resulting absolute target in `base_link`; sending the delta in
+`gripper/tcp` lets the controller apply it from the *later* TCP pose at receipt.
+The runtime already has this observation-relative transport path in
+[`RunACTTorchScript.py`](../aic_example_policies/aic_example_policies/ros/RunACTTorchScript.py).
+
+**Do not add general tracking-aware action-chunk pacing by default.** A second
+fast loop would duplicate the controller's interpolation, and a reach-before-
+advance rule would distort these successful expert commands, especially in
+contact. Keep the nominal command cadence and log measured TCP, reference
+pose, force, command, and simulated time. Consider a guarded
+alignment-to-insertion transition only if the learned policy shows excess
+off-path motion or harmful contact relative to experts, using observable
+signals rather than privileged geometry. Compare the same frozen policy with
+and without that guard on matched simulator scenes before adopting it. The
+expert tracking-gap statistics alone do not demonstrate that extra pacing
+will improve insertion.
+
+## September 18 work
+
+At 18:14 UTC the action contract was corrected: the verified expert label is
+a **TCP-frame delta relative to the recorded observation**, rather than an
+absolute base-link target for the model to predict. The completed all-data ACT
+and fresh ACT60 results below used absolute predictions and remain historical
+baselines. The new strict 60/14 ACT run completed 6,000 updates at 18:55 UTC
+on the 32,183 native observation-command pairs, predicting one TCP delta per
+observation. Its fixed held-out rule selected update 6,000 (2.96 mm first
+command and 2.63 mm final-three-second translation error); four fresh paired
+development scenes ran from 18:56 to 19:09 UTC: all four valid, **0/4 full
+insertions**, mean official score **27.73**. Three ended 5 cm from the port;
+one drifted to 33 cm. These imitation errors are not live insertion scores.
+The corrected world dynamics completed 3,191 updates and stopped early after
+its fixed held-out prediction gates failed; the selected update-1,000 model's
+one-step TCP error was 10.33 mm versus 1.85 mm for persistence (14 episodes).
+Here, one step means **200 ms and four actually executed 20 Hz commands**.
+Starting from a recorded observation, the dynamics model predicts the TCP's
+*measured position after those commands*. The 10.33 mm is the mean distance
+between that predicted future position and the recorded future position in
+`base_link`; it is not the error between a controller command target and the
+robot. The 1.85 mm persistence baseline instead predicts that the future TCP
+will remain at its initial measured position, then compares that unchanged
+position with the same recorded future position. It works well over this short
+interval because the TCP usually moves little, even when the commanded target
+is farther away. See the [held-out dynamics evaluator](../outputs/experiments/2026-09-18_dreamer60_pilot/world_tcp_delta_final_runtime_archive/sources/dreamer_source/dreamer4/aic/evaluate_world.py).
+A fresh supervised policy using corrected delta labels ran from 18:46 to
+19:20 UTC on GPUs 2–3, stopping at update 4,509 after a documented held-out
+plateau; fixed selection chose saved update 4,000 (2.16 mm combined
+first-command error). The first live world startup found a camera-size
+mismatch before any command. After matching the collector's resize to
+288×256, trained raw-camera inference measured **32.76 ms p95** over 1,000
+calls and the four-command callback loop **33.79 ms p95** in isolation.
+The same-GPU live diagnostic measured **464.67 ms p95** across 168 published
+commands, above the 300 ms requirement. Separating renderer and policy GPUs
+alone did not fix this. A private inference worker preserved byte-identical
+commands on verified native samples and passed a full live-scene diagnostic.
+The fresh world development set was **4/4 valid, 1/4 full insertions**, mean
+official score **52.14**, with pooled **81.00 ms p95** live decision latency.
+The frozen paired final assessment completed all **20/20 eligible scenes per
+policy**: ACT **0/20 full insertions**, one official partial, mean total
+**22.69**; world **0/20 full insertions**, two official partials, mean total
+**32.32**. The world policy's 8,908 live decisions measured **77.01 ms p95**,
+under the 300 ms requirement. A failed ACT startup before trial 17's scored
+rollout was preserved, then that same scene completed as an unchanged-model
+retry. The previous absolute-action dynamics and BC runs are superseded.
+The [follow-up](experiments/2026-09-18-world-followup.md) found the world
+policy closer to the opening in more scenes but with persistent lateral error
+and a large requested/measured TCP gap. Across all strict held-out 200 ms
+dynamics windows, future measured TCP error was **12.06 mm** versus **2.29 mm**
+for persistence; near the actual opening it was **13.94 mm** versus **0.57 mm**.
+The 289-episode visual audit and matched tokenizer comparison improved SC
+gross reconstruction with expanded data, but fine connector/port features
+remained blurred. Reward and imagination training remain disabled. See the
+[delta correction record](experiments/2026-09-18-tcp-delta-correction.md) and
+[contract audit](../outputs/experiments/2026-09-18_dreamer60_pilot/act60_delta_contract_audit.json).
+
+The [bounded supervised initialization comparison](experiments/2026-09-18-world-supervised-init-ablation.md)
+trained the same six-view control architecture for 2,500 BC updates in each
+arm and evaluated four fresh paired scenes disjoint from all 289 verified
+episodes and the final set. Held-out first-command error was 2.285 mm with
+selected world weights versus 2.578 mm from a fresh world trunk. Live mean
+official score was 32.85 versus 26.24, with **zero full insertions in either
+arm** and one partial for the selected-world arm. Both met the 300 ms limit:
+pooled p95 command latency was 76.26/79.69 ms. The fresh arm's world weights
+were a separate random draw rather than the exact pretraining ancestor, so
+one seed cannot establish a causal pretraining advantage. The reward and
+imagination gates remain closed.
+
+The [September 19 full verified-data run](experiments/2026-09-19-full-world-training.md)
+is complete. A fresh six-view tokenizer optimized all 250 canonical training
+episodes, held out the 39 scene-disjoint validation episodes, and stopped at
+78,000 updates under the declared validation plateau rule; update 75,000 was
+selected. On 156 held-out frames it reduced whole-image/contact-field MSE by
+91.25%/93.29% and contact edge L1 by 53.09% relative to the earlier bounded
+reference. Corrected dynamics also converged by rule, but future TCP error was
+11.46/19.17/20.12 mm at 200/400/600 ms versus 2.07/4.42/7.24 mm for persistence.
+Every dynamics gate failed, so reward and imagination remain disabled.
+
+The supervised full-data world policy selected update 1,000 and then completed
+all **20/20 eligible sealed final scenes: 2 full insertions, 9 official partials,
+mean total 45.14**. It beat the corrected60 ACT score on 13/20 paired scenes;
+ACT remained 0 full / 1 partial with mean 22.69. Across 8,895 live decisions,
+the new policy measured **80.77 ms p95**, 98.29 ms p99, and 146.74 ms maximum,
+with no 300 ms misses. This is the strongest learned result in that paired set,
+but 2/20 is not reliable and the complete-pipeline comparison does not isolate
+which training change caused it. Next, run the full-data same-architecture
+supervised comparison from the exact preserved random ancestor versus selected
+world weights on new development scenes and multiple seeds. Keep the sealed
+final scenes out of selection.
+
+For size context, ACT has **16,354,566 inference parameters** (65,418,264
+FP32 bytes), while the selected world policy has **22,569,344 acting
+parameters** (90,277,376 FP32 bytes) and 27,130,942 parameters in the complete
+training model. Thus the acting world policy is 1.38 times ACT's size. On their
+matched corrected 60/14 data and frozen 20 scenes, ACT achieved 0 full / 1
+partial insertion with a 22.69 mean score; the world policy achieved 0 full / 2
+partial with a 32.32 mean. Neither met the reliability goal.
 
 The user approved a new **6h50m ACT window, 11:51:28–18:41:28 UTC**, on physical
 GPUs **0–1**. The canonical `expert_verified` collection now contains **289**
@@ -44,19 +208,44 @@ evaluation image. Current trials restart the simulator for each scene and audit
 the pre-command arm joints and first camera frames independently.
 Retained time remains the parent for matched stride-32/stride-16 continuations.
 Both completed 3,000 updates on v3, with held-out command errors **5.60 mm**
-and **5.32 mm**; their fresh-simulator development trials are running with
-physical start checks. No reliable learned
-insertion is established.
-See [active ACT record](experiments/2026-09-18-act-all-verified.md).
+and **5.32 mm**; their fresh-simulator development trials completed with
+physical start checks. No reliable learned insertion is established.
+Their completed nine-scene fresh-simulator development results were
+**0/9 insertions** each, mean score **33.27** for stride 32 and **24.44**
+for stride 16. The earlier parent was also **0/9**, mean **23.03**.
+The prespecified development rule selected stride 32; its frozen 32-scene
+final assessment ran on GPUs 0 and 1 from 17:03 to 18:03 UTC. All **32/32**
+trials passed the fresh-simulator initial-state and duration checks and were
+officially scored. The policy achieved **0/32 full insertions** (SFP **0/20**,
+SC **0/12**), mean official total **25.70** (SFP 21.04, SC 33.48). Two SC
+trials were scored as partial insertions; nine trials incurred a prohibited
+contact penalty. All 32 one-frame-per-second videos and start/end contact
+sheets are archived with the selected model. The target was not met; no
+offline or online SERL was trained in this window. See the
+[ACT record](experiments/2026-09-18-act-all-verified.md) and
+[frozen final report](../outputs/experiments/2026-09-18_act_all_verified_6h50/selected_act_final_single/final_single_results.md).
 
 The parallel [Dreamer-v4 pilot](experiments/2026-09-18-dreamer-proposal.md)
 was approved and started at 15:52:56 UTC, with a separate 22:42:56 UTC deadline.
 Its strict first comparison uses the original 60 aligned SFP training episodes
-and 14 held-out episodes. Dreamer tokenizer training is active on GPUs 2–3;
-a fresh ImageNet ACT baseline is training on GPU 4. An untrained Dreamer
-inference path measured 28.49 ms p95 over 1,000 decisions including image
+and 14 held-out episodes. A fresh ImageNet ACT baseline completed 6,000 updates
+on GPU 4; its four paired development scenes scored **0/4 insertions**.
+Dreamer's first tokenizer stage stopped at 5,981 updates at its 50-minute cap;
+two bounded detail refinements completed 2,500 updates each on GPUs 2–3, but
+fine contact details remained blurred. A selected six-view tokenizer was frozen
+for a supervised diagnostic. Its action-conditioned dynamics stage stopped
+deliberately after 6,344 updates at 18:11:50 UTC; it beat persistence at
+four/eight steps on average but failed the one-step and near-contact gates.
+The held-out selected checkpoint was step 1,500. The superseded supervised BC
+started at 18:12:54 UTC and stopped at 18:14:32 UTC when the action contract
+was corrected. An untrained Dreamer inference path measured
+28.49 ms p95 over 1,000 decisions including image
 preprocessing and command conversion. Early tokenizer reconstructions blur
-connector/port details; neither model has a new live success result yet.
+connector/port details. An audit of all 74 expert bags found the official
+insertion event after the final saved observation in every episode, so the
+strict pilot's insertion-state reward/imagination gate fails. The corrected
+TCP-delta pilot's current training and live results are summarized at the top
+of this page.
 
 ## Completed September 17–18 experiment
 

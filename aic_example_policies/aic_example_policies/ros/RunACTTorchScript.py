@@ -109,6 +109,13 @@ class RunACTTorchScript(Policy):
             (self.action_representation == "absolute_pose") != (self.command_mode == "absolute_pose")
         ):
             raise ValueError("ACT action representation and command mode disagree")
+        if self.command_mode == "delta_pose" and self.command_frame != "gripper/tcp":
+            raise ValueError("TCP delta ACT commands require gripper/tcp command frame")
+        if self.metadata.get("action_frame") is not None and self.metadata["action_frame"] != self.command_frame:
+            raise ValueError("ACT checkpoint action frame and runtime command frame disagree")
+        if (self.metadata.get("delta_pose_reference") is not None
+                and self.metadata["delta_pose_reference"] != self.delta_pose_reference):
+            raise ValueError("ACT checkpoint delta reference and runtime reference disagree")
         self.model = torch.jit.load(str(self.torchscript_path), map_location=self.device).eval()
         self.state_dim = int(self.metadata["state_shape"][0])
         self.include_elapsed_sim_time = self.metadata["include_elapsed_sim_time"]

@@ -4,6 +4,10 @@ Status: approved and implementation started2026-09-18 at15:52:56UTC. The user co
 
 Reviewed 2026-09-18; repository commit `1163696c628cf53ff230487b7244206cbe3fe909`, cloned to `/tmp/aic_dreamer_review_20260918`.
 
+Current execution record: [Dreamer pilot results and gates](2026-09-18-dreamer-pilot.md). The strict74 reward gate failed because no saved native observation reaches the official insertion event; the active experiment is world-pretrained supervised control, with no imagination RL.
+
+**Action-contract correction, 18:14 UTC:** the user confirmed direct observation-relative TCP/body delta outputs. Raw expert `action` labels were verified by pose composition across all74 episodes. Earlier absolute-target recommendations below are superseded. The corrected runtime composes each delta with its recorded/current observation at the API boundary, and never accumulates against a later controller target. Missing micro-observations are masked/excluded; the implemented world context is two verified macro frames. Only the action-independent tokenizer is reused; corrected dynamics and policy weights start fresh. See the execution record for exact data hashes, tests and commands.
+
 ## Confirmed implementation choices
 
 1. Is the 300 ms limit measured from an already available synchronized observation to the outgoing robot command, on one A6000, including resize, GPU transfer, state processing, model, and command conversion? Recommended: report median/p95/p99/max, require p95 below 300 ms, and aim below 150 ms so the existing four-action/200 ms schedule does not stall. Report sensor age and ROS/simulator delay separately. An absolute worst-case guarantee under a shared server cannot be established by a benchmark.

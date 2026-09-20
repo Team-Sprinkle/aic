@@ -28,8 +28,8 @@ def prepare_args(args):
     if (args.max_simulation_sec, args.max_runtime_sec) != (90., 180.):
         raise ValueError('Dreamer comparison requires exactly90sim seconds and180wall watchdog')
     if (args.command_mode, args.command_frame, args.control_hz, args.control_clock,
-            args.n_action_steps) != ('absolute_pose', 'base_link', 20., 'simulation', 4):
-        raise ValueError('Dreamer requires absolute base_link20Hz execution of four commands')
+            args.n_action_steps) != ('delta_pose', 'gripper/tcp', 20., 'simulation', 4) or args.delta_pose_reference != 'observation':
+        raise ValueError('Dreamer requires observation-relative TCP delta20Hz execution of four commands')
     if args.temporal_ensemble_coeff is not None or args.start_delay_sec != 0:
         raise ValueError('Dreamer pilot has no temporal ensemble or artificial startup delay')
     if (args.max_translation_delta, args.max_rotation_delta, args.translation_limit_mode,
@@ -38,11 +38,16 @@ def prepare_args(args):
     # Common prepare otherwise rejects the literal class name before any model or
     # simulator runs. All numeric/identity checks above are stricter, not disabled.
     simulation_limit = args.max_simulation_sec
+    delta_reference = args.delta_pose_reference
     try:
         args.max_simulation_sec = None
+        # The shared checker also restricts this inherited-loop option by the
+        # literal ACT class name. Its semantics were checked strictly above.
+        args.delta_pose_reference = 'controller'
         _BASE_PREPARE(args)
     finally:
         args.max_simulation_sec = simulation_limit
+        args.delta_pose_reference = delta_reference
     config = yaml.safe_load(args.engine_config_host.read_text())
     args.expected_runtime_tasks = [
         {'trial': trial_name, 'task_id': task_id,
@@ -63,6 +68,8 @@ def prepare_args(args):
 def runtime_sources(args):
     sources = _BASE_SOURCES(args)
     sources['scripts/evaluate_dreamer_v4_runtime.py'] = Path(__file__).resolve()
+    sources['aic_example_policies/aic_example_policies/ros/dreamer_inference_worker.py'] = args.workspace_host/'aic_example_policies/aic_example_policies/ros/dreamer_inference_worker.py'
+    sources['dreamer_container_profile.sh'] = args.workspace_host/'outputs/experiments/2026-09-18_dreamer60_pilot/dreamer_container_profile.sh'
     source = Path(args.dreamer_source_root)
     for path in sorted((source / 'dreamer4').rglob('*.py')):
         sources['dreamer_source/' + str(path.relative_to(source))] = path

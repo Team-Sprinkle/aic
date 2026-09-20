@@ -12,6 +12,44 @@ submission is 300 points.
 | Tier 2 | Performance & Convergence | Quantitative metrics for motion quality |
 | Tier 3 | Cable Insertion | Primary objective - successful or partial insertion verified |
 
+## Geometry and distance terminology
+
+Use these names when reading scores or diagnosing a rollout:
+
+| Name | Meaning |
+|------|---------|
+| TCP | Robot tool-center-point frame on the gripper. Its pose is not the pose of the plug tip. |
+| Plug tip | The leading end of the grasped connector (`sfp_tip_link` for SFP). In the SFP asset, this link is offset 23.65 mm along the module's local axis from `sfp_module_link`; this is not necessarily the TCP-to-tip distance. |
+| Port entrance / opening | Mouth of the selected port, represented by `sfp_port_*_link_entrance`. |
+| Port reference / seated target | `sfp_port_*_link`, farther inside the connector's insertion axis than the entrance. The full-insertion event is verified separately by the scorer. |
+| Plug-to-port distance | The scorer's reported distance between plug and target port references. It is not TCP tracking error, lateral misalignment alone, or distance to the opening. |
+
+For the SFP/NIC asset, the entrance is **45.8 mm** from the port reference
+along the insertion axis. The collision cage is approximately **48.72 mm**
+deep. A connector going from the mouth toward full seating therefore travels
+roughly **4.6–4.9 cm along the port axis**, subject to the actual contact and
+scoring geometry; 45.8 mm is a frame offset, not a measured insertion stroke.
+The NIC card's main PCB collision box is **56 × 145 × 1.6 mm** and is mounted
+upright, so its long dimension is roughly **14.5 cm**. These are asset
+dimensions, not tolerances for insertion. See the
+[NIC Card Mount](../aic_assets/models/NIC%20Card%20Mount/model.sdf),
+[NIC Card](../aic_assets/models/NIC%20Card/model.sdf), and
+[SFP Module](../aic_assets/models/SFP%20Module/model.sdf) models.
+
+In the first nine completed September 18 paired world-model final trials, the
+scorer reported an **initial plug-to-port distance of about 15–19 cm** (where
+its path-efficiency message was available). This is a scene-specific starting
+distance to the port reference, **not** a measured TCP-to-port distance and
+not the distance from plug tip to the opening. A terminal score message of
+"0.04–0.05 m from the port" can therefore put the plug near the mouth in
+axial distance, since the mouth and port reference differ by 45.8 mm. The
+single Euclidean distance cannot establish whether the tip is centered,
+oriented correctly, or inside. One trial even received a *partial insertion*
+message at approximately 0.05 m; other nearby-distance trials received *no
+insertion*. Inspect tip-to-entrance axial depth, lateral error, orientation,
+and the official insertion event separately. See the
+[paired score records](../outputs/experiments/2026-09-18_dreamer60_pilot/artifacts/world_tcp_delta_final_worker_v1/progress.json).
+
 ## Tier 1: Model Validity (Prerequisite)
 
 A sanity check to ensure the submission loads and runs without errors.

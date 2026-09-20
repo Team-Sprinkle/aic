@@ -9,7 +9,10 @@ Start here when returning to this repository. These pages describe the local
 | What works, what is unresolved, and what should we do next? | [Current status](STATUS.md) |
 | Where is the current ACT run? | [All-eligible, task-conditioned ACT](experiments/2026-09-18-act-all-verified.md) |
 | Where are the previous ACT results and rollout videos? | [Earlier verified-data ACT experiment](experiments/2026-09-17-act-verified-8h.md) |
-| What is the proposed world-model comparison? | [Dreamer adaptation proposal — awaiting confirmation](experiments/2026-09-18-dreamer-proposal.md) |
+| What did the world-model pilot show? | [Dreamer pilot](experiments/2026-09-18-dreamer-pilot.md) and [paired follow-up](experiments/2026-09-18-world-followup.md) |
+| Did world pretraining help the supervised policy? | [Matched initialization comparison](experiments/2026-09-18-world-supervised-init-ablation.md) |
+| What did the world-model follow-up require, and what remains? | [World-model next steps](WORLD_MODEL_NEXT_STEPS.md) |
+| How did the full verified-data world run perform? | [Full tokenizer, dynamics, and final evaluation](experiments/2026-09-19-full-world-training.md) |
 | Where are the earlier simulator/control checks? | [Live validation report](experiments/2026-09-17-live-validation.md) |
 | What did we try, and what evidence supports the result? | [Experiment ledger](EXPERIMENTS.md) |
 | How do I use rootless Docker and test a saved policy locally? | [Local workflow](LOCAL_WORKFLOW.md) |

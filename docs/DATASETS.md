@@ -72,9 +72,39 @@ Read `expert_verified/manifest.json` → `training_cache` for the current versio
 New SFP/SC source recordings are copied into the canonical folder; the NVMe
 cache is derived data. Previous caches and canonical manifest versions remain
 available. Append workflow: `scripts/append_verified_experts.py`; exact counts
-and checks: `v3_append_result.json` and `v3_publication_audit.json` in the active
+and checks: `v3_append_result.json` and `v3_publication_audit.json` in the September 18
 experiment. Initial SC evidence remains in `canonical_sfp_sc_membership_check.json`;
 the second collection's terminal review is `sc_collection_gpu0_followup/visual_review.json`.
+
+The [world visual follow-up](experiments/2026-09-18-world-followup.md) checked
+all 289 episode ranges, 253 image shards, RGB/BGR provenance and scene
+groups. Its matched tokenizer experiment keeps the older pilot's original
+14 validation episodes sealed because 15 of the 74 pilot episodes have a
+different assignment in this canonical split. The resampled image cache does
+not establish how many of all 289 frames are geometrically near a port
+opening; use synchronized plug/port transforms for that question.
+
+The September 19 full tokenizer run uses all **250 canonical training
+episodes** for optimization and all **39 canonical validation episodes** for
+selection and reconstruction reporting. “All valid” therefore means the full
+training side of the split, not training on validation episodes. Sampling gives
+equal probability to historical SFP, aligned SFP, and SC, then samples an
+episode uniformly within that category. Dynamics has a narrower eligibility
+rule: an episode must provide native simulator timestamps, native observation
+endpoints, and the actual four-command sequence for each 200 ms transition.
+Visual eligibility alone does not make an episode dynamics-eligible. See the
+[completed protocol and results](experiments/2026-09-19-full-world-training.md).
+
+That strict audit retained **148/289 episodes** for dynamics (126 train, 22
+validation): 127 SFP and 21 SC, with 68,884 native observations. The 140
+historical video episodes have no native `frames.jsonl`; one aligned SFP episode
+has frames but no actual command indices. They are excluded from dynamics
+without synthesizing timestamps or commands, while their verified images remain
+eligible for tokenizer training.
+The prepared strict transition set contains 9,858 training and 1,486 validation
+200 ms edges. The completed dynamics model used exactly this set and did not
+outperform persistence at 200, 400, or 600 ms; visual eligibility must therefore
+not be cited as evidence for planning-quality temporal coverage.
 
 The **253** successful historical agent episodes (180 nominal SFP + 50 recovery
 SFP + 23 SC) remain outside BC training under
@@ -329,3 +359,34 @@ the newest checkpoint merely because it has more data. Incremental image shards 
 These collection batches are complete. Consult the
 [experiment report](experiments/2026-09-17-act-verified-8h.md) for training use. Successful outcomes and trustworthy action labels
 are separate acceptance requirements.
+
+### Strict 74-episode world-model pilot: event timing
+
+The September 18 Dreamer pilot uses the original 60 training / 14 validation
+aligned episodes, without the historical 130. Its scene audit found **73 unique
+scenes in 74 episodes**: episodes 130 and 149 repeat one training scene, while
+no scene crosses the training/validation split. The newly frozen paired
+development and final scenes do not overlap these 73 scenes.
+
+All 74 official bags contain a correct-port insertion event. The event occurs
+**40–142 ms after the last saved observation** for the 60 training episodes and
+**46–124 ms after** for the 14 validation episodes. Thus the episodes remain
+verified successful command trajectories, but none contains an observed
+post-insertion image/state. The aligned collector records an observation when
+it sends a target on a fresh camera timestamp; the CheatCode policy then
+continues that motion, checks the official insertion event, and exits after
+success. The final saved image may show an approach or partial seating, but it
+cannot by itself establish the exact insertion state. The later correct-port
+event establishes that the expert **did** insert successfully; the missing
+post-event frame is a recording-boundary problem for state/reward learning.
+Do not label the last frame as a positive insertion state or train a
+terminal-state reward from that proxy. The [strict-74 raw-bag audit](../outputs/experiments/2026-09-18_dreamer60_pilot/post_event_raw_bag_audit/report.json)
+found short post-event controller-state tails in every bag but no camera or
+video topics. The [all-verified metadata audit](../outputs/experiments/2026-09-18_world_followup/verified_bag_metadata_audit.json)
+found no camera/image/video topics in any of the 149 linked aligned ROS bags;
+the other 140 historical episodes link to LeRobot videos, with no event-linked
+ROS bag in the canonical manifest. The additional aligned bags' state-tail
+durations and historical videos' event timing remain unverified. Future
+collection should save a short synchronized post-event observation tail and
+explicit event timestamp. Evidence: [event audit](../outputs/experiments/2026-09-18_dreamer60_pilot/reward_gate_report.json)
+and [paired scene manifest](../outputs/experiments/2026-09-18_dreamer60_pilot/paired_scenes/manifest.json).

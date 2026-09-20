@@ -1,6 +1,6 @@
 # Outputs Directory Guide
 
-Reviewed: 2026-09-18. Start with the [documentation index](docs/README.md) and
+Reviewed: 2026-09-19. Start with the [documentation index](docs/README.md) and
 [experiment ledger](docs/EXPERIMENTS.md) for the meaning and status of saved runs.
 
 ## Current storage map
@@ -11,6 +11,7 @@ Reviewed: 2026-09-18. Start with the [documentation index](docs/README.md) and
 | `outputs/hf_combined/`, `outputs/trajectory_datasets/` | Derived/recorded LeRobot data. `expert_verified/` is the canonical BC collection; `clean_including_no_insert_trajs/` preserves the original 668 episodes across 23 collections. Successful recordings with unreliable action labels are indexed separately in `successful_pending_label_repair/`. See [dataset membership and S3 paths](docs/DATASETS.md). |
 | `outputs/train/` | ACT, offline/online SERL, and legacy PPO training artifacts. It is not exclusively a PPO directory. |
 | `outputs/experiments/2026-09-17_live_validation/` | Live control/reset checks, dataset audit, runtime regressions, configs, and `review/index.html` with MP4s and one-second snapshots. ACT/direct raw policy trials stay under their respective model run roots; see the [run report](docs/experiments/2026-09-17-live-validation.md). |
+| `outputs/experiments/2026-09-19_full_world_training/` | Completed fresh tokenizer, strict 148-episode dynamics, supervised policy, and frozen 20-scene evaluation. `artifacts/` contains selected tokenizer/dynamics/control checkpoints, reconstruction sheets, final videos and compact reports; `artifact_sha256.txt` pins them. Bulk mutable intermediates remain under `/var/tmp/chmin_aic_20260919_full_world/`. |
 | `outputs/experiments/<run-id>/` | Default for the repaired stateful/axial wrappers: high-level config, common flags, generated per-level episodes, retained training/evaluation cycles, summaries, events, and latest checkpoint. |
 | `outputs/agentic_reward_curriculum_*/`, `outputs/one_day_insertion_pipeline/` | Historical generated episodes, commands, reset/controller diagnostics, rewards, checkpoints, metrics, and videos. Names/dates alone do not identify code or success criteria. |
 | `outputs/gazebo_rl/` and per-model `runtime_eval*` directories | Gazebo bridge and saved-policy evaluations. The ACT runtime evaluator saves numbered attempts; read `scoring_yaml` from the checkpoint's `eval_summary.json`. A summary can describe a failed run. |

@@ -1,14 +1,20 @@
 # Task-conditioned ACT on all eligible experts
 
-Status: active; time-input comparison completed and matched stride continuations
-started on all v3 episodes at 15:18:10 UTC. Initial SFP step-2,000
-development result **0/5 insertions**; later two-scene checks remain **0/2**.
+Status: completed by 18:03 UTC; reliability target failed. All-data ACT
+training and matched stride development comparisons are complete. The selected
+stride-32 policy achieved **0/32 full insertions** on the frozen final scenes.
+At 18:14 UTC the user clarified that expert commands should be learned as
+TCP-frame deltas relative to each observed pose. This experiment instead
+converted them into absolute base-link pose targets before training. Its
+scores remain a valid record of that absolute-target policy, but do not test
+the newly requested delta representation. A separate strict 60/14 native-frame
+retraining is underway; see [STATUS.md](../STATUS.md).
 
 User confirmed a 6h50m total window covering preparation, training, evaluation,
 and documentation. Start **2026-09-18 11:51:28 UTC**; hard deadline
 **18:41:28 UTC**. ACT uses only physical GPUs **0 and 1**. A separately requested
-Dreamer review is read-only pending approval; its potential GPU allocation is
-2–4, making at most five GPUs across both efforts after that approval.
+Dreamer pilot was subsequently approved and runs on physical GPUs 2 and 3,
+with its separate ACT60 comparator on GPU 4. The combined limit is five GPUs.
 
 Artifacts: `outputs/experiments/2026-09-18_act_all_verified_6h50/`.
 
@@ -76,6 +82,18 @@ inputs add 5,120 parameters to the previous 33D model. The three cameras share
 one ImageNet ResNet18. DINOv2 is not used in this ACT run. Exact measurements
 are in `act_model_size.json`; training activation/optimizer memory is separate
 from parameter storage.
+
+For comparison, the selected Dreamer-style policy has **22,569,344 inference
+parameters** (90,277,376 FP32 bytes) and 27,130,942 parameters in its complete
+training model. It is therefore 1.38 times ACT's inference size and 1.66 times
+ACT's complete training size. On the same corrected 60/14 labels and same 20
+frozen final scenes, ACT scored 22.69 on average with zero full and one partial
+insertion; the world policy scored 32.32 with zero full and two partial
+insertions. The world policy scored higher in 14/20 scenes and approached the
+opening more accurately, but neither was reliable. The world runtime predicts
+four commands per visual decision from six views; ACT applies one prediction
+and replans on the next observation, so this is a pipeline comparison rather
+than an architecture-only ranking.
 
 Replaying the exact deterministic distributed sampler confirms all 223
 training episodes are sampled by update 5. By update 1,000 it has visited
@@ -362,15 +380,65 @@ unique training image anchors across 384,000 draws. Commands/logs:
 `paired_stride_v3_launch.json` and `paired_stride_v3_from_control_time_2k/`;
 audits: `stride_v3_readiness_audit.md` and `paired_stride_contract_audit.md`.
 
-Both update-3,000 models began a nine-scene development check on **15:54 UTC**,
-with each original scene run in a fresh simulator. Every trial must pass a
+Both update-3,000 models completed a nine-scene development check begun at
+**15:54 UTC**, with each original scene run in a fresh simulator. Every trial passed a
 pre-command initial state audit: all six named arm joints within **0.05 rad**
 of configured home, finite named gripper positions recorded, and a complete
 90-second simulation-duration audit. The 0.05 rad bound was fixed from six
 fresh starts (maximum observed loaded error 0.03151 rad); the two displaced
 masked starts differed by 0.426/0.528 rad. Gripper width has no inferred target.
-The recorder now adds joint names. The nine-scene launch and audit evidence will
-appear under each arm's `development_step003000_singles_sim90/` directory.
+The recorder now adds joint names. Both arms had **9/9 eligible scenes and 0/9
+insertions**. Stride 32 averaged **33.267** official points and had two
+prohibited-contact penalties; stride 16 averaged **24.444** and had four.
+Thus the lower held-out action error at stride 16 did not produce a better
+closed-loop development result. Evidence, one-second videos, and first/end
+contact sheets are under each arm's
+`development_step003000_singles_sim90/` directory. The retained-time step-2,000
+parent also completed the same isolated nine-scene protocol: **9/9 eligible,
+0/9 insertions**, mean official score **23.026**, four prohibited-contact
+penalties. Its earlier batched results are not comparable because initial
+conditions varied. The prespecified development-only rule selected the
+stride-32 update-3,000 model: all three tied at zero insertions, and stride 32
+had the fewest prohibited contacts (two versus four); it also had the highest
+mean Tier 3 and total score. The exact hashes and comparison are in
+`selection_decision.json`. No final scene informed the choice.
+
+The selected model was materialized into `selected_act_final_single/` with
+checkpoint, normalizer, export, runtime-source hashes, scene identities,
+development evidence, and initial-state contract. Live verification and both
+16-trial queue preflights passed. The **32 isolated final trials started at
+17:03 UTC** on physical GPUs 0 and 1, before the 17:15 latest-start gate.
+Both queues finished by 18:03 UTC. Each queue was configured to stop on an
+invalid trial rather than silently skip it. Rollouts include one-second video
+frames.
+
+### Frozen final assessment
+
+The fixed summarizer verified the selected model and runtime hashes, all 32
+scene identities, independent pre-command initial-state audits, completed
+90-second simulation durations, and official scores. **32/32 were eligible and
+scored, but 0/32 achieved full insertion**. The prespecified target was 29/32
+overall with at least 18/20 SFP and 11/12 SC. Mean official total was **25.70**;
+mean Tier 3 was **22.04**. The SFP subset was **0/20** (mean total 21.04), and
+SC was **0/12** (mean total 33.48). Two SC trials received partial-insertion
+messages, with no full insertion. Eight SFP and one SC trial incurred a
+prohibited-contact penalty; none incurred an excessive-force penalty. The
+largest initial arm-joint deviation among the 32 audits was **0.03177 rad**,
+inside the fixed 0.05-rad limit. These are scene outcomes, not evidence of a
+reliable insertion policy.
+
+Exact per-trial scores and category breakdowns are in
+`selected_act_final_single/final_single_results.json` and the compact
+`final_single_results.md`. The selected checkpoint, normalizer, source hashes,
+and all **32 one-frame-per-second videos plus start/end contact sheets** are
+preserved in `selected_act_final_single/final_review/`; its `manifest.json`
+lists file hashes. Compact copies of all 32 official scoring files, evaluation
+summaries, initial-state audits, per-trial logs, and both queue records are in
+`selected_act_final_single/final_evidence/`. The full raw frame samples remain
+under `/var/tmp/chmin_aic_20260918_act/final32_selected_single/`. Only ACT
+behavior cloning was trained in this experiment. Offline and online SERL were
+not reached. The next model change must use new development scenes; these
+32 final scenes are now a known test set.
 
 The engine's source readiness check was also repaired: stationary joints away
 from home and timeout now fail instead of marking the simulator ready. A pure
@@ -389,7 +457,7 @@ Its 32 focused CPU checks passed, including rejection of mixed-stride checkpoint
 averaging. Short contended GPU probes completed ten finite updates at batch 32
 and 64; the latter used 17.21 GB allocated memory. This establishes feasibility
 for a matched global-batch-128 comparison, not a policy improvement. Insertion
-benefit remains unmeasured. A matched FP32 TorchScript timing check used 20
+benefit was not observed in the nine-scene development check. A matched FP32 TorchScript timing check used 20
 warmups and 100 alternating synchronized samples per model, under concurrent
 DDP: stride 32 p50/p95/p99 = **17.79/25.23/25.96 ms**, stride 16 =
 **20.23/26.35/26.74 ms**. Both were below 200 ms for model computation;
