@@ -55,6 +55,19 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         help="Optional raw Omniverse Kit args forwarded to IsaacLab, for driver/runtime debugging.",
     )
     parser.add_argument("--checkpoint", type=Path, default=None)
+    parser.add_argument("--world-policy-checkpoint", type=Path, default=None)
+    parser.add_argument("--world-policy-online-checkpoint", type=Path, default=None)
+    parser.add_argument(
+        "--world-policy-source",
+        type=Path,
+        default=Path("/data1/chmin/yj/ws_aic/src/dreamer-v4-aic-20260918"),
+    )
+    parser.add_argument(
+        "--world-policy-allow-action-override",
+        action=argparse.BooleanOptionalAction,
+        default=False,
+        help="Allow explicitly configured guide, guard, or exploration commands and record their executed chunks.",
+    )
     parser.add_argument(
         "--act-only",
         action="store_true",
@@ -195,6 +208,19 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser.add_argument("--target-action-guide-preinsert-hover-depth", type=float, default=float("nan"))
     parser.add_argument("--target-action-guide-collect-blend", type=float, default=0.0)
     parser.add_argument("--target-action-guide-collect-steps", type=int, default=0)
+    parser.add_argument(
+        "--target-action-guide-collect-intervention",
+        action=argparse.BooleanOptionalAction,
+        default=False,
+    )
+    parser.add_argument("--target-action-guide-intervention-lateral-m", type=float, default=0.0015)
+    parser.add_argument("--target-action-guide-intervention-orientation-rad", type=float, default=0.05)
+    parser.add_argument(
+        "--target-action-guide-intervention-translation-disagreement-m", type=float, default=0.0005
+    )
+    parser.add_argument(
+        "--target-action-guide-intervention-rotation-disagreement-rad", type=float, default=0.002
+    )
     parser.add_argument("--target-action-guide-collect-decay", action=argparse.BooleanOptionalAction, default=False)
     parser.add_argument("--target-action-guide-prefix-decay", action=argparse.BooleanOptionalAction, default=False)
     parser.add_argument("--target-action-guide-train-executed", action=argparse.BooleanOptionalAction, default=False)
@@ -596,7 +622,23 @@ def build_plan(args: argparse.Namespace, *, inspect_required: bool = True) -> di
     act_only_adapter_hidden_dim = int(getattr(args, "act_only_adapter_hidden_dim", 256))
     act_only_adapter_num_layers = int(getattr(args, "act_only_adapter_num_layers", 2))
     act_only_adapter_activation = str(getattr(args, "act_only_adapter_activation", "gelu"))
+    world_policy_checkpoint = getattr(args, "world_policy_checkpoint", None)
+    adapter_penalty_weight = 0.0 if world_policy_checkpoint is not None else args.adapter_penalty_weight
+    act_preservation_weight = 0.0 if world_policy_checkpoint is not None else args.act_preservation_weight
     checkpoint = (
+        {
+            "path": str(world_policy_checkpoint),
+            "exists": bool(world_policy_checkpoint and world_policy_checkpoint.exists()),
+            "world_policy": True,
+            "vision_offline_serl_config": {
+                "actor_mode": "world_policy",
+                "state_dim": 42,
+                "action_dim": 24,
+                "action_horizon": 4,
+            },
+        }
+        if world_policy_checkpoint is not None
+        else
         {
             "path": None,
             "exists": False,
@@ -622,8 +664,16 @@ def build_plan(args: argparse.Namespace, *, inspect_required: bool = True) -> di
     expert_bc_neighbor_chunk = int(getattr(args, "expert_bc_neighbor_chunk", 8192))
     expert_bc_every = int(getattr(args, "expert_bc_every", 4))
     return {
-        "status": "implemented_short_run_capable",
+        "status": (
+            "world_policy_zero_shot_gate" if world_policy_checkpoint is not None
+            else "implemented_short_run_capable"
+        ),
         "note": (
+            "This loads the full world policy for one-environment, four-command Isaac "
+            "validation or policy-head training. Replay uses one 24D transition per 200 ms "
+            "chunk and stores frozen causal decision features."
+            if world_policy_checkpoint is not None
+            else
             "This inspects a direct visual or legacy ACT checkpoint and records the intended "
             "off-policy Isaac actor-critic configuration. Without --dry-run, this wrapper "
             "launches the Isaac Lab online SERL trainer."
@@ -650,6 +700,8 @@ def build_plan(args: argparse.Namespace, *, inspect_required: bool = True) -> di
         "ram_watchdog_min_available_gb": getattr(args, "ram_watchdog_min_available_gb", 0.0),
         "freeze_act": args.freeze_act,
         "act_only": act_only,
+        "world_policy_checkpoint": None if world_policy_checkpoint is None else str(world_policy_checkpoint),
+        "world_policy_source": str(getattr(args, "world_policy_source", "")),
         "act_only_state_dim": act_only_state_dim,
         "act_only_action_horizon": act_only_action_horizon,
         "act_only_single_action_dim": act_only_single_action_dim,
@@ -672,8 +724,8 @@ def build_plan(args: argparse.Namespace, *, inspect_required: bool = True) -> di
         "expert_bc_max_samples": expert_bc_max_samples,
         "expert_bc_neighbor_chunk": expert_bc_neighbor_chunk,
         "expert_bc_every": expert_bc_every,
-        "adapter_penalty_weight": args.adapter_penalty_weight,
-        "act_preservation_weight": args.act_preservation_weight,
+        "adapter_penalty_weight": adapter_penalty_weight,
+        "act_preservation_weight": act_preservation_weight,
         "target_action_guide_weight": getattr(args, "target_action_guide_weight", 0.0),
         "target_action_guide_mode": getattr(args, "target_action_guide_mode", "axis"),
         "target_action_guide_step_size": getattr(args, "target_action_guide_step_size", 0.001),
@@ -695,6 +747,21 @@ def build_plan(args: argparse.Namespace, *, inspect_required: bool = True) -> di
         ),
         "target_action_guide_collect_blend": getattr(args, "target_action_guide_collect_blend", 0.0),
         "target_action_guide_collect_steps": getattr(args, "target_action_guide_collect_steps", 0),
+        "target_action_guide_collect_intervention": bool(
+            getattr(args, "target_action_guide_collect_intervention", False)
+        ),
+        "target_action_guide_intervention_lateral_m": getattr(
+            args, "target_action_guide_intervention_lateral_m", 0.0015
+        ),
+        "target_action_guide_intervention_orientation_rad": getattr(
+            args, "target_action_guide_intervention_orientation_rad", 0.05
+        ),
+        "target_action_guide_intervention_translation_disagreement_m": getattr(
+            args, "target_action_guide_intervention_translation_disagreement_m", 0.0005
+        ),
+        "target_action_guide_intervention_rotation_disagreement_rad": getattr(
+            args, "target_action_guide_intervention_rotation_disagreement_rad", 0.002
+        ),
         "target_action_guide_collect_decay": bool(getattr(args, "target_action_guide_collect_decay", False)),
         "target_action_guide_prefix_decay": bool(getattr(args, "target_action_guide_prefix_decay", False)),
         "target_action_guide_train_executed": bool(getattr(args, "target_action_guide_train_executed", False)),
@@ -884,6 +951,9 @@ def build_command(args: argparse.Namespace) -> tuple[list[str], dict[str, str]]:
     expert_bc_max_samples = int(getattr(args, "expert_bc_max_samples", 8192))
     expert_bc_neighbor_chunk = int(getattr(args, "expert_bc_neighbor_chunk", 8192))
     expert_bc_every = int(getattr(args, "expert_bc_every", 4))
+    world_policy = getattr(args, "world_policy_checkpoint", None) is not None
+    adapter_penalty_weight = 0.0 if world_policy else args.adapter_penalty_weight
+    act_preservation_weight = 0.0 if world_policy else args.act_preservation_weight
     cmd = [
         args.isaaclab,
         "-p",
@@ -947,9 +1017,9 @@ def build_command(args: argparse.Namespace) -> tuple[list[str], dict[str, str]]:
         "--bc_weight",
         str(bc_weight),
         "--adapter_penalty_weight",
-        str(args.adapter_penalty_weight),
+        str(adapter_penalty_weight),
         "--act_preservation_weight",
-        str(args.act_preservation_weight),
+        str(act_preservation_weight),
         "--target_action_guide_weight",
         str(getattr(args, "target_action_guide_weight", 0.0)),
         "--target_action_guide_mode",
@@ -979,6 +1049,19 @@ def build_command(args: argparse.Namespace) -> tuple[list[str], dict[str, str]]:
         str(getattr(args, "target_action_guide_collect_blend", 0.0)),
         "--target_action_guide_collect_steps",
         str(getattr(args, "target_action_guide_collect_steps", 0)),
+        (
+            "--target_action_guide_collect_intervention"
+            if getattr(args, "target_action_guide_collect_intervention", False)
+            else "--no-target_action_guide_collect_intervention"
+        ),
+        "--target_action_guide_intervention_lateral_m",
+        str(getattr(args, "target_action_guide_intervention_lateral_m", 0.0015)),
+        "--target_action_guide_intervention_orientation_rad",
+        str(getattr(args, "target_action_guide_intervention_orientation_rad", 0.05)),
+        "--target_action_guide_intervention_translation_disagreement_m",
+        str(getattr(args, "target_action_guide_intervention_translation_disagreement_m", 0.0005)),
+        "--target_action_guide_intervention_rotation_disagreement_rad",
+        str(getattr(args, "target_action_guide_intervention_rotation_disagreement_rad", 0.002)),
         "--target_action_guide_collect_decay" if getattr(args, "target_action_guide_collect_decay", False) else "--no-target_action_guide_collect_decay",
         "--target_action_guide_prefix_decay" if getattr(args, "target_action_guide_prefix_decay", False) else "--no-target_action_guide_prefix_decay",
         "--target_action_guide_train_executed" if getattr(args, "target_action_guide_train_executed", False) else "--no-target_action_guide_train_executed",
@@ -1206,7 +1289,28 @@ def build_command(args: argparse.Namespace) -> tuple[list[str], dict[str, str]]:
             ]
         )
     act_only = bool(getattr(args, "act_only", False))
-    if act_only:
+    world_policy_checkpoint = getattr(args, "world_policy_checkpoint", None)
+    if world_policy_checkpoint is not None:
+        args.adapter_penalty_weight = 0.0
+        args.act_preservation_weight = 0.0
+        cmd.extend(
+            [
+                "--world_policy_checkpoint",
+                str(world_policy_checkpoint),
+                "--world_policy_source",
+                str(getattr(args, "world_policy_source")),
+            ]
+        )
+        if getattr(args, "world_policy_online_checkpoint", None) is not None:
+            cmd.extend(
+                [
+                    "--world_policy_online_checkpoint",
+                    str(args.world_policy_online_checkpoint),
+                ]
+            )
+        if bool(getattr(args, "world_policy_allow_action_override", False)):
+            cmd.append("--world_policy_allow_action_override")
+    elif act_only:
         cmd.extend(
             [
                 "--act_only",
@@ -1333,6 +1437,54 @@ def build_command(args: argparse.Namespace) -> tuple[list[str], dict[str, str]]:
 
 
 def validate_launch_inputs(args: argparse.Namespace) -> None:
+    world_policy_checkpoint = getattr(args, "world_policy_checkpoint", None)
+    if world_policy_checkpoint is not None:
+        if not world_policy_checkpoint.exists():
+            raise FileNotFoundError(f"World-policy checkpoint does not exist: {world_policy_checkpoint}")
+        if not Path(args.world_policy_source).exists():
+            raise FileNotFoundError(f"World-policy source checkout does not exist: {args.world_policy_source}")
+        world_policy_online_checkpoint = getattr(args, "world_policy_online_checkpoint", None)
+        if world_policy_online_checkpoint is not None and not world_policy_online_checkpoint.exists():
+            raise FileNotFoundError(
+                f"World-policy online checkpoint does not exist: {world_policy_online_checkpoint}"
+            )
+        if args.checkpoint is not None or args.act_torchscript is not None or bool(args.act_only):
+            raise ValueError("--world-policy-checkpoint is mutually exclusive with ACT/checkpoint modes")
+        if args.episode_config_dir is not None and int(args.near_gate_reset_max_iterations) <= 0:
+            raise ValueError(
+                "--world-policy-checkpoint with --episode-config-dir requires "
+                "--near-gate-reset-max-iterations > 0"
+            )
+        if int(args.num_envs) != 1 or int(args.n_action_steps) != 4:
+            raise ValueError("World-policy training currently requires --num-envs 1 --n-action-steps 4")
+        forbidden = {
+            "--target-action-guide-weight": float(getattr(args, "target_action_guide_weight", 0.0)),
+            "--target-action-guide-collect-blend": float(
+                getattr(args, "target_action_guide_collect_blend", 0.0)
+            ),
+            "--target-action-guide-collect-steps": int(
+                getattr(args, "target_action_guide_collect_steps", 0)
+            ),
+            "--actor-exploration-noise-std": float(
+                getattr(args, "actor_exploration_noise_std", 0.0)
+            ),
+        }
+        changed = {name: value for name, value in forbidden.items() if value != 0}
+        if (
+            bool(getattr(args, "insertion_action_guard", False)) or changed
+        ) and not bool(getattr(args, "world_policy_allow_action_override", False)):
+            raise ValueError(
+                "World-policy action changes require --world-policy-allow-action-override; "
+                f"insertion_action_guard={bool(getattr(args, 'insertion_action_guard', False))}, "
+                f"nonzero={changed}"
+            )
+        if int(args.steps) <= 0:
+            raise ValueError("--steps must be positive")
+        if float(getattr(args, "policy_hz", 20.0)) != 20.0:
+            raise ValueError("World-policy parity requires --policy-hz 20")
+        return
+    if getattr(args, "world_policy_online_checkpoint", None) is not None:
+        raise ValueError("--world-policy-online-checkpoint requires --world-policy-checkpoint")
     if args.act_torchscript is not None and not args.act_torchscript.exists():
         raise FileNotFoundError(f"ACT TorchScript checkpoint does not exist: {args.act_torchscript}")
     if args.act_torchscript is None:

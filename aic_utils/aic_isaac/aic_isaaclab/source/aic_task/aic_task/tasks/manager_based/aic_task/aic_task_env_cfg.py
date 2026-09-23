@@ -32,7 +32,12 @@ from isaaclab.devices.spacemouse import Se3SpaceMouseCfg
 from isaaclab.devices.gamepad import Se3GamepadCfg
 
 from . import mdp
-from .mdp.events import randomize_dome_light, randomize_board_and_parts, reset_robot_tcp_to_episode_start
+from .mdp.events import (
+    randomize_dome_light,
+    randomize_board_and_parts,
+    reset_cable_joints_from_episode,
+    reset_robot_tcp_to_episode_start,
+)
 
 # Resolve asset directory relative to this file (portable across machines)
 _THIS_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -43,21 +48,30 @@ AIC_PARTS_DIR = os.path.join(AIC_ASSET_DIR, "assets")
 EXTENSION_PATH = os.path.dirname(os.path.abspath(__file__))
 
 
-def _camera_render_resolution(default: int = 224) -> int:
-    raw_value = os.environ.get("AIC_ISAAC_CAMERA_RESOLUTION", "").strip()
-    if not raw_value:
-        return default
+def _camera_render_size(default: int = 224) -> tuple[int, int]:
+    """Return (height, width), retaining the legacy square override."""
+
+    square = os.environ.get("AIC_ISAAC_CAMERA_RESOLUTION", "").strip()
+    height = os.environ.get("AIC_ISAAC_CAMERA_HEIGHT", "").strip()
+    width = os.environ.get("AIC_ISAAC_CAMERA_WIDTH", "").strip()
+    if square and (height or width):
+        raise ValueError(
+            "AIC_ISAAC_CAMERA_RESOLUTION cannot be combined with "
+            "AIC_ISAAC_CAMERA_HEIGHT/AIC_ISAAC_CAMERA_WIDTH."
+        )
+    raw_height = height or square or str(default)
+    raw_width = width or square or str(default)
     try:
-        resolution = int(raw_value)
+        resolved = (int(raw_height), int(raw_width))
     except ValueError as exc:
         raise ValueError(
-            f"AIC_ISAAC_CAMERA_RESOLUTION must be a positive integer, got {raw_value!r}."
+            f"Camera height/width must be positive integers, got {raw_height!r}x{raw_width!r}."
         ) from exc
-    if resolution <= 0:
+    if min(resolved) <= 0:
         raise ValueError(
-            f"AIC_ISAAC_CAMERA_RESOLUTION must be a positive integer, got {raw_value!r}."
+            f"Camera height/width must be positive integers, got {raw_height!r}x{raw_width!r}."
         )
-    return resolution
+    return resolved
 
 
 ##
@@ -263,19 +277,25 @@ class AICTaskSceneCfg(InteractiveSceneCfg):
             vertical_aperture=18.627,
             clipping_range=(0.07, 20.0),
         )
-        camera_render_resolution = _camera_render_resolution()
+        camera_render_height, camera_render_width = _camera_render_size()
+        camera_data_types = ["rgb"]
+        if os.environ.get("AIC_ISAAC_HIGHRES_LOCATOR_LABELS", "0").lower() in {"1", "true", "yes"}:
+            camera_data_types.append("instance_id_segmentation_fast")
         print(
             "[AIC task] camera render resolution: "
-            f"{camera_render_resolution}x{camera_render_resolution}",
+            f"{camera_render_width}x{camera_render_height}",
             flush=True,
         )
 
         self.center_camera = TiledCameraCfg(
             prim_path="{ENV_REGEX_NS}/Robot/aic_unified_robot/center_camera_optical/center_camera",
             spawn=_cam_spawn,
-            height=camera_render_resolution,
-            width=camera_render_resolution,
-            data_types=["rgb"],
+            height=camera_render_height,
+            width=camera_render_width,
+            data_types=camera_data_types,
+            update_latest_camera_pose=True,
+            colorize_instance_segmentation=False,
+            colorize_instance_id_segmentation=False,
             offset=TiledCameraCfg.OffsetCfg(
                 pos=(0.0, 0.0, 0.0),
                 rot=(1.0, 0.0, 0.0, 0.0),
@@ -285,9 +305,12 @@ class AICTaskSceneCfg(InteractiveSceneCfg):
         self.left_camera = TiledCameraCfg(
             prim_path="{ENV_REGEX_NS}/Robot/aic_unified_robot/left_camera_optical/left_camera",
             spawn=_cam_spawn,
-            height=camera_render_resolution,
-            width=camera_render_resolution,
-            data_types=["rgb"],
+            height=camera_render_height,
+            width=camera_render_width,
+            data_types=camera_data_types,
+            update_latest_camera_pose=True,
+            colorize_instance_segmentation=False,
+            colorize_instance_id_segmentation=False,
             offset=TiledCameraCfg.OffsetCfg(
                 pos=(0.0, 0.0, 0.0),
                 rot=(1.0, 0.0, 0.0, 0.0),
@@ -297,9 +320,12 @@ class AICTaskSceneCfg(InteractiveSceneCfg):
         self.right_camera = TiledCameraCfg(
             prim_path="{ENV_REGEX_NS}/Robot/aic_unified_robot/right_camera_optical/right_camera",
             spawn=_cam_spawn,
-            height=camera_render_resolution,
-            width=camera_render_resolution,
-            data_types=["rgb"],
+            height=camera_render_height,
+            width=camera_render_width,
+            data_types=camera_data_types,
+            update_latest_camera_pose=True,
+            colorize_instance_segmentation=False,
+            colorize_instance_id_segmentation=False,
             offset=TiledCameraCfg.OffsetCfg(
                 pos=(0.0, 0.0, 0.0),
                 rot=(1.0, 0.0, 0.0, 0.0),
@@ -414,6 +440,15 @@ class EventCfg:
                 },
             ],
         },
+    )
+
+    # Optional and deterministic.  Episode YAMLs without ``cable_reset`` keep
+    # the historical behavior.  This must run after episode assignment above
+    # and before the compensating TCP IK reset below.
+    reset_cable_joints_from_episode = EventTerm(
+        func=reset_cable_joints_from_episode,
+        mode="reset",
+        params={"asset_name": "robot"},
     )
 
     reset_robot_tcp_to_episode_start = EventTerm(

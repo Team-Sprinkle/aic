@@ -32,6 +32,59 @@ def test_direct_visual_launch_needs_no_act_and_disables_residual_defaults(tmp_pa
     assert command[command.index("--n_action_steps") + 1] == "1"
 
 
+def test_world_policy_launch_forwards_online_checkpoint_and_requires_explicit_override(
+    tmp_path: Path,
+) -> None:
+    base = tmp_path / "world.pt"
+    online = tmp_path / "online.pt"
+    source = tmp_path / "dreamer"
+    base.touch()
+    online.touch()
+    source.mkdir()
+    args = isaac_online_serl.parse_args(
+        [
+            "--world-policy-checkpoint",
+            str(base),
+            "--world-policy-online-checkpoint",
+            str(online),
+            "--world-policy-source",
+            str(source),
+            "--num-envs",
+            "1",
+            "--n-action-steps",
+            "4",
+            "--steps",
+            "8",
+            "--target-action-guide-collect-intervention",
+            "--target-action-guide-intervention-lateral-m",
+            "0.0005",
+            "--target-action-guide-intervention-orientation-rad",
+            "0.03",
+            "--target-action-guide-intervention-translation-disagreement-m",
+            "0.0001",
+            "--target-action-guide-intervention-rotation-disagreement-rad",
+            "0.0005",
+            "--dry-run",
+        ]
+    )
+    isaac_online_serl.validate_launch_inputs(args)
+    command, _ = isaac_online_serl.build_command(args)
+    assert command[command.index("--world_policy_checkpoint") + 1] == str(base)
+    assert command[command.index("--world_policy_online_checkpoint") + 1] == str(online)
+    assert command[command.index("--n_action_steps") + 1] == "4"
+    assert "--target_action_guide_collect_intervention" in command
+    assert command[command.index("--target_action_guide_intervention_lateral_m") + 1] == "0.0005"
+    assert command[command.index("--target_action_guide_intervention_orientation_rad") + 1] == "0.03"
+    assert command[command.index("--target_action_guide_intervention_translation_disagreement_m") + 1] == "0.0001"
+    assert command[command.index("--target_action_guide_intervention_rotation_disagreement_rad") + 1] == "0.0005"
+
+    args.target_action_guide_collect_blend = 0.5
+    with pytest.raises(ValueError, match="action changes require"):
+        isaac_online_serl.validate_launch_inputs(args)
+    args.world_policy_allow_action_override = True
+    isaac_online_serl.validate_launch_inputs(args)
+
+
 def test_isaac_serl_plan_inspects_adapter_checkpoint(tmp_path: Path) -> None:
     checkpoint = tmp_path / "adapter_serl.pt"
     torch.save(
@@ -646,7 +699,13 @@ scene:
     assert env["AIC_ISAAC_EPISODE_CONFIG_DIR"] == str(args.episode_config_dir)
 
 
-def test_multi_minimal_yaml_materialization_shards_curriculum_order(tmp_path: Path) -> None:
+def test_multi_minimal_yaml_materialization_shards_curriculum_order(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # The rootless Isaac test container intentionally exposes only GPU 0 for
+    # live runs.  This unit test verifies two-shard materialization, so isolate
+    # it from that process-level allocation.
+    monkeypatch.delenv("CUDA_VISIBLE_DEVICES", raising=False)
     requests = tmp_path / "requests"
     requests.mkdir()
     (requests / "a.yaml").write_text(

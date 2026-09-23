@@ -326,6 +326,61 @@ def randomize_board_and_parts(
             )
 
 
+def reset_cable_joints_from_episode(
+    env: ManagerBasedEnv,
+    env_ids: torch.Tensor,
+    asset_name: str = "robot",
+) -> None:
+    """Apply an explicitly recorded cable shape from the current episode.
+
+    The episode must first be assigned by ``randomize_board_and_parts``.  Arm
+    joints are preserved; only the named cable joints are overwritten.  This
+    event deliberately performs no random sampling so a manifest seed/template
+    identifies the exact reset state.
+    """
+    episodes = dict(getattr(env, "_aic_current_episode_by_env", {}) or {})
+    asset = env.scene[asset_name]
+    joint_names = list(asset.joint_names)
+    name_to_id = {str(name): index for index, name in enumerate(joint_names)}
+    joint_pos = asset.data.joint_pos[env_ids].clone()
+    joint_vel = asset.data.joint_vel[env_ids].clone()
+    reports = dict(getattr(env, "_aic_cable_reset_report_by_env", {}) or {})
+    for local_index, env_id in enumerate(env_ids.tolist()):
+        episode = episodes.get(int(env_id)) or {}
+        reset = episode.get("cable_reset")
+        if not reset:
+            reports[int(env_id)] = {"applied": False, "reason": "episode_has_no_cable_reset"}
+            continue
+        names = list(reset.get("joint_names") or [])
+        positions = list(reset.get("joint_positions") or [])
+        if not names or len(names) != len(positions):
+            raise ValueError(
+                f"episode {episode.get('episode_id')} has invalid cable_reset joint arrays"
+            )
+        unknown = [name for name in names if name not in name_to_id]
+        if unknown:
+            raise ValueError(
+                f"episode {episode.get('episode_id')} cable_reset has unknown joints: {unknown[:4]}"
+            )
+        if any(not (str(name).startswith("joint_") and ":" in str(name)) for name in names):
+            raise ValueError("cable_reset may only select the imported cable joint_*:* names")
+        ids = [name_to_id[name] for name in names]
+        joint_pos[local_index, ids] = torch.tensor(positions, device=joint_pos.device, dtype=joint_pos.dtype)
+        joint_vel[local_index, ids] = 0.0
+        reports[int(env_id)] = {
+            "applied": True,
+            "template_id": reset.get("template_id"),
+            "seed": reset.get("seed"),
+            "joint_count": len(ids),
+            "joint_names": names,
+        }
+    asset.write_joint_state_to_sim(joint_pos, joint_vel, env_ids=env_ids)
+    setattr(env, "_aic_cable_reset_report_by_env", reports)
+    order = list(getattr(env, "_aic_reset_event_order", []) or [])
+    order.append({"event": "reset_cable_joints_from_episode", "env_ids": [int(v) for v in env_ids.tolist()], "index": len(order)})
+    setattr(env, "_aic_reset_event_order", order[-64:])
+
+
 def reset_robot_tcp_to_episode_start(
     env: ManagerBasedEnv,
     env_ids: torch.Tensor,

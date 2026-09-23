@@ -3,9 +3,37 @@
 > **Returning to `feat/hybrid-train`?** Start with the [working documentation](docs/README.md):
 > [current status](docs/STATUS.md), [experiment history](docs/EXPERIMENTS.md),
 > [rootless setup and local model testing](docs/LOCAL_WORKFLOW.md), and
-> [artifact locations](outputs_README.md). Reviewed 2026-09-19. The toolkit
-> documentation below describes the challenge infrastructure; older local
-> training reports are historical evidence, not a current performance claim.
+> [artifact locations](outputs_README.md). Reviewed 2026-09-23. The frozen
+> natural-cable pose estimate reached 0.322/0.626 mm lateral median/p95. Generic
+> pose concatenation and an additive correction both failed their control
+> gates. The repaired controller now predicts four complete connector
+> waypoints at 50 ms intervals relative to the port, learned from the recorded
+> teacher target commands. Fixes cover blended-versus-target labels, lost
+> within-chunk paths, checkpoint selection, and live clipping. A deterministic
+> 2.00M-parameter AIC-RPDP BC arm achieved **6/6 local 8 mm seating events** on
+> the fixed near-port development set and **8/8** on eight additional near-port
+> starts, at 19.86 ms p95 inference. A later recorded five-start check reached
+> **4/5** at 20.12 ms p95. These configs override the physical approximately
+> 45.8--48.72 mm SFP depth with an 8 mm surrogate and use privileged near-mouth
+> resets, so they are local-control results rather than normal full-task
+> insertions. The
+> matched diffusion arm reached 2/6; the earlier valid DPPO arm
+> remains at 1/6 and was not continued. The supervised candidate passes its
+> development gate, while the reserved final split remains sealed. See the
+> [RPDP/DPPO execution record](docs/experiments/2026-09-22-rpdp-dppo.md),
+> [generic controller record](docs/experiments/2026-09-22-pose-conditioned-gru-policy.md),
+> and [explicit-correction record](docs/experiments/2026-09-22-explicit-pose-correction.md).
+> The subsequent four-mode SERL continuation exposed policy-mode collapse,
+> repaired full-mixture anchoring and optimizer learning-rate restoration, and
+> recovered the frozen **3/8** metrics-only result without improving it. A new
+> three-camera rerun recorded **1/8 BC, 1/8 selected RL, and 3/8 selected RL
+> plus measured-path backtracking**. Per-episode review shows mainly lateral
+> divergence and port-lip stalls; it does not establish cable-snag recovery.
+> The selected policy remains an SFP-to-NIC near-port diagnostic. SC-to-SC and
+> multi-card cable routing have not been validated. See the
+> [SERL experiment](docs/experiments/2026-09-22-serl-mixture-recovery.md),
+> [video failure analysis](docs/experiments/2026-09-23-serl-video-failure-analysis.md),
+> and [ordered SC cable-snag plan](docs/SC_CABLE_SNAG_RECOVERY_PLAN.md).
 > Superseded plans, reports, and handoffs are in the [historical archive](obsolete/README.md).
 
 [![build](https://github.com/intrinsic-dev/aic/actions/workflows/build.yml/badge.svg)](https://github.com/intrinsic-dev/aic/actions/workflows/build.yml)
