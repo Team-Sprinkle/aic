@@ -1,0 +1,391 @@
+{
+  "classification": "targeted post-fix Gazebo failure reproduction; not exact leaderboard replay",
+  "outcome_label": "official tier-3 scorer",
+  "insertion_event_count_caveat": "Later bags can replay transient-local insertion history; do not use raw event counts as the trial outcome.",
+  "visual_review": {
+    "five_card_sc1": "Cable remained visibly clear of the NIC card field; axial partial insertion, exact microscopic cause unresolved.",
+    "five_card_sc0": "Cable remained visibly clear of the NIC card field; large TCP tracking failure, specific rigid contact versus workspace cause unresolved.",
+    "confirmed_cable_snag_count": 0
+  },
+  "counts": {
+    "full": 6,
+    "partial": 2,
+    "none": 2
+  },
+  "records": [
+    {
+      "trial": "trial_01_exact_q3_repeat_1",
+      "family": "sc_to_sc",
+      "source": "exact_trial_3",
+      "card_rails": [
+        0,
+        1,
+        2
+      ],
+      "target": "sc1",
+      "reason": "intermittent released-scene failure",
+      "total_score": 92.11513097579825,
+      "tier3_score": 75.0,
+      "tier3_message": "Cable insertion successful.",
+      "outcome": "full",
+      "raw_insertion_event_count": 1,
+      "terminal_entrance_relative_xyz_mm": [
+        0.14129989669176002,
+        -0.11778739919857638,
+        15.56931782298876
+      ],
+      "terminal_lateral_mm": 0.18395524514149317,
+      "terminal_axial_mm": 15.56931782298876,
+      "terminal_orientation_deg": 0.023934607158108055,
+      "terminal_tcp_tracking_error_mm": 56.51854407096325,
+      "force_norm_n": {
+        "max": 21.401040190436003,
+        "p95": 21.046689778077823,
+        "p99": 21.190241391943477
+      },
+      "minimum_entrance_distance_mm": 0.13106788277143824,
+      "bulk_analysis_file": "/var/tmp/chmin_aic_targeted_failure_20260923/analysis/bag_trial_01_exact_q3_repeat_1_20260923_174449_913.json"
+    },
+    {
+      "trial": "trial_02_exact_q3_repeat_2",
+      "family": "sc_to_sc",
+      "source": "exact_trial_3",
+      "card_rails": [
+        0,
+        1,
+        2
+      ],
+      "target": "sc1",
+      "reason": "intermittent released-scene failure",
+      "total_score": 92.35220891248505,
+      "tier3_score": 75.0,
+      "tier3_message": "Cable insertion successful.",
+      "outcome": "full",
+      "raw_insertion_event_count": 2,
+      "terminal_entrance_relative_xyz_mm": [
+        0.07507995127853384,
+        -0.15798548630380388,
+        15.565654157240205
+      ],
+      "terminal_lateral_mm": 0.17491830369242786,
+      "terminal_axial_mm": 15.565654157240205,
+      "terminal_orientation_deg": 0.035130794657612555,
+      "terminal_tcp_tracking_error_mm": 55.846842355457675,
+      "force_norm_n": {
+        "max": 21.47144353750895,
+        "p95": 21.03067860467521,
+        "p99": 21.19047902815608
+      },
+      "minimum_entrance_distance_mm": 0.37630680121652454,
+      "bulk_analysis_file": "/var/tmp/chmin_aic_targeted_failure_20260923/analysis/bag_trial_02_exact_q3_repeat_2_20260923_174547_452.json"
+    },
+    {
+      "trial": "trial_03_exact_q3_repeat_3",
+      "family": "sc_to_sc",
+      "source": "exact_trial_3",
+      "card_rails": [
+        0,
+        1,
+        2
+      ],
+      "target": "sc1",
+      "reason": "intermittent released-scene failure",
+      "total_score": 92.24465844472923,
+      "tier3_score": 75.0,
+      "tier3_message": "Cable insertion successful.",
+      "outcome": "full",
+      "raw_insertion_event_count": 3,
+      "terminal_entrance_relative_xyz_mm": [
+        -0.09277064634227727,
+        0.029107982774020588,
+        15.569557786907717
+      ],
+      "terminal_lateral_mm": 0.09722997214818363,
+      "terminal_axial_mm": 15.569557786907717,
+      "terminal_orientation_deg": 0.02734003632002277,
+      "terminal_tcp_tracking_error_mm": 56.203525827979846,
+      "force_norm_n": {
+        "max": 21.484169330912223,
+        "p95": 21.034513455297162,
+        "p99": 21.200418969015576
+      },
+      "minimum_entrance_distance_mm": 0.1338278059027726,
+      "bulk_analysis_file": "/var/tmp/chmin_aic_targeted_failure_20260923/analysis/bag_trial_03_exact_q3_repeat_3_20260923_174650_734.json"
+    },
+    {
+      "trial": "trial_04_five_cards_sc1_repeat_1",
+      "family": "sc_to_sc",
+      "source": "card-occupancy variant",
+      "card_rails": [
+        0,
+        1,
+        2,
+        3,
+        4
+      ],
+      "target": "sc1",
+      "reason": "maximum intervening-card occupancy",
+      "total_score": 63.22265589364284,
+      "tier3_score": 46.05009306402778,
+      "tier3_message": "Partial insertion detected with distance of 0.01m.",
+      "outcome": "partial",
+      "raw_insertion_event_count": 0,
+      "terminal_entrance_relative_xyz_mm": [
+        0.2758835721841102,
+        -0.31390244120798466,
+        10.492108465304684
+      ],
+      "terminal_lateral_mm": 0.4179072720082739,
+      "terminal_axial_mm": 10.492108465304684,
+      "terminal_orientation_deg": 0.07881524283140832,
+      "terminal_tcp_tracking_error_mm": 61.27190095162606,
+      "force_norm_n": {
+        "max": 21.449585838049508,
+        "p95": 21.031737510507316,
+        "p99": 21.215891014815792
+      },
+      "minimum_entrance_distance_mm": 0.35819703503253425,
+      "bulk_analysis_file": "/var/tmp/chmin_aic_targeted_failure_20260923/analysis/bag_trial_04_five_cards_sc1_repeat_1_20260923_174746_509.json"
+    },
+    {
+      "trial": "trial_05_five_cards_sc1_repeat_2",
+      "family": "sc_to_sc",
+      "source": "card-occupancy variant",
+      "card_rails": [
+        0,
+        1,
+        2,
+        3,
+        4
+      ],
+      "target": "sc1",
+      "reason": "maximum intervening-card occupancy",
+      "total_score": 63.592247154353075,
+      "tier3_score": 46.05019135670261,
+      "tier3_message": "Partial insertion detected with distance of 0.01m.",
+      "outcome": "partial",
+      "raw_insertion_event_count": 0,
+      "terminal_entrance_relative_xyz_mm": [
+        0.17430692679998305,
+        -0.20232290648156992,
+        10.492164274584548
+      ],
+      "terminal_lateral_mm": 0.26705329658628957,
+      "terminal_axial_mm": 10.492164274584548,
+      "terminal_orientation_deg": 0.07242665177498724,
+      "terminal_tcp_tracking_error_mm": 61.16513954993189,
+      "force_norm_n": {
+        "max": 21.483271557427646,
+        "p95": 21.048206863765014,
+        "p99": 21.20312597629715
+      },
+      "minimum_entrance_distance_mm": 0.20052314167521365,
+      "bulk_analysis_file": "/var/tmp/chmin_aic_targeted_failure_20260923/analysis/bag_trial_05_five_cards_sc1_repeat_2_20260923_174844_810.json"
+    },
+    {
+      "trial": "trial_06_five_cards_sc0_repeat_1",
+      "family": "sc_to_sc",
+      "source": "target-rail variant",
+      "card_rails": [
+        0,
+        1,
+        2,
+        3,
+        4
+      ],
+      "target": "sc0",
+      "reason": "opposite cable route across card field",
+      "total_score": 36.92957128822604,
+      "tier3_score": 22.292183734142633,
+      "tier3_message": "No insertion detected. Final plug port distance: 0.03m.",
+      "outcome": "none",
+      "raw_insertion_event_count": 0,
+      "terminal_entrance_relative_xyz_mm": [
+        -0.4374105994220945,
+        1.902528184820701,
+        -16.854454561170186
+      ],
+      "terminal_lateral_mm": 1.9521632940212628,
+      "terminal_axial_mm": -16.854454561170186,
+      "terminal_orientation_deg": 0.20693072277357244,
+      "terminal_tcp_tracking_error_mm": 89.0228338121396,
+      "force_norm_n": {
+        "max": 28.033287482543233,
+        "p95": 20.980705953609654,
+        "p99": 21.170242766833137
+      },
+      "minimum_entrance_distance_mm": 15.888192204853762,
+      "bulk_analysis_file": "/var/tmp/chmin_aic_targeted_failure_20260923/analysis/bag_trial_06_five_cards_sc0_repeat_1_20260923_174940_575.json"
+    },
+    {
+      "trial": "trial_07_five_cards_sc0_repeat_2",
+      "family": "sc_to_sc",
+      "source": "target-rail variant",
+      "card_rails": [
+        0,
+        1,
+        2,
+        3,
+        4
+      ],
+      "target": "sc0",
+      "reason": "opposite cable route across card field",
+      "total_score": 32.32777455123892,
+      "tier3_score": 16.33705300653928,
+      "tier3_message": "No insertion detected. Final plug port distance: 0.07m.",
+      "outcome": "none",
+      "raw_insertion_event_count": 0,
+      "terminal_entrance_relative_xyz_mm": [
+        12.192733684258966,
+        13.052765149798436,
+        -51.03113489596112
+      ],
+      "terminal_lateral_mm": 17.861618984600916,
+      "terminal_axial_mm": -51.03113489596112,
+      "terminal_orientation_deg": 0.22220880039058502,
+      "terminal_tcp_tracking_error_mm": 126.46812194557619,
+      "force_norm_n": {
+        "max": 23.76463961385069,
+        "p95": 20.980435503353426,
+        "p99": 21.164079271460203
+      },
+      "minimum_entrance_distance_mm": 53.865642556198914,
+      "bulk_analysis_file": "/var/tmp/chmin_aic_targeted_failure_20260923/analysis/bag_trial_07_five_cards_sc0_repeat_2_20260923_175041_450.json"
+    },
+    {
+      "trial": "trial_08_five_cards_grasp_y_pitch_repeat_1",
+      "family": "sc_to_sc",
+      "source": "documented grasp-norm variant",
+      "card_rails": [
+        0,
+        1,
+        2,
+        3,
+        4
+      ],
+      "target": "sc1",
+      "translation_jitter_m": [
+        0.0,
+        -0.002,
+        0.0
+      ],
+      "rotation_jitter_rad": [
+        0.0,
+        -0.04,
+        0.0
+      ],
+      "reason": "previously reproduced grasp-sensitive partial insertion",
+      "total_score": 92.48865751275898,
+      "tier3_score": 75.0,
+      "tier3_message": "Cable insertion successful.",
+      "outcome": "full",
+      "raw_insertion_event_count": 8,
+      "terminal_entrance_relative_xyz_mm": [
+        0.022850798089224522,
+        0.08301110386337886,
+        15.569177339676665
+      ],
+      "terminal_lateral_mm": 0.08609879405619558,
+      "terminal_axial_mm": 15.569177339676665,
+      "terminal_orientation_deg": 0.02496854466978084,
+      "terminal_tcp_tracking_error_mm": 57.53184249317701,
+      "force_norm_n": {
+        "max": 21.322216974267896,
+        "p95": 21.010099942934076,
+        "p99": 21.165940220011375
+      },
+      "minimum_entrance_distance_mm": 0.2655846795112388,
+      "bulk_analysis_file": "/var/tmp/chmin_aic_targeted_failure_20260923/analysis/bag_trial_08_five_cards_grasp_y_pitch_repeat_1_20260923_175145_930.json"
+    },
+    {
+      "trial": "trial_09_five_cards_grasp_y_pitch_repeat_2",
+      "family": "sc_to_sc",
+      "source": "documented grasp-norm variant",
+      "card_rails": [
+        0,
+        1,
+        2,
+        3,
+        4
+      ],
+      "target": "sc1",
+      "translation_jitter_m": [
+        0.0,
+        -0.002,
+        0.0
+      ],
+      "rotation_jitter_rad": [
+        0.0,
+        -0.04,
+        0.0
+      ],
+      "reason": "previously reproduced grasp-sensitive partial insertion",
+      "total_score": 91.97547324960206,
+      "tier3_score": 75.0,
+      "tier3_message": "Cable insertion successful.",
+      "outcome": "full",
+      "raw_insertion_event_count": 9,
+      "terminal_entrance_relative_xyz_mm": [
+        -0.23615598198684085,
+        -0.060583674664054996,
+        15.571307033158233
+      ],
+      "terminal_lateral_mm": 0.2438032597484479,
+      "terminal_axial_mm": 15.571307033158233,
+      "terminal_orientation_deg": 0.030175604995565163,
+      "terminal_tcp_tracking_error_mm": 57.52633430785554,
+      "force_norm_n": {
+        "max": 21.46089872924927,
+        "p95": 21.02074133849861,
+        "p99": 21.205795435093545
+      },
+      "minimum_entrance_distance_mm": 0.2158966891300768,
+      "bulk_analysis_file": "/var/tmp/chmin_aic_targeted_failure_20260923/analysis/bag_trial_09_five_cards_grasp_y_pitch_repeat_2_20260923_175246_585.json"
+    },
+    {
+      "trial": "trial_10_five_cards_grasp_y_pitch_repeat_3",
+      "family": "sc_to_sc",
+      "source": "documented grasp-norm variant",
+      "card_rails": [
+        0,
+        1,
+        2,
+        3,
+        4
+      ],
+      "target": "sc1",
+      "translation_jitter_m": [
+        0.0,
+        -0.002,
+        0.0
+      ],
+      "rotation_jitter_rad": [
+        0.0,
+        -0.04,
+        0.0
+      ],
+      "reason": "previously reproduced grasp-sensitive partial insertion",
+      "total_score": 92.67187177220046,
+      "tier3_score": 75.0,
+      "tier3_message": "Cable insertion successful.",
+      "outcome": "full",
+      "raw_insertion_event_count": 10,
+      "terminal_entrance_relative_xyz_mm": [
+        -0.18179040333354823,
+        0.36145285035450725,
+        15.569069282881376
+      ],
+      "terminal_lateral_mm": 0.40459351672211946,
+      "terminal_axial_mm": 15.569069282881376,
+      "terminal_orientation_deg": 0.023424711731202228,
+      "terminal_tcp_tracking_error_mm": 58.010759856453255,
+      "force_norm_n": {
+        "max": 21.329353796736637,
+        "p95": 21.007890194277188,
+        "p99": 21.165365951769786
+      },
+      "minimum_entrance_distance_mm": 1.0402016621739891,
+      "bulk_analysis_file": "/var/tmp/chmin_aic_targeted_failure_20260923/analysis/bag_trial_10_five_cards_grasp_y_pitch_repeat_3_20260923_175349_511.json"
+    }
+  ]
+}

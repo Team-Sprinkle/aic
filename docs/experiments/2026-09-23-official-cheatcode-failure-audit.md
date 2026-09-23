@@ -201,6 +201,17 @@ sensitive axial SC port blocking. This does not prove cable snags cannot occur;
 it means they should not be called a current production failure until a rollout
 actually records one.
 
+## Targeted follow-up
+
+A later ten-trial diagnostic repeated the exact SC scene, five-card routes to
+both SC rails, and the bounded grasp case. Exact and grasp groups were 3/3 full.
+Both five-card rail-1 runs were near-aligned partial insertions; both rail-0
+runs failed during the larger approach with 89--126 mm terminal TCP tracking
+error. The cable remained visibly clear of the card field. This updates the
+single-run card-count result: five-card outcomes can be worse and intermittent,
+but the recorded failures still do not establish cable snag. See the
+[ranked failure analysis](2026-09-23-ranked-failure-scenarios.md).
+
 ## Artifacts
 
 - Exact machine summary: `artifacts/prod_cheatcode_audit/official_qualification/summary.json`

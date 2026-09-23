@@ -1,0 +1,171 @@
+{
+  "classification": "targeted post-fix Gazebo failure reproduction; not exact leaderboard replay",
+  "source_config": "/data1/chmin/yj/ws_aic/src/aic/artifacts/prod_cheatcode_audit/official_qualification/eval_config.yaml",
+  "trial_count": 10,
+  "trials": [
+    {
+      "trial": "trial_01_exact_q3_repeat_1",
+      "family": "sc_to_sc",
+      "source": "exact_trial_3",
+      "card_rails": [
+        0,
+        1,
+        2
+      ],
+      "target": "sc1",
+      "reason": "intermittent released-scene failure"
+    },
+    {
+      "trial": "trial_02_exact_q3_repeat_2",
+      "family": "sc_to_sc",
+      "source": "exact_trial_3",
+      "card_rails": [
+        0,
+        1,
+        2
+      ],
+      "target": "sc1",
+      "reason": "intermittent released-scene failure"
+    },
+    {
+      "trial": "trial_03_exact_q3_repeat_3",
+      "family": "sc_to_sc",
+      "source": "exact_trial_3",
+      "card_rails": [
+        0,
+        1,
+        2
+      ],
+      "target": "sc1",
+      "reason": "intermittent released-scene failure"
+    },
+    {
+      "trial": "trial_04_five_cards_sc1_repeat_1",
+      "family": "sc_to_sc",
+      "source": "card-occupancy variant",
+      "card_rails": [
+        0,
+        1,
+        2,
+        3,
+        4
+      ],
+      "target": "sc1",
+      "reason": "maximum intervening-card occupancy"
+    },
+    {
+      "trial": "trial_05_five_cards_sc1_repeat_2",
+      "family": "sc_to_sc",
+      "source": "card-occupancy variant",
+      "card_rails": [
+        0,
+        1,
+        2,
+        3,
+        4
+      ],
+      "target": "sc1",
+      "reason": "maximum intervening-card occupancy"
+    },
+    {
+      "trial": "trial_06_five_cards_sc0_repeat_1",
+      "family": "sc_to_sc",
+      "source": "target-rail variant",
+      "card_rails": [
+        0,
+        1,
+        2,
+        3,
+        4
+      ],
+      "target": "sc0",
+      "reason": "opposite cable route across card field"
+    },
+    {
+      "trial": "trial_07_five_cards_sc0_repeat_2",
+      "family": "sc_to_sc",
+      "source": "target-rail variant",
+      "card_rails": [
+        0,
+        1,
+        2,
+        3,
+        4
+      ],
+      "target": "sc0",
+      "reason": "opposite cable route across card field"
+    },
+    {
+      "trial": "trial_08_five_cards_grasp_y_pitch_repeat_1",
+      "family": "sc_to_sc",
+      "source": "documented grasp-norm variant",
+      "card_rails": [
+        0,
+        1,
+        2,
+        3,
+        4
+      ],
+      "target": "sc1",
+      "translation_jitter_m": [
+        0.0,
+        -0.002,
+        0.0
+      ],
+      "rotation_jitter_rad": [
+        0.0,
+        -0.04,
+        0.0
+      ],
+      "reason": "previously reproduced grasp-sensitive partial insertion"
+    },
+    {
+      "trial": "trial_09_five_cards_grasp_y_pitch_repeat_2",
+      "family": "sc_to_sc",
+      "source": "documented grasp-norm variant",
+      "card_rails": [
+        0,
+        1,
+        2,
+        3,
+        4
+      ],
+      "target": "sc1",
+      "translation_jitter_m": [
+        0.0,
+        -0.002,
+        0.0
+      ],
+      "rotation_jitter_rad": [
+        0.0,
+        -0.04,
+        0.0
+      ],
+      "reason": "previously reproduced grasp-sensitive partial insertion"
+    },
+    {
+      "trial": "trial_10_five_cards_grasp_y_pitch_repeat_3",
+      "family": "sc_to_sc",
+      "source": "documented grasp-norm variant",
+      "card_rails": [
+        0,
+        1,
+        2,
+        3,
+        4
+      ],
+      "target": "sc1",
+      "translation_jitter_m": [
+        0.0,
+        -0.002,
+        0.0
+      ],
+      "rotation_jitter_rad": [
+        0.0,
+        -0.04,
+        0.0
+      ],
+      "reason": "previously reproduced grasp-sensitive partial insertion"
+    }
+  ]
+}

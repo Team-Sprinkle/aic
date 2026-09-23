@@ -1,0 +1,130 @@
+{
+  "bulk_root": "/var/tmp/chmin_aic_prod_cheatcode_audit_20260923",
+  "compact_files": [
+    {
+      "path": "artifacts/prod_cheatcode_audit/official_qualification/summary.json",
+      "bytes": 3663,
+      "sha256": "1f2ec70a22b6faf57dcca2e3340239b38a4add850088faab2e7a3eecf272e206"
+    },
+    {
+      "path": "artifacts/prod_cheatcode_audit/official_qualification/eval_config.yaml",
+      "bytes": 11933,
+      "sha256": "9f987c07174481474eec2c4fa21faf7d84dae4743a037b809ed7945efb2e5ef5"
+    },
+    {
+      "path": "artifacts/prod_cheatcode_audit/official_qualification/CheatCode_official.py",
+      "bytes": 9288,
+      "sha256": "f118a2fe82cb074bfa8780d702ea3fa56f0c9de99953fd228b24264e21f19b3c"
+    },
+    {
+      "path": "artifacts/prod_cheatcode_audit/official_qualification/runs/run_03/trial_3_analysis.json",
+      "bytes": 388920,
+      "sha256": "270d37f955b622bbf6b30c116310973550ea0dfba6aaf2b9f4101283b051bee0"
+    },
+    {
+      "path": "artifacts/prod_cheatcode_audit/production_family/manifest.json",
+      "bytes": 3835,
+      "sha256": "059bb6f1506ce21f77fde6c36952b7dfdb4d9994c111ea7d51799e49a82d5371"
+    },
+    {
+      "path": "artifacts/prod_cheatcode_audit/production_family/summary.json",
+      "bytes": 5487,
+      "sha256": "71ffdb74f28472456917d20e0fa77b6838445aa1885e77328efcc67f7e767197"
+    },
+    {
+      "path": "artifacts/prod_cheatcode_audit/production_family/trial_11_analysis.json",
+      "bytes": 391643,
+      "sha256": "511c25781aa56af0451e45c71969f488c838999803664554e95e7d82107b45b0"
+    },
+    {
+      "path": "artifacts/prod_cheatcode_audit/production_family_grasp_limit/manifest.json",
+      "bytes": 1281,
+      "sha256": "abbbab1ada14967ea6da8dd9a2b61b28813a1a9cb7b87e5311aea9e12ed58f84"
+    },
+    {
+      "path": "artifacts/prod_cheatcode_audit/production_family_grasp_limit/summary.json",
+      "bytes": 1758,
+      "sha256": "a51f0c36326c58721e1a56794654d2af92a8d765c1d7f2a2b0a7342fbec31d6c"
+    },
+    {
+      "path": "artifacts/prod_cheatcode_audit/production_family_grasp_limit/trial_02_analysis.json",
+      "bytes": 402668,
+      "sha256": "6008f35c8403909e5bebe79a6b93f592c93113750b78807b0de2a02ccff9fbc0"
+    }
+  ],
+  "selected_images": [
+    "docs/images/prod_sc_board_pose_tracking_failure_contact_sheet.jpg",
+    "docs/images/prod_sc_exact_axial_block_contact_sheet.jpg",
+    "docs/images/prod_sc_grasp_partial_contact_sheet.jpg",
+    "docs/images/prod_sc_five_card_axial_partial_contact_sheet.jpg",
+    "docs/images/prod_sc_five_card_rail0_tracking_contact_sheet.jpg"
+  ],
+  "additional_bulk_root": "/var/tmp/chmin_aic_targeted_failure_20260923",
+  "targeted_failure_reproduction": [
+    {
+      "path": "artifacts/prod_cheatcode_audit/targeted_failure_reproduction/commands.sh",
+      "bytes": 502,
+      "sha256": "3f92fd82a41761233e901a3cf34ef6205743b7b4bc9736d4f530dcf7c531afcb"
+    },
+    {
+      "path": "artifacts/prod_cheatcode_audit/targeted_failure_reproduction/eval_config.yaml",
+      "bytes": 30367,
+      "sha256": "72f6f4b441b5ad0fb328c3a97b12aec35107feaa0af7093fdc0da0fbcbbbcf99"
+    },
+    {
+      "path": "artifacts/prod_cheatcode_audit/targeted_failure_reproduction/manifest.json",
+      "bytes": 3709,
+      "sha256": "8558fd053ced8c28908269802499d546807a7cdf5386504557a37d21eec9c957"
+    },
+    {
+      "path": "artifacts/prod_cheatcode_audit/targeted_failure_reproduction/scoring.yaml",
+      "bytes": 8547,
+      "sha256": "22e5ee3b6ef61119a844ca5da9aee4e9ba606473a20c351c1c110890589363a3"
+    },
+    {
+      "path": "artifacts/prod_cheatcode_audit/targeted_failure_reproduction/summary.json",
+      "bytes": 12622,
+      "sha256": "045e208062179b8280a7674b306063cfefc313455ca04c0bacb63614885ab911"
+    },
+    {
+      "path": "artifacts/prod_cheatcode_audit/targeted_failure_reproduction/trial_04_five_card_axial_partial_contact_sheet.jpg",
+      "bytes": 537535,
+      "sha256": "d3b899ca976e742cee4309fbc21a410082bdcff2543af434730837bfe5921350"
+    },
+    {
+      "path": "artifacts/prod_cheatcode_audit/targeted_failure_reproduction/trial_06_five_card_rail0_tracking_contact_sheet.jpg",
+      "bytes": 610225,
+      "sha256": "1f8feb9dc3174775459cef451bc0780e17bfecd53a58f5e847f6b7a8b2e3cc0c"
+    },
+    {
+      "path": "artifacts/prod_cheatcode_audit/targeted_failure_reproduction/videos/trial_04/center.mp4",
+      "bytes": 466578,
+      "sha256": "17ad3c5ffeeee07e7d294e3099df3b4b635bcd4dc1878ff7350185513929d7b8"
+    },
+    {
+      "path": "artifacts/prod_cheatcode_audit/targeted_failure_reproduction/videos/trial_04/left.mp4",
+      "bytes": 618136,
+      "sha256": "8f7744975cbe3fa559fc12b84640902a2709d52f4de929200b5d197d1a23a4b2"
+    },
+    {
+      "path": "artifacts/prod_cheatcode_audit/targeted_failure_reproduction/videos/trial_04/right.mp4",
+      "bytes": 619833,
+      "sha256": "4a9fe88c0d98c81a0888a204a5899c1755b2bd06cf30fa0da0c270624efa45b6"
+    },
+    {
+      "path": "artifacts/prod_cheatcode_audit/targeted_failure_reproduction/videos/trial_06/center.mp4",
+      "bytes": 616750,
+      "sha256": "414f88c34cc6bed1650de7729cb906761f62cf8bdb6467ae6af70427fdc0030a"
+    },
+    {
+      "path": "artifacts/prod_cheatcode_audit/targeted_failure_reproduction/videos/trial_06/left.mp4",
+      "bytes": 887812,
+      "sha256": "95941a930cb90dcf2f9b2b6e82ecdae59873396611cdc741ab423ab046c17187"
+    },
+    {
+      "path": "artifacts/prod_cheatcode_audit/targeted_failure_reproduction/videos/trial_06/right.mp4",
+      "bytes": 691971,
+      "sha256": "70372ba646469acebc19a5e697083834bf56ee277c88d3baa20206ba91cc107b"
+    }
+  ]
+}

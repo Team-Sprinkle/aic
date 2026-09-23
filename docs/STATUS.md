@@ -1,5 +1,24 @@
 # Current experiment status
 
+## Ranked failure scenarios and targeted reproduction (September 23)
+
+A new evidence-based ranking separates learned-policy alignment drift, local
+port-lip blockage, large approach blockage, and unverified cable snag. Ten
+additional post-fix Gazebo SC trials used stock CheatCode. Three exact Trial 3
+repeats and all three bounded grasp-offset repeats inserted fully. Both
+five-card runs to SC rail 1 stopped at nearly aligned partial insertion. Both
+five-card runs to rail 0 failed with 89--126 mm terminal TCP tracking error and
+brief scorer force peaks of 32--47 N.
+
+Camera review showed the cable clear of the NIC card field in these failures.
+They increase the priority of local axial recovery and larger approach-routing
+recovery, but they do not establish cable snag. The ordered continuation is:
+repair the collision-faithful Isaac SC scene, collect local alignment/contact
+incidents first, train matched correlated-exploration and measured-backtrack
+RL arms, then add large obstacle routing. Cable-specific RL remains gated on a
+causal snag incident. See the
+[ranked failure record](experiments/2026-09-23-ranked-failure-scenarios.md).
+
 ## Official Gazebo CheatCode failure audit (September 23)
 
 The previous failure taxonomy mixed Isaac development evidence, broad Gazebo
@@ -19,13 +38,13 @@ an 8.05 mm lateral miss and 72.6 mm TCP tracking error. Of three five-card
 grasp tests at 2 mm translation norm and 0.04 rad rotation norm, two inserted
 and the negative-y/negative-pitch case stopped axially after partial insertion.
 No current production run established a cable snag or named gripper-card
-collision.
+collision. The later targeted suite above shows that five-card outcomes can be
+worse and intermittent even though the visible cable remains clear of cards.
 
-This result parks the attempt to manufacture Isaac cable-snag scenarios as the
-primary continuation. Further recovery work should start from failures actually
-recorded in post-fix Gazebo: intermittent near-aligned SC axial blocking,
-grasp-sensitive partial insertion, and larger approach tracking failures. See
-the [official audit](experiments/2026-09-23-official-cheatcode-failure-audit.md).
+Further recovery work starts from failures actually recorded in post-fix
+Gazebo: intermittent near-aligned SC axial blocking and larger approach
+tracking failures. See the
+[official audit](experiments/2026-09-23-official-cheatcode-failure-audit.md).
 
 ## SC-to-SC mechanics and routing bring-up (September 23)
 

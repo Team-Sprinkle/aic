@@ -1,11 +1,17 @@
 # SC-to-SC cable-snag recovery plan
 
-Status: approved and in execution; SC mechanics gate remains open, 2026-09-23
+Status: reprioritized by observed failures; SC mechanics gate remains open, 2026-09-23
 
 ## Decision and motivation
 
 Continue with perception, port-relative supervised control, and gated online
 RL. Do not restart the parked world-model branch for this experiment.
+
+The [ranked failure audit](experiments/2026-09-23-ranked-failure-scenarios.md)
+now controls execution order. Alignment drift and local axial blockage are
+Priority 1; large approach blockage is Priority 2. Cable snag is Priority 3
+because it remains plausible but has not been reproduced causally in a valid
+current scene. Do not label ordinary five-card failures as cable snags.
 
 The latest SFP-to-NIC video rerun shows that the current measured-path recovery
 can plausibly release a millimeter-scale port-lip contact. It does not establish
@@ -47,6 +53,13 @@ The next required result is a collision-faithful and reachable SC grasp/scene
 contract. Then repeat scripted insertion for every card count 0--5 before
 continuing the bounded discovery set. See the
 [mechanics and routing record](experiments/2026-09-23-sc-mechanics-and-routing.md).
+
+A subsequent ten-trial Gazebo suite added three exact controls, two five-card
+runs to each SC rail, and three bounded grasp repeats. Exact and grasp groups
+were 3/3 full. Rail-1 five-card runs were both near-aligned partial insertions;
+rail-0 runs both had large tracking failures. The cable remained visibly clear
+of the cards. These episodes support local axial and large approach recovery
+curricula, but still provide no accepted cable-snag incident.
 
 The official reversed Gazebo cable includes explicit palm-clearance collision
 exceptions: two endpoint collision groups are removed and the first rope
