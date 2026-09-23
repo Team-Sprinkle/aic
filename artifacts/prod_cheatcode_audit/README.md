@@ -48,3 +48,17 @@ scores. Exact commands and interpretation are in the
 Bulk bags, engine logs, and captured frames remain under the `/var/tmp` roots
 listed there. `artifact_map.json` and `sha256.txt` identify the compact files
 that were preserved here.
+
+## Fixed five-card route probe
+
+`ordinary_broad_followup/cable_route_probe/` contains a second, deliberately
+longer-route comparison on one fixed SC five-card Gazebo scene. Three
+across-card runs yielded one full, one partial, and one no insertion; three
+outside-left runs yielded one full and two partial insertions. The failed
+across-card run brought a cable link close to the main PCB and then nearly
+stopped that link during its failed approach. A lower route is retained as a
+robot-clearance confound. The full [experiment record](../../docs/experiments/2026-09-23-fixed-five-card-route-probe.md)
+explains the missing cable/card contact identity, S3 audit, exact commands,
+videos, and overhead/side cable views. Bulk MCAPs, camera frames, and logs
+remain at `/var/tmp/chmin_aic_cable_route_probe_20260923/`. No model was
+trained.

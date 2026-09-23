@@ -427,5 +427,350 @@
     "artifacts/prod_cheatcode_audit/extract_ordinary_broad_trial.py",
     "artifacts/prod_cheatcode_audit/run_vlm_attempt_replay.sh",
     "artifacts/prod_cheatcode_audit/scan_agent_replay_failures.py"
+  ],
+  "cable_route_probe_bulk_root": "/var/tmp/chmin_aic_cable_route_probe_20260923/",
+  "cable_route_probe_s3_download": "/var/tmp/chmin_aic_s3_nic5_review_20260923/accepted_center.mp4",
+  "cable_route_probe": [
+    {
+      "path": "artifacts/prod_cheatcode_audit/ordinary_broad_followup/cable_route_probe/across_1/eval_config.yaml",
+      "bytes": 4640,
+      "sha256": "c550f7c9ca7e476c25235bdafbac2b7daf98d618083abe26668c3126ffdc72dc"
+    },
+    {
+      "path": "artifacts/prod_cheatcode_audit/ordinary_broad_followup/cable_route_probe/across_1/geometry/cable_geometry_summary.json",
+      "bytes": 900,
+      "sha256": "169c3d93ca7b58d38ed11e0998434f64d9cdb8750e77dcda705168035b851fad"
+    },
+    {
+      "path": "artifacts/prod_cheatcode_audit/ordinary_broad_followup/cable_route_probe/across_1/geometry/cable_overhead_side_force.png",
+      "bytes": 337398,
+      "sha256": "e30480f684d8848c4628743f06a92cd1a39edc583a1a99f05b28a0e0157de145"
+    },
+    {
+      "path": "artifacts/prod_cheatcode_audit/ordinary_broad_followup/cable_route_probe/across_1/geometry/cable_samples.json",
+      "bytes": 317726,
+      "sha256": "9915fab32459298f53970f5baeff879f02154fc3f3ca4913dd0ca49157f7c385"
+    },
+    {
+      "path": "artifacts/prod_cheatcode_audit/ordinary_broad_followup/cable_route_probe/across_1/results/scoring.yaml",
+      "bytes": 977,
+      "sha256": "a77a7fea4cb9ff17bd75978259a33d1cd4300145d75839dbc49c584f36c0b830"
+    },
+    {
+      "path": "artifacts/prod_cheatcode_audit/ordinary_broad_followup/cable_route_probe/across_1/route_plan.json",
+      "bytes": 1945,
+      "sha256": "6c1522ee51d46c9fa118d0277d34fa2642016d0e531620e86915e2a4ca80c961"
+    },
+    {
+      "path": "artifacts/prod_cheatcode_audit/ordinary_broad_followup/cable_route_probe/across_1/trial_analysis.json",
+      "bytes": 271110,
+      "sha256": "478d7293b02aea89769d52dbac5fd13bef3f70b5cc19eb6fe4247b71a8a79366"
+    },
+    {
+      "path": "artifacts/prod_cheatcode_audit/ordinary_broad_followup/cable_route_probe/across_1/visuals/all_cameras_1hz.mp4",
+      "bytes": 2079988,
+      "sha256": "ddf77c587e2b60387d7b349b2d2890d2d403357eb7165084eb630078f96790de"
+    },
+    {
+      "path": "artifacts/prod_cheatcode_audit/ordinary_broad_followup/cable_route_probe/across_1/visuals/five_timepoints.jpg",
+      "bytes": 448272,
+      "sha256": "3ca7b42b5124fa5b952b9fa6887bf4e7e60e90f7bd344818f8c3333de7350ce0"
+    },
+    {
+      "path": "artifacts/prod_cheatcode_audit/ordinary_broad_followup/cable_route_probe/across_2/eval_config.yaml",
+      "bytes": 4640,
+      "sha256": "c550f7c9ca7e476c25235bdafbac2b7daf98d618083abe26668c3126ffdc72dc"
+    },
+    {
+      "path": "artifacts/prod_cheatcode_audit/ordinary_broad_followup/cable_route_probe/across_2/geometry/cable_geometry_summary.json",
+      "bytes": 897,
+      "sha256": "d86d95076c1806cdc02ca2874d94794043f765762151cb81eaf2150d269b684a"
+    },
+    {
+      "path": "artifacts/prod_cheatcode_audit/ordinary_broad_followup/cable_route_probe/across_2/geometry/cable_overhead_side_force.png",
+      "bytes": 314768,
+      "sha256": "b4a754dd1faea99766c14dff9684350529995e6f64717d1e7fe391a4b13f8b4d"
+    },
+    {
+      "path": "artifacts/prod_cheatcode_audit/ordinary_broad_followup/cable_route_probe/across_2/geometry/cable_samples.json",
+      "bytes": 321181,
+      "sha256": "8bc46b250760abb047b5517d0debc400cfe85a2f7d980817641d289b0120c3cb"
+    },
+    {
+      "path": "artifacts/prod_cheatcode_audit/ordinary_broad_followup/cable_route_probe/across_2/results/scoring.yaml",
+      "bytes": 795,
+      "sha256": "079417d3fb2ffcd9d855ccc27a8239ba6317192d1a6bb022cf1e5f9f4af87943"
+    },
+    {
+      "path": "artifacts/prod_cheatcode_audit/ordinary_broad_followup/cable_route_probe/across_2/route_plan.json",
+      "bytes": 1972,
+      "sha256": "0a30c7359275ad770fae695a7f97d87c040207622f23e7d725db8d79c79431a9"
+    },
+    {
+      "path": "artifacts/prod_cheatcode_audit/ordinary_broad_followup/cable_route_probe/across_2/trial_analysis.json",
+      "bytes": 274227,
+      "sha256": "4fb1c265c0712e1c019b6a3c5fe32fbe2bb8b8a24ad896c64ac5c306117bb476"
+    },
+    {
+      "path": "artifacts/prod_cheatcode_audit/ordinary_broad_followup/cable_route_probe/across_2/visuals/all_cameras_1hz.mp4",
+      "bytes": 1913362,
+      "sha256": "f9cd6794d34b62f93f894a60b672eb037814d3095f3b0684c8557309609e2611"
+    },
+    {
+      "path": "artifacts/prod_cheatcode_audit/ordinary_broad_followup/cable_route_probe/across_2/visuals/five_timepoints.jpg",
+      "bytes": 419936,
+      "sha256": "3e934dc0c22d0a59023addc64f364488a6ba2b53ca525b2439cef371f3b3d316"
+    },
+    {
+      "path": "artifacts/prod_cheatcode_audit/ordinary_broad_followup/cable_route_probe/across_3/eval_config.yaml",
+      "bytes": 4640,
+      "sha256": "c550f7c9ca7e476c25235bdafbac2b7daf98d618083abe26668c3126ffdc72dc"
+    },
+    {
+      "path": "artifacts/prod_cheatcode_audit/ordinary_broad_followup/cable_route_probe/across_3/geometry/cable_geometry_summary.json",
+      "bytes": 900,
+      "sha256": "4b562701f0cc758ee53a4feaf0fdcad77d2bff8ad5580f77e7a2d236abedfecd"
+    },
+    {
+      "path": "artifacts/prod_cheatcode_audit/ordinary_broad_followup/cable_route_probe/across_3/geometry/cable_overhead_side_force.png",
+      "bytes": 304675,
+      "sha256": "0421b058df1c1ae5d96f3a530a1d7b3641aab54d384f506cdce4b91f422e17bf"
+    },
+    {
+      "path": "artifacts/prod_cheatcode_audit/ordinary_broad_followup/cable_route_probe/across_3/geometry/cable_samples.json",
+      "bytes": 305475,
+      "sha256": "9cc27dd120daf103ab426912d9a3e54e355a19c55414934835f134de28ebd162"
+    },
+    {
+      "path": "artifacts/prod_cheatcode_audit/ordinary_broad_followup/cable_route_probe/across_3/results/scoring.yaml",
+      "bytes": 969,
+      "sha256": "8c362a7b941c3ae7756e3cc2317bb1e03dd59d63e4b3aec290e565c5c604fd1d"
+    },
+    {
+      "path": "artifacts/prod_cheatcode_audit/ordinary_broad_followup/cable_route_probe/across_3/route_plan.json",
+      "bytes": 1970,
+      "sha256": "6d269aebf2657d96a56df6864427c7ef84aa98f2081a7b10b84956fae315e602"
+    },
+    {
+      "path": "artifacts/prod_cheatcode_audit/ordinary_broad_followup/cable_route_probe/across_3/trial_analysis.json",
+      "bytes": 261927,
+      "sha256": "b8f2a0ec6fb14107aa6bfb8737086747c909bbc8c7d9b2122ec46a5c75042203"
+    },
+    {
+      "path": "artifacts/prod_cheatcode_audit/ordinary_broad_followup/cable_route_probe/across_3/visuals/all_cameras_1hz.mp4",
+      "bytes": 1868671,
+      "sha256": "0f844a5cb1debbf7a6637e81060f4a8d9870be4135ed9d028c0c528e9c4f927b"
+    },
+    {
+      "path": "artifacts/prod_cheatcode_audit/ordinary_broad_followup/cable_route_probe/across_3/visuals/five_timepoints.jpg",
+      "bytes": 426373,
+      "sha256": "a5aa67aef53c2902890aab0dcc150d1719dcdd85d65ca637e97abbb7e4d6917a"
+    },
+    {
+      "path": "artifacts/prod_cheatcode_audit/ordinary_broad_followup/cable_route_probe/low_clearance/eval_config.yaml",
+      "bytes": 4640,
+      "sha256": "c550f7c9ca7e476c25235bdafbac2b7daf98d618083abe26668c3126ffdc72dc"
+    },
+    {
+      "path": "artifacts/prod_cheatcode_audit/ordinary_broad_followup/cable_route_probe/low_clearance/geometry/cable_geometry_summary.json",
+      "bytes": 888,
+      "sha256": "6b43be8dccf77f562fe350e3d8bc65d04207c0a13edd738246eedfc6e7c4cc1e"
+    },
+    {
+      "path": "artifacts/prod_cheatcode_audit/ordinary_broad_followup/cable_route_probe/low_clearance/geometry/cable_overhead_side_force.png",
+      "bytes": 272421,
+      "sha256": "6be6fc8d8e58c3904ccd369a060a51eb8f78f79a94763c48c661f94597c7da85"
+    },
+    {
+      "path": "artifacts/prod_cheatcode_audit/ordinary_broad_followup/cable_route_probe/low_clearance/geometry/cable_samples.json",
+      "bytes": 313641,
+      "sha256": "a3e024b481e70671e2c440a7a2f2394c2d9cab00b708d0f5de6cd0f8d516dbff"
+    },
+    {
+      "path": "artifacts/prod_cheatcode_audit/ordinary_broad_followup/cable_route_probe/low_clearance/results/scoring.yaml",
+      "bytes": 971,
+      "sha256": "5b5de7ceab6d2c4b9ae253b8c4b87b7c2d930ef283ebc8c3b969ac7aa3dc8c96"
+    },
+    {
+      "path": "artifacts/prod_cheatcode_audit/ordinary_broad_followup/cable_route_probe/low_clearance/route_plan.json",
+      "bytes": 1973,
+      "sha256": "d9ea03a2d7b1f12362e73369020f4146ce55fe156ac6c036babb2486b39b0a30"
+    },
+    {
+      "path": "artifacts/prod_cheatcode_audit/ordinary_broad_followup/cable_route_probe/low_clearance/trial_analysis.json",
+      "bytes": 266177,
+      "sha256": "84414cf3906a73b8fabf0586f908546cf2eee474d89165073a180d8ef9663238"
+    },
+    {
+      "path": "artifacts/prod_cheatcode_audit/ordinary_broad_followup/cable_route_probe/low_clearance/visuals/all_cameras_1hz.mp4",
+      "bytes": 1490367,
+      "sha256": "c5d28f63bdafced0d590e2ded46f1fc779a8f24b81c6473d9b7c1d1a0b74b90c"
+    },
+    {
+      "path": "artifacts/prod_cheatcode_audit/ordinary_broad_followup/cable_route_probe/low_clearance/visuals/five_timepoints.jpg",
+      "bytes": 475484,
+      "sha256": "a14dada1292ba5788d9b9f78db2315fbf6f00caa0d245d36d82089370159d861"
+    },
+    {
+      "path": "artifacts/prod_cheatcode_audit/ordinary_broad_followup/cable_route_probe/outside_1/eval_config.yaml",
+      "bytes": 4640,
+      "sha256": "c550f7c9ca7e476c25235bdafbac2b7daf98d618083abe26668c3126ffdc72dc"
+    },
+    {
+      "path": "artifacts/prod_cheatcode_audit/ordinary_broad_followup/cable_route_probe/outside_1/geometry/cable_geometry_summary.json",
+      "bytes": 899,
+      "sha256": "74f7f0dc0742dae40db6eae15834f45fea419c35b19ead5312dbf277b2146dcd"
+    },
+    {
+      "path": "artifacts/prod_cheatcode_audit/ordinary_broad_followup/cable_route_probe/outside_1/geometry/cable_overhead_side_force.png",
+      "bytes": 327282,
+      "sha256": "eefa56e432e3615c01e4310bd66d6ddd148b10c60f946213c4f2a38e2b5299b2"
+    },
+    {
+      "path": "artifacts/prod_cheatcode_audit/ordinary_broad_followup/cable_route_probe/outside_1/geometry/cable_samples.json",
+      "bytes": 301091,
+      "sha256": "01d942be44998bd60359ec890d0b46e6ec8312ce6c6e950d1efb6d6d32413c06"
+    },
+    {
+      "path": "artifacts/prod_cheatcode_audit/ordinary_broad_followup/cable_route_probe/outside_1/results/scoring.yaml",
+      "bytes": 972,
+      "sha256": "965f31a7d1182a2b166244bea0e6a8bd052897c63c3c9dbf756d7d40ee9633fd"
+    },
+    {
+      "path": "artifacts/prod_cheatcode_audit/ordinary_broad_followup/cable_route_probe/outside_1/route_plan.json",
+      "bytes": 1943,
+      "sha256": "05680206931c20390637cdf0d31fe9727faba809c56023da607ca6dc0523b56b"
+    },
+    {
+      "path": "artifacts/prod_cheatcode_audit/ordinary_broad_followup/cable_route_probe/outside_1/trial_analysis.json",
+      "bytes": 255872,
+      "sha256": "99b17205841caff8c19a8d385dd34e87c20a6e82fa04db35819ec717f42fb806"
+    },
+    {
+      "path": "artifacts/prod_cheatcode_audit/ordinary_broad_followup/cable_route_probe/outside_1/visuals/all_cameras_1hz.mp4",
+      "bytes": 1954810,
+      "sha256": "f525d0110c5d38b72db32beb87b4018230940c9a3b247d98f44cc2c99eb9a9f3"
+    },
+    {
+      "path": "artifacts/prod_cheatcode_audit/ordinary_broad_followup/cable_route_probe/outside_1/visuals/five_timepoints.jpg",
+      "bytes": 426926,
+      "sha256": "35105a85f76497e7eb6e6958cf8da3b416134e54ab3bf9d0c5320fcdfdf019b5"
+    },
+    {
+      "path": "artifacts/prod_cheatcode_audit/ordinary_broad_followup/cable_route_probe/outside_2/eval_config.yaml",
+      "bytes": 4640,
+      "sha256": "c550f7c9ca7e476c25235bdafbac2b7daf98d618083abe26668c3126ffdc72dc"
+    },
+    {
+      "path": "artifacts/prod_cheatcode_audit/ordinary_broad_followup/cable_route_probe/outside_2/geometry/cable_geometry_summary.json",
+      "bytes": 902,
+      "sha256": "a4710481e1bebf72307347981b8d30db483fa2e2c6bf67a982598f73e9ad3918"
+    },
+    {
+      "path": "artifacts/prod_cheatcode_audit/ordinary_broad_followup/cable_route_probe/outside_2/geometry/cable_overhead_side_force.png",
+      "bytes": 303723,
+      "sha256": "4217c1012b67929c656a1452c816a8ab129e68910beb766dcff22d4f945c3228"
+    },
+    {
+      "path": "artifacts/prod_cheatcode_audit/ordinary_broad_followup/cable_route_probe/outside_2/geometry/cable_samples.json",
+      "bytes": 338254,
+      "sha256": "1968f26c8ba26ddcf755f5dafb220ef683d08d295a81ce66055c9fa8dd0be2a3"
+    },
+    {
+      "path": "artifacts/prod_cheatcode_audit/ordinary_broad_followup/cable_route_probe/outside_2/results/scoring.yaml",
+      "bytes": 971,
+      "sha256": "ee5bea796f878703b6a8e5e8a36597277b82a2af6e63dd8653c4e1e908c09ab1"
+    },
+    {
+      "path": "artifacts/prod_cheatcode_audit/ordinary_broad_followup/cable_route_probe/outside_2/route_plan.json",
+      "bytes": 1972,
+      "sha256": "2be454c7da7388afc5297f0c42d424076af713f35f19c44b362fc490fde116cf"
+    },
+    {
+      "path": "artifacts/prod_cheatcode_audit/ordinary_broad_followup/cable_route_probe/outside_2/trial_analysis.json",
+      "bytes": 287045,
+      "sha256": "a8764a63a9366ba271d903dd1b7275f8b04844a34bacf4d488eab2d2dc90ea66"
+    },
+    {
+      "path": "artifacts/prod_cheatcode_audit/ordinary_broad_followup/cable_route_probe/outside_2/visuals/all_cameras_1hz.mp4",
+      "bytes": 1980458,
+      "sha256": "b890bdd05512ee84c6fee9485c63e547074172e1fd07c4f3bbe7d4607a76f60e"
+    },
+    {
+      "path": "artifacts/prod_cheatcode_audit/ordinary_broad_followup/cable_route_probe/outside_2/visuals/five_timepoints.jpg",
+      "bytes": 412965,
+      "sha256": "8fc9306709e8377ebabfee82f6ebcae7b0152f5ad73693993237f2b0257f0525"
+    },
+    {
+      "path": "artifacts/prod_cheatcode_audit/ordinary_broad_followup/cable_route_probe/outside_3/eval_config.yaml",
+      "bytes": 4640,
+      "sha256": "c550f7c9ca7e476c25235bdafbac2b7daf98d618083abe26668c3126ffdc72dc"
+    },
+    {
+      "path": "artifacts/prod_cheatcode_audit/ordinary_broad_followup/cable_route_probe/outside_3/geometry/cable_geometry_summary.json",
+      "bytes": 902,
+      "sha256": "087b3f3fabc2348fdc569905925bc3757cc6b781610923b1d3fe0f4516446a56"
+    },
+    {
+      "path": "artifacts/prod_cheatcode_audit/ordinary_broad_followup/cable_route_probe/outside_3/geometry/cable_overhead_side_force.png",
+      "bytes": 308808,
+      "sha256": "7092499304f918455021321902e11773c5ae896760524918f4a3792ce41a8b06"
+    },
+    {
+      "path": "artifacts/prod_cheatcode_audit/ordinary_broad_followup/cable_route_probe/outside_3/geometry/cable_samples.json",
+      "bytes": 304807,
+      "sha256": "bc5eb954d8721ab6cea747bd8fc97f4876bef29c933f8346a929706ee148178a"
+    },
+    {
+      "path": "artifacts/prod_cheatcode_audit/ordinary_broad_followup/cable_route_probe/outside_3/results/scoring.yaml",
+      "bytes": 795,
+      "sha256": "64e8eba6c0c3bf6e9a3c892bd16861194b1ecaab65cfaa82a34b0d8bbf34a1fb"
+    },
+    {
+      "path": "artifacts/prod_cheatcode_audit/ordinary_broad_followup/cable_route_probe/outside_3/route_plan.json",
+      "bytes": 1974,
+      "sha256": "01f6f7ec0033fec279d42803434354ab0ee683c4ed3f6d7bb2f58c5a7d6ccbbd"
+    },
+    {
+      "path": "artifacts/prod_cheatcode_audit/ordinary_broad_followup/cable_route_probe/outside_3/trial_analysis.json",
+      "bytes": 259406,
+      "sha256": "dca3e77df1db655b2ed081492e8d0b8b01c14d96fc46f73a76c4cc4f2eec8a34"
+    },
+    {
+      "path": "artifacts/prod_cheatcode_audit/ordinary_broad_followup/cable_route_probe/outside_3/visuals/all_cameras_1hz.mp4",
+      "bytes": 1946671,
+      "sha256": "3cadb07db2446f4dada8db0459bd46f01ce17ce09ae4db8bd91bc24a53305ffd"
+    },
+    {
+      "path": "artifacts/prod_cheatcode_audit/ordinary_broad_followup/cable_route_probe/outside_3/visuals/five_timepoints.jpg",
+      "bytes": 428935,
+      "sha256": "44fbd2a4b05e58283f1b820feccfa6cefe49a8d170ac72df0f3ccbf67b7e8ff7"
+    },
+    {
+      "path": "artifacts/prod_cheatcode_audit/ordinary_broad_followup/cable_route_probe/stock_control/geometry/cable_geometry_summary.json",
+      "bytes": 873,
+      "sha256": "9f6b31d6007d9f30707982590c99b8e03e75667dd57ae1569c1c021be129a3fd"
+    },
+    {
+      "path": "artifacts/prod_cheatcode_audit/ordinary_broad_followup/cable_route_probe/stock_control/geometry/cable_overhead_side_force.png",
+      "bytes": 298174,
+      "sha256": "1c21eb7b8f10102d492a71babdcb3ff00d71973312dc902ab221b98604c71f5d"
+    },
+    {
+      "path": "artifacts/prod_cheatcode_audit/ordinary_broad_followup/cable_route_probe/stock_control/results/scoring.yaml",
+      "bytes": 852,
+      "sha256": "385a0a22445f90dc577e594afcf6f3ab2fe6d4ab7dbe896e58ee30202b218fa5"
+    },
+    {
+      "path": "artifacts/prod_cheatcode_audit/ordinary_broad_followup/cable_route_probe/summary.json",
+      "bytes": 12033,
+      "sha256": "60cad7fc7955a100f157dc1f19c8f936704fad778a3b51ef86ab77e53aabd7e1"
+    }
+  ],
+  "cable_route_probe_scripts": [
+    "artifacts/prod_cheatcode_audit/CableRouteDiagnostic.py",
+    "artifacts/prod_cheatcode_audit/run_cable_route_diagnostic.sh",
+    "artifacts/prod_cheatcode_audit/analyze_cable_route_bag.py",
+    "artifacts/prod_cheatcode_audit/package_cable_route_diagnostic.py"
   ]
 }

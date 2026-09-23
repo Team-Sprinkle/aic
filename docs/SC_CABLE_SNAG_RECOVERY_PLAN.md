@@ -2,6 +2,15 @@
 
 Status: reprioritized by observed failures; SC mechanics gate remains open, 2026-09-23
 
+The latest [fixed five-card route probe](experiments/2026-09-23-fixed-five-card-route-probe.md)
+created a route-sensitive candidate in collision-normal Gazebo: one of three
+across-card traversals failed with the cable extremely close to a card and
+nearly stationary during the later stalled approach. The other across-card
+runs inserted fully or partially, and three outside-left runs avoided total
+noninsertion. The scorer has no named cable/card contact topic, so this does
+not yet pass the causal snag-data gate. The low-clearance robot-path failure
+is recorded separately. The opposite cable end is free and unconnected.
+
 ## Decision and motivation
 
 Continue with perception, port-relative supervised control, and gated online
@@ -73,6 +82,13 @@ regenerated seed-51500 five-card stock-CheatCode control was partial without
 visible card snag. This narrows the cable investigation to **route-dependent
 transport** and preserves the outside-left bypass as a useful prior, while
 leaving cable-specific RL data collection gated on a recorded causal incident.
+
+The subsequent route probe now provides a fresh failed across-card run with
+measured cable-link positions, force, commanded and measured TCP motion, and
+three-camera video. Its nominally identical repeats had different cable
+clearance and better insertion outcomes. The next missing measurement is
+named cable/card contact or a cable-tension constraint at the stall; no RL
+label is assigned yet.
 
 The official reversed Gazebo cable includes explicit palm-clearance collision
 exceptions: two endpoint collision groups are removed and the first rope

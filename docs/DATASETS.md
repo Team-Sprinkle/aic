@@ -233,11 +233,20 @@ A September 23 follow-up scanned 190 retained SC full-insertion
 `agent_generation/replay_attempts` and replayed one low-score three-card
 VLM/MoveIt joint trajectory. It also checked the one-port/five-card seed-51500
 collection associated with an older cable-catch note. That collection's local
-and checked S3 clean prefixes retain accepted metadata, but the original
+and checked S3 clean prefixes retain the accepted dataset, video, and
+metadata, but the original
 failed route/video from the note is unavailable there. The retained score-1
 three-card attempt failed on a later port-handoff miss; its transient force
 peak should not be labeled a cable snag. See the
 [route and replay audit](experiments/2026-09-23-ordinary-development-cable-audit.md#agentvlm-route-follow-up).
+
+A subsequent [fixed five-card route probe](experiments/2026-09-23-fixed-five-card-route-probe.md)
+downloaded the accepted center-camera MP4 from the collection's S3 clean
+prefix and verified that its SHA-256 matches the local file. The accepted
+video covers attempts 27 and 28. The historical failed seed-51500 recording
+was not found in that clean prefix, the inventoried `datasets/dev/` prefix,
+or the inventoried `ec2_transfer/` prefix. The new route-probe videos are
+fresh Gazebo runs, not recovered historical footage.
 
 Earlier VLM experiments also exist under:
 

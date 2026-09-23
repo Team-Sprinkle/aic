@@ -1,0 +1,29 @@
+{
+  "schema": "aic_cable_route_geometry/v1",
+  "bag": "/audit/results/bag_trial_000001_20260923_222029_561",
+  "sample_count": 184,
+  "peak_force_n": 21.55460431121869,
+  "peak_force_time_s": 71.336594402,
+  "near_peak_main_pcb_center_gap_mm": 15.246594204429135,
+  "near_peak_nearest_card": 0,
+  "near_peak_nearest_cable_link": 6,
+  "minimum_main_pcb_center_gap_mm": 8.579262632626763,
+  "minimum_gap_time_s": 54.7,
+  "minimum_gap_card": 0,
+  "minimum_gap_cable_link": 6,
+  "wrist_force_at_minimum_gap_n": 20.132246511905432,
+  "cable_link5_motion_60_to_80_s_mm": 29.777206779516234,
+  "link5_motion_sample_times_s": [
+    60.228,
+    79.809
+  ],
+  "selected_snapshot_times_s": [
+    0.473,
+    54.7,
+    30.128,
+    45.181,
+    60.228,
+    92.39
+  ],
+  "caveat": "Segment-center proximity to main PCB boxes omits cable radius, card protrusions and named contacts; it cannot establish a snag."
+}

@@ -1,5 +1,27 @@
 # Current experiment status
 
+## Fixed five-card route probe and S3 audit (September 23)
+
+The SC cable's opposite SFP-module end is free. A free end can still drape
+over or catch on the NIC cards. The five-card collection's accepted video
+**was downloaded from S3** and matches the local accepted MP4 byte for byte.
+The original failed seed-51500 VLM/MoveIt video was not found under the
+checked clean, development, or EC2-transfer prefixes; the clean collection
+contains accepted attempts 27 and 28, not that old failed attempt.
+
+A privileged diagnostic route used one fixed generated five-card Gazebo scene,
+normal collisions, and stock CheatCode insertion after a long transport path.
+Across-card runs were **one full, one partial, one none**; outside-left runs
+were **one full, two partial, zero none**. The no-insertion across-card run
+brought a cable segment center to 0.9 mm from a main PCB collider and later
+held it nearly fixed while commanded TCP motion advanced and the plug stayed
+46.7 mm before the port. Successful/partial repeats of the same planned
+across-card route had at least 8.6 mm measured center clearance. A lower
+route failed with the cable far from the cards and is a separate robot-path
+clearance confound. This is a **credible route-sensitive cable-trap candidate,
+not a named cable/card contact or proven causal snag**. No RL or model training
+was run. Review the [fixed-scene comparison, overhead/side plots, and videos](experiments/2026-09-23-fixed-five-card-route-probe.md).
+
 ## Ordinary Gazebo and VLM-route cable follow-up (September 23)
 
 The broad development audit now has **19 valid, clean stock-CheatCode Gazebo

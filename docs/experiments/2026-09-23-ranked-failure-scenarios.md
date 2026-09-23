@@ -41,6 +41,15 @@ route/video is not retained. Cable snag remains an **unresolved,
 route-dependent audit target**, not a label for the current stock-CheatCode
 failures.
 
+The later [fixed five-card route probe](2026-09-23-fixed-five-card-route-probe.md)
+deliberately tested three across-card and three outside-left paths on the
+same Gazebo scene. One across-card run failed with a cable segment within
+0.9 mm of a main PCB and nearly stationary during the subsequent approach;
+its planned-route repeats kept more clearance and inserted fully or partially.
+This raises the priority of instrumenting a **route-sensitive cable-trap
+candidate**, but the existing scorer still lacks named cable/card contact,
+so the accepted causal-label set remains empty.
+
 ## How this list was built
 
 This ranking includes a failure only when at least one saved rollout supports
@@ -156,6 +165,14 @@ make the outcome worse without proving that the cable wrapped around a card.
   regenerated five-card seed-51500 stock-CheatCode control ended partially
   inserted with its cable visually clear of the cards. These do not reproduce
   the historical snag.
+- **New deliberate route test:** in one fixed five-card scene, across-card
+  transport produced one full, one partial, and one no insertion across three
+  runs. Outside-left produced one full and two partial insertions. The
+  no-insertion across run had a 0.9 mm cable-center/main-PCB gap and a nearly
+  stationary cable link during its late TCP stall. Repeats of that nominal
+  route had at least 8.6 mm cable-center clearance. This is a fresh candidate,
+  not a named contact or causal cable-snag label. A lower pass failed much
+  earlier with the cable far from cards and is a robot-clearance confound.
 - **Accepted causal evidence for a trainable incident:** none retained yet. The earlier Isaac “snag” remained after cable
   collisions were disabled and was traced to roughly 128 N of gripper-housing
   contact with a card. The new stock Gazebo videos also show the cable clear
@@ -227,12 +244,14 @@ selection needs cable-specific temporal or visual evidence.
    blocks with normal collisions and train a separate long-retreat/route option.
    The option selector may use image history, robot state, force, measured
    motion, and the predicted pose.
-6. **Keep cable snag as a gated route search.** Try to recover the missing
-   seed-51500 failed VLM/MoveIt artifact, or generate a deliberate direct-route
-   versus outside-left-bypass pair on the same Gazebo scene with cable/card
-   contact identity recorded. Port the resulting incident to Isaac only after
-   its five-card grasp/collision contract is faithful. Do not manufacture a
-   snag label or claim cable recovery from force alone.
+6. **Instrument the route-sensitive cable candidate.** The fixed-scene
+   across-card versus outside-left comparison is now retained. Try to recover
+   the missing historical VLM/MoveIt failure if another backup exists, and
+   add named cable/card contact or cable-tension measurements to the fresh
+   Gazebo run. Verify the stall with a paired mechanics ablation before using
+   it as a training label. Port the incident to Isaac only after its five-card
+   grasp/collision contract is faithful. Do not infer contact identity from
+   force alone.
 7. **Close Isaac-to-Gazebo transfer.** First replay successful Isaac recovery
    behavior as supervised Gazebo fine-tuning data. Then use short incident
    resets for offline critic warm-up and a small amount of online Gazebo RL.

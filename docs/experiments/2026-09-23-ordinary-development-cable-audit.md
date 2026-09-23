@@ -279,3 +279,8 @@ recovery gated on a retained incident with synchronized cable geometry,
 named contact/tension, force, commands, and measured progress. The documented
 outside-left bypass remains a useful route prior. Do not relabel current
 partial insertions or the invalid long-batch failures as snags.
+
+The later [fixed five-card route probe](2026-09-23-fixed-five-card-route-probe.md)
+deliberately compared long across-card and outside-left paths on one scene.
+It produced a new route-sensitive cable-trap candidate, with the scorer's
+contact-identity gap still unresolved.
