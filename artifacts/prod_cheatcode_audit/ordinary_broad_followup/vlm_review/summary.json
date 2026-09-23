@@ -1,0 +1,56 @@
+{
+  "schema": "aic_vlm_route_followup/v1",
+  "date": "2026-09-23",
+  "historical_five_card_note": {
+    "source": "docs/expert_matrix_template_fixes.md#sc-to-sc-nic-bypass-full-insertion-template",
+    "claim": "Older center-camera inspection reported cable caught on NIC stack in SC one-port/five-card seed-51500 run; outside-left bypass later accepted with score 89.17.",
+    "raw_failed_trajectory_or_video_retained_locally": false,
+    "s3_agent_generation_prefix_contents": "accepted_metadata/ and generation_config.json only; failed replay_attempts absent under checked prefix"
+  },
+  "retained_replay_scan": {
+    "attempts": 190,
+    "score_at_most_one": 150,
+    "force_stall_screen_hits": 1,
+    "criterion": "A screen, not a snag label: score <= 1; in the middle 10-80% of a recorded episode, a one-second window has peak force >30 N and measured TCP displacement <3 mm. Overlapping windows sampled every 0.5 s.",
+    "only_screen_hit": "one-card attempt 037; official off-limit contact names wrist collider against enclosure wall, not cable/card"
+  },
+  "archived_three_card_low_score": {
+    "source": "outputs/trajectory_datasets/clean_including_no_insert_trajs/sc_to_sc/agent/sc_ports_2/n100__sc_ports2_nic3_n100/agent_generation/replay_attempts/attempt_000003_candidate_00",
+    "score": 1,
+    "force_peak_n_from_20hz_state": 50.527068027301034,
+    "force_peak_time_s": 21.350000381469727,
+    "tcp_displacement_20_to_22_s_mm": 19.09235011355658,
+    "late_handoff_lateral_error_mm": 13.893437659253097,
+    "late_handoff_axial_error_mm": 51.866753896391266,
+    "route_policy": "camera_left_then_outside_lane_moveit_around_present_nic_cards",
+    "video": "artifacts/prod_cheatcode_audit/ordinary_broad_followup/vlm_review/sc3_003/all_cameras_1hz.mp4",
+    "diagnosis": "Transport force spike was transient while TCP kept moving; later port handoff failed with large lateral error. This is not a verified cable snag."
+  },
+  "exact_scene_and_trajectory_current_replay": {
+    "source_manifest": "/var/tmp/chmin_aic_vlm_route_replay_20260923/sc3_attempt003/manifest.json",
+    "score": 1,
+    "tier3_message": "Task not completed.",
+    "force_peak_n": 33.68756168412473,
+    "terminal_lateral_mm": 15.52590567435704,
+    "terminal_axial_mm": -51.40549482730727,
+    "terminal_orientation_deg": 0.21563404357533789,
+    "late_handoff_lateral_error_mm": 15.524082908357409,
+    "insertion_events": 0,
+    "physics_entity_errors": 0,
+    "video": "artifacts/prod_cheatcode_audit/ordinary_broad_followup/vlm_review/replay_sc3_003/all_cameras_1hz.mp4",
+    "caveat": "Same saved scene and joint trajectory, but current Gazebo image and current local teacher code; not bitwise reproduction of old dynamics."
+  },
+  "regenerated_seed51500_five_card_stock_cheatcode": {
+    "source_request": "artifacts/prod_cheatcode_audit/ordinary_broad_followup/vlm_review/stock_seed51500/request.yaml",
+    "score": 54.50136311050045,
+    "tier3_message": "Partial insertion detected with distance of 0.01m.",
+    "force_peak_n": 27.038577248029867,
+    "terminal_lateral_mm": 0.3880103706873466,
+    "terminal_axial_mm": 2.1780294971265324,
+    "terminal_orientation_deg": 0.06278661961253938,
+    "insertion_events": 0,
+    "video": "artifacts/prod_cheatcode_audit/ordinary_broad_followup/vlm_review/stock_seed51500/all_cameras_1hz.mp4",
+    "caveat": "Regenerated first scene from retained request seed with current generator; direct stock CheatCode is a route control, not replay of missing failed VLM path."
+  },
+  "decision": "Treat historical five-card cable catch as a documented observation with missing raw failed artifact. Current low-score replay and seed stock control show different failures. Do not use them as cable-snag recovery labels. Preserve the documented outside-left routing as a safety prior and collect a named-contact/force/motion incident before cable-specific RL."
+}

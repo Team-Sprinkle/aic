@@ -1,0 +1,22 @@
+{
+  "source_attempt": "/data1/chmin/yj/ws_aic/src/aic/outputs/trajectory_datasets/clean_including_no_insert_trajs/sc_to_sc/agent/sc_ports_2/n100__sc_ports2_nic3_n100/agent_generation/replay_attempts/attempt_000003_candidate_00",
+  "files": {
+    "eval_config.yaml": {
+      "source": "/data1/chmin/yj/ws_aic/src/aic/outputs/trajectory_datasets/clean_including_no_insert_trajs/sc_to_sc/agent/sc_ports_2/n100__sc_ports2_nic3_n100/agent_generation/replay_attempts/attempt_000003_candidate_00/tmp/engine_1_trial_000003.yaml",
+      "sha256": "df371c140cce17b2845a818340608a54e4e5a5873e0b2614d60a3c7f9caa5077"
+    },
+    "smooth_trajectory.json": {
+      "source": "/data1/chmin/yj/ws_aic/src/aic/outputs/trajectory_datasets/clean_including_no_insert_trajs/sc_to_sc/agent/sc_ports_2/n100__sc_ports2_nic3_n100/agent_generation/replay_attempts/attempt_000003_candidate_00/smooth_trajectory.json",
+      "sha256": "2de64b0423df88919deddeef488a7c13e660812c05b51674ee47a7874f28bd62"
+    },
+    "original_scoring.yaml": {
+      "source": "/data1/chmin/yj/ws_aic/src/aic/outputs/trajectory_datasets/clean_including_no_insert_trajs/sc_to_sc/agent/sc_ports_2/n100__sc_ports2_nic3_n100/agent_generation/replay_attempts/attempt_000003_candidate_00/results/trial_1_trial_000003/scoring.yaml",
+      "sha256": "ef687c37a32eb5be2e06f3e93a3a11064cb52eca0bf2a7bc04971ebfe827dd06"
+    },
+    "original_runtime_trace.jsonl": {
+      "source": "/data1/chmin/yj/ws_aic/src/aic/outputs/trajectory_datasets/clean_including_no_insert_trajs/sc_to_sc/agent/sc_ports_2/n100__sc_ports2_nic3_n100/agent_generation/replay_attempts/attempt_000003_candidate_00/runtime_trace.jsonl",
+      "sha256": "fc3834bb55a83dacf9109baa58f99a13c97eb280eb70629e4c4684c91c76e63c"
+    }
+  },
+  "image_digest": "sha256:9aa2ffdbb946d38edde1bac7b5f02a44cfbea26e3b04a9c74e09f14c97472923"
+}

@@ -1,0 +1,52 @@
+{
+  "source": "/var/tmp/chmin_aic_ordinary_broad_20260923/trial_18_quick_motion_force.json",
+  "peak_force_n": 44.701068151313315,
+  "peak_force_time_s": 9.303340196,
+  "windows": [
+    {
+      "start_s": 0,
+      "end_s": 30,
+      "force_max_n": 44.701068151313315,
+      "force_p95_n": 25.791600665612314,
+      "measured_tcp_displacement_mm": 210.26224643075042,
+      "commanded_tcp_target_change_mm": 384.9002931381477,
+      "end_command_error_mm": 188.14782236938927
+    },
+    {
+      "start_s": 30,
+      "end_s": 60,
+      "force_max_n": 21.874092186880148,
+      "force_p95_n": 21.349253411727666,
+      "measured_tcp_displacement_mm": 0.23484979332996608,
+      "commanded_tcp_target_change_mm": 59.07922590670236,
+      "end_command_error_mm": 207.1885587881542
+    },
+    {
+      "start_s": 60,
+      "end_s": 90,
+      "force_max_n": 21.220462993796357,
+      "force_p95_n": 20.734120426337164,
+      "measured_tcp_displacement_mm": 0.2592983681974939,
+      "commanded_tcp_target_change_mm": 56.11653078916082,
+      "end_command_error_mm": 237.832439941544
+    },
+    {
+      "start_s": 90,
+      "end_s": 120,
+      "force_max_n": 20.937585371067556,
+      "force_p95_n": 20.748865049038603,
+      "measured_tcp_displacement_mm": 0.20609860003321864,
+      "commanded_tcp_target_change_mm": 62.624282304523575,
+      "end_command_error_mm": 281.55942894539277
+    },
+    {
+      "start_s": 120,
+      "end_s": 153,
+      "force_max_n": 20.898772450158027,
+      "force_p95_n": 20.624614108752713,
+      "measured_tcp_displacement_mm": 0.16549125331588815,
+      "commanded_tcp_target_change_mm": 13.523010565410885,
+      "end_command_error_mm": 291.94843187139224
+    }
+  ]
+}

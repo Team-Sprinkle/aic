@@ -1,0 +1,827 @@
+{
+  "schema": "aic_ordinary_followups/v1",
+  "suite_manifest": "/var/tmp/chmin_aic_ordinary_broad_20260923/manifest.json",
+  "source_sha256": "9f987c07174481474eec2c4fa21faf7d84dae4743a037b809ed7945efb2e5ef5",
+  "selection_rule": "Latest officially scored attempt with successful model validation, a bag, and zero Gazebo physics-entity errors. Invalid attempts retained below.",
+  "trial_count": 19,
+  "valid_trial_count": 19,
+  "selected_outcomes": {
+    "full": 13,
+    "partial": 5,
+    "none": 1
+  },
+  "records": [
+    {
+      "trial": "trial_01_sfp_cards1_nic0_port1",
+      "family": "sfp_to_nic",
+      "card_count": 1,
+      "target": "nic0/port1",
+      "source": "qualification scaffold with card count, target, and port changed",
+      "selected": {
+        "kind": "broad_batch",
+        "root": "/var/tmp/chmin_aic_ordinary_broad_20260923",
+        "tier1_message": "Model validation succeeded.",
+        "tier3_message": "Cable insertion successful.",
+        "tier3_score": 75,
+        "outcome": "full",
+        "physics_entity_errors": 0,
+        "bag": "/var/tmp/chmin_aic_ordinary_broad_20260923/results/bag_trial_01_sfp_cards1_nic0_port1_20260923_183130_613",
+        "engine_exit": "engine_trials_complete_launcher_stopped",
+        "valid": true
+      },
+      "attempts": [
+        {
+          "kind": "broad_batch",
+          "root": "/var/tmp/chmin_aic_ordinary_broad_20260923",
+          "tier1_message": "Model validation succeeded.",
+          "tier3_message": "Cable insertion successful.",
+          "tier3_score": 75,
+          "outcome": "full",
+          "physics_entity_errors": 0,
+          "bag": "/var/tmp/chmin_aic_ordinary_broad_20260923/results/bag_trial_01_sfp_cards1_nic0_port1_20260923_183130_613",
+          "engine_exit": "engine_trials_complete_launcher_stopped",
+          "valid": true
+        }
+      ]
+    },
+    {
+      "trial": "trial_02_sfp_cards2_nic1_port0",
+      "family": "sfp_to_nic",
+      "card_count": 2,
+      "target": "nic1/port0",
+      "source": "qualification scaffold with card count, target, and port changed",
+      "selected": {
+        "kind": "isolated",
+        "root": "/var/tmp/chmin_aic_ordinary_fresh_20260923/trial_02_sfp_cards2_nic1_port0",
+        "tier1_message": "Model validation succeeded.",
+        "tier3_message": "Partial insertion detected with distance of 0.04m.",
+        "tier3_score": 38.609549807868845,
+        "outcome": "partial",
+        "physics_entity_errors": 0,
+        "bag": "/var/tmp/chmin_aic_ordinary_fresh_20260923/trial_02_sfp_cards2_nic1_port0/results/bag_trial_02_sfp_cards2_nic1_port0_20260923_191040_268",
+        "engine_exit": "all_trials_processed",
+        "valid": true
+      },
+      "attempts": [
+        {
+          "kind": "broad_batch",
+          "root": "/var/tmp/chmin_aic_ordinary_broad_20260923",
+          "tier1_message": "Model validation succeeded.",
+          "tier3_message": "No insertion detected. Final plug port distance: 0.05m.",
+          "tier3_score": 24.501225407718955,
+          "outcome": "none",
+          "physics_entity_errors": 0,
+          "bag": "/var/tmp/chmin_aic_ordinary_broad_20260923/results/bag_trial_02_sfp_cards2_nic1_port0_20260923_183230_175",
+          "engine_exit": "engine_trials_complete_launcher_stopped",
+          "valid": true
+        },
+        {
+          "kind": "isolated",
+          "root": "/var/tmp/chmin_aic_ordinary_fresh_20260923/trial_02_sfp_cards2_nic1_port0",
+          "tier1_message": "Model validation succeeded.",
+          "tier3_message": "Partial insertion detected with distance of 0.04m.",
+          "tier3_score": 38.609549807868845,
+          "outcome": "partial",
+          "physics_entity_errors": 0,
+          "bag": "/var/tmp/chmin_aic_ordinary_fresh_20260923/trial_02_sfp_cards2_nic1_port0/results/bag_trial_02_sfp_cards2_nic1_port0_20260923_191040_268",
+          "engine_exit": "all_trials_processed",
+          "valid": true
+        }
+      ]
+    },
+    {
+      "trial": "trial_03_sfp_cards3_nic2_port1",
+      "family": "sfp_to_nic",
+      "card_count": 3,
+      "target": "nic2/port1",
+      "source": "qualification scaffold with card count, target, and port changed",
+      "selected": {
+        "kind": "broad_batch",
+        "root": "/var/tmp/chmin_aic_ordinary_broad_20260923",
+        "tier1_message": "Model validation succeeded.",
+        "tier3_message": "Cable insertion successful.",
+        "tier3_score": 75,
+        "outcome": "full",
+        "physics_entity_errors": 0,
+        "bag": "/var/tmp/chmin_aic_ordinary_broad_20260923/results/bag_trial_03_sfp_cards3_nic2_port1_20260923_183328_381",
+        "engine_exit": "engine_trials_complete_launcher_stopped",
+        "valid": true
+      },
+      "attempts": [
+        {
+          "kind": "broad_batch",
+          "root": "/var/tmp/chmin_aic_ordinary_broad_20260923",
+          "tier1_message": "Model validation succeeded.",
+          "tier3_message": "Cable insertion successful.",
+          "tier3_score": 75,
+          "outcome": "full",
+          "physics_entity_errors": 0,
+          "bag": "/var/tmp/chmin_aic_ordinary_broad_20260923/results/bag_trial_03_sfp_cards3_nic2_port1_20260923_183328_381",
+          "engine_exit": "engine_trials_complete_launcher_stopped",
+          "valid": true
+        }
+      ]
+    },
+    {
+      "trial": "trial_04_sfp_cards4_nic3_port0",
+      "family": "sfp_to_nic",
+      "card_count": 4,
+      "target": "nic3/port0",
+      "source": "qualification scaffold with card count, target, and port changed",
+      "selected": {
+        "kind": "broad_batch",
+        "root": "/var/tmp/chmin_aic_ordinary_broad_20260923",
+        "tier1_message": "Model validation succeeded.",
+        "tier3_message": "Cable insertion successful.",
+        "tier3_score": 75,
+        "outcome": "full",
+        "physics_entity_errors": 0,
+        "bag": "/var/tmp/chmin_aic_ordinary_broad_20260923/results/bag_trial_04_sfp_cards4_nic3_port0_20260923_183430_982",
+        "engine_exit": "engine_trials_complete_launcher_stopped",
+        "valid": true
+      },
+      "attempts": [
+        {
+          "kind": "broad_batch",
+          "root": "/var/tmp/chmin_aic_ordinary_broad_20260923",
+          "tier1_message": "Model validation succeeded.",
+          "tier3_message": "Cable insertion successful.",
+          "tier3_score": 75,
+          "outcome": "full",
+          "physics_entity_errors": 0,
+          "bag": "/var/tmp/chmin_aic_ordinary_broad_20260923/results/bag_trial_04_sfp_cards4_nic3_port0_20260923_183430_982",
+          "engine_exit": "engine_trials_complete_launcher_stopped",
+          "valid": true
+        }
+      ]
+    },
+    {
+      "trial": "trial_05_sfp_cards5_nic4_port1",
+      "family": "sfp_to_nic",
+      "card_count": 5,
+      "target": "nic4/port1",
+      "source": "qualification scaffold with card count, target, and port changed",
+      "selected": {
+        "kind": "broad_batch",
+        "root": "/var/tmp/chmin_aic_ordinary_broad_20260923",
+        "tier1_message": "Model validation succeeded.",
+        "tier3_message": "Cable insertion successful.",
+        "tier3_score": 75,
+        "outcome": "full",
+        "physics_entity_errors": 0,
+        "bag": "/var/tmp/chmin_aic_ordinary_broad_20260923/results/bag_trial_05_sfp_cards5_nic4_port1_20260923_183532_993",
+        "engine_exit": "engine_trials_complete_launcher_stopped",
+        "valid": true
+      },
+      "attempts": [
+        {
+          "kind": "broad_batch",
+          "root": "/var/tmp/chmin_aic_ordinary_broad_20260923",
+          "tier1_message": "Model validation succeeded.",
+          "tier3_message": "Cable insertion successful.",
+          "tier3_score": 75,
+          "outcome": "full",
+          "physics_entity_errors": 0,
+          "bag": "/var/tmp/chmin_aic_ordinary_broad_20260923/results/bag_trial_05_sfp_cards5_nic4_port1_20260923_183532_993",
+          "engine_exit": "engine_trials_complete_launcher_stopped",
+          "valid": true
+        }
+      ]
+    },
+    {
+      "trial": "trial_06_sc_cards0_sc0",
+      "family": "sc_to_sc",
+      "card_count": 0,
+      "target": "sc0",
+      "source": "qualification scaffold with card count and target changed",
+      "selected": {
+        "kind": "broad_batch",
+        "root": "/var/tmp/chmin_aic_ordinary_broad_20260923",
+        "tier1_message": "Model validation succeeded.",
+        "tier3_message": "Cable insertion successful.",
+        "tier3_score": 75,
+        "outcome": "full",
+        "physics_entity_errors": 0,
+        "bag": "/var/tmp/chmin_aic_ordinary_broad_20260923/results/bag_trial_06_sc_cards0_sc0_20260923_183633_644",
+        "engine_exit": "engine_trials_complete_launcher_stopped",
+        "valid": true
+      },
+      "attempts": [
+        {
+          "kind": "broad_batch",
+          "root": "/var/tmp/chmin_aic_ordinary_broad_20260923",
+          "tier1_message": "Model validation succeeded.",
+          "tier3_message": "Cable insertion successful.",
+          "tier3_score": 75,
+          "outcome": "full",
+          "physics_entity_errors": 0,
+          "bag": "/var/tmp/chmin_aic_ordinary_broad_20260923/results/bag_trial_06_sc_cards0_sc0_20260923_183633_644",
+          "engine_exit": "engine_trials_complete_launcher_stopped",
+          "valid": true
+        }
+      ]
+    },
+    {
+      "trial": "trial_07_sc_cards0_sc1",
+      "family": "sc_to_sc",
+      "card_count": 0,
+      "target": "sc1",
+      "source": "qualification scaffold with card count and target changed",
+      "selected": {
+        "kind": "broad_batch",
+        "root": "/var/tmp/chmin_aic_ordinary_broad_20260923",
+        "tier1_message": "Model validation succeeded.",
+        "tier3_message": "Cable insertion successful.",
+        "tier3_score": 75,
+        "outcome": "full",
+        "physics_entity_errors": 0,
+        "bag": "/var/tmp/chmin_aic_ordinary_broad_20260923/results/bag_trial_07_sc_cards0_sc1_20260923_183740_915",
+        "engine_exit": "engine_trials_complete_launcher_stopped",
+        "valid": true
+      },
+      "attempts": [
+        {
+          "kind": "broad_batch",
+          "root": "/var/tmp/chmin_aic_ordinary_broad_20260923",
+          "tier1_message": "Model validation succeeded.",
+          "tier3_message": "Cable insertion successful.",
+          "tier3_score": 75,
+          "outcome": "full",
+          "physics_entity_errors": 0,
+          "bag": "/var/tmp/chmin_aic_ordinary_broad_20260923/results/bag_trial_07_sc_cards0_sc1_20260923_183740_915",
+          "engine_exit": "engine_trials_complete_launcher_stopped",
+          "valid": true
+        }
+      ]
+    },
+    {
+      "trial": "trial_08_sc_cards1_sc0",
+      "family": "sc_to_sc",
+      "card_count": 1,
+      "target": "sc0",
+      "source": "qualification scaffold with card count and target changed",
+      "selected": {
+        "kind": "isolated",
+        "root": "/var/tmp/chmin_aic_ordinary_fresh_retry_08_20260923/trial_08_sc_cards1_sc0",
+        "tier1_message": "Model validation succeeded.",
+        "tier3_message": "Cable insertion successful.",
+        "tier3_score": 75,
+        "outcome": "full",
+        "physics_entity_errors": 0,
+        "bag": "/var/tmp/chmin_aic_ordinary_fresh_retry_08_20260923/trial_08_sc_cards1_sc0/results/bag_trial_08_sc_cards1_sc0_20260923_193913_068",
+        "engine_exit": "all_trials_processed",
+        "valid": true
+      },
+      "attempts": [
+        {
+          "kind": "broad_batch",
+          "root": "/var/tmp/chmin_aic_ordinary_broad_20260923",
+          "tier1_message": "Model validation succeeded.",
+          "tier3_message": "Cable insertion successful.",
+          "tier3_score": 75,
+          "outcome": "full",
+          "physics_entity_errors": 13442,
+          "bag": "/var/tmp/chmin_aic_ordinary_broad_20260923/results/bag_trial_08_sc_cards1_sc0_20260923_183839_403",
+          "engine_exit": "engine_trials_complete_launcher_stopped",
+          "valid": false
+        },
+        {
+          "kind": "isolated",
+          "root": "/var/tmp/chmin_aic_ordinary_fresh_retry_08_20260923/trial_08_sc_cards1_sc0",
+          "tier1_message": "Model validation succeeded.",
+          "tier3_message": "Cable insertion successful.",
+          "tier3_score": 75,
+          "outcome": "full",
+          "physics_entity_errors": 0,
+          "bag": "/var/tmp/chmin_aic_ordinary_fresh_retry_08_20260923/trial_08_sc_cards1_sc0/results/bag_trial_08_sc_cards1_sc0_20260923_193913_068",
+          "engine_exit": "all_trials_processed",
+          "valid": true
+        }
+      ]
+    },
+    {
+      "trial": "trial_09_sc_cards1_sc1",
+      "family": "sc_to_sc",
+      "card_count": 1,
+      "target": "sc1",
+      "source": "qualification scaffold with card count and target changed",
+      "selected": {
+        "kind": "isolated",
+        "root": "/var/tmp/chmin_aic_ordinary_fresh_retry_20260923/trial_09_sc_cards1_sc1",
+        "tier1_message": "Model validation succeeded.",
+        "tier3_message": "Partial insertion detected with distance of 0.01m.",
+        "tier3_score": 46.0537415355337,
+        "outcome": "partial",
+        "physics_entity_errors": 0,
+        "bag": "/var/tmp/chmin_aic_ordinary_fresh_retry_20260923/trial_09_sc_cards1_sc1/results/bag_trial_09_sc_cards1_sc1_20260923_193552_946",
+        "engine_exit": "all_trials_processed",
+        "valid": true
+      },
+      "attempts": [
+        {
+          "kind": "broad_batch",
+          "root": "/var/tmp/chmin_aic_ordinary_broad_20260923",
+          "tier1_message": "Model validation succeeded.",
+          "tier3_message": "No insertion detected. Final plug port distance: 0.01m.",
+          "tier3_score": 25,
+          "outcome": "none",
+          "physics_entity_errors": 517142,
+          "bag": "/var/tmp/chmin_aic_ordinary_broad_20260923/results/bag_trial_09_sc_cards1_sc1_20260923_183959_834",
+          "engine_exit": "engine_trials_complete_launcher_stopped",
+          "valid": false
+        },
+        {
+          "kind": "isolated",
+          "root": "/var/tmp/chmin_aic_ordinary_fresh_20260923/trial_09_sc_cards1_sc1",
+          "tier1_message": "Model validation failed.",
+          "tier3_message": "Task execution failed",
+          "tier3_score": 0,
+          "outcome": "unscored",
+          "physics_entity_errors": 0,
+          "bag": null,
+          "engine_exit": "invalid_model_validation_overlap",
+          "valid": false
+        },
+        {
+          "kind": "isolated",
+          "root": "/var/tmp/chmin_aic_ordinary_fresh_retry_20260923/trial_09_sc_cards1_sc1",
+          "tier1_message": "Model validation succeeded.",
+          "tier3_message": "Partial insertion detected with distance of 0.01m.",
+          "tier3_score": 46.0537415355337,
+          "outcome": "partial",
+          "physics_entity_errors": 0,
+          "bag": "/var/tmp/chmin_aic_ordinary_fresh_retry_20260923/trial_09_sc_cards1_sc1/results/bag_trial_09_sc_cards1_sc1_20260923_193552_946",
+          "engine_exit": "all_trials_processed",
+          "valid": true
+        }
+      ]
+    },
+    {
+      "trial": "trial_10_sc_cards2_sc0",
+      "family": "sc_to_sc",
+      "card_count": 2,
+      "target": "sc0",
+      "source": "qualification scaffold with card count and target changed",
+      "selected": {
+        "kind": "isolated",
+        "root": "/var/tmp/chmin_aic_ordinary_fresh_retry_20260923/trial_10_sc_cards2_sc0",
+        "tier1_message": "Model validation succeeded.",
+        "tier3_message": "Cable insertion successful.",
+        "tier3_score": 75,
+        "outcome": "full",
+        "physics_entity_errors": 0,
+        "bag": "/var/tmp/chmin_aic_ordinary_fresh_retry_20260923/trial_10_sc_cards2_sc0/results/bag_trial_10_sc_cards2_sc0_20260923_193718_140",
+        "engine_exit": "all_trials_processed",
+        "valid": true
+      },
+      "attempts": [
+        {
+          "kind": "broad_batch",
+          "root": "/var/tmp/chmin_aic_ordinary_broad_20260923",
+          "tier1_message": "Model validation succeeded.",
+          "tier3_message": "No insertion detected. Final plug port distance: 0.35m.",
+          "tier3_score": 0,
+          "outcome": "none",
+          "physics_entity_errors": 612383,
+          "bag": "/var/tmp/chmin_aic_ordinary_broad_20260923/results/bag_trial_10_sc_cards2_sc0_20260923_184341_816",
+          "engine_exit": "engine_trials_complete_launcher_stopped",
+          "valid": false
+        },
+        {
+          "kind": "isolated",
+          "root": "/var/tmp/chmin_aic_ordinary_fresh_20260923/trial_10_sc_cards2_sc0",
+          "tier1_message": null,
+          "tier3_message": "",
+          "tier3_score": null,
+          "outcome": "unscored",
+          "physics_entity_errors": 0,
+          "bag": "/var/tmp/chmin_aic_ordinary_fresh_20260923/trial_10_sc_cards2_sc0/results/bag_trial_10_sc_cards2_sc0_20260923_191651_794",
+          "engine_exit": "invalid_sim_clock_freeze_after_overlap",
+          "valid": false
+        },
+        {
+          "kind": "isolated",
+          "root": "/var/tmp/chmin_aic_ordinary_fresh_retry_20260923/trial_10_sc_cards2_sc0",
+          "tier1_message": "Model validation succeeded.",
+          "tier3_message": "Cable insertion successful.",
+          "tier3_score": 75,
+          "outcome": "full",
+          "physics_entity_errors": 0,
+          "bag": "/var/tmp/chmin_aic_ordinary_fresh_retry_20260923/trial_10_sc_cards2_sc0/results/bag_trial_10_sc_cards2_sc0_20260923_193718_140",
+          "engine_exit": "all_trials_processed",
+          "valid": true
+        }
+      ]
+    },
+    {
+      "trial": "trial_11_sc_cards2_sc1",
+      "family": "sc_to_sc",
+      "card_count": 2,
+      "target": "sc1",
+      "source": "qualification scaffold with card count and target changed",
+      "selected": {
+        "kind": "isolated",
+        "root": "/var/tmp/chmin_aic_ordinary_fresh_20260923/trial_11_sc_cards2_sc1",
+        "tier1_message": "Model validation succeeded.",
+        "tier3_message": "Cable insertion successful.",
+        "tier3_score": 75,
+        "outcome": "full",
+        "physics_entity_errors": 0,
+        "bag": "/var/tmp/chmin_aic_ordinary_fresh_20260923/trial_11_sc_cards2_sc1/results/bag_trial_11_sc_cards2_sc1_20260923_192051_794",
+        "engine_exit": "all_trials_processed",
+        "valid": true
+      },
+      "attempts": [
+        {
+          "kind": "broad_batch",
+          "root": "/var/tmp/chmin_aic_ordinary_broad_20260923",
+          "tier1_message": "Model validation succeeded.",
+          "tier3_message": "No insertion detected. Final plug port distance: 0.05m.",
+          "tier3_score": 18.3663171618423,
+          "outcome": "none",
+          "physics_entity_errors": 545788,
+          "bag": "/var/tmp/chmin_aic_ordinary_broad_20260923/results/bag_trial_11_sc_cards2_sc1_20260923_184649_802",
+          "engine_exit": "engine_trials_complete_launcher_stopped",
+          "valid": false
+        },
+        {
+          "kind": "isolated",
+          "root": "/var/tmp/chmin_aic_ordinary_fresh_20260923/trial_11_sc_cards2_sc1",
+          "tier1_message": "Model validation succeeded.",
+          "tier3_message": "Cable insertion successful.",
+          "tier3_score": 75,
+          "outcome": "full",
+          "physics_entity_errors": 0,
+          "bag": "/var/tmp/chmin_aic_ordinary_fresh_20260923/trial_11_sc_cards2_sc1/results/bag_trial_11_sc_cards2_sc1_20260923_192051_794",
+          "engine_exit": "all_trials_processed",
+          "valid": true
+        }
+      ]
+    },
+    {
+      "trial": "trial_12_sc_cards3_sc0",
+      "family": "sc_to_sc",
+      "card_count": 3,
+      "target": "sc0",
+      "source": "qualification scaffold with card count and target changed",
+      "selected": {
+        "kind": "isolated",
+        "root": "/var/tmp/chmin_aic_ordinary_fresh_20260923/trial_12_sc_cards3_sc0",
+        "tier1_message": "Model validation succeeded.",
+        "tier3_message": "Cable insertion successful.",
+        "tier3_score": 75,
+        "outcome": "full",
+        "physics_entity_errors": 0,
+        "bag": "/var/tmp/chmin_aic_ordinary_fresh_20260923/trial_12_sc_cards3_sc0/results/bag_trial_12_sc_cards3_sc0_20260923_192223_732",
+        "engine_exit": "all_trials_processed",
+        "valid": true
+      },
+      "attempts": [
+        {
+          "kind": "broad_batch",
+          "root": "/var/tmp/chmin_aic_ordinary_broad_20260923",
+          "tier1_message": "Model validation succeeded.",
+          "tier3_message": "No insertion detected. Final plug port distance: 0.15m.",
+          "tier3_score": 0,
+          "outcome": "none",
+          "physics_entity_errors": 531823,
+          "bag": "/var/tmp/chmin_aic_ordinary_broad_20260923/results/bag_trial_12_sc_cards3_sc0_20260923_184942_007",
+          "engine_exit": "engine_trials_complete_launcher_stopped",
+          "valid": false
+        },
+        {
+          "kind": "isolated",
+          "root": "/var/tmp/chmin_aic_ordinary_fresh_20260923/trial_12_sc_cards3_sc0",
+          "tier1_message": "Model validation succeeded.",
+          "tier3_message": "Cable insertion successful.",
+          "tier3_score": 75,
+          "outcome": "full",
+          "physics_entity_errors": 0,
+          "bag": "/var/tmp/chmin_aic_ordinary_fresh_20260923/trial_12_sc_cards3_sc0/results/bag_trial_12_sc_cards3_sc0_20260923_192223_732",
+          "engine_exit": "all_trials_processed",
+          "valid": true
+        }
+      ]
+    },
+    {
+      "trial": "trial_13_sc_cards3_sc1",
+      "family": "sc_to_sc",
+      "card_count": 3,
+      "target": "sc1",
+      "source": "qualification scaffold with card count and target changed",
+      "selected": {
+        "kind": "isolated",
+        "root": "/var/tmp/chmin_aic_ordinary_fresh_20260923/trial_13_sc_cards3_sc1",
+        "tier1_message": "Model validation succeeded.",
+        "tier3_message": "Partial insertion detected with distance of 0.01m.",
+        "tier3_score": 46.05007193564518,
+        "outcome": "partial",
+        "physics_entity_errors": 0,
+        "bag": "/var/tmp/chmin_aic_ordinary_fresh_20260923/trial_13_sc_cards3_sc1/results/bag_trial_13_sc_cards3_sc1_20260923_192357_413",
+        "engine_exit": "all_trials_processed",
+        "valid": true
+      },
+      "attempts": [
+        {
+          "kind": "broad_batch",
+          "root": "/var/tmp/chmin_aic_ordinary_broad_20260923",
+          "tier1_message": "Model validation succeeded.",
+          "tier3_message": "No insertion detected. Final plug port distance: 0.12m.",
+          "tier3_score": 0,
+          "outcome": "none",
+          "physics_entity_errors": 629486,
+          "bag": "/var/tmp/chmin_aic_ordinary_broad_20260923/results/bag_trial_13_sc_cards3_sc1_20260923_185259_501",
+          "engine_exit": "engine_trials_complete_launcher_stopped",
+          "valid": false
+        },
+        {
+          "kind": "isolated",
+          "root": "/var/tmp/chmin_aic_ordinary_fresh_20260923/trial_13_sc_cards3_sc1",
+          "tier1_message": "Model validation succeeded.",
+          "tier3_message": "Partial insertion detected with distance of 0.01m.",
+          "tier3_score": 46.05007193564518,
+          "outcome": "partial",
+          "physics_entity_errors": 0,
+          "bag": "/var/tmp/chmin_aic_ordinary_fresh_20260923/trial_13_sc_cards3_sc1/results/bag_trial_13_sc_cards3_sc1_20260923_192357_413",
+          "engine_exit": "all_trials_processed",
+          "valid": true
+        }
+      ]
+    },
+    {
+      "trial": "trial_14_sc_cards4_sc0",
+      "family": "sc_to_sc",
+      "card_count": 4,
+      "target": "sc0",
+      "source": "qualification scaffold with card count and target changed",
+      "selected": {
+        "kind": "isolated",
+        "root": "/var/tmp/chmin_aic_ordinary_fresh_20260923/trial_14_sc_cards4_sc0",
+        "tier1_message": "Model validation succeeded.",
+        "tier3_message": "Cable insertion successful.",
+        "tier3_score": 75,
+        "outcome": "full",
+        "physics_entity_errors": 0,
+        "bag": "/var/tmp/chmin_aic_ordinary_fresh_20260923/trial_14_sc_cards4_sc0/results/bag_trial_14_sc_cards4_sc0_20260923_192524_936",
+        "engine_exit": "all_trials_processed",
+        "valid": true
+      },
+      "attempts": [
+        {
+          "kind": "broad_batch",
+          "root": "/var/tmp/chmin_aic_ordinary_broad_20260923",
+          "tier1_message": "Model validation succeeded.",
+          "tier3_message": "No insertion detected. Final plug port distance: 0.44m.",
+          "tier3_score": 0,
+          "outcome": "none",
+          "physics_entity_errors": 516901,
+          "bag": "/var/tmp/chmin_aic_ordinary_broad_20260923/results/bag_trial_14_sc_cards4_sc0_20260923_185538_509",
+          "engine_exit": "engine_trials_complete_launcher_stopped",
+          "valid": false
+        },
+        {
+          "kind": "isolated",
+          "root": "/var/tmp/chmin_aic_ordinary_fresh_20260923/trial_14_sc_cards4_sc0",
+          "tier1_message": "Model validation succeeded.",
+          "tier3_message": "Cable insertion successful.",
+          "tier3_score": 75,
+          "outcome": "full",
+          "physics_entity_errors": 0,
+          "bag": "/var/tmp/chmin_aic_ordinary_fresh_20260923/trial_14_sc_cards4_sc0/results/bag_trial_14_sc_cards4_sc0_20260923_192524_936",
+          "engine_exit": "all_trials_processed",
+          "valid": true
+        }
+      ]
+    },
+    {
+      "trial": "trial_15_sc_cards4_sc1",
+      "family": "sc_to_sc",
+      "card_count": 4,
+      "target": "sc1",
+      "source": "qualification scaffold with card count and target changed",
+      "selected": {
+        "kind": "isolated",
+        "root": "/var/tmp/chmin_aic_ordinary_fresh_20260923/trial_15_sc_cards4_sc1",
+        "tier1_message": "Model validation succeeded.",
+        "tier3_message": "Partial insertion detected with distance of 0.01m.",
+        "tier3_score": 46.05118757249989,
+        "outcome": "partial",
+        "physics_entity_errors": 0,
+        "bag": "/var/tmp/chmin_aic_ordinary_fresh_20260923/trial_15_sc_cards4_sc1/results/bag_trial_15_sc_cards4_sc1_20260923_192658_748",
+        "engine_exit": "all_trials_processed",
+        "valid": true
+      },
+      "attempts": [
+        {
+          "kind": "broad_batch",
+          "root": "/var/tmp/chmin_aic_ordinary_broad_20260923",
+          "tier1_message": "Model validation succeeded.",
+          "tier3_message": "No insertion detected. Final plug port distance: 0.29m.",
+          "tier3_score": 0,
+          "outcome": "none",
+          "physics_entity_errors": 277998,
+          "bag": "/var/tmp/chmin_aic_ordinary_broad_20260923/results/bag_trial_15_sc_cards4_sc1_20260923_185739_897",
+          "engine_exit": "engine_trials_complete_launcher_stopped",
+          "valid": false
+        },
+        {
+          "kind": "isolated",
+          "root": "/var/tmp/chmin_aic_ordinary_fresh_20260923/trial_15_sc_cards4_sc1",
+          "tier1_message": "Model validation succeeded.",
+          "tier3_message": "Partial insertion detected with distance of 0.01m.",
+          "tier3_score": 46.05118757249989,
+          "outcome": "partial",
+          "physics_entity_errors": 0,
+          "bag": "/var/tmp/chmin_aic_ordinary_fresh_20260923/trial_15_sc_cards4_sc1/results/bag_trial_15_sc_cards4_sc1_20260923_192658_748",
+          "engine_exit": "all_trials_processed",
+          "valid": true
+        }
+      ]
+    },
+    {
+      "trial": "trial_16_sc_cards5_sc0",
+      "family": "sc_to_sc",
+      "card_count": 5,
+      "target": "sc0",
+      "source": "qualification scaffold with card count and target changed",
+      "selected": {
+        "kind": "isolated",
+        "root": "/var/tmp/chmin_aic_ordinary_fresh_20260923/trial_16_sc_cards5_sc0",
+        "tier1_message": "Model validation succeeded.",
+        "tier3_message": "Cable insertion successful.",
+        "tier3_score": 75,
+        "outcome": "full",
+        "physics_entity_errors": 0,
+        "bag": "/var/tmp/chmin_aic_ordinary_fresh_20260923/trial_16_sc_cards5_sc0/results/bag_trial_16_sc_cards5_sc0_20260923_192830_055",
+        "engine_exit": "all_trials_processed",
+        "valid": true
+      },
+      "attempts": [
+        {
+          "kind": "broad_batch",
+          "root": "/var/tmp/chmin_aic_ordinary_broad_20260923",
+          "tier1_message": "Model validation succeeded.",
+          "tier3_message": "No insertion detected. Final plug port distance: 0.33m.",
+          "tier3_score": 0,
+          "outcome": "none",
+          "physics_entity_errors": 296284,
+          "bag": "/var/tmp/chmin_aic_ordinary_broad_20260923/results/bag_trial_16_sc_cards5_sc0_20260923_185920_189",
+          "engine_exit": "engine_trials_complete_launcher_stopped",
+          "valid": false
+        },
+        {
+          "kind": "isolated",
+          "root": "/var/tmp/chmin_aic_ordinary_fresh_20260923/trial_16_sc_cards5_sc0",
+          "tier1_message": "Model validation succeeded.",
+          "tier3_message": "Cable insertion successful.",
+          "tier3_score": 75,
+          "outcome": "full",
+          "physics_entity_errors": 0,
+          "bag": "/var/tmp/chmin_aic_ordinary_fresh_20260923/trial_16_sc_cards5_sc0/results/bag_trial_16_sc_cards5_sc0_20260923_192830_055",
+          "engine_exit": "all_trials_processed",
+          "valid": true
+        }
+      ]
+    },
+    {
+      "trial": "trial_17_sc_cards5_sc1",
+      "family": "sc_to_sc",
+      "card_count": 5,
+      "target": "sc1",
+      "source": "qualification scaffold with card count and target changed",
+      "selected": {
+        "kind": "isolated",
+        "root": "/var/tmp/chmin_aic_ordinary_fresh_tail_20260923/trial_17_sc_cards5_sc1",
+        "tier1_message": "Model validation succeeded.",
+        "tier3_message": "Cable insertion successful.",
+        "tier3_score": 75,
+        "outcome": "full",
+        "physics_entity_errors": 0,
+        "bag": "/var/tmp/chmin_aic_ordinary_fresh_tail_20260923/trial_17_sc_cards5_sc1/results/bag_trial_17_sc_cards5_sc1_20260923_193023_312",
+        "engine_exit": "all_trials_processed",
+        "valid": true
+      },
+      "attempts": [
+        {
+          "kind": "broad_batch",
+          "root": "/var/tmp/chmin_aic_ordinary_broad_20260923",
+          "tier1_message": "Model validation succeeded.",
+          "tier3_message": "No insertion detected. Final plug port distance: 0.28m.",
+          "tier3_score": 0,
+          "outcome": "none",
+          "physics_entity_errors": 287681,
+          "bag": "/var/tmp/chmin_aic_ordinary_broad_20260923/results/bag_trial_17_sc_cards5_sc1_20260923_190107_235",
+          "engine_exit": "engine_trials_complete_launcher_stopped",
+          "valid": false
+        },
+        {
+          "kind": "isolated",
+          "root": "/var/tmp/chmin_aic_ordinary_fresh_tail_20260923/trial_17_sc_cards5_sc1",
+          "tier1_message": "Model validation succeeded.",
+          "tier3_message": "Cable insertion successful.",
+          "tier3_score": 75,
+          "outcome": "full",
+          "physics_entity_errors": 0,
+          "bag": "/var/tmp/chmin_aic_ordinary_fresh_tail_20260923/trial_17_sc_cards5_sc1/results/bag_trial_17_sc_cards5_sc1_20260923_193023_312",
+          "engine_exit": "all_trials_processed",
+          "valid": true
+        }
+      ]
+    },
+    {
+      "trial": "trial_18_sc_historical_cards5_seed12",
+      "family": "sc_to_sc",
+      "card_count": 5,
+      "target": "sc_port_1",
+      "source": "/data1/chmin/yj/ws_aic/src/aic/outputs/trajectory_datasets/clean_including_no_insert_trajs/sc_to_sc/agent/sc_ports_2/n20__sc_ports2_nic5_full_insert_n20/trials/trial_000012.yaml",
+      "source_sha256": "ba0f1f524d4da890735de284805bfc35e8b6b9e7807b796ef63b6cf7da20fa4a",
+      "historical_policy": "joint_position_then_cheatcode; current replay uses stock CheatCode only",
+      "selected": {
+        "kind": "isolated",
+        "root": "/var/tmp/chmin_aic_ordinary_fresh_tail_20260923/trial_18_sc_historical_cards5_seed12",
+        "tier1_message": "Model validation succeeded.",
+        "tier3_message": "No insertion detected. Final plug port distance: 0.02m.",
+        "tier3_score": 24.798400940026934,
+        "outcome": "none",
+        "physics_entity_errors": 0,
+        "bag": "/var/tmp/chmin_aic_ordinary_fresh_tail_20260923/trial_18_sc_historical_cards5_seed12/results/bag_trial_18_sc_historical_cards5_seed12_20260923_193154_883",
+        "engine_exit": "all_trials_processed",
+        "valid": true
+      },
+      "attempts": [
+        {
+          "kind": "broad_batch",
+          "root": "/var/tmp/chmin_aic_ordinary_broad_20260923",
+          "tier1_message": "Model validation succeeded.",
+          "tier3_message": "No insertion detected. Final plug port distance: 0.24m.",
+          "tier3_score": 0,
+          "outcome": "none",
+          "physics_entity_errors": 528536,
+          "bag": "/var/tmp/chmin_aic_ordinary_broad_20260923/results/bag_trial_18_sc_historical_cards5_seed12_20260923_190305_245",
+          "engine_exit": "engine_trials_complete_launcher_stopped",
+          "valid": false
+        },
+        {
+          "kind": "isolated",
+          "root": "/var/tmp/chmin_aic_ordinary_fresh_tail_20260923/trial_18_sc_historical_cards5_seed12",
+          "tier1_message": "Model validation succeeded.",
+          "tier3_message": "No insertion detected. Final plug port distance: 0.02m.",
+          "tier3_score": 24.798400940026934,
+          "outcome": "none",
+          "physics_entity_errors": 0,
+          "bag": "/var/tmp/chmin_aic_ordinary_fresh_tail_20260923/trial_18_sc_historical_cards5_seed12/results/bag_trial_18_sc_historical_cards5_seed12_20260923_193154_883",
+          "engine_exit": "all_trials_processed",
+          "valid": true
+        }
+      ]
+    },
+    {
+      "trial": "trial_19_sc_historical_cards3_seed4",
+      "family": "sc_to_sc",
+      "card_count": 3,
+      "target": "sc_port_0",
+      "source": "/data1/chmin/yj/ws_aic/src/aic/outputs/trajectory_datasets/clean_including_no_insert_trajs/sc_to_sc/agent/sc_ports_1/n100__sc_ports1_nic3_stop_near_gate_05mm_n100/trials/trial_000004.yaml",
+      "source_sha256": "9b29790c05bda03d0029fabccd1dd679fef54eec83437588b34370beb4aec4cb",
+      "historical_policy": "joint_position_then_cheatcode; current replay uses stock CheatCode only",
+      "selected": {
+        "kind": "isolated",
+        "root": "/var/tmp/chmin_aic_ordinary_fresh_tail_20260923/trial_19_sc_historical_cards3_seed4",
+        "tier1_message": "Model validation succeeded.",
+        "tier3_message": "Partial insertion detected with distance of 0.01m.",
+        "tier3_score": 39.67321642204712,
+        "outcome": "partial",
+        "physics_entity_errors": 0,
+        "bag": "/var/tmp/chmin_aic_ordinary_fresh_tail_20260923/trial_19_sc_historical_cards3_seed4/results/bag_trial_19_sc_historical_cards3_seed4_20260923_193324_378",
+        "engine_exit": "all_trials_processed",
+        "valid": true
+      },
+      "attempts": [
+        {
+          "kind": "broad_batch",
+          "root": "/var/tmp/chmin_aic_ordinary_broad_20260923",
+          "tier1_message": "Model validation succeeded.",
+          "tier3_message": "No insertion detected. Final plug port distance: 0.02m.",
+          "tier3_score": 25,
+          "outcome": "none",
+          "physics_entity_errors": 1110073,
+          "bag": "/var/tmp/chmin_aic_ordinary_broad_20260923/results/bag_trial_19_sc_historical_cards3_seed4_20260923_190557_705",
+          "engine_exit": "engine_trials_complete_launcher_stopped",
+          "valid": false
+        },
+        {
+          "kind": "isolated",
+          "root": "/var/tmp/chmin_aic_ordinary_fresh_tail_20260923/trial_19_sc_historical_cards3_seed4",
+          "tier1_message": "Model validation succeeded.",
+          "tier3_message": "Partial insertion detected with distance of 0.01m.",
+          "tier3_score": 39.67321642204712,
+          "outcome": "partial",
+          "physics_entity_errors": 0,
+          "bag": "/var/tmp/chmin_aic_ordinary_fresh_tail_20260923/trial_19_sc_historical_cards3_seed4/results/bag_trial_19_sc_historical_cards3_seed4_20260923_193324_378",
+          "engine_exit": "all_trials_processed",
+          "valid": true
+        }
+      ]
+    }
+  ],
+  "caveat": "A tier-3 insertion result is not a cable-snag diagnosis. This stratified sample is not an estimate of deployment frequency."
+}

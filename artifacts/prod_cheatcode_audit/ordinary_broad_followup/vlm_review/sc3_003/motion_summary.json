@@ -1,0 +1,18 @@
+{
+  "source_attempt": "outputs/trajectory_datasets/clean_including_no_insert_trajs/sc_to_sc/agent/sc_ports_2/n100__sc_ports2_nic3_n100/agent_generation/replay_attempts/attempt_000003_candidate_00",
+  "score": 1,
+  "target_tcp_source": "first tracking-gate event at 34.9 s; target used only for retrospective analysis",
+  "target_tcp_m": [
+    -0.42528242884517165,
+    0.45922942309128145,
+    0.12202715142765383
+  ],
+  "peak_force_n": 50.527068027301034,
+  "peak_time_s": 21.350000381469727,
+  "force_peak_tcp_xy_distance_to_later_target_mm": 51.01988147411949,
+  "force_peak_tcp_z_to_later_target_mm": 199.36493770084044,
+  "tcp_displacement_20_to_22_s_mm": 19.09235011355658,
+  "terminal_tcp_xy_distance_to_later_target_mm": 19.728062324988564,
+  "scorer_contact_message": "No contact detected (off-limit category only)",
+  "interpretation": "50.5 N peak during transport, but TCP moved 19.1 mm over 20-22 s; no persistent snag. Later handoff/tracking gate failed with lateral error about 13.9 mm."
+}

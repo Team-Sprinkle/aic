@@ -126,5 +126,306 @@
       "bytes": 691971,
       "sha256": "70372ba646469acebc19a5e697083834bf56ee277c88d3baa20206ba91cc107b"
     }
+  ],
+  "ordinary_broad_followup_bulk_roots": [
+    "/var/tmp/chmin_aic_ordinary_broad_20260923/",
+    "/var/tmp/chmin_aic_ordinary_fresh_20260923/",
+    "/var/tmp/chmin_aic_ordinary_fresh_tail_20260923/",
+    "/var/tmp/chmin_aic_ordinary_fresh_retry_20260923/",
+    "/var/tmp/chmin_aic_ordinary_fresh_retry_08_20260923/",
+    "/var/tmp/chmin_aic_vlm_route_replay_20260923/",
+    "/var/tmp/chmin_aic_vlm_seed51500_20260923/"
+  ],
+  "ordinary_broad_followup": [
+    {
+      "path": "artifacts/prod_cheatcode_audit/ordinary_broad_followup/combined_summary.json",
+      "bytes": 36174,
+      "sha256": "41cc3173b356eb3ae0cde6d4633dc1b14658fc943bc9b4e46341d0c8254b85fe"
+    },
+    {
+      "path": "artifacts/prod_cheatcode_audit/ordinary_broad_followup/eval_config.yaml",
+      "bytes": 52029,
+      "sha256": "62dc175e4622baf6947b782756b4d2ed81eaeba37deebb35c34b4eda9d015eef"
+    },
+    {
+      "path": "artifacts/prod_cheatcode_audit/ordinary_broad_followup/historical_summary.json",
+      "bytes": 6006,
+      "sha256": "20fd1adac2b23552c17aabefe06d108758359da64fc80dd64a2171da8c660b29"
+    },
+    {
+      "path": "artifacts/prod_cheatcode_audit/ordinary_broad_followup/manifest.json",
+      "bytes": 5081,
+      "sha256": "70368a1f050a781f2f7884c0ac6807346f10458b29456f6a526d83ece8edf249"
+    },
+    {
+      "path": "artifacts/prod_cheatcode_audit/ordinary_broad_followup/old_sc2_ep030_force_timeline.jpg",
+      "bytes": 337676,
+      "sha256": "f205cbd27cd9188c2cb77ce6a00e86b8f2ef61b7c68c84a83eb946ec248eed38"
+    },
+    {
+      "path": "artifacts/prod_cheatcode_audit/ordinary_broad_followup/old_sc3_ep039_force_motion.png",
+      "bytes": 116408,
+      "sha256": "c57cb462bb655c0536b31110b3f4c0232f9219a9fb03a4aa53a5572da81fd194"
+    },
+    {
+      "path": "artifacts/prod_cheatcode_audit/ordinary_broad_followup/old_sc3_ep039_force_timeline.jpg",
+      "bytes": 595176,
+      "sha256": "932c5a925b15dba2ad609f0ccf8813b1fb94c2b7d46dfb92f88916694dcc6fc8"
+    },
+    {
+      "path": "artifacts/prod_cheatcode_audit/ordinary_broad_followup/trial_02_analysis.json",
+      "bytes": 153357,
+      "sha256": "5ada0d39eac74d6ac95d7146439365481b2045782011ab66cce269082b2791d8"
+    },
+    {
+      "path": "artifacts/prod_cheatcode_audit/ordinary_broad_followup/trial_09_analysis.json",
+      "bytes": 140939,
+      "sha256": "72190bc5a552b0bdfa3a213a0f5dbd19fb7faf5901b6236e7cbe2b66ae5d8f94"
+    },
+    {
+      "path": "artifacts/prod_cheatcode_audit/ordinary_broad_followup/trial_13_analysis.json",
+      "bytes": 144156,
+      "sha256": "756ff17b165205d5b968a074fb6baa5f03a574039b77087b6a0aa32a97f449c1"
+    },
+    {
+      "path": "artifacts/prod_cheatcode_audit/ordinary_broad_followup/trial_15_analysis.json",
+      "bytes": 152259,
+      "sha256": "296625df3036fe443e6b501f90b7f26f6cb196e8100b6f70af0bbcac8ec473e4"
+    },
+    {
+      "path": "artifacts/prod_cheatcode_audit/ordinary_broad_followup/trial_18_analysis.json",
+      "bytes": 157066,
+      "sha256": "e09724d340ca29018cbee65f08329b632d03d923496f54f51a991dbc738c729e"
+    },
+    {
+      "path": "artifacts/prod_cheatcode_audit/ordinary_broad_followup/trial_18_stall_force.png",
+      "bytes": 84286,
+      "sha256": "b075293318e5d841f2317dabec18dda43b96b617669c0af476d98e8bf71d6ed8"
+    },
+    {
+      "path": "artifacts/prod_cheatcode_audit/ordinary_broad_followup/trial_18_stall_metrics.json",
+      "bytes": 1696,
+      "sha256": "90f0ac285303409337dd903340e0cb459629ece9dce1dc9494cfdbc0535dcd9e"
+    },
+    {
+      "path": "artifacts/prod_cheatcode_audit/ordinary_broad_followup/trial_19_analysis.json",
+      "bytes": 150115,
+      "sha256": "2270dbd24e915400948d90241938da978588d48dc6d76b181c979378ea66f2d2"
+    },
+    {
+      "path": "artifacts/prod_cheatcode_audit/ordinary_broad_followup/videos/trial_02/all_cameras_1hz.mp4",
+      "bytes": 755436,
+      "sha256": "2265adcc8d50373f943a17f692f36da5bafd580e8225e3ba8dc0c73bd936450f"
+    },
+    {
+      "path": "artifacts/prod_cheatcode_audit/ordinary_broad_followup/videos/trial_02/five_timepoints.jpg",
+      "bytes": 409011,
+      "sha256": "e3ed7fb333bea7bd82c1ca0d894fe2b2d87da2db8dc2bcfb015f586e19652020"
+    },
+    {
+      "path": "artifacts/prod_cheatcode_audit/ordinary_broad_followup/videos/trial_09/all_cameras_1hz.mp4",
+      "bytes": 865195,
+      "sha256": "cc6ce1375164bf5620af72b968668dc3d65e2a708244972ed421c6d4745a1290"
+    },
+    {
+      "path": "artifacts/prod_cheatcode_audit/ordinary_broad_followup/videos/trial_09/five_timepoints.jpg",
+      "bytes": 409118,
+      "sha256": "854ea3162cb355ad59d907bb5e8575e1d50d7012bcc5c9842ea6b8faa62ff355"
+    },
+    {
+      "path": "artifacts/prod_cheatcode_audit/ordinary_broad_followup/videos/trial_13/all_cameras_1hz.mp4",
+      "bytes": 945793,
+      "sha256": "ab653d3b867f04ade9bbfd886a929985352ce5376e5dfaf8c97ad9862cc48e2c"
+    },
+    {
+      "path": "artifacts/prod_cheatcode_audit/ordinary_broad_followup/videos/trial_13/five_timepoints.jpg",
+      "bytes": 419425,
+      "sha256": "a45170721cb0e12900de3c08eb43d3d3e8e85f8b28276d3ddbc4c21539a14351"
+    },
+    {
+      "path": "artifacts/prod_cheatcode_audit/ordinary_broad_followup/videos/trial_15/all_cameras_1hz.mp4",
+      "bytes": 986455,
+      "sha256": "406ecba8093b09f3fe99617433c1f87db9c7cf6fcad4ccb0f246389e25b1e434"
+    },
+    {
+      "path": "artifacts/prod_cheatcode_audit/ordinary_broad_followup/videos/trial_15/five_timepoints.jpg",
+      "bytes": 427683,
+      "sha256": "bb4b62793b7ade4429b16fef5a371f258832862dbf99ff88c2579a9efb96c8c7"
+    },
+    {
+      "path": "artifacts/prod_cheatcode_audit/ordinary_broad_followup/videos/trial_18/all_cameras_1hz.mp4",
+      "bytes": 967312,
+      "sha256": "5facd413b93fb28f163419df1b2ecc4e0ee506f88231f354d62ce106c2579e6d"
+    },
+    {
+      "path": "artifacts/prod_cheatcode_audit/ordinary_broad_followup/videos/trial_18/five_timepoints.jpg",
+      "bytes": 399608,
+      "sha256": "2a2727de85eaf9d3ff2adcec750a72fa823423b4b2d015748a3dfa24525a3a0f"
+    },
+    {
+      "path": "artifacts/prod_cheatcode_audit/ordinary_broad_followup/videos/trial_19/all_cameras_1hz.mp4",
+      "bytes": 929543,
+      "sha256": "4e6a552a527732cb1e16b040a3dc4b0adbae620025befdcf6d091f8a351fb084"
+    },
+    {
+      "path": "artifacts/prod_cheatcode_audit/ordinary_broad_followup/videos/trial_19/five_timepoints.jpg",
+      "bytes": 428553,
+      "sha256": "5941c9683367339473b4276d6b48b5c218e2f715940ce0e4bf09459ca2d76832"
+    },
+    {
+      "path": "artifacts/prod_cheatcode_audit/ordinary_broad_followup/vlm_review/low_score_scan.json",
+      "bytes": 112419,
+      "sha256": "64feedfa047f8caba48588b60b516b726eff7079274a2182d820b4dff2a40ec5"
+    },
+    {
+      "path": "artifacts/prod_cheatcode_audit/ordinary_broad_followup/vlm_review/replay_sc3_003/all_cameras_1hz.mp4",
+      "bytes": 1509617,
+      "sha256": "33559d660ae8a0392fcb1231e823cd607742a6c4ff39392fd3a48132c7d23bd4"
+    },
+    {
+      "path": "artifacts/prod_cheatcode_audit/ordinary_broad_followup/vlm_review/replay_sc3_003/eval_config.yaml",
+      "bytes": 4810,
+      "sha256": "df371c140cce17b2845a818340608a54e4e5a5873e0b2614d60a3c7f9caa5077"
+    },
+    {
+      "path": "artifacts/prod_cheatcode_audit/ordinary_broad_followup/vlm_review/replay_sc3_003/five_timepoints.jpg",
+      "bytes": 464975,
+      "sha256": "fa992340573fa2f7adba43183e6e16fb152a98920d93d2c1ab8be56cdbe71101"
+    },
+    {
+      "path": "artifacts/prod_cheatcode_audit/ordinary_broad_followup/vlm_review/replay_sc3_003/manifest.json",
+      "bytes": 1835,
+      "sha256": "1de1b8abdacd00cd91af7df23f1fe668421fb5056768a28789b2253c08f4e27a"
+    },
+    {
+      "path": "artifacts/prod_cheatcode_audit/ordinary_broad_followup/vlm_review/replay_sc3_003/original_runtime_trace.jsonl",
+      "bytes": 7482,
+      "sha256": "fc3834bb55a83dacf9109baa58f99a13c97eb280eb70629e4c4684c91c76e63c"
+    },
+    {
+      "path": "artifacts/prod_cheatcode_audit/ordinary_broad_followup/vlm_review/replay_sc3_003/original_scoring.yaml",
+      "bytes": 741,
+      "sha256": "ef687c37a32eb5be2e06f3e93a3a11064cb52eca0bf2a7bc04971ebfe827dd06"
+    },
+    {
+      "path": "artifacts/prod_cheatcode_audit/ordinary_broad_followup/vlm_review/replay_sc3_003/runtime_trace.jsonl",
+      "bytes": 13101,
+      "sha256": "2bae790447583ca6ca05a95fcdd266b48db582e5a409faa4855239542615612b"
+    },
+    {
+      "path": "artifacts/prod_cheatcode_audit/ordinary_broad_followup/vlm_review/replay_sc3_003/scoring.yaml",
+      "bytes": 741,
+      "sha256": "b916a80161b15a515325f2133510100e1ede9eb4abe679b678222be31dfd5dc8"
+    },
+    {
+      "path": "artifacts/prod_cheatcode_audit/ordinary_broad_followup/vlm_review/replay_sc3_003/smooth_trajectory.json.gz",
+      "bytes": 230432,
+      "sha256": "bc9934b30bb5c27181fcde50d14729311656198c71de5febe1fc2e6c4d56e93e"
+    },
+    {
+      "path": "artifacts/prod_cheatcode_audit/ordinary_broad_followup/vlm_review/replay_sc3_003/trial_analysis.json",
+      "bytes": 162383,
+      "sha256": "77681a720f9c4df910c23be269ab989a96c4d565a67da5963c1929ff0dc7b67e"
+    },
+    {
+      "path": "artifacts/prod_cheatcode_audit/ordinary_broad_followup/vlm_review/sc1_037/force_review.jpg",
+      "bytes": 331763,
+      "sha256": "07a6b6077aebfd367f557a5625a634e1be82bd8a204345c214ff446b5ea2d7eb"
+    },
+    {
+      "path": "artifacts/prod_cheatcode_audit/ordinary_broad_followup/vlm_review/sc1_037/review.json",
+      "bytes": 968,
+      "sha256": "2464b969c7d169ae7135d01298174d6510723b8d227db8fc920842b48e0d7a14"
+    },
+    {
+      "path": "artifacts/prod_cheatcode_audit/ordinary_broad_followup/vlm_review/sc2_004/force_review.jpg",
+      "bytes": 426440,
+      "sha256": "927a7a05fea8502d3f4ad7aacdd1b543d828b3902bce996a819da7004cd8e4eb"
+    },
+    {
+      "path": "artifacts/prod_cheatcode_audit/ordinary_broad_followup/vlm_review/sc2_004/review.json",
+      "bytes": 922,
+      "sha256": "b3e4b0f5246d1c93ddd4e37884a9884981258e51d19112547f15faf589fb2c77"
+    },
+    {
+      "path": "artifacts/prod_cheatcode_audit/ordinary_broad_followup/vlm_review/sc3_003/all_cameras_1hz.mp4",
+      "bytes": 1215454,
+      "sha256": "8a974b3ca67309a7b9f6cd627cc1826bec1d0d24a21617b136cfeff502ef59aa"
+    },
+    {
+      "path": "artifacts/prod_cheatcode_audit/ordinary_broad_followup/vlm_review/sc3_003/force_review.jpg",
+      "bytes": 435360,
+      "sha256": "c7f000b760259c59836b92a4dce4173fb3215b993af264ff17eadeeb1a2376ab"
+    },
+    {
+      "path": "artifacts/prod_cheatcode_audit/ordinary_broad_followup/vlm_review/sc3_003/motion_summary.json",
+      "bytes": 1005,
+      "sha256": "37adffadec325ca26a93d9848bf4a276861f78fb5f8129bab47a336eca3df25c"
+    },
+    {
+      "path": "artifacts/prod_cheatcode_audit/ordinary_broad_followup/vlm_review/sc3_003/path_force_relative_target.png",
+      "bytes": 158056,
+      "sha256": "ca7415f8fa210bafc25f2291e86b0de4b0c3b112c4190db5b66e3a7ddfd2cf01"
+    },
+    {
+      "path": "artifacts/prod_cheatcode_audit/ordinary_broad_followup/vlm_review/sc3_003/review.json",
+      "bytes": 754,
+      "sha256": "deb6eecaa36b5597784d38a7cf0ac1999beea124b4c7a82b998204788f521160"
+    },
+    {
+      "path": "artifacts/prod_cheatcode_audit/ordinary_broad_followup/vlm_review/stock_seed51500/all_cameras_1hz.mp4",
+      "bytes": 1017697,
+      "sha256": "3b1a34e51a93f8d84934430f3a51b2580e04dfde6ab3f6a7ce5bb65610c2813d"
+    },
+    {
+      "path": "artifacts/prod_cheatcode_audit/ordinary_broad_followup/vlm_review/stock_seed51500/eval_config.yaml",
+      "bytes": 4640,
+      "sha256": "c550f7c9ca7e476c25235bdafbac2b7daf98d618083abe26668c3126ffdc72dc"
+    },
+    {
+      "path": "artifacts/prod_cheatcode_audit/ordinary_broad_followup/vlm_review/stock_seed51500/five_timepoints.jpg",
+      "bytes": 423421,
+      "sha256": "9b268504aec172f049c3d3bc3562dae8aeba1c617483a09496faa306eac108a1"
+    },
+    {
+      "path": "artifacts/prod_cheatcode_audit/ordinary_broad_followup/vlm_review/stock_seed51500/manifest.json",
+      "bytes": 293,
+      "sha256": "6dee24507d346201d31dc0e7a6e2729b3da54b8faa411fd5c8b44f1602336841"
+    },
+    {
+      "path": "artifacts/prod_cheatcode_audit/ordinary_broad_followup/vlm_review/stock_seed51500/request.yaml",
+      "bytes": 5206,
+      "sha256": "36e4c5993751f574ff3d89c9095af405a4ef1c1eedb02053651c07b0106d8b40"
+    },
+    {
+      "path": "artifacts/prod_cheatcode_audit/ordinary_broad_followup/vlm_review/stock_seed51500/scoring.yaml",
+      "bytes": 852,
+      "sha256": "385a0a22445f90dc577e594afcf6f3ab2fe6d4ab7dbe896e58ee30202b218fa5"
+    },
+    {
+      "path": "artifacts/prod_cheatcode_audit/ordinary_broad_followup/vlm_review/stock_seed51500/trial_analysis.json",
+      "bytes": 163479,
+      "sha256": "5bd2c5758d32b631e5a6159eb26b970a24c092e623bf53dfa21e5b361011cc5d"
+    },
+    {
+      "path": "artifacts/prod_cheatcode_audit/ordinary_broad_followup/vlm_review/summary.json",
+      "bytes": 3894,
+      "sha256": "70ae237b94d3e18933a4ef16dbfacf00e81fafa2c7f6bc6ce8cf1f210cb748b9"
+    }
+  ],
+  "ordinary_broad_followup_scripts": [
+    "artifacts/prod_cheatcode_audit/make_ordinary_broad_suite.py",
+    "artifacts/prod_cheatcode_audit/run_ordinary_broad_suite.sh",
+    "artifacts/prod_cheatcode_audit/run_fresh_ordinary_followups.sh",
+    "artifacts/prod_cheatcode_audit/summarize_historical_sc_archive.py",
+    "artifacts/prod_cheatcode_audit/analyze_ordinary_broad_trial.py",
+    "artifacts/prod_cheatcode_audit/quick_motion_force.py",
+    "artifacts/prod_cheatcode_audit/render_ordinary_broad_trial.py",
+    "artifacts/prod_cheatcode_audit/render_agent_attempt.py",
+    "artifacts/prod_cheatcode_audit/summarize_ordinary_broad_suite.py",
+    "artifacts/prod_cheatcode_audit/summarize_ordinary_followups.py",
+    "artifacts/prod_cheatcode_audit/extract_ordinary_broad_trial.py",
+    "artifacts/prod_cheatcode_audit/run_vlm_attempt_replay.sh",
+    "artifacts/prod_cheatcode_audit/scan_agent_replay_failures.py"
   ]
 }

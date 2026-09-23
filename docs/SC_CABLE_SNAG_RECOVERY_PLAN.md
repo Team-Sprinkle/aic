@@ -61,6 +61,19 @@ rail-0 runs both had large tracking failures. The cable remained visibly clear
 of the cards. These episodes support local axial and large approach recovery
 curricula, but still provide no accepted cable-snag incident.
 
+The later [ordinary and VLM-route follow-up](experiments/2026-09-23-ordinary-development-cable-audit.md)
+expanded stock CheatCode to 19 clean scenes and found 13 full, five partial,
+and one no insertion. No causal cable snag was established in that route.
+An older expert-generator note does record a five-card **VLM/MoveIt path**
+that caught the cable on the NIC stack; an outside-left bypass then scored
+89.17. Its failed raw path/video is missing. A saved low-score three-card VLM
+path was replayed against its exact scene and again scored 1, but its force
+spike was transient and both runs failed laterally at port handoff. A
+regenerated seed-51500 five-card stock-CheatCode control was partial without
+visible card snag. This narrows the cable investigation to **route-dependent
+transport** and preserves the outside-left bypass as a useful prior, while
+leaving cable-specific RL data collection gated on a recorded causal incident.
+
 The official reversed Gazebo cable includes explicit palm-clearance collision
 exceptions: two endpoint collision groups are removed and the first rope
 collider is shortened and shifted. The Isaac builder now matches those source

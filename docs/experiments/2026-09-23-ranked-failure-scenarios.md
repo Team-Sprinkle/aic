@@ -12,20 +12,34 @@ cannot reproduce the remembered SC cable interaction among several NIC cards.
 The production-family suite added selected 0/1/3/5-card cases, but it was still
 a bounded sample rather than the complete `training_broad` randomization matrix.
 
-Historical Gazebo data provides a reason to reopen the cable category. The
-unfiltered archive contains 275 rejected SC-to-SC episodes from randomized
-one-through-five-card collections. Their replay mode was
+Historical Gazebo data provides a reason to investigate the cable category,
+but its rejection count is not a failure count. The unfiltered archive contains
+275 excluded SC-to-SC episodes from randomized one-through-five-card
+collections: 212 have official noninsertion scores and belong to collections
+deliberately stopped near the gate; 63 lack the raw score or trajectory lineage
+needed to verify insertion. Their replay mode was
 `joint_position_then_cheatcode`: a planned initial motion followed by the
 official CheatCode action, rather than the stock three-trial sample evaluator.
 Timeline review shows the cable passing against or between card structures in
-some multi-card episodes. Images alone do not establish that cable contact
-caused the terminal failure; force, commanded-versus-measured motion, and cable
-motion must be synchronized before assigning a causal snag label.
+some multi-card episodes. In the middle 10--80% of the retained trajectories,
+force exceeded 30 N in 0/23 one-card, 5/86 two-card, and 12/100 three-card
+episodes. These are force/contact candidates. The saved wrist videos and state
+do not identify which body touched the card; the deliberately stopped
+trajectory also cannot establish that contact caused noninsertion. A causal
+snag label requires a full insertion attempt with synchronized command, measured
+motion, cable geometry, force, and contact evidence.
 
 Consequently, "no snag in the recent bounded suite" is a negative result for
-that suite only. Cable snag is now an **unresolved, high-priority audit target**
-for the old broad Gazebo episodes and a systematic ordinary-evaluation replay,
-not evidence that the failure is rare in all development settings.
+that suite only. The [ordinary development audit](2026-09-23-ordinary-development-cable-audit.md)
+now has 19 clean stock-CheatCode scenes: 13 full, five partial, one no
+insertion, and no causally established cable-to-card snag. Their first long
+batch was invalid after Gazebo physics-entity errors; isolated replays supply
+the selected scores. A separate archived expert-generator note records a
+five-card **VLM/MoveIt route** where the center camera showed the cable catch
+on NIC cards, followed by a successful outside-left bypass. The failed raw
+route/video is not retained. Cable snag remains an **unresolved,
+route-dependent audit target**, not a label for the current stock-CheatCode
+failures.
 
 ## How this list was built
 
@@ -130,16 +144,23 @@ make the outcome worse without proving that the cable wrapped around a card.
 
 ### Priority 3: cable-to-card snag or persistent cable tension
 
-- **Likelihood:** unresolved and potentially high in ordinary broad SC-to-SC
-  evaluation. The recent bounded production-family sample is insufficient to
-  estimate it.
-- **Reproducibility:** not yet measured systematically. It has not been
-  causally reproduced in a valid current Gazebo or Isaac scene, but historical
-  multi-card Gazebo episodes contain visible cable/card interaction candidates.
-- **Accepted causal evidence:** none yet. The earlier Isaac “snag” remained after cable
+- **Likelihood:** unresolved for learned or VLM/MoveIt routes through crowded
+  SC scenes. The 19-scene stock-CheatCode sample did not establish one and
+  cannot estimate its rate under another route.
+- **Reproducibility:** the older [SC NIC bypass note](../expert_matrix_template_fixes.md#sc-to-sc-nic-bypass-full-insertion-template)
+  reports a five-card center-camera cable catch and a successful route change,
+  but the failed raw trajectory/video is missing from the checked local and
+  S3 clean archives. A saved three-card VLM/MoveIt score-1 trajectory was
+  replayed exactly in the current Gazebo image and again scored 1; both runs
+  failed laterally at port handoff, with no persistent transport stall. A
+  regenerated five-card seed-51500 stock-CheatCode control ended partially
+  inserted with its cable visually clear of the cards. These do not reproduce
+  the historical snag.
+- **Accepted causal evidence for a trainable incident:** none retained yet. The earlier Isaac “snag” remained after cable
   collisions were disabled and was traced to roughly 128 N of gripper-housing
-  contact with a card. The new five-card Gazebo videos also show the cable
-  clear of the card field.
+  contact with a card. The new stock Gazebo videos also show the cable clear
+  of the card field. The historical observer's note warrants targeted replay,
+  but cannot supply force, exact route, and named contact labels itself.
 - **What other data can teach:** Priority 1B and 2 data can teach force/stall
   detection, unloading, and measured-path backtracking. It cannot by itself
   teach which motion unwinds a cable or routes slack around a card.
@@ -206,9 +227,12 @@ selection needs cable-specific temporal or visual evidence.
    blocks with normal collisions and train a separate long-retreat/route option.
    The option selector may use image history, robot state, force, measured
    motion, and the predicted pose.
-6. **Keep cable snag as a gated search.** Continue a bounded search only after
-   the faithful five-card Isaac scene exists. If neither simulator produces a
-   causal incident, do not manufacture a snag label or claim cable recovery.
+6. **Keep cable snag as a gated route search.** Try to recover the missing
+   seed-51500 failed VLM/MoveIt artifact, or generate a deliberate direct-route
+   versus outside-left-bypass pair on the same Gazebo scene with cable/card
+   contact identity recorded. Port the resulting incident to Isaac only after
+   its five-card grasp/collision contract is faithful. Do not manufacture a
+   snag label or claim cable recovery from force alone.
 7. **Close Isaac-to-Gazebo transfer.** First replay successful Isaac recovery
    behavior as supervised Gazebo fine-tuning data. Then use short incident
    resets for offline critic warm-up and a small amount of online Gazebo RL.
@@ -229,5 +253,6 @@ phase-aware BC/RLPD-style RL with explicit recovery modes.
   `/var/tmp/chmin_aic_targeted_failure_20260923/`
 - Compact videos: `artifacts/prod_cheatcode_audit/targeted_failure_reproduction/videos/`
 - Prior exact audit: [official CheatCode failure audit](2026-09-23-official-cheatcode-failure-audit.md)
+- Ordinary and VLM-route follow-up: [19-scene audit and exact archived-route replay](2026-09-23-ordinary-development-cable-audit.md), compact records under `artifacts/prod_cheatcode_audit/ordinary_broad_followup/`
 - Isaac mechanics evidence: [SC mechanics and routing](2026-09-23-sc-mechanics-and-routing.md)
 - Learned-policy videos: [SERL video failure analysis](2026-09-23-serl-video-failure-analysis.md)

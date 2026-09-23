@@ -229,6 +229,16 @@ GPT-5 is used for failure critique in the recovery workflow. The SFP EC2 run's
 [EC2 hard-batch request](../aic_utils/lerobot_robot_aic/config/data_generation_requests/ec2_02_sfp_hard.yaml).
 This is not a VLM predicting all low-level actions directly.
 
+A September 23 follow-up scanned 190 retained SC full-insertion
+`agent_generation/replay_attempts` and replayed one low-score three-card
+VLM/MoveIt joint trajectory. It also checked the one-port/five-card seed-51500
+collection associated with an older cable-catch note. That collection's local
+and checked S3 clean prefixes retain accepted metadata, but the original
+failed route/video from the note is unavailable there. The retained score-1
+three-card attempt failed on a later port-handoff miss; its transient force
+peak should not be labeled a cable snag. See the
+[route and replay audit](experiments/2026-09-23-ordinary-development-cable-audit.md#agentvlm-route-follow-up).
+
 Earlier VLM experiments also exist under:
 
 ```text

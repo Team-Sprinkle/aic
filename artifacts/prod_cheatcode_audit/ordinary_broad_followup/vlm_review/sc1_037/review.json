@@ -1,0 +1,32 @@
+{
+  "attempt": "outputs/trajectory_datasets/clean_including_no_insert_trajs/sc_to_sc/agent/sc_ports_2/n20__sc_ports2_nic1_full_insert_n20/agent_generation/replay_attempts/attempt_000037_candidate_00",
+  "score": -35,
+  "frames": 4949,
+  "peak_force_n": 323.77618408203125,
+  "peak_force_time_s": 200.25,
+  "review_indices": [
+    0,
+    1237,
+    3711,
+    4005,
+    4948
+  ],
+  "review_times_s": [
+    0.0,
+    61.849998474121094,
+    185.5500030517578,
+    200.25,
+    247.39999389648438
+  ],
+  "measured_tcp_at_peak_m": [
+    -0.6599148511886597,
+    0.37982210516929626,
+    0.5761536359786987
+  ],
+  "measured_tcp_at_end_m": [
+    -0.43970516324043274,
+    0.500404953956604,
+    0.33245593309402466
+  ],
+  "contact_message": "Contacts detected (only first reported) between entity named [ur5e::wrist_3_link::wrist_3_link_fixed_joint_lump__body_collider_box_collision_15] and [enclosure walls::enclosure_walls_link::v1015062006_collider_box]. Penalty applied."
+}

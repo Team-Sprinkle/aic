@@ -1,5 +1,34 @@
 # Current experiment status
 
+## Ordinary Gazebo and VLM-route cable follow-up (September 23)
+
+The broad development audit now has **19 valid, clean stock-CheatCode Gazebo
+scenes** across SFP-to-NIC counts 1--5, SC-to-SC counts 0--5 on both rails,
+and two saved randomized SC layouts: **13 full, five partial, one no
+insertion**. The original long batch became invalid after Gazebo
+physics-entity errors; each affected scene was rerun alone. Three SC rail-1
+partial runs with one, three, and four NIC cards stopped at almost exactly
+10.5 mm past the port entrance despite 0.09--0.38 mm lateral error. Two
+historical SC layouts failed with larger lateral approach error. The
+two-card SFP scene was partial. These are insertion/approach failures, not
+verified cable-to-card snags. See the [audited scenes and videos](experiments/2026-09-23-ordinary-development-cable-audit.md).
+
+An older [expert-generator note](expert_matrix_template_fixes.md#sc-to-sc-nic-bypass-full-insertion-template)
+does record a five-card VLM/MoveIt route where the center-camera reviewer saw
+the cable catch on the NIC stack; a later outside-left bypass succeeded with
+score 89.17. Its failed raw trajectory/video is absent from the checked local
+and S3 clean archives. Of 190 retained SC full-insertion agent/VLM replay
+attempts, 150 scored at most 1. A saved three-card score-1 trajectory with a
+50.5 N transient force peak was replayed against its exact scene and again
+scored 1, but both runs failed later at a roughly 14--16 mm lateral port
+handoff miss. The TCP kept moving through the old force spike. Regenerating
+the first five-card seed-51500 scene and running stock CheatCode produced a
+partial axial insertion without a visible cable snag. **The historical
+route-dependent snag is credible but is still missing a retained causal
+incident suitable for RL labels.** The outside-left bypass remains a route
+prior; cable-specific RL stays gated on a recorded contact/tension incident.
+No model training was run in this audit.
+
 ## Ordinary-evaluation cable coverage correction (September 23)
 
 The recent Gazebo audit did not cover every normal development setting. The
@@ -8,12 +37,16 @@ zero-card SC-to-SC scene, so it cannot expose SC cable snag among several NIC
 cards. The selected production-family stress runs were also not an exhaustive
 `training_broad` sweep.
 
-The unfiltered historical archive contains 275 rejected SC-to-SC episodes from
-randomized one-through-five-card Gazebo collections. These used planned initial
+The unfiltered historical archive contains 275 excluded SC-to-SC episodes from
+randomized one-through-five-card Gazebo collections. Of these, 212 have official
+noninsertion scores from collections deliberately stopped near the gate. The
+remaining 63 lack the raw score or trajectory lineage needed for verification;
+the exclusion count is not a cable-failure count. These used planned initial
 motion followed by CheatCode. Initial timeline review shows cable/card
-interaction candidates, but images alone cannot prove that the cable caused a
-stall. Cable snag is therefore reopened as a high-priority causal audit rather
-than treated as disproved by the recent bounded runs. See the updated
+proximity and mid-trajectory force spikes, but the retained data cannot name
+the contacting body or prove that cable contact caused a stall. Cable snag is
+therefore reopened as a high-priority causal audit rather than treated as
+disproved by the recent bounded runs. See the updated
 [ranked failure record](experiments/2026-09-23-ranked-failure-scenarios.md).
 
 ## Ranked failure scenarios and targeted reproduction (September 23)

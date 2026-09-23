@@ -1,0 +1,2525 @@
+{
+  "schema": "aic_sc_agent_replay_failure_scan/v1",
+  "scope": "retained SC agent/VLM replay_attempts with full-insertion collection intent; explicit stop-near-gate runs excluded",
+  "criterion": "A screen, not a snag label: score <= 1; in the middle 10-80% of a recorded episode, a one-second window has peak force >30 N and measured TCP displacement <3 mm. Overlapping windows sampled every 0.5 s.",
+  "attempt_count": 190,
+  "low_score_count": 150,
+  "low_score_stall_candidate_count": 1,
+  "contact_messages": {
+    "Contacts detected (only first reported) between entity named [ur5e::wrist_3_link::wrist_3_link_fixed_joint_lump__body_collider_box_collision_15] and [enclosure walls::enclosure_walls_link::v1015062006_collider_box]. Penalty applied.": 1,
+    "Contacts detected (only first reported) between entity named [ur5e::forearm_link::forearm_link_collision] and [task_board::nic_card_mount_2::nic_card_link::pcb_collider_box]. Penalty applied.": 1
+  },
+  "records": [
+    {
+      "attempt": "outputs/trajectory_datasets/clean_including_no_insert_trajs/sc_to_sc/agent/sc_ports_1/n1__ec2_03_sc_easy/agent_generation/replay_attempts/attempt_000001_candidate_00",
+      "run": "n1__ec2_03_sc_easy",
+      "score": 95.40364281582255,
+      "tier3_message": "Cable insertion successful.",
+      "off_limit_contact": "No contact detected.",
+      "has_video": true,
+      "has_state_data": true,
+      "force_peak_n": 22.096212308153284,
+      "one_second_mid_stall_candidates": []
+    },
+    {
+      "attempt": "outputs/trajectory_datasets/clean_including_no_insert_trajs/sc_to_sc/agent/sc_ports_2/n100__sc_ports2_nic3_n100/agent_generation/replay_attempts/attempt_000001_candidate_00",
+      "run": "n100__sc_ports2_nic3_n100",
+      "score": 1.0,
+      "tier3_message": "Task not completed.",
+      "off_limit_contact": "No contact detected.",
+      "has_video": false,
+      "has_state_data": false,
+      "force_peak_n": null,
+      "one_second_mid_stall_candidates": []
+    },
+    {
+      "attempt": "outputs/trajectory_datasets/clean_including_no_insert_trajs/sc_to_sc/agent/sc_ports_2/n100__sc_ports2_nic3_n100/agent_generation/replay_attempts/attempt_000002_candidate_00",
+      "run": "n100__sc_ports2_nic3_n100",
+      "score": 1.0,
+      "tier3_message": "Task not completed.",
+      "off_limit_contact": "No contact detected.",
+      "has_video": true,
+      "has_state_data": true,
+      "force_peak_n": 40.712901356132825,
+      "one_second_mid_stall_candidates": []
+    },
+    {
+      "attempt": "outputs/trajectory_datasets/clean_including_no_insert_trajs/sc_to_sc/agent/sc_ports_2/n100__sc_ports2_nic3_n100/agent_generation/replay_attempts/attempt_000003_candidate_00",
+      "run": "n100__sc_ports2_nic3_n100",
+      "score": 1.0,
+      "tier3_message": "Task not completed.",
+      "off_limit_contact": "No contact detected.",
+      "has_video": true,
+      "has_state_data": true,
+      "force_peak_n": 50.527068027301034,
+      "one_second_mid_stall_candidates": []
+    },
+    {
+      "attempt": "outputs/trajectory_datasets/clean_including_no_insert_trajs/sc_to_sc/agent/sc_ports_2/n100__sc_ports2_nic3_n100/agent_generation/replay_attempts/attempt_000005_candidate_00",
+      "run": "n100__sc_ports2_nic3_n100",
+      "score": 1.0,
+      "tier3_message": "Task not completed.",
+      "off_limit_contact": "No contact detected.",
+      "has_video": true,
+      "has_state_data": true,
+      "force_peak_n": 26.428669427149785,
+      "one_second_mid_stall_candidates": []
+    },
+    {
+      "attempt": "outputs/trajectory_datasets/clean_including_no_insert_trajs/sc_to_sc/agent/sc_ports_2/n100__sc_ports2_nic3_n100/agent_generation/replay_attempts/attempt_000006_candidate_00",
+      "run": "n100__sc_ports2_nic3_n100",
+      "score": 89.3709088493519,
+      "tier3_message": "Cable insertion successful.",
+      "off_limit_contact": "No contact detected.",
+      "has_video": true,
+      "has_state_data": true,
+      "force_peak_n": 21.926000428535417,
+      "one_second_mid_stall_candidates": []
+    },
+    {
+      "attempt": "outputs/trajectory_datasets/clean_including_no_insert_trajs/sc_to_sc/agent/sc_ports_2/n100__sc_ports2_nic3_n100/agent_generation/replay_attempts/attempt_000009_candidate_00",
+      "run": "n100__sc_ports2_nic3_n100",
+      "score": 1.0,
+      "tier3_message": "Task not completed.",
+      "off_limit_contact": "No contact detected.",
+      "has_video": true,
+      "has_state_data": true,
+      "force_peak_n": 21.595458033055113,
+      "one_second_mid_stall_candidates": []
+    },
+    {
+      "attempt": "outputs/trajectory_datasets/clean_including_no_insert_trajs/sc_to_sc/agent/sc_ports_2/n100__sc_ports2_nic3_n100/agent_generation/replay_attempts/attempt_000010_candidate_00",
+      "run": "n100__sc_ports2_nic3_n100",
+      "score": 1.0,
+      "tier3_message": "Task not completed.",
+      "off_limit_contact": "No contact detected.",
+      "has_video": true,
+      "has_state_data": true,
+      "force_peak_n": 22.471730102991017,
+      "one_second_mid_stall_candidates": []
+    },
+    {
+      "attempt": "outputs/trajectory_datasets/clean_including_no_insert_trajs/sc_to_sc/agent/sc_ports_2/n100__sc_ports2_nic3_n100/agent_generation/replay_attempts/attempt_000011_candidate_00",
+      "run": "n100__sc_ports2_nic3_n100",
+      "score": 1.0,
+      "tier3_message": "Task not completed.",
+      "off_limit_contact": "No contact detected.",
+      "has_video": true,
+      "has_state_data": true,
+      "force_peak_n": 23.45765969477917,
+      "one_second_mid_stall_candidates": []
+    },
+    {
+      "attempt": "outputs/trajectory_datasets/clean_including_no_insert_trajs/sc_to_sc/agent/sc_ports_2/n100__sc_ports2_nic3_n100/agent_generation/replay_attempts/attempt_000013_candidate_00",
+      "run": "n100__sc_ports2_nic3_n100",
+      "score": 1.0,
+      "tier3_message": "Task not completed.",
+      "off_limit_contact": "No contact detected.",
+      "has_video": true,
+      "has_state_data": true,
+      "force_peak_n": 21.863080374834762,
+      "one_second_mid_stall_candidates": []
+    },
+    {
+      "attempt": "outputs/trajectory_datasets/clean_including_no_insert_trajs/sc_to_sc/agent/sc_ports_2/n100__sc_ports2_nic3_n100/agent_generation/replay_attempts/attempt_000014_candidate_00",
+      "run": "n100__sc_ports2_nic3_n100",
+      "score": 1.0,
+      "tier3_message": "Task not completed.",
+      "off_limit_contact": "No contact detected.",
+      "has_video": true,
+      "has_state_data": true,
+      "force_peak_n": 21.603945600687602,
+      "one_second_mid_stall_candidates": []
+    },
+    {
+      "attempt": "outputs/trajectory_datasets/clean_including_no_insert_trajs/sc_to_sc/agent/sc_ports_2/n100__sc_ports2_nic3_n100/agent_generation/replay_attempts/attempt_000016_candidate_00",
+      "run": "n100__sc_ports2_nic3_n100",
+      "score": 1.0,
+      "tier3_message": "Task not completed.",
+      "off_limit_contact": "No contact detected.",
+      "has_video": true,
+      "has_state_data": true,
+      "force_peak_n": 24.532185699519747,
+      "one_second_mid_stall_candidates": []
+    },
+    {
+      "attempt": "outputs/trajectory_datasets/clean_including_no_insert_trajs/sc_to_sc/agent/sc_ports_2/n100__sc_ports2_nic3_n100/agent_generation/replay_attempts/attempt_000020_candidate_00",
+      "run": "n100__sc_ports2_nic3_n100",
+      "score": 86.08425268470121,
+      "tier3_message": "Cable insertion successful.",
+      "off_limit_contact": "No contact detected.",
+      "has_video": true,
+      "has_state_data": true,
+      "force_peak_n": 22.18948493319949,
+      "one_second_mid_stall_candidates": []
+    },
+    {
+      "attempt": "outputs/trajectory_datasets/clean_including_no_insert_trajs/sc_to_sc/agent/sc_ports_2/n100__sc_ports2_nic3_n100/agent_generation/replay_attempts/attempt_000021_candidate_00",
+      "run": "n100__sc_ports2_nic3_n100",
+      "score": 1.0,
+      "tier3_message": "Task not completed.",
+      "off_limit_contact": "No contact detected.",
+      "has_video": true,
+      "has_state_data": true,
+      "force_peak_n": 22.166269651327667,
+      "one_second_mid_stall_candidates": []
+    },
+    {
+      "attempt": "outputs/trajectory_datasets/clean_including_no_insert_trajs/sc_to_sc/agent/sc_ports_2/n100__sc_ports2_nic3_n100/agent_generation/replay_attempts/attempt_000023_candidate_00",
+      "run": "n100__sc_ports2_nic3_n100",
+      "score": 1.0,
+      "tier3_message": "Task not completed.",
+      "off_limit_contact": "No contact detected.",
+      "has_video": true,
+      "has_state_data": true,
+      "force_peak_n": 21.832713795006157,
+      "one_second_mid_stall_candidates": []
+    },
+    {
+      "attempt": "outputs/trajectory_datasets/clean_including_no_insert_trajs/sc_to_sc/agent/sc_ports_2/n100__sc_ports2_nic3_n100/agent_generation/replay_attempts/attempt_000025_candidate_00",
+      "run": "n100__sc_ports2_nic3_n100",
+      "score": 1.0,
+      "tier3_message": "Task not completed.",
+      "off_limit_contact": "No contact detected.",
+      "has_video": true,
+      "has_state_data": true,
+      "force_peak_n": 21.737693757871387,
+      "one_second_mid_stall_candidates": []
+    },
+    {
+      "attempt": "outputs/trajectory_datasets/clean_including_no_insert_trajs/sc_to_sc/agent/sc_ports_2/n100__sc_ports2_nic3_n100/agent_generation/replay_attempts/attempt_000026_candidate_00",
+      "run": "n100__sc_ports2_nic3_n100",
+      "score": 1.0,
+      "tier3_message": "Task not completed.",
+      "off_limit_contact": "No contact detected.",
+      "has_video": true,
+      "has_state_data": true,
+      "force_peak_n": 22.206318743278587,
+      "one_second_mid_stall_candidates": []
+    },
+    {
+      "attempt": "outputs/trajectory_datasets/clean_including_no_insert_trajs/sc_to_sc/agent/sc_ports_2/n100__sc_ports2_nic3_n100/agent_generation/replay_attempts/attempt_000027_candidate_00",
+      "run": "n100__sc_ports2_nic3_n100",
+      "score": 1.0,
+      "tier3_message": "Task not completed.",
+      "off_limit_contact": "No contact detected.",
+      "has_video": true,
+      "has_state_data": true,
+      "force_peak_n": 22.319766765365,
+      "one_second_mid_stall_candidates": []
+    },
+    {
+      "attempt": "outputs/trajectory_datasets/clean_including_no_insert_trajs/sc_to_sc/agent/sc_ports_2/n100__sc_ports2_nic3_n100/agent_generation/replay_attempts/attempt_000032_candidate_00",
+      "run": "n100__sc_ports2_nic3_n100",
+      "score": 1.0,
+      "tier3_message": "Task not completed.",
+      "off_limit_contact": "No contact detected.",
+      "has_video": true,
+      "has_state_data": true,
+      "force_peak_n": 21.991171430125746,
+      "one_second_mid_stall_candidates": []
+    },
+    {
+      "attempt": "outputs/trajectory_datasets/clean_including_no_insert_trajs/sc_to_sc/agent/sc_ports_2/n100__sc_ports2_nic3_n100/agent_generation/replay_attempts/attempt_000035_candidate_00",
+      "run": "n100__sc_ports2_nic3_n100",
+      "score": 87.2966145865725,
+      "tier3_message": "Cable insertion successful.",
+      "off_limit_contact": "No contact detected.",
+      "has_video": true,
+      "has_state_data": true,
+      "force_peak_n": 22.58338213599916,
+      "one_second_mid_stall_candidates": []
+    },
+    {
+      "attempt": "outputs/trajectory_datasets/clean_including_no_insert_trajs/sc_to_sc/agent/sc_ports_2/n100__sc_ports2_nic3_n100/agent_generation/replay_attempts/attempt_000036_candidate_00",
+      "run": "n100__sc_ports2_nic3_n100",
+      "score": 1.0,
+      "tier3_message": "Task not completed.",
+      "off_limit_contact": "No contact detected.",
+      "has_video": true,
+      "has_state_data": true,
+      "force_peak_n": 21.755943444527965,
+      "one_second_mid_stall_candidates": []
+    },
+    {
+      "attempt": "outputs/trajectory_datasets/clean_including_no_insert_trajs/sc_to_sc/agent/sc_ports_2/n100__sc_ports2_nic3_n100/agent_generation/replay_attempts/attempt_000037_candidate_00",
+      "run": "n100__sc_ports2_nic3_n100",
+      "score": 1.0,
+      "tier3_message": "Task not completed.",
+      "off_limit_contact": "No contact detected.",
+      "has_video": true,
+      "has_state_data": true,
+      "force_peak_n": 22.296986337393623,
+      "one_second_mid_stall_candidates": []
+    },
+    {
+      "attempt": "outputs/trajectory_datasets/clean_including_no_insert_trajs/sc_to_sc/agent/sc_ports_2/n100__sc_ports2_nic3_n100/agent_generation/replay_attempts/attempt_000038_candidate_00",
+      "run": "n100__sc_ports2_nic3_n100",
+      "score": 1.0,
+      "tier3_message": "Task not completed.",
+      "off_limit_contact": "No contact detected.",
+      "has_video": true,
+      "has_state_data": true,
+      "force_peak_n": 21.86744133471653,
+      "one_second_mid_stall_candidates": []
+    },
+    {
+      "attempt": "outputs/trajectory_datasets/clean_including_no_insert_trajs/sc_to_sc/agent/sc_ports_2/n100__sc_ports2_nic3_n100/agent_generation/replay_attempts/attempt_000039_candidate_00",
+      "run": "n100__sc_ports2_nic3_n100",
+      "score": 1.0,
+      "tier3_message": "Task not completed.",
+      "off_limit_contact": "No contact detected.",
+      "has_video": true,
+      "has_state_data": true,
+      "force_peak_n": 22.150648498083285,
+      "one_second_mid_stall_candidates": []
+    },
+    {
+      "attempt": "outputs/trajectory_datasets/clean_including_no_insert_trajs/sc_to_sc/agent/sc_ports_2/n100__sc_ports2_nic3_n100/agent_generation/replay_attempts/attempt_000041_candidate_00",
+      "run": "n100__sc_ports2_nic3_n100",
+      "score": 1.0,
+      "tier3_message": "Task not completed.",
+      "off_limit_contact": "No contact detected.",
+      "has_video": true,
+      "has_state_data": true,
+      "force_peak_n": 29.964017284284807,
+      "one_second_mid_stall_candidates": []
+    },
+    {
+      "attempt": "outputs/trajectory_datasets/clean_including_no_insert_trajs/sc_to_sc/agent/sc_ports_2/n100__sc_ports2_nic3_n100/agent_generation/replay_attempts/attempt_000043_candidate_00",
+      "run": "n100__sc_ports2_nic3_n100",
+      "score": 1.0,
+      "tier3_message": "Task not completed.",
+      "off_limit_contact": "No contact detected.",
+      "has_video": true,
+      "has_state_data": true,
+      "force_peak_n": 21.92484920689829,
+      "one_second_mid_stall_candidates": []
+    },
+    {
+      "attempt": "outputs/trajectory_datasets/clean_including_no_insert_trajs/sc_to_sc/agent/sc_ports_2/n100__sc_ports2_nic3_n100/agent_generation/replay_attempts/attempt_000045_candidate_00",
+      "run": "n100__sc_ports2_nic3_n100",
+      "score": 1.0,
+      "tier3_message": "Task not completed.",
+      "off_limit_contact": "No contact detected.",
+      "has_video": true,
+      "has_state_data": true,
+      "force_peak_n": 24.591523320124896,
+      "one_second_mid_stall_candidates": []
+    },
+    {
+      "attempt": "outputs/trajectory_datasets/clean_including_no_insert_trajs/sc_to_sc/agent/sc_ports_2/n20__sc_ports2_nic1_full_insert_n20/agent_generation/replay_attempts/attempt_000002_candidate_00",
+      "run": "n20__sc_ports2_nic1_full_insert_n20",
+      "score": 90.97548294882444,
+      "tier3_message": "Cable insertion successful.",
+      "off_limit_contact": "No contact detected.",
+      "has_video": true,
+      "has_state_data": true,
+      "force_peak_n": 22.022956653802787,
+      "one_second_mid_stall_candidates": []
+    },
+    {
+      "attempt": "outputs/trajectory_datasets/clean_including_no_insert_trajs/sc_to_sc/agent/sc_ports_2/n20__sc_ports2_nic1_full_insert_n20/agent_generation/replay_attempts/attempt_000003_candidate_00",
+      "run": "n20__sc_ports2_nic1_full_insert_n20",
+      "score": 1.0,
+      "tier3_message": "Task not completed.",
+      "off_limit_contact": "No contact detected.",
+      "has_video": true,
+      "has_state_data": true,
+      "force_peak_n": 22.099431264309978,
+      "one_second_mid_stall_candidates": []
+    },
+    {
+      "attempt": "outputs/trajectory_datasets/clean_including_no_insert_trajs/sc_to_sc/agent/sc_ports_2/n20__sc_ports2_nic1_full_insert_n20/agent_generation/replay_attempts/attempt_000004_candidate_00",
+      "run": "n20__sc_ports2_nic1_full_insert_n20",
+      "score": 1.0,
+      "tier3_message": "Task not completed.",
+      "off_limit_contact": "No contact detected.",
+      "has_video": true,
+      "has_state_data": true,
+      "force_peak_n": 21.52202184843105,
+      "one_second_mid_stall_candidates": []
+    },
+    {
+      "attempt": "outputs/trajectory_datasets/clean_including_no_insert_trajs/sc_to_sc/agent/sc_ports_2/n20__sc_ports2_nic1_full_insert_n20/agent_generation/replay_attempts/attempt_000005_candidate_00",
+      "run": "n20__sc_ports2_nic1_full_insert_n20",
+      "score": 1.0,
+      "tier3_message": "Task not completed.",
+      "off_limit_contact": "No contact detected.",
+      "has_video": true,
+      "has_state_data": true,
+      "force_peak_n": 22.262313575795286,
+      "one_second_mid_stall_candidates": []
+    },
+    {
+      "attempt": "outputs/trajectory_datasets/clean_including_no_insert_trajs/sc_to_sc/agent/sc_ports_2/n20__sc_ports2_nic1_full_insert_n20/agent_generation/replay_attempts/attempt_000006_candidate_00",
+      "run": "n20__sc_ports2_nic1_full_insert_n20",
+      "score": 1.0,
+      "tier3_message": "Task not completed.",
+      "off_limit_contact": "No contact detected.",
+      "has_video": true,
+      "has_state_data": true,
+      "force_peak_n": 22.078409172751705,
+      "one_second_mid_stall_candidates": []
+    },
+    {
+      "attempt": "outputs/trajectory_datasets/clean_including_no_insert_trajs/sc_to_sc/agent/sc_ports_2/n20__sc_ports2_nic1_full_insert_n20/agent_generation/replay_attempts/attempt_000007_candidate_00",
+      "run": "n20__sc_ports2_nic1_full_insert_n20",
+      "score": 1.0,
+      "tier3_message": "Task not completed.",
+      "off_limit_contact": "No contact detected.",
+      "has_video": true,
+      "has_state_data": true,
+      "force_peak_n": 21.59462875653238,
+      "one_second_mid_stall_candidates": []
+    },
+    {
+      "attempt": "outputs/trajectory_datasets/clean_including_no_insert_trajs/sc_to_sc/agent/sc_ports_2/n20__sc_ports2_nic1_full_insert_n20/agent_generation/replay_attempts/attempt_000008_candidate_00",
+      "run": "n20__sc_ports2_nic1_full_insert_n20",
+      "score": 1.0,
+      "tier3_message": "Task not completed.",
+      "off_limit_contact": "No contact detected.",
+      "has_video": true,
+      "has_state_data": true,
+      "force_peak_n": 21.957826327703323,
+      "one_second_mid_stall_candidates": []
+    },
+    {
+      "attempt": "outputs/trajectory_datasets/clean_including_no_insert_trajs/sc_to_sc/agent/sc_ports_2/n20__sc_ports2_nic1_full_insert_n20/agent_generation/replay_attempts/attempt_000009_candidate_00",
+      "run": "n20__sc_ports2_nic1_full_insert_n20",
+      "score": 1.0,
+      "tier3_message": "Task not completed.",
+      "off_limit_contact": "No contact detected.",
+      "has_video": true,
+      "has_state_data": true,
+      "force_peak_n": 22.044496066425726,
+      "one_second_mid_stall_candidates": []
+    },
+    {
+      "attempt": "outputs/trajectory_datasets/clean_including_no_insert_trajs/sc_to_sc/agent/sc_ports_2/n20__sc_ports2_nic1_full_insert_n20/agent_generation/replay_attempts/attempt_000010_candidate_00",
+      "run": "n20__sc_ports2_nic1_full_insert_n20",
+      "score": 1.0,
+      "tier3_message": "Task not completed.",
+      "off_limit_contact": "No contact detected.",
+      "has_video": true,
+      "has_state_data": true,
+      "force_peak_n": 21.7475646359191,
+      "one_second_mid_stall_candidates": []
+    },
+    {
+      "attempt": "outputs/trajectory_datasets/clean_including_no_insert_trajs/sc_to_sc/agent/sc_ports_2/n20__sc_ports2_nic1_full_insert_n20/agent_generation/replay_attempts/attempt_000011_candidate_00",
+      "run": "n20__sc_ports2_nic1_full_insert_n20",
+      "score": 89.54581883886763,
+      "tier3_message": "Cable insertion successful.",
+      "off_limit_contact": "No contact detected.",
+      "has_video": true,
+      "has_state_data": true,
+      "force_peak_n": 21.724708413024047,
+      "one_second_mid_stall_candidates": []
+    },
+    {
+      "attempt": "outputs/trajectory_datasets/clean_including_no_insert_trajs/sc_to_sc/agent/sc_ports_2/n20__sc_ports2_nic1_full_insert_n20/agent_generation/replay_attempts/attempt_000012_candidate_00",
+      "run": "n20__sc_ports2_nic1_full_insert_n20",
+      "score": 89.67761533572073,
+      "tier3_message": "Cable insertion successful.",
+      "off_limit_contact": "No contact detected.",
+      "has_video": true,
+      "has_state_data": true,
+      "force_peak_n": 22.649383042538066,
+      "one_second_mid_stall_candidates": []
+    },
+    {
+      "attempt": "outputs/trajectory_datasets/clean_including_no_insert_trajs/sc_to_sc/agent/sc_ports_2/n20__sc_ports2_nic1_full_insert_n20/agent_generation/replay_attempts/attempt_000013_candidate_00",
+      "run": "n20__sc_ports2_nic1_full_insert_n20",
+      "score": 1.0,
+      "tier3_message": "Task not completed.",
+      "off_limit_contact": "No contact detected.",
+      "has_video": true,
+      "has_state_data": true,
+      "force_peak_n": 25.98852936747146,
+      "one_second_mid_stall_candidates": []
+    },
+    {
+      "attempt": "outputs/trajectory_datasets/clean_including_no_insert_trajs/sc_to_sc/agent/sc_ports_2/n20__sc_ports2_nic1_full_insert_n20/agent_generation/replay_attempts/attempt_000015_candidate_00",
+      "run": "n20__sc_ports2_nic1_full_insert_n20",
+      "score": 1.0,
+      "tier3_message": "Task not completed.",
+      "off_limit_contact": "No contact detected.",
+      "has_video": true,
+      "has_state_data": true,
+      "force_peak_n": 22.714367346929823,
+      "one_second_mid_stall_candidates": []
+    },
+    {
+      "attempt": "outputs/trajectory_datasets/clean_including_no_insert_trajs/sc_to_sc/agent/sc_ports_2/n20__sc_ports2_nic1_full_insert_n20/agent_generation/replay_attempts/attempt_000016_candidate_00",
+      "run": "n20__sc_ports2_nic1_full_insert_n20",
+      "score": 1.0,
+      "tier3_message": "Task not completed.",
+      "off_limit_contact": "No contact detected.",
+      "has_video": true,
+      "has_state_data": true,
+      "force_peak_n": 22.484176582766196,
+      "one_second_mid_stall_candidates": []
+    },
+    {
+      "attempt": "outputs/trajectory_datasets/clean_including_no_insert_trajs/sc_to_sc/agent/sc_ports_2/n20__sc_ports2_nic1_full_insert_n20/agent_generation/replay_attempts/attempt_000017_candidate_00",
+      "run": "n20__sc_ports2_nic1_full_insert_n20",
+      "score": 1.0,
+      "tier3_message": "Task not completed.",
+      "off_limit_contact": "No contact detected.",
+      "has_video": true,
+      "has_state_data": true,
+      "force_peak_n": 21.87428924889787,
+      "one_second_mid_stall_candidates": []
+    },
+    {
+      "attempt": "outputs/trajectory_datasets/clean_including_no_insert_trajs/sc_to_sc/agent/sc_ports_2/n20__sc_ports2_nic1_full_insert_n20/agent_generation/replay_attempts/attempt_000018_candidate_00",
+      "run": "n20__sc_ports2_nic1_full_insert_n20",
+      "score": 1.0,
+      "tier3_message": "Task not completed.",
+      "off_limit_contact": "No contact detected.",
+      "has_video": true,
+      "has_state_data": true,
+      "force_peak_n": 22.22575934046909,
+      "one_second_mid_stall_candidates": []
+    },
+    {
+      "attempt": "outputs/trajectory_datasets/clean_including_no_insert_trajs/sc_to_sc/agent/sc_ports_2/n20__sc_ports2_nic1_full_insert_n20/agent_generation/replay_attempts/attempt_000019_candidate_00",
+      "run": "n20__sc_ports2_nic1_full_insert_n20",
+      "score": 1.0,
+      "tier3_message": "Task not completed.",
+      "off_limit_contact": "No contact detected.",
+      "has_video": true,
+      "has_state_data": true,
+      "force_peak_n": 21.78653680678875,
+      "one_second_mid_stall_candidates": []
+    },
+    {
+      "attempt": "outputs/trajectory_datasets/clean_including_no_insert_trajs/sc_to_sc/agent/sc_ports_2/n20__sc_ports2_nic1_full_insert_n20/agent_generation/replay_attempts/attempt_000020_candidate_00",
+      "run": "n20__sc_ports2_nic1_full_insert_n20",
+      "score": 1.0,
+      "tier3_message": "Task not completed.",
+      "off_limit_contact": "No contact detected.",
+      "has_video": true,
+      "has_state_data": true,
+      "force_peak_n": 22.07952764270969,
+      "one_second_mid_stall_candidates": []
+    },
+    {
+      "attempt": "outputs/trajectory_datasets/clean_including_no_insert_trajs/sc_to_sc/agent/sc_ports_2/n20__sc_ports2_nic1_full_insert_n20/agent_generation/replay_attempts/attempt_000021_candidate_00",
+      "run": "n20__sc_ports2_nic1_full_insert_n20",
+      "score": 89.80172943864957,
+      "tier3_message": "Cable insertion successful.",
+      "off_limit_contact": "No contact detected.",
+      "has_video": true,
+      "has_state_data": true,
+      "force_peak_n": 22.35230383867014,
+      "one_second_mid_stall_candidates": []
+    },
+    {
+      "attempt": "outputs/trajectory_datasets/clean_including_no_insert_trajs/sc_to_sc/agent/sc_ports_2/n20__sc_ports2_nic1_full_insert_n20/agent_generation/replay_attempts/attempt_000022_candidate_00",
+      "run": "n20__sc_ports2_nic1_full_insert_n20",
+      "score": 1.0,
+      "tier3_message": "Task not completed.",
+      "off_limit_contact": "No contact detected.",
+      "has_video": true,
+      "has_state_data": true,
+      "force_peak_n": 21.91143433025396,
+      "one_second_mid_stall_candidates": []
+    },
+    {
+      "attempt": "outputs/trajectory_datasets/clean_including_no_insert_trajs/sc_to_sc/agent/sc_ports_2/n20__sc_ports2_nic1_full_insert_n20/agent_generation/replay_attempts/attempt_000023_candidate_00",
+      "run": "n20__sc_ports2_nic1_full_insert_n20",
+      "score": 90.0347811163364,
+      "tier3_message": "Cable insertion successful.",
+      "off_limit_contact": "No contact detected.",
+      "has_video": true,
+      "has_state_data": true,
+      "force_peak_n": 22.144723811566887,
+      "one_second_mid_stall_candidates": []
+    },
+    {
+      "attempt": "outputs/trajectory_datasets/clean_including_no_insert_trajs/sc_to_sc/agent/sc_ports_2/n20__sc_ports2_nic1_full_insert_n20/agent_generation/replay_attempts/attempt_000024_candidate_00",
+      "run": "n20__sc_ports2_nic1_full_insert_n20",
+      "score": 90.59740374054314,
+      "tier3_message": "Cable insertion successful.",
+      "off_limit_contact": "No contact detected.",
+      "has_video": true,
+      "has_state_data": true,
+      "force_peak_n": 22.62231759331153,
+      "one_second_mid_stall_candidates": []
+    },
+    {
+      "attempt": "outputs/trajectory_datasets/clean_including_no_insert_trajs/sc_to_sc/agent/sc_ports_2/n20__sc_ports2_nic1_full_insert_n20/agent_generation/replay_attempts/attempt_000025_candidate_00",
+      "run": "n20__sc_ports2_nic1_full_insert_n20",
+      "score": 91.34148957276895,
+      "tier3_message": "Cable insertion successful.",
+      "off_limit_contact": "No contact detected.",
+      "has_video": true,
+      "has_state_data": true,
+      "force_peak_n": 22.064443874417847,
+      "one_second_mid_stall_candidates": []
+    },
+    {
+      "attempt": "outputs/trajectory_datasets/clean_including_no_insert_trajs/sc_to_sc/agent/sc_ports_2/n20__sc_ports2_nic1_full_insert_n20/agent_generation/replay_attempts/attempt_000028_candidate_00",
+      "run": "n20__sc_ports2_nic1_full_insert_n20",
+      "score": 1.0,
+      "tier3_message": "Task not completed.",
+      "off_limit_contact": "No contact detected.",
+      "has_video": true,
+      "has_state_data": true,
+      "force_peak_n": 22.009929101553336,
+      "one_second_mid_stall_candidates": []
+    },
+    {
+      "attempt": "outputs/trajectory_datasets/clean_including_no_insert_trajs/sc_to_sc/agent/sc_ports_2/n20__sc_ports2_nic1_full_insert_n20/agent_generation/replay_attempts/attempt_000029_candidate_00",
+      "run": "n20__sc_ports2_nic1_full_insert_n20",
+      "score": 90.75035307015216,
+      "tier3_message": "Cable insertion successful.",
+      "off_limit_contact": "No contact detected.",
+      "has_video": true,
+      "has_state_data": true,
+      "force_peak_n": 22.43325448414977,
+      "one_second_mid_stall_candidates": []
+    },
+    {
+      "attempt": "outputs/trajectory_datasets/clean_including_no_insert_trajs/sc_to_sc/agent/sc_ports_2/n20__sc_ports2_nic1_full_insert_n20/agent_generation/replay_attempts/attempt_000030_candidate_00",
+      "run": "n20__sc_ports2_nic1_full_insert_n20",
+      "score": 1.0,
+      "tier3_message": "Task not completed.",
+      "off_limit_contact": "No contact detected.",
+      "has_video": true,
+      "has_state_data": true,
+      "force_peak_n": 22.20787874394028,
+      "one_second_mid_stall_candidates": []
+    },
+    {
+      "attempt": "outputs/trajectory_datasets/clean_including_no_insert_trajs/sc_to_sc/agent/sc_ports_2/n20__sc_ports2_nic1_full_insert_n20/agent_generation/replay_attempts/attempt_000031_candidate_00",
+      "run": "n20__sc_ports2_nic1_full_insert_n20",
+      "score": 1.0,
+      "tier3_message": "Task not completed.",
+      "off_limit_contact": "No contact detected.",
+      "has_video": true,
+      "has_state_data": true,
+      "force_peak_n": 21.60120341701313,
+      "one_second_mid_stall_candidates": []
+    },
+    {
+      "attempt": "outputs/trajectory_datasets/clean_including_no_insert_trajs/sc_to_sc/agent/sc_ports_2/n20__sc_ports2_nic1_full_insert_n20/agent_generation/replay_attempts/attempt_000032_candidate_00",
+      "run": "n20__sc_ports2_nic1_full_insert_n20",
+      "score": 1.0,
+      "tier3_message": "Task not completed.",
+      "off_limit_contact": "No contact detected.",
+      "has_video": true,
+      "has_state_data": true,
+      "force_peak_n": 22.01158466109772,
+      "one_second_mid_stall_candidates": []
+    },
+    {
+      "attempt": "outputs/trajectory_datasets/clean_including_no_insert_trajs/sc_to_sc/agent/sc_ports_2/n20__sc_ports2_nic1_full_insert_n20/agent_generation/replay_attempts/attempt_000033_candidate_00",
+      "run": "n20__sc_ports2_nic1_full_insert_n20",
+      "score": 1.0,
+      "tier3_message": "Task not completed.",
+      "off_limit_contact": "No contact detected.",
+      "has_video": true,
+      "has_state_data": true,
+      "force_peak_n": 21.668066346381128,
+      "one_second_mid_stall_candidates": []
+    },
+    {
+      "attempt": "outputs/trajectory_datasets/clean_including_no_insert_trajs/sc_to_sc/agent/sc_ports_2/n20__sc_ports2_nic1_full_insert_n20/agent_generation/replay_attempts/attempt_000034_candidate_00",
+      "run": "n20__sc_ports2_nic1_full_insert_n20",
+      "score": 90.47538377019079,
+      "tier3_message": "Cable insertion successful.",
+      "off_limit_contact": "No contact detected.",
+      "has_video": true,
+      "has_state_data": true,
+      "force_peak_n": 21.829108934930336,
+      "one_second_mid_stall_candidates": []
+    },
+    {
+      "attempt": "outputs/trajectory_datasets/clean_including_no_insert_trajs/sc_to_sc/agent/sc_ports_2/n20__sc_ports2_nic1_full_insert_n20/agent_generation/replay_attempts/attempt_000035_candidate_00",
+      "run": "n20__sc_ports2_nic1_full_insert_n20",
+      "score": 1.0,
+      "tier3_message": "Task not completed.",
+      "off_limit_contact": "No contact detected.",
+      "has_video": true,
+      "has_state_data": true,
+      "force_peak_n": 22.778464663296646,
+      "one_second_mid_stall_candidates": []
+    },
+    {
+      "attempt": "outputs/trajectory_datasets/clean_including_no_insert_trajs/sc_to_sc/agent/sc_ports_2/n20__sc_ports2_nic1_full_insert_n20/agent_generation/replay_attempts/attempt_000036_candidate_00",
+      "run": "n20__sc_ports2_nic1_full_insert_n20",
+      "score": 89.8822609756329,
+      "tier3_message": "Cable insertion successful.",
+      "off_limit_contact": "No contact detected.",
+      "has_video": true,
+      "has_state_data": true,
+      "force_peak_n": 22.196632784331197,
+      "one_second_mid_stall_candidates": []
+    },
+    {
+      "attempt": "outputs/trajectory_datasets/clean_including_no_insert_trajs/sc_to_sc/agent/sc_ports_2/n20__sc_ports2_nic1_full_insert_n20/agent_generation/replay_attempts/attempt_000037_candidate_00",
+      "run": "n20__sc_ports2_nic1_full_insert_n20",
+      "score": -35.0,
+      "tier3_message": "Task not completed.",
+      "off_limit_contact": "Contacts detected (only first reported) between entity named [ur5e::wrist_3_link::wrist_3_link_fixed_joint_lump__body_collider_box_collision_15] and [enclosure walls::enclosure_walls_link::v1015062006_collider_box]. Penalty applied.",
+      "has_video": true,
+      "has_state_data": true,
+      "force_peak_n": 323.77616159152166,
+      "one_second_mid_stall_candidates": [
+        {
+          "start_s": 95.74,
+          "force_peak_n": 31.56,
+          "measured_tcp_displacement_mm": 2.85
+        },
+        {
+          "start_s": 96.24,
+          "force_peak_n": 32.77,
+          "measured_tcp_displacement_mm": 2.84
+        },
+        {
+          "start_s": 96.74,
+          "force_peak_n": 34.6,
+          "measured_tcp_displacement_mm": 2.84
+        },
+        {
+          "start_s": 97.24,
+          "force_peak_n": 35.79,
+          "measured_tcp_displacement_mm": 2.86
+        },
+        {
+          "start_s": 97.74,
+          "force_peak_n": 37.68,
+          "measured_tcp_displacement_mm": 2.86
+        },
+        {
+          "start_s": 98.24,
+          "force_peak_n": 39.05,
+          "measured_tcp_displacement_mm": 2.86
+        },
+        {
+          "start_s": 98.74,
+          "force_peak_n": 40.96,
+          "measured_tcp_displacement_mm": 2.86
+        },
+        {
+          "start_s": 99.24,
+          "force_peak_n": 42.46,
+          "measured_tcp_displacement_mm": 2.85
+        },
+        {
+          "start_s": 99.74,
+          "force_peak_n": 43.97,
+          "measured_tcp_displacement_mm": 2.67
+        },
+        {
+          "start_s": 100.24,
+          "force_peak_n": 45.49,
+          "measured_tcp_displacement_mm": 2.47
+        },
+        {
+          "start_s": 100.74,
+          "force_peak_n": 47.09,
+          "measured_tcp_displacement_mm": 2.66
+        },
+        {
+          "start_s": 101.24,
+          "force_peak_n": 48.75,
+          "measured_tcp_displacement_mm": 2.85
+        },
+        {
+          "start_s": 101.74,
+          "force_peak_n": 50.31,
+          "measured_tcp_displacement_mm": 2.66
+        },
+        {
+          "start_s": 102.24,
+          "force_peak_n": 52.01,
+          "measured_tcp_displacement_mm": 2.85
+        },
+        {
+          "start_s": 102.74,
+          "force_peak_n": 53.44,
+          "measured_tcp_displacement_mm": 2.84
+        },
+        {
+          "start_s": 103.24,
+          "force_peak_n": 54.64,
+          "measured_tcp_displacement_mm": 2.65
+        },
+        {
+          "start_s": 103.74,
+          "force_peak_n": 56.1,
+          "measured_tcp_displacement_mm": 2.65
+        },
+        {
+          "start_s": 104.24,
+          "force_peak_n": 57.99,
+          "measured_tcp_displacement_mm": 2.84
+        },
+        {
+          "start_s": 105.24,
+          "force_peak_n": 61.37,
+          "measured_tcp_displacement_mm": 2.83
+        },
+        {
+          "start_s": 105.74,
+          "force_peak_n": 63.1,
+          "measured_tcp_displacement_mm": 2.83
+        },
+        {
+          "start_s": 106.74,
+          "force_peak_n": 66.15,
+          "measured_tcp_displacement_mm": 2.82
+        },
+        {
+          "start_s": 107.24,
+          "force_peak_n": 67.72,
+          "measured_tcp_displacement_mm": 2.83
+        },
+        {
+          "start_s": 107.74,
+          "force_peak_n": 69.75,
+          "measured_tcp_displacement_mm": 2.83
+        },
+        {
+          "start_s": 108.24,
+          "force_peak_n": 71.13,
+          "measured_tcp_displacement_mm": 2.82
+        },
+        {
+          "start_s": 108.74,
+          "force_peak_n": 72.77,
+          "measured_tcp_displacement_mm": 2.83
+        },
+        {
+          "start_s": 109.24,
+          "force_peak_n": 73.71,
+          "measured_tcp_displacement_mm": 2.67
+        },
+        {
+          "start_s": 109.74,
+          "force_peak_n": 73.98,
+          "measured_tcp_displacement_mm": 1.99
+        },
+        {
+          "start_s": 110.24,
+          "force_peak_n": 74.35,
+          "measured_tcp_displacement_mm": 1.4
+        },
+        {
+          "start_s": 110.74,
+          "force_peak_n": 75.02,
+          "measured_tcp_displacement_mm": 1.38
+        },
+        {
+          "start_s": 111.24,
+          "force_peak_n": 75.24,
+          "measured_tcp_displacement_mm": 1.51
+        },
+        {
+          "start_s": 111.74,
+          "force_peak_n": 75.75,
+          "measured_tcp_displacement_mm": 1.74
+        },
+        {
+          "start_s": 112.24,
+          "force_peak_n": 75.75,
+          "measured_tcp_displacement_mm": 1.88
+        },
+        {
+          "start_s": 112.74,
+          "force_peak_n": 75.69,
+          "measured_tcp_displacement_mm": 1.88
+        },
+        {
+          "start_s": 113.24,
+          "force_peak_n": 76.34,
+          "measured_tcp_displacement_mm": 2.04
+        },
+        {
+          "start_s": 113.74,
+          "force_peak_n": 77.2,
+          "measured_tcp_displacement_mm": 2.34
+        },
+        {
+          "start_s": 114.24,
+          "force_peak_n": 77.3,
+          "measured_tcp_displacement_mm": 2.51
+        },
+        {
+          "start_s": 114.74,
+          "force_peak_n": 77.3,
+          "measured_tcp_displacement_mm": 2.52
+        },
+        {
+          "start_s": 115.24,
+          "force_peak_n": 77.93,
+          "measured_tcp_displacement_mm": 2.72
+        },
+        {
+          "start_s": 115.74,
+          "force_peak_n": 78.14,
+          "measured_tcp_displacement_mm": 2.91
+        },
+        {
+          "start_s": 119.24,
+          "force_peak_n": 80.03,
+          "measured_tcp_displacement_mm": 0.89
+        },
+        {
+          "start_s": 119.74,
+          "force_peak_n": 79.78,
+          "measured_tcp_displacement_mm": 0.4
+        },
+        {
+          "start_s": 120.24,
+          "force_peak_n": 79.53,
+          "measured_tcp_displacement_mm": 0.78
+        },
+        {
+          "start_s": 120.74,
+          "force_peak_n": 79.47,
+          "measured_tcp_displacement_mm": 0.87
+        },
+        {
+          "start_s": 121.24,
+          "force_peak_n": 79.38,
+          "measured_tcp_displacement_mm": 0.83
+        },
+        {
+          "start_s": 121.74,
+          "force_peak_n": 79.09,
+          "measured_tcp_displacement_mm": 0.9
+        },
+        {
+          "start_s": 122.24,
+          "force_peak_n": 78.86,
+          "measured_tcp_displacement_mm": 0.91
+        },
+        {
+          "start_s": 122.74,
+          "force_peak_n": 78.86,
+          "measured_tcp_displacement_mm": 0.85
+        },
+        {
+          "start_s": 123.24,
+          "force_peak_n": 78.53,
+          "measured_tcp_displacement_mm": 0.92
+        },
+        {
+          "start_s": 123.74,
+          "force_peak_n": 78.44,
+          "measured_tcp_displacement_mm": 0.93
+        },
+        {
+          "start_s": 124.24,
+          "force_peak_n": 78.17,
+          "measured_tcp_displacement_mm": 0.94
+        },
+        {
+          "start_s": 124.74,
+          "force_peak_n": 78.17,
+          "measured_tcp_displacement_mm": 0.95
+        },
+        {
+          "start_s": 125.24,
+          "force_peak_n": 77.7,
+          "measured_tcp_displacement_mm": 0.95
+        },
+        {
+          "start_s": 125.74,
+          "force_peak_n": 77.53,
+          "measured_tcp_displacement_mm": 0.96
+        },
+        {
+          "start_s": 126.24,
+          "force_peak_n": 77.4,
+          "measured_tcp_displacement_mm": 0.9
+        },
+        {
+          "start_s": 126.74,
+          "force_peak_n": 77.4,
+          "measured_tcp_displacement_mm": 0.91
+        },
+        {
+          "start_s": 127.24,
+          "force_peak_n": 76.93,
+          "measured_tcp_displacement_mm": 0.99
+        },
+        {
+          "start_s": 127.74,
+          "force_peak_n": 76.93,
+          "measured_tcp_displacement_mm": 1.0
+        },
+        {
+          "start_s": 128.24,
+          "force_peak_n": 76.61,
+          "measured_tcp_displacement_mm": 0.94
+        },
+        {
+          "start_s": 128.74,
+          "force_peak_n": 76.43,
+          "measured_tcp_displacement_mm": 1.02
+        },
+        {
+          "start_s": 129.24,
+          "force_peak_n": 76.07,
+          "measured_tcp_displacement_mm": 1.03
+        },
+        {
+          "start_s": 129.74,
+          "force_peak_n": 76.02,
+          "measured_tcp_displacement_mm": 0.97
+        },
+        {
+          "start_s": 130.24,
+          "force_peak_n": 75.68,
+          "measured_tcp_displacement_mm": 1.06
+        },
+        {
+          "start_s": 130.74,
+          "force_peak_n": 75.68,
+          "measured_tcp_displacement_mm": 1.07
+        },
+        {
+          "start_s": 131.24,
+          "force_peak_n": 75.4,
+          "measured_tcp_displacement_mm": 1.02
+        },
+        {
+          "start_s": 131.74,
+          "force_peak_n": 75.02,
+          "measured_tcp_displacement_mm": 1.11
+        },
+        {
+          "start_s": 132.24,
+          "force_peak_n": 74.87,
+          "measured_tcp_displacement_mm": 1.12
+        },
+        {
+          "start_s": 132.74,
+          "force_peak_n": 74.52,
+          "measured_tcp_displacement_mm": 1.14
+        },
+        {
+          "start_s": 133.24,
+          "force_peak_n": 74.32,
+          "measured_tcp_displacement_mm": 1.16
+        },
+        {
+          "start_s": 133.74,
+          "force_peak_n": 73.99,
+          "measured_tcp_displacement_mm": 1.11
+        },
+        {
+          "start_s": 134.24,
+          "force_peak_n": 73.7,
+          "measured_tcp_displacement_mm": 1.13
+        },
+        {
+          "start_s": 134.74,
+          "force_peak_n": 73.34,
+          "measured_tcp_displacement_mm": 1.24
+        },
+        {
+          "start_s": 135.24,
+          "force_peak_n": 73.28,
+          "measured_tcp_displacement_mm": 1.27
+        },
+        {
+          "start_s": 135.74,
+          "force_peak_n": 72.84,
+          "measured_tcp_displacement_mm": 1.31
+        },
+        {
+          "start_s": 136.24,
+          "force_peak_n": 72.47,
+          "measured_tcp_displacement_mm": 1.34
+        },
+        {
+          "start_s": 136.74,
+          "force_peak_n": 72.31,
+          "measured_tcp_displacement_mm": 1.3
+        },
+        {
+          "start_s": 137.24,
+          "force_peak_n": 71.97,
+          "measured_tcp_displacement_mm": 1.34
+        },
+        {
+          "start_s": 137.74,
+          "force_peak_n": 71.66,
+          "measured_tcp_displacement_mm": 1.5
+        },
+        {
+          "start_s": 138.24,
+          "force_peak_n": 71.3,
+          "measured_tcp_displacement_mm": 1.56
+        },
+        {
+          "start_s": 138.74,
+          "force_peak_n": 70.66,
+          "measured_tcp_displacement_mm": 1.53
+        },
+        {
+          "start_s": 139.24,
+          "force_peak_n": 70.63,
+          "measured_tcp_displacement_mm": 1.62
+        },
+        {
+          "start_s": 139.74,
+          "force_peak_n": 69.92,
+          "measured_tcp_displacement_mm": 1.72
+        },
+        {
+          "start_s": 140.24,
+          "force_peak_n": 69.36,
+          "measured_tcp_displacement_mm": 2.01
+        },
+        {
+          "start_s": 140.74,
+          "force_peak_n": 69.14,
+          "measured_tcp_displacement_mm": 2.22
+        },
+        {
+          "start_s": 141.24,
+          "force_peak_n": 68.73,
+          "measured_tcp_displacement_mm": 2.59
+        }
+      ]
+    },
+    {
+      "attempt": "outputs/trajectory_datasets/clean_including_no_insert_trajs/sc_to_sc/agent/sc_ports_2/n20__sc_ports2_nic1_full_insert_n20/agent_generation/replay_attempts/attempt_000039_candidate_00",
+      "run": "n20__sc_ports2_nic1_full_insert_n20",
+      "score": 1.0,
+      "tier3_message": "Task not completed.",
+      "off_limit_contact": "No contact detected.",
+      "has_video": true,
+      "has_state_data": true,
+      "force_peak_n": 22.02447626098386,
+      "one_second_mid_stall_candidates": []
+    },
+    {
+      "attempt": "outputs/trajectory_datasets/clean_including_no_insert_trajs/sc_to_sc/agent/sc_ports_2/n20__sc_ports2_nic1_full_insert_n20/agent_generation/replay_attempts/attempt_000040_candidate_00",
+      "run": "n20__sc_ports2_nic1_full_insert_n20",
+      "score": 89.72740607840507,
+      "tier3_message": "Cable insertion successful.",
+      "off_limit_contact": "No contact detected.",
+      "has_video": true,
+      "has_state_data": true,
+      "force_peak_n": 28.16421479519072,
+      "one_second_mid_stall_candidates": []
+    },
+    {
+      "attempt": "outputs/trajectory_datasets/clean_including_no_insert_trajs/sc_to_sc/agent/sc_ports_2/n20__sc_ports2_nic1_full_insert_n20/agent_generation/replay_attempts/attempt_000041_candidate_00",
+      "run": "n20__sc_ports2_nic1_full_insert_n20",
+      "score": 1.0,
+      "tier3_message": "Task not completed.",
+      "off_limit_contact": "No contact detected.",
+      "has_video": true,
+      "has_state_data": true,
+      "force_peak_n": 22.572594790137675,
+      "one_second_mid_stall_candidates": []
+    },
+    {
+      "attempt": "outputs/trajectory_datasets/clean_including_no_insert_trajs/sc_to_sc/agent/sc_ports_2/n20__sc_ports2_nic1_full_insert_n20/agent_generation/replay_attempts/attempt_000042_candidate_00",
+      "run": "n20__sc_ports2_nic1_full_insert_n20",
+      "score": 1.0,
+      "tier3_message": "Task not completed.",
+      "off_limit_contact": "No contact detected.",
+      "has_video": true,
+      "has_state_data": true,
+      "force_peak_n": 23.039711393045454,
+      "one_second_mid_stall_candidates": []
+    },
+    {
+      "attempt": "outputs/trajectory_datasets/clean_including_no_insert_trajs/sc_to_sc/agent/sc_ports_2/n20__sc_ports2_nic1_full_insert_n20/agent_generation/replay_attempts/attempt_000043_candidate_00",
+      "run": "n20__sc_ports2_nic1_full_insert_n20",
+      "score": 1.0,
+      "tier3_message": "Task not completed.",
+      "off_limit_contact": "No contact detected.",
+      "has_video": true,
+      "has_state_data": true,
+      "force_peak_n": 21.51749166967411,
+      "one_second_mid_stall_candidates": []
+    },
+    {
+      "attempt": "outputs/trajectory_datasets/clean_including_no_insert_trajs/sc_to_sc/agent/sc_ports_2/n20__sc_ports2_nic1_full_insert_n20/agent_generation/replay_attempts/attempt_000044_candidate_00",
+      "run": "n20__sc_ports2_nic1_full_insert_n20",
+      "score": 1.0,
+      "tier3_message": "Task not completed.",
+      "off_limit_contact": "No contact detected.",
+      "has_video": true,
+      "has_state_data": true,
+      "force_peak_n": 21.96993884705844,
+      "one_second_mid_stall_candidates": []
+    },
+    {
+      "attempt": "outputs/trajectory_datasets/clean_including_no_insert_trajs/sc_to_sc/agent/sc_ports_2/n20__sc_ports2_nic1_full_insert_n20/agent_generation/replay_attempts/attempt_000045_candidate_00",
+      "run": "n20__sc_ports2_nic1_full_insert_n20",
+      "score": 1.0,
+      "tier3_message": "Task not completed.",
+      "off_limit_contact": "No contact detected.",
+      "has_video": true,
+      "has_state_data": true,
+      "force_peak_n": 22.10931240746958,
+      "one_second_mid_stall_candidates": []
+    },
+    {
+      "attempt": "outputs/trajectory_datasets/clean_including_no_insert_trajs/sc_to_sc/agent/sc_ports_2/n20__sc_ports2_nic1_full_insert_n20/agent_generation/replay_attempts/attempt_000046_candidate_00",
+      "run": "n20__sc_ports2_nic1_full_insert_n20",
+      "score": -11.0,
+      "tier3_message": "Task not completed.",
+      "off_limit_contact": "No contact detected.",
+      "has_video": true,
+      "has_state_data": true,
+      "force_peak_n": 63.16638659979296,
+      "one_second_mid_stall_candidates": []
+    },
+    {
+      "attempt": "outputs/trajectory_datasets/clean_including_no_insert_trajs/sc_to_sc/agent/sc_ports_2/n20__sc_ports2_nic1_full_insert_n20/agent_generation/replay_attempts/attempt_000048_candidate_00",
+      "run": "n20__sc_ports2_nic1_full_insert_n20",
+      "score": 1.0,
+      "tier3_message": "Task not completed.",
+      "off_limit_contact": "No contact detected.",
+      "has_video": true,
+      "has_state_data": true,
+      "force_peak_n": 22.015073959561526,
+      "one_second_mid_stall_candidates": []
+    },
+    {
+      "attempt": "outputs/trajectory_datasets/clean_including_no_insert_trajs/sc_to_sc/agent/sc_ports_2/n20__sc_ports2_nic1_full_insert_n20/agent_generation/replay_attempts/attempt_000050_candidate_00",
+      "run": "n20__sc_ports2_nic1_full_insert_n20",
+      "score": 1.0,
+      "tier3_message": "Task not completed.",
+      "off_limit_contact": "No contact detected.",
+      "has_video": true,
+      "has_state_data": true,
+      "force_peak_n": 22.066953879797776,
+      "one_second_mid_stall_candidates": []
+    },
+    {
+      "attempt": "outputs/trajectory_datasets/clean_including_no_insert_trajs/sc_to_sc/agent/sc_ports_2/n20__sc_ports2_nic1_full_insert_n20/agent_generation/replay_attempts/attempt_000051_candidate_00",
+      "run": "n20__sc_ports2_nic1_full_insert_n20",
+      "score": 90.12398892046407,
+      "tier3_message": "Cable insertion successful.",
+      "off_limit_contact": "No contact detected.",
+      "has_video": true,
+      "has_state_data": true,
+      "force_peak_n": 22.455520857471026,
+      "one_second_mid_stall_candidates": []
+    },
+    {
+      "attempt": "outputs/trajectory_datasets/clean_including_no_insert_trajs/sc_to_sc/agent/sc_ports_2/n20__sc_ports2_nic1_full_insert_n20/agent_generation/replay_attempts/attempt_000053_candidate_00",
+      "run": "n20__sc_ports2_nic1_full_insert_n20",
+      "score": 1.0,
+      "tier3_message": "Task not completed.",
+      "off_limit_contact": "No contact detected.",
+      "has_video": true,
+      "has_state_data": true,
+      "force_peak_n": 22.530952171107163,
+      "one_second_mid_stall_candidates": []
+    },
+    {
+      "attempt": "outputs/trajectory_datasets/clean_including_no_insert_trajs/sc_to_sc/agent/sc_ports_2/n20__sc_ports2_nic1_full_insert_n20/agent_generation/replay_attempts/attempt_000054_candidate_00",
+      "run": "n20__sc_ports2_nic1_full_insert_n20",
+      "score": 1.0,
+      "tier3_message": "Task not completed.",
+      "off_limit_contact": "No contact detected.",
+      "has_video": true,
+      "has_state_data": true,
+      "force_peak_n": 22.281485035064897,
+      "one_second_mid_stall_candidates": []
+    },
+    {
+      "attempt": "outputs/trajectory_datasets/clean_including_no_insert_trajs/sc_to_sc/agent/sc_ports_2/n20__sc_ports2_nic1_full_insert_n20/agent_generation/replay_attempts/attempt_000055_candidate_00",
+      "run": "n20__sc_ports2_nic1_full_insert_n20",
+      "score": 1.0,
+      "tier3_message": "Task not completed.",
+      "off_limit_contact": "No contact detected.",
+      "has_video": true,
+      "has_state_data": true,
+      "force_peak_n": 26.421317417299722,
+      "one_second_mid_stall_candidates": []
+    },
+    {
+      "attempt": "outputs/trajectory_datasets/clean_including_no_insert_trajs/sc_to_sc/agent/sc_ports_2/n20__sc_ports2_nic1_full_insert_n20/agent_generation/replay_attempts/attempt_000056_candidate_00",
+      "run": "n20__sc_ports2_nic1_full_insert_n20",
+      "score": 1.0,
+      "tier3_message": "Task not completed.",
+      "off_limit_contact": "No contact detected.",
+      "has_video": true,
+      "has_state_data": true,
+      "force_peak_n": 22.344820921326278,
+      "one_second_mid_stall_candidates": []
+    },
+    {
+      "attempt": "outputs/trajectory_datasets/clean_including_no_insert_trajs/sc_to_sc/agent/sc_ports_2/n20__sc_ports2_nic1_full_insert_n20/agent_generation/replay_attempts/attempt_000058_candidate_00",
+      "run": "n20__sc_ports2_nic1_full_insert_n20",
+      "score": 1.0,
+      "tier3_message": "Task not completed.",
+      "off_limit_contact": "No contact detected.",
+      "has_video": true,
+      "has_state_data": true,
+      "force_peak_n": 21.868496267325845,
+      "one_second_mid_stall_candidates": []
+    },
+    {
+      "attempt": "outputs/trajectory_datasets/clean_including_no_insert_trajs/sc_to_sc/agent/sc_ports_2/n20__sc_ports2_nic1_full_insert_n20/agent_generation/replay_attempts/attempt_000059_candidate_00",
+      "run": "n20__sc_ports2_nic1_full_insert_n20",
+      "score": 1.0,
+      "tier3_message": "Task not completed.",
+      "off_limit_contact": "No contact detected.",
+      "has_video": true,
+      "has_state_data": true,
+      "force_peak_n": 22.062013451540388,
+      "one_second_mid_stall_candidates": []
+    },
+    {
+      "attempt": "outputs/trajectory_datasets/clean_including_no_insert_trajs/sc_to_sc/agent/sc_ports_2/n20__sc_ports2_nic1_full_insert_n20/agent_generation/replay_attempts/attempt_000060_candidate_00",
+      "run": "n20__sc_ports2_nic1_full_insert_n20",
+      "score": 1.0,
+      "tier3_message": "Task not completed.",
+      "off_limit_contact": "No contact detected.",
+      "has_video": true,
+      "has_state_data": true,
+      "force_peak_n": 21.513331620549618,
+      "one_second_mid_stall_candidates": []
+    },
+    {
+      "attempt": "outputs/trajectory_datasets/clean_including_no_insert_trajs/sc_to_sc/agent/sc_ports_2/n20__sc_ports2_nic1_full_insert_n20/agent_generation/replay_attempts/attempt_000061_candidate_00",
+      "run": "n20__sc_ports2_nic1_full_insert_n20",
+      "score": 1.0,
+      "tier3_message": "Task not completed.",
+      "off_limit_contact": "No contact detected.",
+      "has_video": true,
+      "has_state_data": true,
+      "force_peak_n": 22.08976244844568,
+      "one_second_mid_stall_candidates": []
+    },
+    {
+      "attempt": "outputs/trajectory_datasets/clean_including_no_insert_trajs/sc_to_sc/agent/sc_ports_2/n20__sc_ports2_nic1_full_insert_n20/agent_generation/replay_attempts/attempt_000062_candidate_00",
+      "run": "n20__sc_ports2_nic1_full_insert_n20",
+      "score": 1.0,
+      "tier3_message": "Task not completed.",
+      "off_limit_contact": "No contact detected.",
+      "has_video": true,
+      "has_state_data": true,
+      "force_peak_n": 22.648254585227033,
+      "one_second_mid_stall_candidates": []
+    },
+    {
+      "attempt": "outputs/trajectory_datasets/clean_including_no_insert_trajs/sc_to_sc/agent/sc_ports_2/n20__sc_ports2_nic1_full_insert_n20/agent_generation/replay_attempts/attempt_000064_candidate_00",
+      "run": "n20__sc_ports2_nic1_full_insert_n20",
+      "score": 90.5825053071957,
+      "tier3_message": "Cable insertion successful.",
+      "off_limit_contact": "No contact detected.",
+      "has_video": true,
+      "has_state_data": true,
+      "force_peak_n": 21.924469496099633,
+      "one_second_mid_stall_candidates": []
+    },
+    {
+      "attempt": "outputs/trajectory_datasets/clean_including_no_insert_trajs/sc_to_sc/agent/sc_ports_2/n20__sc_ports2_nic1_full_insert_n20/agent_generation/replay_attempts/attempt_000065_candidate_00",
+      "run": "n20__sc_ports2_nic1_full_insert_n20",
+      "score": 1.0,
+      "tier3_message": "Task not completed.",
+      "off_limit_contact": "No contact detected.",
+      "has_video": true,
+      "has_state_data": true,
+      "force_peak_n": 24.082961402859368,
+      "one_second_mid_stall_candidates": []
+    },
+    {
+      "attempt": "outputs/trajectory_datasets/clean_including_no_insert_trajs/sc_to_sc/agent/sc_ports_2/n20__sc_ports2_nic1_full_insert_n20/agent_generation/replay_attempts/attempt_000066_candidate_00",
+      "run": "n20__sc_ports2_nic1_full_insert_n20",
+      "score": 90.12574324240205,
+      "tier3_message": "Cable insertion successful.",
+      "off_limit_contact": "No contact detected.",
+      "has_video": true,
+      "has_state_data": true,
+      "force_peak_n": 22.737381524461664,
+      "one_second_mid_stall_candidates": []
+    },
+    {
+      "attempt": "outputs/trajectory_datasets/clean_including_no_insert_trajs/sc_to_sc/agent/sc_ports_2/n20__sc_ports2_nic1_full_insert_n20/agent_generation/replay_attempts/attempt_000067_candidate_00",
+      "run": "n20__sc_ports2_nic1_full_insert_n20",
+      "score": 89.54469116802295,
+      "tier3_message": "Cable insertion successful.",
+      "off_limit_contact": "No contact detected.",
+      "has_video": true,
+      "has_state_data": true,
+      "force_peak_n": 21.950985994203112,
+      "one_second_mid_stall_candidates": []
+    },
+    {
+      "attempt": "outputs/trajectory_datasets/clean_including_no_insert_trajs/sc_to_sc/agent/sc_ports_2/n20__sc_ports2_nic1_full_insert_n20/agent_generation/replay_attempts/attempt_000068_candidate_00",
+      "run": "n20__sc_ports2_nic1_full_insert_n20",
+      "score": 89.56918582951059,
+      "tier3_message": "Cable insertion successful.",
+      "off_limit_contact": "No contact detected.",
+      "has_video": true,
+      "has_state_data": true,
+      "force_peak_n": 22.238197509675253,
+      "one_second_mid_stall_candidates": []
+    },
+    {
+      "attempt": "outputs/trajectory_datasets/clean_including_no_insert_trajs/sc_to_sc/agent/sc_ports_2/n20__sc_ports2_nic1_full_insert_n20/agent_generation/replay_attempts/attempt_000069_candidate_00",
+      "run": "n20__sc_ports2_nic1_full_insert_n20",
+      "score": 1.0,
+      "tier3_message": "Task not completed.",
+      "off_limit_contact": "No contact detected.",
+      "has_video": true,
+      "has_state_data": true,
+      "force_peak_n": 22.231807855949988,
+      "one_second_mid_stall_candidates": []
+    },
+    {
+      "attempt": "outputs/trajectory_datasets/clean_including_no_insert_trajs/sc_to_sc/agent/sc_ports_2/n20__sc_ports2_nic1_full_insert_n20/agent_generation/replay_attempts/attempt_000070_candidate_00",
+      "run": "n20__sc_ports2_nic1_full_insert_n20",
+      "score": 1.0,
+      "tier3_message": "Task not completed.",
+      "off_limit_contact": "No contact detected.",
+      "has_video": true,
+      "has_state_data": true,
+      "force_peak_n": 21.818520372911415,
+      "one_second_mid_stall_candidates": []
+    },
+    {
+      "attempt": "outputs/trajectory_datasets/clean_including_no_insert_trajs/sc_to_sc/agent/sc_ports_2/n20__sc_ports2_nic1_full_insert_n20/agent_generation/replay_attempts/attempt_000071_candidate_00",
+      "run": "n20__sc_ports2_nic1_full_insert_n20",
+      "score": 1.0,
+      "tier3_message": "Task not completed.",
+      "off_limit_contact": "No contact detected.",
+      "has_video": true,
+      "has_state_data": true,
+      "force_peak_n": 22.343996482077316,
+      "one_second_mid_stall_candidates": []
+    },
+    {
+      "attempt": "outputs/trajectory_datasets/clean_including_no_insert_trajs/sc_to_sc/agent/sc_ports_2/n20__sc_ports2_nic1_full_insert_n20/agent_generation/replay_attempts/attempt_000072_candidate_00",
+      "run": "n20__sc_ports2_nic1_full_insert_n20",
+      "score": 1.0,
+      "tier3_message": "Task not completed.",
+      "off_limit_contact": "No contact detected.",
+      "has_video": true,
+      "has_state_data": true,
+      "force_peak_n": 24.63481877514439,
+      "one_second_mid_stall_candidates": []
+    },
+    {
+      "attempt": "outputs/trajectory_datasets/clean_including_no_insert_trajs/sc_to_sc/agent/sc_ports_2/n20__sc_ports2_nic1_full_insert_n20/agent_generation/replay_attempts/attempt_000074_candidate_00",
+      "run": "n20__sc_ports2_nic1_full_insert_n20",
+      "score": 1.0,
+      "tier3_message": "Task not completed.",
+      "off_limit_contact": "No contact detected.",
+      "has_video": true,
+      "has_state_data": true,
+      "force_peak_n": 22.45378226783813,
+      "one_second_mid_stall_candidates": []
+    },
+    {
+      "attempt": "outputs/trajectory_datasets/clean_including_no_insert_trajs/sc_to_sc/agent/sc_ports_2/n20__sc_ports2_nic1_full_insert_n20/agent_generation/replay_attempts/attempt_000075_candidate_00",
+      "run": "n20__sc_ports2_nic1_full_insert_n20",
+      "score": 1.0,
+      "tier3_message": "Task not completed.",
+      "off_limit_contact": "No contact detected.",
+      "has_video": true,
+      "has_state_data": true,
+      "force_peak_n": 22.367573922737463,
+      "one_second_mid_stall_candidates": []
+    },
+    {
+      "attempt": "outputs/trajectory_datasets/clean_including_no_insert_trajs/sc_to_sc/agent/sc_ports_2/n20__sc_ports2_nic1_full_insert_n20/agent_generation/replay_attempts/attempt_000076_candidate_00",
+      "run": "n20__sc_ports2_nic1_full_insert_n20",
+      "score": 1.0,
+      "tier3_message": "Task not completed.",
+      "off_limit_contact": "No contact detected.",
+      "has_video": true,
+      "has_state_data": true,
+      "force_peak_n": 22.75935562528484,
+      "one_second_mid_stall_candidates": []
+    },
+    {
+      "attempt": "outputs/trajectory_datasets/clean_including_no_insert_trajs/sc_to_sc/agent/sc_ports_2/n20__sc_ports2_nic1_full_insert_n20/agent_generation/replay_attempts/attempt_000078_candidate_00",
+      "run": "n20__sc_ports2_nic1_full_insert_n20",
+      "score": 1.0,
+      "tier3_message": "Task not completed.",
+      "off_limit_contact": "No contact detected.",
+      "has_video": true,
+      "has_state_data": true,
+      "force_peak_n": 23.38268324747823,
+      "one_second_mid_stall_candidates": []
+    },
+    {
+      "attempt": "outputs/trajectory_datasets/clean_including_no_insert_trajs/sc_to_sc/agent/sc_ports_2/n20__sc_ports2_nic1_full_insert_n20/agent_generation/replay_attempts/attempt_000079_candidate_00",
+      "run": "n20__sc_ports2_nic1_full_insert_n20",
+      "score": 1.0,
+      "tier3_message": "Task not completed.",
+      "off_limit_contact": "No contact detected.",
+      "has_video": true,
+      "has_state_data": true,
+      "force_peak_n": 22.36075490440606,
+      "one_second_mid_stall_candidates": []
+    },
+    {
+      "attempt": "outputs/trajectory_datasets/clean_including_no_insert_trajs/sc_to_sc/agent/sc_ports_2/n20__sc_ports2_nic1_full_insert_n20/agent_generation/replay_attempts/attempt_000080_candidate_00",
+      "run": "n20__sc_ports2_nic1_full_insert_n20",
+      "score": 64.0,
+      "tier3_message": "Cable insertion successful.",
+      "off_limit_contact": "No contact detected.",
+      "has_video": true,
+      "has_state_data": true,
+      "force_peak_n": 361.11184656633543,
+      "one_second_mid_stall_candidates": []
+    },
+    {
+      "attempt": "outputs/trajectory_datasets/clean_including_no_insert_trajs/sc_to_sc/agent/sc_ports_2/n20__sc_ports2_nic1_full_insert_n20/agent_generation/replay_attempts/attempt_000082_candidate_00",
+      "run": "n20__sc_ports2_nic1_full_insert_n20",
+      "score": 1.0,
+      "tier3_message": "Task not completed.",
+      "off_limit_contact": "No contact detected.",
+      "has_video": true,
+      "has_state_data": true,
+      "force_peak_n": 22.32862644439853,
+      "one_second_mid_stall_candidates": []
+    },
+    {
+      "attempt": "outputs/trajectory_datasets/clean_including_no_insert_trajs/sc_to_sc/agent/sc_ports_2/n20__sc_ports2_nic1_full_insert_n20/agent_generation/replay_attempts/attempt_000083_candidate_00",
+      "run": "n20__sc_ports2_nic1_full_insert_n20",
+      "score": 1.0,
+      "tier3_message": "Task not completed.",
+      "off_limit_contact": "No contact detected.",
+      "has_video": true,
+      "has_state_data": true,
+      "force_peak_n": 22.54553747330363,
+      "one_second_mid_stall_candidates": []
+    },
+    {
+      "attempt": "outputs/trajectory_datasets/clean_including_no_insert_trajs/sc_to_sc/agent/sc_ports_2/n20__sc_ports2_nic1_full_insert_n20/agent_generation/replay_attempts/attempt_000084_candidate_00",
+      "run": "n20__sc_ports2_nic1_full_insert_n20",
+      "score": 1.0,
+      "tier3_message": "Task not completed.",
+      "off_limit_contact": "No contact detected.",
+      "has_video": true,
+      "has_state_data": true,
+      "force_peak_n": 81.12873702239808,
+      "one_second_mid_stall_candidates": []
+    },
+    {
+      "attempt": "outputs/trajectory_datasets/clean_including_no_insert_trajs/sc_to_sc/agent/sc_ports_2/n20__sc_ports2_nic1_full_insert_n20/agent_generation/replay_attempts/attempt_000085_candidate_00",
+      "run": "n20__sc_ports2_nic1_full_insert_n20",
+      "score": 1.0,
+      "tier3_message": "Task not completed.",
+      "off_limit_contact": "No contact detected.",
+      "has_video": true,
+      "has_state_data": true,
+      "force_peak_n": 22.702679326582302,
+      "one_second_mid_stall_candidates": []
+    },
+    {
+      "attempt": "outputs/trajectory_datasets/clean_including_no_insert_trajs/sc_to_sc/agent/sc_ports_2/n20__sc_ports2_nic1_full_insert_n20/agent_generation/replay_attempts/attempt_000086_candidate_00",
+      "run": "n20__sc_ports2_nic1_full_insert_n20",
+      "score": 1.0,
+      "tier3_message": "Task not completed.",
+      "off_limit_contact": "No contact detected.",
+      "has_video": true,
+      "has_state_data": true,
+      "force_peak_n": 22.271481634333945,
+      "one_second_mid_stall_candidates": []
+    },
+    {
+      "attempt": "outputs/trajectory_datasets/clean_including_no_insert_trajs/sc_to_sc/agent/sc_ports_2/n20__sc_ports2_nic1_full_insert_n20/agent_generation/replay_attempts/attempt_000089_candidate_00",
+      "run": "n20__sc_ports2_nic1_full_insert_n20",
+      "score": 1.0,
+      "tier3_message": "Task not completed.",
+      "off_limit_contact": "No contact detected.",
+      "has_video": true,
+      "has_state_data": true,
+      "force_peak_n": 22.521632887720315,
+      "one_second_mid_stall_candidates": []
+    },
+    {
+      "attempt": "outputs/trajectory_datasets/clean_including_no_insert_trajs/sc_to_sc/agent/sc_ports_2/n20__sc_ports2_nic1_full_insert_n20/agent_generation/replay_attempts/attempt_000090_candidate_00",
+      "run": "n20__sc_ports2_nic1_full_insert_n20",
+      "score": 1.0,
+      "tier3_message": "Task not completed.",
+      "off_limit_contact": "No contact detected.",
+      "has_video": true,
+      "has_state_data": true,
+      "force_peak_n": 21.928150987314282,
+      "one_second_mid_stall_candidates": []
+    },
+    {
+      "attempt": "outputs/trajectory_datasets/clean_including_no_insert_trajs/sc_to_sc/agent/sc_ports_2/n20__sc_ports2_nic1_full_insert_n20/agent_generation/replay_attempts/attempt_000091_candidate_00",
+      "run": "n20__sc_ports2_nic1_full_insert_n20",
+      "score": 1.0,
+      "tier3_message": "Task not completed.",
+      "off_limit_contact": "No contact detected.",
+      "has_video": true,
+      "has_state_data": true,
+      "force_peak_n": 22.19852324711234,
+      "one_second_mid_stall_candidates": []
+    },
+    {
+      "attempt": "outputs/trajectory_datasets/clean_including_no_insert_trajs/sc_to_sc/agent/sc_ports_2/n20__sc_ports2_nic1_full_insert_n20/agent_generation/replay_attempts/attempt_000092_candidate_00",
+      "run": "n20__sc_ports2_nic1_full_insert_n20",
+      "score": 1.0,
+      "tier3_message": "Task not completed.",
+      "off_limit_contact": "No contact detected.",
+      "has_video": true,
+      "has_state_data": true,
+      "force_peak_n": 21.595892371916374,
+      "one_second_mid_stall_candidates": []
+    },
+    {
+      "attempt": "outputs/trajectory_datasets/clean_including_no_insert_trajs/sc_to_sc/agent/sc_ports_2/n20__sc_ports2_nic1_full_insert_n20/agent_generation/replay_attempts/attempt_000093_candidate_00",
+      "run": "n20__sc_ports2_nic1_full_insert_n20",
+      "score": 1.0,
+      "tier3_message": "Task not completed.",
+      "off_limit_contact": "No contact detected.",
+      "has_video": true,
+      "has_state_data": true,
+      "force_peak_n": 22.25835400373961,
+      "one_second_mid_stall_candidates": []
+    },
+    {
+      "attempt": "outputs/trajectory_datasets/clean_including_no_insert_trajs/sc_to_sc/agent/sc_ports_2/n20__sc_ports2_nic1_full_insert_n20/agent_generation/replay_attempts/attempt_000095_candidate_00",
+      "run": "n20__sc_ports2_nic1_full_insert_n20",
+      "score": 90.30017604054981,
+      "tier3_message": "Cable insertion successful.",
+      "off_limit_contact": "No contact detected.",
+      "has_video": true,
+      "has_state_data": true,
+      "force_peak_n": 33.75054608799157,
+      "one_second_mid_stall_candidates": []
+    },
+    {
+      "attempt": "outputs/trajectory_datasets/clean_including_no_insert_trajs/sc_to_sc/agent/sc_ports_2/n20__sc_ports2_nic1_full_insert_n20/agent_generation/replay_attempts/attempt_000096_candidate_00",
+      "run": "n20__sc_ports2_nic1_full_insert_n20",
+      "score": 87.23080939152285,
+      "tier3_message": "Cable insertion successful.",
+      "off_limit_contact": "No contact detected.",
+      "has_video": true,
+      "has_state_data": true,
+      "force_peak_n": 22.347882848452112,
+      "one_second_mid_stall_candidates": []
+    },
+    {
+      "attempt": "outputs/trajectory_datasets/clean_including_no_insert_trajs/sc_to_sc/agent/sc_ports_2/n20__sc_ports2_nic1_full_insert_n20/agent_generation/replay_attempts/attempt_000097_candidate_00",
+      "run": "n20__sc_ports2_nic1_full_insert_n20",
+      "score": 1.0,
+      "tier3_message": "Task not completed.",
+      "off_limit_contact": "No contact detected.",
+      "has_video": true,
+      "has_state_data": true,
+      "force_peak_n": 22.109376342698184,
+      "one_second_mid_stall_candidates": []
+    },
+    {
+      "attempt": "outputs/trajectory_datasets/clean_including_no_insert_trajs/sc_to_sc/agent/sc_ports_2/n20__sc_ports2_nic1_full_insert_n20/agent_generation/replay_attempts/attempt_000099_candidate_00",
+      "run": "n20__sc_ports2_nic1_full_insert_n20",
+      "score": 1.0,
+      "tier3_message": "Task not completed.",
+      "off_limit_contact": "No contact detected.",
+      "has_video": true,
+      "has_state_data": true,
+      "force_peak_n": 21.847418675967177,
+      "one_second_mid_stall_candidates": []
+    },
+    {
+      "attempt": "outputs/trajectory_datasets/clean_including_no_insert_trajs/sc_to_sc/agent/sc_ports_2/n20__sc_ports2_nic1_full_insert_n20/agent_generation/replay_attempts/attempt_000100_candidate_00",
+      "run": "n20__sc_ports2_nic1_full_insert_n20",
+      "score": 89.17968889650098,
+      "tier3_message": "Cable insertion successful.",
+      "off_limit_contact": "No contact detected.",
+      "has_video": true,
+      "has_state_data": true,
+      "force_peak_n": 21.89348229592444,
+      "one_second_mid_stall_candidates": []
+    },
+    {
+      "attempt": "outputs/trajectory_datasets/clean_including_no_insert_trajs/sc_to_sc/agent/sc_ports_2/n20__sc_ports2_nic2_full_insert_n20/agent_generation/replay_attempts/attempt_000001_candidate_00",
+      "run": "n20__sc_ports2_nic2_full_insert_n20",
+      "score": 1.0,
+      "tier3_message": "Task not completed.",
+      "off_limit_contact": "No contact detected.",
+      "has_video": true,
+      "has_state_data": true,
+      "force_peak_n": 38.87466391138218,
+      "one_second_mid_stall_candidates": []
+    },
+    {
+      "attempt": "outputs/trajectory_datasets/clean_including_no_insert_trajs/sc_to_sc/agent/sc_ports_2/n20__sc_ports2_nic2_full_insert_n20/agent_generation/replay_attempts/attempt_000002_candidate_00",
+      "run": "n20__sc_ports2_nic2_full_insert_n20",
+      "score": 1.0,
+      "tier3_message": "Task not completed.",
+      "off_limit_contact": "No contact detected.",
+      "has_video": true,
+      "has_state_data": true,
+      "force_peak_n": 22.405160711732158,
+      "one_second_mid_stall_candidates": []
+    },
+    {
+      "attempt": "outputs/trajectory_datasets/clean_including_no_insert_trajs/sc_to_sc/agent/sc_ports_2/n20__sc_ports2_nic2_full_insert_n20/agent_generation/replay_attempts/attempt_000004_candidate_00",
+      "run": "n20__sc_ports2_nic2_full_insert_n20",
+      "score": -23.0,
+      "tier3_message": "Task not completed.",
+      "off_limit_contact": "Contacts detected (only first reported) between entity named [ur5e::forearm_link::forearm_link_collision] and [task_board::nic_card_mount_2::nic_card_link::pcb_collider_box]. Penalty applied.",
+      "has_video": true,
+      "has_state_data": true,
+      "force_peak_n": 54.4632540329847,
+      "one_second_mid_stall_candidates": []
+    },
+    {
+      "attempt": "outputs/trajectory_datasets/clean_including_no_insert_trajs/sc_to_sc/agent/sc_ports_2/n20__sc_ports2_nic2_full_insert_n20/agent_generation/replay_attempts/attempt_000006_candidate_00",
+      "run": "n20__sc_ports2_nic2_full_insert_n20",
+      "score": 1.0,
+      "tier3_message": "Task not completed.",
+      "off_limit_contact": "No contact detected.",
+      "has_video": true,
+      "has_state_data": true,
+      "force_peak_n": 21.886088088001827,
+      "one_second_mid_stall_candidates": []
+    },
+    {
+      "attempt": "outputs/trajectory_datasets/clean_including_no_insert_trajs/sc_to_sc/agent/sc_ports_2/n20__sc_ports2_nic2_full_insert_n20/agent_generation/replay_attempts/attempt_000009_candidate_00",
+      "run": "n20__sc_ports2_nic2_full_insert_n20",
+      "score": 1.0,
+      "tier3_message": "Task not completed.",
+      "off_limit_contact": "No contact detected.",
+      "has_video": true,
+      "has_state_data": true,
+      "force_peak_n": 22.31993090965616,
+      "one_second_mid_stall_candidates": []
+    },
+    {
+      "attempt": "outputs/trajectory_datasets/clean_including_no_insert_trajs/sc_to_sc/agent/sc_ports_2/n20__sc_ports2_nic2_full_insert_n20/agent_generation/replay_attempts/attempt_000011_candidate_00",
+      "run": "n20__sc_ports2_nic2_full_insert_n20",
+      "score": 89.48055350621166,
+      "tier3_message": "Cable insertion successful.",
+      "off_limit_contact": "No contact detected.",
+      "has_video": true,
+      "has_state_data": true,
+      "force_peak_n": 22.769087202213864,
+      "one_second_mid_stall_candidates": []
+    },
+    {
+      "attempt": "outputs/trajectory_datasets/clean_including_no_insert_trajs/sc_to_sc/agent/sc_ports_2/n20__sc_ports2_nic2_full_insert_n20/agent_generation/replay_attempts/attempt_000012_candidate_00",
+      "run": "n20__sc_ports2_nic2_full_insert_n20",
+      "score": 1.0,
+      "tier3_message": "Task not completed.",
+      "off_limit_contact": "No contact detected.",
+      "has_video": true,
+      "has_state_data": true,
+      "force_peak_n": 21.84108304335996,
+      "one_second_mid_stall_candidates": []
+    },
+    {
+      "attempt": "outputs/trajectory_datasets/clean_including_no_insert_trajs/sc_to_sc/agent/sc_ports_2/n20__sc_ports2_nic2_full_insert_n20/agent_generation/replay_attempts/attempt_000013_candidate_00",
+      "run": "n20__sc_ports2_nic2_full_insert_n20",
+      "score": 1.0,
+      "tier3_message": "Task not completed.",
+      "off_limit_contact": "No contact detected.",
+      "has_video": true,
+      "has_state_data": true,
+      "force_peak_n": 26.719009093436586,
+      "one_second_mid_stall_candidates": []
+    },
+    {
+      "attempt": "outputs/trajectory_datasets/clean_including_no_insert_trajs/sc_to_sc/agent/sc_ports_2/n20__sc_ports2_nic2_full_insert_n20/agent_generation/replay_attempts/attempt_000017_candidate_00",
+      "run": "n20__sc_ports2_nic2_full_insert_n20",
+      "score": 89.57666563846917,
+      "tier3_message": "Cable insertion successful.",
+      "off_limit_contact": "No contact detected.",
+      "has_video": true,
+      "has_state_data": true,
+      "force_peak_n": 21.91080323920161,
+      "one_second_mid_stall_candidates": []
+    },
+    {
+      "attempt": "outputs/trajectory_datasets/clean_including_no_insert_trajs/sc_to_sc/agent/sc_ports_2/n20__sc_ports2_nic2_full_insert_n20/agent_generation/replay_attempts/attempt_000021_candidate_00",
+      "run": "n20__sc_ports2_nic2_full_insert_n20",
+      "score": 89.59470052822041,
+      "tier3_message": "Cable insertion successful.",
+      "off_limit_contact": "No contact detected.",
+      "has_video": true,
+      "has_state_data": true,
+      "force_peak_n": 22.045865965312487,
+      "one_second_mid_stall_candidates": []
+    },
+    {
+      "attempt": "outputs/trajectory_datasets/clean_including_no_insert_trajs/sc_to_sc/agent/sc_ports_2/n20__sc_ports2_nic2_full_insert_n20/agent_generation/replay_attempts/attempt_000022_candidate_00",
+      "run": "n20__sc_ports2_nic2_full_insert_n20",
+      "score": 1.0,
+      "tier3_message": "Task not completed.",
+      "off_limit_contact": "No contact detected.",
+      "has_video": true,
+      "has_state_data": true,
+      "force_peak_n": 22.410490715266437,
+      "one_second_mid_stall_candidates": []
+    },
+    {
+      "attempt": "outputs/trajectory_datasets/clean_including_no_insert_trajs/sc_to_sc/agent/sc_ports_2/n20__sc_ports2_nic2_full_insert_n20/agent_generation/replay_attempts/attempt_000025_candidate_00",
+      "run": "n20__sc_ports2_nic2_full_insert_n20",
+      "score": 89.85805581295763,
+      "tier3_message": "Cable insertion successful.",
+      "off_limit_contact": "No contact detected.",
+      "has_video": true,
+      "has_state_data": true,
+      "force_peak_n": 22.99767833054192,
+      "one_second_mid_stall_candidates": []
+    },
+    {
+      "attempt": "outputs/trajectory_datasets/clean_including_no_insert_trajs/sc_to_sc/agent/sc_ports_2/n20__sc_ports2_nic2_full_insert_n20/agent_generation/replay_attempts/attempt_000026_candidate_00",
+      "run": "n20__sc_ports2_nic2_full_insert_n20",
+      "score": 88.91787415731272,
+      "tier3_message": "Cable insertion successful.",
+      "off_limit_contact": "No contact detected.",
+      "has_video": true,
+      "has_state_data": true,
+      "force_peak_n": 22.12261789512815,
+      "one_second_mid_stall_candidates": []
+    },
+    {
+      "attempt": "outputs/trajectory_datasets/clean_including_no_insert_trajs/sc_to_sc/agent/sc_ports_2/n20__sc_ports2_nic2_full_insert_n20/agent_generation/replay_attempts/attempt_000027_candidate_00",
+      "run": "n20__sc_ports2_nic2_full_insert_n20",
+      "score": 1.0,
+      "tier3_message": "Task not completed.",
+      "off_limit_contact": "No contact detected.",
+      "has_video": true,
+      "has_state_data": true,
+      "force_peak_n": 22.661035890115844,
+      "one_second_mid_stall_candidates": []
+    },
+    {
+      "attempt": "outputs/trajectory_datasets/clean_including_no_insert_trajs/sc_to_sc/agent/sc_ports_2/n20__sc_ports2_nic2_full_insert_n20/agent_generation/replay_attempts/attempt_000028_candidate_00",
+      "run": "n20__sc_ports2_nic2_full_insert_n20",
+      "score": 89.46942159173318,
+      "tier3_message": "Cable insertion successful.",
+      "off_limit_contact": "No contact detected.",
+      "has_video": true,
+      "has_state_data": true,
+      "force_peak_n": 40.42309538433804,
+      "one_second_mid_stall_candidates": []
+    },
+    {
+      "attempt": "outputs/trajectory_datasets/clean_including_no_insert_trajs/sc_to_sc/agent/sc_ports_2/n20__sc_ports2_nic2_full_insert_n20/agent_generation/replay_attempts/attempt_000029_candidate_00",
+      "run": "n20__sc_ports2_nic2_full_insert_n20",
+      "score": 89.52230997194204,
+      "tier3_message": "Cable insertion successful.",
+      "off_limit_contact": "No contact detected.",
+      "has_video": true,
+      "has_state_data": true,
+      "force_peak_n": 22.045826680302103,
+      "one_second_mid_stall_candidates": []
+    },
+    {
+      "attempt": "outputs/trajectory_datasets/clean_including_no_insert_trajs/sc_to_sc/agent/sc_ports_2/n20__sc_ports2_nic2_full_insert_n20/agent_generation/replay_attempts/attempt_000030_candidate_00",
+      "run": "n20__sc_ports2_nic2_full_insert_n20",
+      "score": 1.0,
+      "tier3_message": "Task not completed.",
+      "off_limit_contact": "No contact detected.",
+      "has_video": true,
+      "has_state_data": true,
+      "force_peak_n": 24.304929647976845,
+      "one_second_mid_stall_candidates": []
+    },
+    {
+      "attempt": "outputs/trajectory_datasets/clean_including_no_insert_trajs/sc_to_sc/agent/sc_ports_2/n20__sc_ports2_nic2_full_insert_n20/agent_generation/replay_attempts/attempt_000031_candidate_00",
+      "run": "n20__sc_ports2_nic2_full_insert_n20",
+      "score": 89.93501130917753,
+      "tier3_message": "Cable insertion successful.",
+      "off_limit_contact": "No contact detected.",
+      "has_video": true,
+      "has_state_data": true,
+      "force_peak_n": 22.604110013814232,
+      "one_second_mid_stall_candidates": []
+    },
+    {
+      "attempt": "outputs/trajectory_datasets/clean_including_no_insert_trajs/sc_to_sc/agent/sc_ports_2/n20__sc_ports2_nic2_full_insert_n20/agent_generation/replay_attempts/attempt_000032_candidate_00",
+      "run": "n20__sc_ports2_nic2_full_insert_n20",
+      "score": 1.0,
+      "tier3_message": "Task not completed.",
+      "off_limit_contact": "No contact detected.",
+      "has_video": true,
+      "has_state_data": true,
+      "force_peak_n": 23.859582681629945,
+      "one_second_mid_stall_candidates": []
+    },
+    {
+      "attempt": "outputs/trajectory_datasets/clean_including_no_insert_trajs/sc_to_sc/agent/sc_ports_2/n20__sc_ports2_nic2_full_insert_n20/agent_generation/replay_attempts/attempt_000033_candidate_00",
+      "run": "n20__sc_ports2_nic2_full_insert_n20",
+      "score": 1.0,
+      "tier3_message": "Task not completed.",
+      "off_limit_contact": "No contact detected.",
+      "has_video": true,
+      "has_state_data": true,
+      "force_peak_n": 21.779250722917315,
+      "one_second_mid_stall_candidates": []
+    },
+    {
+      "attempt": "outputs/trajectory_datasets/clean_including_no_insert_trajs/sc_to_sc/agent/sc_ports_2/n20__sc_ports2_nic2_full_insert_n20/agent_generation/replay_attempts/attempt_000034_candidate_00",
+      "run": "n20__sc_ports2_nic2_full_insert_n20",
+      "score": 1.0,
+      "tier3_message": "Task not completed.",
+      "off_limit_contact": "No contact detected.",
+      "has_video": true,
+      "has_state_data": true,
+      "force_peak_n": 47.60748427966642,
+      "one_second_mid_stall_candidates": []
+    },
+    {
+      "attempt": "outputs/trajectory_datasets/clean_including_no_insert_trajs/sc_to_sc/agent/sc_ports_2/n20__sc_ports2_nic2_full_insert_n20/agent_generation/replay_attempts/attempt_000035_candidate_00",
+      "run": "n20__sc_ports2_nic2_full_insert_n20",
+      "score": 1.0,
+      "tier3_message": "Task not completed.",
+      "off_limit_contact": "No contact detected.",
+      "has_video": true,
+      "has_state_data": true,
+      "force_peak_n": 21.960577940452218,
+      "one_second_mid_stall_candidates": []
+    },
+    {
+      "attempt": "outputs/trajectory_datasets/clean_including_no_insert_trajs/sc_to_sc/agent/sc_ports_2/n20__sc_ports2_nic2_full_insert_n20/agent_generation/replay_attempts/attempt_000036_candidate_00",
+      "run": "n20__sc_ports2_nic2_full_insert_n20",
+      "score": 90.36284347347042,
+      "tier3_message": "Cable insertion successful.",
+      "off_limit_contact": "No contact detected.",
+      "has_video": true,
+      "has_state_data": true,
+      "force_peak_n": 39.58899569166938,
+      "one_second_mid_stall_candidates": []
+    },
+    {
+      "attempt": "outputs/trajectory_datasets/clean_including_no_insert_trajs/sc_to_sc/agent/sc_ports_2/n20__sc_ports2_nic2_full_insert_n20/agent_generation/replay_attempts/attempt_000037_candidate_00",
+      "run": "n20__sc_ports2_nic2_full_insert_n20",
+      "score": 1.0,
+      "tier3_message": "Task not completed.",
+      "off_limit_contact": "No contact detected.",
+      "has_video": true,
+      "has_state_data": true,
+      "force_peak_n": 27.485568339592934,
+      "one_second_mid_stall_candidates": []
+    },
+    {
+      "attempt": "outputs/trajectory_datasets/clean_including_no_insert_trajs/sc_to_sc/agent/sc_ports_2/n20__sc_ports2_nic2_full_insert_n20/agent_generation/replay_attempts/attempt_000038_candidate_00",
+      "run": "n20__sc_ports2_nic2_full_insert_n20",
+      "score": 1.0,
+      "tier3_message": "Task not completed.",
+      "off_limit_contact": "No contact detected.",
+      "has_video": true,
+      "has_state_data": true,
+      "force_peak_n": 21.919684731899178,
+      "one_second_mid_stall_candidates": []
+    },
+    {
+      "attempt": "outputs/trajectory_datasets/clean_including_no_insert_trajs/sc_to_sc/agent/sc_ports_2/n20__sc_ports2_nic2_full_insert_n20/agent_generation/replay_attempts/attempt_000039_candidate_00",
+      "run": "n20__sc_ports2_nic2_full_insert_n20",
+      "score": 1.0,
+      "tier3_message": "Task not completed.",
+      "off_limit_contact": "No contact detected.",
+      "has_video": false,
+      "has_state_data": false,
+      "force_peak_n": null,
+      "one_second_mid_stall_candidates": []
+    },
+    {
+      "attempt": "outputs/trajectory_datasets/clean_including_no_insert_trajs/sc_to_sc/agent/sc_ports_2/n20__sc_ports2_nic2_full_insert_n20/agent_generation/replay_attempts/attempt_000040_candidate_00",
+      "run": "n20__sc_ports2_nic2_full_insert_n20",
+      "score": 1.0,
+      "tier3_message": "Task not completed.",
+      "off_limit_contact": "No contact detected.",
+      "has_video": true,
+      "has_state_data": true,
+      "force_peak_n": 21.83243397819272,
+      "one_second_mid_stall_candidates": []
+    },
+    {
+      "attempt": "outputs/trajectory_datasets/clean_including_no_insert_trajs/sc_to_sc/agent/sc_ports_2/n20__sc_ports2_nic2_full_insert_n20/agent_generation/replay_attempts/attempt_000041_candidate_00",
+      "run": "n20__sc_ports2_nic2_full_insert_n20",
+      "score": 1.0,
+      "tier3_message": "Task not completed.",
+      "off_limit_contact": "No contact detected.",
+      "has_video": true,
+      "has_state_data": true,
+      "force_peak_n": 36.51864588006342,
+      "one_second_mid_stall_candidates": []
+    },
+    {
+      "attempt": "outputs/trajectory_datasets/clean_including_no_insert_trajs/sc_to_sc/agent/sc_ports_2/n20__sc_ports2_nic2_full_insert_n20/agent_generation/replay_attempts/attempt_000042_candidate_00",
+      "run": "n20__sc_ports2_nic2_full_insert_n20",
+      "score": 1.0,
+      "tier3_message": "Task not completed.",
+      "off_limit_contact": "No contact detected.",
+      "has_video": true,
+      "has_state_data": true,
+      "force_peak_n": 22.60001311237569,
+      "one_second_mid_stall_candidates": []
+    },
+    {
+      "attempt": "outputs/trajectory_datasets/clean_including_no_insert_trajs/sc_to_sc/agent/sc_ports_2/n20__sc_ports2_nic2_full_insert_n20/agent_generation/replay_attempts/attempt_000043_candidate_00",
+      "run": "n20__sc_ports2_nic2_full_insert_n20",
+      "score": 1.0,
+      "tier3_message": "Task not completed.",
+      "off_limit_contact": "No contact detected.",
+      "has_video": true,
+      "has_state_data": true,
+      "force_peak_n": 22.073577369112694,
+      "one_second_mid_stall_candidates": []
+    },
+    {
+      "attempt": "outputs/trajectory_datasets/clean_including_no_insert_trajs/sc_to_sc/agent/sc_ports_2/n20__sc_ports2_nic2_full_insert_n20/agent_generation/replay_attempts/attempt_000044_candidate_00",
+      "run": "n20__sc_ports2_nic2_full_insert_n20",
+      "score": 87.5291263356806,
+      "tier3_message": "Cable insertion successful.",
+      "off_limit_contact": "No contact detected.",
+      "has_video": true,
+      "has_state_data": true,
+      "force_peak_n": 22.282581121685137,
+      "one_second_mid_stall_candidates": []
+    },
+    {
+      "attempt": "outputs/trajectory_datasets/clean_including_no_insert_trajs/sc_to_sc/agent/sc_ports_2/n20__sc_ports2_nic2_full_insert_n20/agent_generation/replay_attempts/attempt_000045_candidate_00",
+      "run": "n20__sc_ports2_nic2_full_insert_n20",
+      "score": 1.0,
+      "tier3_message": "Task not completed.",
+      "off_limit_contact": "No contact detected.",
+      "has_video": true,
+      "has_state_data": true,
+      "force_peak_n": 28.395200115175886,
+      "one_second_mid_stall_candidates": []
+    },
+    {
+      "attempt": "outputs/trajectory_datasets/clean_including_no_insert_trajs/sc_to_sc/agent/sc_ports_2/n20__sc_ports2_nic2_full_insert_n20/agent_generation/replay_attempts/attempt_000046_candidate_00",
+      "run": "n20__sc_ports2_nic2_full_insert_n20",
+      "score": 1.0,
+      "tier3_message": "Task not completed.",
+      "off_limit_contact": "No contact detected.",
+      "has_video": true,
+      "has_state_data": true,
+      "force_peak_n": 23.004219892270807,
+      "one_second_mid_stall_candidates": []
+    },
+    {
+      "attempt": "outputs/trajectory_datasets/clean_including_no_insert_trajs/sc_to_sc/agent/sc_ports_2/n20__sc_ports2_nic2_full_insert_n20/agent_generation/replay_attempts/attempt_000047_candidate_00",
+      "run": "n20__sc_ports2_nic2_full_insert_n20",
+      "score": 1.0,
+      "tier3_message": "Task not completed.",
+      "off_limit_contact": "No contact detected.",
+      "has_video": true,
+      "has_state_data": true,
+      "force_peak_n": 22.296446580209256,
+      "one_second_mid_stall_candidates": []
+    },
+    {
+      "attempt": "outputs/trajectory_datasets/clean_including_no_insert_trajs/sc_to_sc/agent/sc_ports_2/n20__sc_ports2_nic2_full_insert_n20/agent_generation/replay_attempts/attempt_000048_candidate_00",
+      "run": "n20__sc_ports2_nic2_full_insert_n20",
+      "score": 88.7595680506237,
+      "tier3_message": "Cable insertion successful.",
+      "off_limit_contact": "No contact detected.",
+      "has_video": true,
+      "has_state_data": true,
+      "force_peak_n": 22.751085369042336,
+      "one_second_mid_stall_candidates": []
+    },
+    {
+      "attempt": "outputs/trajectory_datasets/clean_including_no_insert_trajs/sc_to_sc/agent/sc_ports_2/n20__sc_ports2_nic2_full_insert_n20/agent_generation/replay_attempts/attempt_000050_candidate_00",
+      "run": "n20__sc_ports2_nic2_full_insert_n20",
+      "score": 1.0,
+      "tier3_message": "Task not completed.",
+      "off_limit_contact": "No contact detected.",
+      "has_video": true,
+      "has_state_data": true,
+      "force_peak_n": 22.27937568324973,
+      "one_second_mid_stall_candidates": []
+    },
+    {
+      "attempt": "outputs/trajectory_datasets/clean_including_no_insert_trajs/sc_to_sc/agent/sc_ports_2/n20__sc_ports2_nic2_full_insert_n20/agent_generation/replay_attempts/attempt_000051_candidate_00",
+      "run": "n20__sc_ports2_nic2_full_insert_n20",
+      "score": 1.0,
+      "tier3_message": "Task not completed.",
+      "off_limit_contact": "No contact detected.",
+      "has_video": true,
+      "has_state_data": true,
+      "force_peak_n": 24.62873293990688,
+      "one_second_mid_stall_candidates": []
+    },
+    {
+      "attempt": "outputs/trajectory_datasets/clean_including_no_insert_trajs/sc_to_sc/agent/sc_ports_2/n20__sc_ports2_nic2_full_insert_n20/agent_generation/replay_attempts/attempt_000052_candidate_00",
+      "run": "n20__sc_ports2_nic2_full_insert_n20",
+      "score": 88.68058027201364,
+      "tier3_message": "Cable insertion successful.",
+      "off_limit_contact": "No contact detected.",
+      "has_video": true,
+      "has_state_data": true,
+      "force_peak_n": 21.47396865304147,
+      "one_second_mid_stall_candidates": []
+    },
+    {
+      "attempt": "outputs/trajectory_datasets/clean_including_no_insert_trajs/sc_to_sc/agent/sc_ports_2/n20__sc_ports2_nic2_full_insert_n20/agent_generation/replay_attempts/attempt_000053_candidate_00",
+      "run": "n20__sc_ports2_nic2_full_insert_n20",
+      "score": 1.0,
+      "tier3_message": "Task not completed.",
+      "off_limit_contact": "No contact detected.",
+      "has_video": true,
+      "has_state_data": true,
+      "force_peak_n": 22.309826063969574,
+      "one_second_mid_stall_candidates": []
+    },
+    {
+      "attempt": "outputs/trajectory_datasets/clean_including_no_insert_trajs/sc_to_sc/agent/sc_ports_2/n20__sc_ports2_nic2_full_insert_n20/agent_generation/replay_attempts/attempt_000054_candidate_00",
+      "run": "n20__sc_ports2_nic2_full_insert_n20",
+      "score": 88.28239486805145,
+      "tier3_message": "Cable insertion successful.",
+      "off_limit_contact": "No contact detected.",
+      "has_video": true,
+      "has_state_data": true,
+      "force_peak_n": 22.89397783456103,
+      "one_second_mid_stall_candidates": []
+    },
+    {
+      "attempt": "outputs/trajectory_datasets/clean_including_no_insert_trajs/sc_to_sc/agent/sc_ports_2/n20__sc_ports2_nic2_full_insert_n20/agent_generation/replay_attempts/attempt_000055_candidate_00",
+      "run": "n20__sc_ports2_nic2_full_insert_n20",
+      "score": 1.0,
+      "tier3_message": "Task not completed.",
+      "off_limit_contact": "No contact detected.",
+      "has_video": true,
+      "has_state_data": true,
+      "force_peak_n": 25.363742954572025,
+      "one_second_mid_stall_candidates": []
+    },
+    {
+      "attempt": "outputs/trajectory_datasets/clean_including_no_insert_trajs/sc_to_sc/agent/sc_ports_2/n20__sc_ports2_nic2_full_insert_n20/agent_generation/replay_attempts/attempt_000056_candidate_00",
+      "run": "n20__sc_ports2_nic2_full_insert_n20",
+      "score": 1.0,
+      "tier3_message": "Task not completed.",
+      "off_limit_contact": "No contact detected.",
+      "has_video": true,
+      "has_state_data": true,
+      "force_peak_n": 24.08993156353709,
+      "one_second_mid_stall_candidates": []
+    },
+    {
+      "attempt": "outputs/trajectory_datasets/clean_including_no_insert_trajs/sc_to_sc/agent/sc_ports_2/n20__sc_ports2_nic2_full_insert_n20/agent_generation/replay_attempts/attempt_000057_candidate_00",
+      "run": "n20__sc_ports2_nic2_full_insert_n20",
+      "score": 1.0,
+      "tier3_message": "Task not completed.",
+      "off_limit_contact": "No contact detected.",
+      "has_video": true,
+      "has_state_data": true,
+      "force_peak_n": 24.871050888286113,
+      "one_second_mid_stall_candidates": []
+    },
+    {
+      "attempt": "outputs/trajectory_datasets/clean_including_no_insert_trajs/sc_to_sc/agent/sc_ports_2/n20__sc_ports2_nic2_full_insert_n20/agent_generation/replay_attempts/attempt_000058_candidate_00",
+      "run": "n20__sc_ports2_nic2_full_insert_n20",
+      "score": 1.0,
+      "tier3_message": "Task not completed.",
+      "off_limit_contact": "No contact detected.",
+      "has_video": true,
+      "has_state_data": true,
+      "force_peak_n": 25.014492543932615,
+      "one_second_mid_stall_candidates": []
+    },
+    {
+      "attempt": "outputs/trajectory_datasets/clean_including_no_insert_trajs/sc_to_sc/agent/sc_ports_2/n20__sc_ports2_nic2_full_insert_n20/agent_generation/replay_attempts/attempt_000059_candidate_00",
+      "run": "n20__sc_ports2_nic2_full_insert_n20",
+      "score": 1.0,
+      "tier3_message": "Task not completed.",
+      "off_limit_contact": "No contact detected.",
+      "has_video": true,
+      "has_state_data": true,
+      "force_peak_n": 22.34032794878446,
+      "one_second_mid_stall_candidates": []
+    },
+    {
+      "attempt": "outputs/trajectory_datasets/clean_including_no_insert_trajs/sc_to_sc/agent/sc_ports_2/n20__sc_ports2_nic2_full_insert_n20/agent_generation/replay_attempts/attempt_000060_candidate_00",
+      "run": "n20__sc_ports2_nic2_full_insert_n20",
+      "score": 1.0,
+      "tier3_message": "Task not completed.",
+      "off_limit_contact": "No contact detected.",
+      "has_video": true,
+      "has_state_data": true,
+      "force_peak_n": 22.24136730587338,
+      "one_second_mid_stall_candidates": []
+    },
+    {
+      "attempt": "outputs/trajectory_datasets/clean_including_no_insert_trajs/sc_to_sc/agent/sc_ports_2/n20__sc_ports2_nic2_full_insert_n20/agent_generation/replay_attempts/attempt_000061_candidate_00",
+      "run": "n20__sc_ports2_nic2_full_insert_n20",
+      "score": 1.0,
+      "tier3_message": "Task not completed.",
+      "off_limit_contact": "No contact detected.",
+      "has_video": true,
+      "has_state_data": true,
+      "force_peak_n": 22.013387893750547,
+      "one_second_mid_stall_candidates": []
+    },
+    {
+      "attempt": "outputs/trajectory_datasets/clean_including_no_insert_trajs/sc_to_sc/agent/sc_ports_2/n20__sc_ports2_nic2_full_insert_n20/agent_generation/replay_attempts/attempt_000064_candidate_00",
+      "run": "n20__sc_ports2_nic2_full_insert_n20",
+      "score": 1.0,
+      "tier3_message": "Task not completed.",
+      "off_limit_contact": "No contact detected.",
+      "has_video": true,
+      "has_state_data": true,
+      "force_peak_n": 23.10024805747874,
+      "one_second_mid_stall_candidates": []
+    },
+    {
+      "attempt": "outputs/trajectory_datasets/clean_including_no_insert_trajs/sc_to_sc/agent/sc_ports_2/n20__sc_ports2_nic2_full_insert_n20/agent_generation/replay_attempts/attempt_000065_candidate_00",
+      "run": "n20__sc_ports2_nic2_full_insert_n20",
+      "score": 1.0,
+      "tier3_message": "Task not completed.",
+      "off_limit_contact": "No contact detected.",
+      "has_video": true,
+      "has_state_data": true,
+      "force_peak_n": 25.200089431584196,
+      "one_second_mid_stall_candidates": []
+    },
+    {
+      "attempt": "outputs/trajectory_datasets/clean_including_no_insert_trajs/sc_to_sc/agent/sc_ports_2/n20__sc_ports2_nic2_full_insert_n20/agent_generation/replay_attempts/attempt_000067_candidate_00",
+      "run": "n20__sc_ports2_nic2_full_insert_n20",
+      "score": 1.0,
+      "tier3_message": "Task not completed.",
+      "off_limit_contact": "No contact detected.",
+      "has_video": true,
+      "has_state_data": true,
+      "force_peak_n": 22.139090345509274,
+      "one_second_mid_stall_candidates": []
+    },
+    {
+      "attempt": "outputs/trajectory_datasets/clean_including_no_insert_trajs/sc_to_sc/agent/sc_ports_2/n20__sc_ports2_nic2_full_insert_n20/agent_generation/replay_attempts/attempt_000068_candidate_00",
+      "run": "n20__sc_ports2_nic2_full_insert_n20",
+      "score": 1.0,
+      "tier3_message": "Task not completed.",
+      "off_limit_contact": "No contact detected.",
+      "has_video": true,
+      "has_state_data": true,
+      "force_peak_n": 30.862333624594886,
+      "one_second_mid_stall_candidates": []
+    },
+    {
+      "attempt": "outputs/trajectory_datasets/clean_including_no_insert_trajs/sc_to_sc/agent/sc_ports_2/n20__sc_ports2_nic2_full_insert_n20/agent_generation/replay_attempts/attempt_000069_candidate_00",
+      "run": "n20__sc_ports2_nic2_full_insert_n20",
+      "score": 1.0,
+      "tier3_message": "Task not completed.",
+      "off_limit_contact": "No contact detected.",
+      "has_video": true,
+      "has_state_data": true,
+      "force_peak_n": 22.041696675509908,
+      "one_second_mid_stall_candidates": []
+    },
+    {
+      "attempt": "outputs/trajectory_datasets/clean_including_no_insert_trajs/sc_to_sc/agent/sc_ports_2/n20__sc_ports2_nic2_full_insert_n20/agent_generation/replay_attempts/attempt_000070_candidate_00",
+      "run": "n20__sc_ports2_nic2_full_insert_n20",
+      "score": 1.0,
+      "tier3_message": "Task not completed.",
+      "off_limit_contact": "No contact detected.",
+      "has_video": true,
+      "has_state_data": true,
+      "force_peak_n": 22.45461658689227,
+      "one_second_mid_stall_candidates": []
+    },
+    {
+      "attempt": "outputs/trajectory_datasets/clean_including_no_insert_trajs/sc_to_sc/agent/sc_ports_2/n20__sc_ports2_nic2_full_insert_n20/agent_generation/replay_attempts/attempt_000072_candidate_00",
+      "run": "n20__sc_ports2_nic2_full_insert_n20",
+      "score": 1.0,
+      "tier3_message": "Task not completed.",
+      "off_limit_contact": "No contact detected.",
+      "has_video": true,
+      "has_state_data": true,
+      "force_peak_n": 21.997090202337304,
+      "one_second_mid_stall_candidates": []
+    },
+    {
+      "attempt": "outputs/trajectory_datasets/clean_including_no_insert_trajs/sc_to_sc/agent/sc_ports_2/n20__sc_ports2_nic2_full_insert_n20/agent_generation/replay_attempts/attempt_000073_candidate_00",
+      "run": "n20__sc_ports2_nic2_full_insert_n20",
+      "score": 1.0,
+      "tier3_message": "Task not completed.",
+      "off_limit_contact": "No contact detected.",
+      "has_video": true,
+      "has_state_data": true,
+      "force_peak_n": 22.921716659827094,
+      "one_second_mid_stall_candidates": []
+    },
+    {
+      "attempt": "outputs/trajectory_datasets/clean_including_no_insert_trajs/sc_to_sc/agent/sc_ports_2/n20__sc_ports2_nic2_full_insert_n20/agent_generation/replay_attempts/attempt_000074_candidate_00",
+      "run": "n20__sc_ports2_nic2_full_insert_n20",
+      "score": 1.0,
+      "tier3_message": "Task not completed.",
+      "off_limit_contact": "No contact detected.",
+      "has_video": true,
+      "has_state_data": true,
+      "force_peak_n": 22.72759937040591,
+      "one_second_mid_stall_candidates": []
+    },
+    {
+      "attempt": "outputs/trajectory_datasets/clean_including_no_insert_trajs/sc_to_sc/agent/sc_ports_2/n20__sc_ports2_nic2_full_insert_n20/agent_generation/replay_attempts/attempt_000076_candidate_00",
+      "run": "n20__sc_ports2_nic2_full_insert_n20",
+      "score": 1.0,
+      "tier3_message": "Task not completed.",
+      "off_limit_contact": "No contact detected.",
+      "has_video": true,
+      "has_state_data": true,
+      "force_peak_n": 22.73338927176001,
+      "one_second_mid_stall_candidates": []
+    },
+    {
+      "attempt": "outputs/trajectory_datasets/clean_including_no_insert_trajs/sc_to_sc/agent/sc_ports_2/n20__sc_ports2_nic2_full_insert_n20/agent_generation/replay_attempts/attempt_000077_candidate_00",
+      "run": "n20__sc_ports2_nic2_full_insert_n20",
+      "score": 1.0,
+      "tier3_message": "Task not completed.",
+      "off_limit_contact": "No contact detected.",
+      "has_video": true,
+      "has_state_data": true,
+      "force_peak_n": 22.49927093995829,
+      "one_second_mid_stall_candidates": []
+    },
+    {
+      "attempt": "outputs/trajectory_datasets/clean_including_no_insert_trajs/sc_to_sc/agent/sc_ports_2/n20__sc_ports2_nic2_full_insert_n20/agent_generation/replay_attempts/attempt_000078_candidate_00",
+      "run": "n20__sc_ports2_nic2_full_insert_n20",
+      "score": 1.0,
+      "tier3_message": "Task not completed.",
+      "off_limit_contact": "No contact detected.",
+      "has_video": true,
+      "has_state_data": true,
+      "force_peak_n": 22.079225128728805,
+      "one_second_mid_stall_candidates": []
+    },
+    {
+      "attempt": "outputs/trajectory_datasets/clean_including_no_insert_trajs/sc_to_sc/agent/sc_ports_2/n20__sc_ports2_nic2_full_insert_n20/agent_generation/replay_attempts/attempt_000079_candidate_00",
+      "run": "n20__sc_ports2_nic2_full_insert_n20",
+      "score": 1.0,
+      "tier3_message": "Task not completed.",
+      "off_limit_contact": "No contact detected.",
+      "has_video": true,
+      "has_state_data": true,
+      "force_peak_n": 23.16980906872311,
+      "one_second_mid_stall_candidates": []
+    },
+    {
+      "attempt": "outputs/trajectory_datasets/clean_including_no_insert_trajs/sc_to_sc/agent/sc_ports_2/n20__sc_ports2_nic2_full_insert_n20/agent_generation/replay_attempts/attempt_000080_candidate_00",
+      "run": "n20__sc_ports2_nic2_full_insert_n20",
+      "score": 1.0,
+      "tier3_message": "Task not completed.",
+      "off_limit_contact": "No contact detected.",
+      "has_video": true,
+      "has_state_data": true,
+      "force_peak_n": 22.20104283097124,
+      "one_second_mid_stall_candidates": []
+    },
+    {
+      "attempt": "outputs/trajectory_datasets/clean_including_no_insert_trajs/sc_to_sc/agent/sc_ports_2/n20__sc_ports2_nic2_full_insert_n20/agent_generation/replay_attempts/attempt_000081_candidate_00",
+      "run": "n20__sc_ports2_nic2_full_insert_n20",
+      "score": 1.0,
+      "tier3_message": "Task not completed.",
+      "off_limit_contact": "No contact detected.",
+      "has_video": true,
+      "has_state_data": true,
+      "force_peak_n": 33.586668617639766,
+      "one_second_mid_stall_candidates": []
+    },
+    {
+      "attempt": "outputs/trajectory_datasets/clean_including_no_insert_trajs/sc_to_sc/agent/sc_ports_2/n20__sc_ports2_nic2_full_insert_n20/agent_generation/replay_attempts/attempt_000082_candidate_00",
+      "run": "n20__sc_ports2_nic2_full_insert_n20",
+      "score": 1.0,
+      "tier3_message": "Task not completed.",
+      "off_limit_contact": "No contact detected.",
+      "has_video": true,
+      "has_state_data": true,
+      "force_peak_n": 22.757322298296515,
+      "one_second_mid_stall_candidates": []
+    },
+    {
+      "attempt": "outputs/trajectory_datasets/clean_including_no_insert_trajs/sc_to_sc/agent/sc_ports_2/n20__sc_ports2_nic2_full_insert_n20/agent_generation/replay_attempts/attempt_000083_candidate_00",
+      "run": "n20__sc_ports2_nic2_full_insert_n20",
+      "score": 1.0,
+      "tier3_message": "Task not completed.",
+      "off_limit_contact": "No contact detected.",
+      "has_video": true,
+      "has_state_data": true,
+      "force_peak_n": 37.20054630266393,
+      "one_second_mid_stall_candidates": []
+    },
+    {
+      "attempt": "outputs/trajectory_datasets/clean_including_no_insert_trajs/sc_to_sc/agent/sc_ports_2/n20__sc_ports2_nic2_full_insert_n20/agent_generation/replay_attempts/attempt_000084_candidate_00",
+      "run": "n20__sc_ports2_nic2_full_insert_n20",
+      "score": 1.0,
+      "tier3_message": "Task not completed.",
+      "off_limit_contact": "No contact detected.",
+      "has_video": true,
+      "has_state_data": true,
+      "force_peak_n": 28.637949656306247,
+      "one_second_mid_stall_candidates": []
+    },
+    {
+      "attempt": "outputs/trajectory_datasets/clean_including_no_insert_trajs/sc_to_sc/agent/sc_ports_2/n20__sc_ports2_nic2_full_insert_n20/agent_generation/replay_attempts/attempt_000085_candidate_00",
+      "run": "n20__sc_ports2_nic2_full_insert_n20",
+      "score": 1.0,
+      "tier3_message": "Task not completed.",
+      "off_limit_contact": "No contact detected.",
+      "has_video": true,
+      "has_state_data": true,
+      "force_peak_n": 37.73726581970337,
+      "one_second_mid_stall_candidates": []
+    },
+    {
+      "attempt": "outputs/trajectory_datasets/clean_including_no_insert_trajs/sc_to_sc/agent/sc_ports_2/n20__sc_ports2_nic2_full_insert_n20/agent_generation/replay_attempts/attempt_000086_candidate_00",
+      "run": "n20__sc_ports2_nic2_full_insert_n20",
+      "score": 90.32414173741036,
+      "tier3_message": "Cable insertion successful.",
+      "off_limit_contact": "No contact detected.",
+      "has_video": true,
+      "has_state_data": true,
+      "force_peak_n": 28.28662725847826,
+      "one_second_mid_stall_candidates": []
+    },
+    {
+      "attempt": "outputs/trajectory_datasets/clean_including_no_insert_trajs/sc_to_sc/agent/sc_ports_2/n20__sc_ports2_nic2_full_insert_n20/agent_generation/replay_attempts/attempt_000087_candidate_00",
+      "run": "n20__sc_ports2_nic2_full_insert_n20",
+      "score": 1.0,
+      "tier3_message": "Task not completed.",
+      "off_limit_contact": "No contact detected.",
+      "has_video": true,
+      "has_state_data": true,
+      "force_peak_n": 25.715336567286183,
+      "one_second_mid_stall_candidates": []
+    },
+    {
+      "attempt": "outputs/trajectory_datasets/clean_including_no_insert_trajs/sc_to_sc/agent/sc_ports_2/n20__sc_ports2_nic2_full_insert_n20/agent_generation/replay_attempts/attempt_000088_candidate_00",
+      "run": "n20__sc_ports2_nic2_full_insert_n20",
+      "score": 1.0,
+      "tier3_message": "Task not completed.",
+      "off_limit_contact": "No contact detected.",
+      "has_video": true,
+      "has_state_data": true,
+      "force_peak_n": 22.409799625992385,
+      "one_second_mid_stall_candidates": []
+    },
+    {
+      "attempt": "outputs/trajectory_datasets/clean_including_no_insert_trajs/sc_to_sc/agent/sc_ports_2/n20__sc_ports2_nic2_full_insert_n20/agent_generation/replay_attempts/attempt_000089_candidate_00",
+      "run": "n20__sc_ports2_nic2_full_insert_n20",
+      "score": 1.0,
+      "tier3_message": "Task not completed.",
+      "off_limit_contact": "No contact detected.",
+      "has_video": true,
+      "has_state_data": true,
+      "force_peak_n": 21.596845669890907,
+      "one_second_mid_stall_candidates": []
+    },
+    {
+      "attempt": "outputs/trajectory_datasets/clean_including_no_insert_trajs/sc_to_sc/agent/sc_ports_2/n20__sc_ports2_nic2_full_insert_n20/agent_generation/replay_attempts/attempt_000090_candidate_00",
+      "run": "n20__sc_ports2_nic2_full_insert_n20",
+      "score": 1.0,
+      "tier3_message": "Task not completed.",
+      "off_limit_contact": "No contact detected.",
+      "has_video": true,
+      "has_state_data": true,
+      "force_peak_n": 22.416061743573874,
+      "one_second_mid_stall_candidates": []
+    },
+    {
+      "attempt": "outputs/trajectory_datasets/clean_including_no_insert_trajs/sc_to_sc/agent/sc_ports_2/n20__sc_ports2_nic2_full_insert_n20/agent_generation/replay_attempts/attempt_000091_candidate_00",
+      "run": "n20__sc_ports2_nic2_full_insert_n20",
+      "score": 89.42737931269498,
+      "tier3_message": "Cable insertion successful.",
+      "off_limit_contact": "No contact detected.",
+      "has_video": true,
+      "has_state_data": true,
+      "force_peak_n": 29.154306651456796,
+      "one_second_mid_stall_candidates": []
+    },
+    {
+      "attempt": "outputs/trajectory_datasets/clean_including_no_insert_trajs/sc_to_sc/agent/sc_ports_2/n20__sc_ports2_nic2_full_insert_n20/agent_generation/replay_attempts/attempt_000092_candidate_00",
+      "run": "n20__sc_ports2_nic2_full_insert_n20",
+      "score": 1.0,
+      "tier3_message": "Task not completed.",
+      "off_limit_contact": "No contact detected.",
+      "has_video": true,
+      "has_state_data": true,
+      "force_peak_n": 22.282905410871045,
+      "one_second_mid_stall_candidates": []
+    },
+    {
+      "attempt": "outputs/trajectory_datasets/clean_including_no_insert_trajs/sc_to_sc/agent/sc_ports_2/n20__sc_ports2_nic2_full_insert_n20/agent_generation/replay_attempts/attempt_000093_candidate_00",
+      "run": "n20__sc_ports2_nic2_full_insert_n20",
+      "score": 1.0,
+      "tier3_message": "Task not completed.",
+      "off_limit_contact": "No contact detected.",
+      "has_video": true,
+      "has_state_data": true,
+      "force_peak_n": 22.802696086184095,
+      "one_second_mid_stall_candidates": []
+    },
+    {
+      "attempt": "outputs/trajectory_datasets/clean_including_no_insert_trajs/sc_to_sc/agent/sc_ports_2/n20__sc_ports2_nic2_full_insert_n20/agent_generation/replay_attempts/attempt_000094_candidate_00",
+      "run": "n20__sc_ports2_nic2_full_insert_n20",
+      "score": 1.0,
+      "tier3_message": "Task not completed.",
+      "off_limit_contact": "No contact detected.",
+      "has_video": true,
+      "has_state_data": true,
+      "force_peak_n": 23.634433690322346,
+      "one_second_mid_stall_candidates": []
+    },
+    {
+      "attempt": "outputs/trajectory_datasets/clean_including_no_insert_trajs/sc_to_sc/agent/sc_ports_2/n20__sc_ports2_nic2_full_insert_n20/agent_generation/replay_attempts/attempt_000096_candidate_00",
+      "run": "n20__sc_ports2_nic2_full_insert_n20",
+      "score": 1.0,
+      "tier3_message": "Task not completed.",
+      "off_limit_contact": "No contact detected.",
+      "has_video": true,
+      "has_state_data": true,
+      "force_peak_n": 22.246865338605662,
+      "one_second_mid_stall_candidates": []
+    },
+    {
+      "attempt": "outputs/trajectory_datasets/clean_including_no_insert_trajs/sc_to_sc/agent/sc_ports_2/n20__sc_ports2_nic2_full_insert_n20/agent_generation/replay_attempts/attempt_000097_candidate_00",
+      "run": "n20__sc_ports2_nic2_full_insert_n20",
+      "score": 1.0,
+      "tier3_message": "Task not completed.",
+      "off_limit_contact": "No contact detected.",
+      "has_video": true,
+      "has_state_data": true,
+      "force_peak_n": 22.90628622309538,
+      "one_second_mid_stall_candidates": []
+    },
+    {
+      "attempt": "outputs/trajectory_datasets/clean_including_no_insert_trajs/sc_to_sc/agent/sc_ports_2/n20__sc_ports2_nic2_full_insert_n20/agent_generation/replay_attempts/attempt_000098_candidate_00",
+      "run": "n20__sc_ports2_nic2_full_insert_n20",
+      "score": 1.0,
+      "tier3_message": "Task not completed.",
+      "off_limit_contact": "No contact detected.",
+      "has_video": true,
+      "has_state_data": true,
+      "force_peak_n": 22.560684775542725,
+      "one_second_mid_stall_candidates": []
+    },
+    {
+      "attempt": "outputs/trajectory_datasets/clean_including_no_insert_trajs/sc_to_sc/agent/sc_ports_2/n20__sc_ports2_nic2_full_insert_n20/agent_generation/replay_attempts/attempt_000099_candidate_00",
+      "run": "n20__sc_ports2_nic2_full_insert_n20",
+      "score": 1.0,
+      "tier3_message": "Task not completed.",
+      "off_limit_contact": "No contact detected.",
+      "has_video": true,
+      "has_state_data": true,
+      "force_peak_n": 22.33447539677366,
+      "one_second_mid_stall_candidates": []
+    },
+    {
+      "attempt": "outputs/trajectory_datasets/clean_including_no_insert_trajs/sc_to_sc/agent/sc_ports_2/n20__sc_ports2_nic3_full_insert_n20/agent_generation/replay_attempts/attempt_000002_candidate_00",
+      "run": "n20__sc_ports2_nic3_full_insert_n20",
+      "score": 88.34550067884842,
+      "tier3_message": "Cable insertion successful.",
+      "off_limit_contact": "No contact detected.",
+      "has_video": true,
+      "has_state_data": true,
+      "force_peak_n": 21.981253926054226,
+      "one_second_mid_stall_candidates": []
+    }
+  ]
+}

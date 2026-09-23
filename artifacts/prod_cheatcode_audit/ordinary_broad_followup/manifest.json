@@ -1,0 +1,146 @@
+{
+  "classification": "bounded ordinary-development replay; not qualification frequency estimate",
+  "source_config": "/data1/chmin/yj/ws_aic/src/aic/artifacts/prod_cheatcode_audit/official_qualification/eval_config.yaml",
+  "source_sha256": "9f987c07174481474eec2c4fa21faf7d84dae4743a037b809ed7945efb2e5ef5",
+  "policy": "installed aic_example_policies.ros.CheatCode",
+  "trial_count": 19,
+  "trials": [
+    {
+      "trial": "trial_01_sfp_cards1_nic0_port1",
+      "family": "sfp_to_nic",
+      "card_count": 1,
+      "target": "nic0/port1",
+      "source": "qualification scaffold with card count, target, and port changed"
+    },
+    {
+      "trial": "trial_02_sfp_cards2_nic1_port0",
+      "family": "sfp_to_nic",
+      "card_count": 2,
+      "target": "nic1/port0",
+      "source": "qualification scaffold with card count, target, and port changed"
+    },
+    {
+      "trial": "trial_03_sfp_cards3_nic2_port1",
+      "family": "sfp_to_nic",
+      "card_count": 3,
+      "target": "nic2/port1",
+      "source": "qualification scaffold with card count, target, and port changed"
+    },
+    {
+      "trial": "trial_04_sfp_cards4_nic3_port0",
+      "family": "sfp_to_nic",
+      "card_count": 4,
+      "target": "nic3/port0",
+      "source": "qualification scaffold with card count, target, and port changed"
+    },
+    {
+      "trial": "trial_05_sfp_cards5_nic4_port1",
+      "family": "sfp_to_nic",
+      "card_count": 5,
+      "target": "nic4/port1",
+      "source": "qualification scaffold with card count, target, and port changed"
+    },
+    {
+      "trial": "trial_06_sc_cards0_sc0",
+      "family": "sc_to_sc",
+      "card_count": 0,
+      "target": "sc0",
+      "source": "qualification scaffold with card count and target changed"
+    },
+    {
+      "trial": "trial_07_sc_cards0_sc1",
+      "family": "sc_to_sc",
+      "card_count": 0,
+      "target": "sc1",
+      "source": "qualification scaffold with card count and target changed"
+    },
+    {
+      "trial": "trial_08_sc_cards1_sc0",
+      "family": "sc_to_sc",
+      "card_count": 1,
+      "target": "sc0",
+      "source": "qualification scaffold with card count and target changed"
+    },
+    {
+      "trial": "trial_09_sc_cards1_sc1",
+      "family": "sc_to_sc",
+      "card_count": 1,
+      "target": "sc1",
+      "source": "qualification scaffold with card count and target changed"
+    },
+    {
+      "trial": "trial_10_sc_cards2_sc0",
+      "family": "sc_to_sc",
+      "card_count": 2,
+      "target": "sc0",
+      "source": "qualification scaffold with card count and target changed"
+    },
+    {
+      "trial": "trial_11_sc_cards2_sc1",
+      "family": "sc_to_sc",
+      "card_count": 2,
+      "target": "sc1",
+      "source": "qualification scaffold with card count and target changed"
+    },
+    {
+      "trial": "trial_12_sc_cards3_sc0",
+      "family": "sc_to_sc",
+      "card_count": 3,
+      "target": "sc0",
+      "source": "qualification scaffold with card count and target changed"
+    },
+    {
+      "trial": "trial_13_sc_cards3_sc1",
+      "family": "sc_to_sc",
+      "card_count": 3,
+      "target": "sc1",
+      "source": "qualification scaffold with card count and target changed"
+    },
+    {
+      "trial": "trial_14_sc_cards4_sc0",
+      "family": "sc_to_sc",
+      "card_count": 4,
+      "target": "sc0",
+      "source": "qualification scaffold with card count and target changed"
+    },
+    {
+      "trial": "trial_15_sc_cards4_sc1",
+      "family": "sc_to_sc",
+      "card_count": 4,
+      "target": "sc1",
+      "source": "qualification scaffold with card count and target changed"
+    },
+    {
+      "trial": "trial_16_sc_cards5_sc0",
+      "family": "sc_to_sc",
+      "card_count": 5,
+      "target": "sc0",
+      "source": "qualification scaffold with card count and target changed"
+    },
+    {
+      "trial": "trial_17_sc_cards5_sc1",
+      "family": "sc_to_sc",
+      "card_count": 5,
+      "target": "sc1",
+      "source": "qualification scaffold with card count and target changed"
+    },
+    {
+      "trial": "trial_18_sc_historical_cards5_seed12",
+      "family": "sc_to_sc",
+      "card_count": 5,
+      "target": "sc_port_1",
+      "source": "/data1/chmin/yj/ws_aic/src/aic/outputs/trajectory_datasets/clean_including_no_insert_trajs/sc_to_sc/agent/sc_ports_2/n20__sc_ports2_nic5_full_insert_n20/trials/trial_000012.yaml",
+      "source_sha256": "ba0f1f524d4da890735de284805bfc35e8b6b9e7807b796ef63b6cf7da20fa4a",
+      "historical_policy": "joint_position_then_cheatcode; current replay uses stock CheatCode only"
+    },
+    {
+      "trial": "trial_19_sc_historical_cards3_seed4",
+      "family": "sc_to_sc",
+      "card_count": 3,
+      "target": "sc_port_0",
+      "source": "/data1/chmin/yj/ws_aic/src/aic/outputs/trajectory_datasets/clean_including_no_insert_trajs/sc_to_sc/agent/sc_ports_1/n100__sc_ports1_nic3_stop_near_gate_05mm_n100/trials/trial_000004.yaml",
+      "source_sha256": "9b29790c05bda03d0029fabccd1dd679fef54eec83437588b34370beb4aec4cb",
+      "historical_policy": "joint_position_then_cheatcode; current replay uses stock CheatCode only"
+    }
+  ]
+}

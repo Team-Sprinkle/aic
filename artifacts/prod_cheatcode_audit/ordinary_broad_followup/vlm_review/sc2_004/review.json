@@ -1,0 +1,32 @@
+{
+  "attempt": "outputs/trajectory_datasets/clean_including_no_insert_trajs/sc_to_sc/agent/sc_ports_2/n20__sc_ports2_nic2_full_insert_n20/agent_generation/replay_attempts/attempt_000004_candidate_00",
+  "score": -23,
+  "frames": 1620,
+  "peak_force_n": 54.463253021240234,
+  "peak_force_time_s": 47.95000076293945,
+  "review_indices": [
+    0,
+    405,
+    959,
+    1215,
+    1619
+  ],
+  "review_times_s": [
+    0.0,
+    20.25,
+    47.95000076293945,
+    60.75,
+    80.94999694824219
+  ],
+  "measured_tcp_at_peak_m": [
+    -0.4252379834651947,
+    0.46496719121932983,
+    0.17919683456420898
+  ],
+  "measured_tcp_at_end_m": [
+    -0.4249543249607086,
+    0.4631158113479614,
+    0.14602048695087433
+  ],
+  "contact_message": "Contacts detected (only first reported) between entity named [ur5e::forearm_link::forearm_link_collision] and [task_board::nic_card_mount_2::nic_card_link::pcb_collider_box]. Penalty applied."
+}

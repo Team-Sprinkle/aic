@@ -1,0 +1,6083 @@
+{
+  "schema": "aic_ordinary_broad_trial/v1",
+  "bag": "/replay/sc3_attempt003/results/bag_trial_000003_20260923_195025_613",
+  "family": "sc_to_sc",
+  "target": 0,
+  "duration_s": 60.202,
+  "sample_count": 302,
+  "raw_insertion_event_count": 0,
+  "force_max_n": 33.68756168412473,
+  "force_p95_n": 23.791958788329755,
+  "peak_force_time_s": 56.973,
+  "state_near_peak_force": {
+    "time_s": 57.006,
+    "entrance_relative_xyz_mm": [
+      13.68925461736642,
+      -2.2650564325299163,
+      -50.306886042052135
+    ],
+    "lateral_mm": 13.875380089267212,
+    "axial_mm": -50.306886042052135,
+    "orientation_deg": 0.10269916713292133,
+    "measured_tcp_xyz_m": [
+      -0.4219602357143931,
+      0.43994081405362867,
+      0.10119913146549889
+    ],
+    "commanded_tcp_xyz_m": [
+      -0.42509875967444205,
+      0.468031880112724,
+      0.06520553893115133
+    ],
+    "tcp_command_error_mm": 45.76567522186141
+  },
+  "final": {
+    "time_s": 60.202,
+    "entrance_relative_xyz_mm": [
+      15.504920285592167,
+      -0.8069658892819742,
+      -51.40549482730727
+    ],
+    "lateral_mm": 15.52590567435704,
+    "axial_mm": -51.40549482730727,
+    "orientation_deg": 0.21563404357533789,
+    "measured_tcp_xyz_m": [
+      -0.42359697495727056,
+      0.4382422291115534,
+      0.10220508478498622
+    ],
+    "commanded_tcp_xyz_m": [
+      -0.4245287169230121,
+      0.46798622082359737,
+      0.06515938401501276
+    ],
+    "tcp_command_error_mm": 47.51796640845729
+  },
+  "samples": [
+    {
+      "time_s": 0.441,
+      "entrance_relative_xyz_mm": [
+        243.91756195994483,
+        -77.09281779614311,
+        -270.537024531726
+      ],
+      "lateral_mm": 255.81063228144535,
+      "axial_mm": -270.537024531726,
+      "orientation_deg": 27.289294468924346,
+      "measured_tcp_xyz_m": [
+        -0.37133248840494876,
+        0.19429948444035405,
+        0.31690460440476254
+      ],
+      "commanded_tcp_xyz_m": null,
+      "tcp_command_error_mm": null
+    },
+    {
+      "time_s": 0.442,
+      "entrance_relative_xyz_mm": [
+        243.91813203733275,
+        -77.09598470698356,
+        -270.51937547572646
+      ],
+      "lateral_mm": 255.81213027243476,
+      "axial_mm": -270.51937547572646,
+      "orientation_deg": 27.288786013689148,
+      "measured_tcp_xyz_m": [
+        -0.37133248840494876,
+        0.19429948444035405,
+        0.31690460440476254
+      ],
+      "commanded_tcp_xyz_m": null,
+      "tcp_command_error_mm": null
+    },
+    {
+      "time_s": 0.442,
+      "entrance_relative_xyz_mm": [
+        243.9187816161935,
+        -77.09911675929857,
+        -270.50185191112155
+      ],
+      "lateral_mm": 255.81369359397524,
+      "axial_mm": -270.50185191112155,
+      "orientation_deg": 27.288259018711052,
+      "measured_tcp_xyz_m": [
+        -0.37133248840494876,
+        0.19429948444035405,
+        0.31690460440476254
+      ],
+      "commanded_tcp_xyz_m": null,
+      "tcp_command_error_mm": null
+    },
+    {
+      "time_s": 0.605,
+      "entrance_relative_xyz_mm": [
+        243.99099556574447,
+        -77.24482858439643,
+        -269.365313471712
+      ],
+      "lateral_mm": 255.92649229846432,
+      "axial_mm": -269.365313471712,
+      "orientation_deg": 27.253171448716827,
+      "measured_tcp_xyz_m": [
+        -0.3712353689891736,
+        0.1942168885238425,
+        0.31571257774802497
+      ],
+      "commanded_tcp_xyz_m": null,
+      "tcp_command_error_mm": null
+    },
+    {
+      "time_s": 0.804,
+      "entrance_relative_xyz_mm": [
+        244.11013658458543,
+        -77.26382911060928,
+        -268.51903060445227
+      ],
+      "lateral_mm": 256.04581244804297,
+      "axial_mm": -268.51903060445227,
+      "orientation_deg": 27.202595096811038,
+      "measured_tcp_xyz_m": [
+        -0.3712713588137522,
+        0.19410985114920715,
+        0.31492757727419984
+      ],
+      "commanded_tcp_xyz_m": null,
+      "tcp_command_error_mm": null
+    },
+    {
+      "time_s": 1.002,
+      "entrance_relative_xyz_mm": [
+        244.25321582867056,
+        -77.09873551244634,
+        -268.57114661354166
+      ],
+      "lateral_mm": 256.13248224359455,
+      "axial_mm": -268.57114661354166,
+      "orientation_deg": 27.12369235601106,
+      "measured_tcp_xyz_m": [
+        -0.37146492297198874,
+        0.1940134853670197,
+        0.31502877371333593
+      ],
+      "commanded_tcp_xyz_m": null,
+      "tcp_command_error_mm": null
+    },
+    {
+      "time_s": 1.205,
+      "entrance_relative_xyz_mm": [
+        244.4185465522667,
+        -76.76157460969668,
+        -269.1238381883854
+      ],
+      "lateral_mm": 256.18892488802595,
+      "axial_mm": -269.1238381883854,
+      "orientation_deg": 27.002230985791886,
+      "measured_tcp_xyz_m": [
+        -0.3718330328397826,
+        0.1939085661080093,
+        0.3156422447954942
+      ],
+      "commanded_tcp_xyz_m": null,
+      "tcp_command_error_mm": null
+    },
+    {
+      "time_s": 1.405,
+      "entrance_relative_xyz_mm": [
+        244.74657452405577,
+        -76.20136895970919,
+        -269.9153509137928
+      ],
+      "lateral_mm": 256.3348091317153,
+      "axial_mm": -269.9153509137928,
+      "orientation_deg": 26.789309609280206,
+      "measured_tcp_xyz_m": [
+        -0.3724461475818211,
+        0.19369891403999737,
+        0.31648758556424555
+      ],
+      "commanded_tcp_xyz_m": null,
+      "tcp_command_error_mm": null
+    },
+    {
+      "time_s": 1.603,
+      "entrance_relative_xyz_mm": [
+        245.2598089582787,
+        -75.30978615166103,
+        -270.8231268735666
+      ],
+      "lateral_mm": 256.5617621167665,
+      "axial_mm": -270.8231268735666,
+      "orientation_deg": 26.472753487000173,
+      "measured_tcp_xyz_m": [
+        -0.373401573709566,
+        0.19337847726549695,
+        0.3174534106939634
+      ],
+      "commanded_tcp_xyz_m": null,
+      "tcp_command_error_mm": null
+    },
+    {
+      "time_s": 1.81,
+      "entrance_relative_xyz_mm": [
+        245.9599197441125,
+        -74.14258678562268,
+        -271.7828663831929
+      ],
+      "lateral_mm": 256.891816327017,
+      "axial_mm": -271.7828663831929,
+      "orientation_deg": 26.060947942899478,
+      "measured_tcp_xyz_m": [
+        -0.3746921826395907,
+        0.19289122206656997,
+        0.31854390995976145
+      ],
+      "commanded_tcp_xyz_m": null,
+      "tcp_command_error_mm": null
+    },
+    {
+      "time_s": 2.01,
+      "entrance_relative_xyz_mm": [
+        246.92952438380743,
+        -72.52018217659482,
+        -273.1120375172249
+      ],
+      "lateral_mm": 257.3584403809983,
+      "axial_mm": -273.1120375172249,
+      "orientation_deg": 25.482673986988534,
+      "measured_tcp_xyz_m": [
+        -0.376466409651927,
+        0.1922876517791555,
+        0.3200042724279536
+      ],
+      "commanded_tcp_xyz_m": null,
+      "tcp_command_error_mm": null
+    },
+    {
+      "time_s": 2.211,
+      "entrance_relative_xyz_mm": [
+        248.02915181676826,
+        -70.59123873690801,
+        -274.6064345003387
+      ],
+      "lateral_mm": 257.8790087179579,
+      "axial_mm": -274.6064345003387,
+      "orientation_deg": 24.815015534885543,
+      "measured_tcp_xyz_m": [
+        -0.37853043582873336,
+        0.1915827814770778,
+        0.32165185539370866
+      ],
+      "commanded_tcp_xyz_m": null,
+      "tcp_command_error_mm": null
+    },
+    {
+      "time_s": 2.4,
+      "entrance_relative_xyz_mm": [
+        249.2866722358611,
+        -68.2073206878826,
+        -276.5221230808521
+      ],
+      "lateral_mm": 258.4493829550562,
+      "axial_mm": -276.5221230808521,
+      "orientation_deg": 24.01029959918698,
+      "measured_tcp_xyz_m": [
+        -0.38101199089928595,
+        0.1908448211198075,
+        0.32368895831654704
+      ],
+      "commanded_tcp_xyz_m": null,
+      "tcp_command_error_mm": null
+    },
+    {
+      "time_s": 2.602,
+      "entrance_relative_xyz_mm": [
+        250.77397372706545,
+        -65.3895707395393,
+        -278.8339455363029
+      ],
+      "lateral_mm": 259.158989541872,
+      "axial_mm": -278.8339455363029,
+      "orientation_deg": 23.047010887171524,
+      "measured_tcp_xyz_m": [
+        -0.3841745562992713,
+        0.18991704286751482,
+        0.32632900699225165
+      ],
+      "commanded_tcp_xyz_m": null,
+      "tcp_command_error_mm": null
+    },
+    {
+      "time_s": 2.801,
+      "entrance_relative_xyz_mm": [
+        252.5167616468461,
+        -61.700352201600225,
+        -281.631518457361
+      ],
+      "lateral_mm": 259.9454719251936,
+      "axial_mm": -281.631518457361,
+      "orientation_deg": 21.850005325737527,
+      "measured_tcp_xyz_m": [
+        -0.38794570231007874,
+        0.1889664616363065,
+        0.32926892100567334
+      ],
+      "commanded_tcp_xyz_m": null,
+      "tcp_command_error_mm": null
+    },
+    {
+      "time_s": 3.0,
+      "entrance_relative_xyz_mm": [
+        254.18441106166807,
+        -57.840324369764,
+        -284.42911853956775
+      ],
+      "lateral_mm": 260.68221640527486,
+      "axial_mm": -284.42911853956775,
+      "orientation_deg": 20.62867944881348,
+      "measured_tcp_xyz_m": [
+        -0.3920702895552923,
+        0.1880809930955712,
+        0.33235261391260895
+      ],
+      "commanded_tcp_xyz_m": null,
+      "tcp_command_error_mm": null
+    },
+    {
+      "time_s": 3.205,
+      "entrance_relative_xyz_mm": [
+        256.1604488578618,
+        -53.15898406096872,
+        -288.08019377564966
+      ],
+      "lateral_mm": 261.6181437619638,
+      "axial_mm": -288.08019377564966,
+      "orientation_deg": 19.11667215548002,
+      "measured_tcp_xyz_m": [
+        -0.3971291910441899,
+        0.18707439041117083,
+        0.33639688557203556
+      ],
+      "commanded_tcp_xyz_m": null,
+      "tcp_command_error_mm": null
+    },
+    {
+      "time_s": 3.41,
+      "entrance_relative_xyz_mm": [
+        257.9123406679676,
+        -48.023964045330324,
+        -291.646981146535
+      ],
+      "lateral_mm": 262.34533842143446,
+      "axial_mm": -291.646981146535,
+      "orientation_deg": 17.578136652240676,
+      "measured_tcp_xyz_m": [
+        -0.40253845122735454,
+        0.18635551461686695,
+        0.3402880124563397
+      ],
+      "commanded_tcp_xyz_m": null,
+      "tcp_command_error_mm": null
+    },
+    {
+      "time_s": 3.605,
+      "entrance_relative_xyz_mm": [
+        259.81580703333054,
+        -42.29592646965402,
+        -295.8749191708163
+      ],
+      "lateral_mm": 263.23601383607684,
+      "axial_mm": -295.8749191708163,
+      "orientation_deg": 15.818617318577227,
+      "measured_tcp_xyz_m": [
+        -0.4084086258164741,
+        0.18564123340435967,
+        0.3447848812980513
+      ],
+      "commanded_tcp_xyz_m": null,
+      "tcp_command_error_mm": null
+    },
+    {
+      "time_s": 3.801,
+      "entrance_relative_xyz_mm": [
+        261.33212822930983,
+        -36.158028771600904,
+        -300.01506476326335
+      ],
+      "lateral_mm": 263.82169033176245,
+      "axial_mm": -300.01506476326335,
+      "orientation_deg": 14.060175783836689,
+      "measured_tcp_xyz_m": [
+        -0.41490654908761815,
+        0.185315215780296,
+        0.3493770451884105
+      ],
+      "commanded_tcp_xyz_m": null,
+      "tcp_command_error_mm": null
+    },
+    {
+      "time_s": 4.001,
+      "entrance_relative_xyz_mm": [
+        263.09533538426047,
+        -28.376066803894762,
+        -305.3875207539876
+      ],
+      "lateral_mm": 264.6211568794445,
+      "axial_mm": -305.3875207539876,
+      "orientation_deg": 11.80003088680552,
+      "measured_tcp_xyz_m": [
+        -0.4225546367707852,
+        0.1851823814289393,
+        0.35485834149190626
+      ],
+      "commanded_tcp_xyz_m": null,
+      "tcp_command_error_mm": null
+    },
+    {
+      "time_s": 4.2,
+      "entrance_relative_xyz_mm": [
+        264.18478082536893,
+        -20.808284244831054,
+        -310.15990176432615
+      ],
+      "lateral_mm": 265.00298698875434,
+      "axial_mm": -310.15990176432615,
+      "orientation_deg": 9.714326659178958,
+      "measured_tcp_xyz_m": [
+        -0.43046019319714246,
+        0.1856041136506943,
+        0.36009711650299076
+      ],
+      "commanded_tcp_xyz_m": null,
+      "tcp_command_error_mm": null
+    },
+    {
+      "time_s": 4.402,
+      "entrance_relative_xyz_mm": [
+        265.0839511068695,
+        -12.248966130063376,
+        -315.6173740609296
+      ],
+      "lateral_mm": 265.36679955428605,
+      "axial_mm": -315.6173740609296,
+      "orientation_deg": 7.3828831904590135,
+      "measured_tcp_xyz_m": [
+        -0.43908886031665895,
+        0.18646371178895754,
+        0.36584137827725216
+      ],
+      "commanded_tcp_xyz_m": null,
+      "tcp_command_error_mm": null
+    },
+    {
+      "time_s": 4.605,
+      "entrance_relative_xyz_mm": [
+        265.35330338431027,
+        -3.1636765854939632,
+        -321.2410468957727
+      ],
+      "lateral_mm": 265.3721621920871,
+      "axial_mm": -321.2410468957727,
+      "orientation_deg": 4.9840195375735625,
+      "measured_tcp_xyz_m": [
+        -0.4481876754535186,
+        0.18798850411681786,
+        0.37180967345446736
+      ],
+      "commanded_tcp_xyz_m": null,
+      "tcp_command_error_mm": null
+    },
+    {
+      "time_s": 4.8,
+      "entrance_relative_xyz_mm": [
+        265.3797352308856,
+        4.098261140069309,
+        -325.9102285370796
+      ],
+      "lateral_mm": 265.4113780823783,
+      "axial_mm": -325.9102285370796,
+      "orientation_deg": 3.047911592438708,
+      "measured_tcp_xyz_m": [
+        -0.4550293500689086,
+        0.18932623886623845,
+        0.3764729471503856
+      ],
+      "commanded_tcp_xyz_m": null,
+      "tcp_command_error_mm": null
+    },
+    {
+      "time_s": 5.001,
+      "entrance_relative_xyz_mm": [
+        263.70958127068604,
+        13.49346971381607,
+        -328.4943160488054
+      ],
+      "lateral_mm": 264.05457197117084,
+      "axial_mm": -328.4943160488054,
+      "orientation_deg": 1.0222922437406392,
+      "measured_tcp_xyz_m": [
+        -0.46409219642969923,
+        0.19268234412675136,
+        0.3792400591788681
+      ],
+      "commanded_tcp_xyz_m": null,
+      "tcp_command_error_mm": null
+    },
+    {
+      "time_s": 5.2,
+      "entrance_relative_xyz_mm": [
+        262.4240280298127,
+        16.98055758464409,
+        -321.341447048092
+      ],
+      "lateral_mm": 262.9728309603053,
+      "axial_mm": -321.341447048092,
+      "orientation_deg": 0.6283209375822199,
+      "measured_tcp_xyz_m": [
+        -0.46743138810582296,
+        0.19455654044320617,
+        0.3720387513386301
+      ],
+      "commanded_tcp_xyz_m": null,
+      "tcp_command_error_mm": null
+    },
+    {
+      "time_s": 5.403,
+      "entrance_relative_xyz_mm": [
+        262.17942218473354,
+        17.879442077130964,
+        -310.2098065982246
+      ],
+      "lateral_mm": 262.7883632623603,
+      "axial_mm": -310.2098065982246,
+      "orientation_deg": 0.6800806429145246,
+      "measured_tcp_xyz_m": [
+        -0.4682889190986509,
+        0.19489173780477875,
+        0.3605045662237855
+      ],
+      "commanded_tcp_xyz_m": null,
+      "tcp_command_error_mm": null
+    },
+    {
+      "time_s": 5.606,
+      "entrance_relative_xyz_mm": [
+        261.8657796354591,
+        17.738317576350664,
+        -299.17150416105807
+      ],
+      "lateral_mm": 262.46587293308494,
+      "axial_mm": -299.17150416105807,
+      "orientation_deg": 0.9311193597304497,
+      "measured_tcp_xyz_m": [
+        -0.4681629627436131,
+        0.19519090590517862,
+        0.3497206462328342
+      ],
+      "commanded_tcp_xyz_m": null,
+      "tcp_command_error_mm": null
+    },
+    {
+      "time_s": 5.8,
+      "entrance_relative_xyz_mm": [
+        259.7806189547715,
+        18.907255487002146,
+        -294.4607961356867
+      ],
+      "lateral_mm": 260.467760566591,
+      "axial_mm": -294.4607961356867,
+      "orientation_deg": 1.132974173208288,
+      "measured_tcp_xyz_m": [
+        -0.46918512255576017,
+        0.19739102800597863,
+        0.34522859307512177
+      ],
+      "commanded_tcp_xyz_m": null,
+      "tcp_command_error_mm": null
+    },
+    {
+      "time_s": 6.001,
+      "entrance_relative_xyz_mm": [
+        256.4575738598087,
+        20.9395008095096,
+        -293.8071301806682
+      ],
+      "lateral_mm": 257.3109983739729,
+      "axial_mm": -293.8071301806682,
+      "orientation_deg": 1.132806451185749,
+      "measured_tcp_xyz_m": [
+        -0.47083852473145066,
+        0.20086279913623273,
+        0.34459396009930887
+      ],
+      "commanded_tcp_xyz_m": null,
+      "tcp_command_error_mm": null
+    },
+    {
+      "time_s": 6.2,
+      "entrance_relative_xyz_mm": [
+        252.73776554016848,
+        22.92115194116037,
+        -294.9540898005321
+      ],
+      "lateral_mm": 253.77501322341988,
+      "axial_mm": -294.9540898005321,
+      "orientation_deg": 1.0514674712386012,
+      "measured_tcp_xyz_m": [
+        -0.47242702547379906,
+        0.2048437493872344,
+        0.34577217061581267
+      ],
+      "commanded_tcp_xyz_m": null,
+      "tcp_command_error_mm": null
+    },
+    {
+      "time_s": 6.4,
+      "entrance_relative_xyz_mm": [
+        248.46368592835182,
+        25.095375013054227,
+        -296.7232472140684
+      ],
+      "lateral_mm": 249.72781397383127,
+      "axial_mm": -296.7232472140684,
+      "orientation_deg": 0.947308055149394,
+      "measured_tcp_xyz_m": [
+        -0.4740655745216056,
+        0.2092063462301203,
+        0.3474973009229518
+      ],
+      "commanded_tcp_xyz_m": null,
+      "tcp_command_error_mm": null
+    },
+    {
+      "time_s": 6.602,
+      "entrance_relative_xyz_mm": [
+        244.53528380267957,
+        26.999576753898886,
+        -298.1259568206975
+      ],
+      "lateral_mm": 246.02130429974295,
+      "axial_mm": -298.1259568206975,
+      "orientation_deg": 0.8922141551894658,
+      "measured_tcp_xyz_m": [
+        -0.4755916166575757,
+        0.2134893743411248,
+        0.3489540097063374
+      ],
+      "commanded_tcp_xyz_m": null,
+      "tcp_command_error_mm": null
+    },
+    {
+      "time_s": 6.802,
+      "entrance_relative_xyz_mm": [
+        240.61743522166566,
+        28.89540428006862,
+        -299.13501754000004
+      ],
+      "lateral_mm": 242.3462286093206,
+      "axial_mm": -299.13501754000004,
+      "orientation_deg": 0.8637777661127075,
+      "measured_tcp_xyz_m": [
+        -0.47703799728520146,
+        0.2175558512846254,
+        0.3499367382280969
+      ],
+      "commanded_tcp_xyz_m": null,
+      "tcp_command_error_mm": null
+    },
+    {
+      "time_s": 7.004,
+      "entrance_relative_xyz_mm": [
+        236.4284383312601,
+        30.80254667655677,
+        -300.021051364916
+      ],
+      "lateral_mm": 238.42651558398433,
+      "axial_mm": -300.021051364916,
+      "orientation_deg": 0.8678774158647901,
+      "measured_tcp_xyz_m": [
+        -0.4785302050716897,
+        0.22194806910480558,
+        0.3508272714881856
+      ],
+      "commanded_tcp_xyz_m": null,
+      "tcp_command_error_mm": null
+    },
+    {
+      "time_s": 7.204,
+      "entrance_relative_xyz_mm": [
+        232.08837428043358,
+        32.80259104593533,
+        -300.8452250169793
+      ],
+      "lateral_mm": 234.3950158502981,
+      "axial_mm": -300.8452250169793,
+      "orientation_deg": 0.8614890471693923,
+      "measured_tcp_xyz_m": [
+        -0.4800547054993481,
+        0.22646696487953485,
+        0.3516423163205591
+      ],
+      "commanded_tcp_xyz_m": null,
+      "tcp_command_error_mm": null
+    },
+    {
+      "time_s": 7.4,
+      "entrance_relative_xyz_mm": [
+        227.81412406491805,
+        34.634263235135435,
+        -301.59435614720473
+      ],
+      "lateral_mm": 230.43178451183016,
+      "axial_mm": -301.59435614720473,
+      "orientation_deg": 0.8605747981292319,
+      "measured_tcp_xyz_m": [
+        -0.481412148909245,
+        0.23081482966627315,
+        0.35237280271453597
+      ],
+      "commanded_tcp_xyz_m": null,
+      "tcp_command_error_mm": null
+    },
+    {
+      "time_s": 7.602,
+      "entrance_relative_xyz_mm": [
+        223.70050743824643,
+        36.36112192031385,
+        -302.3244623559063
+      ],
+      "lateral_mm": 226.63637884380537,
+      "axial_mm": -302.3244623559063,
+      "orientation_deg": 0.853252848191732,
+      "measured_tcp_xyz_m": [
+        -0.48273476067846377,
+        0.23522844922060715,
+        0.35312674091772417
+      ],
+      "commanded_tcp_xyz_m": null,
+      "tcp_command_error_mm": null
+    },
+    {
+      "time_s": 7.8,
+      "entrance_relative_xyz_mm": [
+        219.13715422394435,
+        38.16737842381943,
+        -303.1006450426805
+      ],
+      "lateral_mm": 222.43615069748847,
+      "axial_mm": -303.1006450426805,
+      "orientation_deg": 0.845472736205731,
+      "measured_tcp_xyz_m": [
+        -0.4839922977028653,
+        0.23971021664812675,
+        0.3538587200022727
+      ],
+      "commanded_tcp_xyz_m": null,
+      "tcp_command_error_mm": null
+    },
+    {
+      "time_s": 8.001,
+      "entrance_relative_xyz_mm": [
+        214.7902763941427,
+        39.870095889187354,
+        -303.9469937472321
+      ],
+      "lateral_mm": 218.45934949020884,
+      "axial_mm": -303.9469937472321,
+      "orientation_deg": 0.8328116426259892,
+      "measured_tcp_xyz_m": [
+        -0.4852289027709809,
+        0.24420817613574056,
+        0.35470309019228485
+      ],
+      "commanded_tcp_xyz_m": null,
+      "tcp_command_error_mm": null
+    },
+    {
+      "time_s": 8.2,
+      "entrance_relative_xyz_mm": [
+        210.03954110307737,
+        41.637556663652184,
+        -304.7407524818377
+      ],
+      "lateral_mm": 214.12681978610286,
+      "axial_mm": -304.7407524818377,
+      "orientation_deg": 0.8164931565702517,
+      "measured_tcp_xyz_m": [
+        -0.48648840227014595,
+        0.2491142364104449,
+        0.35549467202353646
+      ],
+      "commanded_tcp_xyz_m": null,
+      "tcp_command_error_mm": null
+    },
+    {
+      "time_s": 8.405,
+      "entrance_relative_xyz_mm": [
+        205.50172446723877,
+        43.22173608650934,
+        -305.42106090144586
+      ],
+      "lateral_mm": 209.99780291550857,
+      "axial_mm": -305.42106090144586,
+      "orientation_deg": 0.8077479353226953,
+      "measured_tcp_xyz_m": [
+        -0.4876393195495874,
+        0.2540040503866637,
+        0.3562083457655283
+      ],
+      "commanded_tcp_xyz_m": null,
+      "tcp_command_error_mm": null
+    },
+    {
+      "time_s": 8.6,
+      "entrance_relative_xyz_mm": [
+        200.5390008432733,
+        44.92391445954494,
+        -306.1312437558379
+      ],
+      "lateral_mm": 205.50924297847746,
+      "axial_mm": -306.1312437558379,
+      "orientation_deg": 0.7943636829711008,
+      "measured_tcp_xyz_m": [
+        -0.4887644306571581,
+        0.258903427769972,
+        0.35688201143317616
+      ],
+      "commanded_tcp_xyz_m": null,
+      "tcp_command_error_mm": null
+    },
+    {
+      "time_s": 8.8,
+      "entrance_relative_xyz_mm": [
+        195.51684782838845,
+        46.538741107416875,
+        -306.7613641710114
+      ],
+      "lateral_mm": 200.97933278974827,
+      "axial_mm": -306.7613641710114,
+      "orientation_deg": 0.7832905153423604,
+      "measured_tcp_xyz_m": [
+        -0.48984626804167763,
+        0.2640661519045389,
+        0.3575106449115494
+      ],
+      "commanded_tcp_xyz_m": null,
+      "tcp_command_error_mm": null
+    },
+    {
+      "time_s": 9.005,
+      "entrance_relative_xyz_mm": [
+        190.99900681895593,
+        47.91296620276628,
+        -307.26311980216116
+      ],
+      "lateral_mm": 196.91691886725985,
+      "axial_mm": -307.26311980216116,
+      "orientation_deg": 0.7755438510011431,
+      "measured_tcp_xyz_m": [
+        -0.4907790662309745,
+        0.26886756462119793,
+        0.35803096937558476
+      ],
+      "commanded_tcp_xyz_m": null,
+      "tcp_command_error_mm": null
+    },
+    {
+      "time_s": 9.2,
+      "entrance_relative_xyz_mm": [
+        186.64920707316458,
+        49.22090819635669,
+        -307.75079091476965
+      ],
+      "lateral_mm": 193.0301124299399,
+      "axial_mm": -307.75079091476965,
+      "orientation_deg": 0.7622973064725294,
+      "measured_tcp_xyz_m": [
+        -0.4916089211461265,
+        0.27327324394435903,
+        0.35850649545303026
+      ],
+      "commanded_tcp_xyz_m": null,
+      "tcp_command_error_mm": null
+    },
+    {
+      "time_s": 9.407,
+      "entrance_relative_xyz_mm": [
+        181.39128288509082,
+        50.66337516330041,
+        -308.24681523013254
+      ],
+      "lateral_mm": 188.3336801786562,
+      "axial_mm": -308.24681523013254,
+      "orientation_deg": 0.7506385032231475,
+      "measured_tcp_xyz_m": [
+        -0.49251159846593207,
+        0.27876391827422803,
+        0.35900995735001484
+      ],
+      "commanded_tcp_xyz_m": null,
+      "tcp_command_error_mm": null
+    },
+    {
+      "time_s": 9.608,
+      "entrance_relative_xyz_mm": [
+        176.0499061045334,
+        52.05235538134603,
+        -308.70304451301257
+      ],
+      "lateral_mm": 183.5838150277986,
+      "axial_mm": -308.70304451301257,
+      "orientation_deg": 0.7381312192870975,
+      "measured_tcp_xyz_m": [
+        -0.49332333182084753,
+        0.2841701244674997,
+        0.3594611982419067
+      ],
+      "commanded_tcp_xyz_m": null,
+      "tcp_command_error_mm": null
+    },
+    {
+      "time_s": 9.801,
+      "entrance_relative_xyz_mm": [
+        171.3718656011089,
+        53.21107482995921,
+        -309.0394427535632
+      ],
+      "lateral_mm": 179.44284550843494,
+      "axial_mm": -309.0394427535632,
+      "orientation_deg": 0.7257967985994566,
+      "measured_tcp_xyz_m": [
+        -0.49397757565960015,
+        0.2889913932479402,
+        0.359799735060062
+      ],
+      "commanded_tcp_xyz_m": null,
+      "tcp_command_error_mm": null
+    },
+    {
+      "time_s": 10.001,
+      "entrance_relative_xyz_mm": [
+        166.72772689818999,
+        54.26860528847941,
+        -309.3066869415508
+      ],
+      "lateral_mm": 175.3374359245458,
+      "axial_mm": -309.3066869415508,
+      "orientation_deg": 0.7152804696194364,
+      "measured_tcp_xyz_m": [
+        -0.4945404069775479,
+        0.29371657778896826,
+        0.3600625101131132
+      ],
+      "commanded_tcp_xyz_m": null,
+      "tcp_command_error_mm": null
+    },
+    {
+      "time_s": 10.208,
+      "entrance_relative_xyz_mm": [
+        161.7425683971986,
+        55.31560703890218,
+        -309.59746417233515
+      ],
+      "lateral_mm": 170.93997430035114,
+      "axial_mm": -309.59746417233515,
+      "orientation_deg": 0.7052655104589772,
+      "measured_tcp_xyz_m": [
+        -0.4950752038670545,
+        0.2988026756756102,
+        0.3603584476554247
+      ],
+      "commanded_tcp_xyz_m": null,
+      "tcp_command_error_mm": null
+    },
+    {
+      "time_s": 10.401,
+      "entrance_relative_xyz_mm": [
+        156.58687567526317,
+        56.389097576972944,
+        -309.8976616645379
+      ],
+      "lateral_mm": 166.4307061791354,
+      "axial_mm": -309.8976616645379,
+      "orientation_deg": 0.6865698628869539,
+      "measured_tcp_xyz_m": [
+        -0.4955926780877109,
+        0.30415808384002563,
+        0.3606605175839334
+      ],
+      "commanded_tcp_xyz_m": null,
+      "tcp_command_error_mm": null
+    },
+    {
+      "time_s": 10.605,
+      "entrance_relative_xyz_mm": [
+        151.10617922016593,
+        57.360467689422464,
+        -310.0700747939964
+      ],
+      "lateral_mm": 161.6270418341751,
+      "axial_mm": -310.0700747939964,
+      "orientation_deg": 0.6737767723484434,
+      "measured_tcp_xyz_m": [
+        -0.49598247617076774,
+        0.3095425737812406,
+        0.36081509953558183
+      ],
+      "commanded_tcp_xyz_m": null,
+      "tcp_command_error_mm": null
+    },
+    {
+      "time_s": 10.806,
+      "entrance_relative_xyz_mm": [
+        146.18626256844914,
+        58.174012466131266,
+        -310.1831371260584
+      ],
+      "lateral_mm": 157.33607053101696,
+      "axial_mm": -310.1831371260584,
+      "orientation_deg": 0.6610104931447417,
+      "measured_tcp_xyz_m": [
+        -0.4962743123724839,
+        0.31452472623382666,
+        0.3609275837506321
+      ],
+      "commanded_tcp_xyz_m": null,
+      "tcp_command_error_mm": null
+    },
+    {
+      "time_s": 11.007,
+      "entrance_relative_xyz_mm": [
+        141.40256383208205,
+        58.90475829455491,
+        -310.2529867302446
+      ],
+      "lateral_mm": 153.1811202727868,
+      "axial_mm": -310.2529867302446,
+      "orientation_deg": 0.6472253885243663,
+      "measured_tcp_xyz_m": [
+        -0.4964875532457382,
+        0.3194738265608868,
+        0.36100321761788834
+      ],
+      "commanded_tcp_xyz_m": null,
+      "tcp_command_error_mm": null
+    },
+    {
+      "time_s": 11.2,
+      "entrance_relative_xyz_mm": [
+        136.05796855612166,
+        59.60858338747513,
+        -310.25701574481656
+      ],
+      "lateral_mm": 148.54276832306635,
+      "axial_mm": -310.25701574481656,
+      "orientation_deg": 0.6343423164786441,
+      "measured_tcp_xyz_m": [
+        -0.49662847414310607,
+        0.32458445369504907,
+        0.3610011380483169
+      ],
+      "commanded_tcp_xyz_m": null,
+      "tcp_command_error_mm": null
+    },
+    {
+      "time_s": 11.4,
+      "entrance_relative_xyz_mm": [
+        131.43265763571836,
+        60.172689272421835,
+        -310.2227842893175
+      ],
+      "lateral_mm": 144.5520530032811,
+      "axial_mm": -310.2227842893175,
+      "orientation_deg": 0.6213255087214135,
+      "measured_tcp_xyz_m": [
+        -0.4967044358497872,
+        0.3295214835928879,
+        0.36095638161841226
+      ],
+      "commanded_tcp_xyz_m": null,
+      "tcp_command_error_mm": null
+    },
+    {
+      "time_s": 11.603,
+      "entrance_relative_xyz_mm": [
+        126.30404633400205,
+        60.66923706382513,
+        -310.10550982736487
+      ],
+      "lateral_mm": 140.11947918204788,
+      "axial_mm": -310.10550982736487,
+      "orientation_deg": 0.6103526331907435,
+      "measured_tcp_xyz_m": [
+        -0.49666395551771264,
+        0.3344050286886655,
+        0.3608510734977345
+      ],
+      "commanded_tcp_xyz_m": null,
+      "tcp_command_error_mm": null
+    },
+    {
+      "time_s": 11.8,
+      "entrance_relative_xyz_mm": [
+        122.22801758423843,
+        61.17858804455808,
+        -310.09972453084436
+      ],
+      "lateral_mm": 136.68397096111397,
+      "axial_mm": -310.09972453084436,
+      "orientation_deg": 0.5787235014424263,
+      "measured_tcp_xyz_m": [
+        -0.49673709858734044,
+        0.3385192868216038,
+        0.36084627302002537
+      ],
+      "commanded_tcp_xyz_m": null,
+      "tcp_command_error_mm": null
+    },
+    {
+      "time_s": 12.012,
+      "entrance_relative_xyz_mm": [
+        117.86036374505584,
+        61.618396125547505,
+        -310.1828031980587
+      ],
+      "lateral_mm": 132.9958348340344,
+      "axial_mm": -310.1828031980587,
+      "orientation_deg": 0.5482347927003791,
+      "measured_tcp_xyz_m": [
+        -0.49670025079000596,
+        0.34313161406039777,
+        0.3609348439130272
+      ],
+      "commanded_tcp_xyz_m": null,
+      "tcp_command_error_mm": null
+    },
+    {
+      "time_s": 12.208,
+      "entrance_relative_xyz_mm": [
+        112.92669836392825,
+        61.916412004411086,
+        -310.0777933454766
+      ],
+      "lateral_mm": 128.78696082631043,
+      "axial_mm": -310.0777933454766,
+      "orientation_deg": 0.5288647745971861,
+      "measured_tcp_xyz_m": [
+        -0.4964784703904851,
+        0.3480219665471184,
+        0.36082027333798017
+      ],
+      "commanded_tcp_xyz_m": null,
+      "tcp_command_error_mm": null
+    },
+    {
+      "time_s": 12.401,
+      "entrance_relative_xyz_mm": [
+        108.33542344633807,
+        62.05687334248941,
+        -309.84795462972926
+      ],
+      "lateral_mm": 124.85038847493887,
+      "axial_mm": -309.84795462972926,
+      "orientation_deg": 0.5188722171246,
+      "measured_tcp_xyz_m": [
+        -0.49614355628741963,
+        0.3524383468239248,
+        0.3605958689478742
+      ],
+      "commanded_tcp_xyz_m": null,
+      "tcp_command_error_mm": null
+    },
+    {
+      "time_s": 12.601,
+      "entrance_relative_xyz_mm": [
+        103.62741867178319,
+        62.1877977733131,
+        -309.57006671285535
+      ],
+      "lateral_mm": 120.85513680630842,
+      "axial_mm": -309.57006671285535,
+      "orientation_deg": 0.506262820477568,
+      "measured_tcp_xyz_m": [
+        -0.4957499841444596,
+        0.3573612351437908,
+        0.36030757972517347
+      ],
+      "commanded_tcp_xyz_m": null,
+      "tcp_command_error_mm": null
+    },
+    {
+      "time_s": 12.802,
+      "entrance_relative_xyz_mm": [
+        98.94804617006395,
+        62.225312876652644,
+        -309.0031359979348
+      ],
+      "lateral_mm": 116.88757591579363,
+      "axial_mm": -309.0031359979348,
+      "orientation_deg": 0.5074617257710242,
+      "measured_tcp_xyz_m": [
+        -0.4953149536284706,
+        0.36196459740798015,
+        0.35973014019421545
+      ],
+      "commanded_tcp_xyz_m": null,
+      "tcp_command_error_mm": null
+    },
+    {
+      "time_s": 13.009,
+      "entrance_relative_xyz_mm": [
+        94.1524291685264,
+        62.300100412871956,
+        -308.4145278296504
+      ],
+      "lateral_mm": 112.89810640479453,
+      "axial_mm": -308.4145278296504,
+      "orientation_deg": 0.49915337057825476,
+      "measured_tcp_xyz_m": [
+        -0.4949035907119749,
+        0.3667128613546852,
+        0.3591607762888775
+      ],
+      "commanded_tcp_xyz_m": null,
+      "tcp_command_error_mm": null
+    },
+    {
+      "time_s": 13.205,
+      "entrance_relative_xyz_mm": [
+        89.30974192692202,
+        62.220393785027056,
+        -307.9586139001107
+      ],
+      "lateral_mm": 108.84671518156736,
+      "axial_mm": -307.9586139001107,
+      "orientation_deg": 0.4897905081939019,
+      "measured_tcp_xyz_m": [
+        -0.49430902111218183,
+        0.3715844129773559,
+        0.3587008818071699
+      ],
+      "commanded_tcp_xyz_m": null,
+      "tcp_command_error_mm": null
+    },
+    {
+      "time_s": 13.411,
+      "entrance_relative_xyz_mm": [
+        84.13915068948668,
+        62.04918633328418,
+        -307.5878495372468
+      ],
+      "lateral_mm": 104.54424041223298,
+      "axial_mm": -307.5878495372468,
+      "orientation_deg": 0.47040649944633056,
+      "measured_tcp_xyz_m": [
+        -0.49356729839318475,
+        0.3767595667995465,
+        0.35833575302975784
+      ],
+      "commanded_tcp_xyz_m": null,
+      "tcp_command_error_mm": null
+    },
+    {
+      "time_s": 13.602,
+      "entrance_relative_xyz_mm": [
+        79.57742771176363,
+        61.76894998042506,
+        -307.22512010956905
+      ],
+      "lateral_mm": 100.73713408125735,
+      "axial_mm": -307.22512010956905,
+      "orientation_deg": 0.46080363101512506,
+      "measured_tcp_xyz_m": [
+        -0.4928258424203507,
+        0.381157322328367,
+        0.357975241862633
+      ],
+      "commanded_tcp_xyz_m": null,
+      "tcp_command_error_mm": null
+    },
+    {
+      "time_s": 13.8,
+      "entrance_relative_xyz_mm": [
+        74.14092026386705,
+        61.35593224251604,
+        -306.9574989821531
+      ],
+      "lateral_mm": 96.23630540976369,
+      "axial_mm": -306.9574989821531,
+      "orientation_deg": 0.43923434860864397,
+      "measured_tcp_xyz_m": [
+        -0.49182986987941546,
+        0.3865245368939137,
+        0.3577100730946048
+      ],
+      "commanded_tcp_xyz_m": null,
+      "tcp_command_error_mm": null
+    },
+    {
+      "time_s": 14.006,
+      "entrance_relative_xyz_mm": [
+        69.41392700242388,
+        60.874984943140284,
+        -306.90374303797773
+      ],
+      "lateral_mm": 92.325820081521,
+      "axial_mm": -306.90374303797773,
+      "orientation_deg": 0.422042939898935,
+      "measured_tcp_xyz_m": [
+        -0.49082808877134587,
+        0.3912262894140047,
+        0.3576557714159899
+      ],
+      "commanded_tcp_xyz_m": null,
+      "tcp_command_error_mm": null
+    },
+    {
+      "time_s": 14.204,
+      "entrance_relative_xyz_mm": [
+        64.37110351045611,
+        60.37606248672736,
+        -306.2607767513714
+      ],
+      "lateral_mm": 88.25478960688231,
+      "axial_mm": -306.2607767513714,
+      "orientation_deg": 0.41158883696779747,
+      "measured_tcp_xyz_m": [
+        -0.4898095486553675,
+        0.3962918997943658,
+        0.3569809377670957
+      ],
+      "commanded_tcp_xyz_m": null,
+      "tcp_command_error_mm": null
+    },
+    {
+      "time_s": 14.407,
+      "entrance_relative_xyz_mm": [
+        59.435444238898185,
+        59.93963047114057,
+        -305.2360593065131
+      ],
+      "lateral_mm": 84.41167770452178,
+      "axial_mm": -305.2360593065131,
+      "orientation_deg": 0.3967977006536266,
+      "measured_tcp_xyz_m": [
+        -0.48881418599121057,
+        0.4012328367647746,
+        0.35593301500496066
+      ],
+      "commanded_tcp_xyz_m": null,
+      "tcp_command_error_mm": null
+    },
+    {
+      "time_s": 14.6,
+      "entrance_relative_xyz_mm": [
+        53.94455464293266,
+        59.18366115464171,
+        -304.8112984391069
+      ],
+      "lateral_mm": 80.07946505373143,
+      "axial_mm": -304.8112984391069,
+      "orientation_deg": 0.4061067698443737,
+      "measured_tcp_xyz_m": [
+        -0.48755140959579185,
+        0.4062902185188766,
+        0.3555745848487333
+      ],
+      "commanded_tcp_xyz_m": null,
+      "tcp_command_error_mm": null
+    },
+    {
+      "time_s": 14.801,
+      "entrance_relative_xyz_mm": [
+        50.97338844021132,
+        58.85626244081302,
+        -302.69781635520144
+      ],
+      "lateral_mm": 77.86106830488859,
+      "axial_mm": -302.69781635520144,
+      "orientation_deg": 0.4284313526805119,
+      "measured_tcp_xyz_m": [
+        -0.48696319428524765,
+        0.4092811950556044,
+        0.35347996202620824
+      ],
+      "commanded_tcp_xyz_m": null,
+      "tcp_command_error_mm": null
+    },
+    {
+      "time_s": 15.001,
+      "entrance_relative_xyz_mm": [
+        47.06405831258678,
+        58.88464258124551,
+        -299.97225585201284
+      ],
+      "lateral_mm": 75.38187260059013,
+      "axial_mm": -299.97225585201284,
+      "orientation_deg": 0.5498894666987061,
+      "measured_tcp_xyz_m": [
+        -0.48662542861447255,
+        0.4132318595887292,
+        0.3507689228916543
+      ],
+      "commanded_tcp_xyz_m": null,
+      "tcp_command_error_mm": null
+    },
+    {
+      "time_s": 15.209,
+      "entrance_relative_xyz_mm": [
+        43.32781737284372,
+        58.6706937085725,
+        -297.32947451442817
+      ],
+      "lateral_mm": 72.93524565352219,
+      "axial_mm": -297.32947451442817,
+      "orientation_deg": 0.7374662598343384,
+      "measured_tcp_xyz_m": [
+        -0.4860475924974068,
+        0.417179098060926,
+        0.3479772818542535
+      ],
+      "commanded_tcp_xyz_m": null,
+      "tcp_command_error_mm": null
+    },
+    {
+      "time_s": 15.401,
+      "entrance_relative_xyz_mm": [
+        39.77815002178767,
+        58.56635308025823,
+        -294.7611103234582
+      ],
+      "lateral_mm": 70.79773253627067,
+      "axial_mm": -294.7611103234582,
+      "orientation_deg": 0.9222192318920633,
+      "measured_tcp_xyz_m": [
+        -0.48561419162336866,
+        0.42063899192890813,
+        0.3455246387796219
+      ],
+      "commanded_tcp_xyz_m": null,
+      "tcp_command_error_mm": null
+    },
+    {
+      "time_s": 15.6,
+      "entrance_relative_xyz_mm": [
+        36.67717609334087,
+        58.52850175528659,
+        -291.8695643800997
+      ],
+      "lateral_mm": 69.07098351623871,
+      "axial_mm": -291.8695643800997,
+      "orientation_deg": 1.1760915412134043,
+      "measured_tcp_xyz_m": [
+        -0.4853180849418664,
+        0.42371273501522433,
+        0.3427062998352285
+      ],
+      "commanded_tcp_xyz_m": null,
+      "tcp_command_error_mm": null
+    },
+    {
+      "time_s": 15.8,
+      "entrance_relative_xyz_mm": [
+        33.552596593559855,
+        58.29197548572193,
+        -289.23233055286124
+      ],
+      "lateral_mm": 67.25868824321637,
+      "axial_mm": -289.23233055286124,
+      "orientation_deg": 1.416063579068658,
+      "measured_tcp_xyz_m": [
+        -0.48479400739790435,
+        0.42690549720780185,
+        0.3400541316899621
+      ],
+      "commanded_tcp_xyz_m": null,
+      "tcp_command_error_mm": null
+    },
+    {
+      "time_s": 16.004,
+      "entrance_relative_xyz_mm": [
+        30.6514315354674,
+        58.24184398695634,
+        -286.99149214551255
+      ],
+      "lateral_mm": 65.81506397607168,
+      "axial_mm": -286.99149214551255,
+      "orientation_deg": 1.5721039350132884,
+      "measured_tcp_xyz_m": [
+        -0.4844109568369874,
+        0.429925430319147,
+        0.3377442211786883
+      ],
+      "commanded_tcp_xyz_m": null,
+      "tcp_command_error_mm": null
+    },
+    {
+      "time_s": 16.205,
+      "entrance_relative_xyz_mm": [
+        28.3717969813852,
+        58.128804853832065,
+        -284.2971679981579
+      ],
+      "lateral_mm": 64.68320352060361,
+      "axial_mm": -284.2971679981579,
+      "orientation_deg": 1.854228245833823,
+      "measured_tcp_xyz_m": [
+        -0.4841609979542138,
+        0.4321606494391116,
+        0.33514589317581667
+      ],
+      "commanded_tcp_xyz_m": null,
+      "tcp_command_error_mm": null
+    },
+    {
+      "time_s": 16.4,
+      "entrance_relative_xyz_mm": [
+        25.983179005373835,
+        57.91545634947229,
+        -282.1588641472772
+      ],
+      "lateral_mm": 63.47696964563549,
+      "axial_mm": -282.1588641472772,
+      "orientation_deg": 2.0482509399433244,
+      "measured_tcp_xyz_m": [
+        -0.4837298100241528,
+        0.4345476362969686,
+        0.3330610137853276
+      ],
+      "commanded_tcp_xyz_m": null,
+      "tcp_command_error_mm": null
+    },
+    {
+      "time_s": 16.611,
+      "entrance_relative_xyz_mm": [
+        23.37685025260286,
+        57.809034739202986,
+        -279.58563464756804
+      ],
+      "lateral_mm": 62.356728788567764,
+      "axial_mm": -279.58563464756804,
+      "orientation_deg": 2.2806256815589734,
+      "measured_tcp_xyz_m": [
+        -0.48335729322199616,
+        0.4373001960852159,
+        0.33035333481283036
+      ],
+      "commanded_tcp_xyz_m": null,
+      "tcp_command_error_mm": null
+    },
+    {
+      "time_s": 16.802,
+      "entrance_relative_xyz_mm": [
+        21.367397611486233,
+        57.67765981890102,
+        -277.2450125317505
+      ],
+      "lateral_mm": 61.508358154581046,
+      "axial_mm": -277.2450125317505,
+      "orientation_deg": 2.5183949589968067,
+      "measured_tcp_xyz_m": [
+        -0.4830665392896658,
+        0.43936456248128886,
+        0.3280352847630208
+      ],
+      "commanded_tcp_xyz_m": null,
+      "tcp_command_error_mm": null
+    },
+    {
+      "time_s": 17.002,
+      "entrance_relative_xyz_mm": [
+        18.843382058770064,
+        57.571780833250955,
+        -274.1971852565841
+      ],
+      "lateral_mm": 60.577083090263265,
+      "axial_mm": -274.1971852565841,
+      "orientation_deg": 2.8108115040284614,
+      "measured_tcp_xyz_m": [
+        -0.48274769356317554,
+        0.44181842659009984,
+        0.325136650945554
+      ],
+      "commanded_tcp_xyz_m": null,
+      "tcp_command_error_mm": null
+    },
+    {
+      "time_s": 17.201,
+      "entrance_relative_xyz_mm": [
+        17.112793602853145,
+        56.275617865415875,
+        -271.9937499964067
+      ],
+      "lateral_mm": 58.82000400397951,
+      "axial_mm": -271.9937499964067,
+      "orientation_deg": 3.07579189119348,
+      "measured_tcp_xyz_m": [
+        -0.4813257236688883,
+        0.4434687953896721,
+        0.32294353861909886
+      ],
+      "commanded_tcp_xyz_m": null,
+      "tcp_command_error_mm": null
+    },
+    {
+      "time_s": 17.402,
+      "entrance_relative_xyz_mm": [
+        15.938516050244322,
+        53.29341492308018,
+        -270.94127078866114
+      ],
+      "lateral_mm": 55.625752741401,
+      "axial_mm": -270.94127078866114,
+      "orientation_deg": 3.349659771989782,
+      "measured_tcp_xyz_m": [
+        -0.47829580194463234,
+        0.4443958395880858,
+        0.3219071322049646
+      ],
+      "commanded_tcp_xyz_m": null,
+      "tcp_command_error_mm": null
+    },
+    {
+      "time_s": 17.603,
+      "entrance_relative_xyz_mm": [
+        15.94146925530554,
+        50.40410539139415,
+        -270.56534100947437
+      ],
+      "lateral_mm": 52.864962709952046,
+      "axial_mm": -270.56534100947437,
+      "orientation_deg": 3.62785390446924,
+      "measured_tcp_xyz_m": [
+        -0.475472144698209,
+        0.4441535080548959,
+        0.3215445351257593
+      ],
+      "commanded_tcp_xyz_m": null,
+      "tcp_command_error_mm": null
+    },
+    {
+      "time_s": 17.802,
+      "entrance_relative_xyz_mm": [
+        16.344236715041315,
+        47.5910360461885,
+        -270.6533270593572
+      ],
+      "lateral_mm": 50.319387771980274,
+      "axial_mm": -270.6533270593572,
+      "orientation_deg": 3.876493257193488,
+      "measured_tcp_xyz_m": [
+        -0.47275428752006626,
+        0.4435075168150076,
+        0.32164203207623704
+      ],
+      "commanded_tcp_xyz_m": null,
+      "tcp_command_error_mm": null
+    },
+    {
+      "time_s": 18.003,
+      "entrance_relative_xyz_mm": [
+        16.899899360344804,
+        44.73725726624764,
+        -270.83047331713493
+      ],
+      "lateral_mm": 47.822889771491326,
+      "axial_mm": -270.83047331713493,
+      "orientation_deg": 4.128071033798302,
+      "measured_tcp_xyz_m": [
+        -0.4700091907261915,
+        0.44270796707707427,
+        0.3218313694275695
+      ],
+      "commanded_tcp_xyz_m": null,
+      "tcp_command_error_mm": null
+    },
+    {
+      "time_s": 18.202,
+      "entrance_relative_xyz_mm": [
+        17.212880481590947,
+        42.371586915137236,
+        -270.7787459674911
+      ],
+      "lateral_mm": 45.7343922248953,
+      "axial_mm": -270.7787459674911,
+      "orientation_deg": 4.314451149020156,
+      "measured_tcp_xyz_m": [
+        -0.4676474124079165,
+        0.4421861036025505,
+        0.321758685629062
+      ],
+      "commanded_tcp_xyz_m": null,
+      "tcp_command_error_mm": null
+    },
+    {
+      "time_s": 18.403,
+      "entrance_relative_xyz_mm": [
+        16.91166471460076,
+        39.10955093791199,
+        -269.9243817075245
+      ],
+      "lateral_mm": 42.60940480673492,
+      "axial_mm": -269.9243817075245,
+      "orientation_deg": 4.294042179943575,
+      "measured_tcp_xyz_m": [
+        -0.4643491845992717,
+        0.44209451072717854,
+        0.3209113777155084
+      ],
+      "commanded_tcp_xyz_m": null,
+      "tcp_command_error_mm": null
+    },
+    {
+      "time_s": 18.612,
+      "entrance_relative_xyz_mm": [
+        17.22173476980618,
+        35.79354995447662,
+        -269.6288290814455
+      ],
+      "lateral_mm": 39.721107321236204,
+      "axial_mm": -269.6288290814455,
+      "orientation_deg": 4.274926453049921,
+      "measured_tcp_xyz_m": [
+        -0.46098836122941844,
+        0.44140914992251723,
+        0.3206205242025224
+      ],
+      "commanded_tcp_xyz_m": null,
+      "tcp_command_error_mm": null
+    },
+    {
+      "time_s": 18.805,
+      "entrance_relative_xyz_mm": [
+        17.66707134445719,
+        32.823757931661284,
+        -269.4828182886859
+      ],
+      "lateral_mm": 37.276326195675956,
+      "axial_mm": -269.4828182886859,
+      "orientation_deg": 4.256973537593489,
+      "measured_tcp_xyz_m": [
+        -0.4581254869834703,
+        0.44067026665934195,
+        0.32048158776919866
+      ],
+      "commanded_tcp_xyz_m": null,
+      "tcp_command_error_mm": null
+    },
+    {
+      "time_s": 19.0,
+      "entrance_relative_xyz_mm": [
+        18.06664746146819,
+        29.861165318433606,
+        -269.2021923158654
+      ],
+      "lateral_mm": 34.90118829885018,
+      "axial_mm": -269.2021923158654,
+      "orientation_deg": 4.251837406367253,
+      "measured_tcp_xyz_m": [
+        -0.45524821091419754,
+        0.4399709169504327,
+        0.3202127774885223
+      ],
+      "commanded_tcp_xyz_m": null,
+      "tcp_command_error_mm": null
+    },
+    {
+      "time_s": 19.204,
+      "entrance_relative_xyz_mm": [
+        18.43703760342977,
+        26.91688765566977,
+        -268.75054791250807
+      ],
+      "lateral_mm": 32.625805685963236,
+      "axial_mm": -268.75054791250807,
+      "orientation_deg": 4.264813585418817,
+      "measured_tcp_xyz_m": [
+        -0.45223607104334584,
+        0.4392803275776801,
+        0.31974994222083974
+      ],
+      "commanded_tcp_xyz_m": null,
+      "tcp_command_error_mm": null
+    },
+    {
+      "time_s": 19.411,
+      "entrance_relative_xyz_mm": [
+        18.731240546428246,
+        23.916507544198968,
+        -268.1284994494244
+      ],
+      "lateral_mm": 30.378589590695018,
+      "axial_mm": -268.1284994494244,
+      "orientation_deg": 4.285043779055195,
+      "measured_tcp_xyz_m": [
+        -0.44919887415316734,
+        0.4386637024244516,
+        0.31912367277133247
+      ],
+      "commanded_tcp_xyz_m": null,
+      "tcp_command_error_mm": null
+    },
+    {
+      "time_s": 19.6,
+      "entrance_relative_xyz_mm": [
+        18.758117931107847,
+        21.54824123268359,
+        -267.3674983887959
+      ],
+      "lateral_mm": 28.569103740566923,
+      "axial_mm": -267.3674983887959,
+      "orientation_deg": 4.242529033311267,
+      "measured_tcp_xyz_m": [
+        -0.446838147700005,
+        0.43841528275292957,
+        0.31833870392353697
+      ],
+      "commanded_tcp_xyz_m": null,
+      "tcp_command_error_mm": null
+    },
+    {
+      "time_s": 19.801,
+      "entrance_relative_xyz_mm": [
+        17.978857706613393,
+        20.18032833043956,
+        -265.97773528720705
+      ],
+      "lateral_mm": 27.027485564865138,
+      "axial_mm": -265.97773528720705,
+      "orientation_deg": 4.060849319162215,
+      "measured_tcp_xyz_m": [
+        -0.4454120391993205,
+        0.43899018761164127,
+        0.31698706860411985
+      ],
+      "commanded_tcp_xyz_m": null,
+      "tcp_command_error_mm": null
+    },
+    {
+      "time_s": 20.004,
+      "entrance_relative_xyz_mm": [
+        16.46828321289509,
+        19.315161939883723,
+        -263.8499792518316
+      ],
+      "lateral_mm": 25.382667959535993,
+      "axial_mm": -263.8499792518316,
+      "orientation_deg": 3.8155665018774174,
+      "measured_tcp_xyz_m": [
+        -0.44432753982513845,
+        0.44034025606624766,
+        0.3148486926006283
+      ],
+      "commanded_tcp_xyz_m": null,
+      "tcp_command_error_mm": null
+    },
+    {
+      "time_s": 20.205,
+      "entrance_relative_xyz_mm": [
+        14.640333092184987,
+        18.604583123632196,
+        -261.2824795267934
+      ],
+      "lateral_mm": 23.674244787411205,
+      "axial_mm": -261.2824795267934,
+      "orientation_deg": 3.5637671494167122,
+      "measured_tcp_xyz_m": [
+        -0.44332955990801215,
+        0.442109650016,
+        0.3121438618107155
+      ],
+      "commanded_tcp_xyz_m": null,
+      "tcp_command_error_mm": null
+    },
+    {
+      "time_s": 20.403,
+      "entrance_relative_xyz_mm": [
+        12.347568045199514,
+        17.774351995947598,
+        -258.0887740760147
+      ],
+      "lateral_mm": 21.64232024314118,
+      "axial_mm": -258.0887740760147,
+      "orientation_deg": 3.28056942104122,
+      "measured_tcp_xyz_m": [
+        -0.442259990181127,
+        0.44415581876627974,
+        0.30906450483376946
+      ],
+      "commanded_tcp_xyz_m": null,
+      "tcp_command_error_mm": null
+    },
+    {
+      "time_s": 20.603,
+      "entrance_relative_xyz_mm": [
+        10.188726868819636,
+        17.028246888785265,
+        -254.9417862372829
+      ],
+      "lateral_mm": 19.843672727416976,
+      "axial_mm": -254.9417862372829,
+      "orientation_deg": 3.0168502683510674,
+      "measured_tcp_xyz_m": [
+        -0.4412124020531755,
+        0.44625122399066086,
+        0.30576749135101977
+      ],
+      "commanded_tcp_xyz_m": null,
+      "tcp_command_error_mm": null
+    },
+    {
+      "time_s": 20.805,
+      "entrance_relative_xyz_mm": [
+        7.938902055588115,
+        16.24292797245333,
+        -251.52902587916935
+      ],
+      "lateral_mm": 18.07923878282844,
+      "axial_mm": -251.52902587916935,
+      "orientation_deg": 2.7380360484782353,
+      "measured_tcp_xyz_m": [
+        -0.44016187250614697,
+        0.44831041029242735,
+        0.3023892757330647
+      ],
+      "commanded_tcp_xyz_m": null,
+      "tcp_command_error_mm": null
+    },
+    {
+      "time_s": 21.01,
+      "entrance_relative_xyz_mm": [
+        5.923373123617321,
+        15.552380341646883,
+        -248.3476213501392
+      ],
+      "lateral_mm": 16.64220188114651,
+      "axial_mm": -248.3476213501392,
+      "orientation_deg": 2.4763890030937956,
+      "measured_tcp_xyz_m": [
+        -0.43919866188332196,
+        0.4502318919180734,
+        0.29910562497161164
+      ],
+      "commanded_tcp_xyz_m": null,
+      "tcp_command_error_mm": null
+    },
+    {
+      "time_s": 21.202,
+      "entrance_relative_xyz_mm": [
+        4.085744997210483,
+        14.875644629118362,
+        -245.3495466025797
+      ],
+      "lateral_mm": 15.42653931748947,
+      "axial_mm": -245.3495466025797,
+      "orientation_deg": 2.2348036927366484,
+      "measured_tcp_xyz_m": [
+        -0.43833443747702144,
+        0.45183149067976996,
+        0.29627738342516785
+      ],
+      "commanded_tcp_xyz_m": null,
+      "tcp_command_error_mm": null
+    },
+    {
+      "time_s": 21.402,
+      "entrance_relative_xyz_mm": [
+        2.2168560666432082,
+        14.182163217242556,
+        -242.16623619579525
+      ],
+      "lateral_mm": 14.35437927396098,
+      "axial_mm": -242.16623619579525,
+      "orientation_deg": 1.986513702919061,
+      "measured_tcp_xyz_m": [
+        -0.4374053063348745,
+        0.45355701514876745,
+        0.2930813007533157
+      ],
+      "commanded_tcp_xyz_m": null,
+      "tcp_command_error_mm": null
+    },
+    {
+      "time_s": 21.601,
+      "entrance_relative_xyz_mm": [
+        0.4897496603774032,
+        13.491650982767583,
+        -239.1676826728568
+      ],
+      "lateral_mm": 13.500537062304346,
+      "axial_mm": -239.1676826728568,
+      "orientation_deg": 1.7614948813977283,
+      "measured_tcp_xyz_m": [
+        -0.43649967077976704,
+        0.4551474796569766,
+        0.2900708754914537
+      ],
+      "commanded_tcp_xyz_m": null,
+      "tcp_command_error_mm": null
+    },
+    {
+      "time_s": 21.802,
+      "entrance_relative_xyz_mm": [
+        -0.9986345068979385,
+        12.826483820269823,
+        -236.3722734018716
+      ],
+      "lateral_mm": 12.86530054332237,
+      "axial_mm": -236.3722734018716,
+      "orientation_deg": 1.57261499205382,
+      "measured_tcp_xyz_m": [
+        -0.43560739769082285,
+        0.4565702025183026,
+        0.28714110897344447
+      ],
+      "commanded_tcp_xyz_m": null,
+      "tcp_command_error_mm": null
+    },
+    {
+      "time_s": 22.009,
+      "entrance_relative_xyz_mm": [
+        -2.6011761947841716,
+        12.133852411037566,
+        -233.26750091815063
+      ],
+      "lateral_mm": 12.409532300983548,
+      "axial_mm": -233.26750091815063,
+      "orientation_deg": 1.370941856732733,
+      "measured_tcp_xyz_m": [
+        -0.43473422462825995,
+        0.4580200519235185,
+        0.2840617575111437
+      ],
+      "commanded_tcp_xyz_m": null,
+      "tcp_command_error_mm": null
+    },
+    {
+      "time_s": 22.201,
+      "entrance_relative_xyz_mm": [
+        -4.069687493475193,
+        11.388808734627082,
+        -230.0431507517544
+      ],
+      "lateral_mm": 12.094102723578402,
+      "axial_mm": -230.0431507517544,
+      "orientation_deg": 1.1941444751437609,
+      "measured_tcp_xyz_m": [
+        -0.4338408547652292,
+        0.45932475439989323,
+        0.2809169750341921
+      ],
+      "commanded_tcp_xyz_m": null,
+      "tcp_command_error_mm": null
+    },
+    {
+      "time_s": 22.401,
+      "entrance_relative_xyz_mm": [
+        -5.65794279604484,
+        10.568265602844324,
+        -226.5744501966611
+      ],
+      "lateral_mm": 11.98751661252564,
+      "axial_mm": -226.5744501966611,
+      "orientation_deg": 1.010477163153307,
+      "measured_tcp_xyz_m": [
+        -0.4328325585787235,
+        0.46077312471869925,
+        0.2774381549097015
+      ],
+      "commanded_tcp_xyz_m": null,
+      "tcp_command_error_mm": null
+    },
+    {
+      "time_s": 22.606,
+      "entrance_relative_xyz_mm": [
+        -7.231547014671186,
+        9.660561056206301,
+        -222.97466997925898
+      ],
+      "lateral_mm": 12.067382157953297,
+      "axial_mm": -222.97466997925898,
+      "orientation_deg": 0.8329521468457058,
+      "measured_tcp_xyz_m": [
+        -0.43168432293128906,
+        0.4622689776975939,
+        0.2736486185125907
+      ],
+      "commanded_tcp_xyz_m": null,
+      "tcp_command_error_mm": null
+    },
+    {
+      "time_s": 22.805,
+      "entrance_relative_xyz_mm": [
+        -8.828738892992016,
+        8.67477904748079,
+        -219.11101078270767
+      ],
+      "lateral_mm": 12.377335010544137,
+      "axial_mm": -219.11101078270767,
+      "orientation_deg": 0.6608959232103131,
+      "measured_tcp_xyz_m": [
+        -0.4305323725219918,
+        0.46368351615198405,
+        0.26982311122669267
+      ],
+      "commanded_tcp_xyz_m": null,
+      "tcp_command_error_mm": null
+    },
+    {
+      "time_s": 23.012,
+      "entrance_relative_xyz_mm": [
+        -10.301890574708095,
+        7.680338719891461,
+        -215.2933931602059
+      ],
+      "lateral_mm": 12.84976856855887,
+      "axial_mm": -215.2933931602059,
+      "orientation_deg": 0.5101642312631137,
+      "measured_tcp_xyz_m": [
+        -0.42936319329905936,
+        0.46502968228190195,
+        0.2659486784112832
+      ],
+      "commanded_tcp_xyz_m": null,
+      "tcp_command_error_mm": null
+    },
+    {
+      "time_s": 23.2,
+      "entrance_relative_xyz_mm": [
+        -11.45555392544667,
+        6.821423676074606,
+        -212.08596307741456
+      ],
+      "lateral_mm": 13.332724279280953,
+      "axial_mm": -212.08596307741456,
+      "orientation_deg": 0.4033450291150116,
+      "measured_tcp_xyz_m": [
+        -0.42838518519315594,
+        0.46603321794961744,
+        0.26279139336015694
+      ],
+      "commanded_tcp_xyz_m": null,
+      "tcp_command_error_mm": null
+    },
+    {
+      "time_s": 23.4,
+      "entrance_relative_xyz_mm": [
+        -12.54141831616365,
+        6.009704529514631,
+        -208.9285330258852
+      ],
+      "lateral_mm": 13.906966668295203,
+      "axial_mm": -208.9285330258852,
+      "orientation_deg": 0.3201096611214639,
+      "measured_tcp_xyz_m": [
+        -0.427494626263751,
+        0.4669629289796247,
+        0.25975365431763553
+      ],
+      "commanded_tcp_xyz_m": null,
+      "tcp_command_error_mm": null
+    },
+    {
+      "time_s": 23.6,
+      "entrance_relative_xyz_mm": [
+        -13.571827371370276,
+        5.166039460374278,
+        -205.6926169843627
+      ],
+      "lateral_mm": 14.52179265464218,
+      "axial_mm": -205.6926169843627,
+      "orientation_deg": 0.27046627467136114,
+      "measured_tcp_xyz_m": [
+        -0.42653794453467686,
+        0.46787385194415027,
+        0.25651242924889917
+      ],
+      "commanded_tcp_xyz_m": null,
+      "tcp_command_error_mm": null
+    },
+    {
+      "time_s": 23.801,
+      "entrance_relative_xyz_mm": [
+        -14.500193916958338,
+        4.336110204827132,
+        -202.56617710446068
+      ],
+      "lateral_mm": 15.134644869893762,
+      "axial_mm": -202.56617710446068,
+      "orientation_deg": 0.2604099725771229,
+      "measured_tcp_xyz_m": [
+        -0.4256089984789997,
+        0.468688883893505,
+        0.2533813786692298
+      ],
+      "commanded_tcp_xyz_m": null,
+      "tcp_command_error_mm": null
+    },
+    {
+      "time_s": 24.002,
+      "entrance_relative_xyz_mm": [
+        -15.37892501727639,
+        3.4889343340777366,
+        -199.38464075054995
+      ],
+      "lateral_mm": 15.769717736044488,
+      "axial_mm": -199.38464075054995,
+      "orientation_deg": 0.2822289548927435,
+      "measured_tcp_xyz_m": [
+        -0.42467061476843204,
+        0.4694553225138076,
+        0.25019630748203403
+      ],
+      "commanded_tcp_xyz_m": null,
+      "tcp_command_error_mm": null
+    },
+    {
+      "time_s": 24.202,
+      "entrance_relative_xyz_mm": [
+        -16.0376751246758,
+        2.64000806451456,
+        -196.2163495164715
+      ],
+      "lateral_mm": 16.253512419946247,
+      "axial_mm": -196.2163495164715,
+      "orientation_deg": 0.31935717609449304,
+      "measured_tcp_xyz_m": [
+        -0.42375775376221275,
+        0.4700071904462543,
+        0.2470247346521873
+      ],
+      "commanded_tcp_xyz_m": null,
+      "tcp_command_error_mm": null
+    },
+    {
+      "time_s": 24.406,
+      "entrance_relative_xyz_mm": [
+        -14.211402438551012,
+        3.0946916731220133,
+        -192.0249535217349
+      ],
+      "lateral_mm": 14.544451719543929,
+      "axial_mm": -192.0249535217349,
+      "orientation_deg": 0.2776374218102994,
+      "measured_tcp_xyz_m": [
+        -0.4244579586548639,
+        0.4682040418359026,
+        0.2426851677193038
+      ],
+      "commanded_tcp_xyz_m": null,
+      "tcp_command_error_mm": null
+    },
+    {
+      "time_s": 24.601,
+      "entrance_relative_xyz_mm": [
+        -10.956458422002296,
+        4.873356414263369,
+        -186.45940424366557
+      ],
+      "lateral_mm": 11.991396244537455,
+      "axial_mm": -186.45940424366557,
+      "orientation_deg": 0.4200248579404043,
+      "measured_tcp_xyz_m": [
+        -0.4265143942089925,
+        0.4653176591610925,
+        0.23729774012422855
+      ],
+      "commanded_tcp_xyz_m": null,
+      "tcp_command_error_mm": null
+    },
+    {
+      "time_s": 24.8,
+      "entrance_relative_xyz_mm": [
+        -8.579838998027778,
+        5.9149157500993645,
+        -181.00830849296545
+      ],
+      "lateral_mm": 10.421125925870575,
+      "axial_mm": -181.00830849296545,
+      "orientation_deg": 0.6655135966848708,
+      "measured_tcp_xyz_m": [
+        -0.427821595989815,
+        0.4631277300852913,
+        0.2318611115912229
+      ],
+      "commanded_tcp_xyz_m": null,
+      "tcp_command_error_mm": null
+    },
+    {
+      "time_s": 25.0,
+      "entrance_relative_xyz_mm": [
+        -7.349769660933481,
+        6.128710445441082,
+        -176.72588361156372
+      ],
+      "lateral_mm": 9.569754740474641,
+      "axial_mm": -176.72588361156372,
+      "orientation_deg": 0.8044121263585325,
+      "measured_tcp_xyz_m": [
+        -0.42818294141905605,
+        0.46194112087723127,
+        0.22750293090518056
+      ],
+      "commanded_tcp_xyz_m": null,
+      "tcp_command_error_mm": null
+    },
+    {
+      "time_s": 25.209,
+      "entrance_relative_xyz_mm": [
+        -6.799350550422023,
+        5.871658388846429,
+        -173.14392461196638
+      ],
+      "lateral_mm": 8.983737537508256,
+      "axial_mm": -173.14392461196638,
+      "orientation_deg": 0.8567900054764177,
+      "measured_tcp_xyz_m": [
+        -0.4279752565618205,
+        0.4613989950585242,
+        0.2239158860533867
+      ],
+      "commanded_tcp_xyz_m": null,
+      "tcp_command_error_mm": null
+    },
+    {
+      "time_s": 25.401,
+      "entrance_relative_xyz_mm": [
+        -6.684783373075431,
+        5.44211531767988,
+        -170.58116764495023
+      ],
+      "lateral_mm": 8.619915769650637,
+      "axial_mm": -170.58116764495023,
+      "orientation_deg": 0.8394505054339394,
+      "measured_tcp_xyz_m": [
+        -0.42756177068608,
+        0.46124976973180143,
+        0.22144729754297543
+      ],
+      "commanded_tcp_xyz_m": null,
+      "tcp_command_error_mm": null
+    },
+    {
+      "time_s": 25.603,
+      "entrance_relative_xyz_mm": [
+        -6.780153950501439,
+        4.9081966912179755,
+        -168.29851237003268
+      ],
+      "lateral_mm": 8.370237891015007,
+      "axial_mm": -168.29851237003268,
+      "orientation_deg": 0.7944525636807893,
+      "measured_tcp_xyz_m": [
+        -0.42698179659246394,
+        0.46127702618843763,
+        0.2190592045393008
+      ],
+      "commanded_tcp_xyz_m": null,
+      "tcp_command_error_mm": null
+    },
+    {
+      "time_s": 25.808,
+      "entrance_relative_xyz_mm": [
+        -6.802999579500146,
+        4.440875583183152,
+        -166.32018012088668
+      ],
+      "lateral_mm": 8.124172525493995,
+      "axial_mm": -166.32018012088668,
+      "orientation_deg": 0.7654100180346295,
+      "measured_tcp_xyz_m": [
+        -0.426513506113047,
+        0.4612445120250113,
+        0.21710585016213385
+      ],
+      "commanded_tcp_xyz_m": null,
+      "tcp_command_error_mm": null
+    },
+    {
+      "time_s": 26.0,
+      "entrance_relative_xyz_mm": [
+        -6.7235886755229455,
+        3.951960065431331,
+        -164.05088998495532
+      ],
+      "lateral_mm": 7.799014876020202,
+      "axial_mm": -164.05088998495532,
+      "orientation_deg": 0.7513781559341199,
+      "measured_tcp_xyz_m": [
+        -0.42605027015658126,
+        0.4611139040017874,
+        0.21491375449385997
+      ],
+      "commanded_tcp_xyz_m": null,
+      "tcp_command_error_mm": null
+    },
+    {
+      "time_s": 26.201,
+      "entrance_relative_xyz_mm": [
+        -6.287560764324407,
+        3.734412677177806,
+        -161.5363456682939
+      ],
+      "lateral_mm": 7.312951415710215,
+      "axial_mm": -161.5363456682939,
+      "orientation_deg": 0.7742918487812593,
+      "measured_tcp_xyz_m": [
+        -0.42587581545206254,
+        0.4606617828364366,
+        0.21240040088450812
+      ],
+      "commanded_tcp_xyz_m": null,
+      "tcp_command_error_mm": null
+    },
+    {
+      "time_s": 26.401,
+      "entrance_relative_xyz_mm": [
+        -6.000438481355813,
+        3.414895943838175,
+        -159.32549804316753
+      ],
+      "lateral_mm": 6.904112997031413,
+      "axial_mm": -159.32549804316753,
+      "orientation_deg": 0.7887735194262989,
+      "measured_tcp_xyz_m": [
+        -0.4255871532784048,
+        0.46035233137270354,
+        0.21019183212419904
+      ],
+      "commanded_tcp_xyz_m": null,
+      "tcp_command_error_mm": null
+    },
+    {
+      "time_s": 26.601,
+      "entrance_relative_xyz_mm": [
+        -5.491941909954501,
+        3.310241508230699,
+        -157.225283770287
+      ],
+      "lateral_mm": 6.412419573384772,
+      "axial_mm": -157.225283770287,
+      "orientation_deg": 0.8258119677380911,
+      "measured_tcp_xyz_m": [
+        -0.42553710943401674,
+        0.45984062275556026,
+        0.2080929165483961
+      ],
+      "commanded_tcp_xyz_m": null,
+      "tcp_command_error_mm": null
+    },
+    {
+      "time_s": 26.805,
+      "entrance_relative_xyz_mm": [
+        -5.432208063899213,
+        2.9589871214804884,
+        -155.4604935721784
+      ],
+      "lateral_mm": 6.185829712704596,
+      "axial_mm": -155.4604935721784,
+      "orientation_deg": 0.8220955361010795,
+      "measured_tcp_xyz_m": [
+        -0.4251837388764628,
+        0.45973136832973444,
+        0.2062700779202328
+      ],
+      "commanded_tcp_xyz_m": null,
+      "tcp_command_error_mm": null
+    },
+    {
+      "time_s": 27.006,
+      "entrance_relative_xyz_mm": [
+        -5.099906687980299,
+        2.727001257547185,
+        -153.81378048565276
+      ],
+      "lateral_mm": 5.783215721790958,
+      "axial_mm": -153.81378048565276,
+      "orientation_deg": 0.8395756306006795,
+      "measured_tcp_xyz_m": [
+        -0.42499130523309464,
+        0.4593859064494958,
+        0.2046159020802085
+      ],
+      "commanded_tcp_xyz_m": null,
+      "tcp_command_error_mm": null
+    },
+    {
+      "time_s": 27.2,
+      "entrance_relative_xyz_mm": [
+        -4.919119817038742,
+        2.5030331339452596,
+        -152.3405233469548
+      ],
+      "lateral_mm": 5.519321936978408,
+      "axial_mm": -152.3405233469548,
+      "orientation_deg": 0.8411029122384345,
+      "measured_tcp_xyz_m": [
+        -0.42479072634190507,
+        0.45919320488330784,
+        0.2032101062438125
+      ],
+      "commanded_tcp_xyz_m": null,
+      "tcp_command_error_mm": null
+    },
+    {
+      "time_s": 27.406,
+      "entrance_relative_xyz_mm": [
+        -4.787550841137883,
+        2.2125371093805466,
+        -151.0515479563339
+      ],
+      "lateral_mm": 5.274084140101111,
+      "axial_mm": -151.0515479563339,
+      "orientation_deg": 0.8386665223439997,
+      "measured_tcp_xyz_m": [
+        -0.4245191588242209,
+        0.458993858631637,
+        0.2018832284030016
+      ],
+      "commanded_tcp_xyz_m": null,
+      "tcp_command_error_mm": null
+    },
+    {
+      "time_s": 27.605,
+      "entrance_relative_xyz_mm": [
+        -4.289814226833583,
+        2.2052157769690552,
+        -149.7850334896118
+      ],
+      "lateral_mm": 4.8234305969648865,
+      "axial_mm": -149.7850334896118,
+      "orientation_deg": 0.8730102238281273,
+      "measured_tcp_xyz_m": [
+        -0.4246061577744911,
+        0.4584357967022888,
+        0.20061608089376412
+      ],
+      "commanded_tcp_xyz_m": null,
+      "tcp_command_error_mm": null
+    },
+    {
+      "time_s": 27.8,
+      "entrance_relative_xyz_mm": [
+        -3.2018655487351944,
+        2.6974723795206437,
+        -148.49535076784483
+      ],
+      "lateral_mm": 4.186681290766481,
+      "axial_mm": -148.49535076784483,
+      "orientation_deg": 0.9617383728512513,
+      "measured_tcp_xyz_m": [
+        -0.42515173506589526,
+        0.45752917997557097,
+        0.19937011512324324
+      ],
+      "commanded_tcp_xyz_m": null,
+      "tcp_command_error_mm": null
+    },
+    {
+      "time_s": 28.001,
+      "entrance_relative_xyz_mm": [
+        -3.2546171512744526,
+        2.386995353117621,
+        -147.43379547976775
+      ],
+      "lateral_mm": 4.036121853608356,
+      "axial_mm": -147.43379547976775,
+      "orientation_deg": 0.9527941634621855,
+      "measured_tcp_xyz_m": [
+        -0.42484011304713504,
+        0.4575497271246745,
+        0.19830890576239493
+      ],
+      "commanded_tcp_xyz_m": null,
+      "tcp_command_error_mm": null
+    },
+    {
+      "time_s": 28.2,
+      "entrance_relative_xyz_mm": [
+        -3.3969733837614093,
+        2.005974656170334,
+        -146.62810340474252
+      ],
+      "lateral_mm": 3.945042774315778,
+      "axial_mm": -146.62810340474252,
+      "orientation_deg": 0.9325355349154646,
+      "measured_tcp_xyz_m": [
+        -0.4244481311433977,
+        0.45765122591086127,
+        0.19750337205309834
+      ],
+      "commanded_tcp_xyz_m": null,
+      "tcp_command_error_mm": null
+    },
+    {
+      "time_s": 28.403,
+      "entrance_relative_xyz_mm": [
+        -3.455130272125684,
+        1.7628445655064606,
+        -146.00156802263342
+      ],
+      "lateral_mm": 3.87885887336662,
+      "axial_mm": -146.00156802263342,
+      "orientation_deg": 0.9182109213138114,
+      "measured_tcp_xyz_m": [
+        -0.42419134993259755,
+        0.4576771424264475,
+        0.19685282566165171
+      ],
+      "commanded_tcp_xyz_m": null,
+      "tcp_command_error_mm": null
+    },
+    {
+      "time_s": 28.6,
+      "entrance_relative_xyz_mm": [
+        -3.4848938955365227,
+        1.6211057142078156,
+        -145.57909802993362
+      ],
+      "lateral_mm": 3.8434970014018424,
+      "axial_mm": -145.57909802993362,
+      "orientation_deg": 0.9105151488844363,
+      "measured_tcp_xyz_m": [
+        -0.42405000418513245,
+        0.4576976564681201,
+        0.196441517916107
+      ],
+      "commanded_tcp_xyz_m": null,
+      "tcp_command_error_mm": null
+    },
+    {
+      "time_s": 28.805,
+      "entrance_relative_xyz_mm": [
+        -3.527268762633345,
+        1.5267727990402324,
+        -145.25144123485467
+      ],
+      "lateral_mm": 3.843521835990803,
+      "axial_mm": -145.25144123485467,
+      "orientation_deg": 0.9033258357384477,
+      "measured_tcp_xyz_m": [
+        -0.42399438141597906,
+        0.45765765697301963,
+        0.1961266254156036
+      ],
+      "commanded_tcp_xyz_m": null,
+      "tcp_command_error_mm": null
+    },
+    {
+      "time_s": 29.004,
+      "entrance_relative_xyz_mm": [
+        -3.3836628665660227,
+        1.5078629406452826,
+        -144.95960582197887
+      ],
+      "lateral_mm": 3.7044331607344776,
+      "axial_mm": -144.95960582197887,
+      "orientation_deg": 0.9098520406754805,
+      "measured_tcp_xyz_m": [
+        -0.42395019661765043,
+        0.45758081129952316,
+        0.19583420930236364
+      ],
+      "commanded_tcp_xyz_m": null,
+      "tcp_command_error_mm": null
+    },
+    {
+      "time_s": 29.214,
+      "entrance_relative_xyz_mm": [
+        -3.3784995082415947,
+        1.451018942155241,
+        -144.712566895145
+      ],
+      "lateral_mm": 3.6769164931613574,
+      "axial_mm": -144.712566895145,
+      "orientation_deg": 0.9088651515352821,
+      "measured_tcp_xyz_m": [
+        -0.42388924017302165,
+        0.45757343589104194,
+        0.19557316847187733
+      ],
+      "commanded_tcp_xyz_m": null,
+      "tcp_command_error_mm": null
+    },
+    {
+      "time_s": 29.4,
+      "entrance_relative_xyz_mm": [
+        -3.340055384490115,
+        1.428737942591518,
+        -144.53027672564446
+      ],
+      "lateral_mm": 3.632803611546054,
+      "axial_mm": -144.53027672564446,
+      "orientation_deg": 0.9117805697152572,
+      "measured_tcp_xyz_m": [
+        -0.42387732924477955,
+        0.45752862346933665,
+        0.19540483582255888
+      ],
+      "commanded_tcp_xyz_m": null,
+      "tcp_command_error_mm": null
+    },
+    {
+      "time_s": 29.602,
+      "entrance_relative_xyz_mm": [
+        -3.242760856979332,
+        1.4430528715507762,
+        -144.37074515508507
+      ],
+      "lateral_mm": 3.549351992356953,
+      "axial_mm": -144.37074515508507,
+      "orientation_deg": 0.9189057840803008,
+      "measured_tcp_xyz_m": [
+        -0.42390046987563645,
+        0.4574371064786634,
+        0.19524612105423694
+      ],
+      "commanded_tcp_xyz_m": null,
+      "tcp_command_error_mm": null
+    },
+    {
+      "time_s": 29.801,
+      "entrance_relative_xyz_mm": [
+        -3.2133498505420297,
+        1.4302108098956379,
+        -144.2235224103421
+      ],
+      "lateral_mm": 3.517260329108555,
+      "axial_mm": -144.2235224103421,
+      "orientation_deg": 0.9209323615585618,
+      "measured_tcp_xyz_m": [
+        -0.42389120539585,
+        0.4574056312717332,
+        0.19509879716675463
+      ],
+      "commanded_tcp_xyz_m": null,
+      "tcp_command_error_mm": null
+    },
+    {
+      "time_s": 30.002,
+      "entrance_relative_xyz_mm": [
+        -3.193591611514335,
+        1.4200266678836282,
+        -144.09918143685795
+      ],
+      "lateral_mm": 3.495068399707709,
+      "axial_mm": -144.09918143685795,
+      "orientation_deg": 0.9220018514487961,
+      "measured_tcp_xyz_m": [
+        -0.42388250429801333,
+        0.4573859100976949,
+        0.19497440830328924
+      ],
+      "commanded_tcp_xyz_m": null,
+      "tcp_command_error_mm": null
+    },
+    {
+      "time_s": 30.213,
+      "entrance_relative_xyz_mm": [
+        -3.129596169554355,
+        1.4273789728440622,
+        -144.0264784734724
+      ],
+      "lateral_mm": 3.4397358789021375,
+      "axial_mm": -144.0264784734724,
+      "orientation_deg": 0.9260941341719153,
+      "measured_tcp_xyz_m": [
+        -0.42389494273020567,
+        0.4573239020615746,
+        0.19489839002630335
+      ],
+      "commanded_tcp_xyz_m": null,
+      "tcp_command_error_mm": null
+    },
+    {
+      "time_s": 30.415,
+      "entrance_relative_xyz_mm": [
+        -3.14695073131821,
+        1.4061661435456618,
+        -143.9490888209678
+      ],
+      "lateral_mm": 3.446824934428538,
+      "axial_mm": -143.9490888209678,
+      "orientation_deg": 0.9245176934616078,
+      "measured_tcp_xyz_m": [
+        -0.4238625129382143,
+        0.4573556612476597,
+        0.19481416784204578
+      ],
+      "commanded_tcp_xyz_m": null,
+      "tcp_command_error_mm": null
+    },
+    {
+      "time_s": 30.604,
+      "entrance_relative_xyz_mm": [
+        -3.119588337710616,
+        1.4167971871594243,
+        -143.92230096647097
+      ],
+      "lateral_mm": 3.426243667097094,
+      "axial_mm": -143.92230096647097,
+      "orientation_deg": 0.9260185806065926,
+      "measured_tcp_xyz_m": [
+        -0.4238862305807246,
+        0.45731310687900295,
+        0.194797630312736
+      ],
+      "commanded_tcp_xyz_m": null,
+      "tcp_command_error_mm": null
+    },
+    {
+      "time_s": 30.801,
+      "entrance_relative_xyz_mm": [
+        -3.1191881368455854,
+        1.4033465022178226,
+        -143.880808931526
+      ],
+      "lateral_mm": 3.420338585334094,
+      "axial_mm": -143.880808931526,
+      "orientation_deg": 0.9258975751618382,
+      "measured_tcp_xyz_m": [
+        -0.4238737843734594,
+        0.45730929186397873,
+        0.19475607340614348
+      ],
+      "commanded_tcp_xyz_m": null,
+      "tcp_command_error_mm": null
+    },
+    {
+      "time_s": 31.011,
+      "entrance_relative_xyz_mm": [
+        -2.8892868392093316,
+        1.2667835236653824,
+        -143.75931417526667
+      ],
+      "lateral_mm": 3.154793009859495,
+      "axial_mm": -143.75931417526667,
+      "orientation_deg": 0.9432873419115257,
+      "measured_tcp_xyz_m": [
+        -0.4237421232194265,
+        0.457022705697689,
+        0.1946155971916271
+      ],
+      "commanded_tcp_xyz_m": [
+        -0.4238907930092699,
+        0.4572813242240166,
+        0.1947255270413886
+      ],
+      "tcp_command_error_mm": 0.3179163733445388
+    },
+    {
+      "time_s": 31.205,
+      "entrance_relative_xyz_mm": [
+        -1.5650985708490217,
+        0.3363951478660976,
+        -143.06524795168096
+      ],
+      "lateral_mm": 1.6008420384227495,
+      "axial_mm": -143.06524795168096,
+      "orientation_deg": 0.980380034640596,
+      "measured_tcp_xyz_m": [
+        -0.4229471966319166,
+        0.455586678658114,
+        0.19390295265790528
+      ],
+      "commanded_tcp_xyz_m": [
+        -0.42386302189383984,
+        0.4572075002468475,
+        0.19211032040143056
+      ],
+      "tcp_command_error_mm": 2.5844397729169484
+    },
+    {
+      "time_s": 31.407,
+      "entrance_relative_xyz_mm": [
+        0.5260401818347749,
+        -0.9324288099668288,
+        -141.35337026936367
+      ],
+      "lateral_mm": 1.0705801037572664,
+      "axial_mm": -141.35337026936367,
+      "orientation_deg": 0.9538294598742876,
+      "measured_tcp_xyz_m": [
+        -0.4218836561627684,
+        0.4533214410839463,
+        0.19207890387352503
+      ],
+      "commanded_tcp_xyz_m": [
+        -0.4237153186102549,
+        0.4568148604962891,
+        0.17820109846370175
+      ],
+      "tcp_command_error_mm": 14.42748936942898
+    },
+    {
+      "time_s": 31.603,
+      "entrance_relative_xyz_mm": [
+        2.470805206248566,
+        -2.3593450178237276,
+        -136.61614153935653
+      ],
+      "lateral_mm": 3.416341212518835,
+      "axial_mm": -136.61614153935653,
+      "orientation_deg": 0.8579080686732575,
+      "measured_tcp_xyz_m": [
+        -0.420720177626053,
+        0.4513391066783897,
+        0.18749041777767958
+      ],
+      "commanded_tcp_xyz_m": [
+        -0.4235201397356478,
+        0.45629601634617956,
+        0.15982109892289276
+      ],
+      "tcp_command_error_mm": 28.248928247946967
+    },
+    {
+      "time_s": 31.8,
+      "entrance_relative_xyz_mm": [
+        4.0589108616189975,
+        -3.669115250398508,
+        -128.162798137492
+      ],
+      "lateral_mm": 5.471486461947574,
+      "axial_mm": -128.162798137492,
+      "orientation_deg": 0.7212525862731061,
+      "measured_tcp_xyz_m": [
+        -0.41956386789778244,
+        0.44956263129360297,
+        0.17890793158856416
+      ],
+      "commanded_tcp_xyz_m": [
+        -0.42328317252601805,
+        0.4556660862334477,
+        0.1375058908198273
+      ],
+      "tcp_command_error_mm": 42.01445428583452
+    },
+    {
+      "time_s": 32.001,
+      "entrance_relative_xyz_mm": [
+        5.491643233164256,
+        -4.937085444400358,
+        -113.62227116931378
+      ],
+      "lateral_mm": 7.384643395971714,
+      "axial_mm": -113.62227116931378,
+      "orientation_deg": 0.5338761211368882,
+      "measured_tcp_xyz_m": [
+        -0.4184544098045717,
+        0.447968347781203,
+        0.1644775209838111
+      ],
+      "commanded_tcp_xyz_m": [
+        -0.4229746763795153,
+        0.4548460106936821,
+        0.10845480092869754
+      ],
+      "tcp_command_error_mm": 56.624025107898035
+    },
+    {
+      "time_s": 32.204,
+      "entrance_relative_xyz_mm": [
+        6.603919521327967,
+        -5.835305811449754,
+        -96.48964995703469
+      ],
+      "lateral_mm": 8.812635641924377,
+      "axial_mm": -96.48964995703469,
+      "orientation_deg": 0.37232422714670477,
+      "measured_tcp_xyz_m": [
+        -0.4176280607090311,
+        0.4466422272587093,
+        0.14619896786384406
+      ],
+      "commanded_tcp_xyz_m": [
+        -0.42280093231297905,
+        0.45438414671009264,
+        0.092093317804145
+      ],
+      "tcp_command_error_mm": 54.90097709335648
+    },
+    {
+      "time_s": 32.41,
+      "entrance_relative_xyz_mm": [
+        6.85814233637469,
+        -6.519351355479818,
+        -81.3115988332933
+      ],
+      "lateral_mm": 9.462349518072742,
+      "axial_mm": -81.3115988332933,
+      "orientation_deg": 0.27571609492855825,
+      "measured_tcp_xyz_m": [
+        -0.4169615169264539,
+        0.4464073854865423,
+        0.13151798519834906
+      ],
+      "commanded_tcp_xyz_m": [
+        -0.422687685854396,
+        0.4540831035635189,
+        0.08142889594524873
+      ],
+      "tcp_command_error_mm": 50.99629908918495
+    },
+    {
+      "time_s": 32.602,
+      "entrance_relative_xyz_mm": [
+        7.736450007619522,
+        -5.9657257094048735,
+        -70.77175970922967
+      ],
+      "lateral_mm": 9.769469891465473,
+      "axial_mm": -70.77175970922967,
+      "orientation_deg": 0.24465464980280827,
+      "measured_tcp_xyz_m": [
+        -0.4176224640855625,
+        0.4455609674146099,
+        0.12161708252201231
+      ],
+      "commanded_tcp_xyz_m": [
+        -0.4226750272327275,
+        0.4540494531399556,
+        0.08023683322369592
+      ],
+      "tcp_command_error_mm": 42.543011367982665
+    },
+    {
+      "time_s": 32.801,
+      "entrance_relative_xyz_mm": [
+        8.6518447312251,
+        -4.811683546661505,
+        -66.54495674390427
+      ],
+      "lateral_mm": 9.899834130248879,
+      "axial_mm": -66.54495674390427,
+      "orientation_deg": 0.17675931789706734,
+      "measured_tcp_xyz_m": [
+        -0.4188801961007554,
+        0.4447566717419599,
+        0.11738250015191576
+      ],
+      "commanded_tcp_xyz_m": [
+        -0.42256942460822156,
+        0.45400040208979237,
+        0.11961154624122944
+      ],
+      "tcp_command_error_mm": 10.199294298726016
+    },
+    {
+      "time_s": 33.003,
+      "entrance_relative_xyz_mm": [
+        8.244154639306139,
+        -4.435156677120661,
+        -66.51960919591127
+      ],
+      "lateral_mm": 9.361447562604884,
+      "axial_mm": -66.51960919591127,
+      "orientation_deg": 0.13273168230931873,
+      "measured_tcp_xyz_m": [
+        -0.419242370203474,
+        0.44519640113735404,
+        0.11736023227784376
+      ],
+      "commanded_tcp_xyz_m": [
+        -0.4228920209215913,
+        0.4543048909033459,
+        0.11739878260131065
+      ],
+      "tcp_command_error_mm": 9.81254413028916
+    },
+    {
+      "time_s": 33.209,
+      "entrance_relative_xyz_mm": [
+        8.1385133444975,
+        -4.110468322976068,
+        -66.76402814201165
+      ],
+      "lateral_mm": 9.117639458366051,
+      "axial_mm": -66.76402814201165,
+      "orientation_deg": 0.07822655930747036,
+      "measured_tcp_xyz_m": [
+        -0.419565329419256,
+        0.4453190105950423,
+        0.11761028847904986
+      ],
+      "commanded_tcp_xyz_m": [
+        -0.42365572773744825,
+        0.4561486408422844,
+        0.1174101583219612
+      ],
+      "tcp_command_error_mm": 11.578095774920294
+    },
+    {
+      "time_s": 33.402,
+      "entrance_relative_xyz_mm": [
+        7.830582375556644,
+        -3.8153414608327885,
+        -67.09192556590548
+      ],
+      "lateral_mm": 8.710617131014772,
+      "axial_mm": -67.09192556590548,
+      "orientation_deg": 0.03566932992264729,
+      "measured_tcp_xyz_m": [
+        -0.4198078184718408,
+        0.44563159236341604,
+        0.11791813770678308
+      ],
+      "commanded_tcp_xyz_m": [
+        -0.42419879316473413,
+        0.45754366443487643,
+        0.1176419200053205
+      ],
+      "tcp_command_error_mm": 12.698598978151002
+    },
+    {
+      "time_s": 33.612,
+      "entrance_relative_xyz_mm": [
+        7.15846043734869,
+        -3.5578114380103996,
+        -67.33798625140919
+      ],
+      "lateral_mm": 7.993846262064591,
+      "axial_mm": -67.33798625140919,
+      "orientation_deg": 0.018330285934772424,
+      "measured_tcp_xyz_m": [
+        -0.42001676067736454,
+        0.44634120652682757,
+        0.11818146234479698
+      ],
+      "commanded_tcp_xyz_m": [
+        -0.4248644495040641,
+        0.45938511994846853,
+        0.11799528046261533
+      ],
+      "tcp_command_error_mm": 13.916839727647424
+    },
+    {
+      "time_s": 33.801,
+      "entrance_relative_xyz_mm": [
+        6.833705044610089,
+        -2.977359343271119,
+        -67.5927218463257
+      ],
+      "lateral_mm": 7.454139339702016,
+      "axial_mm": -67.5927218463257,
+      "orientation_deg": 0.017864132365643912,
+      "measured_tcp_xyz_m": [
+        -0.42053914797177133,
+        0.44669576355423135,
+        0.11841474018994302
+      ],
+      "commanded_tcp_xyz_m": [
+        -0.4253579043420724,
+        0.460808912258461,
+        0.11822040678207676
+      ],
+      "tcp_command_error_mm": 14.91439387898243
+    },
+    {
+      "time_s": 34.0,
+      "entrance_relative_xyz_mm": [
+        6.541058384257282,
+        -2.4521041178010297,
+        -67.81225423375092
+      ],
+      "lateral_mm": 6.985575093777122,
+      "axial_mm": -67.81225423375092,
+      "orientation_deg": 0.029151915952987356,
+      "measured_tcp_xyz_m": [
+        -0.42103277013743906,
+        0.44703672709353914,
+        0.11863214275899364
+      ],
+      "commanded_tcp_xyz_m": [
+        -0.4259848106684187,
+        0.46271750467130623,
+        0.11846108934113858
+      ],
+      "tcp_command_error_mm": 16.44502204728313
+    },
+    {
+      "time_s": 34.2,
+      "entrance_relative_xyz_mm": [
+        6.106588468703905,
+        -1.810572270997013,
+        -68.23203903983188
+      ],
+      "lateral_mm": 6.369348057266991,
+      "axial_mm": -68.23203903983188,
+      "orientation_deg": 0.05425635059793315,
+      "measured_tcp_xyz_m": [
+        -0.4216271959853431,
+        0.4475259352801223,
+        0.11904945499824737
+      ],
+      "commanded_tcp_xyz_m": [
+        -0.4263780743778986,
+        0.46417076453148093,
+        0.11867953650354139
+      ],
+      "tcp_command_error_mm": 17.31352147890371
+    },
+    {
+      "time_s": 34.403,
+      "entrance_relative_xyz_mm": [
+        5.718245829267082,
+        -1.1935073815455832,
+        -68.6504823280465
+      ],
+      "lateral_mm": 5.841472009154386,
+      "axial_mm": -68.6504823280465,
+      "orientation_deg": 0.06933908413956465,
+      "measured_tcp_xyz_m": [
+        -0.4222180297642482,
+        0.44798748874082195,
+        0.11947910281818774
+      ],
+      "commanded_tcp_xyz_m": [
+        -0.42648570939442293,
+        0.46517406548291806,
+        0.11920219466516127
+      ],
+      "tcp_command_error_mm": 17.710680045186855
+    },
+    {
+      "time_s": 34.601,
+      "entrance_relative_xyz_mm": [
+        5.377171776905332,
+        -0.6699798962926384,
+        -69.05727702805797
+      ],
+      "lateral_mm": 5.41874979859594,
+      "axial_mm": -69.05727702805797,
+      "orientation_deg": 0.07793600705469694,
+      "measured_tcp_xyz_m": [
+        -0.422692053411844,
+        0.4483625744609848,
+        0.11987224637743366
+      ],
+      "commanded_tcp_xyz_m": [
+        -0.42619466970876974,
+        0.465275920113836,
+        0.11960546277245793
+      ],
+      "tcp_command_error_mm": 17.27428017568876
+    },
+    {
+      "time_s": 34.801,
+      "entrance_relative_xyz_mm": [
+        5.105542857930967,
+        -0.2991513632264742,
+        -69.39693883421239
+      ],
+      "lateral_mm": 5.114299503577216,
+      "axial_mm": -69.39693883421239,
+      "orientation_deg": 0.07573457159352893,
+      "measured_tcp_xyz_m": [
+        -0.42303388351145954,
+        0.44867330497499125,
+        0.1202112319562458
+      ],
+      "commanded_tcp_xyz_m": [
+        -0.425824591266451,
+        0.4653631689726162,
+        0.11992706137242873
+      ],
+      "tcp_command_error_mm": 16.923958253130206
+    },
+    {
+      "time_s": 35.001,
+      "entrance_relative_xyz_mm": [
+        4.960832928794873,
+        -0.08602796735293627,
+        -69.69456299142074
+      ],
+      "lateral_mm": 4.9615787969740435,
+      "axial_mm": -69.69456299142074,
+      "orientation_deg": 0.0786332601129101,
+      "measured_tcp_xyz_m": [
+        -0.423233500381135,
+        0.44883914359513916,
+        0.12050845629561616
+      ],
+      "commanded_tcp_xyz_m": [
+        -0.4252782023274333,
+        0.4655131572541971,
+        0.12035890496961539
+      ],
+      "tcp_command_error_mm": 16.799580445676497
+    },
+    {
+      "time_s": 35.212,
+      "entrance_relative_xyz_mm": [
+        4.758450307869644,
+        0.023979734297019384,
+        -70.10052954089807
+      ],
+      "lateral_mm": 4.758510729222082,
+      "axial_mm": -70.10052954089807,
+      "orientation_deg": 0.09662723950139451,
+      "measured_tcp_xyz_m": [
+        -0.4233277388251191,
+        0.44905636770818147,
+        0.1209414134752001
+      ],
+      "commanded_tcp_xyz_m": [
+        -0.42486183850456516,
+        0.46558870076281905,
+        0.12061164255496518
+      ],
+      "tcp_command_error_mm": 16.606632618197207
+    },
+    {
+      "time_s": 35.401,
+      "entrance_relative_xyz_mm": [
+        4.607684149530778,
+        0.01571081263632146,
+        -70.50811626289443
+      ],
+      "lateral_mm": 4.607710934018199,
+      "axial_mm": -70.50811626289443,
+      "orientation_deg": 0.10596336063944845,
+      "measured_tcp_xyz_m": [
+        -0.4233044442981935,
+        0.4491919970208216,
+        0.12132019615044778
+      ],
+      "commanded_tcp_xyz_m": [
+        -0.42445917167124386,
+        0.46564813165545854,
+        0.12102272562206334
+      ],
+      "tcp_command_error_mm": 16.499280321717894
+    },
+    {
+      "time_s": 35.602,
+      "entrance_relative_xyz_mm": [
+        4.466376577181796,
+        -0.05750706340432177,
+        -70.96190636287436
+      ],
+      "lateral_mm": 4.466746779429025,
+      "axial_mm": -70.96190636287436,
+      "orientation_deg": 0.11246166423851386,
+      "measured_tcp_xyz_m": [
+        -0.4232188650562186,
+        0.449323004016766,
+        0.12177373824718454
+      ],
+      "commanded_tcp_xyz_m": [
+        -0.42409751629405945,
+        0.4656882454151392,
+        0.12136615830474595
+      ],
+      "tcp_command_error_mm": 16.39387920640705
+    },
+    {
+      "time_s": 35.801,
+      "entrance_relative_xyz_mm": [
+        4.37896788743064,
+        -0.14289378929974172,
+        -71.32488150292926
+      ],
+      "lateral_mm": 4.381298710904018,
+      "axial_mm": -71.32488150292926,
+      "orientation_deg": 0.10455756320279544,
+      "measured_tcp_xyz_m": [
+        -0.423123812486538,
+        0.4494040031517677,
+        0.12213735443701518
+      ],
+      "commanded_tcp_xyz_m": [
+        -0.4237838172893645,
+        0.4657260127507475,
+        0.12181511837761223
+      ],
+      "tcp_command_error_mm": 16.338526242195826
+    },
+    {
+      "time_s": 36.001,
+      "entrance_relative_xyz_mm": [
+        4.311857347149783,
+        -0.23118388547940794,
+        -71.61250180682144
+      ],
+      "lateral_mm": 4.318050459533206,
+      "axial_mm": -71.61250180682144,
+      "orientation_deg": 0.10640752998696418,
+      "measured_tcp_xyz_m": [
+        -0.42302950926420735,
+        0.4494600237671681,
+        0.12242504690700529
+      ],
+      "commanded_tcp_xyz_m": [
+        -0.42353446469656914,
+        0.4657438568568252,
+        0.12217056197196707
+      ],
+      "tcp_command_error_mm": 16.29364792373531
+    },
+    {
+      "time_s": 36.21,
+      "entrance_relative_xyz_mm": [
+        4.29246909289327,
+        -0.3515072594850177,
+        -71.79813945671731
+      ],
+      "lateral_mm": 4.30683738570597,
+      "axial_mm": -71.79813945671731,
+      "orientation_deg": 0.09875094147396214,
+      "measured_tcp_xyz_m": [
+        -0.42290294608303575,
+        0.44946668474131146,
+        0.12262306629079256
+      ],
+      "commanded_tcp_xyz_m": [
+        -0.42334249798862844,
+        0.46574748233730523,
+        0.1224580417281704
+      ],
+      "tcp_command_error_mm": 16.287566096433665
+    },
+    {
+      "time_s": 36.408,
+      "entrance_relative_xyz_mm": [
+        4.243941486793385,
+        -0.4945454521671222,
+        -72.07775401536654
+      ],
+      "lateral_mm": 4.272658955215737,
+      "axial_mm": -72.07775401536654,
+      "orientation_deg": 0.10316500356419517,
+      "measured_tcp_xyz_m": [
+        -0.4227551703816373,
+        0.44950713446071544,
+        0.12290283151398293
+      ],
+      "commanded_tcp_xyz_m": [
+        -0.423210673645153,
+        0.46576058420949457,
+        0.1226451810077135
+      ],
+      "tcp_command_error_mm": 16.261872454995537
+    },
+    {
+      "time_s": 36.601,
+      "entrance_relative_xyz_mm": [
+        4.218512970365684,
+        -0.6991371328748663,
+        -72.334333618292
+      ],
+      "lateral_mm": 4.276054771832091,
+      "axial_mm": -72.334333618292,
+      "orientation_deg": 0.10855315755839656,
+      "measured_tcp_xyz_m": [
+        -0.42255148060399794,
+        0.44950642171431376,
+        0.12315189590998676
+      ],
+      "commanded_tcp_xyz_m": [
+        -0.4231233898318393,
+        0.4657638162566868,
+        0.12300250922285956
+      ],
+      "tcp_command_error_mm": 16.268136766500362
+    },
+    {
+      "time_s": 36.8,
+      "entrance_relative_xyz_mm": [
+        4.200098257922252,
+        -0.8567091273471716,
+        -72.54093708817555
+      ],
+      "lateral_mm": 4.286580910828756,
+      "axial_mm": -72.54093708817555,
+      "orientation_deg": 0.10889679593351204,
+      "measured_tcp_xyz_m": [
+        -0.42239807091853815,
+        0.44950555762403044,
+        0.1233540139563587
+      ],
+      "commanded_tcp_xyz_m": [
+        -0.42314385057248094,
+        0.465760389767402,
+        0.12322383743278126
+      ],
+      "tcp_command_error_mm": 16.272452219278815
+    },
+    {
+      "time_s": 37.002,
+      "entrance_relative_xyz_mm": [
+        4.19244370698299,
+        -0.9188608457240677,
+        -72.67565784858986
+      ],
+      "lateral_mm": 4.291956370936921,
+      "axial_mm": -72.67565784858986,
+      "orientation_deg": 0.09579409370216908,
+      "measured_tcp_xyz_m": [
+        -0.42233220410108824,
+        0.44951093884859744,
+        0.12348935124191138
+      ],
+      "commanded_tcp_xyz_m": [
+        -0.4232015417197572,
+        0.465757017034494,
+        0.12338579822141141
+      ],
+      "tcp_command_error_mm": 16.26965050471436
+    },
+    {
+      "time_s": 37.207,
+      "entrance_relative_xyz_mm": [
+        4.110121280455875,
+        -0.9405549129135882,
+        -72.92397592280841
+      ],
+      "lateral_mm": 4.216365791088592,
+      "axial_mm": -72.92397592280841,
+      "orientation_deg": 0.10413008388421689,
+      "measured_tcp_xyz_m": [
+        -0.42230340834030333,
+        0.44958968679032535,
+        0.12374923235602739
+      ],
+      "commanded_tcp_xyz_m": [
+        -0.4232872268710526,
+        0.465750720322388,
+        0.12351453716935565
+      ],
+      "tcp_command_error_mm": 16.192652208842944
+    },
+    {
+      "time_s": 37.401,
+      "entrance_relative_xyz_mm": [
+        4.096902769007343,
+        -1.0284228778146554,
+        -73.12299374340058
+      ],
+      "lateral_mm": 4.224010643252762,
+      "axial_mm": -73.12299374340058,
+      "orientation_deg": 0.09454183511097741,
+      "measured_tcp_xyz_m": [
+        -0.4222141012635919,
+        0.44959556421602603,
+        0.1239369193875125
+      ],
+      "commanded_tcp_xyz_m": [
+        -0.4233555477536071,
+        0.4657530602681201,
+        0.12377095409187201
+      ],
+      "tcp_command_error_mm": 16.198614855670833
+    },
+    {
+      "time_s": 37.609,
+      "entrance_relative_xyz_mm": [
+        4.8621460937532115,
+        -1.5117876030975863,
+        -73.07027967089708
+      ],
+      "lateral_mm": 5.091754746045725,
+      "axial_mm": -73.07027967089708,
+      "orientation_deg": 0.07546164458283039,
+      "measured_tcp_xyz_m": [
+        -0.42181002992412775,
+        0.44876819394736056,
+        0.12388478025771071
+      ],
+      "commanded_tcp_xyz_m": [
+        -0.4222725074400139,
+        0.4496665272974993,
+        0.12383425186807395
+      ],
+      "tcp_command_error_mm": 1.0116527955929113
+    },
+    {
+      "time_s": 37.803,
+      "entrance_relative_xyz_mm": [
+        6.021611370293028,
+        -2.124965999026257,
+        -73.02969720892771
+      ],
+      "lateral_mm": 6.385552755389305,
+      "axial_mm": -73.02969720892771,
+      "orientation_deg": 0.0746876840074408,
+      "measured_tcp_xyz_m": [
+        -0.42132744942528266,
+        0.44756907862353423,
+        0.1238489437944919
+      ],
+      "commanded_tcp_xyz_m": [
+        -0.4223187344735723,
+        0.4500724274565312,
+        0.12383425186807395
+      ],
+      "tcp_command_error_mm": 2.692511333185391
+    },
+    {
+      "time_s": 38.001,
+      "entrance_relative_xyz_mm": [
+        7.218962511269661,
+        -2.823997763828218,
+        -72.93668127612385
+      ],
+      "lateral_mm": 7.751669698150428,
+      "axial_mm": -72.93668127612385,
+      "orientation_deg": 0.07026691569345908,
+      "measured_tcp_xyz_m": [
+        -0.42076134389326314,
+        0.4463192682547563,
+        0.12375664081865195
+      ],
+      "commanded_tcp_xyz_m": [
+        -0.42240774030991907,
+        0.4508539503090027,
+        0.12383425186807395
+      ],
+      "tcp_command_error_mm": 4.824933778703515
+    },
+    {
+      "time_s": 38.205,
+      "entrance_relative_xyz_mm": [
+        8.113884498953949,
+        -3.4803287483037293,
+        -72.82952041730684
+      ],
+      "lateral_mm": 8.82880568699043,
+      "axial_mm": -72.82952041730684,
+      "orientation_deg": 0.06834138391431623,
+      "measured_tcp_xyz_m": [
+        -0.4201751892642054,
+        0.44532572911480317,
+        0.12364041187454489
+      ],
+      "commanded_tcp_xyz_m": [
+        -0.42248226930893995,
+        0.4515083581354707,
+        0.12383425186807395
+      ],
+      "tcp_command_error_mm": 6.6019007780414265
+    },
+    {
+      "time_s": 38.41,
+      "entrance_relative_xyz_mm": [
+        8.757870500654324,
+        -4.1138743101120365,
+        -72.60739420106366
+      ],
+      "lateral_mm": 9.675962874341291,
+      "axial_mm": -72.60739420106366,
+      "orientation_deg": 0.06558524037236527,
+      "measured_tcp_xyz_m": [
+        -0.4196022044177032,
+        0.44462701515043285,
+        0.12341185509303462
+      ],
+      "commanded_tcp_xyz_m": [
+        -0.4226291290903349,
+        0.4527978721716291,
+        0.12383425186807395
+      ],
+      "tcp_command_error_mm": 8.723737528730572
+    },
+    {
+      "time_s": 38.603,
+      "entrance_relative_xyz_mm": [
+        8.981567879351227,
+        -4.552113961733162,
+        -72.37436377000806
+      ],
+      "lateral_mm": 10.06927520191993,
+      "axial_mm": -72.37436377000806,
+      "orientation_deg": 0.054741615951763536,
+      "measured_tcp_xyz_m": [
+        -0.419201375383824,
+        0.44437448016448805,
+        0.12319269340373698
+      ],
+      "commanded_tcp_xyz_m": [
+        -0.4227050320486248,
+        0.45346434415715897,
+        0.12383425186807395
+      ],
+      "tcp_command_error_mm": 9.762829236098558
+    },
+    {
+      "time_s": 38.804,
+      "entrance_relative_xyz_mm": [
+        9.004636357128698,
+        -4.7400921897991495,
+        -72.4321875863423
+      ],
+      "lateral_mm": 10.1760478522813,
+      "axial_mm": -72.4321875863423,
+      "orientation_deg": 0.04808881375284975,
+      "measured_tcp_xyz_m": [
+        -0.41901531929203417,
+        0.4443427674235335,
+        0.12325837739741383
+      ],
+      "commanded_tcp_xyz_m": [
+        -0.4227366006112978,
+        0.45374153444221516,
+        0.12383425186807395
+      ],
+      "tcp_command_error_mm": 10.125037655955477
+    },
+    {
+      "time_s": 39.004,
+      "entrance_relative_xyz_mm": [
+        9.029504444231312,
+        -4.816964134929657,
+        -72.56077274027595
+      ],
+      "lateral_mm": 10.23401651286491,
+      "axial_mm": -72.56077274027595,
+      "orientation_deg": 0.03082446570243241,
+      "measured_tcp_xyz_m": [
+        -0.41894818612835244,
+        0.44431531455011136,
+        0.12338475958674722
+      ],
+      "commanded_tcp_xyz_m": [
+        -0.42290114421872954,
+        0.4542576411298371,
+        0.12333413337608279
+      ],
+      "tcp_command_error_mm": 10.699453186747649
+    },
+    {
+      "time_s": 39.202,
+      "entrance_relative_xyz_mm": [
+        8.835642688322237,
+        -4.7695193280754005,
+        -72.61726233091315
+      ],
+      "lateral_mm": 10.04076174085348,
+      "axial_mm": -72.61726233091315,
+      "orientation_deg": 0.0326140868554222,
+      "measured_tcp_xyz_m": [
+        -0.41897277990117915,
+        0.4445114807036307,
+        0.12343938494055837
+      ],
+      "commanded_tcp_xyz_m": [
+        -0.42346833370038384,
+        0.4556453283039908,
+        0.123421355923231
+      ],
+      "tcp_command_error_mm": 12.007201647138821
+    },
+    {
+      "time_s": 39.401,
+      "entrance_relative_xyz_mm": [
+        8.52804230845669,
+        -4.65934201153409,
+        -72.62502407888417
+      ],
+      "lateral_mm": 9.717868778455173,
+      "axial_mm": -72.62502407888417,
+      "orientation_deg": 0.0262882893259103,
+      "measured_tcp_xyz_m": [
+        -0.4190496322135951,
+        0.4448314377022822,
+        0.12344741105967422
+      ],
+      "commanded_tcp_xyz_m": [
+        -0.4240308818252596,
+        0.4570422821902776,
+        0.12344123641583357
+      ],
+      "tcp_command_error_mm": 13.187782563036995
+    },
+    {
+      "time_s": 39.601,
+      "entrance_relative_xyz_mm": [
+        7.918988556998574,
+        -4.498306899016702,
+        -72.63898100875777
+      ],
+      "lateral_mm": 9.10742250714304,
+      "axial_mm": -72.63898100875777,
+      "orientation_deg": 0.02948326173023147,
+      "measured_tcp_xyz_m": [
+        -0.41914568957974396,
+        0.4454528381329704,
+        0.12346111973630652
+      ],
+      "commanded_tcp_xyz_m": [
+        -0.424600565645647,
+        0.45843225897379697,
+        0.12345428498327858
+      ],
+      "tcp_command_error_mm": 14.079101000116971
+    },
+    {
+      "time_s": 39.804,
+      "entrance_relative_xyz_mm": [
+        7.030606982124654,
+        -4.2029360454938764,
+        -72.61234356304146
+      ],
+      "lateral_mm": 8.191099189950737,
+      "axial_mm": -72.61234356304146,
+      "orientation_deg": 0.03213660219692332,
+      "measured_tcp_xyz_m": [
+        -0.4193550667178177,
+        0.44640445891023967,
+        0.1234344873659459
+      ],
+      "commanded_tcp_xyz_m": [
+        -0.4251844562061282,
+        0.4598061713442893,
+        0.12345886933495018
+      ],
+      "tcp_command_error_mm": 14.614659505161192
+    },
+    {
+      "time_s": 40.001,
+      "entrance_relative_xyz_mm": [
+        6.129335418731757,
+        -3.8464434206064158,
+        -72.53221554601996
+      ],
+      "lateral_mm": 7.236289080961732,
+      "axial_mm": -72.53221554601996,
+      "orientation_deg": 0.02311278759676108,
+      "measured_tcp_xyz_m": [
+        -0.41960483715552793,
+        0.447304437034919,
+        0.12335467411859283
+      ],
+      "commanded_tcp_xyz_m": [
+        -0.4251833833390999,
+        0.45980568687364837,
+        0.12343109702788573
+      ],
+      "tcp_command_error_mm": 13.689677334168278
+    },
+    {
+      "time_s": 40.2,
+      "entrance_relative_xyz_mm": [
+        5.445476701989721,
+        -3.5131420650818255,
+        -72.4308872959547
+      ],
+      "lateral_mm": 6.480384531905513,
+      "axial_mm": -72.4308872959547,
+      "orientation_deg": 0.01523260244216325,
+      "measured_tcp_xyz_m": [
+        -0.41987126742754494,
+        0.4480286196251833,
+        0.12325701275621881
+      ],
+      "commanded_tcp_xyz_m": [
+        -0.4252081964401214,
+        0.4598732484410911,
+        0.12332165850067783
+      ],
+      "tcp_command_error_mm": 12.991621228476102
+    },
+    {
+      "time_s": 40.4,
+      "entrance_relative_xyz_mm": [
+        5.276693873469268,
+        -3.012137644575419,
+        -72.46269378768133
+      ],
+      "lateral_mm": 6.075892644227387,
+      "axial_mm": -72.46269378768133,
+      "orientation_deg": 0.011143554473403906,
+      "measured_tcp_xyz_m": [
+        -0.4203524081713706,
+        0.4482493581935102,
+        0.12328549492786506
+      ],
+      "commanded_tcp_xyz_m": [
+        -0.4256433115203033,
+        0.46072432693617776,
+        0.1232751351885175
+      ],
+      "tcp_command_error_mm": 13.55059447782568
+    },
+    {
+      "time_s": 40.608,
+      "entrance_relative_xyz_mm": [
+        5.123137713079262,
+        -2.5515229797579977,
+        -72.46526089972404
+      ],
+      "lateral_mm": 5.723356492776607,
+      "axial_mm": -72.46526089972404,
+      "orientation_deg": 0.012315112862462924,
+      "measured_tcp_xyz_m": [
+        -0.4208074524390768,
+        0.4484483712914529,
+        0.12328832041931767
+      ],
+      "commanded_tcp_xyz_m": [
+        -0.4260174939549402,
+        0.46161815898550124,
+        0.12328529243566409
+      ],
+      "tcp_command_error_mm": 14.162903998545389
+    },
+    {
+      "time_s": 40.81,
+      "entrance_relative_xyz_mm": [
+        4.978294952677487,
+        -2.1528753785420296,
+        -72.50047757144573
+      ],
+      "lateral_mm": 5.423863293943407,
+      "axial_mm": -72.50047757144573,
+      "orientation_deg": 0.020541745255971144,
+      "measured_tcp_xyz_m": [
+        -0.4211974342591617,
+        0.44864013198019137,
+        0.12333125292752989
+      ],
+      "commanded_tcp_xyz_m": [
+        -0.42657314561872445,
+        0.463032638039914,
+        0.12328894832445472
+      ],
+      "tcp_command_error_mm": 15.36373304180747
+    },
+    {
+      "time_s": 41.002,
+      "entrance_relative_xyz_mm": [
+        4.794846769074324,
+        -1.6702337278793888,
+        -72.58569716225693
+      ],
+      "lateral_mm": 5.077424174189937,
+      "axial_mm": -72.58569716225693,
+      "orientation_deg": 0.03317619068537593,
+      "measured_tcp_xyz_m": [
+        -0.4216330093060097,
+        0.44885317690654464,
+        0.12340495284129002
+      ],
+      "commanded_tcp_xyz_m": [
+        -0.4270221734583635,
+        0.46446056502963096,
+        0.12335844445396354
+      ],
+      "tcp_command_error_mm": 16.511687294633543
+    },
+    {
+      "time_s": 41.2,
+      "entrance_relative_xyz_mm": [
+        4.593545658291287,
+        -1.1893746808755712,
+        -72.68789383883178
+      ],
+      "lateral_mm": 4.745026221878505,
+      "axial_mm": -72.68789383883178,
+      "orientation_deg": 0.04488782377094374,
+      "measured_tcp_xyz_m": [
+        -0.42210486898935773,
+        0.4491060258279057,
+        0.12350721854226052
+      ],
+      "commanded_tcp_xyz_m": [
+        -0.4270892176678016,
+        0.4649834690811153,
+        0.12340549689187844
+      ],
+      "tcp_command_error_mm": 16.641733182014217
+    },
+    {
+      "time_s": 41.4,
+      "entrance_relative_xyz_mm": [
+        4.425288784254438,
+        -0.7479485386311657,
+        -72.74758137693338
+      ],
+      "lateral_mm": 4.488051675336261,
+      "axial_mm": -72.74758137693338,
+      "orientation_deg": 0.0521899698386933,
+      "measured_tcp_xyz_m": [
+        -0.42253164432547075,
+        0.44931804599469843,
+        0.12356947456171488
+      ],
+      "commanded_tcp_xyz_m": [
+        -0.42678591454038683,
+        0.4650703117991619,
+        0.12350848636613643
+      ],
+      "tcp_command_error_mm": 16.316752513781402
+    },
+    {
+      "time_s": 41.601,
+      "entrance_relative_xyz_mm": [
+        4.238993600145847,
+        -0.4004062517268536,
+        -72.80564508836717
+      ],
+      "lateral_mm": 4.257862363733637,
+      "axial_mm": -72.80564508836717,
+      "orientation_deg": 0.05731983471832957,
+      "measured_tcp_xyz_m": [
+        -0.4228420461005388,
+        0.44953001582024327,
+        0.12362182014612313
+      ],
+      "commanded_tcp_xyz_m": [
+        -0.42642556567664724,
+        0.4651969731467425,
+        0.12357976507179706
+      ],
+      "tcp_command_error_mm": 16.07161886842696
+    },
+    {
+      "time_s": 41.801,
+      "entrance_relative_xyz_mm": [
+        3.737598622345933,
+        -0.31478223083974965,
+        -72.95230666988294
+      ],
+      "lateral_mm": 3.7508307499292295,
+      "axial_mm": -72.95230666988294,
+      "orientation_deg": 0.061706614898667723,
+      "measured_tcp_xyz_m": [
+        -0.4228760921349665,
+        0.45003643768207374,
+        0.1237682157949784
+      ],
+      "commanded_tcp_xyz_m": [
+        -0.4259998817726704,
+        0.46532446804334354,
+        0.12363983497762045
+      ],
+      "tcp_command_error_mm": 15.604435768780581
+    },
+    {
+      "time_s": 42.005,
+      "entrance_relative_xyz_mm": [
+        3.6356354489300857,
+        -0.27076699299807827,
+        -72.9242581946874
+      ],
+      "lateral_mm": 3.6457043053454417,
+      "axial_mm": -72.9242581946874,
+      "orientation_deg": 0.05140573996719178,
+      "measured_tcp_xyz_m": [
+        -0.42291165752523235,
+        0.45014400157075307,
+        0.12373887049722956
+      ],
+      "commanded_tcp_xyz_m": [
+        -0.4255869647709099,
+        0.46540005294393183,
+        0.12377216407409847
+      ],
+      "tcp_command_error_mm": 15.488882491067747
+    },
+    {
+      "time_s": 42.201,
+      "entrance_relative_xyz_mm": [
+        3.732378984833584,
+        -0.4307839222050247,
+        -73.00541721765863
+      ],
+      "lateral_mm": 3.7571568604541548,
+      "axial_mm": -73.00541721765863,
+      "orientation_deg": 0.06111827428076679,
+      "measured_tcp_xyz_m": [
+        -0.4227631849333873,
+        0.4500309182695292,
+        0.12382163736987109
+      ],
+      "commanded_tcp_xyz_m": [
+        -0.4252035860545641,
+        0.4655227151080436,
+        0.1237256753130121
+      ],
+      "tcp_command_error_mm": 15.683129012872495
+    },
+    {
+      "time_s": 42.401,
+      "entrance_relative_xyz_mm": [
+        3.718537593012022,
+        -0.6616087787086333,
+        -73.15309542996617
+      ],
+      "lateral_mm": 3.7769363254770356,
+      "axial_mm": -73.15309542996617,
+      "orientation_deg": 0.06822344860338408,
+      "measured_tcp_xyz_m": [
+        -0.42251918048191445,
+        0.4500204104894226,
+        0.12397958306452983
+      ],
+      "commanded_tcp_xyz_m": [
+        -0.4248802923925431,
+        0.4655762625524185,
+        0.12384378422551533
+      ],
+      "tcp_command_error_mm": 15.734605943111657
+    },
+    {
+      "time_s": 42.604,
+      "entrance_relative_xyz_mm": [
+        3.105533591490628,
+        -1.0214539221276853,
+        -73.28046011831901
+      ],
+      "lateral_mm": 3.2692058673180417,
+      "axial_mm": -73.28046011831901,
+      "orientation_deg": 0.07332672313366657,
+      "measured_tcp_xyz_m": [
+        -0.4220937908636636,
+        0.45059297699589873,
+        0.12409777778093894
+      ],
+      "commanded_tcp_xyz_m": [
+        -0.42472888495719147,
+        0.46560377989028573,
+        0.1240275121311018
+      ],
+      "tcp_command_error_mm": 15.240500702976577
+    },
+    {
+      "time_s": 42.801,
+      "entrance_relative_xyz_mm": [
+        3.340464539435123,
+        -1.1077981889126287,
+        -73.1269301188584
+      ],
+      "lateral_mm": 3.5193636024971346,
+      "axial_mm": -73.1269301188584,
+      "orientation_deg": 0.053201361485480665,
+      "measured_tcp_xyz_m": [
+        -0.4220452403326902,
+        0.45035347042288587,
+        0.12394390875328085
+      ],
+      "commanded_tcp_xyz_m": [
+        -0.42472757053182275,
+        0.4656121018955013,
+        0.12409687478154643
+      ],
+      "tcp_command_error_mm": 15.493357554773963
+    },
+    {
+      "time_s": 43.001,
+      "entrance_relative_xyz_mm": [
+        3.800977318921123,
+        -0.8715667053720011,
+        -73.28140156895068
+      ],
+      "lateral_mm": 3.8996226869872697,
+      "axial_mm": -73.28140156895068,
+      "orientation_deg": 0.07398229256905114,
+      "measured_tcp_xyz_m": [
+        -0.422325252887331,
+        0.4499029907324174,
+        0.12410720267427355
+      ],
+      "commanded_tcp_xyz_m": [
+        -0.4248113527605581,
+        0.4655835202711143,
+        0.12394390875328096
+      ],
+      "tcp_command_error_mm": 15.877227846769703
+    },
+    {
+      "time_s": 43.203,
+      "entrance_relative_xyz_mm": [
+        3.7485246107165917,
+        -0.8737927312687244,
+        -73.53675465722054
+      ],
+      "lateral_mm": 3.84901941984787,
+      "axial_mm": -73.53675465722054,
+      "orientation_deg": 0.09242883619831156,
+      "measured_tcp_xyz_m": [
+        -0.42230994379863657,
+        0.4499870852731776,
+        0.12435628628611547
+      ],
+      "commanded_tcp_xyz_m": [
+        -0.4247563138360793,
+        0.4656021647360378,
+        0.12412214561446017
+      ],
+      "tcp_command_error_mm": 15.807284866341215
+    },
+    {
+      "time_s": 43.406,
+      "entrance_relative_xyz_mm": [
+        2.8880065737827976,
+        -1.0751131707778527,
+        -73.6667465073535
+      ],
+      "lateral_mm": 3.0816311103363203,
+      "axial_mm": -73.6667465073535,
+      "orientation_deg": 0.09535515948657865,
+      "measured_tcp_xyz_m": [
+        -0.42202113946408887,
+        0.45083231492069287,
+        0.12448574478472013
+      ],
+      "commanded_tcp_xyz_m": [
+        -0.4246611052808224,
+        0.4656332005499238,
+        0.12438578819730119
+      ],
+      "tcp_command_error_mm": 15.034813808041145
+    },
+    {
+      "time_s": 43.6,
+      "entrance_relative_xyz_mm": [
+        1.4849183216660566,
+        -1.3377847528688036,
+        -73.70087282934313
+      ],
+      "lateral_mm": 1.9986621693092068,
+      "axial_mm": -73.70087282934313,
+      "orientation_deg": 0.06863466779972968,
+      "measured_tcp_xyz_m": [
+        -0.42162322961175125,
+        0.4521660692479444,
+        0.1245172512498279
+      ],
+      "commanded_tcp_xyz_m": [
+        -0.42464566246426416,
+        0.46566296730433804,
+        0.12449382816820848
+      ],
+      "tcp_command_error_mm": 13.831193228835483
+    },
+    {
+      "time_s": 43.803,
+      "entrance_relative_xyz_mm": [
+        -0.07071301912800476,
+        -1.5398882273257308,
+        -73.52202496653759
+      ],
+      "lateral_mm": 1.541510974249155,
+      "axial_mm": -73.52202496653759,
+      "orientation_deg": 0.03677721953327509,
+      "measured_tcp_xyz_m": [
+        -0.4212475298309112,
+        0.4537490415873165,
+        0.1243311078226117
+      ],
+      "commanded_tcp_xyz_m": [
+        -0.4246388233289748,
+        0.46574638559774395,
+        0.12446599827656313
+      ],
+      "tcp_command_error_mm": 12.468172694068498
+    },
+    {
+      "time_s": 44.005,
+      "entrance_relative_xyz_mm": [
+        -1.201994068973894,
+        -1.6296631875525602,
+        -73.21034098743628
+      ],
+      "lateral_mm": 2.0249918139865133,
+      "axial_mm": -73.21034098743628,
+      "orientation_deg": 0.006719316936605135,
+      "measured_tcp_xyz_m": [
+        -0.4210474807609748,
+        0.4548716583019036,
+        0.12402610475881337
+      ],
+      "commanded_tcp_xyz_m": [
+        -0.4246595355539793,
+        0.46566078850619863,
+        0.12425461594024374
+      ],
+      "tcp_command_error_mm": 11.380003855576502
+    },
+    {
+      "time_s": 44.2,
+      "entrance_relative_xyz_mm": [
+        -1.750930434661041,
+        -1.6577215346828267,
+        -72.90160415638303
+      ],
+      "lateral_mm": 2.4111818831381195,
+      "axial_mm": -72.90160415638303,
+      "orientation_deg": 0.031246532986314406,
+      "measured_tcp_xyz_m": [
+        -0.4209692050646613,
+        0.4553735012249022,
+        0.12371792314538757
+      ],
+      "commanded_tcp_xyz_m": [
+        -0.4241000886468873,
+        0.4527134686531711,
+        0.1239415845850492
+      ],
+      "tcp_command_error_mm": 4.114392996265005
+    },
+    {
+      "time_s": 44.408,
+      "entrance_relative_xyz_mm": [
+        -0.19167767712399697,
+        -1.6302553826015864,
+        -72.50546565875382
+      ],
+      "lateral_mm": 1.6414849814753396,
+      "axial_mm": -72.50546565875382,
+      "orientation_deg": 0.09217226254777919,
+      "measured_tcp_xyz_m": [
+        -0.42116657831588555,
+        0.4537961671437259,
+        0.12333507065866756
+      ],
+      "commanded_tcp_xyz_m": [
+        -0.42492471169576584,
+        0.45207445102762345,
+        0.1235220840086136
+      ],
+      "tcp_command_error_mm": 4.1379761814775335
+    },
+    {
+      "time_s": 44.61,
+      "entrance_relative_xyz_mm": [
+        1.7133687321200797,
+        -1.7417288606300374,
+        -72.50201169433579
+      ],
+      "lateral_mm": 2.4432052382389773,
+      "axial_mm": -72.50201169433579,
+      "orientation_deg": 0.09028811367050366,
+      "measured_tcp_xyz_m": [
+        -0.42125184727469084,
+        0.45183194970349105,
+        0.12332293959855209
+      ],
+      "commanded_tcp_xyz_m": [
+        -0.4255117564419627,
+        0.4529513635212269,
+        0.12335651741440606
+      ],
+      "tcp_command_error_mm": 4.40466126716486
+    },
+    {
+      "time_s": 44.808,
+      "entrance_relative_xyz_mm": [
+        3.5592074158085074,
+        -2.1259616347582835,
+        -72.25097405972835
+      ],
+      "lateral_mm": 4.145801526992144,
+      "axial_mm": -72.25097405972835,
+      "orientation_deg": 0.0561904281273375,
+      "measured_tcp_xyz_m": [
+        -0.42104847341057206,
+        0.4500277591386417,
+        0.12307249693895589
+      ],
+      "commanded_tcp_xyz_m": [
+        -0.4234988180862822,
+        0.45399560811602657,
+        0.12327945926305325
+      ],
+      "tcp_command_error_mm": 4.668066831217305
+    },
+    {
+      "time_s": 45.003,
+      "entrance_relative_xyz_mm": [
+        4.751128386563275,
+        -2.5100083901553605,
+        -72.06020997769392
+      ],
+      "lateral_mm": 5.373393998606249,
+      "axial_mm": -72.06020997769392,
+      "orientation_deg": 0.02924299092984276,
+      "measured_tcp_xyz_m": [
+        -0.42079928950299905,
+        0.44882992600861643,
+        0.12288566416750782
+      ],
+      "commanded_tcp_xyz_m": [
+        -0.4234927856655426,
+        0.4540387422490953,
+        0.12304332941899004
+      ],
+      "tcp_command_error_mm": 5.866135570905105
+    },
+    {
+      "time_s": 45.2,
+      "entrance_relative_xyz_mm": [
+        5.679845512328141,
+        -2.7836012993193435,
+        -71.91778943231265
+      ],
+      "lateral_mm": 6.32527321445378,
+      "axial_mm": -71.91778943231265,
+      "orientation_deg": 0.020786761114920595,
+      "measured_tcp_xyz_m": [
+        -0.4206227408505361,
+        0.44787466653775077,
+        0.12274263944809385
+      ],
+      "commanded_tcp_xyz_m": [
+        -0.42348736527735753,
+        0.4539640370282758,
+        0.12286537810379411
+      ],
+      "tcp_command_error_mm": 6.730644163467749
+    },
+    {
+      "time_s": 45.402,
+      "entrance_relative_xyz_mm": [
+        6.420585715326554,
+        -3.070109899590723,
+        -71.80567864495102
+      ],
+      "lateral_mm": 7.116845911175846,
+      "axial_mm": -71.80567864495102,
+      "orientation_deg": 0.017094014650369763,
+      "measured_tcp_xyz_m": [
+        -0.42041229116052103,
+        0.4471081129589649,
+        0.12262994036053987
+      ],
+      "commanded_tcp_xyz_m": [
+        -0.4236522667001351,
+        0.4544939545719778,
+        0.12270618111649562
+      ],
+      "tcp_command_error_mm": 8.065600441546728
+    },
+    {
+      "time_s": 45.601,
+      "entrance_relative_xyz_mm": [
+        7.165972696088929,
+        -3.114248373773915,
+        -71.80235003814883
+      ],
+      "lateral_mm": 7.813431231836977,
+      "axial_mm": -71.80235003814883,
+      "orientation_deg": 0.011841485218810706,
+      "measured_tcp_xyz_m": [
+        -0.4204464029209159,
+        0.44635290439476993,
+        0.1226250210762323
+      ],
+      "commanded_tcp_xyz_m": [
+        -0.4238245202251759,
+        0.4549318374225163,
+        0.12263465868266982
+      ],
+      "tcp_command_error_mm": 9.220079245828442
+    },
+    {
+      "time_s": 45.802,
+      "entrance_relative_xyz_mm": [
+        7.4712904283055215,
+        -3.216072592433256,
+        -71.82267809735166
+      ],
+      "lateral_mm": 8.134082836060257,
+      "axial_mm": -71.82267809735166,
+      "orientation_deg": 0.02040808087133117,
+      "measured_tcp_xyz_m": [
+        -0.420372454833036,
+        0.44603020027937484,
+        0.1226463766954621
+      ],
+      "commanded_tcp_xyz_m": [
+        -0.42426508887593917,
+        0.4563746652212124,
+        0.12263587955108037
+      ],
+      "tcp_command_error_mm": 11.052631583243656
+    },
+    {
+      "time_s": 46.0,
+      "entrance_relative_xyz_mm": [
+        7.5065868613815585,
+        -3.213113650110788,
+        -71.85116467194975
+      ],
+      "lateral_mm": 8.165350306998134,
+      "axial_mm": -71.85116467194975,
+      "orientation_deg": 0.025836802407843196,
+      "measured_tcp_xyz_m": [
+        -0.42038105678937926,
+        0.4459985920432423,
+        0.12267222602966418
+      ],
+      "commanded_tcp_xyz_m": [
+        -0.42455607634772186,
+        0.4573613566416601,
+        0.12264637669546224
+      ],
+      "tcp_command_error_mm": 12.105530794627652
+    },
+    {
+      "time_s": 46.201,
+      "entrance_relative_xyz_mm": [
+        7.361970010167362,
+        -3.1636916957157037,
+        -71.92367749241258
+      ],
+      "lateral_mm": 8.012961223926155,
+      "axial_mm": -71.92367749241258,
+      "orientation_deg": 0.030881901158826375,
+      "measured_tcp_xyz_m": [
+        -0.4204147369274903,
+        0.44614554886975377,
+        0.12274388066243846
+      ],
+      "commanded_tcp_xyz_m": [
+        -0.42498946829551487,
+        0.45879878813536873,
+        0.12268163387026859
+      ],
+      "tcp_command_error_mm": 13.45498070104983
+    },
+    {
+      "time_s": 46.403,
+      "entrance_relative_xyz_mm": [
+        7.065459548625225,
+        -2.98083912646388,
+        -72.0175386726638
+      ],
+      "lateral_mm": 7.668514884325211,
+      "axial_mm": -72.0175386726638,
+      "orientation_deg": 0.042192650453932654,
+      "measured_tcp_xyz_m": [
+        -0.4205761350740026,
+        0.44647860864801786,
+        0.12284471084900597
+      ],
+      "commanded_tcp_xyz_m": [
+        -0.42542721771177233,
+        0.4602434003327804,
+        0.122748984342683
+      ],
+      "tcp_command_error_mm": 14.594918857170507
+    },
+    {
+      "time_s": 46.603,
+      "entrance_relative_xyz_mm": [
+        6.693926548439505,
+        -2.6508782592995495,
+        -72.14454174008745
+      ],
+      "lateral_mm": 7.199708895610311,
+      "axial_mm": -72.14454174008745,
+      "orientation_deg": 0.044793569589679255,
+      "measured_tcp_xyz_m": [
+        -0.42086379911905664,
+        0.44687218724889816,
+        0.1229673570742214
+      ],
+      "commanded_tcp_xyz_m": [
+        -0.42585847914814,
+        0.4616843500332571,
+        0.12287713004694825
+      ],
+      "tcp_command_error_mm": 15.631862840356632
+    },
+    {
+      "time_s": 46.801,
+      "entrance_relative_xyz_mm": [
+        6.406885728242023,
+        -2.2343639736391863,
+        -72.26446660008313
+      ],
+      "lateral_mm": 6.785319970454452,
+      "axial_mm": -72.26446660008313,
+      "orientation_deg": 0.047628556976261255,
+      "measured_tcp_xyz_m": [
+        -0.4212632145580093,
+        0.44720365419880964,
+        0.12308915533457251
+      ],
+      "commanded_tcp_xyz_m": [
+        -0.4262471384158738,
+        0.46311930859175787,
+        0.12299452431833358
+      ],
+      "tcp_command_error_mm": 16.678024667387856
+    },
+    {
+      "time_s": 47.001,
+      "entrance_relative_xyz_mm": [
+        6.176392737705316,
+        -1.8339613429263768,
+        -72.40498569080268
+      ],
+      "lateral_mm": 6.442921810617237,
+      "axial_mm": -72.40498569080268,
+      "orientation_deg": 0.05763781002235637,
+      "measured_tcp_xyz_m": [
+        -0.4216307521393385,
+        0.4474671299522063,
+        0.12322923204892708
+      ],
+      "commanded_tcp_xyz_m": [
+        -0.42657977290053667,
+        0.4645738560008084,
+        0.12311089577755902
+      ],
+      "tcp_command_error_mm": 17.808618308836174
+    },
+    {
+      "time_s": 47.202,
+      "entrance_relative_xyz_mm": [
+        5.981803028255323,
+        -1.4193184949691517,
+        -72.57277222953684
+      ],
+      "lateral_mm": 6.147880322436835,
+      "axial_mm": -72.57277222953684,
+      "orientation_deg": 0.06562237694799683,
+      "measured_tcp_xyz_m": [
+        -0.42202752719662123,
+        0.44769843731560766,
+        0.12339919413222855
+      ],
+      "commanded_tcp_xyz_m": [
+        -0.426708969286112,
+        0.46557270066960993,
+        0.12326951833484931
+      ],
+      "tcp_command_error_mm": 18.477608240730465
+    },
+    {
+      "time_s": 47.406,
+      "entrance_relative_xyz_mm": [
+        5.8452880217092495,
+        -1.0579813520378567,
+        -72.71203277858595
+      ],
+      "lateral_mm": 5.940262334105918,
+      "axial_mm": -72.71203277858595,
+      "orientation_deg": 0.0747912359190577,
+      "measured_tcp_xyz_m": [
+        -0.4223653957885207,
+        0.4478622860521534,
+        0.12352953869708297
+      ],
+      "commanded_tcp_xyz_m": [
+        -0.42650863466054395,
+        0.4656253192791889,
+        0.1234398638013211
+      ],
+      "tcp_command_error_mm": 18.240060837682005
+    },
+    {
+      "time_s": 47.6,
+      "entrance_relative_xyz_mm": [
+        5.79070629224071,
+        -0.7620160975421453,
+        -72.80908994642732
+      ],
+      "lateral_mm": 5.840629066796616,
+      "axial_mm": -72.80908994642732,
+      "orientation_deg": 0.08260055254683218,
+      "measured_tcp_xyz_m": [
+        -0.422650687167307,
+        0.4479433120327136,
+        0.12362649642564255
+      ],
+      "commanded_tcp_xyz_m": [
+        -0.4262658591969733,
+        0.46568989128045346,
+        0.12355153090281654
+      ],
+      "tcp_command_error_mm": 18.111216514359416
+    },
+    {
+      "time_s": 47.805,
+      "entrance_relative_xyz_mm": [
+        5.670726381753366,
+        -0.5582680571209198,
+        -72.93914935139401
+      ],
+      "lateral_mm": 5.698140128174734,
+      "axial_mm": -72.93914935139401,
+      "orientation_deg": 0.09092890644277762,
+      "measured_tcp_xyz_m": [
+        -0.42284233922904074,
+        0.44808650335279643,
+        0.12375899153161377
+      ],
+      "commanded_tcp_xyz_m": [
+        -0.42598298145738217,
+        0.46575516671961004,
+        0.12366486761110729
+      ],
+      "tcp_command_error_mm": 17.94586743762012
+    },
+    {
+      "time_s": 48.006,
+      "entrance_relative_xyz_mm": [
+        5.53527071088844,
+        -0.42362637330548014,
+        -73.076628744412
+      ],
+      "lateral_mm": 5.551457569591915,
+      "axial_mm": -73.076628744412,
+      "orientation_deg": 0.09073312121971987,
+      "measured_tcp_xyz_m": [
+        -0.4229600043913733,
+        0.4482302934987453,
+        0.12389529074989475
+      ],
+      "commanded_tcp_xyz_m": [
+        -0.4257881998963427,
+        0.4658093721931923,
+        0.12376525653159605
+      ],
+      "tcp_command_error_mm": 17.805606040172204
+    },
+    {
+      "time_s": 48.203,
+      "entrance_relative_xyz_mm": [
+        5.49451744787513,
+        -0.3396621459623439,
+        -73.17466735318301
+      ],
+      "lateral_mm": 5.505006117926117,
+      "axial_mm": -73.17466735318301,
+      "orientation_deg": 0.09474202953453773,
+      "measured_tcp_xyz_m": [
+        -0.4230401345859956,
+        0.44827739506640985,
+        0.12399097680279017
+      ],
+      "commanded_tcp_xyz_m": [
+        -0.42547116534463947,
+        0.4658478674977612,
+        0.12390618645234502
+      ],
+      "tcp_command_error_mm": 17.738055175635207
+    },
+    {
+      "time_s": 48.401,
+      "entrance_relative_xyz_mm": [
+        5.465596445380861,
+        -0.2860635187872662,
+        -73.25639490384894
+      ],
+      "lateral_mm": 5.473077456106468,
+      "axial_mm": -73.25639490384894,
+      "orientation_deg": 0.09630522924640234,
+      "measured_tcp_xyz_m": [
+        -0.4230876919303059,
+        0.4483147521299223,
+        0.12407168079734254
+      ],
+      "commanded_tcp_xyz_m": [
+        -0.42517546234521575,
+        0.4658896975441464,
+        0.12400164270598654
+      ],
+      "tcp_command_error_mm": 17.69865523006115
+    },
+    {
+      "time_s": 48.6,
+      "entrance_relative_xyz_mm": [
+        5.4336974329415035,
+        -0.2657009790802134,
+        -73.2808230492119
+      ],
+      "lateral_mm": 5.4401897763809,
+      "axial_mm": -73.2808230492119,
+      "orientation_deg": 0.09654261474021443,
+      "measured_tcp_xyz_m": [
+        -0.42310608349108664,
+        0.4483411383195267,
+        0.1240907403817085
+      ],
+      "commanded_tcp_xyz_m": [
+        -0.4248986097030614,
+        0.46592812605666306,
+        0.124085577891419
+      ],
+      "tcp_command_error_mm": 17.678102684906744
+    },
+    {
+      "time_s": 48.8,
+      "entrance_relative_xyz_mm": [
+        5.474179666569046,
+        -0.24935369696921228,
+        -73.32295758492924
+      ],
+      "lateral_mm": 5.479855863804285,
+      "axial_mm": -73.32295758492924,
+      "orientation_deg": 0.09874209179307737,
+      "measured_tcp_xyz_m": [
+        -0.42312674044183135,
+        0.44830456803773466,
+        0.12413559166118784
+      ],
+      "commanded_tcp_xyz_m": [
+        -0.42464460113571373,
+        0.46595195307468484,
+        0.12408905749119772
+      ],
+      "tcp_command_error_mm": 17.712601874297942
+    },
+    {
+      "time_s": 49.008,
+      "entrance_relative_xyz_mm": [
+        5.388853485630479,
+        -0.26386479475795643,
+        -73.36961201080317
+      ],
+      "lateral_mm": 5.3953096778131675,
+      "axial_mm": -73.36961201080317,
+      "orientation_deg": 0.10159706742595119,
+      "measured_tcp_xyz_m": [
+        -0.42310536107806995,
+        0.4483870506611898,
+        0.12418115646595815
+      ],
+      "commanded_tcp_xyz_m": [
+        -0.42441453672118107,
+        0.46597118488862277,
+        0.1241579465962922
+      ],
+      "tcp_command_error_mm": 17.63281758797912
+    },
+    {
+      "time_s": 49.201,
+      "entrance_relative_xyz_mm": [
+        5.453531850532239,
+        -0.26005227858560964,
+        -73.32579217601464
+      ],
+      "lateral_mm": 5.459728640909469,
+      "axial_mm": -73.32579217601464,
+      "orientation_deg": 0.10411143682012794,
+      "measured_tcp_xyz_m": [
+        -0.42311595615564457,
+        0.4483226058901524,
+        0.12413810318547086
+      ],
+      "commanded_tcp_xyz_m": [
+        -0.4242166920961196,
+        0.46598295115019195,
+        0.12417825215556949
+      ],
+      "tcp_command_error_mm": 17.69466095335696
+    },
+    {
+      "time_s": 49.413,
+      "entrance_relative_xyz_mm": [
+        5.40219199156483,
+        -0.29465201958886467,
+        -73.36962641453981
+      ],
+      "lateral_mm": 5.410221633757252,
+      "axial_mm": -73.36962641453981,
+      "orientation_deg": 0.11771091443618525,
+      "measured_tcp_xyz_m": [
+        -0.42306302692491693,
+        0.44839794075871453,
+        0.12417817485752505
+      ],
+      "commanded_tcp_xyz_m": [
+        -0.4240390626977736,
+        0.46599269589785763,
+        0.12415500564483989
+      ],
+      "tcp_command_error_mm": 17.621821445262544
+    },
+    {
+      "time_s": 49.601,
+      "entrance_relative_xyz_mm": [
+        4.131627810065764,
+        -0.7431482002828727,
+        -73.463292591466
+      ],
+      "lateral_mm": 4.19793015764823,
+      "axial_mm": -73.463292591466,
+      "orientation_deg": 0.11362575871340215,
+      "measured_tcp_xyz_m": [
+        -0.422447347493284,
+        0.4496784741331962,
+        0.12427834628667461
+      ],
+      "commanded_tcp_xyz_m": [
+        -0.4239261438133295,
+        0.466001378818469,
+        0.1241759677696251
+      ],
+      "tcp_command_error_mm": 16.390074352529115
+    },
+    {
+      "time_s": 49.801,
+      "entrance_relative_xyz_mm": [
+        2.039346292044164,
+        -1.3697693422883572,
+        -73.44813063499033
+      ],
+      "lateral_mm": 2.4566646799975285,
+      "axial_mm": -73.44813063499033,
+      "orientation_deg": 0.0726642367389759,
+      "measured_tcp_xyz_m": [
+        -0.4216525545951804,
+        0.4516102400920331,
+        0.1242641111035507
+      ],
+      "commanded_tcp_xyz_m": [
+        -0.4238972197850457,
+        0.4660713641076101,
+        0.12428813992574525
+      ],
+      "tcp_command_error_mm": 14.634316075334239
+    },
+    {
+      "time_s": 50.007,
+      "entrance_relative_xyz_mm": [
+        0.44422374552255395,
+        -1.669126351760003,
+        -73.26884325508342
+      ],
+      "lateral_mm": 1.7272282750770798,
+      "axial_mm": -73.26884325508342,
+      "orientation_deg": 0.03002035721909493,
+      "measured_tcp_xyz_m": [
+        -0.4211830296594456,
+        0.45319995009282166,
+        0.12407348892196698
+      ],
+      "commanded_tcp_xyz_m": [
+        -0.4215373438086346,
+        0.45201130205005996,
+        0.12425681502309319
+      ],
+      "tcp_command_error_mm": 1.2538066618226613
+    },
+    {
+      "time_s": 50.202,
+      "entrance_relative_xyz_mm": [
+        0.2900350092513715,
+        -1.5195683981067687,
+        -72.21097224172301
+      ],
+      "lateral_mm": 1.5469998135475693,
+      "axial_mm": -72.21097224172301,
+      "orientation_deg": 0.011582305369751564,
+      "measured_tcp_xyz_m": [
+        -0.42131774062508826,
+        0.4533573566869663,
+        0.12303238743274938
+      ],
+      "commanded_tcp_xyz_m": [
+        -0.4216145871165902,
+        0.4520935232891534,
+        0.12425681502309319
+      ],
+      "tcp_command_error_mm": 1.784549136599892
+    },
+    {
+      "time_s": 50.406,
+      "entrance_relative_xyz_mm": [
+        0.5029047953416521,
+        -1.2659676328183322,
+        -71.03111933033502
+      ],
+      "lateral_mm": 1.3621994275880756,
+      "axial_mm": -71.03111933033502,
+      "orientation_deg": 0.021799915967274857,
+      "measured_tcp_xyz_m": [
+        -0.42159703898100165,
+        0.4531728207137271,
+        0.12182360391569469
+      ],
+      "commanded_tcp_xyz_m": [
+        -0.42186482495690664,
+        0.45235988766224206,
+        0.12425681502309319
+      ],
+      "tcp_command_error_mm": 2.579357627056708
+    },
+    {
+      "time_s": 50.603,
+      "entrance_relative_xyz_mm": [
+        0.48503105057134954,
+        -1.1166165786468396,
+        -70.52392542071217
+      ],
+      "lateral_mm": 1.2174102446288682,
+      "axial_mm": -70.52392542071217,
+      "orientation_deg": 0.01784747851574665,
+      "measured_tcp_xyz_m": [
+        -0.4217422332180801,
+        0.4532025898696819,
+        0.121335084432562
+      ],
+      "commanded_tcp_xyz_m": [
+        -0.42227246640369387,
+        0.452793799489011,
+        0.12425681502309319
+      ],
+      "tcp_command_error_mm": 2.997459999749951
+    },
+    {
+      "time_s": 50.801,
+      "entrance_relative_xyz_mm": [
+        0.5155977747680895,
+        -0.9549590870882585,
+        -70.17762585821119
+      ],
+      "lateral_mm": 1.085259380681985,
+      "axial_mm": -70.17762585821119,
+      "orientation_deg": 0.015422679818763517,
+      "measured_tcp_xyz_m": [
+        -0.42190140568067297,
+        0.4531896606498272,
+        0.12099839853803587
+      ],
+      "commanded_tcp_xyz_m": [
+        -0.4227413610368752,
+        0.4532929119527936,
+        0.12425681502309319
+      ],
+      "tcp_command_error_mm": 3.366521026530259
+    },
+    {
+      "time_s": 51.005,
+      "entrance_relative_xyz_mm": [
+        0.5382633725772856,
+        -0.7775097556124155,
+        -69.87539530504239
+      ],
+      "lateral_mm": 0.9456473329580917,
+      "axial_mm": -69.87539530504239,
+      "orientation_deg": 0.012298087933480226,
+      "measured_tcp_xyz_m": [
+        -0.4220879312328903,
+        0.45318789716312485,
+        0.12068190980177823
+      ],
+      "commanded_tcp_xyz_m": [
+        -0.42314900248366244,
+        0.4537268237795625,
+        0.12425681502309319
+      ],
+      "tcp_command_error_mm": 3.7677926480241806
+    },
+    {
+      "time_s": 51.205,
+      "entrance_relative_xyz_mm": [
+        0.5015751180100225,
+        -0.572916730504025,
+        -69.5889755693826
+      ],
+      "lateral_mm": 0.7614533334999524,
+      "axial_mm": -69.5889755693826,
+      "orientation_deg": 0.008923830522162727,
+      "measured_tcp_xyz_m": [
+        -0.4222820781452485,
+        0.45324771775976624,
+        0.12040269062609837
+      ],
+      "commanded_tcp_xyz_m": [
+        -0.42339924032397885,
+        0.45399318815265116,
+        0.12425681502309319
+      ],
+      "tcp_command_error_mm": 4.0814277290874825
+    },
+    {
+      "time_s": 51.4,
+      "entrance_relative_xyz_mm": [
+        0.46713855254071346,
+        -0.435846311953314,
+        -69.34137465656498
+      ],
+      "lateral_mm": 0.6388900022015828,
+      "axial_mm": -69.34137465656498,
+      "orientation_deg": 0.004610727048361323,
+      "measured_tcp_xyz_m": [
+        -0.4224101414570083,
+        0.45329688401666746,
+        0.1201603540540841
+      ],
+      "commanded_tcp_xyz_m": [
+        -0.42347499199588196,
+        0.454073821627474,
+        0.12425681502309319
+      ],
+      "tcp_command_error_mm": 4.30331630162602
+    },
+    {
+      "time_s": 51.6,
+      "entrance_relative_xyz_mm": [
+        0.8257601396093606,
+        -0.5961271240161881,
+        -69.16056130040272
+      ],
+      "lateral_mm": 1.0184534138366281,
+      "axial_mm": -69.16056130040272,
+      "orientation_deg": 0.038402564449620556,
+      "measured_tcp_xyz_m": [
+        -0.4222915488373576,
+        0.4529361747869792,
+        0.11998515024210393
+      ],
+      "commanded_tcp_xyz_m": [
+        -0.42380291595573205,
+        0.4545377400327676,
+        0.12014663057868075
+      ],
+      "tcp_command_error_mm": 2.2080121607730785
+    },
+    {
+      "time_s": 51.802,
+      "entrance_relative_xyz_mm": [
+        1.5734501321601757,
+        -0.9628248692420127,
+        -69.05002707737351
+      ],
+      "lateral_mm": 1.844661770413691,
+      "axial_mm": -69.05002707737351,
+      "orientation_deg": 0.05406462062879484,
+      "measured_tcp_xyz_m": [
+        -0.42200546589360316,
+        0.45216006217361204,
+        0.11987607675003722
+      ],
+      "commanded_tcp_xyz_m": [
+        -0.42438277097427207,
+        0.45562275786234147,
+        0.11998210453391077
+      ],
+      "tcp_command_error_mm": 4.2015571839822305
+    },
+    {
+      "time_s": 52.0,
+      "entrance_relative_xyz_mm": [
+        2.3449119185166847,
+        -1.3527290482268084,
+        -69.21862750647767
+      ],
+      "lateral_mm": 2.7071179847797926,
+      "axial_mm": -69.21862750647767,
+      "orientation_deg": 0.05535791787710271,
+      "measured_tcp_xyz_m": [
+        -0.42169684102916977,
+        0.45135323627277835,
+        0.12004513783286588
+      ],
+      "commanded_tcp_xyz_m": [
+        -0.42458933407089244,
+        0.45606176811454086,
+        0.12346744036320861
+      ],
+      "tcp_command_error_mm": 6.499918669529319
+    },
+    {
+      "time_s": 52.2,
+      "entrance_relative_xyz_mm": [
+        3.299300289520385,
+        -1.7183335543860812,
+        -69.61074590989114
+      ],
+      "lateral_mm": 3.719953306771256,
+      "axial_mm": -69.61074590989114,
+      "orientation_deg": 0.0393185360588575,
+      "measured_tcp_xyz_m": [
+        -0.42143152213768803,
+        0.45036047693904097,
+        0.12043647992373033
+      ],
+      "commanded_tcp_xyz_m": [
+        -0.42457285402582823,
+        0.4560154926140621,
+        0.12032000881328626
+      ],
+      "tcp_command_error_mm": 6.469987158855053
+    },
+    {
+      "time_s": 52.401,
+      "entrance_relative_xyz_mm": [
+        4.082839767743707,
+        -2.0432507749406916,
+        -69.29949451620976
+      ],
+      "lateral_mm": 4.565572724025456,
+      "axial_mm": -69.29949451620976,
+      "orientation_deg": 0.016783377393746402,
+      "measured_tcp_xyz_m": [
+        -0.4211888422911385,
+        0.4495391434537235,
+        0.12012333712047885
+      ],
+      "commanded_tcp_xyz_m": [
+        -0.42457823878246775,
+        0.45602241118314957,
+        0.11359914436478409
+      ],
+      "tcp_command_error_mm": 9.802339523823516
+    },
+    {
+      "time_s": 52.602,
+      "entrance_relative_xyz_mm": [
+        4.729944058443763,
+        -2.419587275591606,
+        -67.94653286428188
+      ],
+      "lateral_mm": 5.3128874804772845,
+      "axial_mm": -67.94653286428188,
+      "orientation_deg": 0.004336853721827824,
+      "measured_tcp_xyz_m": [
+        -0.42087958584205276,
+        0.4488493408938376,
+        0.11876870946902685
+      ],
+      "commanded_tcp_xyz_m": [
+        -0.42458089813958394,
+        0.4560391152157099,
+        0.10739803146431019
+      ],
+      "tcp_command_error_mm": 13.952952583960743
+    },
+    {
+      "time_s": 52.801,
+      "entrance_relative_xyz_mm": [
+        5.689322536198915,
+        -2.3734142294697946,
+        -67.60956659706684
+      ],
+      "lateral_mm": 6.164534534378938,
+      "axial_mm": -67.60956659706684,
+      "orientation_deg": 0.019486643849895336,
+      "measured_tcp_xyz_m": [
+        -0.4209709560328978,
+        0.44792575755658964,
+        0.11848236356133174
+      ],
+      "commanded_tcp_xyz_m": [
+        -0.4245846676349042,
+        0.4560423110979375,
+        0.09649910526274635
+      ],
+      "tcp_command_error_mm": 23.710778105207044
+    },
+    {
+      "time_s": 53.0,
+      "entrance_relative_xyz_mm": [
+        5.225474973422573,
+        -2.8973495806829397,
+        -66.66295892254648
+      ],
+      "lateral_mm": 5.974966384051817,
+      "axial_mm": -66.66295892254648,
+      "orientation_deg": 0.03316576467018832,
+      "measured_tcp_xyz_m": [
+        -0.42045199234100555,
+        0.44828916871108826,
+        0.11744355001148712
+      ],
+      "commanded_tcp_xyz_m": [
+        -0.42459531050353544,
+        0.4560285460257798,
+        0.08525628605688189
+      ],
+      "tcp_command_error_mm": 33.36292864091133
+    },
+    {
+      "time_s": 53.203,
+      "entrance_relative_xyz_mm": [
+        7.370296906518914,
+        -2.343334600474839,
+        -64.38101904642535
+      ],
+      "lateral_mm": 7.7338537314863185,
+      "axial_mm": -64.38101904642535,
+      "orientation_deg": 0.01896959360762183,
+      "measured_tcp_xyz_m": [
+        -0.4212270490732864,
+        0.44622750083233126,
+        0.11519955648674027
+      ],
+      "commanded_tcp_xyz_m": [
+        -0.4245978008883529,
+        0.45602031403018395,
+        0.07555355984467796
+      ],
+      "tcp_command_error_mm": 40.976410382916995
+    },
+    {
+      "time_s": 53.405,
+      "entrance_relative_xyz_mm": [
+        8.341489078567966,
+        -2.614718639757152,
+        -59.36562885580021
+      ],
+      "lateral_mm": 8.741692834512211,
+      "axial_mm": -59.36562885580021,
+      "orientation_deg": 0.021124656922305477,
+      "measured_tcp_xyz_m": [
+        -0.42111219807666533,
+        0.44511253931859585,
+        0.11003504239892378
+      ],
+      "commanded_tcp_xyz_m": [
+        -0.4245911003567045,
+        0.45602431043308844,
+        0.06895719542658907
+      ],
+      "tcp_command_error_mm": 42.644566146364824
+    },
+    {
+      "time_s": 53.601,
+      "entrance_relative_xyz_mm": [
+        9.965463254319463,
+        -2.3768836306338748,
+        -57.928475834442274
+      ],
+      "lateral_mm": 10.24500042297543,
+      "axial_mm": -57.928475834442274,
+      "orientation_deg": 0.09275535888210708,
+      "measured_tcp_xyz_m": [
+        -0.42146947502736126,
+        0.44361582325093696,
+        0.10874369480478871
+      ],
+      "commanded_tcp_xyz_m": [
+        -0.42453872688593586,
+        0.4561506665282589,
+        0.06584912588249137
+      ],
+      "tcp_command_error_mm": 44.79382374823681
+    },
+    {
+      "time_s": 53.806,
+      "entrance_relative_xyz_mm": [
+        11.137155053780907,
+        -2.4204084544612314,
+        -54.92904097571882
+      ],
+      "lateral_mm": 11.397131208263989,
+      "axial_mm": -54.92904097571882,
+      "orientation_deg": 0.03662117644388575,
+      "measured_tcp_xyz_m": [
+        -0.42155622382381036,
+        0.44239689097747653,
+        0.10567317270140172
+      ],
+      "commanded_tcp_xyz_m": [
+        -0.42453187927465935,
+        0.4560628209060464,
+        0.06489872218194537
+      ],
+      "tcp_command_error_mm": 43.10647261535492
+    },
+    {
+      "time_s": 54.0,
+      "entrance_relative_xyz_mm": [
+        12.963836420800067,
+        -2.107902376316473,
+        -53.2406084970114
+      ],
+      "lateral_mm": 13.134089506826994,
+      "axial_mm": -53.2406084970114,
+      "orientation_deg": 0.09706451152008472,
+      "measured_tcp_xyz_m": [
+        -0.42204916121574915,
+        0.4406310217674619,
+        0.10400924027703448
+      ],
+      "commanded_tcp_xyz_m": [
+        -0.4245870803879049,
+        0.4560308460345903,
+        0.06516445951099108
+      ],
+      "tcp_command_error_mm": 41.8630220355006
+    },
+    {
+      "time_s": 54.202,
+      "entrance_relative_xyz_mm": [
+        13.997955713113047,
+        -2.00708231868596,
+        -52.1830217722854
+      ],
+      "lateral_mm": 14.14111535842403,
+      "axial_mm": -52.1830217722854,
+      "orientation_deg": 0.13441668184603725,
+      "measured_tcp_xyz_m": [
+        -0.42224502018994714,
+        0.43961556880950137,
+        0.10296340902065304
+      ],
+      "commanded_tcp_xyz_m": [
+        -0.42459841494841244,
+        0.4559958378262862,
+        0.06514246827880221
+      ],
+      "tcp_command_error_mm": 41.28286858431722
+    },
+    {
+      "time_s": 54.404,
+      "entrance_relative_xyz_mm": [
+        14.239184289942836,
+        -2.0840922100404393,
+        -51.953003614555456
+      ],
+      "lateral_mm": 14.39089328648177,
+      "axial_mm": -51.953003614555456,
+      "orientation_deg": 0.13240080352763403,
+      "measured_tcp_xyz_m": [
+        -0.42219905765019666,
+        0.439389063103482,
+        0.10275256412044742
+      ],
+      "commanded_tcp_xyz_m": [
+        -0.42460800819233646,
+        0.4565030981510228,
+        0.06515688588674698
+      ],
+      "tcp_command_error_mm": 41.37787162451528
+    },
+    {
+      "time_s": 54.615,
+      "entrance_relative_xyz_mm": [
+        14.31648517068737,
+        -2.079754872636952,
+        -51.89191868002507
+      ],
+      "lateral_mm": 14.466759415044148,
+      "axial_mm": -51.89191868002507,
+      "orientation_deg": 0.12552041944882275,
+      "measured_tcp_xyz_m": [
+        -0.4222056008448715,
+        0.4393153689024321,
+        0.1026930000154393
+      ],
+      "commanded_tcp_xyz_m": [
+        -0.4246832711322871,
+        0.45851060098615776,
+        0.06516190681314135
+      ],
+      "tcp_command_error_mm": 42.22770111858811
+    },
+    {
+      "time_s": 54.802,
+      "entrance_relative_xyz_mm": [
+        14.328169738135582,
+        -2.069218447166593,
+        -51.88025377880923
+      ],
+      "lateral_mm": 14.476812944392105,
+      "axial_mm": -51.88025377880923,
+      "orientation_deg": 0.13268074626706017,
+      "measured_tcp_xyz_m": [
+        -0.4222126082052565,
+        0.4393084242886944,
+        0.10268043157198356
+      ],
+      "commanded_tcp_xyz_m": [
+        -0.42473310752257515,
+        0.46001170514769685,
+        0.06516065519264
+      ],
+      "tcp_command_error_mm": 42.926825816629965
+    },
+    {
+      "time_s": 55.003,
+      "entrance_relative_xyz_mm": [
+        14.322484124637658,
+        -2.065331161165751,
+        -51.86836044509802
+      ],
+      "lateral_mm": 14.47063040457395,
+      "axial_mm": -51.86836044509802,
+      "orientation_deg": 0.14542614586796104,
+      "measured_tcp_xyz_m": [
+        -0.4222124508941881,
+        0.43931164146991275,
+        0.10267027231405237
+      ],
+      "commanded_tcp_xyz_m": [
+        -0.4247769609558922,
+        0.46150469767115837,
+        0.06515723886935368
+      ],
+      "tcp_command_error_mm": 43.66160937976647
+    },
+    {
+      "time_s": 55.208,
+      "entrance_relative_xyz_mm": [
+        14.323150100010867,
+        -2.0422615313433203,
+        -51.874414794455646
+      ],
+      "lateral_mm": 14.468015100553568,
+      "axial_mm": -51.874414794455646,
+      "orientation_deg": 0.15928953379211505,
+      "measured_tcp_xyz_m": [
+        -0.42222807787250294,
+        0.43931103354627127,
+        0.10267637972697266
+      ],
+      "commanded_tcp_xyz_m": [
+        -0.42483021638021873,
+        0.463003652345275,
+        0.065160016106278
+      ],
+      "tcp_command_error_mm": 44.44759666943113
+    },
+    {
+      "time_s": 55.4,
+      "entrance_relative_xyz_mm": [
+        14.317812051439283,
+        -2.0269903181492355,
+        -51.874110786870766
+      ],
+      "lateral_mm": 14.460581996939498,
+      "axial_mm": -51.874110786870766,
+      "orientation_deg": 0.17162600648919665,
+      "measured_tcp_xyz_m": [
+        -0.42223820344127877,
+        0.4393145874789662,
+        0.10267344825470265
+      ],
+      "commanded_tcp_xyz_m": [
+        -0.4248728592675576,
+        0.4645006209004098,
+        0.06515970771214702
+      ],
+      "tcp_command_error_mm": 45.26100330663474
+    },
+    {
+      "time_s": 55.602,
+      "entrance_relative_xyz_mm": [
+        14.468138767097571,
+        -1.992523745923347,
+        -51.65395733038514
+      ],
+      "lateral_mm": 14.604697540930454,
+      "axial_mm": -51.65395733038514,
+      "orientation_deg": 0.14782827379268199,
+      "measured_tcp_xyz_m": [
+        -0.42231148389906015,
+        0.43921411375006,
+        0.10251857186422089
+      ],
+      "commanded_tcp_xyz_m": [
+        -0.4249072029133111,
+        0.46549890560165663,
+        0.06515700309245273
+      ],
+      "tcp_command_error_mm": 45.75494356864914
+    },
+    {
+      "time_s": 55.801,
+      "entrance_relative_xyz_mm": [
+        14.707378478467259,
+        -1.9101074284250397,
+        -50.32111233446535
+      ],
+      "lateral_mm": 14.830896537195802,
+      "axial_mm": -50.32111233446535,
+      "orientation_deg": 0.08121174551570215,
+      "measured_tcp_xyz_m": [
+        -0.422454892297174,
+        0.4389964818193338,
+        0.10118072282017823
+      ],
+      "commanded_tcp_xyz_m": [
+        -0.4249521996107104,
+        0.4665290838171223,
+        0.06519585796916395
+      ],
+      "tcp_command_error_mm": 45.378312164872696
+    },
+    {
+      "time_s": 56.002,
+      "entrance_relative_xyz_mm": [
+        13.652532985439365,
+        -2.318035578226074,
+        -50.251243696702645
+      ],
+      "lateral_mm": 13.84792207735268,
+      "axial_mm": -50.251243696702645,
+      "orientation_deg": 0.0821596569974997,
+      "measured_tcp_xyz_m": [
+        -0.4218840720259566,
+        0.4399686511538897,
+        0.10105734418187967
+      ],
+      "commanded_tcp_xyz_m": [
+        -0.42495031499802116,
+        0.466549386221683,
+        0.06521810417819372
+      ],
+      "tcp_command_error_mm": 44.7257023058303
+    },
+    {
+      "time_s": 56.2,
+      "entrance_relative_xyz_mm": [
+        13.419850997943072,
+        -2.4142115279892904,
+        -50.50034299495954
+      ],
+      "lateral_mm": 13.6352784389931,
+      "axial_mm": -50.50034299495954,
+      "orientation_deg": 0.1077315681195567,
+      "measured_tcp_xyz_m": [
+        -0.4217716790049284,
+        0.4401729237646257,
+        0.10130103852859942
+      ],
+      "commanded_tcp_xyz_m": [
+        -0.42492656144266877,
+        0.4664562849936291,
+        0.0651789975353241
+      ],
+      "tcp_command_error_mm": 44.78359304712057
+    },
+    {
+      "time_s": 56.404,
+      "entrance_relative_xyz_mm": [
+        13.36288638285607,
+        -2.4582711056889694,
+        -50.44441711035197
+      ],
+      "lateral_mm": 13.587119978501162,
+      "axial_mm": -50.44441711035197,
+      "orientation_deg": 0.1364072792894007,
+      "measured_tcp_xyz_m": [
+        -0.42172534086603913,
+        0.4402448900034606,
+        0.10126817550621689
+      ],
+      "commanded_tcp_xyz_m": [
+        -0.42497044193663297,
+        0.4669871138692838,
+        0.06516679515542682
+      ],
+      "tcp_command_error_mm": 45.044276900407496
+    },
+    {
+      "time_s": 56.601,
+      "entrance_relative_xyz_mm": [
+        13.565063017117934,
+        -2.45650170353065,
+        -50.473874082899606
+      ],
+      "lateral_mm": 13.785693137373604,
+      "axial_mm": -50.473874082899606,
+      "orientation_deg": 0.11730758844954943,
+      "measured_tcp_xyz_m": [
+        -0.4217574506923667,
+        0.440056869424507,
+        0.10131562973432331
+      ],
+      "commanded_tcp_xyz_m": [
+        -0.425076078374281,
+        0.4680193836211434,
+        0.06518548732758524
+      ],
+      "tcp_command_error_mm": 45.807233928926934
+    },
+    {
+      "time_s": 56.809,
+      "entrance_relative_xyz_mm": [
+        13.600012185942784,
+        -2.378399566796557,
+        -50.306512089880464
+      ],
+      "lateral_mm": 13.806415753450649,
+      "axial_mm": -50.306512089880464,
+      "orientation_deg": 0.11033953793221582,
+      "measured_tcp_xyz_m": [
+        -0.42184922004171055,
+        0.4400147883929595,
+        0.10116819435718633
+      ],
+      "commanded_tcp_xyz_m": [
+        -0.42509667482971814,
+        0.46803613039057546,
+        0.06519407211100353
+      ],
+      "tcp_command_error_mm": 45.71519486265823
+    },
+    {
+      "time_s": 57.006,
+      "entrance_relative_xyz_mm": [
+        13.68925461736642,
+        -2.2650564325299163,
+        -50.306886042052135
+      ],
+      "lateral_mm": 13.875380089267212,
+      "axial_mm": -50.306886042052135,
+      "orientation_deg": 0.10269916713292133,
+      "measured_tcp_xyz_m": [
+        -0.4219602357143931,
+        0.43994081405362867,
+        0.10119913146549889
+      ],
+      "commanded_tcp_xyz_m": [
+        -0.42509875967444205,
+        0.468031880112724,
+        0.06520553893115133
+      ],
+      "tcp_command_error_mm": 45.76567522186141
+    },
+    {
+      "time_s": 57.202,
+      "entrance_relative_xyz_mm": [
+        13.729340356042396,
+        -2.293235129675053,
+        -50.24977675346642
+      ],
+      "lateral_mm": 13.919544316249368,
+      "axial_mm": -50.24977675346642,
+      "orientation_deg": 0.07750743237626645,
+      "measured_tcp_xyz_m": [
+        -0.4219536490901765,
+        0.43992523553436713,
+        0.10110849089966836
+      ],
+      "commanded_tcp_xyz_m": [
+        -0.42510075443697226,
+        0.46803091838430877,
+        0.065228335990317
+      ],
+      "tcp_command_error_mm": 45.68609412988141
+    },
+    {
+      "time_s": 57.413,
+      "entrance_relative_xyz_mm": [
+        13.725499980935474,
+        -2.463132612017943,
+        -50.48564659121624
+      ],
+      "lateral_mm": 13.94476145335753,
+      "axial_mm": -50.48564659121624,
+      "orientation_deg": 0.05481745713054571,
+      "measured_tcp_xyz_m": [
+        -0.4217747448641694,
+        0.43992663296977597,
+        0.1013706084948344
+      ],
+      "commanded_tcp_xyz_m": [
+        -0.4251064579868112,
+        0.46802415505770567,
+        0.06523113043139132
+      ],
+      "tcp_command_error_mm": 45.89807114151274
+    },
+    {
+      "time_s": 57.606,
+      "entrance_relative_xyz_mm": [
+        13.765820890709934,
+        -2.558197536311646,
+        -50.74268523478831
+      ],
+      "lateral_mm": 14.001507041382974,
+      "axial_mm": -50.74268523478831,
+      "orientation_deg": 0.07104540744571568,
+      "measured_tcp_xyz_m": [
+        -0.42168608534281526,
+        0.4398666538627526,
+        0.10159998797906555
+      ],
+      "commanded_tcp_xyz_m": [
+        -0.4251145378252564,
+        0.46805983181924915,
+        0.06522931566278412
+      ],
+      "tcp_command_error_mm": 46.14580559974396
+    },
+    {
+      "time_s": 57.802,
+      "entrance_relative_xyz_mm": [
+        13.80961324508373,
+        -2.5831994445539297,
+        -50.78227148948478
+      ],
+      "lateral_mm": 14.049140092871724,
+      "axial_mm": -50.78227148948478,
+      "orientation_deg": 0.07590316229108938,
+      "measured_tcp_xyz_m": [
+        -0.42166648316598226,
+        0.4398197614919165,
+        0.10163969191999694
+      ],
+      "commanded_tcp_xyz_m": [
+        -0.42514024624537905,
+        0.468052378016894,
+        0.06521393642972398
+      ],
+      "tcp_command_error_mm": 46.216699674634526
+    },
+    {
+      "time_s": 58.01,
+      "entrance_relative_xyz_mm": [
+        13.828131144392048,
+        -2.593731298563162,
+        -50.796427471721415
+      ],
+      "lateral_mm": 14.069280471852549,
+      "axial_mm": -50.796427471721415,
+      "orientation_deg": 0.07707932149513004,
+      "measured_tcp_xyz_m": [
+        -0.4216585659409794,
+        0.43980163801075295,
+        0.10165312892281192
+      ],
+      "commanded_tcp_xyz_m": [
+        -0.42516944314788246,
+        0.4680490409144816,
+        0.06521464499200157
+      ],
+      "tcp_command_error_mm": 46.23856767616674
+    },
+    {
+      "time_s": 58.206,
+      "entrance_relative_xyz_mm": [
+        14.204688824574069,
+        -2.3114166042862982,
+        -50.98448817311274
+      ],
+      "lateral_mm": 14.391519423658846,
+      "axial_mm": -50.98448817311274,
+      "orientation_deg": 0.08125353207288578,
+      "measured_tcp_xyz_m": [
+        -0.42196590062447514,
+        0.43944993116076897,
+        0.10182958800129821
+      ],
+      "commanded_tcp_xyz_m": [
+        -0.42519820706358735,
+        0.4680491555377924,
+        0.0652134315550203
+      ],
+      "tcp_command_error_mm": 46.57366587227119
+    },
+    {
+      "time_s": 58.401,
+      "entrance_relative_xyz_mm": [
+        14.965943048074305,
+        -1.4042422971136947,
+        -50.86784722951965
+      ],
+      "lateral_mm": 15.031678141418768,
+      "axial_mm": -50.86784722951965,
+      "orientation_deg": 0.12750479014621008,
+      "measured_tcp_xyz_m": [
+        -0.42307174100272926,
+        0.43860941319252444,
+        0.1016867521638816
+      ],
+      "commanded_tcp_xyz_m": [
+        -0.4252282910009234,
+        0.46802844731406223,
+        0.06522849054504007
+      ],
+      "tcp_command_error_mm": 46.89706938399039
+    },
+    {
+      "time_s": 58.602,
+      "entrance_relative_xyz_mm": [
+        15.519741685097205,
+        -0.8132216814999149,
+        -51.38479716679956
+      ],
+      "lateral_mm": 15.541033153410535,
+      "axial_mm": -51.38479716679956,
+      "orientation_deg": 0.17080142124179817,
+      "measured_tcp_xyz_m": [
+        -0.42360301333418554,
+        0.43824233322952816,
+        0.10218724957973249
+      ],
+      "commanded_tcp_xyz_m": [
+        -0.4252027356225351,
+        0.4680117955707543,
+        0.06519393791956969
+      ],
+      "tcp_command_error_mm": 47.510894614514044
+    },
+    {
+      "time_s": 58.8,
+      "entrance_relative_xyz_mm": [
+        15.52446018015491,
+        -0.8207554283972407,
+        -51.39874643218412
+      ],
+      "lateral_mm": 15.546141108276965,
+      "axial_mm": -51.39874643218412,
+      "orientation_deg": 0.18685808406027332,
+      "measured_tcp_xyz_m": [
+        -0.4235904688034424,
+        0.43823000486961455,
+        0.10219879851138342
+      ],
+      "commanded_tcp_xyz_m": [
+        -0.4250491455888715,
+        0.4679915379639529,
+        0.06516211989548679
+      ],
+      "tcp_command_error_mm": 47.535167539275164
+    },
+    {
+      "time_s": 59.001,
+      "entrance_relative_xyz_mm": [
+        15.525625856781106,
+        -0.8168568454918479,
+        -51.40260078138525
+      ],
+      "lateral_mm": 15.547099837293674,
+      "axial_mm": -51.40260078138525,
+      "orientation_deg": 0.19144331632219588,
+      "measured_tcp_xyz_m": [
+        -0.4235918781663,
+        0.43822617749688614,
+        0.10220190819407265
+      ],
+      "commanded_tcp_xyz_m": [
+        -0.42495760428320745,
+        0.4679875735446695,
+        0.06515754111886683
+      ],
+      "tcp_command_error_mm": 47.53831122938647
+    },
+    {
+      "time_s": 59.202,
+      "entrance_relative_xyz_mm": [
+        15.521965996948744,
+        -0.8119592446942381,
+        -51.40347548113322
+      ],
+      "lateral_mm": 15.54318841890162,
+      "axial_mm": -51.40347548113322,
+      "orientation_deg": 0.19692178875478047,
+      "measured_tcp_xyz_m": [
+        -0.4235944032141574,
+        0.4382315686620869,
+        0.10220672113768675
+      ],
+      "commanded_tcp_xyz_m": [
+        -0.424836465518799,
+        0.4679887621167519,
+        0.06515808838598479
+      ],
+      "tcp_command_error_mm": 47.535612648176226
+    },
+    {
+      "time_s": 59.402,
+      "entrance_relative_xyz_mm": [
+        15.517631662531173,
+        -0.8095487083468744,
+        -51.404958001640246
+      ],
+      "lateral_mm": 15.538734231756976,
+      "axial_mm": -51.404958001640246,
+      "orientation_deg": 0.20222108311111422,
+      "measured_tcp_xyz_m": [
+        -0.42359627451757303,
+        0.438232738918361,
+        0.10220402800836872
+      ],
+      "commanded_tcp_xyz_m": [
+        -0.4247645508897163,
+        0.46798978939575264,
+        0.06516338196127087
+      ],
+      "tcp_command_error_mm": 47.52742768530743
+    },
+    {
+      "time_s": 59.601,
+      "entrance_relative_xyz_mm": [
+        15.513046331252722,
+        -0.8073042297727095,
+        -51.40514545974328
+      ],
+      "lateral_mm": 15.534038322181468,
+      "axial_mm": -51.40514545974328,
+      "orientation_deg": 0.2073995460809664,
+      "measured_tcp_xyz_m": [
+        -0.4235969788995102,
+        0.4382363664955729,
+        0.1022049358109447
+      ],
+      "commanded_tcp_xyz_m": [
+        -0.42466658992380135,
+        0.46798845392670935,
+        0.06515843999232085
+      ],
+      "tcp_command_error_mm": 47.52655706752369
+    },
+    {
+      "time_s": 59.802,
+      "entrance_relative_xyz_mm": [
+        15.507855727992542,
+        -0.8075326364212765,
+        -51.40511855390151
+      ],
+      "lateral_mm": 15.528866611543696,
+      "axial_mm": -51.40511855390151,
+      "orientation_deg": 0.21199448306072277,
+      "measured_tcp_xyz_m": [
+        -0.4235965529912595,
+        0.43823998374510964,
+        0.10220550156032773
+      ],
+      "commanded_tcp_xyz_m": [
+        -0.4246076053969583,
+        0.46798751276779627,
+        0.06515932786430434
+      ],
+      "tcp_command_error_mm": 47.52217056741609
+    },
+    {
+      "time_s": 60.008,
+      "entrance_relative_xyz_mm": [
+        15.504823323714835,
+        -0.8064156397261935,
+        -51.40471417656967
+      ],
+      "lateral_mm": 15.525780253617096,
+      "axial_mm": -51.40471417656967,
+      "orientation_deg": 0.21516596135248203,
+      "measured_tcp_xyz_m": [
+        -0.42359683591062763,
+        0.4382427519704962,
+        0.10220608346928023
+      ],
+      "commanded_tcp_xyz_m": [
+        -0.4245287169230121,
+        0.46798622082359737,
+        0.06515938401501276
+      ],
+      "tcp_command_error_mm": 47.518420450299715
+    },
+    {
+      "time_s": 60.202,
+      "entrance_relative_xyz_mm": [
+        15.504920285592167,
+        -0.8069658892819742,
+        -51.40549482730727
+      ],
+      "lateral_mm": 15.52590567435704,
+      "axial_mm": -51.40549482730727,
+      "orientation_deg": 0.21563404357533789,
+      "measured_tcp_xyz_m": [
+        -0.42359697495727056,
+        0.4382422291115534,
+        0.10220508478498622
+      ],
+      "commanded_tcp_xyz_m": [
+        -0.4245287169230121,
+        0.46798622082359737,
+        0.06515938401501276
+      ],
+      "tcp_command_error_mm": 47.51796640845729
+    }
+  ],
+  "caveat": "No collider-specific cable/card contact topic is in this bag. Force and proximity cannot identify a cable snag by themselves."
+}

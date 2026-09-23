@@ -26,6 +26,7 @@ Start here when returning to this repository. These pages describe the local
 | Why did each recorded BC/RL/backtracking episode succeed or fail? | [Three-camera video and geometry failure analysis](experiments/2026-09-23-serl-video-failure-analysis.md) |
 | How should we reproduce and learn recovery for multi-card SC-to-SC cable snags? | [Ordered SC cable-snag recovery plan](SC_CABLE_SNAG_RECOVERY_PLAN.md) |
 | What did the first SC mechanics and routed-transport bring-up establish? | [Corrected topology, gripper/card root cause, bounded routing proxy, and active grasp gate](experiments/2026-09-23-sc-mechanics-and-routing.md) |
+| Did broader Gazebo scenes or the archived VLM route reproduce cable snag? | [Nineteen-scene stock audit, low-score VLM trajectory replay, seed-51500 control, videos, and remaining evidence gap](experiments/2026-09-23-ordinary-development-cable-audit.md) |
 | Where are the earlier simulator/control checks? | [Live validation report](experiments/2026-09-17-live-validation.md) |
 | What did we try, and what evidence supports the result? | [Experiment ledger](EXPERIMENTS.md) |
 | How do I use rootless Docker and test a saved policy locally? | [Local workflow](LOCAL_WORKFLOW.md) |
