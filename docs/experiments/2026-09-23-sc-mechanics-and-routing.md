@@ -3,6 +3,13 @@
 Date: 2026-09-23  
 Status: mechanics partly validated; multi-card result is diagnostic proxy evidence
 
+> **Scope correction:** these are Isaac development-scene mechanics probes, not
+> runs of the released Gazebo production evaluation. Do not use the failure
+> categories or rates below as production evidence. The separate
+> [official CheatCode audit](2026-09-23-official-cheatcode-failure-audit.md)
+> runs the stock policy against the exact released qualification YAML and keeps
+> production observations separate from simulator bring-up hypotheses.
+
 ## Why this experiment was required
 
 The approved SC continuation begins by proving that Isaac has the correct plug,
@@ -66,6 +73,16 @@ succeeded; the matched negative retry did not remain successful.
 
 ## The first five-card “snag” was actually gripper-card collision
 
+![Labeled SC scene parts](../images/sc_parts_collision_reference.png)
+
+In this image, the **gripper housing** (1) is the large rounded black rigid
+body, also named the gripper palm or base. The **fingers** (2) are the smaller
+jaws mounted on it. They hold the **SC plug** (3), which is attached to the
+orange flexible cable (4). The blue receptacle is the **SC port opening** (5),
+mounted on a black **NIC card** (6). The boxes were checked against the
+untouched simulator frame. They are visual aids; the causal collision result
+comes from named USD collision prims and contact-sensor logs.
+
 The normal full-start five-card probe stopped about 13.2 mm away with about
 12.5 mm lateral error and a 165.8 N peak wrist load. The left-camera video made
 the cable look suspicious, but a collision ablation gave the causal answer:
@@ -86,6 +103,30 @@ reachable full insertion.
 
 The [invalid original-grasp video](../../outputs/experiments/2026-09-23_sc_cable_bringup/videos/invalid_original_grasp_nic5_left.mp4)
 is retained so this failure is not later mistaken for learned cable behavior.
+
+### What “disabling a collision” means in these diagnostics
+
+Isaac keeps separate visual geometry and collision geometry. Setting a USD
+collision prim's `physics:collisionEnabled` attribute to `false` leaves the
+part visible and moving, but PhysX no longer lets that collision shape push on
+or be pushed by other collision shapes. It is therefore a causal ablation,
+not a proposed robot configuration.
+
+The cable/plug ablation disabled the collision shapes for the rope links and
+connector bodies while leaving the rendered cable, robot motion, cards, board,
+and port visible. Since the same failure remained, cable contact was not the
+main cause of that rollout. The gripper-base contact sensor then measured about
+128 N against a NIC card. A separate diagnostic asset disabled gripper
+collision shapes; that let the visually unchanged gripper pass through cards.
+The latter asset was used only to ask whether a routed cable path could work if
+the known gripper-clearance defect were removed.
+
+The builder implements these diagnostic switches with
+`--disable-collision-substring`; the probe scripts can also disable matching
+runtime prims with `--disable_collision_prim_regex`. Every matched path must be
+logged. A collision-disabled rollout is invalid as autonomous performance or
+training data unless that disabled contact exactly reproduces the source
+simulator's intended physics contract.
 
 ## Bounded cable-routing proxy
 
@@ -147,6 +188,14 @@ from the palm. The Isaac builder now reproduces those exceptions by default for
 `reversed_topology`. These are part of the source physics contract, not an
 experiment-specific collision relaxation.
 
+This source rule is much narrower than “turn off the cable.” The visible plug
+and cable are unchanged, and almost all cable collision remains active. Only
+the collision volumes immediately inside or beside the palm are removed or
+trimmed. Without that exception, the welded plug/cable and the gripper start
+with collision volumes occupying the same space. A physics engine then tries
+to separate bodies that a fixed joint simultaneously forces together, which
+can create large artificial contact forces.
+
 The corrected fixed-joint transform residuals remained below 0.4 nanometers.
 The IK solution also required wrapping wrist joint 3 from 4.944 rad to the
 equivalent -1.340 rad solution. Even with both fixes, a 40-step full-scene hold
@@ -167,6 +216,15 @@ placement/reset. A source-plugin audit also found that Gazebo welds the cable
 to `ati/tool_link`, whereas the prepared USD weld targets the right gripper
 finger. The next audit must reproduce that weld frame exactly and reconcile the
 Isaac board/port placement with the source task before another physical probe.
+
+In plain terms, the corrected cable is stable when left where the asset starts.
+When the reset asks the robot to hold the same cable near the port, the
+requested configuration is not physically realized: forces become extreme or
+the tip settles tens of millimeters from the requested pose. That does not show
+that the cable correction is wrong. It localizes the remaining defect to the
+near-port setup: the gripper-to-plug weld frame, board/port placement, arm reach
+and joint representation, reset interpolation, or a combination of these. The
+evidence does not yet identify one of those as the sole cause.
 
 An attempted one-step camera capture triggered an Isaac PhysX illegal-memory
 error and produced no valid visual artifact. It is retained only in the bulk

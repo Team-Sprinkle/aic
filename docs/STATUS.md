@@ -1,5 +1,32 @@
 # Current experiment status
 
+## Official Gazebo CheatCode failure audit (September 23)
+
+The previous failure taxonomy mixed Isaac development evidence, broad Gazebo
+data-collection scenes, and hypotheses. It was not a production failure census.
+The corrected audit ran the stock official CheatCode in rootless Docker against
+the exact released qualification YAML five times. SFP inserted in 10/10 trials.
+SC inserted in 4/5; the remaining run was a partial axial block with about
+0.06 mm lateral error and 0.19 degrees orientation error, but the plug stopped
+3.21 mm outside the entrance and emitted no insertion event. CheatCode still
+returned `True`, so engine task completion is not an insertion label.
+
+A separate, labeled production-family stress suite covered SFP and SC, card
+counts 0/1/3/5, both SC rails, a rail-limit position, released board poses, and
+norm-bounded grasp changes. Card count alone did not cause a snag: every
+0/1/3/5-card SC trial inserted. The SC/Trial-1-board-pose cross-combination had
+an 8.05 mm lateral miss and 72.6 mm TCP tracking error. Of three five-card
+grasp tests at 2 mm translation norm and 0.04 rad rotation norm, two inserted
+and the negative-y/negative-pitch case stopped axially after partial insertion.
+No current production run established a cable snag or named gripper-card
+collision.
+
+This result parks the attempt to manufacture Isaac cable-snag scenarios as the
+primary continuation. Further recovery work should start from failures actually
+recorded in post-fix Gazebo: intermittent near-aligned SC axial blocking,
+grasp-sensitive partial insertion, and larger approach tracking failures. See
+the [official audit](experiments/2026-09-23-official-cheatcode-failure-audit.md).
+
 ## SC-to-SC mechanics and routing bring-up (September 23)
 
 The approved multi-card SC continuation reached its simulator-mechanics gate.
@@ -780,34 +807,34 @@ settings, measured geometry, failure records, and interpretation limits.
 
 ## Next experiments, in order
 
-The SFP pose-refitting branch remains parked with its failed dependence gate as
-a fixed baseline. The active continuation is SC-to-SC and follows these gates:
+The SFP pose-refitting and Isaac snag-reproduction branches remain parked. The
+active continuation begins from the failure modes actually observed in the
+post-fix Gazebo evaluator:
 
-1. **Repair the SC grasp/scene contract.** Reproduce a reachable grasp using
-   the source-defined collision contract for the gripper, connector, cable,
-   board, ports, and cards. Do not use the gripper-disabled diagnostic proxy
-   for learning.
-2. **Validate mechanics for card counts 0--5.** Run scripted complete insertion
-   attempts with deterministic seeds and require valid reset identity, force,
-   contact, plug motion, cable motion, and terminal observations in every
-   stratum. Record failures rather than weakening the geometry gate.
-3. **Collect the bounded discovery set.** Retain complete episodes and compact
-   20 Hz telemetry. Manually validate that port-lip contact, simple
-   misalignment, and cable/card snag labels are causally distinct. Require ten
-   natural snag incidents across at least two layouts or conclude that this
-   Isaac setup does not reproduce the intended failure.
-4. **Train SC perception and port-relative BC.** Use episode-grouped splits,
-   observation-only RGB/state/force inputs, full port-frame trajectory targets,
-   and no privileged evaluation inputs. Require the frozen pose gate and
-   autonomous insertion before adding RL.
-5. **Compare recovery and then train model-free critics.** Start with fixed
-   multi-scale measured-path retreat plus coherent lateral/routed exploration.
-   Only after enough on-policy success, failure, block, retreat, and recovery
-   outcomes, train critics offline and proceed to bounded online SERL with a
-   strong supervised anchor.
-6. **Measure Gazebo transfer after the Isaac gate.** Freeze the successful
-   candidate, evaluate it on new Gazebo development scenes, and use the existing
-   bridge for bounded adaptation only if accuracy, force, and latency hold.
+1. **Collect compact repeated exact replays.** Repeat the released three-trial
+   YAML with event-driven telemetry rather than multi-gigabyte full-rate TF
+   bags. Retain plug/port pose, TCP command/state, force, insertion event, named
+   contact pairs, and low-rate cameras. Estimate the intermittent SC axial-block
+   rate without tuning on a reserved subset.
+2. **Name the blocking contact.** Add diagnostic Gazebo contact logging for the
+   SC plug, port rim/latch, gripper, cards, board, and cable links. Reproduce the
+   near-aligned partial and determine which collision prevents the final 3--5 mm.
+3. **Create short recovery starts from real failures.** Snapshot states before
+   the observed axial block and larger approach-tracking failure. Validate
+   reset identity and cable state; do not synthesize a cable snag label that the
+   production run did not exhibit.
+4. **Compare two recovery scales.** For local axial blocks, test a 10--15 mm
+   measured-path retreat followed by coherent submillimeter/millimeter lateral
+   search and reapproach. For the 8 mm approach miss, test a larger retreat or
+   collision-safe transport replan. Keep unmodified CheatCode as the matched
+   baseline.
+5. **Train only after causal labels exist.** Add port-relative BC/recovery data,
+   then critics and bounded online SERL, using observation-only RGB/state/force
+   inputs and episode-grouped splits. Preserve the supervised anchor and require
+   autonomous insertion before promotion.
+6. **Use Isaac as a matched accelerator later.** Reopen Isaac only after its
+   grasp, board, port, and collision contract reproduces one of the named Gazebo
+   failures. A collision-disabled proxy is not training or promotion evidence.
 
 World-model dynamics, SEER, reward-model training, imagination, and the reserved
 final split remain parked. If explicit corrective control fails, return to the
