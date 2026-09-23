@@ -125,6 +125,35 @@
       -0.00465
     ]
   },
+  "source_collision_contract_followup": {
+    "builder_default_updated": true,
+    "camera_capture": {
+      "artifact_log": "/var/tmp/chmin_aic_20260920_isaac_world_rl/sc_snag_20260923/sc_source_contract_visual1_v3.log",
+      "status": "failed_physx_cuda_illegal_memory_access_no_valid_video"
+    },
+    "decision": "grasp gate remains closed; no SC BC or RL",
+    "fixed_joint_max_translation_residual_m": 3.8743048349410706e-10,
+    "full_scene_hold": {
+      "artifact": "/var/tmp/chmin_aic_20260920_isaac_world_rl/sc_snag_20260923/sc_source_contract_wrap_full_hold40.json",
+      "final_distance_mm": 134.002223610878,
+      "peak_wrist_force_n": 36981.7265625,
+      "status": "unstable",
+      "steps": 40
+    },
+    "official_sdf_contract": [
+      "remove cable endpoint-0 and connection-0 collision groups near the gripper palm",
+      "replace the first rope-link 48 mm collider with a 36 mm collider shifted 6 mm"
+    ],
+    "physical_interpolation_without_board_port_or_self_collision": {
+      "artifact": "/var/tmp/chmin_aic_20260920_isaac_world_rl/sc_snag_20260923/sc_source_contract_physical600_hold300_noscene.json",
+      "hold_steps": 300,
+      "interpolation_steps": 600,
+      "peak_wrist_force_n_after_reset": 0.573401153087616,
+      "reset_tip_error_mm": 44.27054896950722,
+      "status": "low_force_but_target_not_realized"
+    },
+    "wrapped_wrist_3_solution_rad": -1.3396620750427246
+  },
   "status": "mechanics_bringup_partial_proxy_only",
   "zero_card_backtrack": {
     "minus_4mm_retry": {

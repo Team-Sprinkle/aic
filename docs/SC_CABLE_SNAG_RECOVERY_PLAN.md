@@ -48,6 +48,15 @@ contract. Then repeat scripted insertion for every card count 0--5 before
 continuing the bounded discovery set. See the
 [mechanics and routing record](experiments/2026-09-23-sc-mechanics-and-routing.md).
 
+The official reversed Gazebo cable includes explicit palm-clearance collision
+exceptions: two endpoint collision groups are removed and the first rope
+collider is shortened and shifted. The Isaac builder now matches those source
+exceptions and wraps the equivalent wrist solution into its valid range. A
+full-scene hold still became unstable, while removing the board, port, and self
+collision yielded low force but left a 44.27 mm reset miss after physical
+interpolation. Treat this as a remaining transform/placement/actuation fault;
+it does not authorize the discovery set.
+
 ## What the latest SFP experiment established
 
 - The selected deterministic BC and tight-trust RL actor can perform local

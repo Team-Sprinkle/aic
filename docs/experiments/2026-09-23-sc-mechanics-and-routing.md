@@ -137,6 +137,33 @@ reachable robot/base/board arrangement or an equivalent collision-faithful
 gripper model. After that, rerun card counts 0--5 and require stable physical
 insertions before beginning the bounded discovery set.
 
+### Source collision-contract follow-up
+
+A post-commit audit found one more source mismatch. The official
+`sfp_sc_cable_reversed/model.sdf` deliberately removes the endpoint-0 and
+connection-0 colliders because they intersect the gripper palm. It also replaces
+the first rope link's 48 mm collider with a 36 mm collider shifted 6 mm away
+from the palm. The Isaac builder now reproduces those exceptions by default for
+`reversed_topology`. These are part of the source physics contract, not an
+experiment-specific collision relaxation.
+
+The corrected fixed-joint transform residuals remained below 0.4 nanometers.
+The IK solution also required wrapping wrist joint 3 from 4.944 rad to the
+equivalent -1.340 rad solution. Even with both fixes, a 40-step full-scene hold
+was unstable: peak wrist force reached 36.98 kN and the connector moved far from
+the requested pose. Removing board and port collision greatly reduced the
+instability; disabling self collision reduced it further. With board, port, and
+self collision disabled and a 600-step physical interpolation plus 300-step
+hold, force stayed below 0.58 N, but the realized tip still stopped 44.27 mm
+from the requested reset pose. This points to a remaining grasp-transform,
+scene-placement, or articulation-actuation mismatch in addition to the now
+fixed cable-collider mismatch.
+
+An attempted one-step camera capture triggered an Isaac PhysX illegal-memory
+error and produced no valid visual artifact. It is retained only in the bulk
+log as a simulator failure. The collision-faithful grasp gate therefore remains
+failed; no SC learning stage was opened.
+
 ## Artifacts
 
 - [Machine summary](../../outputs/experiments/2026-09-23_sc_cable_bringup/summary.json)

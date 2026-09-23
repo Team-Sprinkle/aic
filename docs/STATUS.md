@@ -17,6 +17,15 @@ contact. The source reversed Gazebo grasp was not physically reachable in the
 current Isaac base/board arrangement. Therefore no SC BC or RL was trained and
 the failed rollout is not labeled as cable-snag data.
 
+A follow-up source audit found that Gazebo intentionally removes two endpoint
+collision groups near the palm and shortens/shifts the first rope collider. The
+Isaac builder now reproduces that contract and uses the equivalent wrapped
+wrist solution. This did not fix the full scene: a hold still produced a
+36.98 kN peak. Removing the board, port, and self collision made the motion
+low-force, but physical interpolation stopped 44.27 mm from the requested tip
+pose. The remaining fault is narrower but unresolved: grasp transform, scene
+placement, or articulation actuation. The SC learning gate remains closed.
+
 A declared gripper-collision-disabled proxy tested routing while retaining
 plug, cable, card, board, and port collisions. A direct high approach held the
 final component gate in 1/3 seeds; a privileged 100 mm route around the card
@@ -769,9 +778,10 @@ settings, measured geometry, failure records, and interpretation limits.
 The SFP pose-refitting branch remains parked with its failed dependence gate as
 a fixed baseline. The active continuation is SC-to-SC and follows these gates:
 
-1. **Repair the SC grasp/scene contract.** Reproduce a reachable grasp whose
-   physical gripper, connector, cable, board, ports, and cards all retain
-   collisions. Do not use the gripper-disabled diagnostic proxy for learning.
+1. **Repair the SC grasp/scene contract.** Reproduce a reachable grasp using
+   the source-defined collision contract for the gripper, connector, cable,
+   board, ports, and cards. Do not use the gripper-disabled diagnostic proxy
+   for learning.
 2. **Validate mechanics for card counts 0--5.** Run scripted complete insertion
    attempts with deterministic seeds and require valid reset identity, force,
    contact, plug motion, cable motion, and terminal observations in every

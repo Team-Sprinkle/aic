@@ -69,6 +69,15 @@ parser.add_argument(
     action="store_true",
     help="Use the UR arm's continuous +/-360 degree range for source-grasp reachability diagnostics.",
 )
+parser.add_argument(
+    "--apply-source-reversed-collision-contract",
+    action=argparse.BooleanOptionalAction,
+    default=True,
+    help=(
+        "For reversed_topology, reproduce the official Gazebo model's cable/gripper collision exceptions: "
+        "remove endpoint-0/connection-0 collision and shorten/shift the first cable-link collider."
+    ),
+)
 AppLauncher.add_app_launcher_args(parser)
 args = parser.parse_args()
 app = AppLauncher(args)
@@ -426,6 +435,45 @@ def _apply_arm_joint_limits() -> None:
     print(f"expanded_arm_joint_limits={changed}", flush=True)
 
 
+def _apply_source_reversed_collision_contract() -> None:
+    """Mirror the collision edits declared by sfp_sc_cable_reversed/model.sdf.
+
+    Gazebo removes the endpoint-0 and connection-0 colliders because they
+    overlap the gripper palm. It replaces link_1's 48 mm cylinder with a 36 mm
+    cylinder shifted 6 mm away from that palm. The SDF importer collapsed each
+    rope rigid body and its collider onto one USD prim, so create a child
+    collider rather than moving the link_1 rigid body itself.
+    """
+    if args.mode != "reversed_topology" or not args.apply_source_reversed_collision_contract:
+        return
+
+    link0 = stage.GetPrimAtPath(base + "/Rope/Rope/link_0")
+    link1 = stage.GetPrimAtPath(base + "/Rope/Rope/link_1")
+    if not link0.IsValid() or not link1.IsValid():
+        raise RuntimeError("Expected imported rope links 0 and 1 for reversed collision contract")
+    for prim in (link0, link1):
+        if not prim.HasAPI(UsdPhysics.CollisionAPI):
+            raise RuntimeError(f"Expected collision API on imported rope body {prim.GetPath()}")
+        collision = UsdPhysics.CollisionAPI(prim)
+        collision.CreateCollisionEnabledAttr().Set(False)
+
+    replacement_path = link1.GetPath().AppendChild("source_reversed_link1_collision")
+    replacement = UsdGeom.Capsule.Define(stage, replacement_path)
+    replacement.CreateAxisAttr().Set(UsdGeom.Tokens.z)
+    replacement.CreateRadiusAttr().Set(0.002)
+    replacement.CreateHeightAttr().Set(0.036)
+    replacement.AddTranslateOp().Set(Gf.Vec3d(0.0, 0.0, 0.006))
+    UsdPhysics.CollisionAPI.Apply(replacement.GetPrim()).CreateCollisionEnabledAttr().Set(True)
+    physx_collision = PhysxSchema.PhysxCollisionAPI.Apply(replacement.GetPrim())
+    physx_collision.CreateContactOffsetAttr().Set(0.00001)
+    physx_collision.CreateRestOffsetAttr().Set(0.0)
+    print(
+        "source_reversed_collision_contract="
+        f"disabled:{link0.GetPath()},{link1.GetPath()} replacement:{replacement_path}",
+        flush=True,
+    )
+
+
 if args.mode == "aligned_topology":
     _aligned_topology()
     layer.Save()
@@ -435,6 +483,7 @@ if args.mode == "aligned_topology":
 
 if args.mode == "reversed_topology":
     _reversed_topology()
+    _apply_source_reversed_collision_contract()
     _apply_arm_joint_limits()
     _apply_requested_deinstancing()
     collision_paths = _apply_requested_collision_disables()
