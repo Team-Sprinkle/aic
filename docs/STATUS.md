@@ -25,6 +25,11 @@ wrist solution. This did not fix the full scene: a hold still produced a
 low-force, but physical interpolation stopped 44.27 mm from the requested tip
 pose. The remaining fault is narrower but unresolved: grasp transform, scene
 placement, or articulation actuation. The SC learning gate remains closed.
+The corrected asset is stable at its native initial posture, which localizes
+the failure to near-port placement/reset rather than an always-unstable cable
+topology. Gazebo welds to `ati/tool_link`; the prepared USD welds to the right
+gripper finger. That frame contract and the source board/port placement are the
+next items to reconcile.
 
 A declared gripper-collision-disabled proxy tested routing while retaining
 plug, cable, card, board, and port collisions. A direct high approach held the

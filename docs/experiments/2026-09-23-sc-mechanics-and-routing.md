@@ -159,6 +159,15 @@ from the requested reset pose. This points to a remaining grasp-transform,
 scene-placement, or articulation-actuation mismatch in addition to the now
 fixed cable-collider mismatch.
 
+The same corrected reversed asset was then held for 40 steps at its native
+initial robot posture, without moving it near the board. Its target-distance
+diagnostic varied by less than 0.5 mm, so the topology is not intrinsically
+exploding at spawn. The remaining failure is introduced by the near-port
+placement/reset. A source-plugin audit also found that Gazebo welds the cable
+to `ati/tool_link`, whereas the prepared USD weld targets the right gripper
+finger. The next audit must reproduce that weld frame exactly and reconcile the
+Isaac board/port placement with the source task before another physical probe.
+
 An attempted one-step camera capture triggered an Isaac PhysX illegal-memory
 error and produced no valid visual artifact. It is retained only in the bulk
 log as a simulator failure. The collision-faithful grasp gate therefore remains

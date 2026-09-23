@@ -140,6 +140,18 @@
       "status": "unstable",
       "steps": 40
     },
+    "native_initial_posture_hold": {
+      "artifact": "/var/tmp/chmin_aic_20260920_isaac_world_rl/sc_snag_20260923/sc_source_contract_native_hold40.json",
+      "distance_range_mm": [
+        134.11715626716614,
+        134.6115618944168
+      ],
+      "final_joint_goal_error_rad": 0.08694204688072205,
+      "peak_wrist_force_n": 60.99428176879883,
+      "status": "geometrically_stable_at_native_posture",
+      "steps": 40
+    },
+    "next_audit": "verify converted gripper weld against Gazebo ati/tool_link and reconcile Isaac board/port placement before more rollouts",
     "official_sdf_contract": [
       "remove cable endpoint-0 and connection-0 collision groups near the gripper palm",
       "replace the first rope-link 48 mm collider with a 36 mm collider shifted 6 mm"
