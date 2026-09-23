@@ -1,0 +1,10 @@
+{
+  "bulk_root": "/var/tmp/chmin_aic_20260920_isaac_world_rl/sc_snag_20260923",
+  "checksums": "sha256.txt",
+  "note": "Bulk diagnostics remain outside Git; exact source paths are recorded in summary.json.",
+  "summary": "summary.json",
+  "videos": {
+    "invalid_original_grasp_left": "videos/invalid_original_grasp_nic5_left.mp4",
+    "proxy_route_left": "videos/proxy_x100_route_seed1_left.mp4"
+  }
+}

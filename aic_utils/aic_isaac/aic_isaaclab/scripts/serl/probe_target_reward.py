@@ -6,6 +6,7 @@ from __future__ import annotations
 import argparse
 import json
 import math
+import os
 import sys
 from pathlib import Path
 
@@ -22,17 +23,170 @@ parser.add_argument("--target_port_index", type=int, default=0)
 parser.add_argument("--target_body", default="sfp_tip_link")
 parser.add_argument("--max_delta", type=float, default=0.02)
 parser.add_argument("--max_rotation", type=float, default=0.08)
+parser.add_argument(
+    "--rotation_sign",
+    type=float,
+    choices=(-1.0, 1.0),
+    default=1.0,
+    help="Sign applied to the TCP-frame rotation command for Isaac IK convention diagnostics.",
+)
 parser.add_argument("--descent_start_step", type=int, default=90)
+parser.add_argument(
+    "--descent_end_step",
+    type=int,
+    default=0,
+    help="Step at which the first insertion interpolation reaches insert_offset; 0 uses --steps.",
+)
+parser.add_argument(
+    "--lateral_descent_gate_m",
+    type=float,
+    default=0.0,
+    help="Pause SC axial descent and command recentering when target-frame lateral error exceeds this value.",
+)
+parser.add_argument("--lateral_descent_gate_start_step", type=int, default=0)
+parser.add_argument(
+    "--translation_start_step",
+    type=int,
+    default=0,
+    help="Hold translation at zero until this step while the privileged controller aligns orientation.",
+)
+parser.add_argument(
+    "--orientation_correction_start_step",
+    type=int,
+    default=0,
+    help="Hold rotation commands at zero before this step.",
+)
+parser.add_argument(
+    "--orientation_correction_end_step",
+    type=int,
+    default=0,
+    help="Stop rotation commands at this step; 0 leaves them enabled.",
+)
+parser.add_argument(
+    "--cheatcode_switch_step",
+    type=int,
+    default=0,
+    help="When using target_body_pose_root, switch to coupled wrist/tip control at this step.",
+)
+parser.add_argument(
+    "--direct_resume_step",
+    type=int,
+    default=0,
+    help="After a coupled correction phase, resume target_body_pose_root at this step.",
+)
+parser.add_argument(
+    "--alternating_control_start_step",
+    type=int,
+    default=0,
+    help="Start repeating direct-translation and coupled-orientation phases; 0 disables the schedule.",
+)
+parser.add_argument(
+    "--alternating_translation_steps",
+    type=int,
+    default=10,
+    help="Number of target_body_pose_root steps in each alternating-control cycle.",
+)
+parser.add_argument(
+    "--alternating_orientation_steps",
+    type=int,
+    default=5,
+    help="Number of cheatcode_tcp orientation-correction steps in each alternating-control cycle.",
+)
+parser.add_argument("--near_gate_reset_max_iterations", type=int, default=20)
+parser.add_argument("--near_gate_reset_position_tolerance", type=float, default=0.0005)
+parser.add_argument("--near_gate_reset_damping", type=float, default=0.05)
+parser.add_argument("--near_gate_reset_max_joint_delta", type=float, default=0.25)
+parser.add_argument("--near_gate_reset_joint_seed", type=float, nargs=6, default=None)
+parser.add_argument("--near_gate_reset_interpolation_steps", type=int, default=0)
+parser.add_argument("--near_gate_reset_hold_steps", type=int, default=0)
+parser.add_argument(
+    "--near_gate_reset_physical_interpolation",
+    action=argparse.BooleanOptionalAction,
+    default=False,
+    help="Move to the reset IK solution through actuator targets without teleporting articulation joints.",
+)
+parser.add_argument(
+    "--near_gate_reset_wrap_joints",
+    action=argparse.BooleanOptionalAction,
+    default=False,
+    help="Choose the 2*pi-equivalent IK joint solution closest to the initial arm posture.",
+)
 parser.add_argument("--approach_offset", type=float, nargs=3, default=None)
 parser.add_argument("--insert_offset", type=float, nargs=3, default=None)
+parser.add_argument(
+    "--transport_offset",
+    type=float,
+    nargs=3,
+    default=None,
+    help="Optional target-local waypoint held until --transport_end_step before approaching the port.",
+)
+parser.add_argument("--transport_end_step", type=int, default=0)
+parser.add_argument(
+    "--recovery_offset",
+    type=float,
+    nargs=3,
+    default=None,
+    help="Optional target-local scripted recovery waypoint used only in the configured step window.",
+)
+parser.add_argument("--recovery_start_step", type=int, default=0)
+parser.add_argument("--recovery_end_step", type=int, default=0)
+parser.add_argument(
+    "--detour_offset",
+    type=float,
+    nargs=3,
+    default=None,
+    help="Optional target-local lateral waypoint used after scripted retreat.",
+)
+parser.add_argument("--detour_start_step", type=int, default=0)
+parser.add_argument("--detour_end_step", type=int, default=0)
+parser.add_argument(
+    "--reinsertion_start_step",
+    type=int,
+    default=0,
+    help="After recovery/detour, begin a fresh smooth interpolation to the insert target.",
+)
+parser.add_argument(
+    "--reinsertion_start_offset",
+    type=float,
+    nargs=3,
+    default=None,
+    help="Start offset for the fresh reinsertion interpolation (defaults to approach_offset).",
+)
+parser.add_argument(
+    "--reinsertion_end_step",
+    type=int,
+    default=0,
+    help="Step at which reinsertion reaches insert_offset; 0 uses --steps.",
+)
 parser.add_argument("--record_cameras", action="store_true")
 parser.add_argument("--video_dir", type=Path)
 parser.add_argument("--video_fps", type=float, default=20.0)
+parser.add_argument(
+    "--preflight_settle_steps",
+    type=int,
+    default=0,
+    help=(
+        "Diagnostic only: park movable scene objects, step the robot/cable with zero actions, "
+        "then restore the episode scene before collecting probe metrics."
+    ),
+)
+parser.add_argument(
+    "--preflight_transport_steps",
+    type=int,
+    default=0,
+    help="While the scene is parked, move the controlled plug to the intended episode approach pose before restore.",
+)
 parser.add_argument(
     "--fix_isaac_ik_xy_sign",
     action=argparse.BooleanOptionalAction,
     default=True,
     help="Flip Isaac IK root-frame x/y translation commands to match realized TCP motion direction.",
+)
+parser.add_argument(
+    "--fix_isaac_ik_z_sign",
+    action=argparse.BooleanOptionalAction,
+    default=False,
+    help="Flip the Isaac IK root-frame z translation command (needed by the vertical SC path).",
 )
 parser.add_argument(
     "--isaac_ik_xy_sign_by_target_card",
@@ -89,6 +243,13 @@ parser.add_argument(
     ),
 )
 parser.add_argument(
+    "--target_orientation_offset",
+    type=float,
+    nargs=4,
+    default=None,
+    metavar=("W", "X", "Y", "Z"),
+)
+parser.add_argument(
     "--body_position_offset",
     type=float,
     nargs=3,
@@ -100,8 +261,16 @@ parser.add_argument(
     ),
 )
 parser.add_argument(
+    "--body_orientation_offset",
+    type=float,
+    nargs=4,
+    default=None,
+    metavar=("W", "X", "Y", "Z"),
+    help="Optional body-local quaternion from the selected rigid body to the semantic connector-tip frame.",
+)
+parser.add_argument(
     "--controller",
-    choices=("target_body_world", "cheatcode_tcp"),
+    choices=("target_body_world", "target_body_pose_root", "projected_body_ik", "joint_pose_replay", "cheatcode_tcp"),
     default="cheatcode_tcp",
     help=(
         "target_body_world is the old direct world-frame body delta probe. "
@@ -109,9 +278,41 @@ parser.add_argument(
         "then uses the same TCP-to-Isaac action conversion as online SERL."
     ),
 )
+parser.add_argument(
+    "--joint_goal",
+    type=float,
+    nargs=6,
+    default=None,
+    help="Absolute six arm-joint target used by joint_pose_replay.",
+)
+parser.add_argument(
+    "--joint_recovery_goal",
+    type=float,
+    nargs=6,
+    default=None,
+    help="Optional retreat joint target used during the configured recovery window.",
+)
+parser.add_argument(
+    "--joint_detour_goal",
+    type=float,
+    nargs=6,
+    default=None,
+    help="Optional near-lateral exploration joint target used during the detour window.",
+)
+parser.add_argument(
+    "--joint_return_goal",
+    type=float,
+    nargs=6,
+    default=None,
+    help="Optional high-clearance return target reached after a lateral detour.",
+)
+parser.add_argument("--joint_return_start_step", type=int, default=0)
+parser.add_argument("--joint_return_end_step", type=int, default=0)
 AppLauncher.add_app_launcher_args(parser)
 args_cli = parser.parse_args()
-args_cli.enable_cameras = True
+# Camera sensors are extremely expensive in this cable scene. Mechanics and
+# reward probes create them only when evidence videos are requested.
+args_cli.enable_cameras = bool(args_cli.record_cameras)
 
 app_launcher = AppLauncher(args_cli)
 simulation_app = app_launcher.app
@@ -121,6 +322,8 @@ import numpy as np
 import pandas as pd
 import torch
 from torch.nn import functional as F
+import omni.usd
+from pxr import UsdPhysics
 
 import isaaclab_tasks  # noqa: F401
 from isaaclab_tasks.utils import parse_env_cfg
@@ -154,7 +357,10 @@ ARM_JOINT_NAMES = (
     "wrist_2_joint",
     "wrist_3_joint",
 )
-CONTROLLED_TCP_BODY = "gripper_tcp"
+# The environment's Differential IK action is applied to wrist_3_link.  Build
+# and express the privileged alignment command at that same body; using the
+# displaced gripper_tcp frame makes rotations induce an uncommanded orbit.
+CONTROLLED_TCP_BODY = os.environ.get("AIC_ISAAC_IK_BODY_NAME", "wrist_3_link").strip() or "wrist_3_link"
 FORCE_WRENCH_BODY = "wrist_3_link"
 EXPERT_BC_STATE_INDICES = (0, 1, 2, 13, 14, 15, 72, 73, 74, 75, 76, 77, 78, 79, 80, 81)
 SFP_PORT_LOCAL = {
@@ -165,6 +371,8 @@ SFP_PORT_RPY = (4.69895, 0.0, 0.0)
 SFP_PORT_ENTRANCE_LOCAL = (0.0, 0.0, -0.0458)
 SFP_TIP_LOCAL = (0.0, -0.02365, 0.0)
 SFP_TIP_RPY = (1.5708, 0.0, 0.0)
+SC_TIP_LOCAL = (0.01165, 0.0, 0.0)
+SC_TIP_RPY = (-1.5708, 0.0, -1.5708)
 
 
 def _stack_vector_column(series: pd.Series, key: str) -> np.ndarray:
@@ -351,7 +559,11 @@ def _target_position_offset() -> tuple[float, float, float]:
         return tuple(float(v) for v in args_cli.target_position_offset)
     if args_cli.task_family == "sfp_to_nic":
         return _offset_from_port_frame(SFP_PORT_ENTRANCE_LOCAL)
-    return (0.093, 0.140, 0.020)
+    # Centre of the source SC port's official contact sensor.  The USD import
+    # maps its source y=-3.4 mm to rigid-root local z=+3.4 mm.
+    # Stable SC plug/port contact, not the unreachable center of Gazebo's
+    # solid touch-sensor collision box.
+    return (0.0, 0.0, -0.00465)
 
 
 def _controller_approach_offset() -> tuple[float, float, float]:
@@ -359,7 +571,9 @@ def _controller_approach_offset() -> tuple[float, float, float]:
         return tuple(float(v) for v in args_cli.approach_offset)
     if args_cli.task_family == "sfp_to_nic":
         return _offset_from_port_frame(SFP_PORT_ENTRANCE_LOCAL)
-    return _target_position_offset()
+    # Source sc_port_base_link_entrance is 15.64 mm outward from the base;
+    # relative to the imported rigid root this is local z=-13.64 mm.
+    return (0.0, 0.0, -0.01364)
 
 
 def _controller_insert_offset() -> tuple[float, float, float]:
@@ -375,25 +589,41 @@ def _body_position_offset() -> tuple[float, float, float]:
         if args_cli.target_body == "sfp_tip_link":
             return (0.0, 0.0, 0.0)
         return SFP_TIP_LOCAL
-    return (0.0, 0.0, 0.0)
+    return (0.0, 0.0, 0.0) if args_cli.target_body == "sc_tip_link" else SC_TIP_LOCAL
 
 
 def _target_orientation_offset() -> tuple[float, float, float, float] | None:
     if args_cli.disable_semantic_orientation_offsets:
         return None
+    if args_cli.target_orientation_offset is not None:
+        values = tuple(float(v) for v in args_cli.target_orientation_offset)
+        norm = math.sqrt(sum(v * v for v in values))
+        if norm < 1.0e-9:
+            raise ValueError("target_orientation_offset must be a nonzero quaternion")
+        return tuple(v / norm for v in values)
     if args_cli.task_family == "sfp_to_nic":
         return _quat_from_rpy(*SFP_PORT_RPY)
-    return None
+    # The import already bakes the source +90-degree X rotation into the rigid
+    # root. Conjugating the source Y(pi) by that baked rotation leaves Z(pi).
+    return _quat_from_rpy(0.0, 0.0, math.pi)
 
 
 def _body_orientation_offset() -> tuple[float, float, float, float] | None:
     if args_cli.disable_semantic_orientation_offsets:
         return None
+    if args_cli.body_orientation_offset is not None:
+        values = tuple(float(v) for v in args_cli.body_orientation_offset)
+        norm = math.sqrt(sum(v * v for v in values))
+        if norm < 1.0e-9:
+            raise ValueError("body_orientation_offset must be a nonzero quaternion")
+        return tuple(v / norm for v in values)
     if args_cli.task_family == "sfp_to_nic":
         if args_cli.target_body == "sfp_tip_link":
             return _quat_from_rpy(0.0, math.pi, 0.0)
         return _quat_from_rpy(*SFP_TIP_RPY)
-    return None
+    if args_cli.target_body == "sc_tip_link":
+        return None
+    return _quat_from_rpy(*SC_TIP_RPY)
 
 
 def _configure_rewards(env_cfg) -> dict[str, object]:
@@ -426,6 +656,7 @@ def _configure_rewards(env_cfg) -> dict[str, object]:
         "target_lateral_progress",
         "target_axial_progress",
         "target_insertion_corridor",
+        "target_cheatcode_phase_reward",
     ):
         term = getattr(rewards, name)
         term.params["body_cfg"].body_names = [args_cli.target_body]
@@ -579,6 +810,9 @@ def _tcp_delta_action_to_isaac_base_action(
         action = action.clone()
         sign_mask = _isaac_ik_xy_sign_fix_mask(env, action.shape[0], device=action.device)
         action[:, 0:2] = torch.where(sign_mask, -action[:, 0:2], action[:, 0:2])
+    if bool(args_cli.fix_isaac_ik_z_sign):
+        action = action.clone()
+        action[:, 2] = -action[:, 2]
     return action
 
 
@@ -621,6 +855,43 @@ def _lerp_offset(
     fraction: float,
 ) -> tuple[float, float, float]:
     return tuple(float(a + (b - a) * fraction) for a, b in zip(start, end))
+
+
+def _controller_target_offset_for_step(step: int) -> tuple[float, float, float]:
+    if (
+        args_cli.detour_offset is not None
+        and int(args_cli.detour_start_step) <= step < int(args_cli.detour_end_step)
+    ):
+        return tuple(float(v) for v in args_cli.detour_offset)
+    if (
+        args_cli.recovery_offset is not None
+        and int(args_cli.recovery_start_step) <= step < int(args_cli.recovery_end_step)
+    ):
+        return tuple(float(v) for v in args_cli.recovery_offset)
+    if args_cli.transport_offset is not None and step < int(args_cli.transport_end_step):
+        return tuple(float(v) for v in args_cli.transport_offset)
+    if int(args_cli.reinsertion_start_step) > 0 and step >= int(args_cli.reinsertion_start_step):
+        start = (
+            tuple(float(v) for v in args_cli.reinsertion_start_offset)
+            if args_cli.reinsertion_start_offset is not None
+            else _controller_approach_offset()
+        )
+        reinsertion_end = int(args_cli.reinsertion_end_step) or int(args_cli.steps)
+        denom = max(1, reinsertion_end - int(args_cli.reinsertion_start_step))
+        return _lerp_offset(
+            start,
+            _controller_insert_offset(),
+            _smoothstep((step - int(args_cli.reinsertion_start_step)) / denom),
+        )
+    if step < args_cli.descent_start_step:
+        return _controller_approach_offset()
+    descent_end = int(args_cli.descent_end_step) or int(args_cli.steps)
+    denom = max(1, descent_end - args_cli.descent_start_step)
+    return _lerp_offset(
+        _controller_approach_offset(),
+        _controller_insert_offset(),
+        _smoothstep((step - args_cli.descent_start_step) / denom),
+    )
 
 
 class VideoRecorder:
@@ -683,6 +954,8 @@ def _cheatcode_tcp_action(
     wrist_index: int,
     body_index: int,
     controller_target_offset: tuple[float, float, float],
+    target_pos_w_override: torch.Tensor | None = None,
+    target_quat_w_override: torch.Tensor | None = None,
 ) -> tuple[torch.Tensor, dict[str, float]]:
     """Return a TCP-frame delta that moves the wrist to align body with target.
 
@@ -695,8 +968,8 @@ def _cheatcode_tcp_action(
     body_quat_w = robot.data.body_quat_w[:, body_index]
     wrist_pos_w = robot.data.body_pos_w[:, wrist_index]
     wrist_quat_w = robot.data.body_quat_w[:, wrist_index]
-    target_pos_w = target.data.root_pos_w
-    target_quat_w = target.data.root_quat_w
+    target_pos_w = target.data.root_pos_w if target_pos_w_override is None else target_pos_w_override
+    target_quat_w = target.data.root_quat_w if target_quat_w_override is None else target_quat_w_override
     body_frame_quat_w = math_utils.quat_mul(
         body_quat_w,
         _offset_quat_tensor(_body_orientation_offset(), like=body_quat_w),
@@ -725,14 +998,19 @@ def _cheatcode_tcp_action(
         q_body_inv = math_utils.quat_inv(body_frame_quat_w)
         q_diff = math_utils.quat_mul(target_frame_quat_w, q_body_inv)
     target_wrist_quat_w = math_utils.quat_mul(q_diff, wrist_quat_w)
-    target_wrist_pos_w = target_pos_w + (wrist_pos_w - body_point_w)
+    # Apply the complete rigid alignment transform.  Keeping the current
+    # wrist-to-tip vector unrotated makes the tip orbit the target whenever
+    # the connector orientation changes, which is especially large for SC.
+    target_wrist_pos_w = target_pos_w + math_utils.quat_apply(
+        q_diff, wrist_pos_w - body_point_w
+    )
 
     delta_pos_tcp = math_utils.quat_apply_inverse(wrist_quat_w, target_wrist_pos_w - wrist_pos_w)
     delta_quat_tcp = math_utils.quat_mul(math_utils.quat_inv(wrist_quat_w), target_wrist_quat_w)
     delta_rot_tcp = math_utils.axis_angle_from_quat(delta_quat_tcp)
 
     clipped_pos_tcp = _clip_by_norm(delta_pos_tcp, args_cli.max_delta)
-    clipped_rot_tcp = _clip_by_norm(delta_rot_tcp, args_cli.max_rotation)
+    clipped_rot_tcp = _clip_by_norm(delta_rot_tcp, args_cli.max_rotation) * float(args_cli.rotation_sign)
     tcp_action = torch.cat([clipped_pos_tcp, clipped_rot_tcp], dim=-1)
     diagnostics = {
         "tcp_delta_pos_norm_m": float(torch.linalg.norm(delta_pos_tcp, dim=-1)[0].detach().cpu()),
@@ -742,6 +1020,13 @@ def _cheatcode_tcp_action(
         "controller_target_offset_x": float(controller_target_offset[0]),
         "controller_target_offset_y": float(controller_target_offset[1]),
         "controller_target_offset_z": float(controller_target_offset[2]),
+        "controller_body_point_w": [float(v) for v in body_point_w[0].detach().cpu()],
+        "controller_target_point_w": [float(v) for v in target_pos_w[0].detach().cpu()],
+        "controller_wrist_pos_w": [float(v) for v in wrist_pos_w[0].detach().cpu()],
+        "controller_target_wrist_pos_w": [float(v) for v in target_wrist_pos_w[0].detach().cpu()],
+        "controller_q_diff_rad": float(
+            torch.linalg.norm(math_utils.axis_angle_from_quat(q_diff), dim=-1)[0].detach().cpu()
+        ),
     }
     return tcp_action, diagnostics
 
@@ -757,7 +1042,21 @@ def main() -> None:
     env_cfg.observations.policy.center_rgb = None
     env_cfg.observations.policy.left_rgb = None
     env_cfg.observations.policy.right_rgb = None
+    if not args_cli.record_cameras:
+        env_cfg.scene.center_camera = None
+        env_cfg.scene.left_camera = None
+        env_cfg.scene.right_camera = None
     env_cfg.actions.arm_action.scale = 1.0
+    reset_params = env_cfg.events.reset_robot_tcp_to_episode_start.params
+    reset_params["max_iterations"] = int(args_cli.near_gate_reset_max_iterations)
+    reset_params["position_tolerance"] = float(args_cli.near_gate_reset_position_tolerance)
+    reset_params["damping"] = float(args_cli.near_gate_reset_damping)
+    reset_params["max_joint_delta"] = float(args_cli.near_gate_reset_max_joint_delta)
+    reset_params["ik_joint_seed"] = args_cli.near_gate_reset_joint_seed
+    reset_params["interpolation_steps"] = int(args_cli.near_gate_reset_interpolation_steps)
+    reset_params["physical_interpolation_hold_steps"] = int(args_cli.near_gate_reset_hold_steps)
+    reset_params["physical_interpolation"] = bool(args_cli.near_gate_reset_physical_interpolation)
+    reset_params["wrap_solved_joints_to_initial"] = bool(args_cli.near_gate_reset_wrap_joints)
     reward_config = _configure_rewards(env_cfg)
 
     env = gym.make(args_cli.task, cfg=env_cfg)
@@ -774,7 +1073,74 @@ def main() -> None:
     unwrapped = env.unwrapped
     robot = unwrapped.scene["robot"]
     target = unwrapped.scene[reward_config["target_scene"]]
+    reset_report = dict(getattr(unwrapped, "_aic_tcp_reset_report_by_env", {}) or {})
+    stage = omni.usd.get_context().get_stage()
+    collision_enabled_by_path = {}
+    for prim in stage.Traverse():
+        path = str(prim.GetPath())
+        if "/env_0/Robot/" not in path and "/env_0/task_board/" not in path:
+            continue
+        if prim.HasAPI(UsdPhysics.CollisionAPI):
+            value = UsdPhysics.CollisionAPI(prim).GetCollisionEnabledAttr().Get()
+            collision_enabled_by_path[path] = True if value is None else bool(value)
+    initial_scene_asset_poses = {}
+    for scene_name in ("task_board", "sc_port", "sc_port_2", "nic_card", "nic_card_1", "nic_card_2", "nic_card_3", "nic_card_4"):
+        try:
+            asset = unwrapped.scene[scene_name]
+        except KeyError:
+            continue
+        initial_scene_asset_poses[scene_name] = {
+            "root_position_world": [float(v) for v in asset.data.root_pos_w[0].detach().cpu().tolist()],
+            "root_orientation_wxyz": [float(v) for v in asset.data.root_quat_w[0].detach().cpu().tolist()],
+        }
+    preflight_settle_report: dict[str, object] | None = None
+    if int(args_cli.preflight_settle_steps) > 0 or int(args_cli.preflight_transport_steps) > 0:
+        intended_target_pos_w = target.data.root_pos_w.clone()
+        intended_target_quat_w = target.data.root_quat_w.clone()
+        parked_assets = []
+        for scene_name, pose in initial_scene_asset_poses.items():
+            asset = unwrapped.scene[scene_name]
+            root_pose = torch.cat([asset.data.root_pos_w, asset.data.root_quat_w], dim=-1).clone()
+            root_pose[:, 0] += 2.0
+            asset.write_root_pose_to_sim(root_pose)
+            parked_assets.append(scene_name)
+        zero_action = torch.zeros((args_cli.num_envs, 6), device=unwrapped.device)
+        for _ in range(int(args_cli.preflight_settle_steps)):
+            env.step(zero_action)
+        if int(args_cli.preflight_transport_steps) > 0:
+            preflight_body_index = _named_index(list(robot.body_names), args_cli.target_body)
+            preflight_wrist_index = _named_index(list(robot.body_names), CONTROLLED_TCP_BODY)
+            for _ in range(int(args_cli.preflight_transport_steps)):
+                tcp_action, _ = _cheatcode_tcp_action(
+                    robot=robot,
+                    target=target,
+                    wrist_index=preflight_wrist_index,
+                    body_index=preflight_body_index,
+                    controller_target_offset=_controller_approach_offset(),
+                    target_pos_w_override=intended_target_pos_w,
+                    target_quat_w_override=intended_target_quat_w,
+                )
+                env.step(_tcp_delta_action_to_isaac_base_action(env, tcp_action))
+        for scene_name in parked_assets:
+            asset = unwrapped.scene[scene_name]
+            pose = initial_scene_asset_poses[scene_name]
+            root_pose = torch.tensor(
+                [pose["root_position_world"] + pose["root_orientation_wxyz"]],
+                dtype=asset.data.root_pos_w.dtype,
+                device=unwrapped.device,
+            )
+            asset.write_root_pose_to_sim(root_pose)
+            asset.write_root_velocity_to_sim(torch.zeros((args_cli.num_envs, 6), device=unwrapped.device))
+        preflight_settle_report = {
+            "steps": int(args_cli.preflight_settle_steps),
+            "transport_steps": int(args_cli.preflight_transport_steps),
+            "parked_assets": parked_assets,
+        }
     body_names = list(robot.body_names)
+    body_mass_values = robot.root_physx_view.get_masses()[0].reshape(-1).detach().cpu().tolist()
+    articulation_body_masses_kg = {
+        str(name): float(body_mass_values[index]) for index, name in enumerate(body_names)
+    }
     body_index = _named_index(body_names, args_cli.target_body)
     force_body_index = _named_index(body_names, FORCE_WRENCH_BODY)
     controlled_tcp_index = _named_index(body_names, CONTROLLED_TCP_BODY)
@@ -803,6 +1169,7 @@ def main() -> None:
     previous_force: torch.Tensor | None = None
     success_emitted = False
     pending_bc_action_chunk: torch.Tensor | None = None
+    joint_replay_start_q = robot.data.joint_pos[:, arm_joint_indices].detach().clone()
 
     def selected_force() -> torch.Tensor:
         incoming_wrench = getattr(robot.data, "body_incoming_wrench_w", None)
@@ -813,6 +1180,29 @@ def main() -> None:
         if incoming_wrench is None:
             return torch.zeros((args_cli.num_envs, 3), dtype=robot.data.root_pos_w.dtype, device=unwrapped.device)
         return incoming_wrench[:, force_body_index, :3]
+
+    def contact_sensor_report() -> dict[str, object]:
+        sensor = unwrapped.scene.sensors.get("contact_forces")
+        if sensor is None:
+            return {}
+        net = getattr(sensor.data, "net_forces_w", None)
+        if net is None:
+            return {"contact_sensor_body_names": list(getattr(sensor, "body_names", []))}
+        norms = torch.linalg.norm(net, dim=-1)[0].detach().cpu()
+        names = list(getattr(sensor, "body_names", []))
+        report: dict[str, object] = {
+            "contact_sensor_body_names": names,
+            "contact_sensor_force_norms": [float(value) for value in norms],
+            "contact_sensor_max_force_norm": float(norms.max()) if norms.numel() else 0.0,
+        }
+        force_matrix = getattr(sensor.data, "force_matrix_w", None)
+        if force_matrix is not None:
+            filtered_norms = torch.linalg.norm(force_matrix, dim=-1)[0].detach().cpu()
+            report["contact_sensor_filtered_force_norms"] = filtered_norms.tolist()
+            report["contact_sensor_filtered_max_force_norm"] = (
+                float(filtered_norms.max()) if filtered_norms.numel() else 0.0
+            )
+        return report
 
     def lerobot_compatible_feature_probe() -> dict[str, object]:
         data = robot.data
@@ -990,6 +1380,7 @@ def main() -> None:
             "force_delta_norm": float(force_delta_norm[0].detach().cpu()),
             "force_delta_penalty_unit": float(force_penalty_unit[0].detach().cpu()),
             "force_delta_penalty_weighted": float((float(args_cli.force_delta_penalty_weight) * force_penalty_unit)[0].detach().cpu()),
+            **contact_sensor_report(),
             "terminal_unit": terminal_unit_value,
             "terminal_weighted": float(args_cli.terminal_weight) * terminal_unit_value,
             "expected_dense_reward": float(expected[0].detach().cpu()),
@@ -1002,6 +1393,15 @@ def main() -> None:
             "body_root_pos_w": _tensor_xyz(body_pos[0]),
             "body_root_quat_w": _tensor_quat(body_quat[0]),
             "reward_body_pos_w": _tensor_xyz(body_point[0]),
+            "arm_joint_positions": [
+                float(v) for v in robot.data.joint_pos[0, arm_joint_indices].detach().cpu()
+            ],
+            "arm_joint_position_targets": [
+                float(v) for v in robot.data.joint_pos_target[0, arm_joint_indices].detach().cpu()
+            ],
+            "arm_applied_torque_nm": [
+                float(v) for v in robot.data.applied_torque[0, arm_joint_indices].detach().cpu()
+            ],
             **lerobot_compatible_feature_probe(),
         }
 
@@ -1010,7 +1410,122 @@ def main() -> None:
     print(json.dumps(rows[-1]), flush=True)
     for step in range(1, args_cli.steps + 1):
         diagnostics: dict[str, float] = {}
-        if args_cli.controller == "target_body_world":
+        effective_controller = args_cli.controller
+        if (
+            args_cli.controller == "target_body_pose_root"
+            and int(args_cli.cheatcode_switch_step) > 0
+            and step >= int(args_cli.cheatcode_switch_step)
+        ):
+            effective_controller = "cheatcode_tcp"
+        if (
+            args_cli.controller == "target_body_pose_root"
+            and int(args_cli.direct_resume_step) > 0
+            and step >= int(args_cli.direct_resume_step)
+        ):
+            effective_controller = "target_body_pose_root"
+        rotation_held = step < int(args_cli.orientation_correction_start_step) or (
+            int(args_cli.orientation_correction_end_step) > 0
+            and step >= int(args_cli.orientation_correction_end_step)
+        )
+        alternating_start = int(args_cli.alternating_control_start_step)
+        if args_cli.controller == "target_body_pose_root" and alternating_start > 0 and step >= alternating_start:
+            translation_steps = max(1, int(args_cli.alternating_translation_steps))
+            orientation_steps = max(1, int(args_cli.alternating_orientation_steps))
+            phase = (step - alternating_start) % (translation_steps + orientation_steps)
+            if phase < translation_steps:
+                effective_controller = "target_body_pose_root"
+                rotation_held = True
+            else:
+                effective_controller = "cheatcode_tcp"
+                rotation_held = False
+        if effective_controller == "joint_pose_replay":
+            if args_cli.joint_goal is None:
+                raise ValueError("joint_pose_replay requires --joint_goal with six values")
+            end_step = int(args_cli.descent_end_step) if int(args_cli.descent_end_step) > 0 else int(args_cli.steps)
+            fraction = (step - int(args_cli.descent_start_step)) / max(
+                1, end_step - int(args_cli.descent_start_step)
+            )
+            alpha = _smoothstep(fraction)
+            joint_goal = torch.tensor(
+                args_cli.joint_goal,
+                dtype=joint_replay_start_q.dtype,
+                device=joint_replay_start_q.device,
+            ).reshape(1, 6)
+            action = joint_replay_start_q + alpha * (joint_goal - joint_replay_start_q)
+            joint_phase = 0.0
+            recovery_goal = None
+            if args_cli.joint_recovery_goal is not None:
+                recovery_goal = torch.tensor(
+                    args_cli.joint_recovery_goal,
+                    dtype=joint_replay_start_q.dtype,
+                    device=joint_replay_start_q.device,
+                ).reshape(1, 6)
+            detour_goal = None
+            if args_cli.joint_detour_goal is not None:
+                detour_goal = torch.tensor(
+                    args_cli.joint_detour_goal,
+                    dtype=joint_replay_start_q.dtype,
+                    device=joint_replay_start_q.device,
+                ).reshape(1, 6)
+            return_goal = None
+            if args_cli.joint_return_goal is not None:
+                return_goal = torch.tensor(
+                    args_cli.joint_return_goal,
+                    dtype=joint_replay_start_q.dtype,
+                    device=joint_replay_start_q.device,
+                ).reshape(1, 6)
+            if recovery_goal is not None and step >= int(args_cli.recovery_start_step) > 0:
+                recovery_end = max(int(args_cli.recovery_end_step), int(args_cli.recovery_start_step) + 1)
+                recovery_alpha = _smoothstep(
+                    (step - int(args_cli.recovery_start_step))
+                    / (recovery_end - int(args_cli.recovery_start_step))
+                )
+                action = joint_goal + recovery_alpha * (recovery_goal - joint_goal)
+                joint_phase = 1.0
+                if step >= recovery_end:
+                    action = recovery_goal
+            if detour_goal is not None and step >= int(args_cli.detour_start_step) > 0:
+                detour_start = int(args_cli.detour_start_step)
+                detour_end = max(int(args_cli.detour_end_step), detour_start + 1)
+                detour_alpha = _smoothstep((step - detour_start) / (detour_end - detour_start))
+                detour_from = recovery_goal if recovery_goal is not None else joint_goal
+                action = detour_from + detour_alpha * (detour_goal - detour_from)
+                joint_phase = 2.0
+                if step >= detour_end:
+                    action = detour_goal
+            if return_goal is not None and step >= int(args_cli.joint_return_start_step) > 0:
+                return_start = int(args_cli.joint_return_start_step)
+                return_end = max(int(args_cli.joint_return_end_step), return_start + 1)
+                return_alpha = _smoothstep((step - return_start) / (return_end - return_start))
+                return_from = detour_goal if detour_goal is not None else joint_goal
+                action = return_from + return_alpha * (return_goal - return_from)
+                joint_phase = 3.0
+                if step >= return_end:
+                    action = return_goal
+            reinsertion_from = return_goal if return_goal is not None else detour_goal
+            if reinsertion_from is not None and step >= int(args_cli.reinsertion_start_step) > 0:
+                reinsertion_start = int(args_cli.reinsertion_start_step)
+                reinsertion_end = max(
+                    int(args_cli.reinsertion_end_step) or int(args_cli.steps),
+                    reinsertion_start + 1,
+                )
+                reinsertion_alpha = _smoothstep(
+                    (step - reinsertion_start) / (reinsertion_end - reinsertion_start)
+                )
+                action = reinsertion_from + reinsertion_alpha * (joint_goal - reinsertion_from)
+                joint_phase = 4.0
+                if step >= reinsertion_end:
+                    action = joint_goal
+            diagnostics = {
+                "joint_replay_alpha": float(alpha),
+                "joint_replay_phase": joint_phase,
+                "joint_goal_error_norm_rad": float(
+                    torch.linalg.norm(joint_goal - robot.data.joint_pos[:, arm_joint_indices], dim=-1)[0]
+                    .detach()
+                    .cpu()
+                ),
+            }
+        elif effective_controller == "target_body_world":
             target_pos = target.data.root_pos_w[:, :3]
             target_offset = torch.tensor(
                 _target_position_offset(),
@@ -1036,16 +1551,116 @@ def main() -> None:
                 "world_delta_norm_m": float(torch.linalg.norm(delta, dim=-1)[0].detach().cpu()),
                 "cmd_world_pos_norm_m": float(torch.linalg.norm(action[:, :3], dim=-1)[0].detach().cpu()),
             }
-        else:
-            if step < args_cli.descent_start_step:
-                controller_target_offset = _controller_approach_offset()
-            else:
-                denom = max(1, args_cli.steps - args_cli.descent_start_step)
-                controller_target_offset = _lerp_offset(
-                    _controller_approach_offset(),
-                    _controller_insert_offset(),
-                    _smoothstep((step - args_cli.descent_start_step) / denom),
+        elif effective_controller in ("target_body_pose_root", "projected_body_ik"):
+            controller_target_offset = _controller_target_offset_for_step(step)
+            body_pos = robot.data.body_pos_w[:, body_index]
+            body_quat = robot.data.body_quat_w[:, body_index]
+            target_pos = target.data.root_pos_w
+            target_quat = target.data.root_quat_w
+            target_offset = torch.tensor(
+                controller_target_offset, dtype=target_pos.dtype, device=target_pos.device
+            ).reshape(1, 3)
+            target_point = target_pos + math_utils.quat_apply(target_quat, target_offset.expand_as(target_pos))
+            body_frame_quat = math_utils.quat_mul(
+                body_quat, _offset_quat_tensor(_body_orientation_offset(), like=body_quat)
+            )
+            target_frame_quat = math_utils.quat_mul(
+                target_quat, _offset_quat_tensor(_target_orientation_offset(), like=target_quat)
+            )
+            world_rot_delta = math_utils.quat_mul(target_frame_quat, math_utils.quat_inv(body_frame_quat))
+            desired_body_quat = math_utils.quat_mul(world_rot_delta, body_quat)
+            body_offset = torch.tensor(
+                _body_position_offset(), dtype=body_pos.dtype, device=body_pos.device
+            ).reshape(1, 3)
+            desired_body_pos = target_point - math_utils.quat_apply(
+                desired_body_quat, body_offset.expand_as(body_pos)
+            )
+            root_quat = robot.data.root_quat_w
+            pos_error_root = math_utils.quat_apply_inverse(root_quat, desired_body_pos - body_pos)
+            rot_error_world = math_utils.axis_angle_from_quat(world_rot_delta)
+            rot_error_root = math_utils.quat_apply_inverse(root_quat, rot_error_world)
+            body_error_root = torch.cat([pos_error_root, rot_error_root], dim=-1)
+            if effective_controller == "projected_body_ik":
+                # Isaac's configured differential-IK action controls wrist_3_link,
+                # while the goal above is expressed for a connector body offset
+                # from that wrist. Project the connector pose error through the
+                # arm joints and back into the equivalent wrist twist. This keeps
+                # the normal environment action path without treating connector
+                # and wrist pose deltas as interchangeable.
+                jacobians = robot.root_physx_view.get_jacobians()
+                body_jacobian_index = max(body_index - 1, 0)
+                wrist_jacobian_index = max(controlled_tcp_index - 1, 0)
+                body_jacobian = jacobians[:, body_jacobian_index, :, :][:, :, arm_joint_indices]
+                wrist_jacobian = jacobians[:, wrist_jacobian_index, :, :][:, :, arm_joint_indices]
+                jacobian_t = body_jacobian.transpose(1, 2)
+                damping_sq = float(args_cli.near_gate_reset_damping) ** 2
+                identity = torch.eye(6, dtype=body_jacobian.dtype, device=body_jacobian.device).unsqueeze(0)
+                joint_delta = jacobian_t @ torch.linalg.solve(
+                    body_jacobian @ jacobian_t + damping_sq * identity,
+                    body_error_root.unsqueeze(-1),
                 )
+                projected_wrist_delta = (wrist_jacobian @ joint_delta).squeeze(-1)
+                pos_norm = torch.linalg.norm(projected_wrist_delta[:, :3], dim=-1, keepdim=True).clamp_min(1.0e-9)
+                rot_norm = torch.linalg.norm(projected_wrist_delta[:, 3:6], dim=-1, keepdim=True).clamp_min(1.0e-9)
+                scale = torch.minimum(
+                    torch.minimum(torch.ones_like(pos_norm), float(args_cli.max_delta) / pos_norm),
+                    float(args_cli.max_rotation) / rot_norm if args_cli.max_rotation > 0.0 else torch.zeros_like(rot_norm),
+                )
+                action = projected_wrist_delta * scale
+                diagnostics["projected_joint_delta_norm_rad"] = float(
+                    torch.linalg.norm(joint_delta.squeeze(-1), dim=-1)[0].detach().cpu()
+                )
+            else:
+                action = torch.cat(
+                    [
+                        _clip_by_norm(pos_error_root, args_cli.max_delta),
+                        _clip_by_norm(rot_error_root, args_cli.max_rotation),
+                    ],
+                    dim=-1,
+                )
+            if bool(args_cli.fix_isaac_ik_xy_sign):
+                action[:, 0:2] *= -1.0
+            if bool(args_cli.fix_isaac_ik_z_sign):
+                action[:, 2] *= -1.0
+            action[:, 3:6] *= float(args_cli.rotation_sign)
+            if rotation_held:
+                action[:, 3:6] = 0.0
+            pending_bc_action_chunk = action.reshape(-1).repeat(args_cli.expert_bc_action_horizon).detach()
+            diagnostics.update({
+                "world_delta_norm_m": float(torch.linalg.norm(desired_body_pos - body_pos, dim=-1)[0].detach().cpu()),
+                "cmd_root_pos_norm_m": float(torch.linalg.norm(action[:, :3], dim=-1)[0].detach().cpu()),
+                "cmd_root_rot_norm_rad": float(torch.linalg.norm(action[:, 3:6], dim=-1)[0].detach().cpu()),
+                "cmd_root_action": [float(v) for v in action[0].detach().cpu()],
+                "controller_target_offset_x": float(controller_target_offset[0]),
+                "controller_target_offset_y": float(controller_target_offset[1]),
+                "controller_target_offset_z": float(controller_target_offset[2]),
+            })
+        else:
+            controller_target_offset = _controller_target_offset_for_step(step)
+            if (
+                float(args_cli.lateral_descent_gate_m) > 0.0
+                and step >= int(args_cli.lateral_descent_gate_start_step)
+            ):
+                body_pos_w = robot.data.body_pos_w[:, body_index]
+                body_quat_w = robot.data.body_quat_w[:, body_index]
+                body_offset = torch.tensor(
+                    _body_position_offset(), dtype=body_pos_w.dtype, device=body_pos_w.device
+                ).reshape(1, 3)
+                body_point_w = body_pos_w + math_utils.quat_apply(
+                    body_quat_w, body_offset.expand_as(body_pos_w)
+                )
+                target_pos_w = target.data.root_pos_w
+                target_quat_w = target.data.root_quat_w
+                target_local = math_utils.quat_apply_inverse(
+                    target_quat_w, body_point_w - target_pos_w
+                )
+                lateral_error = torch.linalg.norm(target_local[:, :2], dim=-1)
+                if bool((lateral_error > float(args_cli.lateral_descent_gate_m))[0].detach().cpu()):
+                    controller_target_offset = (
+                        float(controller_target_offset[0]),
+                        float(controller_target_offset[1]),
+                        float(target_local[0, 2].detach().cpu()),
+                    )
             tcp_action, diagnostics = _cheatcode_tcp_action(
                 robot=robot,
                 target=target,
@@ -1053,13 +1668,21 @@ def main() -> None:
                 body_index=body_index,
                 controller_target_offset=controller_target_offset,
             )
+            if step < int(args_cli.translation_start_step):
+                tcp_action = tcp_action.clone()
+                tcp_action[:, :3] = 0.0
+                diagnostics["cmd_tcp_pos_norm_m"] = 0.0
+            if rotation_held:
+                tcp_action = tcp_action.clone()
+                tcp_action[:, 3:6] = 0.0
+                diagnostics["cmd_tcp_rot_norm_rad"] = 0.0
             pending_bc_action_chunk = tcp_action.reshape(-1).repeat(args_cli.expert_bc_action_horizon).detach()
             action = _tcp_delta_action_to_isaac_base_action(env, tcp_action, action_frame=CONTROLLED_TCP_BODY)
         _, reward, terminated, truncated, _ = env.step(action)
         if video_recorder is not None:
             video_recorder.add_scene(env)
         row = metrics(step, reward)
-        row["controller"] = args_cli.controller
+        row["controller"] = effective_controller
         row.update(diagnostics)
         rows.append(row)
         print(json.dumps(row), flush=True)
@@ -1083,6 +1706,15 @@ def main() -> None:
         video_paths = video_recorder.close()
     summary = {
         "reward_config": reward_config,
+        "near_gate_reset_report": reset_report,
+        "initial_scene_asset_poses": initial_scene_asset_poses,
+        "articulation_body_masses_kg": articulation_body_masses_kg,
+        "arm_soft_joint_position_limits_rad": robot.data.soft_joint_pos_limits[0, arm_joint_indices]
+        .detach()
+        .cpu()
+        .tolist(),
+        "collision_enabled_by_path": collision_enabled_by_path,
+        "preflight_settle_report": preflight_settle_report,
         "expert_bc": None
         if expert_prior is None
         else {

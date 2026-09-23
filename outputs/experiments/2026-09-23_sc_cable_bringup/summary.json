@@ -1,0 +1,164 @@
+{
+  "bc_training_run": false,
+  "code_provenance": {
+    "base_commit": "9455c3434f9a6de0ed3bab99451a1ebb27171e3a",
+    "branch": "feat/hybrid-train",
+    "note": "Mechanics changes and this summary were committed together after the recorded runs; see the experiment-record commit."
+  },
+  "date": "2026-09-23",
+  "decisions": [
+    "Do not label original-grasp failures as cable snags.",
+    "Do not train SC BC or RL from proxy rollouts.",
+    "Use the gripper-collision-disabled asset only to test cable-routing hypotheses.",
+    "Repair the physical grasp/scene contract before SC data collection."
+  ],
+  "faithful_grasp": {
+    "gripper_card_contact_force_n_at_step_160": 128.37478637695312,
+    "root_cause": "reachable clearance30 grasp makes gripper_hande_base_link contact NIC cards; source reversed grasp is not physically reachable in the current Isaac board/base scene",
+    "status": "failed"
+  },
+  "nic5_original_grasp": {
+    "artifact": "/var/tmp/chmin_aic_20260920_isaac_world_rl/sc_snag_20260923/sc_fullstart_nic5_scripted250.json",
+    "best_distance_mm": 13.189381919801235,
+    "best_step": 250,
+    "component_gate_rows": 0,
+    "final_axial_mm": 4.310981836169958,
+    "final_lateral_mm": 12.464965301024266,
+    "final_orientation_deg": 1.9415167031824438,
+    "peak_wrist_force_n": 165.77963256835938,
+    "steps": 250
+  },
+  "nic5_proxy_baseline": [
+    {
+      "artifact": "/var/tmp/chmin_aic_20260920_isaac_world_rl/sc_snag_20260923/sc_nic5_gripper_proxy_seed1_250.json",
+      "best_distance_mm": 5.193781107664108,
+      "best_step": 238,
+      "component_gate_rows": 0,
+      "final_axial_mm": 4.394165705889463,
+      "final_lateral_mm": 3.215029458731301,
+      "final_orientation_deg": 0.839295512841018,
+      "peak_wrist_force_n": 62.40104293823242,
+      "steps": 250
+    },
+    {
+      "artifact": "/var/tmp/chmin_aic_20260920_isaac_world_rl/sc_snag_20260923/sc_nic5_gripper_proxy_seed2_250.json",
+      "best_distance_mm": 0.10862302588066086,
+      "best_step": 233,
+      "component_gate_rows": 43,
+      "final_axial_mm": 0.635491800494492,
+      "final_lateral_mm": 0.0952051132006294,
+      "final_orientation_deg": 0.0,
+      "peak_wrist_force_n": 179.58511352539062,
+      "steps": 250
+    },
+    {
+      "artifact": "/var/tmp/chmin_aic_20260920_isaac_world_rl/sc_snag_20260923/sc_nic5_gripper_proxy_seed3_250.json",
+      "best_distance_mm": 0.29128146707080305,
+      "best_step": 224,
+      "component_gate_rows": 17,
+      "final_axial_mm": 3.2133678905665874,
+      "final_lateral_mm": 7.783485467833864,
+      "final_orientation_deg": 0.870425113839556,
+      "peak_wrist_force_n": 65.28591918945312,
+      "steps": 250
+    }
+  ],
+  "nic5_proxy_x100_route": [
+    {
+      "artifact": "/var/tmp/chmin_aic_20260920_isaac_world_rl/sc_snag_20260923/sc_nic5_proxy_preplanned_x100_seed1_520.json",
+      "best_distance_mm": 0.5049648461863399,
+      "best_step": 501,
+      "component_gate_rows": 52,
+      "final_axial_mm": 0.48476297524757683,
+      "final_lateral_mm": 0.14659431461891634,
+      "final_orientation_deg": 0.0,
+      "peak_wrist_force_n": 42.00031280517578,
+      "steps": 520
+    },
+    {
+      "artifact": "/var/tmp/chmin_aic_20260920_isaac_world_rl/sc_snag_20260923/sc_nic5_proxy_preplanned_x100_seed2_520.json",
+      "best_distance_mm": 0.3955196007154882,
+      "best_step": 499,
+      "component_gate_rows": 54,
+      "final_axial_mm": 0.3853502857964486,
+      "final_lateral_mm": 0.11199770939249494,
+      "final_orientation_deg": 0.0,
+      "peak_wrist_force_n": 30.55052947998047,
+      "steps": 520
+    },
+    {
+      "artifact": "/var/tmp/chmin_aic_20260920_isaac_world_rl/sc_snag_20260923/sc_nic5_proxy_preplanned_x100_seed3_520.json",
+      "best_distance_mm": 0.39478932740166783,
+      "best_step": 480,
+      "component_gate_rows": 54,
+      "final_axial_mm": 0.4587872535921633,
+      "final_lateral_mm": 0.1007865174639753,
+      "final_orientation_deg": 0.0,
+      "peak_wrist_force_n": 42.224674224853516,
+      "steps": 520
+    }
+  ],
+  "recorded_proxy_route": {
+    "artifact": "/var/tmp/chmin_aic_20260920_isaac_world_rl/sc_snag_20260923/sc_nic5_proxy_preplanned_x100_seed1_video520.json",
+    "best_distance_mm": 0.5433191545307636,
+    "best_step": 489,
+    "component_gate_rows": 18,
+    "final_axial_mm": 0.5819832440465689,
+    "final_lateral_mm": 1.8851122687444306,
+    "final_orientation_deg": 0.33337803825245804,
+    "peak_wrist_force_n": 100.46954345703125,
+    "steps": 520
+  },
+  "reserved_final_opened": false,
+  "rl_training_run": false,
+  "sc_contact_target": {
+    "entrance_local_m": [
+      0,
+      0,
+      -0.01364
+    ],
+    "seated_depth_m": 0.00899,
+    "status": "empirical stable-contact calibration; Gazebo terminal pose still needed",
+    "target_local_m": [
+      0,
+      0,
+      -0.00465
+    ]
+  },
+  "status": "mechanics_bringup_partial_proxy_only",
+  "zero_card_backtrack": {
+    "minus_4mm_retry": {
+      "artifact": "/var/tmp/chmin_aic_20260920_isaac_world_rl/sc_snag_20260923/sc_full_backtrack_minus_y4_220.json",
+      "best_distance_mm": 0.5048722377978265,
+      "best_step": 182,
+      "component_gate_rows": 19,
+      "final_axial_mm": 2.994744572788477,
+      "final_lateral_mm": 2.6395092778877243,
+      "final_orientation_deg": 0.6875618999338328,
+      "peak_wrist_force_n": 31.62493133544922,
+      "steps": 220
+    },
+    "no_recovery": {
+      "artifact": "/var/tmp/chmin_aic_20260920_isaac_world_rl/sc_snag_20260923/sc_clearance30_contact_target_full_collision180.json",
+      "best_distance_mm": 2.59637669660151,
+      "best_step": 128,
+      "component_gate_rows": 0,
+      "final_axial_mm": 2.5422440376132727,
+      "final_lateral_mm": 0.9772717235354679,
+      "final_orientation_deg": 0.4334096271027327,
+      "peak_wrist_force_n": 27.05201530456543,
+      "steps": 180
+    },
+    "plus_4mm_retry": {
+      "artifact": "/var/tmp/chmin_aic_20260920_isaac_world_rl/sc_snag_20260923/sc_full_backtrack_plus_y4_220.json",
+      "best_distance_mm": 0.08445593266515061,
+      "best_step": 197,
+      "component_gate_rows": 53,
+      "final_axial_mm": 0.007557006028946489,
+      "final_lateral_mm": 0.09940639385395475,
+      "final_orientation_deg": 0.0,
+      "peak_wrist_force_n": 29.57122802734375,
+      "steps": 220
+    }
+  }
+}

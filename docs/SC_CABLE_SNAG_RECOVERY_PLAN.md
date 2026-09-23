@@ -1,6 +1,6 @@
 # SC-to-SC cable-snag recovery plan
 
-Status: proposed for review, 2026-09-23
+Status: approved and in execution; SC mechanics gate remains open, 2026-09-23
 
 ## Decision and motivation
 
@@ -19,6 +19,34 @@ only been validated in SFP-to-NIC near-port scenes. The verified mixed Gazebo
 collection contains 21 SC episodes, but those episodes did not train or validate
 the selected Isaac RPDP checkpoint. SC support must therefore pass its own
 perception and BC gates before RL.
+
+## September 23 mechanics-gate result
+
+Steps 1--4 were entered, but step 2 exposed a scene-contract problem that must
+be fixed before the discovery set can be interpreted. The audit corrected the
+SC port mount, reversed cable topology, fixed-joint transforms, reset ordering,
+and the unreachable center-of-collider target. In the corrected zero-card
+scene, a 14 mm retreat and positive 4 mm lateral retry reached 0.099 mm final
+lateral and 0.008 mm axial error.
+
+The first five-card failure was not a verified cable snag. Disabling cable and
+plug collisions did not change it, while the contact sensor measured about
+128 N between the gripper base and a NIC card. The reachable Isaac grasp makes
+the gripper housing cross the card. The source reversed Gazebo grasp avoids
+that route but is not reachable in the current Isaac robot/base/board layout.
+
+A clearly labeled diagnostic asset with the ten gripper colliders disabled was
+used only to test the routing hypothesis. The direct high approach ended in the
+component gate in 1/3 seeds; a coherent 100 mm route around the card edge did so
+in 3/3 seeds. Those privileged IK runs support large routed recovery, but they
+are not autonomous evidence and must not enter BC or RL replay. Rendering also
+changed the recorded seed-1 outcome, so videos and metrics-only runs remain
+separate evidence.
+
+The next required result is a collision-faithful and reachable SC grasp/scene
+contract. Then repeat scripted insertion for every card count 0--5 before
+continuing the bounded discovery set. See the
+[mechanics and routing record](experiments/2026-09-23-sc-mechanics-and-routing.md).
 
 ## What the latest SFP experiment established
 

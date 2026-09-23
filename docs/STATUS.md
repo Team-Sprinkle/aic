@@ -1,5 +1,32 @@
 # Current experiment status
 
+## SC-to-SC mechanics and routing bring-up (September 23)
+
+The approved multi-card SC continuation reached its simulator-mechanics gate.
+The audit corrected the SC port mount, reversed cable endpoint topology and
+fixed-joint transforms, reset ordering, multi-card scene support, and the SC
+contact target. With normal collisions and no intervening cards, a scripted
+14 mm retreat plus positive 4 mm lateral retry reached 0.099 mm final lateral
+and 0.008 mm axial error. The matched negative retry entered the corridor only
+briefly and diverged, confirming that recovery direction matters.
+
+The apparent five-card cable snag was instead dominated by the gripper housing
+striking a NIC card. Removing plug and cable collisions did not change the
+failure; direct contact sensing measured about 128 N at the gripper/card
+contact. The source reversed Gazebo grasp was not physically reachable in the
+current Isaac base/board arrangement. Therefore no SC BC or RL was trained and
+the failed rollout is not labeled as cable-snag data.
+
+A declared gripper-collision-disabled proxy tested routing while retaining
+plug, cable, card, board, and port collisions. A direct high approach held the
+final component gate in 1/3 seeds; a privileged 100 mm route around the card
+edge held it in 3/3. This supports hierarchical routed transport as a future
+candidate, but it is neither autonomous nor valid policy data. The active gate
+is a reachable collision-faithful SC grasp/scene contract, followed by scripted
+card-count 0--5 validation. See the
+[SC mechanics record](experiments/2026-09-23-sc-mechanics-and-routing.md) and
+[machine summary](../outputs/experiments/2026-09-23_sc_cable_bringup/summary.json).
+
 ## Probabilistic SERL recovery continuation (September 23)
 
 The deterministic local RPDP controller was converted into a four-component
@@ -63,9 +90,9 @@ visible backoff may also be a learned action. The two additional successes do
 not prove that hard-coded recovery caused the improvement. See the
 [committed failure analysis](experiments/2026-09-23-serl-video-failure-analysis.md).
 
-### Proposed direction requiring review before execution
+### Approved SC continuation now in execution
 
-The next proposed work targets SC-to-SC with multiple intervening cards, where
+The active work targets SC-to-SC with multiple intervening cards, where
 the cable can require a larger retreat and a routed detour rather than local
 realignment. Current selected pose/RPDP/SERL evidence is SFP-to-NIC only. The
 ordered plan first audits Isaac SC support, defines cable snag causally, records
@@ -739,33 +766,31 @@ settings, measured geometry, failure records, and interpretation limits.
 
 ## Next experiments, in order
 
-The user elected to park further pose-estimator fitting. The matched generic
-controller and the later mandatory pose-correction controller are complete.
-The latter failed its pre-live offline gate, so neither authorizes RL.
+The SFP pose-refitting branch remains parked with its failed dependence gate as
+a fixed baseline. The active continuation is SC-to-SC and follows these gates:
 
-1. **Resolve pose-to-control consistency before another rollout.** The balanced
-   collection and mandatory pose path are now implemented, but correct pose did
-   not beat shuffled/zero pose consistently across unseen cable templates.
-   Audit camera/template frame calibration and teacher residuals by phase, then
-   test a short-horizon visual-servo target or per-camera corrective target on
-   complete held-out templates. The current retained data is approach-only, so
-   collect contact, blocked, retreat, and recovery examples as a separate
-   force-safe stage. Keep the current failed checkpoints as fixed baselines.
-2. **Repeat the offline dependence gate.** Require correct sample-specific pose
-   to beat both zero and shuffled pose, along with the existing 5% translation,
-   0.030 mm magnitude, direction, and symmetry checks. Do not open live scenes
-   from a numerical threshold pass that still loses to shuffled pose.
-3. **Only after that, run a matched autonomous development gate.** Compare the corrected
-   controller with its action-only counterpart on new starts, with no guide,
-   exploration, guard, or privileged actor input. Require repeated insertion,
-   lateral error at or below 0.5 mm, explicit orientation and force checks, and
-   p95 inference below 300 ms. Stop again if lateral alignment does not improve.
-4. **Only then start model-free critics.** Collect enough on-policy successes,
-   failures, blocked contacts, retreats, and recoveries. Train fresh 24D critics
-   offline first, with a strong supervised anchor and a small Q objective.
-   Simulator state may supervise training diagnostics but cannot enter the
-   deployed actor.
-5. **Measure Gazebo transfer after the Isaac gate.** Freeze the successful
+1. **Repair the SC grasp/scene contract.** Reproduce a reachable grasp whose
+   physical gripper, connector, cable, board, ports, and cards all retain
+   collisions. Do not use the gripper-disabled diagnostic proxy for learning.
+2. **Validate mechanics for card counts 0--5.** Run scripted complete insertion
+   attempts with deterministic seeds and require valid reset identity, force,
+   contact, plug motion, cable motion, and terminal observations in every
+   stratum. Record failures rather than weakening the geometry gate.
+3. **Collect the bounded discovery set.** Retain complete episodes and compact
+   20 Hz telemetry. Manually validate that port-lip contact, simple
+   misalignment, and cable/card snag labels are causally distinct. Require ten
+   natural snag incidents across at least two layouts or conclude that this
+   Isaac setup does not reproduce the intended failure.
+4. **Train SC perception and port-relative BC.** Use episode-grouped splits,
+   observation-only RGB/state/force inputs, full port-frame trajectory targets,
+   and no privileged evaluation inputs. Require the frozen pose gate and
+   autonomous insertion before adding RL.
+5. **Compare recovery and then train model-free critics.** Start with fixed
+   multi-scale measured-path retreat plus coherent lateral/routed exploration.
+   Only after enough on-policy success, failure, block, retreat, and recovery
+   outcomes, train critics offline and proceed to bounded online SERL with a
+   strong supervised anchor.
+6. **Measure Gazebo transfer after the Isaac gate.** Freeze the successful
    candidate, evaluate it on new Gazebo development scenes, and use the existing
    bridge for bounded adaptation only if accuracy, force, and latency hold.
 

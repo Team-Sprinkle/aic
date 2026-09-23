@@ -398,6 +398,11 @@ def reset_robot_tcp_to_episode_start(
     orientation_tolerance: float = 0.05,
     damping: float = 0.05,
     max_joint_delta: float = 0.25,
+    ik_joint_seed: tuple[float, ...] | list[float] | None = None,
+    interpolation_steps: int = 0,
+    physical_interpolation: bool = False,
+    physical_interpolation_hold_steps: int = 0,
+    wrap_solved_joints_to_initial: bool = False,
     sync_action_term_after_reset: bool = True,
 ) -> None:
     """Move robot reset body to child-YAML near-gate reset poses.
@@ -542,7 +547,17 @@ def reset_robot_tcp_to_episode_start(
     target_pos = torch.stack([target for _, target, _, _ in targets], dim=0)
     body_id = int(body_ids[0])
     jacobian_body_id = max(body_id - 1, 0)
-    q = robot.data.joint_pos[active_env_ids][:, joint_ids].clone()
+    initial_full_q = robot.data.joint_pos[active_env_ids].clone()
+    q = initial_full_q[:, joint_ids].clone()
+    if ik_joint_seed is not None:
+        if len(ik_joint_seed) != len(joint_ids):
+            raise ValueError("ik_joint_seed length must match the configured reset arm joints")
+        q = torch.tensor(ik_joint_seed, dtype=q.dtype, device=q.device).reshape(1, -1).expand_as(q).clone()
+        robot.write_joint_state_to_sim(q, torch.zeros_like(q), joint_ids=joint_ids, env_ids=active_env_ids)
+        robot.set_joint_position_target(q, joint_ids=joint_ids, env_ids=active_env_ids)
+        if hasattr(env, "sim"):
+            env.sim.forward()
+        robot.update(0.0)
     zeros = torch.zeros_like(q)
     has_orientation = any(target_quat is not None for _, _, target_quat, _ in targets)
     if has_orientation:
@@ -609,14 +624,74 @@ def reset_robot_tcp_to_episode_start(
             env.sim.forward()
         robot.update(0.0)
 
+    if wrap_solved_joints_to_initial:
+        initial_arm_q = initial_full_q[:, joint_ids]
+        two_pi = 2.0 * torch.pi
+        q = q + two_pi * torch.round((initial_arm_q - q) / two_pi)
+        limits = getattr(robot.data, "soft_joint_pos_limits", None)
+        if limits is not None:
+            lo = limits[active_env_ids][:, joint_ids, 0]
+            hi = limits[active_env_ids][:, joint_ids, 1]
+            q = torch.max(torch.min(q, hi), lo)
+
     full_q = robot.data.joint_pos[active_env_ids].clone()
     full_q[:, joint_ids] = q
     full_qd = torch.zeros_like(full_q)
-    robot.write_joint_state_to_sim(full_q, full_qd, env_ids=active_env_ids)
-    robot.set_joint_position_target(q, joint_ids=joint_ids, env_ids=active_env_ids)
-    if hasattr(env, "sim"):
+    settle_steps = max(0, int(interpolation_steps))
+    if settle_steps > 0 and hasattr(env, "sim"):
+        # Preserve the cable's articulated shape by moving the arm to the IK
+        # solution over physics steps.  A direct arm teleport leaves the
+        # flexible cable at its old pose and produces a large first-step snap.
+        # The IK iterations above write trial joint states without advancing
+        # physics. Restore the original state before starting the physical
+        # interpolation; otherwise the first target commands the solved arm
+        # backward while the cable is still at its original pose.
+        robot.write_joint_state_to_sim(
+            initial_full_q,
+            torch.zeros_like(initial_full_q),
+            env_ids=active_env_ids,
+        )
+        initial_arm_q = initial_full_q[:, joint_ids]
+        robot.set_joint_position_target(
+            initial_arm_q, joint_ids=joint_ids, env_ids=active_env_ids
+        )
+        robot.write_data_to_sim()
         env.sim.forward()
-    robot.update(0.0)
+        robot.update(0.0)
+        for step_index in range(1, settle_steps + 1):
+            alpha = float(step_index) / float(settle_steps)
+            interpolated_arm_q = initial_arm_q + alpha * (q - initial_arm_q)
+            if not physical_interpolation:
+                # Legacy deterministic reset. This is unsuitable for a cable
+                # topology rooted at the gripped connector because teleporting
+                # the arm does not transport the articulated cable bodies.
+                robot.write_joint_state_to_sim(
+                    interpolated_arm_q,
+                    torch.zeros_like(interpolated_arm_q),
+                    joint_ids=joint_ids,
+                    env_ids=active_env_ids,
+                )
+            robot.set_joint_position_target(
+                interpolated_arm_q, joint_ids=joint_ids, env_ids=active_env_ids
+            )
+            # We advance the SimulationContext directly inside this reset
+            # event, bypassing ManagerBasedEnv.step(). Flush actuator targets
+            # explicitly or PhysX keeps its previous (zero) targets.
+            robot.write_data_to_sim()
+            env.sim.step(render=False)
+            robot.update(float(env.sim.get_physics_dt()))
+        if physical_interpolation:
+            for _ in range(max(0, int(physical_interpolation_hold_steps))):
+                robot.set_joint_position_target(q, joint_ids=joint_ids, env_ids=active_env_ids)
+                robot.write_data_to_sim()
+                env.sim.step(render=False)
+                robot.update(float(env.sim.get_physics_dt()))
+    else:
+        robot.write_joint_state_to_sim(full_q, full_qd, env_ids=active_env_ids)
+        robot.set_joint_position_target(q, joint_ids=joint_ids, env_ids=active_env_ids)
+        if hasattr(env, "sim"):
+            env.sim.forward()
+        robot.update(0.0)
     if sync_action_term_after_reset:
         action_manager = getattr(env, "action_manager", None)
         if action_manager is not None:
@@ -668,8 +743,21 @@ def reset_robot_tcp_to_episode_start(
             if final_orientation_error is None
             else float(final_orientation_error[row].detach().cpu()),
             "max_iterations": int(max_iterations),
+            "interpolation_steps": settle_steps,
+            "physical_interpolation": bool(physical_interpolation),
+            "physical_interpolation_hold_steps": int(physical_interpolation_hold_steps),
+            "wrapped_solved_joints_to_initial": bool(wrap_solved_joints_to_initial),
             "position_tolerance_m": float(position_tolerance),
             "orientation_tolerance_rad": float(orientation_tolerance),
+            "joint_names": [str(name) for name in resolved_joint_names],
+            "initial_joint_positions": [
+                float(v) for v in initial_full_q[row, joint_ids].detach().cpu().tolist()
+            ],
+            "ik_joint_seed": None if ik_joint_seed is None else [float(v) for v in ik_joint_seed],
+            "solved_joint_positions": [float(v) for v in q[row].detach().cpu().tolist()],
+            "realized_joint_positions": [
+                float(v) for v in robot.data.joint_pos[active_env_ids[row], joint_ids].detach().cpu().tolist()
+            ],
             "full_joint_velocities_zeroed": True,
             "action_term_synced_after_reset": bool(sync_action_term_after_reset),
         }

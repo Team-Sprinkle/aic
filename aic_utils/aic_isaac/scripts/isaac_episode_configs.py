@@ -18,10 +18,19 @@ import yaml
 TASK_FAMILIES = {"sfp_to_nic", "sc_to_sc"}
 DEFAULT_BOARD_POS = (0.2837, 0.229, 0.0)
 DEFAULT_BOARD_RANGE = {"x": (0.0, 0.0), "y": (0.0, 0.0), "z": (0.0, 0.0), "yaw": (0.0, 0.0)}
+NIC_SCENE_NAMES = ("nic_card", "nic_card_1", "nic_card_2", "nic_card_3", "nic_card_4")
+HIDDEN_PART_OFFSET = (5.0, 5.0, -2.0)
 DEFAULT_PARTS = {
-    "sc_port": {"scene_name": "sc_port", "offset": (0.0067, -0.0362, 0.005), "pose_range": {}},
-    "sc_port_2": {"scene_name": "sc_port_2", "offset": (0.0076, -0.0783, 0.005), "pose_range": {}},
+    # The source task-board xacro mounts both SC-port model origins 16.5 mm
+    # above the board origin.  The old 5 mm value put the receptacle inside
+    # the board's 12 mm collision slab and made physical insertion impossible.
+    "sc_port": {"scene_name": "sc_port", "offset": (0.0067, -0.0362, 0.0165), "pose_range": {}},
+    "sc_port_2": {"scene_name": "sc_port_2", "offset": (0.0076, -0.0783, 0.0165), "pose_range": {}},
     "nic_card": {"scene_name": "nic_card", "offset": (-0.03235, 0.02329, 0.0743), "pose_range": {}, "snap_step": {"y": 0.04}},
+    "nic_card_1": {"scene_name": "nic_card_1", "offset": (-0.03235, 0.06329, 0.0743), "pose_range": {}},
+    "nic_card_2": {"scene_name": "nic_card_2", "offset": (-0.03235, 0.10329, 0.0743), "pose_range": {}},
+    "nic_card_3": {"scene_name": "nic_card_3", "offset": (-0.03235, 0.14329, 0.0743), "pose_range": {}},
+    "nic_card_4": {"scene_name": "nic_card_4", "offset": (-0.03235, 0.18329, 0.0743), "pose_range": {}},
 }
 NIC_CARD_ROT_WXYZ = (0.0, 0.0, -0.7068252, 0.7073883)
 SFP_PORT_LOCAL = {
@@ -37,8 +46,24 @@ SFP_PORT_CAGE_DEPTH_M = 0.04872
 SFP_PORT_ENTRANCE_LOCAL = (0.0, 0.0, -0.0458)
 SFP_PORT_INSERTION_AXIS_LOCAL = (0.0, 0.0, 1.0)
 SFP_TIP_LOCAL = (0.0, -0.02365, 0.0)
-SC_PORT_TARGET_LOCAL = (0.093, 0.140, 0.020)
-SC_INSERTION_AXIS_WORLD = (0.0, 1.0, 0.0)
+# Source SC geometry, expressed in the imported rigid-root frame.  The source
+# port base is at y=-2 mm and its entrance is 15.64 mm outward from that base.
+# The official Gazebo task declares success on sustained contact with a solid
+# box centered at source y=-3.4 mm; that box center is not a reachable plug-tip
+# target.  An isolated plug/port collision probe places first stable contact at
+# root-local z=-4.65 mm, 8.99 mm past the entrance.  Keep this empirical contact
+# pose explicit until a Gazebo terminal pose can refine it.
+SC_PORT_TARGET_LOCAL = (0.0, 0.0, -0.00465)
+SC_PORT_ENTRANCE_LOCAL = (0.0, 0.0, -0.01364)
+SC_PORT_SEATED_DEPTH_M = 0.00899
+SC_INSERTION_AXIS_WORLD = (0.0, 0.0, -1.0)
+SC_TIP_LOCAL = (0.01165, 0.0, 0.0)
+SC_TIP_RPY = (-1.5708, 0.0, -1.5708)
+# Effective rigid-body quaternion reported by Isaac for the fixed SC-port USD
+# after its asset-root conversion and configured spawn rotation.
+# Effective sc_port_base orientation after the Gazebo-compatible Isaac spawn
+# rotation.  The tiny w/z terms reflect the source model's 1.57 rad values.
+SC_PORT_ORIENTATION_WXYZ = (0.000282727, -0.706824414, 0.707389147, -0.000282727)
 
 
 class _NoAliasDumper(yaml.SafeDumper):
@@ -282,7 +307,9 @@ def _sample_context(request: dict[str, Any], rng: random.Random) -> dict[str, An
         }
     if family == "sc_to_sc":
         sc = scene.get("sc_ports") or {}
+        nic = scene.get("nic_cards") or {}
         count = max(1, min(2, _sample_int(sc.get("count"), [1, 2], rng)))
+        nic_count = max(0, min(5, _sample_int(nic.get("count"), [0], rng)))
         target_raw = sc.get("target_port", "auto")
         target_port = rng.randrange(count) if target_raw == "auto" else _port_index(rng.choice(_choices(target_raw, list(range(count)))))
         if target_port not in {0, 1}:
@@ -292,7 +319,7 @@ def _sample_context(request: dict[str, Any], rng: random.Random) -> dict[str, An
             "target_port_index": target_port,
             "target_card_index": -1,
             "target_card_valid": 0,
-            "nic_card_count": 0,
+            "nic_card_count": nic_count,
             "sc_port_count": count,
         }
     raise ValueError(f"Unsupported task_family: {family}")
@@ -347,7 +374,7 @@ def _episode_parts(
     if scene_parts and not isinstance(scene_parts, dict):
         raise ValueError("scene.parts must be a mapping keyed by scene_name")
     parts: list[dict[str, Any]] = []
-    for name in ("sc_port", "sc_port_2", "nic_card"):
+    for name in ("sc_port", "sc_port_2", *NIC_SCENE_NAMES):
         base = dict(DEFAULT_PARTS[name])
         override = scene_parts.get(name, {}) if isinstance(scene_parts, dict) else {}
         if override and not isinstance(override, dict):
@@ -363,9 +390,20 @@ def _episode_parts(
             # snapped card-position offset so the task vector, visible card, and
             # semantic entrance/target metadata all point at the same card.
             offset[1] += 0.04 * int(context.get("target_card_index", 0))
+        if name in NIC_SCENE_NAMES:
+            if context.get("task_family") == "sfp_to_nic":
+                # Keep the established SFP contract: one target NIC asset is
+                # materialized at the requested rail.  The additional assets
+                # exist so SC scenes can contain real intervening cards.
+                present = name == "nic_card"
+            else:
+                present = NIC_SCENE_NAMES.index(name) < int(context.get("nic_card_count", 0))
+            if not present:
+                offset = list(HIDDEN_PART_OFFSET)
         for axis_idx, axis in enumerate(("x", "y", "z")):
             offset[axis_idx] += _sample_axis_offset(pose_range, snap_step, axis, rng)
         base["offset"] = tuple(offset)
+        base["present"] = bool(name not in NIC_SCENE_NAMES or present)
         base["pose_range"] = {}
         base["snap_step"] = {}
         parts.append(base)
@@ -391,6 +429,14 @@ def _target_spec(
         if not isinstance(raw, (list, tuple)) or len(raw) != 3:
             raise ValueError("scene.end_effector_tip.body_position_offset must be a 3-value list")
         return (float(raw[0]), float(raw[1]), float(raw[2]))
+
+    def _tip_orientation_offset(
+        default_offset: tuple[float, float, float, float],
+    ) -> tuple[float, float, float, float]:
+        raw = tip_cfg.get("body_orientation_offset_wxyz", default_offset)
+        if not isinstance(raw, (list, tuple)) or len(raw) != 4:
+            raise ValueError("scene.end_effector_tip.body_orientation_offset_wxyz must be a 4-value list")
+        return _quat_normalize_wxyz(tuple(float(v) for v in raw))
 
     if context["task_family"] == "sfp_to_nic":
         target_cfg = scene.get("target") or {}
@@ -438,9 +484,20 @@ def _target_spec(
         }
     scene_name = "sc_port" if int(context["target_port_index"]) == 0 else "sc_port_2"
     part = (parts_by_name or DEFAULT_PARTS)[scene_name]
-    position = _vadd(_vadd(board_pos, part["offset"]), SC_PORT_TARGET_LOCAL)
+    root_position = _vadd(board_pos, part["offset"])
+    entrance_position = _vadd(
+        root_position,
+        _quat_apply_wxyz(SC_PORT_ORIENTATION_WXYZ, SC_PORT_ENTRANCE_LOCAL),
+    )
+    position = _vadd(entrance_position, _vscale(SC_INSERTION_AXIS_WORLD, SC_PORT_SEATED_DEPTH_M))
     tip_body = _tip_body("sc_tip_link")
-    tip_offset = _tip_offset((0.0, 0.0, 0.0))
+    tip_offset = _tip_offset((0.0, 0.0, 0.0) if tip_body == "sc_tip_link" else SC_TIP_LOCAL)
+    tip_orientation_offset = _tip_orientation_offset(_quat_from_rpy(*SC_TIP_RPY))
+    body_orientation = (
+        SC_PORT_ORIENTATION_WXYZ
+        if tip_body == "sc_tip_link"
+        else _quat_mul_wxyz(SC_PORT_ORIENTATION_WXYZ, _quat_conj_wxyz(tip_orientation_offset))
+    )
     return {
         "scene_name": scene_name,
         "target_reward_body": tip_body,
@@ -448,7 +505,13 @@ def _target_spec(
         "body_position_offset": _round3(tip_offset),
         "end_effector_tip_body": tip_body,
         "end_effector_tip_body_position_offset": _round3(tip_offset),
-        "target_pose_world": {"position": _round3(position), "orientation_wxyz": None},
+        "target_pose_world": {"position": _round3(position), "orientation_wxyz": _round4(SC_PORT_ORIENTATION_WXYZ)},
+        "entrance_pose_world": {"position": _round3(entrance_position), "orientation_wxyz": _round4(SC_PORT_ORIENTATION_WXYZ)},
+        "body_start_orientation_wxyz": _round4(body_orientation),
+        "body_orientation_offset_wxyz": (
+            None if tip_body == "sc_tip_link" else _round4(tip_orientation_offset)
+        ),
+        "seated_depth_m": SC_PORT_SEATED_DEPTH_M,
         "insertion_axis_world": _round3(SC_INSERTION_AXIS_WORLD),
     }
 

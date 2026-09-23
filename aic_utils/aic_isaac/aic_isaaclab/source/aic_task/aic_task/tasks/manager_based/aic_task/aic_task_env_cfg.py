@@ -148,6 +148,10 @@ class AICTaskSceneCfg(InteractiveSceneCfg):
         filter_prim_paths_expr=[
             "{ENV_REGEX_NS}/task_board",
             "{ENV_REGEX_NS}/nic_card",
+            "{ENV_REGEX_NS}/nic_card_1",
+            "{ENV_REGEX_NS}/nic_card_2",
+            "{ENV_REGEX_NS}/nic_card_3",
+            "{ENV_REGEX_NS}/nic_card_4",
             "{ENV_REGEX_NS}/sc_port",
             "{ENV_REGEX_NS}/sc_port_2",
         ],
@@ -192,8 +196,9 @@ class AICTaskSceneCfg(InteractiveSceneCfg):
     task_board = RigidObjectCfg(
         prim_path="{ENV_REGEX_NS}/task_board",
         spawn=sim_utils.UsdFileCfg(
-            usd_path=os.path.join(
-                AIC_PARTS_DIR, "Task Board Base", "task_board_rigid.usd"
+            usd_path=os.environ.get(
+                "AIC_ISAAC_TASK_BOARD_USD_PATH",
+                os.path.join(AIC_PARTS_DIR, "Task Board Base", "task_board_rigid.usd"),
             ),
             rigid_props=sim_utils.RigidBodyPropertiesCfg(
                 kinematic_enabled=True,
@@ -208,28 +213,44 @@ class AICTaskSceneCfg(InteractiveSceneCfg):
     sc_port = RigidObjectCfg(
         prim_path="{ENV_REGEX_NS}/sc_port",
         spawn=sim_utils.UsdFileCfg(
-            usd_path=os.path.join(AIC_PARTS_DIR, "SC Port", "sc_port.usd"),
+            usd_path=os.environ.get(
+                "AIC_ISAAC_SC_PORT_USD_PATH",
+                os.path.join(AIC_PARTS_DIR, "SC Port", "sc_port.usd"),
+            ),
+            collision_props=sim_utils.CollisionPropertiesCfg(
+                contact_offset=0.00001,
+                rest_offset=0.0,
+            ),
             rigid_props=sim_utils.RigidBodyPropertiesCfg(
                 kinematic_enabled=True,
             ),
         ),
         init_state=RigidObjectCfg.InitialStateCfg(
-            pos=(0.2904, 0.1928, 0.005),
-            rot=(0.73136, 0.0, 0.0, -0.682),
+            pos=(0.2904, 0.1928, 0.0165),
+            # Gazebo task_board.urdf.xacro mounts the SC port at
+            # rpy=(1.57, 0, 1.57).  Keep the Isaac import in the same frame.
+            rot=(0.500398, 0.5, 0.499602, 0.5),
         ),
     )
 
     sc_port_2 = RigidObjectCfg(
         prim_path="{ENV_REGEX_NS}/sc_port_2",
         spawn=sim_utils.UsdFileCfg(
-            usd_path=os.path.join(AIC_PARTS_DIR, "SC Port", "sc_port.usd"),
+            usd_path=os.environ.get(
+                "AIC_ISAAC_SC_PORT_USD_PATH",
+                os.path.join(AIC_PARTS_DIR, "SC Port", "sc_port.usd"),
+            ),
+            collision_props=sim_utils.CollisionPropertiesCfg(
+                contact_offset=0.00001,
+                rest_offset=0.0,
+            ),
             rigid_props=sim_utils.RigidBodyPropertiesCfg(
                 kinematic_enabled=True,
             ),
         ),
         init_state=RigidObjectCfg.InitialStateCfg(
-            pos=(0.2913, 0.1507, 0.005),
-            rot=(0.73136, 0.0, 0.0, -0.682),
+            pos=(0.2913, 0.1507, 0.0165),
+            rot=(0.500398, 0.5, 0.499602, 0.5),
         ),
     )
 
@@ -244,6 +265,56 @@ class AICTaskSceneCfg(InteractiveSceneCfg):
         ),
         init_state=RigidObjectCfg.InitialStateCfg(
             pos=(0.25135, 0.25229, 0.0743),
+            rot=(0.0, 0.0, -0.7068252, 0.7073883),
+        ),
+    )
+
+    # Five separately addressable NIC assets are required for SC-to-SC cable
+    # routing scenes.  Episode YAMLs park unused cards outside the workspace.
+    nic_card_1 = RigidObjectCfg(
+        prim_path="{ENV_REGEX_NS}/nic_card_1",
+        spawn=sim_utils.UsdFileCfg(
+            usd_path=os.path.join(AIC_PARTS_DIR, "NIC Card", "nic_card.usd"),
+            rigid_props=sim_utils.RigidBodyPropertiesCfg(kinematic_enabled=True),
+        ),
+        init_state=RigidObjectCfg.InitialStateCfg(
+            pos=(0.25135, 0.29229, 0.0743),
+            rot=(0.0, 0.0, -0.7068252, 0.7073883),
+        ),
+    )
+
+    nic_card_2 = RigidObjectCfg(
+        prim_path="{ENV_REGEX_NS}/nic_card_2",
+        spawn=sim_utils.UsdFileCfg(
+            usd_path=os.path.join(AIC_PARTS_DIR, "NIC Card", "nic_card.usd"),
+            rigid_props=sim_utils.RigidBodyPropertiesCfg(kinematic_enabled=True),
+        ),
+        init_state=RigidObjectCfg.InitialStateCfg(
+            pos=(0.25135, 0.33229, 0.0743),
+            rot=(0.0, 0.0, -0.7068252, 0.7073883),
+        ),
+    )
+
+    nic_card_3 = RigidObjectCfg(
+        prim_path="{ENV_REGEX_NS}/nic_card_3",
+        spawn=sim_utils.UsdFileCfg(
+            usd_path=os.path.join(AIC_PARTS_DIR, "NIC Card", "nic_card.usd"),
+            rigid_props=sim_utils.RigidBodyPropertiesCfg(kinematic_enabled=True),
+        ),
+        init_state=RigidObjectCfg.InitialStateCfg(
+            pos=(0.25135, 0.37229, 0.0743),
+            rot=(0.0, 0.0, -0.7068252, 0.7073883),
+        ),
+    )
+
+    nic_card_4 = RigidObjectCfg(
+        prim_path="{ENV_REGEX_NS}/nic_card_4",
+        spawn=sim_utils.UsdFileCfg(
+            usd_path=os.path.join(AIC_PARTS_DIR, "NIC Card", "nic_card.usd"),
+            rigid_props=sim_utils.RigidBodyPropertiesCfg(kinematic_enabled=True),
+        ),
+        init_state=RigidObjectCfg.InitialStateCfg(
+            pos=(0.25135, 0.41229, 0.0743),
             rot=(0.0, 0.0, -0.7068252, 0.7073883),
         ),
     )
@@ -438,17 +509,12 @@ class EventCfg:
                     "pose_range": {"y": (0.0, 0.12)},
                     "snap_step": {"y": 0.04},
                 },
+                {"scene_name": "nic_card_1", "offset": (5.0, 5.0, -2.0), "pose_range": {}},
+                {"scene_name": "nic_card_2", "offset": (5.0, 5.0, -2.0), "pose_range": {}},
+                {"scene_name": "nic_card_3", "offset": (5.0, 5.0, -2.0), "pose_range": {}},
+                {"scene_name": "nic_card_4", "offset": (5.0, 5.0, -2.0), "pose_range": {}},
             ],
         },
-    )
-
-    # Optional and deterministic.  Episode YAMLs without ``cable_reset`` keep
-    # the historical behavior.  This must run after episode assignment above
-    # and before the compensating TCP IK reset below.
-    reset_cable_joints_from_episode = EventTerm(
-        func=reset_cable_joints_from_episode,
-        mode="reset",
-        params={"asset_name": "robot"},
     )
 
     reset_robot_tcp_to_episode_start = EventTerm(
@@ -459,6 +525,16 @@ class EventCfg:
             "max_iterations": 8,
             "position_tolerance": 0.002,
         },
+    )
+
+    # Apply the cable shape after the arm reaches its episode start. The cable
+    # articulation is rooted at the gripped connector, so doing this first and
+    # then moving the arm leaves the cable in its old world-space shape and
+    # creates a large artificial reset load.
+    reset_cable_joints_from_episode = EventTerm(
+        func=reset_cable_joints_from_episode,
+        mode="reset",
+        params={"asset_name": "robot"},
     )
 
 
@@ -1022,8 +1098,22 @@ class AICTaskEnvCfg(ManagerBasedRLEnvCfg):
     def __post_init__(self) -> None:
         super().__post_init__()
         self._apply_initial_arm_joint_override()
+        self_collision_override = os.environ.get("AIC_ISAAC_ENABLE_ROBOT_SELF_COLLISIONS", "").strip()
+        if self_collision_override:
+            self.scene.robot.spawn.articulation_props.enabled_self_collisions = self_collision_override.lower() in {
+                "1",
+                "true",
+                "yes",
+            }
+        soft_limit_factor = os.environ.get("AIC_ISAAC_SOFT_JOINT_POS_LIMIT_FACTOR", "").strip()
+        if soft_limit_factor:
+            self.scene.robot.soft_joint_pos_limit_factor = float(soft_limit_factor)
         if os.environ.get("AIC_ISAAC_ENABLE_CONTACT_SENSOR", "0") not in {"1", "true", "True"}:
             self.scene.contact_forces = None
+        elif self.scene.contact_forces is not None:
+            diagnostic_prim_path = os.environ.get("AIC_ISAAC_CONTACT_SENSOR_PRIM_PATH", "").strip()
+            if diagnostic_prim_path:
+                self.scene.contact_forces.prim_path = diagnostic_prim_path
 
         # General settings.  Gazebo expert datasets are sampled at 20 Hz, so
         # keep Isaac's policy/control step at 50 ms while physics runs faster.
@@ -1053,6 +1143,9 @@ class AICTaskEnvCfg(ManagerBasedRLEnvCfg):
         actuator_damping = os.environ.get("AIC_ISAAC_ARM_ACTUATOR_DAMPING")
         if actuator_damping:
             self.scene.robot.actuators["arm"].damping = float(actuator_damping)
+        actuator_effort_limit = os.environ.get("AIC_ISAAC_ARM_ACTUATOR_EFFORT_LIMIT")
+        if actuator_effort_limit:
+            self.scene.robot.actuators["arm"].effort_limit_sim = float(actuator_effort_limit)
         # self.sim.gravity = (0.0, 0.0, 3)
         self.viewer.eye = (8.0, 0.0, 5.0)
 
@@ -1088,28 +1181,50 @@ class AICTaskEnvCfg(ManagerBasedRLEnvCfg):
         #     asset_name="robot", joint_names=[".*"], scale=0.5, use_default_offset=True
         # )
 
+        arm_action_mode = os.environ.get("AIC_ISAAC_ARM_ACTION_MODE", "differential_ik").strip().lower()
         ik_body_name = os.environ.get("AIC_ISAAC_IK_BODY_NAME", "wrist_3_link").strip() or "wrist_3_link"
+        ik_method = os.environ.get("AIC_ISAAC_IK_METHOD", "svd").strip().lower() or "svd"
+        if ik_method == "dls":
+            ik_params = {"lambda_val": float(os.environ.get("AIC_ISAAC_IK_DLS_LAMBDA", "0.05"))}
+        elif ik_method == "svd":
+            ik_params = {"k_val": 1.0, "min_singular_value": 1e-5}
+        else:
+            raise ValueError(f"Unsupported AIC_ISAAC_IK_METHOD={ik_method!r}; expected 'svd' or 'dls'")
         # Arm action: differential IK.  Default to the wrist for compatibility, but allow insertion
         # diagnostics/training to control the semantic tip frame directly.
-        self.actions.arm_action = DifferentialInverseKinematicsActionCfg(
-            asset_name="robot",
-            joint_names=[
-                "shoulder_pan_joint",
-                "shoulder_lift_joint",
-                "elbow_joint",
-                "wrist_1_joint",
-                "wrist_2_joint",
-                "wrist_3_joint",
-            ],
-            body_name=ik_body_name,
-            controller=DifferentialIKControllerCfg(
-                command_type="pose",
-                use_relative_mode=True,
-                ik_method="svd",
-                ik_params={"k_val": 1.0, "min_singular_value": 1e-5},
-            ),
-            scale=0.05,
-        )
+        arm_joint_names = [
+            "shoulder_pan_joint",
+            "shoulder_lift_joint",
+            "elbow_joint",
+            "wrist_1_joint",
+            "wrist_2_joint",
+            "wrist_3_joint",
+        ]
+        if arm_action_mode == "joint_position":
+            self.actions.arm_action = JointPositionActionCfg(
+                asset_name="robot",
+                joint_names=arm_joint_names,
+                scale=1.0,
+                use_default_offset=False,
+            )
+        elif arm_action_mode == "differential_ik":
+            self.actions.arm_action = DifferentialInverseKinematicsActionCfg(
+                asset_name="robot",
+                joint_names=arm_joint_names,
+                body_name=ik_body_name,
+                controller=DifferentialIKControllerCfg(
+                    command_type="pose",
+                    use_relative_mode=True,
+                    ik_method=ik_method,
+                    ik_params=ik_params,
+                ),
+                scale=0.05,
+            )
+        else:
+            raise ValueError(
+                f"Unsupported AIC_ISAAC_ARM_ACTION_MODE={arm_action_mode!r}; "
+                "expected 'differential_ik' or 'joint_position'"
+            )
 
         # Command generator: end-effector body and pitch (wrist_3_link, EE along x)
         self.commands.ee_pose.body_name = "wrist_3_link"
@@ -1139,6 +1254,14 @@ class AICTaskEnvCfg(ManagerBasedRLEnvCfg):
         )
 
     def _apply_randomization_profile(self) -> None:
+        def ensure_multi_nic_parts() -> None:
+            parts = self.events.randomize_board_and_parts.params["parts"]
+            existing = {part["scene_name"] for part in parts}
+            for index in range(1, 5):
+                name = f"nic_card_{index}"
+                if name not in existing:
+                    parts.append({"scene_name": name, "offset": (5.0, 5.0, -2.0), "pose_range": {}})
+
         profile = os.environ.get("AIC_ISAAC_RANDOMIZATION_PROFILE", "light").lower()
         if profile not in {"none", "light", "heavy"}:
             raise ValueError(
@@ -1164,6 +1287,7 @@ class AICTaskEnvCfg(ManagerBasedRLEnvCfg):
             self.observations.policy.joint_pos.noise = Unoise(n_min=0.0, n_max=0.0)
             self.observations.policy.joint_vel.noise = Unoise(n_min=0.0, n_max=0.0)
             self.observations.policy.eef_pose.noise = Unoise(n_min=0.0, n_max=0.0)
+            ensure_multi_nic_parts()
             return
 
         if profile == "light":
@@ -1198,6 +1322,7 @@ class AICTaskEnvCfg(ManagerBasedRLEnvCfg):
                 },
             ]
             self.actions.arm_action.scale = 0.05
+            ensure_multi_nic_parts()
             return
 
         # Heavy profile: still conservative enough for smoke PPO runs, but
@@ -1250,6 +1375,7 @@ class AICTaskEnvCfg(ManagerBasedRLEnvCfg):
             },
         ]
         self.actions.arm_action.scale = 0.06
+        ensure_multi_nic_parts()
         self.observations.policy.joint_pos.noise = Unoise(n_min=-0.025, n_max=0.025)
         self.observations.policy.joint_vel.noise = Unoise(n_min=-0.025, n_max=0.025)
         self.observations.policy.eef_pose.noise = Unoise(n_min=-0.003, n_max=0.003)

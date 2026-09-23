@@ -570,9 +570,46 @@ scene:
 
     assert target["target_reward_body"] == "sc_tip_link"
     assert target["body_position_offset"] == [0.0, 0.0, 0.0]
+    assert target["target_position_offset"] == [0.0, 0.0, -0.00465]
+    assert target["insertion_axis_world"] == [0.0, 0.0, -1.0]
+    entrance = target["entrance_pose_world"]["position"]
+    seated = target["target_pose_world"]["position"]
+    assert [seated[i] - entrance[i] for i in range(3)] == pytest.approx([0.0, 0.0, -0.00899], abs=1e-6)
+    assert target["seated_depth_m"] == pytest.approx(0.00899)
     assert start["reference_reward_body_name"] == "sc_tip_link"
     assert start["achieved_axial_distance_m"] == 0.006
     assert start["achieved_lateral_distance_m"] == 0.006
+
+
+def test_sc_episode_materializes_requested_intervening_nic_cards(tmp_path: Path) -> None:
+    request = tmp_path / "request.yaml"
+    request.write_text(
+        """
+task_family: sc_to_sc
+generation:
+  target_accepted_trajectories: 1
+  seed: 23
+scene:
+  nic_cards:
+    count: 4
+  sc_ports:
+    count: 2
+    target_port: sc_port_1
+""",
+        encoding="utf-8",
+    )
+
+    summary = isaac_online_serl.materialize_episode_configs(request, tmp_path / "episodes")
+    episode = yaml.safe_load((Path(summary["episodes_dir"]) / "episode_000001.yaml").read_text(encoding="utf-8"))
+    context = episode["task_context"]
+    parts = {part["scene_name"]: part for part in episode["isaac_randomization"]["parts"]}
+
+    assert context["task_family"] == "sc_to_sc"
+    assert context["nic_card_count"] == 4
+    assert [parts[f"nic_card{suffix}"]["present"] for suffix in ("", "_1", "_2", "_3")] == [True] * 4
+    assert parts["nic_card_4"]["present"] is False
+    assert parts["nic_card_4"]["offset"] == [5.0, 5.0, -2.0]
+    assert parts["nic_card_3"]["offset"] == [-0.03235, 0.14329, 0.0743]
 
 
 def test_sfp_entrance_axis_offset_shifts_semantic_gate(tmp_path: Path) -> None:

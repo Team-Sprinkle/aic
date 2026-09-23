@@ -23,9 +23,19 @@ A later three-camera rerun does not change that decision. It recorded 1/8 BC,
 1/8 selected RL, and 3/8 selected RL plus recovery, but compact recovery-mode
 telemetry was not retained and most failures were lateral divergence rather
 than cable snagging. World-model, Seer, reward-model, actor-Q, and imagination
-work remain parked. The next proposed experiment is the bounded
+work remain parked. The active experiment is the bounded
 [SC-to-SC multi-card cable-snag plan](SC_CABLE_SNAG_RECOVERY_PLAN.md): establish
 causal snag incidents, SC perception and BC, then fixed and learned recovery.
+
+The September 23 mechanics audit found that the first apparent multi-card snag
+was gripper-to-card collision caused by an Isaac grasp/scene mismatch. A
+collision-disabled diagnostic proxy showed that a 100 mm route around the card
+edge was more reliable than a direct path (3/3 versus 1/3 final component
+gates), but this used privileged IK waypoints and is not policy evidence. No SC
+BC, RL, world-model, or Seer training was started. Repair the collision-faithful
+SC grasp and pass card-count 0--5 scripted validation before resuming data
+collection. See the
+[mechanics record](experiments/2026-09-23-sc-mechanics-and-routing.md).
 Reconsider temporal or predictive dynamics only if observation history remains
 the measured bottleneck after those supervised and model-free stages.
 
