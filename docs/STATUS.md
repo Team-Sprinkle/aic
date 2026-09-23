@@ -1,5 +1,21 @@
 # Current experiment status
 
+## Ordinary-evaluation cable coverage correction (September 23)
+
+The recent Gazebo audit did not cover every normal development setting. The
+current three-trial `sample_config.yaml` has one-card SFP-to-NIC scenes and a
+zero-card SC-to-SC scene, so it cannot expose SC cable snag among several NIC
+cards. The selected production-family stress runs were also not an exhaustive
+`training_broad` sweep.
+
+The unfiltered historical archive contains 275 rejected SC-to-SC episodes from
+randomized one-through-five-card Gazebo collections. These used planned initial
+motion followed by CheatCode. Initial timeline review shows cable/card
+interaction candidates, but images alone cannot prove that the cable caused a
+stall. Cable snag is therefore reopened as a high-priority causal audit rather
+than treated as disproved by the recent bounded runs. See the updated
+[ranked failure record](experiments/2026-09-23-ranked-failure-scenarios.md).
+
 ## Ranked failure scenarios and targeted reproduction (September 23)
 
 A new evidence-based ranking separates learned-policy alignment drift, local

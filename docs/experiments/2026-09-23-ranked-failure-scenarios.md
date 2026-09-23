@@ -3,6 +3,30 @@
 Date: 2026-09-23
 Status: evidence audit and bounded Gazebo reproduction complete; training plan selected
 
+## Coverage correction: ordinary development evaluation
+
+The bounded audit below did **not** exhaust every ordinary development setting.
+The current `aic_engine/config/sample_config.yaml` contains two fixed SFP-to-NIC
+trials with one NIC card and one SC-to-SC trial with zero NIC cards. It therefore
+cannot reproduce the remembered SC cable interaction among several NIC cards.
+The production-family suite added selected 0/1/3/5-card cases, but it was still
+a bounded sample rather than the complete `training_broad` randomization matrix.
+
+Historical Gazebo data provides a reason to reopen the cable category. The
+unfiltered archive contains 275 rejected SC-to-SC episodes from randomized
+one-through-five-card collections. Their replay mode was
+`joint_position_then_cheatcode`: a planned initial motion followed by the
+official CheatCode action, rather than the stock three-trial sample evaluator.
+Timeline review shows the cable passing against or between card structures in
+some multi-card episodes. Images alone do not establish that cable contact
+caused the terminal failure; force, commanded-versus-measured motion, and cable
+motion must be synchronized before assigning a causal snag label.
+
+Consequently, "no snag in the recent bounded suite" is a negative result for
+that suite only. Cable snag is now an **unresolved, high-priority audit target**
+for the old broad Gazebo episodes and a systematic ordinary-evaluation replay,
+not evidence that the failure is rare in all development settings.
+
 ## How this list was built
 
 This ranking includes a failure only when at least one saved rollout supports
@@ -106,12 +130,13 @@ make the outcome worse without proving that the cable wrapped around a card.
 
 ### Priority 3: cable-to-card snag or persistent cable tension
 
-- **Likelihood:** uncertain. It remains plausible in broader randomized or
-  physical evaluation with several cards, but the post-fix released Gazebo
-  evidence suggests it is less frequent than alignment and axial blocking.
-- **Reproducibility:** low. It has not been causally reproduced in a valid
-  current Gazebo or Isaac scene.
-- **Evidence:** none accepted. The earlier Isaac “snag” remained after cable
+- **Likelihood:** unresolved and potentially high in ordinary broad SC-to-SC
+  evaluation. The recent bounded production-family sample is insufficient to
+  estimate it.
+- **Reproducibility:** not yet measured systematically. It has not been
+  causally reproduced in a valid current Gazebo or Isaac scene, but historical
+  multi-card Gazebo episodes contain visible cable/card interaction candidates.
+- **Accepted causal evidence:** none yet. The earlier Isaac “snag” remained after cable
   collisions were disabled and was traced to roughly 128 N of gripper-housing
   contact with a card. The new five-card Gazebo videos also show the cable
   clear of the card field.
