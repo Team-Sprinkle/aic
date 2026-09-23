@@ -10,6 +10,8 @@ import numpy as np
 import pyarrow.parquet as pq
 import yaml
 
+from transcode_compat_mp4 import transcode
+
 
 def frame_at(video, index):
     reader = cv2.VideoCapture(str(video))
@@ -43,7 +45,8 @@ def main(attempt, output):
         panels.append(cv2.hconcat(row))
     output.mkdir(parents=True, exist_ok=True)
     cv2.imwrite(str(output / "force_review.jpg"), cv2.vconcat(panels))
-    writer = cv2.VideoWriter(str(output / "all_cameras_1hz.mp4"),
+    temporary_video = output / "all_cameras_mp4v_temp.mp4"
+    writer = cv2.VideoWriter(str(temporary_video),
                              cv2.VideoWriter_fourcc(*"mp4v"), 1.0, (1440, 270))
     readers = {
         camera: cv2.VideoCapture(str(
@@ -66,6 +69,10 @@ def main(attempt, output):
     for reader in readers.values():
         reader.release()
     writer.release()
+    try:
+        transcode(temporary_video, output / "all_cameras_1hz.mp4")
+    finally:
+        temporary_video.unlink(missing_ok=True)
     scoring = next((attempt / "results").glob("*/scoring.yaml"))
     scores = yaml.safe_load(scoring.read_text())
     record = {

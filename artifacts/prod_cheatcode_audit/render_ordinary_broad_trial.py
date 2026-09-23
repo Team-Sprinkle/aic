@@ -9,6 +9,8 @@ import cv2
 import numpy as np
 import yaml
 
+from transcode_compat_mp4 import transcode
+
 
 CAMERAS = ("left", "center", "right")
 
@@ -51,11 +53,16 @@ def main(audit, bag, output):
             camera_panels.append(frame)
         panels.append(cv2.hconcat(camera_panels))
 
-    writer = cv2.VideoWriter(str(output / "all_cameras_1hz.mp4"),
+    temporary_video = output / "all_cameras_mp4v_temp.mp4"
+    writer = cv2.VideoWriter(str(temporary_video),
                              cv2.VideoWriter_fourcc(*"mp4v"), 1.0, (1440, 270))
     for panel in panels:
         writer.write(panel)
     writer.release()
+    try:
+        transcode(temporary_video, output / "all_cameras_1hz.mp4")
+    finally:
+        temporary_video.unlink(missing_ok=True)
     indices = sorted({0, len(panels) // 4, len(panels) // 2,
                       3 * len(panels) // 4, len(panels) - 1})
     sheet = cv2.vconcat([panels[i] for i in indices])

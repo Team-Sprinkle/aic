@@ -83,8 +83,8 @@
     },
     {
       "path": "artifacts/prod_cheatcode_audit/targeted_failure_reproduction/summary.json",
-      "bytes": 12622,
-      "sha256": "045e208062179b8280a7674b306063cfefc313455ca04c0bacb63614885ab911"
+      "bytes": 13122,
+      "sha256": "498a4f874484b3a3724396cc9a443b6fdb17a594ac2c82a96d29936b26908276"
     },
     {
       "path": "artifacts/prod_cheatcode_audit/targeted_failure_reproduction/trial_04_five_card_axial_partial_contact_sheet.jpg",
@@ -214,8 +214,8 @@
     },
     {
       "path": "artifacts/prod_cheatcode_audit/ordinary_broad_followup/videos/trial_02/all_cameras_1hz.mp4",
-      "bytes": 755436,
-      "sha256": "2265adcc8d50373f943a17f692f36da5bafd580e8225e3ba8dc0c73bd936450f"
+      "bytes": 656442,
+      "sha256": "6752f0ed0a452c9e8c26143ee2ea7d834ac75cc803cbf31be8a7ab1e22dd4ee8"
     },
     {
       "path": "artifacts/prod_cheatcode_audit/ordinary_broad_followup/videos/trial_02/five_timepoints.jpg",
@@ -224,8 +224,8 @@
     },
     {
       "path": "artifacts/prod_cheatcode_audit/ordinary_broad_followup/videos/trial_09/all_cameras_1hz.mp4",
-      "bytes": 865195,
-      "sha256": "cc6ce1375164bf5620af72b968668dc3d65e2a708244972ed421c6d4745a1290"
+      "bytes": 786757,
+      "sha256": "000711bca47b1a9539acc8276a74511e163407152440b4ac81510376bc07c8d6"
     },
     {
       "path": "artifacts/prod_cheatcode_audit/ordinary_broad_followup/videos/trial_09/five_timepoints.jpg",
@@ -234,8 +234,8 @@
     },
     {
       "path": "artifacts/prod_cheatcode_audit/ordinary_broad_followup/videos/trial_13/all_cameras_1hz.mp4",
-      "bytes": 945793,
-      "sha256": "ab653d3b867f04ade9bbfd886a929985352ce5376e5dfaf8c97ad9862cc48e2c"
+      "bytes": 837983,
+      "sha256": "02efa95880e86b41d6c274f002eb849d40e29d8752d7ba8662985f1ad44728f9"
     },
     {
       "path": "artifacts/prod_cheatcode_audit/ordinary_broad_followup/videos/trial_13/five_timepoints.jpg",
@@ -244,8 +244,8 @@
     },
     {
       "path": "artifacts/prod_cheatcode_audit/ordinary_broad_followup/videos/trial_15/all_cameras_1hz.mp4",
-      "bytes": 986455,
-      "sha256": "406ecba8093b09f3fe99617433c1f87db9c7cf6fcad4ccb0f246389e25b1e434"
+      "bytes": 900488,
+      "sha256": "ec7588fec495462577754bc6aaa7ac95efd0001d48ed10cf581ea69df8b81827"
     },
     {
       "path": "artifacts/prod_cheatcode_audit/ordinary_broad_followup/videos/trial_15/five_timepoints.jpg",
@@ -254,8 +254,8 @@
     },
     {
       "path": "artifacts/prod_cheatcode_audit/ordinary_broad_followup/videos/trial_18/all_cameras_1hz.mp4",
-      "bytes": 967312,
-      "sha256": "5facd413b93fb28f163419df1b2ecc4e0ee506f88231f354d62ce106c2579e6d"
+      "bytes": 912086,
+      "sha256": "bf65f1ccd077a12fd4e38bcb74608fb3b75755d12f5d1d72d92c08f761e5c444"
     },
     {
       "path": "artifacts/prod_cheatcode_audit/ordinary_broad_followup/videos/trial_18/five_timepoints.jpg",
@@ -264,8 +264,8 @@
     },
     {
       "path": "artifacts/prod_cheatcode_audit/ordinary_broad_followup/videos/trial_19/all_cameras_1hz.mp4",
-      "bytes": 929543,
-      "sha256": "4e6a552a527732cb1e16b040a3dc4b0adbae620025befdcf6d091f8a351fb084"
+      "bytes": 900670,
+      "sha256": "eecc8e0b397bb10ee211a96805c550f12224572eb8e37c00db73706f06579d3f"
     },
     {
       "path": "artifacts/prod_cheatcode_audit/ordinary_broad_followup/videos/trial_19/five_timepoints.jpg",
@@ -279,8 +279,8 @@
     },
     {
       "path": "artifacts/prod_cheatcode_audit/ordinary_broad_followup/vlm_review/replay_sc3_003/all_cameras_1hz.mp4",
-      "bytes": 1509617,
-      "sha256": "33559d660ae8a0392fcb1231e823cd607742a6c4ff39392fd3a48132c7d23bd4"
+      "bytes": 1332730,
+      "sha256": "c45c7c2bcc4413e68eb8fd129f622e64bd4b998d67b88bf398bd8a466133cb04"
     },
     {
       "path": "artifacts/prod_cheatcode_audit/ordinary_broad_followup/vlm_review/replay_sc3_003/eval_config.yaml",
@@ -349,8 +349,8 @@
     },
     {
       "path": "artifacts/prod_cheatcode_audit/ordinary_broad_followup/vlm_review/sc3_003/all_cameras_1hz.mp4",
-      "bytes": 1215454,
-      "sha256": "8a974b3ca67309a7b9f6cd627cc1826bec1d0d24a21617b136cfeff502ef59aa"
+      "bytes": 1203724,
+      "sha256": "c16eb7116aed7d7bdf06cbd207d6f00391aeae6952e027ef8a2ca90b3834c8a3"
     },
     {
       "path": "artifacts/prod_cheatcode_audit/ordinary_broad_followup/vlm_review/sc3_003/force_review.jpg",
@@ -374,8 +374,8 @@
     },
     {
       "path": "artifacts/prod_cheatcode_audit/ordinary_broad_followup/vlm_review/stock_seed51500/all_cameras_1hz.mp4",
-      "bytes": 1017697,
-      "sha256": "3b1a34e51a93f8d84934430f3a51b2580e04dfde6ab3f6a7ce5bb65610c2813d"
+      "bytes": 942524,
+      "sha256": "613302a44ba264339554fd5abf605cc7e1766356ed1e530e487a5c4578808ba1"
     },
     {
       "path": "artifacts/prod_cheatcode_audit/ordinary_broad_followup/vlm_review/stock_seed51500/eval_config.yaml",
@@ -426,7 +426,8 @@
     "artifacts/prod_cheatcode_audit/summarize_ordinary_followups.py",
     "artifacts/prod_cheatcode_audit/extract_ordinary_broad_trial.py",
     "artifacts/prod_cheatcode_audit/run_vlm_attempt_replay.sh",
-    "artifacts/prod_cheatcode_audit/scan_agent_replay_failures.py"
+    "artifacts/prod_cheatcode_audit/scan_agent_replay_failures.py",
+    "artifacts/prod_cheatcode_audit/transcode_compat_mp4.py"
   ],
   "cable_route_probe_bulk_root": "/var/tmp/chmin_aic_cable_route_probe_20260923/",
   "cable_route_probe_s3_download": "/var/tmp/chmin_aic_s3_nic5_review_20260923/accepted_center.mp4",
@@ -468,8 +469,8 @@
     },
     {
       "path": "artifacts/prod_cheatcode_audit/ordinary_broad_followup/cable_route_probe/across_1/visuals/all_cameras_1hz.mp4",
-      "bytes": 2079988,
-      "sha256": "ddf77c587e2b60387d7b349b2d2890d2d403357eb7165084eb630078f96790de"
+      "bytes": 1914960,
+      "sha256": "c48c08f770626bbdd2570a859a22d27375e7b5fc576af9ab424d8e5b1a92b2dd"
     },
     {
       "path": "artifacts/prod_cheatcode_audit/ordinary_broad_followup/cable_route_probe/across_1/visuals/five_timepoints.jpg",
@@ -513,8 +514,8 @@
     },
     {
       "path": "artifacts/prod_cheatcode_audit/ordinary_broad_followup/cable_route_probe/across_2/visuals/all_cameras_1hz.mp4",
-      "bytes": 1913362,
-      "sha256": "f9cd6794d34b62f93f894a60b672eb037814d3095f3b0684c8557309609e2611"
+      "bytes": 1763396,
+      "sha256": "fef5effa6e057e606e6386c79c60190cf1fd4934b91dda37d54f7f3b15f5c8fb"
     },
     {
       "path": "artifacts/prod_cheatcode_audit/ordinary_broad_followup/cable_route_probe/across_2/visuals/five_timepoints.jpg",
@@ -558,8 +559,8 @@
     },
     {
       "path": "artifacts/prod_cheatcode_audit/ordinary_broad_followup/cable_route_probe/across_3/visuals/all_cameras_1hz.mp4",
-      "bytes": 1868671,
-      "sha256": "0f844a5cb1debbf7a6637e81060f4a8d9870be4135ed9d028c0c528e9c4f927b"
+      "bytes": 1706446,
+      "sha256": "96564ac346d98af450039f74a49aacbfc9fe9951bc4d9a3e086de3975dcd146e"
     },
     {
       "path": "artifacts/prod_cheatcode_audit/ordinary_broad_followup/cable_route_probe/across_3/visuals/five_timepoints.jpg",
@@ -603,8 +604,8 @@
     },
     {
       "path": "artifacts/prod_cheatcode_audit/ordinary_broad_followup/cable_route_probe/low_clearance/visuals/all_cameras_1hz.mp4",
-      "bytes": 1490367,
-      "sha256": "c5d28f63bdafced0d590e2ded46f1fc779a8f24b81c6473d9b7c1d1a0b74b90c"
+      "bytes": 1295739,
+      "sha256": "56735f5c996307589e9031f6176932e7312a08244b4d22282190b01c203c4a6d"
     },
     {
       "path": "artifacts/prod_cheatcode_audit/ordinary_broad_followup/cable_route_probe/low_clearance/visuals/five_timepoints.jpg",
@@ -648,8 +649,8 @@
     },
     {
       "path": "artifacts/prod_cheatcode_audit/ordinary_broad_followup/cable_route_probe/outside_1/visuals/all_cameras_1hz.mp4",
-      "bytes": 1954810,
-      "sha256": "f525d0110c5d38b72db32beb87b4018230940c9a3b247d98f44cc2c99eb9a9f3"
+      "bytes": 1759215,
+      "sha256": "9329f3914651ef73cf4acd5e37b8900617c35dc74069fa6bc10ba22825d8b985"
     },
     {
       "path": "artifacts/prod_cheatcode_audit/ordinary_broad_followup/cable_route_probe/outside_1/visuals/five_timepoints.jpg",
@@ -693,8 +694,8 @@
     },
     {
       "path": "artifacts/prod_cheatcode_audit/ordinary_broad_followup/cable_route_probe/outside_2/visuals/all_cameras_1hz.mp4",
-      "bytes": 1980458,
-      "sha256": "b890bdd05512ee84c6fee9485c63e547074172e1fd07c4f3bbe7d4607a76f60e"
+      "bytes": 1787890,
+      "sha256": "e8f3c7b00c32cddcbbd2ef40259dd431bd5452d7c5b975591af77f730745c92a"
     },
     {
       "path": "artifacts/prod_cheatcode_audit/ordinary_broad_followup/cable_route_probe/outside_2/visuals/five_timepoints.jpg",
@@ -738,8 +739,8 @@
     },
     {
       "path": "artifacts/prod_cheatcode_audit/ordinary_broad_followup/cable_route_probe/outside_3/visuals/all_cameras_1hz.mp4",
-      "bytes": 1946671,
-      "sha256": "3cadb07db2446f4dada8db0459bd46f01ce17ce09ae4db8bd91bc24a53305ffd"
+      "bytes": 1757781,
+      "sha256": "1da17945141e692587a411fe890e8e1d056f18e81fc3b797c937955f30d4a6eb"
     },
     {
       "path": "artifacts/prod_cheatcode_audit/ordinary_broad_followup/cable_route_probe/outside_3/visuals/five_timepoints.jpg",
@@ -763,14 +764,15 @@
     },
     {
       "path": "artifacts/prod_cheatcode_audit/ordinary_broad_followup/cable_route_probe/summary.json",
-      "bytes": 12033,
-      "sha256": "60cad7fc7955a100f157dc1f19c8f936704fad778a3b51ef86ab77e53aabd7e1"
+      "bytes": 12196,
+      "sha256": "308db2c195b354508042cf5a98f0e7fd16b625b14940380311b0918377883fab"
     }
   ],
   "cable_route_probe_scripts": [
     "artifacts/prod_cheatcode_audit/CableRouteDiagnostic.py",
     "artifacts/prod_cheatcode_audit/run_cable_route_diagnostic.sh",
     "artifacts/prod_cheatcode_audit/analyze_cable_route_bag.py",
-    "artifacts/prod_cheatcode_audit/package_cable_route_diagnostic.py"
+    "artifacts/prod_cheatcode_audit/package_cable_route_diagnostic.py",
+    "artifacts/prod_cheatcode_audit/transcode_compat_mp4.py"
   ]
 }

@@ -140,6 +140,11 @@ contains every run, score, measured error, plot, and video path. Start with
 the [failed across-card video](../../artifacts/prod_cheatcode_audit/ordinary_broad_followup/cable_route_probe/across_1/visuals/all_cameras_1hz.mp4),
 the [successful across-card repeat](../../artifacts/prod_cheatcode_audit/ordinary_broad_followup/cable_route_probe/across_2/visuals/all_cameras_1hz.mp4),
 and the [outside-left partial](../../artifacts/prod_cheatcode_audit/ordinary_broad_followup/cable_route_probe/outside_1/visuals/all_cameras_1hz.mp4).
+These review MP4s use H.264/AVC Constrained Baseline, 8-bit YUV 4:2:0,
+and fast-start metadata for Ubuntu and browser playback. Images are sampled
+once per second; the encoder repeats them at 10 fps, so playback time still
+matches the recorded timeline. The codec-only conversion did not rerun the
+simulator or alter the scored outcomes.
 
 ## Reproduction and next gate
 

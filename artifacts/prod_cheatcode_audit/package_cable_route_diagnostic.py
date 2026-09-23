@@ -10,6 +10,8 @@ import sys
 
 import yaml
 
+from transcode_compat_mp4 import transcode
+
 
 RUNS = {
     "across_1": "across_cards_v3",
@@ -39,7 +41,10 @@ def main(source_root: Path, stock_root: Path, target_root: Path) -> None:
     for label, dirname in RUNS.items():
         source = source_root / dirname
         for relative in KEEP:
-            copy(source / relative, target_root / label / relative)
+            if relative == "visuals/all_cameras_1hz.mp4":
+                transcode(source / relative, target_root / label / relative)
+            else:
+                copy(source / relative, target_root / label / relative)
         score = yaml.safe_load((source / "results/scoring.yaml").read_text())
         tier = score["trial_000001"]["tier_3"]
         analysis = json.loads((source / "trial_analysis.json").read_text())
@@ -81,6 +86,7 @@ def main(source_root: Path, stock_root: Path, target_root: Path) -> None:
         "image": "ghcr.io/intrinsic-dev/aic/aic_eval@sha256:9aa2ffdbb946d38edde1bac7b5f02a44cfbea26e3b04a9c74e09f14c97472923",
         "scene": "The same generated SC-to-SC, one-port, five-NIC-card scene from seed 51500 was used in every run; the exact eval_config.yaml is saved per run.",
         "actor": "Privileged diagnostic waypoint route from Gazebo TF, then installed stock CheatCode for insertion. No learned policy and no training.",
+        "review_video_encoding": "H.264/AVC Constrained Baseline, yuv420p, faststart; images sampled at 1 Hz and repeated at 10 fps without changing timeline duration",
         "stock_control": {"bulk_root": str(stock_root), "total_score": 54.50136311050045,
                           "tier3_score": 39.671110596431397,
                           "outcome": "partial", "minimum_main_pcb_center_gap_mm":

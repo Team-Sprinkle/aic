@@ -4,6 +4,7 @@
   "image": "ghcr.io/intrinsic-dev/aic/aic_eval@sha256:9aa2ffdbb946d38edde1bac7b5f02a44cfbea26e3b04a9c74e09f14c97472923",
   "scene": "The same generated SC-to-SC, one-port, five-NIC-card scene from seed 51500 was used in every run; the exact eval_config.yaml is saved per run.",
   "actor": "Privileged diagnostic waypoint route from Gazebo TF, then installed stock CheatCode for insertion. No learned policy and no training.",
+  "review_video_encoding": "H.264/AVC Constrained Baseline, yuv420p, faststart; images sampled at 1 Hz and repeated at 10 fps without changing timeline duration",
   "stock_control": {
     "bulk_root": "/var/tmp/chmin_aic_vlm_seed51500_20260923/stock_cheatcode",
     "total_score": 54.50136311050045,

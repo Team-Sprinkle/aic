@@ -28,6 +28,9 @@ containers were left running and were not modified.
 `ordinary_broad_followup/` holds the 19-scene broad development manifest,
 selected score summary (including rejected invalid attempts), historical
 archive review, measured plug/port analyses, and compact one-second videos.
+The `all_cameras_1hz.mp4` review videos are encoded as H.264/AVC Constrained
+Baseline with 10 fps playback; each sampled image remains visible for one
+second. The original one-Hz source frames remain in the bulk directories.
 The clean scores were 13 full, five partial, and one no insertion. The first
 long batch developed Gazebo physics-entity errors; isolated replays were used
 for its affected scenes.
