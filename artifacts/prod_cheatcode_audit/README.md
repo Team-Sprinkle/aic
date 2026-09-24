@@ -65,3 +65,13 @@ explains the missing cable/card contact identity, S3 audit, exact commands,
 videos, and overhead/side cable views. Bulk MCAPs, camera frames, and logs
 remain at `/var/tmp/chmin_aic_cable_route_probe_20260923/`. No model was
 trained.
+
+The follow-up `cable_route_probe/smooth_wide_repeat_06/` holds synchronized
+20 fps wrist, overhead, side, and combined videos from a new no-insertion
+repeat with the same scene and across-card route. Repeat 02 is a partial
+comparison. The fixed wide cameras show the free cable end and whole card
+row; they do not affect physical contact or provide observations to the
+actor. The [experiment record](../../docs/experiments/2026-09-23-fixed-five-card-route-probe.md#smoother-replay-with-an-actual-full-scene-cable-view)
+explains what the video establishes and why the exact obstruction remains
+unidentified. The seven complete source bags and frames remain at
+`/var/tmp/chmin_aic_cable_route_smooth_20260923/`.

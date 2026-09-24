@@ -146,6 +146,80 @@ once per second; the encoder repeats them at 10 fps, so playback time still
 matches the recorded timeline. The codec-only conversion did not rerun the
 simulator or alter the scored outcomes.
 
+## Smoother replay with an actual full-scene cable view
+
+We reran the **same saved `eval_config.yaml` and across-card route** with two
+collision-free, static diagnostic cameras added to the pinned Gazebo world.
+They do not supply actor observations: the policy was still the privileged
+diagnostic waypoint route followed by stock CheatCode. The overhead camera
+looks down on the whole board, cable loop, and gray free-end plug; the side
+camera shows the cable height over the five cards. The original three wrist
+cameras were captured alongside them. All five sources supplied actual
+images every 0.05 s of simulation time, rather than repeated one-Hz frames.
+The four synchronized H.264 videos play at 20 fps. Their roughly 63-second
+video duration is simulation time; Gazebo took longer in wall time to render
+the extra cameras.
+
+One pilot lost its opening frames when the new recorder hit a ROS property
+name collision. We fixed the recorder and excluded that pilot from the
+full-coverage count. The following seven runs cover the entire scored task:
+
+| Repeat | Official tier-3 outcome | Score | Review |
+| --- | --- | ---: | --- |
+| 02 | Partial insertion | 39.67 | [Combined comparison video](../../artifacts/prod_cheatcode_audit/ordinary_broad_followup/cable_route_probe/smooth_wide_repeat_02/visuals/all_views_20fps.mp4) |
+| 03 | Partial insertion | 39.66 | Bulk frames and bag retained |
+| 04 | Partial insertion | 39.67 | Bulk frames and bag retained |
+| 05 | Partial insertion | 40.41 | Bulk frames and bag retained |
+| **06** | **No insertion; scorer says 0.05 m remaining** | **19.72** | [Combined failure video](../../artifacts/prod_cheatcode_audit/ordinary_broad_followup/cable_route_probe/smooth_wide_repeat_06/visuals/all_views_20fps.mp4) |
+| 07 | Partial insertion | 39.67 | Bulk frames and bag retained |
+| 08 | Partial insertion | 39.67 | Bulk frames and bag retained |
+
+For a larger image, open the failed run's [full-resolution overhead view](../../artifacts/prod_cheatcode_audit/ordinary_broad_followup/cable_route_probe/smooth_wide_repeat_06/visuals/overhead_20fps.mp4)
+and [full-resolution side view](../../artifacts/prod_cheatcode_audit/ordinary_broad_followup/cable_route_probe/smooth_wide_repeat_06/visuals/side_20fps.mp4).
+The [wrist-only triptych](../../artifacts/prod_cheatcode_audit/ordinary_broad_followup/cable_route_probe/smooth_wide_repeat_06/visuals/wrist_triptych_20fps.mp4)
+uses the same clock. The [overhead contact sheet](../../artifacts/prod_cheatcode_audit/ordinary_broad_followup/cable_route_probe/smooth_wide_repeat_06/visuals/overhead_20fps_contact_sheet.jpg)
+marks five points in that video. The gray plug at the end of the large yellow
+loop in the overhead view is the **free, unconnected cable end**.
+
+In repeat 06, the cable is visibly stretched across card tops while the
+robot approaches the selected port. Around **48 seconds of video time**, the
+wrist force peaks at 52.9 N; after that, the plug and measured TCP make
+little forward progress while the TCP target keeps advancing. The plug ends
+38.7 mm behind the port entrance, 4.45 mm laterally off center, with a
+111.6 mm TCP command error and no insertion event. By comparison, partial
+repeat 02 ends 2.2 mm *past* the entrance with 1.23 mm lateral error and a
+27.6 N peak wrist force. These are measured outcomes from the bags; video
+time was mapped from capture wall timestamps to the bag's wall timestamps.
+
+The new failed repeat is **not evidence of the same specific snag** as the
+older Across 1 run. In repeat 06, cable link 5 moved 19.1 mm from 60 to
+80 s of bag wall time, whereas it moved only 0.3 mm in the older candidate.
+Its closest sampled segment center was 1.36 mm from a main PCB collider, but
+the bag still has no named cable/card contact. The larger 4.45 mm terminal
+lateral error also makes a blocked or misaligned port approach plausible.
+The footage shows the cable route and free end clearly; it does not isolate
+which contact caused the stop. The complete [machine summary](../../artifacts/prod_cheatcode_audit/ordinary_broad_followup/cable_route_probe/smooth_wide_summary.json)
+retains all repeat outcomes, source roots, rates, timestamps, and measured
+geometry. Full JPEG frames and MCAP bags are at
+`/var/tmp/chmin_aic_cable_route_smooth_20260923/`.
+
+To reproduce a smooth-view run on one GPU, prepare a new audit directory with
+the saved scene config and generated camera-only world/bridge, then run:
+
+```bash
+python artifacts/prod_cheatcode_audit/make_wide_audit_world.py \
+  aic_description/world/aic.sdf aic_bringup/config/ros_gz_bridge_config.yaml \
+  /var/tmp/my_smooth_audit
+cp artifacts/prod_cheatcode_audit/ordinary_broad_followup/cable_route_probe/across_1/eval_config.yaml \
+  /var/tmp/my_smooth_audit/eval_config.yaml
+AIC_AUDIT_SMOOTH_CAPTURE=1 AIC_AUDIT_DEADLINE_SEC=1800 \
+  bash artifacts/prod_cheatcode_audit/run_cable_route_diagnostic.sh \
+  /var/tmp/my_smooth_audit across_cards
+bag=$(find /var/tmp/my_smooth_audit/results -maxdepth 1 -type d -name 'bag_trial_*' | head -1)
+.pixi/envs/default/bin/python artifacts/prod_cheatcode_audit/render_smooth_wide.py \
+  /var/tmp/my_smooth_audit "$bag" /var/tmp/my_smooth_audit/visuals
+```
+
 ## Reproduction and next gate
 
 The route code, runner, geometry analysis, and packager are

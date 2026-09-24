@@ -773,6 +773,168 @@
     "artifacts/prod_cheatcode_audit/run_cable_route_diagnostic.sh",
     "artifacts/prod_cheatcode_audit/analyze_cable_route_bag.py",
     "artifacts/prod_cheatcode_audit/package_cable_route_diagnostic.py",
-    "artifacts/prod_cheatcode_audit/transcode_compat_mp4.py"
+    "artifacts/prod_cheatcode_audit/transcode_compat_mp4.py",
+    "artifacts/prod_cheatcode_audit/make_wide_audit_world.py",
+    "artifacts/prod_cheatcode_audit/capture_smooth_wide.py",
+    "artifacts/prod_cheatcode_audit/render_smooth_wide.py",
+    "artifacts/prod_cheatcode_audit/summarize_smooth_wide.py"
+  ],
+  "smooth_wide_bulk_root": "/var/tmp/chmin_aic_cable_route_smooth_20260923",
+  "smooth_wide": [
+    {
+      "path": "artifacts/prod_cheatcode_audit/ordinary_broad_followup/cable_route_probe/smooth_wide_summary.json",
+      "bytes": 8774,
+      "sha256": "81f52ed5ca5f61565c963ac71d701e4ff1b7e653aa93291d43e9ba40d91ac7a4"
+    },
+    {
+      "path": "artifacts/prod_cheatcode_audit/ordinary_broad_followup/cable_route_probe/smooth_wide_repeat_02/bridge_audit.yaml",
+      "bytes": 3429,
+      "sha256": "014d7e064f791835a988b835d8cd50b33e11f65d4617e532b68ab9abea8ec323"
+    },
+    {
+      "path": "artifacts/prod_cheatcode_audit/ordinary_broad_followup/cable_route_probe/smooth_wide_repeat_02/eval_config.yaml",
+      "bytes": 4640,
+      "sha256": "c550f7c9ca7e476c25235bdafbac2b7daf98d618083abe26668c3126ffdc72dc"
+    },
+    {
+      "path": "artifacts/prod_cheatcode_audit/ordinary_broad_followup/cable_route_probe/smooth_wide_repeat_02/geometry/cable_geometry_summary.json",
+      "bytes": 919,
+      "sha256": "3a3cc827503b14e1ab750ad47910d89e9c148dabcdee52481d7d1097c024e2dc"
+    },
+    {
+      "path": "artifacts/prod_cheatcode_audit/ordinary_broad_followup/cable_route_probe/smooth_wide_repeat_02/geometry/cable_overhead_side_force.png",
+      "bytes": 334739,
+      "sha256": "315f605b41ed2abfb64dbcc38d962347a7be5b67199a8bb8371aeb653df9721b"
+    },
+    {
+      "path": "artifacts/prod_cheatcode_audit/ordinary_broad_followup/cable_route_probe/smooth_wide_repeat_02/results/scoring.yaml",
+      "bytes": 970,
+      "sha256": "9535539cdf19b828953b9fc97a922c8c13eb9f47545a7e339a2648188208d02d"
+    },
+    {
+      "path": "artifacts/prod_cheatcode_audit/ordinary_broad_followup/cable_route_probe/smooth_wide_repeat_02/route_plan.json",
+      "bytes": 1971,
+      "sha256": "5fee00972f6bcc61a8c2a58db4dd5235cd2f8aed917e85280e506cbd8bded797"
+    },
+    {
+      "path": "artifacts/prod_cheatcode_audit/ordinary_broad_followup/cable_route_probe/smooth_wide_repeat_02/trial_analysis.json",
+      "bytes": 327263,
+      "sha256": "f1d3ed053586a30afbae642955a96f7302b77e5820cee11bd72a8f2a27e43492"
+    },
+    {
+      "path": "artifacts/prod_cheatcode_audit/ordinary_broad_followup/cable_route_probe/smooth_wide_repeat_02/visuals/all_views_20fps.mp4",
+      "bytes": 9302838,
+      "sha256": "1a0e32fff2640279323f42b9f8d76406d6278cb674023f0a7b6b06aec41db722"
+    },
+    {
+      "path": "artifacts/prod_cheatcode_audit/ordinary_broad_followup/cable_route_probe/smooth_wide_repeat_02/visuals/overhead_20fps.mp4",
+      "bytes": 6461720,
+      "sha256": "d371728b9bad7757927d70d935680ea7bb31c17641a1a52d5fee20343b465cf4"
+    },
+    {
+      "path": "artifacts/prod_cheatcode_audit/ordinary_broad_followup/cable_route_probe/smooth_wide_repeat_02/visuals/overhead_20fps_contact_sheet.jpg",
+      "bytes": 182037,
+      "sha256": "288c0204b416c54f023fc25d8e44d56a8ab0b46444af4cc802279f9319f41ec0"
+    },
+    {
+      "path": "artifacts/prod_cheatcode_audit/ordinary_broad_followup/cable_route_probe/smooth_wide_repeat_02/visuals/render_summary.json",
+      "bytes": 1690,
+      "sha256": "e3df7d23ab5357099eb304c93efa041abf576ef31a4a797c96843fa29c0e4364"
+    },
+    {
+      "path": "artifacts/prod_cheatcode_audit/ordinary_broad_followup/cable_route_probe/smooth_wide_repeat_02/visuals/side_20fps.mp4",
+      "bytes": 4621483,
+      "sha256": "3498223b490de96d1227766906d0d694a32ca07e8095185f8340ac1cb0c00b39"
+    },
+    {
+      "path": "artifacts/prod_cheatcode_audit/ordinary_broad_followup/cable_route_probe/smooth_wide_repeat_02/visuals/side_20fps_contact_sheet.jpg",
+      "bytes": 213752,
+      "sha256": "0607a2949282db60accdbcaee787095f635c64b4153fa3fe47c0cb2406755101"
+    },
+    {
+      "path": "artifacts/prod_cheatcode_audit/ordinary_broad_followup/cable_route_probe/smooth_wide_repeat_02/visuals/wrist_triptych_20fps.mp4",
+      "bytes": 6843547,
+      "sha256": "e0c183969ac53f3a42d3d536ee8a6264110db15855400b2211f479dfdc2a715a"
+    },
+    {
+      "path": "artifacts/prod_cheatcode_audit/ordinary_broad_followup/cable_route_probe/smooth_wide_repeat_02/world_audit.sdf",
+      "bytes": 7536,
+      "sha256": "5d8d66c95a6e1fd11493c7d0515d438277d554eb9ecb313302f13fd5e6fd58fd"
+    },
+    {
+      "path": "artifacts/prod_cheatcode_audit/ordinary_broad_followup/cable_route_probe/smooth_wide_repeat_06/bridge_audit.yaml",
+      "bytes": 3429,
+      "sha256": "014d7e064f791835a988b835d8cd50b33e11f65d4617e532b68ab9abea8ec323"
+    },
+    {
+      "path": "artifacts/prod_cheatcode_audit/ordinary_broad_followup/cable_route_probe/smooth_wide_repeat_06/eval_config.yaml",
+      "bytes": 4640,
+      "sha256": "c550f7c9ca7e476c25235bdafbac2b7daf98d618083abe26668c3126ffdc72dc"
+    },
+    {
+      "path": "artifacts/prod_cheatcode_audit/ordinary_broad_followup/cable_route_probe/smooth_wide_repeat_06/geometry/cable_geometry_summary.json",
+      "bytes": 898,
+      "sha256": "603a041b461048d840d20a58f663abf87a014c780f092ba82c2330a0a7236bdd"
+    },
+    {
+      "path": "artifacts/prod_cheatcode_audit/ordinary_broad_followup/cable_route_probe/smooth_wide_repeat_06/geometry/cable_overhead_side_force.png",
+      "bytes": 327618,
+      "sha256": "deed085c5f93709f9cdcdb5229e982ddcc5a6f4f0f5377c456e7019bf3382830"
+    },
+    {
+      "path": "artifacts/prod_cheatcode_audit/ordinary_broad_followup/cable_route_probe/smooth_wide_repeat_06/results/scoring.yaml",
+      "bytes": 978,
+      "sha256": "aab64184eba92dd31877bb21142b29ef77c2d68d40235e6ed96a053100c3e12e"
+    },
+    {
+      "path": "artifacts/prod_cheatcode_audit/ordinary_broad_followup/cable_route_probe/smooth_wide_repeat_06/route_plan.json",
+      "bytes": 1973,
+      "sha256": "49c56b95888919faf5f66f9f1bc15801e390c6f06ad5f4d372d6206fabc8259b"
+    },
+    {
+      "path": "artifacts/prod_cheatcode_audit/ordinary_broad_followup/cable_route_probe/smooth_wide_repeat_06/trial_analysis.json",
+      "bytes": 341406,
+      "sha256": "9408d07cbd955278f4c4c518a05c5fa9d166cbe7bf1964b6ed73a601a82d81cc"
+    },
+    {
+      "path": "artifacts/prod_cheatcode_audit/ordinary_broad_followup/cable_route_probe/smooth_wide_repeat_06/visuals/all_views_20fps.mp4",
+      "bytes": 10347136,
+      "sha256": "8f4eb801245c602b7885b88de3700d1584028c9f2269ec5ae13c1615f5168be0"
+    },
+    {
+      "path": "artifacts/prod_cheatcode_audit/ordinary_broad_followup/cable_route_probe/smooth_wide_repeat_06/visuals/overhead_20fps.mp4",
+      "bytes": 7365195,
+      "sha256": "fd865499b961466704288396d150b774c398b2d88b8fafa9bc6a5a3545fda054"
+    },
+    {
+      "path": "artifacts/prod_cheatcode_audit/ordinary_broad_followup/cable_route_probe/smooth_wide_repeat_06/visuals/overhead_20fps_contact_sheet.jpg",
+      "bytes": 183182,
+      "sha256": "941d35ae60de0f517f062ed386542b564d9638083e08743ea19a799a3021d3f3"
+    },
+    {
+      "path": "artifacts/prod_cheatcode_audit/ordinary_broad_followup/cable_route_probe/smooth_wide_repeat_06/visuals/render_summary.json",
+      "bytes": 1690,
+      "sha256": "7fa9351f55647497330604910ed7aaa2d367e299af2d93fa8c34075f9e9e718d"
+    },
+    {
+      "path": "artifacts/prod_cheatcode_audit/ordinary_broad_followup/cable_route_probe/smooth_wide_repeat_06/visuals/side_20fps.mp4",
+      "bytes": 5702726,
+      "sha256": "ee47e4da69fca5785a68819f072c62d282faeba7db50c30cb3d2ce4768903310"
+    },
+    {
+      "path": "artifacts/prod_cheatcode_audit/ordinary_broad_followup/cable_route_probe/smooth_wide_repeat_06/visuals/side_20fps_contact_sheet.jpg",
+      "bytes": 214215,
+      "sha256": "86cf6a3cf9d92454faf9be037bc621c097f6a59d574a95bcab6e479c5682b274"
+    },
+    {
+      "path": "artifacts/prod_cheatcode_audit/ordinary_broad_followup/cable_route_probe/smooth_wide_repeat_06/visuals/wrist_triptych_20fps.mp4",
+      "bytes": 7614709,
+      "sha256": "d30d696b8426696a38bcd7ddbbd61fa2a0c66839de3d4fe8dd847aa371bb86d0"
+    },
+    {
+      "path": "artifacts/prod_cheatcode_audit/ordinary_broad_followup/cable_route_probe/smooth_wide_repeat_06/world_audit.sdf",
+      "bytes": 7536,
+      "sha256": "5d8d66c95a6e1fd11493c7d0515d438277d554eb9ecb313302f13fd5e6fd58fd"
+    }
   ]
 }

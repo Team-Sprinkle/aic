@@ -8,7 +8,11 @@ repo="$(realpath "$(dirname "$0")/../..")"
 image=ghcr.io/intrinsic-dev/aic/aic_eval@sha256:9aa2ffdbb946d38edde1bac7b5f02a44cfbea26e3b04a9c74e09f14c97472923
 name="aic_cable_route_${variant}_20260923"
 test -f "$audit_dir/eval_config.yaml"
-cp "$repo/artifacts/prod_cheatcode_audit/official_qualification/capture_observations.py" "$audit_dir/capture_observations.py"
+if [[ "${AIC_AUDIT_SMOOTH_CAPTURE:-0}" == 1 ]]; then
+  cp "$repo/artifacts/prod_cheatcode_audit/capture_smooth_wide.py" "$audit_dir/capture_observations.py"
+else
+  cp "$repo/artifacts/prod_cheatcode_audit/official_qualification/capture_observations.py" "$audit_dir/capture_observations.py"
+fi
 cp "$repo/artifacts/prod_cheatcode_audit/CableRouteDiagnostic.py" "$audit_dir/CableRouteDiagnostic.py"
 if docker inspect "$name" >/dev/null 2>&1; then
   echo "Audit container already exists: $name" >&2
@@ -24,8 +28,13 @@ docker run -d --name "$name" --gpus 'device=1' --net=host \
   "$image" -lc 'sleep infinity' > "$audit_dir/container.id"
 docker exec -d "$name" bash -lc '
   export ROS_DOMAIN_ID=86
+  world_args=()
+  if test -f /audit/world_audit.sdf && test -f /audit/bridge_audit.yaml; then
+    world_args+=(world_file:=/audit/world_audit.sdf)
+    world_args+=(ros_gz_bridge_config_file:=/audit/bridge_audit.yaml)
+  fi
   /entrypoint.sh ground_truth:=true start_aic_engine:=true headless:=true \
-    aic_engine_config_file:=/audit/eval_config.yaml > /audit/engine.log 2>&1
+    aic_engine_config_file:=/audit/eval_config.yaml "${world_args[@]}" > /audit/engine.log 2>&1
   printf "%s\n" "$?" > /audit/engine.exit
 '
 for _ in $(seq 1 90); do
@@ -53,7 +62,7 @@ docker exec -e "AIC_CABLE_ROUTE_VARIANT=$variant" \
   export PYTHONPATH=/audit:$PYTHONPATH
   ros2 run aic_model aic_model --ros-args -p use_sim_time:=true -p policy:=CableRouteDiagnostic > /audit/policy.log 2>&1
 '
-deadline=$((SECONDS + 360))
+deadline=$((SECONDS + ${AIC_AUDIT_DEADLINE_SEC:-360}))
 while ! test -f "$audit_dir/engine.exit" && (( SECONDS < deadline )); do
   if test -s "$audit_dir/results/scoring.yaml" && \
      grep -q 'All Trials Processed!' "$audit_dir/engine.log"; then

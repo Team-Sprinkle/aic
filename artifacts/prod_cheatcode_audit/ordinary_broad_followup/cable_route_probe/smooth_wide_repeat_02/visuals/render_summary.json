@@ -1,0 +1,58 @@
+{
+  "schema": "aic_smooth_wide_review/v1",
+  "source_bag": "/var/tmp/chmin_aic_cable_route_smooth_20260923/across_repeat_02/results/bag_trial_000001_20260923_233041_187",
+  "source_manifest": "/var/tmp/chmin_aic_cable_route_smooth_20260923/across_repeat_02/frame_manifest.csv",
+  "bag_start_wall_ns": 1790206241191691728,
+  "bag_end_wall_ns": 1790206351864166462,
+  "first_common_sim_ns": 3700000000,
+  "last_common_sim_ns": 66900000000,
+  "video_fps": 20,
+  "video_frame_count": 1265,
+  "duration_s": 63.25,
+  "source_coverage": {
+    "left": {
+      "captured_frames": 1266,
+      "median_interval_s": 0.05,
+      "p95_interval_s": 0.05,
+      "max_interval_s": 0.05
+    },
+    "center": {
+      "captured_frames": 1266,
+      "median_interval_s": 0.05,
+      "p95_interval_s": 0.05,
+      "max_interval_s": 0.05
+    },
+    "right": {
+      "captured_frames": 1266,
+      "median_interval_s": 0.05,
+      "p95_interval_s": 0.05,
+      "max_interval_s": 0.05
+    },
+    "overhead": {
+      "captured_frames": 1266,
+      "median_interval_s": 0.05,
+      "p95_interval_s": 0.05,
+      "max_interval_s": 0.05
+    },
+    "side": {
+      "captured_frames": 1266,
+      "median_interval_s": 0.05,
+      "p95_interval_s": 0.05,
+      "max_interval_s": 0.05
+    }
+  },
+  "max_nearest_source_offset_s": {
+    "left": 0.0,
+    "center": 0.0,
+    "right": 0.0,
+    "overhead": 0.0,
+    "side": 0.0
+  },
+  "outputs": [
+    "wrist_triptych_20fps.mp4",
+    "overhead_20fps.mp4",
+    "side_20fps.mp4",
+    "all_views_20fps.mp4"
+  ],
+  "note": "The wide views are fixed visual-only Gazebo cameras, not policy observations. Each encoded frame uses the nearest captured camera image in simulation time."
+}

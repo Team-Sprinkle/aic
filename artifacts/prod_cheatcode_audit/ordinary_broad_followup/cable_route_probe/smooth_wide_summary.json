@@ -1,0 +1,201 @@
+{
+  "schema": "aic_cable_route_smooth_wide/v1",
+  "date": "2026-09-23",
+  "source_root": "/var/tmp/chmin_aic_cable_route_smooth_20260923",
+  "scene_config_sha256": "c550f7c9ca7e476c25235bdafbac2b7daf98d618083abe26668c3126ffdc72dc",
+  "wide_world_sha256": "5d8d66c95a6e1fd11493c7d0515d438277d554eb9ecb313302f13fd5e6fd58fd",
+  "camera_modification": "Two static visual-only Gazebo cameras without collision or inertia; the saved task scene, cable/robot assets, route policy and physics settings were otherwise unchanged.",
+  "controller": "Privileged diagnostic waypoints followed by installed stock CheatCode; no trained actor and no training.",
+  "rate": "The five image topics publish at 20 Hz simulation time; the MP4s are H.264/AVC Constrained Baseline at 20 fps with no duplicated one-Hz frames.",
+  "records": [
+    {
+      "run": "across_repeat_01",
+      "bulk_root": "/var/tmp/chmin_aic_cable_route_smooth_20260923/across_repeat_01",
+      "outcome": "partial",
+      "tier3_score": 40.47412289785561,
+      "tier3_message": "Partial insertion detected with distance of 0.01m.",
+      "total_score": 48.889374191494596,
+      "camera_frame_counts": {
+        "center": 1035,
+        "left": 1035,
+        "right": 1035,
+        "overhead": 1026,
+        "side": 1026
+      },
+      "overhead_capture_start_relative_to_bag_s": 30.428936385,
+      "overhead_capture_end_relative_to_bag_s": 16.128888359,
+      "complete_task_camera_coverage": false,
+      "bag": "/var/tmp/chmin_aic_cable_route_smooth_20260923/across_repeat_01/results/bag_trial_000001_20260923_232715_436"
+    },
+    {
+      "run": "across_repeat_02",
+      "bulk_root": "/var/tmp/chmin_aic_cable_route_smooth_20260923/across_repeat_02",
+      "outcome": "partial",
+      "tier3_score": 39.665399896102066,
+      "tier3_message": "Partial insertion detected with distance of 0.01m.",
+      "total_score": 47.83946081881781,
+      "camera_frame_counts": {
+        "overhead": 1550,
+        "side": 1550,
+        "center": 1549,
+        "left": 1549,
+        "right": 1549
+      },
+      "overhead_capture_start_relative_to_bag_s": -15.361338176,
+      "overhead_capture_end_relative_to_bag_s": 14.840632086,
+      "complete_task_camera_coverage": true,
+      "bag": "/var/tmp/chmin_aic_cable_route_smooth_20260923/across_repeat_02/results/bag_trial_000001_20260923_233041_187",
+      "minimum_cable_center_main_pcb_gap_mm": 2.1622361532614858,
+      "link5_motion_60_to_80_wall_s_mm": 16.868221849747435,
+      "terminal_axial_mm": 2.1704982372312553,
+      "terminal_lateral_mm": 1.234209778528469,
+      "terminal_orientation_deg": 0.04341086815789366,
+      "terminal_tcp_command_error_mm": 70.38863971709105,
+      "peak_wrist_force_n": 27.61028981161493,
+      "insertion_event_count": 0
+    },
+    {
+      "run": "across_repeat_03",
+      "bulk_root": "/var/tmp/chmin_aic_cable_route_smooth_20260923/across_repeat_03",
+      "outcome": "partial",
+      "tier3_score": 39.65929038610553,
+      "tier3_message": "Partial insertion detected with distance of 0.01m.",
+      "total_score": 46.924078513303456,
+      "camera_frame_counts": {
+        "overhead": 1618,
+        "side": 1617,
+        "center": 1617,
+        "left": 1617,
+        "right": 1617
+      },
+      "overhead_capture_start_relative_to_bag_s": -15.26209455,
+      "overhead_capture_end_relative_to_bag_s": 17.570088382,
+      "complete_task_camera_coverage": true,
+      "bag": "/var/tmp/chmin_aic_cable_route_smooth_20260923/across_repeat_03/results/bag_trial_000001_20260923_233335_276",
+      "minimum_cable_center_main_pcb_gap_mm": 4.454141930432764,
+      "link5_motion_60_to_80_wall_s_mm": 40.77057862557134
+    },
+    {
+      "run": "across_repeat_04",
+      "bulk_root": "/var/tmp/chmin_aic_cable_route_smooth_20260923/across_repeat_04",
+      "outcome": "partial",
+      "tier3_score": 39.66955895351638,
+      "tier3_message": "Partial insertion detected with distance of 0.01m.",
+      "total_score": 48.38661236999852,
+      "camera_frame_counts": {
+        "overhead": 1524,
+        "side": 1523,
+        "center": 1523,
+        "left": 1523,
+        "right": 1523
+      },
+      "overhead_capture_start_relative_to_bag_s": -15.58504149,
+      "overhead_capture_end_relative_to_bag_s": 15.171989453,
+      "complete_task_camera_coverage": true,
+      "bag": "/var/tmp/chmin_aic_cable_route_smooth_20260923/across_repeat_04/results/bag_trial_000001_20260923_233625_674",
+      "minimum_cable_center_main_pcb_gap_mm": 1.3834363648732952,
+      "link5_motion_60_to_80_wall_s_mm": 16.540498141597368
+    },
+    {
+      "run": "across_repeat_05",
+      "bulk_root": "/var/tmp/chmin_aic_cable_route_smooth_20260923/across_repeat_05",
+      "outcome": "partial",
+      "tier3_score": 40.410614270976474,
+      "tier3_message": "Partial insertion detected with distance of 0.01m.",
+      "total_score": 47.95179511778014,
+      "camera_frame_counts": {
+        "overhead": 1518,
+        "side": 1517,
+        "center": 1517,
+        "left": 1517,
+        "right": 1517
+      },
+      "overhead_capture_start_relative_to_bag_s": -15.798207505,
+      "overhead_capture_end_relative_to_bag_s": 13.211526892,
+      "complete_task_camera_coverage": true,
+      "bag": "/var/tmp/chmin_aic_cable_route_smooth_20260923/across_repeat_05/results/bag_trial_000001_20260923_233914_417",
+      "minimum_cable_center_main_pcb_gap_mm": 0.9766403993033403,
+      "link5_motion_60_to_80_wall_s_mm": 56.091862437520135
+    },
+    {
+      "run": "across_repeat_06",
+      "bulk_root": "/var/tmp/chmin_aic_cable_route_smooth_20260923/across_repeat_06",
+      "outcome": "none",
+      "tier3_score": 19.71626741448266,
+      "tier3_message": "No insertion detected. Final plug port distance: 0.05m.",
+      "total_score": 11.330977495163474,
+      "camera_frame_counts": {
+        "overhead": 1533,
+        "side": 1533,
+        "center": 1533,
+        "left": 1533,
+        "right": 1533
+      },
+      "overhead_capture_start_relative_to_bag_s": -15.694452143,
+      "overhead_capture_end_relative_to_bag_s": 14.303719659,
+      "complete_task_camera_coverage": true,
+      "bag": "/var/tmp/chmin_aic_cable_route_smooth_20260923/across_repeat_06/results/bag_trial_000001_20260923_234345_864",
+      "minimum_cable_center_main_pcb_gap_mm": 1.361033961382705,
+      "link5_motion_60_to_80_wall_s_mm": 19.110649637368,
+      "terminal_axial_mm": -38.72073068351245,
+      "terminal_lateral_mm": 4.450555590092638,
+      "terminal_orientation_deg": 0.6396833534003397,
+      "terminal_tcp_command_error_mm": 111.6071625289873,
+      "peak_wrist_force_n": 52.85815956342992,
+      "insertion_event_count": 0
+    },
+    {
+      "run": "across_repeat_07",
+      "bulk_root": "/var/tmp/chmin_aic_cable_route_smooth_20260923/across_repeat_07",
+      "outcome": "partial",
+      "tier3_score": 39.66968661048008,
+      "tier3_message": "Partial insertion detected with distance of 0.01m.",
+      "total_score": 48.50000320971736,
+      "camera_frame_counts": {
+        "overhead": 1599,
+        "side": 1599,
+        "center": 1599,
+        "left": 1599,
+        "right": 1599
+      },
+      "overhead_capture_start_relative_to_bag_s": -15.233642917,
+      "overhead_capture_end_relative_to_bag_s": 16.989567184,
+      "complete_task_camera_coverage": true,
+      "bag": "/var/tmp/chmin_aic_cable_route_smooth_20260923/across_repeat_07/results/bag_trial_000001_20260923_234932_348"
+    },
+    {
+      "run": "across_repeat_08",
+      "bulk_root": "/var/tmp/chmin_aic_cable_route_smooth_20260923/across_repeat_08",
+      "outcome": "partial",
+      "tier3_score": 39.6726733147503,
+      "tier3_message": "Partial insertion detected with distance of 0.01m.",
+      "total_score": 48.44518961784982,
+      "camera_frame_counts": {
+        "overhead": 1570,
+        "side": 1570,
+        "center": 1570,
+        "left": 1570,
+        "right": 1569
+      },
+      "overhead_capture_start_relative_to_bag_s": -15.318960374,
+      "overhead_capture_end_relative_to_bag_s": 16.541476537,
+      "complete_task_camera_coverage": true,
+      "bag": "/var/tmp/chmin_aic_cable_route_smooth_20260923/across_repeat_08/results/bag_trial_000001_20260923_235208_826"
+    }
+  ],
+  "complete_repeats": [
+    "across_repeat_02",
+    "across_repeat_03",
+    "across_repeat_04",
+    "across_repeat_05",
+    "across_repeat_06",
+    "across_repeat_07",
+    "across_repeat_08"
+  ],
+  "complete_outcome_counts": {
+    "full": 0,
+    "partial": 6,
+    "none": 1
+  },
+  "interpretation_caveat": "Run 06 is a new no-insertion example with cable visible across the card row, but the bag lacks named cable/card contact. Its final lateral error and link-5 motion differ from the earlier across_1 cable-trap candidate; this new video does not prove a cable snag caused its failure."
+}
