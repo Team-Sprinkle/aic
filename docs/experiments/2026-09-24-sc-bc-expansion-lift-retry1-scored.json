@@ -1,0 +1,37 @@
+{
+  "schema": "sc_bc_lift_retry1_scored/v1",
+  "teacher_only": true,
+  "variant": "8cm pre-route lift",
+  "root": "/var/tmp/chmin_aic_20260918_act/sc_bc_expansion_lift_retry1_20260924",
+  "attempts": [
+    {
+      "retry": "trial_992001",
+      "parent": "trial_991001",
+      "parent_tier3_rounded": 38.36,
+      "retry_tier3": 19.10581430024336,
+      "message": "No insertion detected. Final plug port distance: 0.06m.",
+      "physical_tip_drift_mm": 0.016591390019393863,
+      "bc_admitted": false
+    },
+    {
+      "retry": "trial_992002",
+      "parent": "trial_991003",
+      "parent_tier3_rounded": 0,
+      "retry_tier3": 16.146465935827333,
+      "message": "No insertion detected. Final plug port distance: 0.08m.",
+      "physical_tip_drift_mm": 0.843196815651945,
+      "bc_admitted": false
+    },
+    {
+      "retry": "trial_992003",
+      "parent": "trial_991008",
+      "parent_tier3_rounded": 23.29,
+      "retry_tier3": 16.60173586574729,
+      "message": "No insertion detected. Final plug port distance: 0.07m.",
+      "physical_tip_drift_mm": 0.030575799158267886,
+      "bc_admitted": false
+    }
+  ],
+  "full_successes": 0,
+  "archive_manifest": "docs/experiments/2026-09-24-sc-bc-expansion-lift-retry1-mcap-archive.json"
+}

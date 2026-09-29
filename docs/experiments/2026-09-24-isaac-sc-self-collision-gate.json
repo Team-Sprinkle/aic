@@ -1,0 +1,61 @@
+{
+  "schema": "aic_sc_self_collision_fidelity_gate/v1",
+  "scene": "constructed source-bag-251 geometry; controlled card-count 0/3/5 variants",
+  "robot_self_collision_enabled": false,
+  "scene_collisions_enabled": true,
+  "scripts_dir": "outputs/experiments/2026-09-24_isaac_sc_fidelity/cable_self_collision_ablation",
+  "video_dir": "outputs/experiments/2026-09-24_isaac_sc_fidelity/cable_self_collision_ablation/videos",
+  "runs": {
+    "full_start_cards0_no_self_collision": {
+      "trace": "outputs/experiments/2026-09-24_isaac_sc_fidelity/cable_self_collision_ablation/full_start_cards0_no_self_collision.json",
+      "sha256": "1b33e5e652bdbb65860183442d46ed24535521d58c86882259f9adc5abeb9101",
+      "steps": 160,
+      "final_tip_target_distance_mm": 0.07442817150149494,
+      "peak_wrist_force_n": 2.2616403102874756,
+      "peak_plug_contact_n": 0.964978814125061,
+      "peak_gripper_card_contact_n": 0
+    },
+    "full_start_cards3_no_self_collision": {
+      "trace": "outputs/experiments/2026-09-24_isaac_sc_fidelity/cable_self_collision_ablation/full_start_cards3_no_self_collision.json",
+      "sha256": "391c8c7f5a54177a9724e2baff2c6985327f26eed3a1799f8b53e48daa898498",
+      "steps": 160,
+      "final_tip_target_distance_mm": 0.07442817150149494,
+      "peak_wrist_force_n": 2.2616403102874756,
+      "peak_plug_contact_n": 0.964978814125061,
+      "peak_gripper_card_contact_n": 0
+    },
+    "full_start_five_no_self_collision": {
+      "trace": "outputs/experiments/2026-09-24_isaac_sc_fidelity/cable_self_collision_ablation/full_start_five_no_self_collision.json",
+      "sha256": "195720e5d817a83fab9c5342b258467d810c19dcad14d91bcd537132516e1459",
+      "steps": 160,
+      "final_tip_target_distance_mm": 0.07442817150149494,
+      "peak_wrist_force_n": 2.2616403102874756,
+      "peak_plug_contact_n": 0.964978814125061,
+      "peak_gripper_card_contact_n": 0
+    },
+    "gripper_card_route_01_no_self_collision": {
+      "trace": "outputs/experiments/2026-09-24_isaac_sc_fidelity/cable_self_collision_ablation/gripper_card_route_01_no_self_collision.json",
+      "sha256": "3b38d2a534c0788b31a2d3e99f77945469b3d29bfe75486ac4fb4ad9f0ea3179",
+      "steps": 180,
+      "final_tip_target_distance_mm": 0.07440513581968844,
+      "peak_wrist_force_n": 394.6279602050781,
+      "peak_plug_contact_n": 0.9953162670135498,
+      "peak_gripper_card_contact_n": 363.7801208496094
+    },
+    "offset_plus3_x_no_self_collision": {
+      "trace": "outputs/experiments/2026-09-24_isaac_sc_fidelity/cable_self_collision_ablation/offset_plus3_x_no_self_collision.json",
+      "sha256": "150c9119b55eca94f6441dc3c628c04fbc985232245dd935df7aa0b0cd34bedf",
+      "steps": 120,
+      "final_tip_target_distance_mm": 12.787583284080029,
+      "peak_wrist_force_n": 48.238800048828125,
+      "peak_plug_contact_n": 47.43658447265625,
+      "peak_gripper_card_contact_n": 0
+    }
+  },
+  "limitations": [
+    "scripted privileged target controller, not autonomous policy",
+    "0/3/5 variants share board and start",
+    "no isolated cable snag demonstrated",
+    "Gazebo shape episode and Isaac trajectory are not time/action matched"
+  ]
+}

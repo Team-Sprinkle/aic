@@ -1,0 +1,672 @@
+{
+  "schema": "aic_sc_port_tcp_target_audit/v2",
+  "pose_quaternion_order": "xyzw",
+  "port_frame_source": "Scored training-bag TF; world and aic_world assumed coincident, not autonomous input",
+  "warning": "These are TCP teacher targets in the SC receptacle base frame, not connector waypoints or validated fixed-50ms RPDP chunks. Reconstruct opening/tip offsets and observation-only SC pose before policy training.",
+  "episodes": [
+    {
+      "episode_index": 251,
+      "split": "train",
+      "scene_sha256": "a048401ea3b41d4bd1e47d27e1086af7e5569d3a3222b3832b088b7a32e9bbda",
+      "nic_count": 3,
+      "target_port_index": 0,
+      "selected_port_frame": "task_board/sc_port_0/sc_port_base_link",
+      "frames": 707,
+      "command_index_span": 708,
+      "missing_command_indices": 1,
+      "valid_contiguous_four_command_chunks": 701,
+      "possible_four_command_chunks": 704,
+      "max_sim_time_gap_s": 0.15000000000000568,
+      "gaps_over_250ms": 0,
+      "terminal_teacher_tcp_target_port_frame": [
+        -0.002329256006586289,
+        0.001267806498059687,
+        -0.0058916700752151396,
+        0.1594735843913421,
+        -0.1661280876456794,
+        0.6946078758703266,
+        -0.6815346896200367
+      ],
+      "base_selected_port_xyz_m": [
+        -0.424108140293439,
+        0.3855968231975184,
+        0.01450000970131593
+      ],
+      "max_position_roundtrip_m": 1.2719202621569003e-16,
+      "max_rotation_roundtrip_rad": 8.329216068233463e-17
+    },
+    {
+      "episode_index": 252,
+      "split": "train",
+      "scene_sha256": "b4186d7ec66a49cb5b4984abda00e0c93f9ec8a61c71578805323427b1780a4a",
+      "nic_count": 2,
+      "target_port_index": 0,
+      "selected_port_frame": "task_board/sc_port_0/sc_port_base_link",
+      "frames": 531,
+      "command_index_span": 532,
+      "missing_command_indices": 1,
+      "valid_contiguous_four_command_chunks": 525,
+      "possible_four_command_chunks": 528,
+      "max_sim_time_gap_s": 0.1500000000000341,
+      "gaps_over_250ms": 0,
+      "terminal_teacher_tcp_target_port_frame": [
+        0.004409162762962382,
+        0.0024689314842685217,
+        -0.01680274762762734,
+        0.15947343431094232,
+        -0.16612660368809315,
+        0.6946078341080116,
+        -0.6815351290226423
+      ],
+      "base_selected_port_xyz_m": [
+        -0.42350041138373573,
+        0.38210869506137995,
+        0.0144999866613027
+      ],
+      "max_position_roundtrip_m": 1.1102230246251565e-16,
+      "max_rotation_roundtrip_rad": 8.038278098976343e-17
+    },
+    {
+      "episode_index": 253,
+      "split": "validation",
+      "scene_sha256": "62f81c8c56157cf2b5012768a20c14fb84b95a92be34196f67ee655320f30cb6",
+      "nic_count": 1,
+      "target_port_index": 0,
+      "selected_port_frame": "task_board/sc_port_0/sc_port_base_link",
+      "frames": 691,
+      "command_index_span": 691,
+      "missing_command_indices": 0,
+      "valid_contiguous_four_command_chunks": 685,
+      "possible_four_command_chunks": 688,
+      "max_sim_time_gap_s": 0.6000000000000014,
+      "gaps_over_250ms": 1,
+      "terminal_teacher_tcp_target_port_frame": [
+        0.0038429378347319965,
+        0.0018016742372194972,
+        -0.006494257942730607,
+        0.15942547190465944,
+        -0.16627239689421497,
+        0.6946207881207901,
+        -0.6814975932822372
+      ],
+      "base_selected_port_xyz_m": [
+        -0.42406577170808035,
+        0.382833960922768,
+        0.014500074008375163
+      ],
+      "max_position_roundtrip_m": 9.614813431917819e-17,
+      "max_rotation_roundtrip_rad": 8.034918420539166e-17
+    },
+    {
+      "episode_index": 254,
+      "split": "validation",
+      "scene_sha256": "21cd4f32b09f351af04f26857333b43e710032f2edadb13f7cc6ee1aeefe0324",
+      "nic_count": 3,
+      "target_port_index": 0,
+      "selected_port_frame": "task_board/sc_port_0/sc_port_base_link",
+      "frames": 782,
+      "command_index_span": 783,
+      "missing_command_indices": 1,
+      "valid_contiguous_four_command_chunks": 770,
+      "possible_four_command_chunks": 779,
+      "max_sim_time_gap_s": 5.099999999999994,
+      "gaps_over_250ms": 2,
+      "terminal_teacher_tcp_target_port_frame": [
+        0.006684724831500122,
+        0.0014108625501321193,
+        -0.012385732859639283,
+        0.15947327183610588,
+        -0.16612811376774575,
+        0.6946079294752667,
+        -0.6815347017547538
+      ],
+      "base_selected_port_xyz_m": [
+        -0.42242216024127155,
+        0.37829788617209575,
+        0.014499921350446643
+      ],
+      "max_position_roundtrip_m": 1.7772239894833365e-16,
+      "max_rotation_roundtrip_rad": 1.080957485659462e-16
+    },
+    {
+      "episode_index": 255,
+      "split": "train",
+      "scene_sha256": "8fe1624202ee19e7a0e0360b6da8dac29c9cfaa2c95fd17149bcfda72905c287",
+      "nic_count": 1,
+      "target_port_index": 0,
+      "selected_port_frame": "task_board/sc_port_0/sc_port_base_link",
+      "frames": 769,
+      "command_index_span": 771,
+      "missing_command_indices": 2,
+      "valid_contiguous_four_command_chunks": 756,
+      "possible_four_command_chunks": 766,
+      "max_sim_time_gap_s": 1.8500000000000227,
+      "gaps_over_250ms": 2,
+      "terminal_teacher_tcp_target_port_frame": [
+        0.0026752455136799247,
+        0.006017734447466061,
+        -0.005354211125180799,
+        0.15947351543106525,
+        -0.16612673827502267,
+        0.6946084456579381,
+        -0.6815344539543272
+      ],
+      "base_selected_port_xyz_m": [
+        -0.4197907940378394,
+        0.38044198902822757,
+        0.014500067842811548
+      ],
+      "max_position_roundtrip_m": 1.2719202621569003e-16,
+      "max_rotation_roundtrip_rad": 7.740611997333861e-17
+    },
+    {
+      "episode_index": 256,
+      "split": "validation",
+      "scene_sha256": "637cb0792d446f36fe8cd2b24bb331e11fdf1bb56418dcc7915e0398f27d895d",
+      "nic_count": 2,
+      "target_port_index": 0,
+      "selected_port_frame": "task_board/sc_port_0/sc_port_base_link",
+      "frames": 532,
+      "command_index_span": 533,
+      "missing_command_indices": 1,
+      "valid_contiguous_four_command_chunks": 522,
+      "possible_four_command_chunks": 529,
+      "max_sim_time_gap_s": 0.5,
+      "gaps_over_250ms": 2,
+      "terminal_teacher_tcp_target_port_frame": [
+        0.004290150015208605,
+        -0.00209330906328431,
+        -0.016716240980925296,
+        0.15947362612112528,
+        -0.16612650115645014,
+        0.6946078567451056,
+        -0.6815350860618008
+      ],
+      "base_selected_port_xyz_m": [
+        -0.4279259811370555,
+        0.3786111793234368,
+        0.014500114005226772
+      ],
+      "max_position_roundtrip_m": 1.5716250041522723e-16,
+      "max_rotation_roundtrip_rad": 8.040302696218556e-17
+    },
+    {
+      "episode_index": 257,
+      "split": "train",
+      "scene_sha256": "75880e411be87796dfb856e4932eeece45d199f62bbc36803d055044d39add2a",
+      "nic_count": 1,
+      "target_port_index": 1,
+      "selected_port_frame": "task_board/sc_port_1/sc_port_base_link",
+      "frames": 518,
+      "command_index_span": 518,
+      "missing_command_indices": 0,
+      "valid_contiguous_four_command_chunks": 515,
+      "possible_four_command_chunks": 515,
+      "max_sim_time_gap_s": 0.10000000000000142,
+      "gaps_over_250ms": 0,
+      "terminal_teacher_tcp_target_port_frame": [
+        -0.001905650962006178,
+        0.0007531399510940506,
+        -0.01816806640145578,
+        0.15942637018934855,
+        -0.1662747679446307,
+        0.694620688944776,
+        -0.6814969057325886
+      ],
+      "base_selected_port_xyz_m": [
+        -0.4207015711070555,
+        0.4190090711307299,
+        0.014500154757827843
+      ],
+      "max_position_roundtrip_m": 1.2719202621569003e-16,
+      "max_rotation_roundtrip_rad": 8.328281078656682e-17
+    },
+    {
+      "episode_index": 258,
+      "split": "train",
+      "scene_sha256": "fcae2fc9277a21237281bf7695516ca582e9172051fd82256df81fa6a8b3776d",
+      "nic_count": 1,
+      "target_port_index": 0,
+      "selected_port_frame": "task_board/sc_port_0/sc_port_base_link",
+      "frames": 632,
+      "command_index_span": 644,
+      "missing_command_indices": 12,
+      "valid_contiguous_four_command_chunks": 595,
+      "possible_four_command_chunks": 629,
+      "max_sim_time_gap_s": 0.14999999999999858,
+      "gaps_over_250ms": 0,
+      "terminal_teacher_tcp_target_port_frame": [
+        -0.004725800921495493,
+        -0.0023039962405049796,
+        -0.008502838050442047,
+        0.15933186805301164,
+        -0.16617832460041768,
+        0.6946424776446285,
+        -0.6815203214193012
+      ],
+      "base_selected_port_xyz_m": [
+        -0.42477348405428383,
+        0.37975182198369595,
+        0.014500061934946684
+      ],
+      "max_position_roundtrip_m": 8.326672684688674e-17,
+      "max_rotation_roundtrip_rad": 8.33426659194111e-17
+    },
+    {
+      "episode_index": 259,
+      "split": "train",
+      "scene_sha256": "6ebe6316b571834b22721364aee85168285d43cdd529de9f442039385e962e72",
+      "nic_count": 1,
+      "target_port_index": 1,
+      "selected_port_frame": "task_board/sc_port_1/sc_port_base_link",
+      "frames": 510,
+      "command_index_span": 511,
+      "missing_command_indices": 1,
+      "valid_contiguous_four_command_chunks": 504,
+      "possible_four_command_chunks": 507,
+      "max_sim_time_gap_s": 0.15000000000000568,
+      "gaps_over_250ms": 0,
+      "terminal_teacher_tcp_target_port_frame": [
+        -0.0021766453267435537,
+        -0.00014786933411220504,
+        -0.018732132466042703,
+        0.1594254451578637,
+        -0.16627275089518545,
+        0.6946207740552724,
+        -0.6814975275060202
+      ],
+      "base_selected_port_xyz_m": [
+        -0.42474918526260863,
+        0.4207518101329337,
+        0.01450006360265843
+      ],
+      "max_position_roundtrip_m": 1.594436429147036e-16,
+      "max_rotation_roundtrip_rad": 8.337214275996363e-17
+    },
+    {
+      "episode_index": 277,
+      "split": "train",
+      "scene_sha256": "05020297946130f1d075c5748a931612b3b568fecaba1c239ead8f35903b8060",
+      "nic_count": 1,
+      "target_port_index": 1,
+      "selected_port_frame": "task_board/sc_port_1/sc_port_base_link",
+      "frames": 528,
+      "command_index_span": 529,
+      "missing_command_indices": 1,
+      "valid_contiguous_four_command_chunks": 522,
+      "possible_four_command_chunks": 525,
+      "max_sim_time_gap_s": 0.15000000000000568,
+      "gaps_over_250ms": 0,
+      "terminal_teacher_tcp_target_port_frame": [
+        -0.0030424616297259344,
+        -0.0006209500628242548,
+        -0.01726481452688953,
+        0.15942546775971583,
+        -0.16627198310333016,
+        0.694620800640872,
+        -0.6814976824476483
+      ],
+      "base_selected_port_xyz_m": [
+        -0.4243669375667797,
+        0.41807807082416537,
+        0.01450001617435781
+      ],
+      "max_position_roundtrip_m": 1.3597399555105182e-16,
+      "max_rotation_roundtrip_rad": 1.0630841554029929e-16
+    },
+    {
+      "episode_index": 278,
+      "split": "train",
+      "scene_sha256": "33afd0a904b866e6745a58b5c93b8c18f57aae7da6f8d0b2b731703df0f5e15a",
+      "nic_count": 1,
+      "target_port_index": 1,
+      "selected_port_frame": "task_board/sc_port_1/sc_port_base_link",
+      "frames": 478,
+      "command_index_span": 482,
+      "missing_command_indices": 4,
+      "valid_contiguous_four_command_chunks": 463,
+      "possible_four_command_chunks": 475,
+      "max_sim_time_gap_s": 0.15000000000000568,
+      "gaps_over_250ms": 0,
+      "terminal_teacher_tcp_target_port_frame": [
+        -0.0005845640701111487,
+        0.0004560974976134391,
+        -0.020694267678979594,
+        0.15947243965021884,
+        -0.16612744600162466,
+        0.6946081477669357,
+        -0.6815348367712185
+      ],
+      "base_selected_port_xyz_m": [
+        -0.4240779152709913,
+        0.41975113348710313,
+        0.01449998340738623
+      ],
+      "max_position_roundtrip_m": 9.614813431917819e-17,
+      "max_rotation_roundtrip_rad": 8.028454515384143e-17
+    },
+    {
+      "episode_index": 279,
+      "split": "validation",
+      "scene_sha256": "0431f6ac0b15479fecd5fdd8d9820ce662c856d75b814722fa1a2cbd0d45db5b",
+      "nic_count": 1,
+      "target_port_index": 1,
+      "selected_port_frame": "task_board/sc_port_1/sc_port_base_link",
+      "frames": 554,
+      "command_index_span": 555,
+      "missing_command_indices": 1,
+      "valid_contiguous_four_command_chunks": 548,
+      "possible_four_command_chunks": 551,
+      "max_sim_time_gap_s": 0.15000000000000568,
+      "gaps_over_250ms": 0,
+      "terminal_teacher_tcp_target_port_frame": [
+        -0.003954206023096152,
+        0.001178770623639247,
+        -0.014817506999890926,
+        0.1594734094213922,
+        -0.16612719325310032,
+        0.6946078618664441,
+        -0.6815349628468748
+      ],
+      "base_selected_port_xyz_m": [
+        -0.42807120162913115,
+        0.4253087522474769,
+        0.014500152150521028
+      ],
+      "max_position_roundtrip_m": 1.6653345369377348e-16,
+      "max_rotation_roundtrip_rad": 8.321109922573958e-17
+    },
+    {
+      "episode_index": 280,
+      "split": "validation",
+      "scene_sha256": "ac83ffd6839fde3e9a38ca20722d506ea57e2dc7a4ca8904d85bcb8b866a18a9",
+      "nic_count": 3,
+      "target_port_index": 0,
+      "selected_port_frame": "task_board/sc_port_0/sc_port_base_link",
+      "frames": 534,
+      "command_index_span": 541,
+      "missing_command_indices": 7,
+      "valid_contiguous_four_command_chunks": 510,
+      "possible_four_command_chunks": 531,
+      "max_sim_time_gap_s": 0.14999999999999858,
+      "gaps_over_250ms": 0,
+      "terminal_teacher_tcp_target_port_frame": [
+        0.000978674882357089,
+        -0.00011341305213707908,
+        -0.016260634340105794,
+        0.1594259670440839,
+        -0.16627190462973096,
+        0.6946206726333432,
+        -0.6814977152663553
+      ],
+      "base_selected_port_xyz_m": [
+        -0.43081429368825847,
+        0.3804396352616174,
+        0.014499938347287022
+      ],
+      "max_position_roundtrip_m": 1.2412670766236366e-16,
+      "max_rotation_roundtrip_rad": 8.051329733970168e-17
+    },
+    {
+      "episode_index": 281,
+      "split": "train",
+      "scene_sha256": "c1ff6d0e3b29f40d5b346c930a10fe9418119f11f6947673adb998d2df43e9a1",
+      "nic_count": 3,
+      "target_port_index": 0,
+      "selected_port_frame": "task_board/sc_port_0/sc_port_base_link",
+      "frames": 546,
+      "command_index_span": 552,
+      "missing_command_indices": 6,
+      "valid_contiguous_four_command_chunks": 525,
+      "possible_four_command_chunks": 543,
+      "max_sim_time_gap_s": 0.10000000000000853,
+      "gaps_over_250ms": 0,
+      "terminal_teacher_tcp_target_port_frame": [
+        0.00293521827801152,
+        0.0011952793412126073,
+        -0.015195757349829236,
+        0.15945632529158746,
+        -0.16614605473310062,
+        0.694611887225304,
+        -0.6815302597437846
+      ],
+      "base_selected_port_xyz_m": [
+        -0.4219733132390324,
+        0.3786617447168791,
+        0.014500116063666413
+      ],
+      "max_position_roundtrip_m": 1.3597399555105182e-16,
+      "max_rotation_roundtrip_rad": 8.142485874567979e-17
+    },
+    {
+      "episode_index": 282,
+      "split": "train",
+      "scene_sha256": "98d992d73ba13610e427e0e6af7cb9cdb73823f630422c47190c1b483f8af636",
+      "nic_count": 1,
+      "target_port_index": 0,
+      "selected_port_frame": "task_board/sc_port_0/sc_port_base_link",
+      "frames": 956,
+      "command_index_span": 965,
+      "missing_command_indices": 9,
+      "valid_contiguous_four_command_chunks": 923,
+      "possible_four_command_chunks": 953,
+      "max_sim_time_gap_s": 5.149999999999977,
+      "gaps_over_250ms": 1,
+      "terminal_teacher_tcp_target_port_frame": [
+        -0.0020451404276094487,
+        0.008556942583868299,
+        0.004331428839413358,
+        0.15947635616178507,
+        -0.16613754715060572,
+        0.694607292032128,
+        -0.6815323302000675
+      ],
+      "base_selected_port_xyz_m": [
+        -0.41756422770947155,
+        0.3749595629510284,
+        0.014500141418302581
+      ],
+      "max_position_roundtrip_m": 1.2719202621569003e-16,
+      "max_rotation_roundtrip_rad": 8.047509762989094e-17
+    },
+    {
+      "episode_index": 283,
+      "split": "validation",
+      "scene_sha256": "440d7ce40c8340fadbda170a1c761512ad37d35cfa138f78f553098fa894ef1c",
+      "nic_count": 1,
+      "target_port_index": 0,
+      "selected_port_frame": "task_board/sc_port_0/sc_port_base_link",
+      "frames": 686,
+      "command_index_span": 691,
+      "missing_command_indices": 5,
+      "valid_contiguous_four_command_chunks": 668,
+      "possible_four_command_chunks": 683,
+      "max_sim_time_gap_s": 0.1500000000000341,
+      "gaps_over_250ms": 0,
+      "terminal_teacher_tcp_target_port_frame": [
+        0.00034183868194981315,
+        -0.0008057013098678456,
+        -0.006225650238661383,
+        0.15947282567860327,
+        -0.16612468349584708,
+        0.6946080958748962,
+        -0.6815354727000916
+      ],
+      "base_selected_port_xyz_m": [
+        -0.4256909945496613,
+        0.3754898026218374,
+        0.014500134115016161
+      ],
+      "max_position_roundtrip_m": 8.326672684688674e-17,
+      "max_rotation_roundtrip_rad": 8.328592404739404e-17
+    },
+    {
+      "episode_index": 284,
+      "split": "train",
+      "scene_sha256": "ecf2a46c61fa0e0ee625861fd129371dfd2ddd2770bfd005f96016ec0737363f",
+      "nic_count": 1,
+      "target_port_index": 0,
+      "selected_port_frame": "task_board/sc_port_0/sc_port_base_link",
+      "frames": 540,
+      "command_index_span": 544,
+      "missing_command_indices": 4,
+      "valid_contiguous_four_command_chunks": 525,
+      "possible_four_command_chunks": 537,
+      "max_sim_time_gap_s": 0.1500000000000341,
+      "gaps_over_250ms": 0,
+      "terminal_teacher_tcp_target_port_frame": [
+        0.0022516961176246575,
+        -0.0011068002634153085,
+        -0.015774868648734792,
+        0.15947254150470752,
+        -0.16612656067981763,
+        0.6946082023955477,
+        -0.6815349730626816
+      ],
+      "base_selected_port_xyz_m": [
+        -0.4337066752361052,
+        0.38346620480957916,
+        0.01450000948251029
+      ],
+      "max_position_roundtrip_m": 1.4946834900704541e-16,
+      "max_rotation_roundtrip_rad": 8.045422023610522e-17
+    },
+    {
+      "episode_index": 285,
+      "split": "validation",
+      "scene_sha256": "24ccf4b9142faacda95107ac91d8916f205d739eb0600a0dc40280156238b419",
+      "nic_count": 2,
+      "target_port_index": 0,
+      "selected_port_frame": "task_board/sc_port_0/sc_port_base_link",
+      "frames": 1009,
+      "command_index_span": 1019,
+      "missing_command_indices": 10,
+      "valid_contiguous_four_command_chunks": 976,
+      "possible_four_command_chunks": 1006,
+      "max_sim_time_gap_s": 5.100000000000023,
+      "gaps_over_250ms": 1,
+      "terminal_teacher_tcp_target_port_frame": [
+        0.00031899921121153474,
+        0.0020630556159110247,
+        0.006998196887991028,
+        0.15947219853452238,
+        -0.16612603155974665,
+        0.6946080383879919,
+        -0.6815353494423909
+      ],
+      "base_selected_port_xyz_m": [
+        -0.426277262727322,
+        0.3826532663667047,
+        0.014500026610366312
+      ],
+      "max_position_roundtrip_m": 1.2719202621569003e-16,
+      "max_rotation_roundtrip_rad": 8.034916762141942e-17
+    },
+    {
+      "episode_index": 286,
+      "split": "train",
+      "scene_sha256": "61beef4e6ece152fb8129472c54411c788d35f91b69dde21df00fdb6d4144295",
+      "nic_count": 2,
+      "target_port_index": 0,
+      "selected_port_frame": "task_board/sc_port_0/sc_port_base_link",
+      "frames": 540,
+      "command_index_span": 545,
+      "missing_command_indices": 5,
+      "valid_contiguous_four_command_chunks": 522,
+      "possible_four_command_chunks": 537,
+      "max_sim_time_gap_s": 0.14999999999997726,
+      "gaps_over_250ms": 0,
+      "terminal_teacher_tcp_target_port_frame": [
+        0.003954872855784275,
+        -0.000657961431367371,
+        -0.015653866742816686,
+        0.1594731166465954,
+        -0.16612599648225448,
+        0.6946079895523801,
+        -0.6815351929356254
+      ],
+      "base_selected_port_xyz_m": [
+        -0.4224423280224975,
+        0.3810403379676838,
+        0.014500055907288756
+      ],
+      "max_position_roundtrip_m": 1.2412670766236366e-16,
+      "max_rotation_roundtrip_rad": 8.321887113295504e-17
+    },
+    {
+      "episode_index": 287,
+      "split": "train",
+      "scene_sha256": "d3a4b54a03a4e98febf65caa225e5f97026d6d40c1eb1f53abccfa78db1d6719",
+      "nic_count": 2,
+      "target_port_index": 0,
+      "selected_port_frame": "task_board/sc_port_0/sc_port_base_link",
+      "frames": 618,
+      "command_index_span": 625,
+      "missing_command_indices": 7,
+      "valid_contiguous_four_command_chunks": 594,
+      "possible_four_command_chunks": 615,
+      "max_sim_time_gap_s": 0.14999999999997726,
+      "gaps_over_250ms": 0,
+      "terminal_teacher_tcp_target_port_frame": [
+        0.006217212409458217,
+        0.0023513303755932635,
+        -0.009373543809669302,
+        0.15947247952545138,
+        -0.1661249605723289,
+        0.694608137762678,
+        -0.6815354434676976
+      ],
+      "base_selected_port_xyz_m": [
+        -0.4262293678975483,
+        0.3763065925896525,
+        0.014499867791196053
+      ],
+      "max_position_roundtrip_m": 1.2719202621569003e-16,
+      "max_rotation_roundtrip_rad": 8.045985340549962e-17
+    },
+    {
+      "episode_index": 288,
+      "split": "train",
+      "scene_sha256": "b76fa94d0945e644ea982692af7e0f9beb942faa7c74cda6c92409922fbee210",
+      "nic_count": 2,
+      "target_port_index": 0,
+      "selected_port_frame": "task_board/sc_port_0/sc_port_base_link",
+      "frames": 688,
+      "command_index_span": 694,
+      "missing_command_indices": 6,
+      "valid_contiguous_four_command_chunks": 667,
+      "possible_four_command_chunks": 685,
+      "max_sim_time_gap_s": 0.15000000000009095,
+      "gaps_over_250ms": 0,
+      "terminal_teacher_tcp_target_port_frame": [
+        -0.0003698233043654686,
+        0.002254605608368654,
+        -0.006100136632113475,
+        0.1594748458853358,
+        -0.16613118618399872,
+        0.6946075948389213,
+        -0.6815339255671978
+      ],
+      "base_selected_port_xyz_m": [
+        -0.4243877805292725,
+        0.38293260860137596,
+        0.014499924100945583
+      ],
+      "max_position_roundtrip_m": 1.5700924586837752e-16,
+      "max_rotation_roundtrip_rad": 7.756005773657447e-17
+    }
+  ],
+  "counts": {
+    "episodes": 21,
+    "scene_groups": 21,
+    "split": {
+      "train": 14,
+      "validation": 7
+    },
+    "frames": 13349,
+    "missing_command_indices": 84,
+    "valid_contiguous_four_command_chunks": 13016,
+    "possible_four_command_chunks": 13286,
+    "gaps_over_250ms": 9
+  }
+}

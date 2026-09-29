@@ -1,0 +1,2924 @@
+{
+  "schema": "aic_sc_expert_port_edges/v1",
+  "episodes": [
+    {
+      "episode_index": 251,
+      "trial_id": "trial_000003",
+      "split": "train",
+      "nic_count": 3,
+      "target_port_index": 0,
+      "scene_sha256": "a048401ea3b41d4bd1e47d27e1086af7e5569d3a3222b3832b088b7a32e9bbda",
+      "bag_host": "/var/tmp/chmin_aic_20260918_act/sc_workspace/sc_collection/batch01/eval_collection/collection_config/attempt_0001/bag_trial_000003_20260918_123212_795",
+      "edges": [
+        {
+          "topic": "/tf_static",
+          "parent": "tabletop",
+          "child": "base_link",
+          "xyz_m": [
+            0.0,
+            0.0,
+            0.0
+          ],
+          "quat_xyzw": [
+            0.0,
+            0.0,
+            0.0,
+            1.0
+          ]
+        },
+        {
+          "topic": "/tf_static",
+          "parent": "world",
+          "child": "tabletop",
+          "xyz_m": [
+            -0.2,
+            0.2,
+            1.14
+          ],
+          "quat_xyzw": [
+            0.0,
+            0.0,
+            0.9999999560952156,
+            -0.0002963267905598908
+          ]
+        },
+        {
+          "topic": "/scoring/tf",
+          "parent": "task_board/sc_port_0",
+          "child": "task_board/sc_port_0/sc_port_base_link",
+          "xyz_m": [
+            -1.7191966183993657e-09,
+            -0.0020000196513261237,
+            -1.0975809566771133e-08
+          ],
+          "quat_xyzw": [
+            -9.19090377915488e-07,
+            -0.7071054481432846,
+            0.707108061451005,
+            -8.832165932840506e-07
+          ]
+        },
+        {
+          "topic": "/scoring/tf",
+          "parent": "task_board",
+          "child": "task_board/sc_port_0",
+          "xyz_m": [
+            -0.07009002922278704,
+            0.029500029923331034,
+            0.016500043032355416
+          ],
+          "quat_xyzw": [
+            0.4999998502112374,
+            0.49960178911667097,
+            0.49999986615795483,
+            0.5003980994132389
+          ]
+        },
+        {
+          "topic": "/scoring/tf",
+          "parent": "aic_world",
+          "child": "task_board",
+          "xyz_m": [
+            0.15460999310016632,
+            -0.1550000011920929,
+            1.1399999856948853
+          ],
+          "quat_xyzw": [
+            0.0,
+            0.0,
+            0.9999817608123648,
+            0.006046290892773037
+          ]
+        },
+        {
+          "topic": "/tf",
+          "parent": "task_board/sc_port_0",
+          "child": "task_board/sc_port_0/sc_port_base_link",
+          "xyz_m": [
+            -1.7191966183993657e-09,
+            -0.0020000196513261237,
+            -1.0975809566771133e-08
+          ],
+          "quat_xyzw": [
+            -9.19090377915488e-07,
+            -0.7071054481432846,
+            0.707108061451005,
+            -8.832165932840506e-07
+          ]
+        },
+        {
+          "topic": "/tf",
+          "parent": "task_board",
+          "child": "task_board/sc_port_0",
+          "xyz_m": [
+            -0.07009002922278704,
+            0.029500029923331034,
+            0.016500043032355416
+          ],
+          "quat_xyzw": [
+            0.4999998502112374,
+            0.49960178911667097,
+            0.49999986615795483,
+            0.5003980994132389
+          ]
+        },
+        {
+          "topic": "/tf",
+          "parent": "aic_world",
+          "child": "task_board",
+          "xyz_m": [
+            0.15460999310016632,
+            -0.1550000011920929,
+            1.1399999856948853
+          ],
+          "quat_xyzw": [
+            0.0,
+            0.0,
+            0.9999817608123648,
+            0.006046290892773037
+          ]
+        }
+      ]
+    },
+    {
+      "episode_index": 252,
+      "trial_id": "trial_000005",
+      "split": "train",
+      "nic_count": 2,
+      "target_port_index": 0,
+      "scene_sha256": "b4186d7ec66a49cb5b4984abda00e0c93f9ec8a61c71578805323427b1780a4a",
+      "bag_host": "/var/tmp/chmin_aic_20260918_act/sc_workspace/sc_collection/batch01/eval_collection/collection_config/attempt_0001/bag_trial_000005_20260918_123539_512",
+      "edges": [
+        {
+          "topic": "/tf_static",
+          "parent": "tabletop",
+          "child": "base_link",
+          "xyz_m": [
+            0.0,
+            0.0,
+            0.0
+          ],
+          "quat_xyzw": [
+            0.0,
+            0.0,
+            0.0,
+            1.0
+          ]
+        },
+        {
+          "topic": "/tf_static",
+          "parent": "world",
+          "child": "tabletop",
+          "xyz_m": [
+            -0.2,
+            0.2,
+            1.14
+          ],
+          "quat_xyzw": [
+            0.0,
+            0.0,
+            0.9999999560952156,
+            -0.0002963267905598908
+          ]
+        },
+        {
+          "topic": "/scoring/tf",
+          "parent": "aic_world",
+          "child": "task_board",
+          "xyz_m": [
+            0.152319997549057,
+            -0.15153999626636505,
+            1.1399999856948853
+          ],
+          "quat_xyzw": [
+            0.0,
+            0.0,
+            0.9999837277995841,
+            0.005711295445045368
+          ]
+        },
+        {
+          "topic": "/scoring/tf",
+          "parent": "task_board",
+          "child": "task_board/sc_port_0",
+          "xyz_m": [
+            -0.07175004624717629,
+            0.02950002747963773,
+            0.01650004306658137
+          ],
+          "quat_xyzw": [
+            0.4999997878898997,
+            0.4996017753507542,
+            0.499999857386424,
+            0.5003981718117653
+          ]
+        },
+        {
+          "topic": "/scoring/tf",
+          "parent": "task_board/sc_port_0",
+          "child": "task_board/sc_port_0/sc_port_base_link",
+          "xyz_m": [
+            1.2768995860668042e-09,
+            -0.0020000427455251213,
+            1.3797707060225761e-08
+          ],
+          "quat_xyzw": [
+            -9.35464078588577e-07,
+            -0.707105480519342,
+            0.707107994961613,
+            -9.912616595434429e-07
+          ]
+        },
+        {
+          "topic": "/tf",
+          "parent": "aic_world",
+          "child": "task_board",
+          "xyz_m": [
+            0.152319997549057,
+            -0.15153999626636505,
+            1.1399999856948853
+          ],
+          "quat_xyzw": [
+            0.0,
+            0.0,
+            0.9999837277995841,
+            0.005711295445045368
+          ]
+        },
+        {
+          "topic": "/tf",
+          "parent": "task_board",
+          "child": "task_board/sc_port_0",
+          "xyz_m": [
+            -0.07175004624717629,
+            0.02950002747963773,
+            0.01650004306658137
+          ],
+          "quat_xyzw": [
+            0.4999997878898997,
+            0.4996017753507542,
+            0.499999857386424,
+            0.5003981718117653
+          ]
+        },
+        {
+          "topic": "/tf",
+          "parent": "task_board/sc_port_0",
+          "child": "task_board/sc_port_0/sc_port_base_link",
+          "xyz_m": [
+            1.2768995860668042e-09,
+            -0.0020000427455251213,
+            1.3797707060225761e-08
+          ],
+          "quat_xyzw": [
+            -9.35464078588577e-07,
+            -0.707105480519342,
+            0.707107994961613,
+            -9.912616595434429e-07
+          ]
+        }
+      ]
+    },
+    {
+      "episode_index": 253,
+      "trial_id": "trial_000101",
+      "split": "validation",
+      "nic_count": 1,
+      "target_port_index": 0,
+      "scene_sha256": "62f81c8c56157cf2b5012768a20c14fb84b95a92be34196f67ee655320f30cb6",
+      "bag_host": "/var/tmp/chmin_aic_20260918_act/sc_workspace/sc_collection/batch_sc0_01/eval_collection/collection_config/attempt_0001/bag_trial_000101_20260918_124707_560",
+      "edges": [
+        {
+          "topic": "/tf_static",
+          "parent": "tabletop",
+          "child": "base_link",
+          "xyz_m": [
+            0.0,
+            0.0,
+            0.0
+          ],
+          "quat_xyzw": [
+            0.0,
+            0.0,
+            0.0,
+            1.0
+          ]
+        },
+        {
+          "topic": "/tf_static",
+          "parent": "world",
+          "child": "tabletop",
+          "xyz_m": [
+            -0.2,
+            0.2,
+            1.14
+          ],
+          "quat_xyzw": [
+            0.0,
+            0.0,
+            0.9999999560952156,
+            -0.0002963267905598908
+          ]
+        },
+        {
+          "topic": "/scoring/tf",
+          "parent": "task_board/sc_port_0",
+          "child": "task_board/sc_port_0/sc_port_base_link",
+          "xyz_m": [
+            -9.66580077088608e-09,
+            -0.001999955344897497,
+            -8.504744017368004e-08
+          ],
+          "quat_xyzw": [
+            9.078850559118834e-07,
+            0.7071054342155776,
+            -0.707108107209469,
+            9.119891937598953e-07
+          ]
+        },
+        {
+          "topic": "/scoring/tf",
+          "parent": "task_board",
+          "child": "task_board/sc_port_0",
+          "xyz_m": [
+            -0.07308000111406998,
+            0.029500003949870374,
+            0.01650004309207742
+          ],
+          "quat_xyzw": [
+            -0.4999998931628168,
+            -0.49960183812446196,
+            -0.4999998660515065,
+            -0.5003981351472311
+          ]
+        },
+        {
+          "topic": "/scoring/tf",
+          "parent": "aic_world",
+          "child": "task_board",
+          "xyz_m": [
+            0.15095999836921692,
+            -0.15372000634670258,
+            1.1399999856948853
+          ],
+          "quat_xyzw": [
+            0.0,
+            0.0,
+            0.9999905228165722,
+            -0.004353659509726898
+          ]
+        },
+        {
+          "topic": "/tf",
+          "parent": "task_board/sc_port_0",
+          "child": "task_board/sc_port_0/sc_port_base_link",
+          "xyz_m": [
+            -9.66580077088608e-09,
+            -0.001999955344897497,
+            -8.504744017368004e-08
+          ],
+          "quat_xyzw": [
+            9.078850559118834e-07,
+            0.7071054342155776,
+            -0.707108107209469,
+            9.119891937598953e-07
+          ]
+        },
+        {
+          "topic": "/tf",
+          "parent": "task_board",
+          "child": "task_board/sc_port_0",
+          "xyz_m": [
+            -0.07308000111406998,
+            0.029500003949870374,
+            0.01650004309207742
+          ],
+          "quat_xyzw": [
+            -0.4999998931628168,
+            -0.49960183812446196,
+            -0.4999998660515065,
+            -0.5003981351472311
+          ]
+        },
+        {
+          "topic": "/tf",
+          "parent": "aic_world",
+          "child": "task_board",
+          "xyz_m": [
+            0.15095999836921692,
+            -0.15372000634670258,
+            1.1399999856948853
+          ],
+          "quat_xyzw": [
+            0.0,
+            0.0,
+            0.9999905228165722,
+            -0.004353659509726898
+          ]
+        }
+      ]
+    },
+    {
+      "episode_index": 254,
+      "trial_id": "trial_000103",
+      "split": "validation",
+      "nic_count": 3,
+      "target_port_index": 0,
+      "scene_sha256": "21cd4f32b09f351af04f26857333b43e710032f2edadb13f7cc6ee1aeefe0324",
+      "bag_host": "/var/tmp/chmin_aic_20260918_act/sc_workspace/sc_collection/batch_sc0_01/eval_collection/collection_config/attempt_0001/bag_trial_000103_20260918_125034_480",
+      "edges": [
+        {
+          "topic": "/tf_static",
+          "parent": "tabletop",
+          "child": "base_link",
+          "xyz_m": [
+            0.0,
+            0.0,
+            0.0
+          ],
+          "quat_xyzw": [
+            0.0,
+            0.0,
+            0.0,
+            1.0
+          ]
+        },
+        {
+          "topic": "/tf_static",
+          "parent": "world",
+          "child": "tabletop",
+          "xyz_m": [
+            -0.2,
+            0.2,
+            1.14
+          ],
+          "quat_xyzw": [
+            0.0,
+            0.0,
+            0.9999999560952156,
+            -0.0002963267905598908
+          ]
+        },
+        {
+          "topic": "/scoring/tf",
+          "parent": "task_board/sc_port_0",
+          "child": "task_board/sc_port_0/sc_port_base_link",
+          "xyz_m": [
+            4.553085297676063e-09,
+            -0.0020001080730542853,
+            9.913676671247096e-08
+          ],
+          "quat_xyzw": [
+            -7.748453696998503e-07,
+            -0.7071055109869246,
+            0.707108064757015,
+            -8.199657176147289e-07
+          ]
+        },
+        {
+          "topic": "/scoring/tf",
+          "parent": "task_board",
+          "child": "task_board/sc_port_0",
+          "xyz_m": [
+            -0.07578003922108681,
+            0.02950003041573815,
+            0.01650004301535768
+          ],
+          "quat_xyzw": [
+            0.4999998096235,
+            0.49960176086324115,
+            0.4999998228271256,
+            0.5003981581484085
+          ]
+        },
+        {
+          "topic": "/scoring/tf",
+          "parent": "aic_world",
+          "child": "task_board",
+          "xyz_m": [
+            0.1473899930715561,
+            -0.14723999798297882,
+            1.1399999856948853
+          ],
+          "quat_xyzw": [
+            0.0,
+            0.0,
+            0.9999625675824881,
+            0.008656220433603376
+          ]
+        },
+        {
+          "topic": "/tf",
+          "parent": "task_board/sc_port_0",
+          "child": "task_board/sc_port_0/sc_port_base_link",
+          "xyz_m": [
+            4.553085297676063e-09,
+            -0.0020001080730542853,
+            9.913676671247096e-08
+          ],
+          "quat_xyzw": [
+            -7.748453696998503e-07,
+            -0.7071055109869246,
+            0.707108064757015,
+            -8.199657176147289e-07
+          ]
+        },
+        {
+          "topic": "/tf",
+          "parent": "task_board",
+          "child": "task_board/sc_port_0",
+          "xyz_m": [
+            -0.07578003922108681,
+            0.02950003041573815,
+            0.01650004301535768
+          ],
+          "quat_xyzw": [
+            0.4999998096235,
+            0.49960176086324115,
+            0.4999998228271256,
+            0.5003981581484085
+          ]
+        },
+        {
+          "topic": "/tf",
+          "parent": "aic_world",
+          "child": "task_board",
+          "xyz_m": [
+            0.1473899930715561,
+            -0.14723999798297882,
+            1.1399999856948853
+          ],
+          "quat_xyzw": [
+            0.0,
+            0.0,
+            0.9999625675824881,
+            0.008656220433603376
+          ]
+        }
+      ]
+    },
+    {
+      "episode_index": 255,
+      "trial_id": "trial_000104",
+      "split": "train",
+      "nic_count": 1,
+      "target_port_index": 0,
+      "scene_sha256": "8fe1624202ee19e7a0e0360b6da8dac29c9cfaa2c95fd17149bcfda72905c287",
+      "bag_host": "/var/tmp/chmin_aic_20260918_act/sc_workspace/sc_collection/batch_sc0_01/eval_collection/collection_config/attempt_0001/bag_trial_000104_20260918_125210_483",
+      "edges": [
+        {
+          "topic": "/tf_static",
+          "parent": "tabletop",
+          "child": "base_link",
+          "xyz_m": [
+            0.0,
+            0.0,
+            0.0
+          ],
+          "quat_xyzw": [
+            0.0,
+            0.0,
+            0.0,
+            1.0
+          ]
+        },
+        {
+          "topic": "/tf_static",
+          "parent": "world",
+          "child": "tabletop",
+          "xyz_m": [
+            -0.2,
+            0.2,
+            1.14
+          ],
+          "quat_xyzw": [
+            0.0,
+            0.0,
+            0.9999999560952156,
+            -0.0002963267905598908
+          ]
+        },
+        {
+          "topic": "/scoring/tf",
+          "parent": "task_board/sc_port_0",
+          "child": "task_board/sc_port_0/sc_port_base_link",
+          "xyz_m": [
+            4.469519199190586e-10,
+            -0.0019999615295085427,
+            -5.04368668219346e-08
+          ],
+          "quat_xyzw": [
+            -9.814676900088415e-07,
+            -0.7071054610261003,
+            0.7071081216657985,
+            -8.982742735014432e-07
+          ]
+        },
+        {
+          "topic": "/scoring/tf",
+          "parent": "task_board",
+          "child": "task_board/sc_port_0",
+          "xyz_m": [
+            -0.07376001417139474,
+            0.02950000673025574,
+            0.016500043083578664
+          ],
+          "quat_xyzw": [
+            0.4999999193158051,
+            0.49960180370827595,
+            0.4999998807465848,
+            0.5003981016345608
+          ]
+        },
+        {
+          "topic": "/scoring/tf",
+          "parent": "aic_world",
+          "child": "task_board",
+          "xyz_m": [
+            0.14651000499725342,
+            -0.15006999671459198,
+            1.1399999856948853
+          ],
+          "quat_xyzw": [
+            0.0,
+            0.0,
+            0.9999910592633153,
+            0.0042313142873335145
+          ]
+        },
+        {
+          "topic": "/tf",
+          "parent": "task_board/sc_port_0",
+          "child": "task_board/sc_port_0/sc_port_base_link",
+          "xyz_m": [
+            4.469519199190586e-10,
+            -0.0019999615295085427,
+            -5.04368668219346e-08
+          ],
+          "quat_xyzw": [
+            -9.814676900088415e-07,
+            -0.7071054610261003,
+            0.7071081216657985,
+            -8.982742735014432e-07
+          ]
+        },
+        {
+          "topic": "/tf",
+          "parent": "task_board",
+          "child": "task_board/sc_port_0",
+          "xyz_m": [
+            -0.07376001417139474,
+            0.02950000673025574,
+            0.016500043083578664
+          ],
+          "quat_xyzw": [
+            0.4999999193158051,
+            0.49960180370827595,
+            0.4999998807465848,
+            0.5003981016345608
+          ]
+        },
+        {
+          "topic": "/tf",
+          "parent": "aic_world",
+          "child": "task_board",
+          "xyz_m": [
+            0.14651000499725342,
+            -0.15006999671459198,
+            1.1399999856948853
+          ],
+          "quat_xyzw": [
+            0.0,
+            0.0,
+            0.9999910592633153,
+            0.0042313142873335145
+          ]
+        }
+      ]
+    },
+    {
+      "episode_index": 256,
+      "trial_id": "trial_000105",
+      "split": "validation",
+      "nic_count": 2,
+      "target_port_index": 0,
+      "scene_sha256": "637cb0792d446f36fe8cd2b24bb331e11fdf1bb56418dcc7915e0398f27d895d",
+      "bag_host": "/var/tmp/chmin_aic_20260918_act/sc_workspace/sc_collection/batch_sc0_01/eval_collection/collection_config/attempt_0001/bag_trial_000105_20260918_125349_571",
+      "edges": [
+        {
+          "topic": "/tf_static",
+          "parent": "tabletop",
+          "child": "base_link",
+          "xyz_m": [
+            0.0,
+            0.0,
+            0.0
+          ],
+          "quat_xyzw": [
+            0.0,
+            0.0,
+            0.0,
+            1.0
+          ]
+        },
+        {
+          "topic": "/tf_static",
+          "parent": "world",
+          "child": "tabletop",
+          "xyz_m": [
+            -0.2,
+            0.2,
+            1.14
+          ],
+          "quat_xyzw": [
+            0.0,
+            0.0,
+            0.9999999560952156,
+            -0.0002963267905598908
+          ]
+        },
+        {
+          "topic": "/scoring/tf",
+          "parent": "aic_world",
+          "child": "task_board",
+          "xyz_m": [
+            0.15023000538349152,
+            -0.14754000306129456,
+            1.1399999856948853
+          ],
+          "quat_xyzw": [
+            0.0,
+            0.0,
+            0.9999645346074616,
+            0.008426227491752142
+          ]
+        },
+        {
+          "topic": "/scoring/tf",
+          "parent": "task_board",
+          "child": "task_board/sc_port_0",
+          "xyz_m": [
+            -0.0784300310568048,
+            0.029500021229207196,
+            0.01650004309207742
+          ],
+          "quat_xyzw": [
+            0.4999998905431287,
+            0.49960181990387126,
+            0.49999988393043393,
+            0.5003980965576247
+          ]
+        },
+        {
+          "topic": "/scoring/tf",
+          "parent": "task_board/sc_port_0",
+          "child": "task_board/sc_port_0/sc_port_base_link",
+          "xyz_m": [
+            -9.4954821783233e-11,
+            -0.0019999153246341717,
+            -1.144346667980578e-07
+          ],
+          "quat_xyzw": [
+            -9.100396416439338e-07,
+            -0.7071053901482244,
+            0.7071080433263042,
+            -8.529308223525979e-07
+          ]
+        },
+        {
+          "topic": "/tf",
+          "parent": "aic_world",
+          "child": "task_board",
+          "xyz_m": [
+            0.15023000538349152,
+            -0.14754000306129456,
+            1.1399999856948853
+          ],
+          "quat_xyzw": [
+            0.0,
+            0.0,
+            0.9999645346074616,
+            0.008426227491752142
+          ]
+        },
+        {
+          "topic": "/tf",
+          "parent": "task_board",
+          "child": "task_board/sc_port_0",
+          "xyz_m": [
+            -0.0784300310568048,
+            0.029500021229207196,
+            0.01650004309207742
+          ],
+          "quat_xyzw": [
+            0.4999998905431287,
+            0.49960181990387126,
+            0.49999988393043393,
+            0.5003980965576247
+          ]
+        },
+        {
+          "topic": "/tf",
+          "parent": "task_board/sc_port_0",
+          "child": "task_board/sc_port_0/sc_port_base_link",
+          "xyz_m": [
+            -9.4954821783233e-11,
+            -0.0019999153246341717,
+            -1.144346667980578e-07
+          ],
+          "quat_xyzw": [
+            -9.100396416439338e-07,
+            -0.7071053901482244,
+            0.7071080433263042,
+            -8.529308223525979e-07
+          ]
+        }
+      ]
+    },
+    {
+      "episode_index": 257,
+      "trial_id": "trial_000201",
+      "split": "train",
+      "nic_count": 1,
+      "target_port_index": 1,
+      "scene_sha256": "75880e411be87796dfb856e4932eeece45d199f62bbc36803d055044d39add2a",
+      "bag_host": "/var/tmp/chmin_aic_20260918_act/sc_workspace/sc_collection/batch_sc1_01/eval_collection/collection_config/attempt_0001/bag_trial_000201_20260918_125656_918",
+      "edges": [
+        {
+          "topic": "/tf_static",
+          "parent": "tabletop",
+          "child": "base_link",
+          "xyz_m": [
+            0.0,
+            0.0,
+            0.0
+          ],
+          "quat_xyzw": [
+            0.0,
+            0.0,
+            0.0,
+            1.0
+          ]
+        },
+        {
+          "topic": "/tf_static",
+          "parent": "world",
+          "child": "tabletop",
+          "xyz_m": [
+            -0.2,
+            0.2,
+            1.14
+          ],
+          "quat_xyzw": [
+            0.0,
+            0.0,
+            0.9999999560952156,
+            -0.0002963267905598908
+          ]
+        },
+        {
+          "topic": "/scoring/tf",
+          "parent": "task_board/sc_port_1",
+          "child": "task_board/sc_port_1/sc_port_base_link",
+          "xyz_m": [
+            2.057722103820936e-09,
+            -0.0019998745291003317,
+            -1.4706491682781042e-07
+          ],
+          "quat_xyzw": [
+            9.921388616218607e-07,
+            0.7071054322612114,
+            -0.7071080760319058,
+            9.060829472117156e-07
+          ]
+        },
+        {
+          "topic": "/scoring/tf",
+          "parent": "task_board",
+          "child": "task_board/sc_port_1",
+          "xyz_m": [
+            -0.07138000539555059,
+            0.07050001528901431,
+            0.016500043075079907
+          ],
+          "quat_xyzw": [
+            -0.4999999290461564,
+            -0.49960178962003277,
+            -0.4999999019252621,
+            -0.500398127976611
+          ]
+        },
+        {
+          "topic": "/scoring/tf",
+          "parent": "aic_world",
+          "child": "task_board",
+          "xyz_m": [
+            0.14910000562667847,
+            -0.1487399935722351,
+            1.1399999856948853
+          ],
+          "quat_xyzw": [
+            0.0,
+            0.0,
+            0.9999943971476951,
+            -0.0033536669106377804
+          ]
+        },
+        {
+          "topic": "/tf",
+          "parent": "task_board/sc_port_1",
+          "child": "task_board/sc_port_1/sc_port_base_link",
+          "xyz_m": [
+            2.057722103820936e-09,
+            -0.0019998745291003317,
+            -1.4706491682781042e-07
+          ],
+          "quat_xyzw": [
+            9.921388616218607e-07,
+            0.7071054322612114,
+            -0.7071080760319058,
+            9.060829472117156e-07
+          ]
+        },
+        {
+          "topic": "/tf",
+          "parent": "task_board",
+          "child": "task_board/sc_port_1",
+          "xyz_m": [
+            -0.07138000539555059,
+            0.07050001528901431,
+            0.016500043075079907
+          ],
+          "quat_xyzw": [
+            -0.4999999290461564,
+            -0.49960178962003277,
+            -0.4999999019252621,
+            -0.500398127976611
+          ]
+        },
+        {
+          "topic": "/tf",
+          "parent": "aic_world",
+          "child": "task_board",
+          "xyz_m": [
+            0.14910000562667847,
+            -0.1487399935722351,
+            1.1399999856948853
+          ],
+          "quat_xyzw": [
+            0.0,
+            0.0,
+            0.9999943971476951,
+            -0.0033536669106377804
+          ]
+        }
+      ]
+    },
+    {
+      "episode_index": 258,
+      "trial_id": "trial_000001",
+      "split": "train",
+      "nic_count": 1,
+      "target_port_index": 0,
+      "scene_sha256": "fcae2fc9277a21237281bf7695516ca582e9172051fd82256df81fa6a8b3776d",
+      "bag_host": "/var/tmp/chmin_aic_20260918_act/sc_workspace/sc_collection/pilot_minimal/eval_collection/collection_config/attempt_0001/bag_trial_000001_20260918_122337_517",
+      "edges": [
+        {
+          "topic": "/tf_static",
+          "parent": "tabletop",
+          "child": "base_link",
+          "xyz_m": [
+            0.0,
+            0.0,
+            0.0
+          ],
+          "quat_xyzw": [
+            0.0,
+            0.0,
+            0.0,
+            1.0
+          ]
+        },
+        {
+          "topic": "/tf_static",
+          "parent": "world",
+          "child": "tabletop",
+          "xyz_m": [
+            -0.2,
+            0.2,
+            1.14
+          ],
+          "quat_xyzw": [
+            0.0,
+            0.0,
+            0.9999999560952156,
+            -0.0002963267905598908
+          ]
+        },
+        {
+          "topic": "/scoring/tf",
+          "parent": "task_board/sc_port_0",
+          "child": "task_board/sc_port_0/sc_port_base_link",
+          "xyz_m": [
+            8.414044738724868e-09,
+            -0.0019999674433275327,
+            -5.357468618738537e-08
+          ],
+          "quat_xyzw": [
+            -9.865742567893854e-07,
+            -0.7071054470835139,
+            0.7071081303696378,
+            -9.144581477587156e-07
+          ]
+        },
+        {
+          "topic": "/scoring/tf",
+          "parent": "task_board",
+          "child": "task_board/sc_port_0",
+          "xyz_m": [
+            -0.07500000362299111,
+            0.029499998235434616,
+            0.01650004309207742
+          ],
+          "quat_xyzw": [
+            0.4999999314221772,
+            0.4996018167907687,
+            0.49999986990412193,
+            0.5003981055209444
+          ]
+        },
+        {
+          "topic": "/scoring/tf",
+          "parent": "aic_world",
+          "child": "task_board",
+          "xyz_m": [
+            0.15000000596046448,
+            -0.15000000596046448,
+            1.1399999856948853
+          ],
+          "quat_xyzw": [
+            0.0,
+            0.0,
+            1.0,
+            6.123234262925839e-17
+          ]
+        },
+        {
+          "topic": "/tf",
+          "parent": "task_board/sc_port_0",
+          "child": "task_board/sc_port_0/sc_port_base_link",
+          "xyz_m": [
+            8.414044738724868e-09,
+            -0.0019999674433275327,
+            -5.357468618738537e-08
+          ],
+          "quat_xyzw": [
+            -9.865742567893854e-07,
+            -0.7071054470835139,
+            0.7071081303696378,
+            -9.144581477587156e-07
+          ]
+        },
+        {
+          "topic": "/tf",
+          "parent": "task_board",
+          "child": "task_board/sc_port_0",
+          "xyz_m": [
+            -0.07500000362299111,
+            0.029499998235434616,
+            0.01650004309207742
+          ],
+          "quat_xyzw": [
+            0.4999999314221772,
+            0.4996018167907687,
+            0.49999986990412193,
+            0.5003981055209444
+          ]
+        },
+        {
+          "topic": "/tf",
+          "parent": "aic_world",
+          "child": "task_board",
+          "xyz_m": [
+            0.15000000596046448,
+            -0.15000000596046448,
+            1.1399999856948853
+          ],
+          "quat_xyzw": [
+            0.0,
+            0.0,
+            1.0,
+            6.123234262925839e-17
+          ]
+        }
+      ]
+    },
+    {
+      "episode_index": 259,
+      "trial_id": "trial_000001",
+      "split": "train",
+      "nic_count": 1,
+      "target_port_index": 1,
+      "scene_sha256": "6ebe6316b571834b22721364aee85168285d43cdd529de9f442039385e962e72",
+      "bag_host": "/var/tmp/chmin_aic_20260918_act/sc_workspace/sc_collection/pilot_sc1_bias70/eval_collection/collection_config/attempt_0001/bag_trial_000001_20260918_124154_852",
+      "edges": [
+        {
+          "topic": "/tf_static",
+          "parent": "tabletop",
+          "child": "base_link",
+          "xyz_m": [
+            0.0,
+            0.0,
+            0.0
+          ],
+          "quat_xyzw": [
+            0.0,
+            0.0,
+            0.0,
+            1.0
+          ]
+        },
+        {
+          "topic": "/tf_static",
+          "parent": "world",
+          "child": "tabletop",
+          "xyz_m": [
+            -0.2,
+            0.2,
+            1.14
+          ],
+          "quat_xyzw": [
+            0.0,
+            0.0,
+            0.9999999560952156,
+            -0.0002963267905598908
+          ]
+        },
+        {
+          "topic": "/scoring/tf",
+          "parent": "task_board/sc_port_1",
+          "child": "task_board/sc_port_1/sc_port_base_link",
+          "xyz_m": [
+            -4.819399990196871e-09,
+            -0.0019999657756211153,
+            -5.3564147645124294e-08
+          ],
+          "quat_xyzw": [
+            -9.865742567893854e-07,
+            -0.7071054470835139,
+            0.7071081303696378,
+            -9.144581477587156e-07
+          ]
+        },
+        {
+          "topic": "/scoring/tf",
+          "parent": "task_board",
+          "child": "task_board/sc_port_1",
+          "xyz_m": [
+            -0.07500000362299111,
+            0.07050000681850346,
+            0.01650004309207742
+          ],
+          "quat_xyzw": [
+            0.4999999314221772,
+            0.4996018167907687,
+            0.49999986990412193,
+            0.5003981055209444
+          ]
+        },
+        {
+          "topic": "/scoring/tf",
+          "parent": "aic_world",
+          "child": "task_board",
+          "xyz_m": [
+            0.15000000596046448,
+            -0.15000000596046448,
+            1.1399999856948853
+          ],
+          "quat_xyzw": [
+            0.0,
+            0.0,
+            1.0,
+            6.123234262925839e-17
+          ]
+        },
+        {
+          "topic": "/tf",
+          "parent": "task_board/sc_port_1",
+          "child": "task_board/sc_port_1/sc_port_base_link",
+          "xyz_m": [
+            -4.819399990196871e-09,
+            -0.0019999657756211153,
+            -5.3564147645124294e-08
+          ],
+          "quat_xyzw": [
+            -9.865742567893854e-07,
+            -0.7071054470835139,
+            0.7071081303696378,
+            -9.144581477587156e-07
+          ]
+        },
+        {
+          "topic": "/tf",
+          "parent": "task_board",
+          "child": "task_board/sc_port_1",
+          "xyz_m": [
+            -0.07500000362299111,
+            0.07050000681850346,
+            0.01650004309207742
+          ],
+          "quat_xyzw": [
+            0.4999999314221772,
+            0.4996018167907687,
+            0.49999986990412193,
+            0.5003981055209444
+          ]
+        },
+        {
+          "topic": "/tf",
+          "parent": "aic_world",
+          "child": "task_board",
+          "xyz_m": [
+            0.15000000596046448,
+            -0.15000000596046448,
+            1.1399999856948853
+          ],
+          "quat_xyzw": [
+            0.0,
+            0.0,
+            1.0,
+            6.123234262925839e-17
+          ]
+        }
+      ]
+    },
+    {
+      "episode_index": 277,
+      "trial_id": "trial_000501",
+      "split": "train",
+      "nic_count": 1,
+      "target_port_index": 1,
+      "scene_sha256": "05020297946130f1d075c5748a931612b3b568fecaba1c239ead8f35903b8060",
+      "bag_host": "/var/tmp/chmin_aic_20260918_act/sc_collection_gpu0_followup/batch_port1/eval_collection/collection_config/attempt_0001/bag_trial_000501_20260918_135438_670",
+      "edges": [
+        {
+          "topic": "/tf_static",
+          "parent": "tabletop",
+          "child": "base_link",
+          "xyz_m": [
+            0.0,
+            0.0,
+            0.0
+          ],
+          "quat_xyzw": [
+            0.0,
+            0.0,
+            0.0,
+            1.0
+          ]
+        },
+        {
+          "topic": "/tf_static",
+          "parent": "world",
+          "child": "tabletop",
+          "xyz_m": [
+            -0.2,
+            0.2,
+            1.14
+          ],
+          "quat_xyzw": [
+            0.0,
+            0.0,
+            0.9999999560952156,
+            -0.0002963267905598908
+          ]
+        },
+        {
+          "topic": "/scoring/tf",
+          "parent": "task_board/sc_port_1",
+          "child": "task_board/sc_port_1/sc_port_base_link",
+          "xyz_m": [
+            -1.5669927577732778e-09,
+            -0.002000013221979291,
+            -9.966966502128471e-09
+          ],
+          "quat_xyzw": [
+            9.562465005386045e-07,
+            0.7071054384479185,
+            -0.7071079959187613,
+            9.625766077216071e-07
+          ]
+        },
+        {
+          "topic": "/scoring/tf",
+          "parent": "task_board",
+          "child": "task_board/sc_port_1",
+          "xyz_m": [
+            -0.07080999803909752,
+            0.07050001577830556,
+            0.016500043075079907
+          ],
+          "quat_xyzw": [
+            -0.49999984800283476,
+            -0.49960176416500657,
+            -0.4999998721067527,
+            -0.5003981732774756
+          ]
+        },
+        {
+          "topic": "/scoring/tf",
+          "parent": "aic_world",
+          "child": "task_board",
+          "xyz_m": [
+            0.1532299965620041,
+            -0.1479099988937378,
+            1.1399999856948853
+          ],
+          "quat_xyzw": [
+            0.0,
+            0.0,
+            0.9999915957097706,
+            -0.004103662475576431
+          ]
+        },
+        {
+          "topic": "/tf",
+          "parent": "task_board/sc_port_1",
+          "child": "task_board/sc_port_1/sc_port_base_link",
+          "xyz_m": [
+            -1.5669927577732778e-09,
+            -0.002000013221979291,
+            -9.966966502128471e-09
+          ],
+          "quat_xyzw": [
+            9.562465005386045e-07,
+            0.7071054384479185,
+            -0.7071079959187613,
+            9.625766077216071e-07
+          ]
+        },
+        {
+          "topic": "/tf",
+          "parent": "task_board",
+          "child": "task_board/sc_port_1",
+          "xyz_m": [
+            -0.07080999803909752,
+            0.07050001577830556,
+            0.016500043075079907
+          ],
+          "quat_xyzw": [
+            -0.49999984800283476,
+            -0.49960176416500657,
+            -0.4999998721067527,
+            -0.5003981732774756
+          ]
+        },
+        {
+          "topic": "/tf",
+          "parent": "aic_world",
+          "child": "task_board",
+          "xyz_m": [
+            0.1532299965620041,
+            -0.1479099988937378,
+            1.1399999856948853
+          ],
+          "quat_xyzw": [
+            0.0,
+            0.0,
+            0.9999915957097706,
+            -0.004103662475576431
+          ]
+        }
+      ]
+    },
+    {
+      "episode_index": 278,
+      "trial_id": "trial_000502",
+      "split": "train",
+      "nic_count": 1,
+      "target_port_index": 1,
+      "scene_sha256": "33afd0a904b866e6745a58b5c93b8c18f57aae7da6f8d0b2b731703df0f5e15a",
+      "bag_host": "/var/tmp/chmin_aic_20260918_act/sc_collection_gpu0_followup/batch_port1/eval_collection/collection_config/attempt_0001/bag_trial_000502_20260918_135528_226",
+      "edges": [
+        {
+          "topic": "/tf_static",
+          "parent": "tabletop",
+          "child": "base_link",
+          "xyz_m": [
+            0.0,
+            0.0,
+            0.0
+          ],
+          "quat_xyzw": [
+            0.0,
+            0.0,
+            0.0,
+            1.0
+          ]
+        },
+        {
+          "topic": "/tf_static",
+          "parent": "world",
+          "child": "tabletop",
+          "xyz_m": [
+            -0.2,
+            0.2,
+            1.14
+          ],
+          "quat_xyzw": [
+            0.0,
+            0.0,
+            0.9999999560952156,
+            -0.0002963267905598908
+          ]
+        },
+        {
+          "topic": "/scoring/tf",
+          "parent": "task_board/sc_port_1",
+          "child": "task_board/sc_port_1/sc_port_base_link",
+          "xyz_m": [
+            9.288573854515647e-09,
+            -0.0020000459883382504,
+            1.0508607956039029e-08
+          ],
+          "quat_xyzw": [
+            -7.418443718210099e-07,
+            -0.7071055202682304,
+            0.7071080294273433,
+            -6.587598682236337e-07
+          ]
+        },
+        {
+          "topic": "/scoring/tf",
+          "parent": "task_board",
+          "child": "task_board/sc_port_1",
+          "xyz_m": [
+            -0.07313003625385747,
+            0.07050003916043174,
+            0.016500043058082392
+          ],
+          "quat_xyzw": [
+            0.4999998847305187,
+            0.4996016753576201,
+            0.4999998595437181,
+            0.5003981742002767
+          ]
+        },
+        {
+          "topic": "/scoring/tf",
+          "parent": "aic_world",
+          "child": "task_board",
+          "xyz_m": [
+            0.15142999589443207,
+            -0.14876000583171844,
+            1.1399999856948853
+          ],
+          "quat_xyzw": [
+            0.0,
+            0.0,
+            0.9999986886969552,
+            0.0016413262914763145
+          ]
+        },
+        {
+          "topic": "/tf",
+          "parent": "task_board/sc_port_1",
+          "child": "task_board/sc_port_1/sc_port_base_link",
+          "xyz_m": [
+            9.288573854515647e-09,
+            -0.0020000459883382504,
+            1.0508607956039029e-08
+          ],
+          "quat_xyzw": [
+            -7.418443718210099e-07,
+            -0.7071055202682304,
+            0.7071080294273433,
+            -6.587598682236337e-07
+          ]
+        },
+        {
+          "topic": "/tf",
+          "parent": "task_board",
+          "child": "task_board/sc_port_1",
+          "xyz_m": [
+            -0.07313003625385747,
+            0.07050003916043174,
+            0.016500043058082392
+          ],
+          "quat_xyzw": [
+            0.4999998847305187,
+            0.4996016753576201,
+            0.4999998595437181,
+            0.5003981742002767
+          ]
+        },
+        {
+          "topic": "/tf",
+          "parent": "aic_world",
+          "child": "task_board",
+          "xyz_m": [
+            0.15142999589443207,
+            -0.14876000583171844,
+            1.1399999856948853
+          ],
+          "quat_xyzw": [
+            0.0,
+            0.0,
+            0.9999986886969552,
+            0.0016413262914763145
+          ]
+        }
+      ]
+    },
+    {
+      "episode_index": 279,
+      "trial_id": "trial_000504",
+      "split": "validation",
+      "nic_count": 1,
+      "target_port_index": 1,
+      "scene_sha256": "0431f6ac0b15479fecd5fdd8d9820ce662c856d75b814722fa1a2cbd0d45db5b",
+      "bag_host": "/var/tmp/chmin_aic_20260918_act/sc_collection_gpu0_followup/batch_port1/eval_collection/collection_config/attempt_0001/bag_trial_000504_20260918_135738_130",
+      "edges": [
+        {
+          "topic": "/tf_static",
+          "parent": "tabletop",
+          "child": "base_link",
+          "xyz_m": [
+            0.0,
+            0.0,
+            0.0
+          ],
+          "quat_xyzw": [
+            0.0,
+            0.0,
+            0.0,
+            1.0
+          ]
+        },
+        {
+          "topic": "/tf_static",
+          "parent": "world",
+          "child": "tabletop",
+          "xyz_m": [
+            -0.2,
+            0.2,
+            1.14
+          ],
+          "quat_xyzw": [
+            0.0,
+            0.0,
+            0.9999999560952156,
+            -0.0002963267905598908
+          ]
+        },
+        {
+          "topic": "/scoring/tf",
+          "parent": "task_board/sc_port_1",
+          "child": "task_board/sc_port_1/sc_port_base_link",
+          "xyz_m": [
+            -2.985336200467259e-09,
+            -0.0019998771529126103,
+            -1.4740918696798389e-07
+          ],
+          "quat_xyzw": [
+            -9.459204912132257e-07,
+            -0.7071053813891932,
+            0.7071081119292628,
+            -9.015675142807784e-07
+          ]
+        },
+        {
+          "topic": "/scoring/tf",
+          "parent": "task_board",
+          "child": "task_board/sc_port_1",
+          "xyz_m": [
+            -0.07996999177773434,
+            0.07049999887074831,
+            0.01650004309207742
+          ],
+          "quat_xyzw": [
+            0.4999999489737746,
+            0.4996018652147233,
+            0.4999998654116645,
+            0.5003981093475708
+          ]
+        },
+        {
+          "topic": "/scoring/tf",
+          "parent": "aic_world",
+          "child": "task_board",
+          "xyz_m": [
+            0.14891000092029572,
+            -0.15392999351024628,
+            1.1399999856948853
+          ],
+          "quat_xyzw": [
+            0.0,
+            0.0,
+            0.9999923109712634,
+            0.003921316819746166
+          ]
+        },
+        {
+          "topic": "/tf",
+          "parent": "task_board/sc_port_1",
+          "child": "task_board/sc_port_1/sc_port_base_link",
+          "xyz_m": [
+            -2.985336200467259e-09,
+            -0.0019998771529126103,
+            -1.4740918696798389e-07
+          ],
+          "quat_xyzw": [
+            -9.459204912132257e-07,
+            -0.7071053813891932,
+            0.7071081119292628,
+            -9.015675142807784e-07
+          ]
+        },
+        {
+          "topic": "/tf",
+          "parent": "task_board",
+          "child": "task_board/sc_port_1",
+          "xyz_m": [
+            -0.07996999177773434,
+            0.07049999887074831,
+            0.01650004309207742
+          ],
+          "quat_xyzw": [
+            0.4999999489737746,
+            0.4996018652147233,
+            0.4999998654116645,
+            0.5003981093475708
+          ]
+        },
+        {
+          "topic": "/tf",
+          "parent": "aic_world",
+          "child": "task_board",
+          "xyz_m": [
+            0.14891000092029572,
+            -0.15392999351024628,
+            1.1399999856948853
+          ],
+          "quat_xyzw": [
+            0.0,
+            0.0,
+            0.9999923109712634,
+            0.003921316819746166
+          ]
+        }
+      ]
+    },
+    {
+      "episode_index": 280,
+      "trial_id": "trial_000505",
+      "split": "validation",
+      "nic_count": 3,
+      "target_port_index": 0,
+      "scene_sha256": "ac83ffd6839fde3e9a38ca20722d506ea57e2dc7a4ca8904d85bcb8b866a18a9",
+      "bag_host": "/var/tmp/chmin_aic_20260918_act/sc_collection_gpu0_followup/batch_port0/eval_collection/collection_config/attempt_0001/bag_trial_000505_20260918_140028_249",
+      "edges": [
+        {
+          "topic": "/tf_static",
+          "parent": "tabletop",
+          "child": "base_link",
+          "xyz_m": [
+            0.0,
+            0.0,
+            0.0
+          ],
+          "quat_xyzw": [
+            0.0,
+            0.0,
+            0.0,
+            1.0
+          ]
+        },
+        {
+          "topic": "/tf_static",
+          "parent": "world",
+          "child": "tabletop",
+          "xyz_m": [
+            -0.2,
+            0.2,
+            1.14
+          ],
+          "quat_xyzw": [
+            0.0,
+            0.0,
+            0.9999999560952156,
+            -0.0002963267905598908
+          ]
+        },
+        {
+          "topic": "/tf",
+          "parent": "task_board/sc_port_0",
+          "child": "task_board/sc_port_0/sc_port_base_link",
+          "xyz_m": [
+            1.930626158941351e-09,
+            -0.0020000910803688043,
+            6.20531927231216e-08
+          ],
+          "quat_xyzw": [
+            9.929370892725053e-07,
+            0.7071054701972781,
+            -0.7071081724010914,
+            9.890448275483982e-07
+          ]
+        },
+        {
+          "topic": "/tf",
+          "parent": "task_board",
+          "child": "task_board/sc_port_0",
+          "xyz_m": [
+            -0.07967999692729039,
+            0.029499997840939762,
+            0.01650004304935293
+          ],
+          "quat_xyzw": [
+            -0.49999986815423325,
+            -0.49960183930914326,
+            -0.4999998521533728,
+            -0.5003980838692988
+          ]
+        },
+        {
+          "topic": "/tf",
+          "parent": "aic_world",
+          "child": "task_board",
+          "xyz_m": [
+            0.15094999969005585,
+            -0.15182000398635864,
+            1.1399999856948853
+          ],
+          "quat_xyzw": [
+            0.0,
+            0.0,
+            0.9999747273112608,
+            -0.007108613291539115
+          ]
+        },
+        {
+          "topic": "/scoring/tf",
+          "parent": "task_board/sc_port_0",
+          "child": "task_board/sc_port_0/sc_port_base_link",
+          "xyz_m": [
+            1.930626158941351e-09,
+            -0.0020000910803688043,
+            6.20531927231216e-08
+          ],
+          "quat_xyzw": [
+            9.929370892725053e-07,
+            0.7071054701972781,
+            -0.7071081724010914,
+            9.890448275483982e-07
+          ]
+        },
+        {
+          "topic": "/scoring/tf",
+          "parent": "task_board",
+          "child": "task_board/sc_port_0",
+          "xyz_m": [
+            -0.07967999692729039,
+            0.029499997840939762,
+            0.01650004304935293
+          ],
+          "quat_xyzw": [
+            -0.49999986815423325,
+            -0.49960183930914326,
+            -0.4999998521533728,
+            -0.5003980838692988
+          ]
+        },
+        {
+          "topic": "/scoring/tf",
+          "parent": "aic_world",
+          "child": "task_board",
+          "xyz_m": [
+            0.15094999969005585,
+            -0.15182000398635864,
+            1.1399999856948853
+          ],
+          "quat_xyzw": [
+            0.0,
+            0.0,
+            0.9999747273112608,
+            -0.007108613291539115
+          ]
+        }
+      ]
+    },
+    {
+      "episode_index": 281,
+      "trial_id": "trial_000506",
+      "split": "train",
+      "nic_count": 3,
+      "target_port_index": 0,
+      "scene_sha256": "c1ff6d0e3b29f40d5b346c930a10fe9418119f11f6947673adb998d2df43e9a1",
+      "bag_host": "/var/tmp/chmin_aic_20260918_act/sc_collection_gpu0_followup/batch_port0/eval_collection/collection_config/attempt_0001/bag_trial_000506_20260918_140118_403",
+      "edges": [
+        {
+          "topic": "/tf_static",
+          "parent": "tabletop",
+          "child": "base_link",
+          "xyz_m": [
+            0.0,
+            0.0,
+            0.0
+          ],
+          "quat_xyzw": [
+            0.0,
+            0.0,
+            0.0,
+            1.0
+          ]
+        },
+        {
+          "topic": "/tf_static",
+          "parent": "world",
+          "child": "tabletop",
+          "xyz_m": [
+            -0.2,
+            0.2,
+            1.14
+          ],
+          "quat_xyzw": [
+            0.0,
+            0.0,
+            0.9999999560952156,
+            -0.0002963267905598908
+          ]
+        },
+        {
+          "topic": "/scoring/tf",
+          "parent": "task_board/sc_port_0",
+          "child": "task_board/sc_port_0/sc_port_base_link",
+          "xyz_m": [
+            -5.741648378965181e-09,
+            -0.001999913301041767,
+            -1.2445328892440877e-07
+          ],
+          "quat_xyzw": [
+            9.977225743362794e-07,
+            0.7071054200372991,
+            -0.707108043785176,
+            8.819431286530223e-07
+          ]
+        },
+        {
+          "topic": "/scoring/tf",
+          "parent": "task_board",
+          "child": "task_board/sc_port_0",
+          "xyz_m": [
+            -0.07414003181567452,
+            0.029500031504687385,
+            0.016500043134802134
+          ],
+          "quat_xyzw": [
+            -0.49999993236147755,
+            -0.4996017384913148,
+            -0.49999988603310913,
+            -0.5003981244501505
+          ]
+        },
+        {
+          "topic": "/scoring/tf",
+          "parent": "aic_world",
+          "child": "task_board",
+          "xyz_m": [
+            0.14801999926567078,
+            -0.14901000261306763,
+            1.1399999856948853
+          ],
+          "quat_xyzw": [
+            0.0,
+            0.0,
+            0.9999998211860497,
+            -0.0006636732164074378
+          ]
+        },
+        {
+          "topic": "/tf",
+          "parent": "task_board/sc_port_0",
+          "child": "task_board/sc_port_0/sc_port_base_link",
+          "xyz_m": [
+            -5.741648378965181e-09,
+            -0.001999913301041767,
+            -1.2445328892440877e-07
+          ],
+          "quat_xyzw": [
+            9.977225743362794e-07,
+            0.7071054200372991,
+            -0.707108043785176,
+            8.819431286530223e-07
+          ]
+        },
+        {
+          "topic": "/tf",
+          "parent": "task_board",
+          "child": "task_board/sc_port_0",
+          "xyz_m": [
+            -0.07414003181567452,
+            0.029500031504687385,
+            0.016500043134802134
+          ],
+          "quat_xyzw": [
+            -0.49999993236147755,
+            -0.4996017384913148,
+            -0.49999988603310913,
+            -0.5003981244501505
+          ]
+        },
+        {
+          "topic": "/tf",
+          "parent": "aic_world",
+          "child": "task_board",
+          "xyz_m": [
+            0.14801999926567078,
+            -0.14901000261306763,
+            1.1399999856948853
+          ],
+          "quat_xyzw": [
+            0.0,
+            0.0,
+            0.9999998211860497,
+            -0.0006636732164074378
+          ]
+        }
+      ]
+    },
+    {
+      "episode_index": 282,
+      "trial_id": "trial_000510",
+      "split": "train",
+      "nic_count": 1,
+      "target_port_index": 0,
+      "scene_sha256": "98d992d73ba13610e427e0e6af7cb9cdb73823f630422c47190c1b483f8af636",
+      "bag_host": "/var/tmp/chmin_aic_20260918_act/sc_collection_gpu0_followup/batch_port0/eval_collection/collection_config/attempt_0001/bag_trial_000510_20260918_140703_716",
+      "edges": [
+        {
+          "topic": "/tf_static",
+          "parent": "tabletop",
+          "child": "base_link",
+          "xyz_m": [
+            0.0,
+            0.0,
+            0.0
+          ],
+          "quat_xyzw": [
+            0.0,
+            0.0,
+            0.0,
+            1.0
+          ]
+        },
+        {
+          "topic": "/tf_static",
+          "parent": "world",
+          "child": "tabletop",
+          "xyz_m": [
+            -0.2,
+            0.2,
+            1.14
+          ],
+          "quat_xyzw": [
+            0.0,
+            0.0,
+            0.9999999560952156,
+            -0.0002963267905598908
+          ]
+        },
+        {
+          "topic": "/scoring/tf",
+          "parent": "task_board/sc_port_0",
+          "child": "task_board/sc_port_0/sc_port_base_link",
+          "xyz_m": [
+            -1.0429599739403272e-08,
+            -0.0019998878801876785,
+            -1.3261502002093195e-07
+          ],
+          "quat_xyzw": [
+            9.941873627683506e-07,
+            0.707105446319293,
+            -0.7071080637997343,
+            8.929877736866881e-07
+          ]
+        },
+        {
+          "topic": "/scoring/tf",
+          "parent": "task_board",
+          "child": "task_board/sc_port_0",
+          "xyz_m": [
+            -0.07216000553041566,
+            0.02950000473244968,
+            0.016500043075079907
+          ],
+          "quat_xyzw": [
+            -0.4999999497320564,
+            -0.49960176777727733,
+            -0.49999990941552397,
+            -0.5003981566279679
+          ]
+        },
+        {
+          "topic": "/scoring/tf",
+          "parent": "aic_world",
+          "child": "task_board",
+          "xyz_m": [
+            0.14521999657154083,
+            -0.14622999727725983,
+            1.1399999856948853
+          ],
+          "quat_xyzw": [
+            0.0,
+            0.0,
+            0.9999752637664776,
+            -0.007033616132247284
+          ]
+        },
+        {
+          "topic": "/tf",
+          "parent": "task_board/sc_port_0",
+          "child": "task_board/sc_port_0/sc_port_base_link",
+          "xyz_m": [
+            -1.0429599739403272e-08,
+            -0.0019998878801876785,
+            -1.3261502002093195e-07
+          ],
+          "quat_xyzw": [
+            9.941873627683506e-07,
+            0.707105446319293,
+            -0.7071080637997343,
+            8.929877736866881e-07
+          ]
+        },
+        {
+          "topic": "/tf",
+          "parent": "task_board",
+          "child": "task_board/sc_port_0",
+          "xyz_m": [
+            -0.07216000553041566,
+            0.02950000473244968,
+            0.016500043075079907
+          ],
+          "quat_xyzw": [
+            -0.4999999497320564,
+            -0.49960176777727733,
+            -0.49999990941552397,
+            -0.5003981566279679
+          ]
+        },
+        {
+          "topic": "/tf",
+          "parent": "aic_world",
+          "child": "task_board",
+          "xyz_m": [
+            0.14521999657154083,
+            -0.14622999727725983,
+            1.1399999856948853
+          ],
+          "quat_xyzw": [
+            0.0,
+            0.0,
+            0.9999752637664776,
+            -0.007033616132247284
+          ]
+        }
+      ]
+    },
+    {
+      "episode_index": 283,
+      "trial_id": "trial_000511",
+      "split": "validation",
+      "nic_count": 1,
+      "target_port_index": 0,
+      "scene_sha256": "440d7ce40c8340fadbda170a1c761512ad37d35cfa138f78f553098fa894ef1c",
+      "bag_host": "/var/tmp/chmin_aic_20260918_act/sc_collection_gpu0_followup/batch_port0/eval_collection/collection_config/attempt_0001/bag_trial_000511_20260918_140855_261",
+      "edges": [
+        {
+          "topic": "/tf_static",
+          "parent": "tabletop",
+          "child": "base_link",
+          "xyz_m": [
+            0.0,
+            0.0,
+            0.0
+          ],
+          "quat_xyzw": [
+            0.0,
+            0.0,
+            0.0,
+            1.0
+          ]
+        },
+        {
+          "topic": "/tf_static",
+          "parent": "world",
+          "child": "tabletop",
+          "xyz_m": [
+            -0.2,
+            0.2,
+            1.14
+          ],
+          "quat_xyzw": [
+            0.0,
+            0.0,
+            0.9999999560952156,
+            -0.0002963267905598908
+          ]
+        },
+        {
+          "topic": "/scoring/tf",
+          "parent": "task_board/sc_port_0",
+          "child": "task_board/sc_port_0/sc_port_base_link",
+          "xyz_m": [
+            -7.789688005743756e-09,
+            -0.0019998952016238025,
+            -1.3102237594875277e-07
+          ],
+          "quat_xyzw": [
+            1.0025561441029396e-06,
+            0.7071053789718174,
+            -0.7071080547099932,
+            1.0532319060437847e-06
+          ]
+        },
+        {
+          "topic": "/scoring/tf",
+          "parent": "task_board",
+          "child": "task_board/sc_port_0",
+          "xyz_m": [
+            -0.07977999869261648,
+            0.029500014320507167,
+            0.0165000430920772
+          ],
+          "quat_xyzw": [
+            -0.4999998883792649,
+            -0.49960185414558456,
+            -0.4999998471557657,
+            -0.500398161436062
+          ]
+        },
+        {
+          "topic": "/scoring/tf",
+          "parent": "aic_world",
+          "child": "task_board",
+          "xyz_m": [
+            0.14594000577926636,
+            -0.1462700068950653,
+            1.1399999856948853
+          ],
+          "quat_xyzw": [
+            0.0,
+            0.0,
+            0.9999944567526721,
+            -0.003333667378912898
+          ]
+        },
+        {
+          "topic": "/tf",
+          "parent": "task_board/sc_port_0",
+          "child": "task_board/sc_port_0/sc_port_base_link",
+          "xyz_m": [
+            -7.789688005743756e-09,
+            -0.0019998952016238025,
+            -1.3102237594875277e-07
+          ],
+          "quat_xyzw": [
+            1.0025561441029396e-06,
+            0.7071053789718174,
+            -0.7071080547099932,
+            1.0532319060437847e-06
+          ]
+        },
+        {
+          "topic": "/tf",
+          "parent": "task_board",
+          "child": "task_board/sc_port_0",
+          "xyz_m": [
+            -0.07977999869261648,
+            0.029500014320507167,
+            0.0165000430920772
+          ],
+          "quat_xyzw": [
+            -0.4999998883792649,
+            -0.49960185414558456,
+            -0.4999998471557657,
+            -0.500398161436062
+          ]
+        },
+        {
+          "topic": "/tf",
+          "parent": "aic_world",
+          "child": "task_board",
+          "xyz_m": [
+            0.14594000577926636,
+            -0.1462700068950653,
+            1.1399999856948853
+          ],
+          "quat_xyzw": [
+            0.0,
+            0.0,
+            0.9999944567526721,
+            -0.003333667378912898
+          ]
+        }
+      ]
+    },
+    {
+      "episode_index": 284,
+      "trial_id": "trial_000512",
+      "split": "train",
+      "nic_count": 1,
+      "target_port_index": 0,
+      "scene_sha256": "ecf2a46c61fa0e0ee625861fd129371dfd2ddd2770bfd005f96016ec0737363f",
+      "bag_host": "/var/tmp/chmin_aic_20260918_act/sc_collection_gpu0_followup/batch_port0/eval_collection/collection_config/attempt_0001/bag_trial_000512_20260918_141009_893",
+      "edges": [
+        {
+          "topic": "/tf_static",
+          "parent": "tabletop",
+          "child": "base_link",
+          "xyz_m": [
+            0.0,
+            0.0,
+            0.0
+          ],
+          "quat_xyzw": [
+            0.0,
+            0.0,
+            0.0,
+            1.0
+          ]
+        },
+        {
+          "topic": "/tf_static",
+          "parent": "world",
+          "child": "tabletop",
+          "xyz_m": [
+            -0.2,
+            0.2,
+            1.14
+          ],
+          "quat_xyzw": [
+            0.0,
+            0.0,
+            0.9999999560952156,
+            -0.0002963267905598908
+          ]
+        },
+        {
+          "topic": "/scoring/tf",
+          "parent": "task_board/sc_port_0",
+          "child": "task_board/sc_port_0/sc_port_base_link",
+          "xyz_m": [
+            -7.469903307022463e-09,
+            -0.0020000199038809896,
+            -2.236285709389385e-08
+          ],
+          "quat_xyzw": [
+            9.93925727832412e-07,
+            0.7071054595867056,
+            -0.707108050427444,
+            9.182889428849793e-07
+          ]
+        },
+        {
+          "topic": "/scoring/tf",
+          "parent": "task_board",
+          "child": "task_board/sc_port_0",
+          "xyz_m": [
+            -0.07872003860022941,
+            0.029500037314097532,
+            0.016500043075079907
+          ],
+          "quat_xyzw": [
+            -0.49999986054448065,
+            -0.49960175083574665,
+            -0.49999989311012955,
+            -0.5003981042574325
+          ]
+        },
+        {
+          "topic": "/scoring/tf",
+          "parent": "aic_world",
+          "child": "task_board",
+          "xyz_m": [
+            0.15488000214099884,
+            -0.1546200066804886,
+            1.1399999856948853
+          ],
+          "quat_xyzw": [
+            0.0,
+            0.0,
+            0.9999833701658319,
+            -0.005773641723211703
+          ]
+        },
+        {
+          "topic": "/tf",
+          "parent": "task_board/sc_port_0",
+          "child": "task_board/sc_port_0/sc_port_base_link",
+          "xyz_m": [
+            -7.469903307022463e-09,
+            -0.0020000199038809896,
+            -2.236285709389385e-08
+          ],
+          "quat_xyzw": [
+            9.93925727832412e-07,
+            0.7071054595867056,
+            -0.707108050427444,
+            9.182889428849793e-07
+          ]
+        },
+        {
+          "topic": "/tf",
+          "parent": "task_board",
+          "child": "task_board/sc_port_0",
+          "xyz_m": [
+            -0.07872003860022941,
+            0.029500037314097532,
+            0.016500043075079907
+          ],
+          "quat_xyzw": [
+            -0.49999986054448065,
+            -0.49960175083574665,
+            -0.49999989311012955,
+            -0.5003981042574325
+          ]
+        },
+        {
+          "topic": "/tf",
+          "parent": "aic_world",
+          "child": "task_board",
+          "xyz_m": [
+            0.15488000214099884,
+            -0.1546200066804886,
+            1.1399999856948853
+          ],
+          "quat_xyzw": [
+            0.0,
+            0.0,
+            0.9999833701658319,
+            -0.005773641723211703
+          ]
+        }
+      ]
+    },
+    {
+      "episode_index": 285,
+      "trial_id": "trial_000513",
+      "split": "validation",
+      "nic_count": 2,
+      "target_port_index": 0,
+      "scene_sha256": "24ccf4b9142faacda95107ac91d8916f205d739eb0600a0dc40280156238b419",
+      "bag_host": "/var/tmp/chmin_aic_20260918_act/sc_collection_gpu0_followup/batch_port0/eval_collection/collection_config/attempt_0001/bag_trial_000513_20260918_141106_672",
+      "edges": [
+        {
+          "topic": "/tf_static",
+          "parent": "tabletop",
+          "child": "base_link",
+          "xyz_m": [
+            0.0,
+            0.0,
+            0.0
+          ],
+          "quat_xyzw": [
+            0.0,
+            0.0,
+            0.0,
+            1.0
+          ]
+        },
+        {
+          "topic": "/tf_static",
+          "parent": "world",
+          "child": "tabletop",
+          "xyz_m": [
+            -0.2,
+            0.2,
+            1.14
+          ],
+          "quat_xyzw": [
+            0.0,
+            0.0,
+            0.9999999560952156,
+            -0.0002963267905598908
+          ]
+        },
+        {
+          "topic": "/scoring/tf",
+          "parent": "aic_world",
+          "child": "task_board",
+          "xyz_m": [
+            0.15392999351024628,
+            -0.15262000262737274,
+            1.1399999856948853
+          ],
+          "quat_xyzw": [
+            0.0,
+            0.0,
+            0.9999981522543049,
+            0.0019313258414659737
+          ]
+        },
+        {
+          "topic": "/scoring/tf",
+          "parent": "task_board",
+          "child": "task_board/sc_port_0",
+          "xyz_m": [
+            -0.07269002468173813,
+            0.029500009437001568,
+            0.01650004306658115
+          ],
+          "quat_xyzw": [
+            0.4999997912957687,
+            0.4996018090125001,
+            0.49999985422288357,
+            0.5003982079978772
+          ]
+        },
+        {
+          "topic": "/scoring/tf",
+          "parent": "task_board/sc_port_0",
+          "child": "task_board/sc_port_0/sc_port_base_link",
+          "xyz_m": [
+            4.092423844248572e-09,
+            -0.0020000027585829194,
+            -3.37363242064459e-08
+          ],
+          "quat_xyzw": [
+            -8.772123440969892e-07,
+            -0.7071055380381216,
+            0.7071080553709537,
+            -9.8221670220437e-07
+          ]
+        },
+        {
+          "topic": "/tf",
+          "parent": "aic_world",
+          "child": "task_board",
+          "xyz_m": [
+            0.15392999351024628,
+            -0.15262000262737274,
+            1.1399999856948853
+          ],
+          "quat_xyzw": [
+            0.0,
+            0.0,
+            0.9999981522543049,
+            0.0019313258414659737
+          ]
+        },
+        {
+          "topic": "/tf",
+          "parent": "task_board",
+          "child": "task_board/sc_port_0",
+          "xyz_m": [
+            -0.07269002468173813,
+            0.029500009437001568,
+            0.01650004306658115
+          ],
+          "quat_xyzw": [
+            0.4999997912957687,
+            0.4996018090125001,
+            0.49999985422288357,
+            0.5003982079978772
+          ]
+        },
+        {
+          "topic": "/tf",
+          "parent": "task_board/sc_port_0",
+          "child": "task_board/sc_port_0/sc_port_base_link",
+          "xyz_m": [
+            4.092423844248572e-09,
+            -0.0020000027585829194,
+            -3.37363242064459e-08
+          ],
+          "quat_xyzw": [
+            -8.772123440969892e-07,
+            -0.7071055380381216,
+            0.7071080553709537,
+            -9.8221670220437e-07
+          ]
+        }
+      ]
+    },
+    {
+      "episode_index": 286,
+      "trial_id": "trial_000514",
+      "split": "train",
+      "nic_count": 2,
+      "target_port_index": 0,
+      "scene_sha256": "61beef4e6ece152fb8129472c54411c788d35f91b69dde21df00fdb6d4144295",
+      "bag_host": "/var/tmp/chmin_aic_20260918_act/sc_collection_gpu0_followup/batch_port0/eval_collection/collection_config/attempt_0001/bag_trial_000514_20260918_141306_182",
+      "edges": [
+        {
+          "topic": "/tf_static",
+          "parent": "tabletop",
+          "child": "base_link",
+          "xyz_m": [
+            0.0,
+            0.0,
+            0.0
+          ],
+          "quat_xyzw": [
+            0.0,
+            0.0,
+            0.0,
+            1.0
+          ]
+        },
+        {
+          "topic": "/tf_static",
+          "parent": "world",
+          "child": "tabletop",
+          "xyz_m": [
+            -0.2,
+            0.2,
+            1.14
+          ],
+          "quat_xyzw": [
+            0.0,
+            0.0,
+            0.9999999560952156,
+            -0.0002963267905598908
+          ]
+        },
+        {
+          "topic": "/tf",
+          "parent": "aic_world",
+          "child": "task_board",
+          "xyz_m": [
+            0.14609000086784363,
+            -0.15018999576568604,
+            1.1399999856948853
+          ],
+          "quat_xyzw": [
+            0.0,
+            0.0,
+            0.9999743696742898,
+            0.00716126531413483
+          ]
+        },
+        {
+          "topic": "/tf",
+          "parent": "task_board",
+          "child": "task_board/sc_port_0",
+          "xyz_m": [
+            -0.07701000988681334,
+            0.029500006778618526,
+            0.016500043083578664
+          ],
+          "quat_xyzw": [
+            0.4999998871805853,
+            0.4996018121927486,
+            0.49999987924607897,
+            0.5003981167298791
+          ]
+        },
+        {
+          "topic": "/tf",
+          "parent": "task_board/sc_port_0",
+          "child": "task_board/sc_port_0/sc_port_base_link",
+          "xyz_m": [
+            5.1832689806907695e-09,
+            -0.0019999734550089077,
+            -6.310093125794225e-08
+          ],
+          "quat_xyzw": [
+            -9.677895998483343e-07,
+            -0.707105468555175,
+            0.70710810287033,
+            -9.250721207062801e-07
+          ]
+        },
+        {
+          "topic": "/scoring/tf",
+          "parent": "aic_world",
+          "child": "task_board",
+          "xyz_m": [
+            0.14609000086784363,
+            -0.15018999576568604,
+            1.1399999856948853
+          ],
+          "quat_xyzw": [
+            0.0,
+            0.0,
+            0.9999743696742898,
+            0.00716126531413483
+          ]
+        },
+        {
+          "topic": "/scoring/tf",
+          "parent": "task_board",
+          "child": "task_board/sc_port_0",
+          "xyz_m": [
+            -0.07701000988681334,
+            0.029500006778618526,
+            0.016500043083578664
+          ],
+          "quat_xyzw": [
+            0.4999998871805853,
+            0.4996018121927486,
+            0.49999987924607897,
+            0.5003981167298791
+          ]
+        },
+        {
+          "topic": "/scoring/tf",
+          "parent": "task_board/sc_port_0",
+          "child": "task_board/sc_port_0/sc_port_base_link",
+          "xyz_m": [
+            5.1832689806907695e-09,
+            -0.0019999734550089077,
+            -6.310093125794225e-08
+          ],
+          "quat_xyzw": [
+            -9.677895998483343e-07,
+            -0.707105468555175,
+            0.70710810287033,
+            -9.250721207062801e-07
+          ]
+        }
+      ]
+    },
+    {
+      "episode_index": 287,
+      "trial_id": "trial_000515",
+      "split": "train",
+      "nic_count": 2,
+      "target_port_index": 0,
+      "scene_sha256": "d3a4b54a03a4e98febf65caa225e5f97026d6d40c1eb1f53abccfa78db1d6719",
+      "bag_host": "/var/tmp/chmin_aic_20260918_act/sc_collection_gpu0_followup/batch_port0/eval_collection/collection_config/attempt_0001/bag_trial_000515_20260918_141404_024",
+      "edges": [
+        {
+          "topic": "/tf_static",
+          "parent": "tabletop",
+          "child": "base_link",
+          "xyz_m": [
+            0.0,
+            0.0,
+            0.0
+          ],
+          "quat_xyzw": [
+            0.0,
+            0.0,
+            0.0,
+            1.0
+          ]
+        },
+        {
+          "topic": "/tf_static",
+          "parent": "world",
+          "child": "tabletop",
+          "xyz_m": [
+            -0.2,
+            0.2,
+            1.14
+          ],
+          "quat_xyzw": [
+            0.0,
+            0.0,
+            0.9999999560952156,
+            -0.0002963267905598908
+          ]
+        },
+        {
+          "topic": "/scoring/tf",
+          "parent": "aic_world",
+          "child": "task_board",
+          "xyz_m": [
+            0.14885999262332916,
+            -0.1473899930715561,
+            1.1399999856948853
+          ],
+          "quat_xyzw": [
+            0.0,
+            0.0,
+            0.9999854563609161,
+            -0.005398647678918403
+          ]
+        },
+        {
+          "topic": "/scoring/tf",
+          "parent": "task_board",
+          "child": "task_board/sc_port_0",
+          "xyz_m": [
+            -0.07728004199624361,
+            0.02950001797810725,
+            0.016500042981131946
+          ],
+          "quat_xyzw": [
+            -0.4999998606435938,
+            -0.4996017271429216,
+            -0.4999998553351263,
+            -0.5003980764495191
+          ]
+        },
+        {
+          "topic": "/scoring/tf",
+          "parent": "task_board/sc_port_0",
+          "child": "task_board/sc_port_0/sc_port_base_link",
+          "xyz_m": [
+            1.4143340665295767e-08,
+            -0.0020001616310005854,
+            1.4059369818353318e-07
+          ],
+          "quat_xyzw": [
+            1.002357870594217e-06,
+            0.7071054711196355,
+            -0.707108091724726,
+            9.170125351836572e-07
+          ]
+        },
+        {
+          "topic": "/tf",
+          "parent": "aic_world",
+          "child": "task_board",
+          "xyz_m": [
+            0.14885999262332916,
+            -0.1473899930715561,
+            1.1399999856948853
+          ],
+          "quat_xyzw": [
+            0.0,
+            0.0,
+            0.9999854563609161,
+            -0.005398647678918403
+          ]
+        },
+        {
+          "topic": "/tf",
+          "parent": "task_board",
+          "child": "task_board/sc_port_0",
+          "xyz_m": [
+            -0.07728004199624361,
+            0.02950001797810725,
+            0.016500042981131946
+          ],
+          "quat_xyzw": [
+            -0.4999998606435938,
+            -0.4996017271429216,
+            -0.4999998553351263,
+            -0.5003980764495191
+          ]
+        },
+        {
+          "topic": "/tf",
+          "parent": "task_board/sc_port_0",
+          "child": "task_board/sc_port_0/sc_port_base_link",
+          "xyz_m": [
+            1.4143340665295767e-08,
+            -0.0020001616310005854,
+            1.4059369818353318e-07
+          ],
+          "quat_xyzw": [
+            1.002357870594217e-06,
+            0.7071054711196355,
+            -0.707108091724726,
+            9.170125351836572e-07
+          ]
+        }
+      ]
+    },
+    {
+      "episode_index": 288,
+      "trial_id": "trial_000516",
+      "split": "train",
+      "nic_count": 2,
+      "target_port_index": 0,
+      "scene_sha256": "b76fa94d0945e644ea982692af7e0f9beb942faa7c74cda6c92409922fbee210",
+      "bag_host": "/var/tmp/chmin_aic_20260918_act/sc_collection_gpu0_followup/batch_port0/eval_collection/collection_config/attempt_0001/bag_trial_000516_20260918_141511_018",
+      "edges": [
+        {
+          "topic": "/tf_static",
+          "parent": "tabletop",
+          "child": "base_link",
+          "xyz_m": [
+            0.0,
+            0.0,
+            0.0
+          ],
+          "quat_xyzw": [
+            0.0,
+            0.0,
+            0.0,
+            1.0
+          ]
+        },
+        {
+          "topic": "/tf_static",
+          "parent": "world",
+          "child": "tabletop",
+          "xyz_m": [
+            -0.2,
+            0.2,
+            1.14
+          ],
+          "quat_xyzw": [
+            0.0,
+            0.0,
+            0.9999999560952156,
+            -0.0002963267905598908
+          ]
+        },
+        {
+          "topic": "/scoring/tf",
+          "parent": "aic_world",
+          "child": "task_board",
+          "xyz_m": [
+            0.15324999392032623,
+            -0.15392999351024628,
+            1.1399999856948853
+          ],
+          "quat_xyzw": [
+            0.0,
+            0.0,
+            0.9999861716268001,
+            -0.005258649197372747
+          ]
+        },
+        {
+          "topic": "/scoring/tf",
+          "parent": "task_board",
+          "child": "task_board/sc_port_0",
+          "xyz_m": [
+            -0.07106000712920471,
+            0.029500008500483732,
+            0.01650004297263319
+          ],
+          "quat_xyzw": [
+            -0.49999987424547776,
+            -0.4996017756431451,
+            -0.49999986281309494,
+            -0.5003981109713516
+          ]
+        },
+        {
+          "topic": "/scoring/tf",
+          "parent": "task_board/sc_port_0",
+          "child": "task_board/sc_port_0/sc_port_base_link",
+          "xyz_m": [
+            -1.1684048950577619e-08,
+            -0.0020001052659699425,
+            8.191856179506907e-08
+          ],
+          "quat_xyzw": [
+            9.063512989571088e-07,
+            0.7071055064353586,
+            -0.7071081411726857,
+            8.648254473942721e-07
+          ]
+        },
+        {
+          "topic": "/tf",
+          "parent": "aic_world",
+          "child": "task_board",
+          "xyz_m": [
+            0.15324999392032623,
+            -0.15392999351024628,
+            1.1399999856948853
+          ],
+          "quat_xyzw": [
+            0.0,
+            0.0,
+            0.9999861716268001,
+            -0.005258649197372747
+          ]
+        },
+        {
+          "topic": "/tf",
+          "parent": "task_board",
+          "child": "task_board/sc_port_0",
+          "xyz_m": [
+            -0.07106000712920471,
+            0.029500008500483732,
+            0.01650004297263319
+          ],
+          "quat_xyzw": [
+            -0.49999987424547776,
+            -0.4996017756431451,
+            -0.49999986281309494,
+            -0.5003981109713516
+          ]
+        },
+        {
+          "topic": "/tf",
+          "parent": "task_board/sc_port_0",
+          "child": "task_board/sc_port_0/sc_port_base_link",
+          "xyz_m": [
+            -1.1684048950577619e-08,
+            -0.0020001052659699425,
+            8.191856179506907e-08
+          ],
+          "quat_xyzw": [
+            9.063512989571088e-07,
+            0.7071055064353586,
+            -0.7071081411726857,
+            8.648254473942721e-07
+          ]
+        }
+      ]
+    }
+  ]
+}

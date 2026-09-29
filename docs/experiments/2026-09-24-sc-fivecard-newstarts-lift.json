@@ -1,0 +1,27 @@
+{
+  "schema": "sc_fivecard_port0_newstarts_lift_probe/v1",
+  "teacher_privileged": true,
+  "generator_source": "/var/tmp/chmin_aic_20260918_act/sc_fivecard_candidate_pool_20260924.yaml",
+  "generator_seed": 2026092416,
+  "run_dir": "/var/tmp/chmin_aic_20260918_act/sc_fivecard_newstarts_lift_probe_20260924",
+  "run_script_sha256": "ca5e45c4acf3f82a76be1b784f49afc7b851fe04253a773664fcc7d7902b4e17",
+  "engine_config_sha256": "e9e4a33dc355894ce434374bf79a9a45f9ff4e0ffc108dda96902648907c6390",
+  "scoring_sha256": "6c638b9b8ceacb4524f78d99d37927a7887ecd3ce179627ccb1e71572c48759e",
+  "pre_route_lift_m": 0.08,
+  "tier3": {
+    "trial_990101": {
+      "score": 75,
+      "message": "Cable insertion successful."
+    },
+    "trial_990102": {
+      "score": 16.84070386298979,
+      "message": "No insertion detected. Final plug port distance: 0.07m."
+    },
+    "trial_990103": {
+      "score": 75,
+      "message": "Cable insertion successful."
+    }
+  },
+  "success_count": 2,
+  "admission": "Successful scored episodes are candidates only until command/image/physical-tip and causal chunk audits; failures remain excluded from BC."
+}

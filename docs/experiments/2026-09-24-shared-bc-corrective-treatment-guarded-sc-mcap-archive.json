@@ -1,0 +1,13 @@
+{
+  "schema": "sc_scored_mcap_archive/v1",
+  "verified_before_source_removal": true,
+  "files": [
+    {
+      "original_path": "/var/tmp/chmin_aic_20260918_act/shared_port_tcp_bc_corrective_treatment_20260924/eval_guarded_sc_dev/best/attempt_0001/bag_trial_990501_20260924_232605_459/bag_trial_990501_20260924_232605_459_0.mcap",
+      "original_sha256": "cd29aa2bef88ca0eb0b900114139a5bb70d82e2b404abffe64117fd273070f3c",
+      "compressed": "/home/nas/chmin/aic_archive_20260924/shared_bc_corrective_treatment_guarded_sc_20260924/bag_trial_990501_20260924_232605_459_0.mcap.zst",
+      "compressed_bytes": 36304072,
+      "restore_command": "zstd -dc '/home/nas/chmin/aic_archive_20260924/shared_bc_corrective_treatment_guarded_sc_20260924/bag_trial_990501_20260924_232605_459_0.mcap.zst' > '/var/tmp/chmin_aic_20260918_act/shared_port_tcp_bc_corrective_treatment_20260924/eval_guarded_sc_dev/best/attempt_0001/bag_trial_990501_20260924_232605_459/bag_trial_990501_20260924_232605_459_0.mcap'"
+    }
+  ]
+}

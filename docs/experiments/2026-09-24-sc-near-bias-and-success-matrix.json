@@ -1,0 +1,90 @@
+{
+  "schema": "sc_near_bias_and_success_matrix/v1",
+  "teacher_only": true,
+  "autonomous_actor_evidence": false,
+  "near_bias_probe": [
+    {
+      "trial": "trial_990401",
+      "source_split": "new_development_train",
+      "parent_trial": "trial_990302",
+      "task_cell": "2 cards SC port1",
+      "parent_score": 42.32915675593269,
+      "tier3_score": 75,
+      "full_insertion": true,
+      "candidate_integrity_pass": true
+    },
+    {
+      "trial": "trial_990402",
+      "source_split": "new_development_train",
+      "parent_trial": "trial_990101",
+      "task_cell": "5 cards SC port0",
+      "parent_score": 75,
+      "tier3_score": 16.00634954780993,
+      "full_insertion": false,
+      "candidate_integrity_pass": false
+    }
+  ],
+  "all_12_card_port_cells_with_at_least_one_scored_success": true,
+  "sc_success_matrix": {
+    "0_cards_port_0": [
+      "trial_960001",
+      "trial_960002"
+    ],
+    "0_cards_port_1": [
+      "trial_960003",
+      "trial_960004"
+    ],
+    "1_cards_port_0": [
+      "canonical_expert_253",
+      "canonical_expert_255",
+      "canonical_expert_258",
+      "canonical_expert_282",
+      "canonical_expert_283",
+      "canonical_expert_284"
+    ],
+    "1_cards_port_1": [
+      "canonical_expert_257",
+      "canonical_expert_259",
+      "canonical_expert_277",
+      "canonical_expert_278",
+      "canonical_expert_279"
+    ],
+    "2_cards_port_0": [
+      "canonical_expert_252",
+      "canonical_expert_256",
+      "canonical_expert_285",
+      "canonical_expert_286",
+      "canonical_expert_287",
+      "canonical_expert_288"
+    ],
+    "2_cards_port_1": [
+      "trial_990401"
+    ],
+    "3_cards_port_0": [
+      "canonical_expert_251",
+      "canonical_expert_254",
+      "canonical_expert_280",
+      "canonical_expert_281"
+    ],
+    "3_cards_port_1": [
+      "trial_960007"
+    ],
+    "4_cards_port_0": [
+      "trial_990009"
+    ],
+    "4_cards_port_1": [
+      "trial_980011"
+    ],
+    "5_cards_port_0": [
+      "trial_990101",
+      "trial_990103"
+    ],
+    "5_cards_port_1": [
+      "trial_960015"
+    ]
+  },
+  "supplemental_v2_manifest": "/var/tmp/chmin_aic_20260918_act/sc_supplemental_candidates_v2_20260924/manifest.json",
+  "supplemental_v2_manifest_sha256": "8b44b7e4e62905a3bd96ddb500a77169c4908db0cd69d137606d2266db9c54a4",
+  "supplemental_v2_label_summary": "docs/experiments/2026-09-24-sc-supplemental-v2-physical-waypoint-labels.json",
+  "caveat": "The 5-card control regressed under the same anti-windup setting; do not deploy it as a general teacher rule. These are training-label candidates, not BC/RL successes."
+}

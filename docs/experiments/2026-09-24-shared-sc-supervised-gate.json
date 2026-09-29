@@ -1,0 +1,1790 @@
+{
+  "schema": "shared_sc_supervised_gate_20260924/v1",
+  "date": "2026-09-25",
+  "steps_passed": [
+    1,
+    2,
+    3,
+    4
+  ],
+  "step5": "failed_supervised_and_autonomous_gate; posthoc developer-scene rootcause audit active",
+  "rl_started": false,
+  "reserved_final_opened": false,
+  "sc_perception_fourth_suite": {
+    "frozen_bundle": "/var/tmp/chmin_aic_20260918_act/sc_yaw_boundary_refreeze_eval_20260924/frozen_bundle.json",
+    "relative_metrics": "/var/tmp/chmin_aic_20260918_act/sc_yaw_boundary_refreeze_eval_20260924/relative_metrics.json",
+    "yaw_metrics": "/var/tmp/chmin_aic_20260918_act/sc_yaw_boundary_refreeze_eval_20260924/yaw_metrics.json",
+    "archive_manifest": "docs/experiments/2026-09-24-sc-yaw-boundary-refreeze-mcap-archive.json",
+    "near_episodes": 4,
+    "near_frames": 154,
+    "relative_lateral_median_mm": 0.15557284291990597,
+    "relative_lateral_p95_mm": 0.2935389615272607,
+    "yaw_median_deg": 0.048105519461042426,
+    "yaw_p95_deg": 0.08414968395402105
+  },
+  "bc_arms": [
+    {
+      "arm": "shared_port_tcp_bc_time_full_20260924",
+      "checkpoint": "/var/tmp/chmin_aic_20260918_act/shared_port_tcp_bc_time_full_20260924/best.pt",
+      "checkpoint_sha256": "4062b20d464dbd12353e8871e219b6a055271b32f0b05ad9fe93811f39b42cc7",
+      "summary": {
+        "schema": "shared_port_tcp_bc_offline/v1",
+        "completed_updates": 2000,
+        "best_update": 1000,
+        "best_selection_mm": 1.3980959951877594,
+        "train_rows": 146831,
+        "validation_rows": 22683,
+        "train_episodes": 261,
+        "validation_episodes": 39,
+        "parameters": 13615160,
+        "command_loss_weight": 1.0,
+        "include_elapsed": true,
+        "start_oversample": 4.0,
+        "warm_start": "/var/tmp/chmin_aic_20260918_act/shared_port_tcp_bc_command_full_20260924/best.pt",
+        "checkpoint": "/var/tmp/chmin_aic_20260918_act/shared_port_tcp_bc_time_full_20260924/best.pt",
+        "offline_only": true,
+        "reserved_final_opened": false,
+        "rl_started": false
+      },
+      "axis_metrics": "/var/tmp/chmin_aic_20260918_act/shared_port_tcp_bc_time_full_20260924/grouped_offline_metrics_axis.json",
+      "fine_axis_metrics": "/var/tmp/chmin_aic_20260918_act/shared_port_tcp_bc_time_full_20260924/grouped_offline_metrics_fine_axis.json",
+      "sc_near_0_30mm": {
+        "episodes": 7,
+        "target_translation_mm": {
+          "count": 175,
+          "median": 0.9921727180480957,
+          "p95": 4.574119377136228
+        },
+        "pose_translation_mm": {
+          "count": 175,
+          "median": 1.4127306938171387,
+          "p95": 2.781114268302917
+        },
+        "body_command_translation_mm": {
+          "count": 175,
+          "median": 1.1577908779005508,
+          "p95": 3.3381237633173653
+        },
+        "lateral_command_mm": {
+          "count": 175,
+          "median": 0.3658647835254669,
+          "p95": 1.204384708404541
+        },
+        "axial_command_mm": {
+          "count": 175,
+          "median": 1.1342326402664185,
+          "p95": 3.0157882213592497
+        },
+        "lateral_target_mm": {
+          "count": 175,
+          "median": 0.6257609724998474,
+          "p95": 1.15766783952713
+        }
+      },
+      "sfp_near_0_30mm": {
+        "episodes": 32,
+        "target_translation_mm": {
+          "count": 800,
+          "median": 2.4465456008911133,
+          "p95": 9.873969936370846
+        },
+        "pose_translation_mm": {
+          "count": 800,
+          "median": 1.188109815120697,
+          "p95": 3.6652082800865156
+        },
+        "body_command_translation_mm": {
+          "count": 800,
+          "median": 1.8355671330924093,
+          "p95": 8.966445950011803
+        },
+        "lateral_command_mm": {
+          "count": 800,
+          "median": 1.0344288349151611,
+          "p95": 3.0470940709114074
+        },
+        "axial_command_mm": {
+          "count": 800,
+          "median": 1.2269858121871948,
+          "p95": 8.81775889396667
+        },
+        "lateral_target_mm": {
+          "count": 800,
+          "median": 1.4171294569969177,
+          "p95": 3.448378849029538
+        }
+      },
+      "sc_near_0_5mm": {
+        "episodes": 5,
+        "target_translation_mm": {
+          "count": 65,
+          "median": 0.8150008916854858,
+          "p95": 4.4538282394409165
+        },
+        "pose_translation_mm": {
+          "count": 65,
+          "median": 1.95231294631958,
+          "p95": 3.1446868896484377
+        },
+        "body_command_translation_mm": {
+          "count": 65,
+          "median": 1.5972045068347467,
+          "p95": 3.626394943632181
+        },
+        "lateral_command_mm": {
+          "count": 65,
+          "median": 0.3690977990627289,
+          "p95": 0.8199641585350036
+        },
+        "axial_command_mm": {
+          "count": 65,
+          "median": 1.6397870779037476,
+          "p95": 3.562092733383179
+        },
+        "lateral_target_mm": {
+          "count": 65,
+          "median": 0.6257609724998474,
+          "p95": 1.0578603386878964
+        }
+      }
+    },
+    {
+      "arm": "shared_port_tcp_bc_sc_oracle_full_20260924",
+      "checkpoint": "/var/tmp/chmin_aic_20260918_act/shared_port_tcp_bc_sc_oracle_full_20260924/best.pt",
+      "checkpoint_sha256": "02d5184d1163a7a062411b655ee608107cf2a8a5b4033c03027cc3cbe178571b",
+      "summary": {
+        "schema": "shared_port_tcp_bc_offline/v1",
+        "completed_updates": 3000,
+        "best_update": 2000,
+        "best_selection_mm": 1.2808694541454315,
+        "train_rows": 146831,
+        "validation_rows": 22683,
+        "train_episodes": 261,
+        "validation_episodes": 39,
+        "parameters": 13615160,
+        "command_loss_weight": 1.0,
+        "include_elapsed": true,
+        "start_oversample": 4.0,
+        "oracle_sc_near_pose_noise_mm": 0.3,
+        "sc_near_oversample": 4.0,
+        "warm_start": "/var/tmp/chmin_aic_20260918_act/shared_port_tcp_bc_time_full_20260924/best.pt",
+        "checkpoint": "/var/tmp/chmin_aic_20260918_act/shared_port_tcp_bc_sc_oracle_full_20260924/best.pt",
+        "offline_only": true,
+        "reserved_final_opened": false,
+        "rl_started": false
+      },
+      "axis_metrics": "/var/tmp/chmin_aic_20260918_act/shared_port_tcp_bc_sc_oracle_full_20260924/grouped_offline_metrics_axis.json",
+      "fine_axis_metrics": null,
+      "sc_near_0_30mm": {
+        "episodes": 7,
+        "target_translation_mm": {
+          "count": 175,
+          "median": 0.9593271017074585,
+          "p95": 3.1594557046890257
+        },
+        "pose_translation_mm": {
+          "count": 175,
+          "median": 1.2722647190093994,
+          "p95": 2.653997039794922
+        },
+        "body_command_translation_mm": {
+          "count": 175,
+          "median": 1.1674315842108418,
+          "p95": 3.269983769589957
+        },
+        "lateral_command_mm": {
+          "count": 175,
+          "median": 0.5713834166526794,
+          "p95": 1.1405938386917107
+        },
+        "axial_command_mm": {
+          "count": 175,
+          "median": 0.8828006982803345,
+          "p95": 3.1325105905532813
+        },
+        "lateral_target_mm": {
+          "count": 175,
+          "median": 0.47678259015083313,
+          "p95": 0.871663928031921
+        }
+      },
+      "sfp_near_0_30mm": {
+        "episodes": 32,
+        "target_translation_mm": {
+          "count": 800,
+          "median": 2.2720850706100464,
+          "p95": 9.355455827713008
+        },
+        "pose_translation_mm": {
+          "count": 800,
+          "median": 1.1504459977149963,
+          "p95": 3.628790450096125
+        },
+        "body_command_translation_mm": {
+          "count": 800,
+          "median": 1.759492248775444,
+          "p95": 8.441787505851211
+        },
+        "lateral_command_mm": {
+          "count": 800,
+          "median": 1.2107884883880615,
+          "p95": 3.276196801662444
+        },
+        "axial_command_mm": {
+          "count": 800,
+          "median": 1.0016728043556213,
+          "p95": 8.200702428817738
+        },
+        "lateral_target_mm": {
+          "count": 800,
+          "median": 1.4337353706359863,
+          "p95": 4.101096677780151
+        }
+      },
+      "sc_near_0_5mm": null
+    },
+    {
+      "arm": "shared_port_tcp_bc_lateral_full_20260924",
+      "checkpoint": "/var/tmp/chmin_aic_20260918_act/shared_port_tcp_bc_lateral_full_20260924/best.pt",
+      "checkpoint_sha256": "089e2b39ded0223edd1eb74cec43c6cd58c09fd587de3657c59716985a3e08b0",
+      "summary": {
+        "schema": "shared_port_tcp_bc_offline/v1",
+        "completed_updates": 1500,
+        "best_update": 500,
+        "best_selection_mm": 1.240357130765915,
+        "train_rows": 146831,
+        "validation_rows": 22683,
+        "train_episodes": 261,
+        "validation_episodes": 39,
+        "parameters": 13615160,
+        "command_loss_weight": 1.0,
+        "near_oversample": 4.0,
+        "near_lateral_loss_weight": 0.5,
+        "include_elapsed": true,
+        "start_oversample": 4.0,
+        "oracle_sc_near_pose_noise_mm": null,
+        "sc_near_oversample": 1.0,
+        "warm_start": "/var/tmp/chmin_aic_20260918_act/shared_port_tcp_bc_time_full_20260924/best.pt",
+        "checkpoint": "/var/tmp/chmin_aic_20260918_act/shared_port_tcp_bc_lateral_full_20260924/best.pt",
+        "offline_only": true,
+        "reserved_final_opened": false,
+        "rl_started": false
+      },
+      "axis_metrics": "/var/tmp/chmin_aic_20260918_act/shared_port_tcp_bc_lateral_full_20260924/grouped_offline_metrics_axis.json",
+      "fine_axis_metrics": "/var/tmp/chmin_aic_20260918_act/shared_port_tcp_bc_lateral_full_20260924/grouped_offline_metrics_fine_axis.json",
+      "sc_near_0_30mm": {
+        "episodes": 7,
+        "target_translation_mm": {
+          "count": 175,
+          "median": 1.1303337812423706,
+          "p95": 4.411680078506469
+        },
+        "pose_translation_mm": {
+          "count": 175,
+          "median": 1.3855983018875122,
+          "p95": 3.920500636100768
+        },
+        "body_command_translation_mm": {
+          "count": 175,
+          "median": 0.7729327465828569,
+          "p95": 1.9962294110688028
+        },
+        "lateral_command_mm": {
+          "count": 175,
+          "median": 0.5948599576950073,
+          "p95": 0.916295313835144
+        },
+        "axial_command_mm": {
+          "count": 175,
+          "median": 0.4819706082344055,
+          "p95": 1.8169749736785878
+        },
+        "lateral_target_mm": {
+          "count": 175,
+          "median": 0.648224949836731,
+          "p95": 1.0461997389793396
+        }
+      },
+      "sfp_near_0_30mm": {
+        "episodes": 32,
+        "target_translation_mm": {
+          "count": 800,
+          "median": 2.1100014448165894,
+          "p95": 9.559897232055661
+        },
+        "pose_translation_mm": {
+          "count": 800,
+          "median": 1.2130489945411682,
+          "p95": 5.968414092063898
+        },
+        "body_command_translation_mm": {
+          "count": 800,
+          "median": 1.5573041178867255,
+          "p95": 9.482141179281637
+        },
+        "lateral_command_mm": {
+          "count": 800,
+          "median": 0.9810979068279266,
+          "p95": 2.7363169670104672
+        },
+        "axial_command_mm": {
+          "count": 800,
+          "median": 0.9344092011451721,
+          "p95": 8.75949373245238
+        },
+        "lateral_target_mm": {
+          "count": 800,
+          "median": 1.2590458989143372,
+          "p95": 3.445279812812804
+        }
+      },
+      "sc_near_0_5mm": {
+        "episodes": 5,
+        "target_translation_mm": {
+          "count": 65,
+          "median": 1.2533618211746216,
+          "p95": 4.473760128021239
+        },
+        "pose_translation_mm": {
+          "count": 65,
+          "median": 1.4610377550125122,
+          "p95": 3.822903347015381
+        },
+        "body_command_translation_mm": {
+          "count": 65,
+          "median": 0.9382380025305028,
+          "p95": 1.9405202563747395
+        },
+        "lateral_command_mm": {
+          "count": 65,
+          "median": 0.5861064791679382,
+          "p95": 0.7519022226333618
+        },
+        "axial_command_mm": {
+          "count": 65,
+          "median": 0.82476806640625,
+          "p95": 1.9588708639144896
+        },
+        "lateral_target_mm": {
+          "count": 65,
+          "median": 0.6196257472038269,
+          "p95": 0.93400000333786
+        }
+      }
+    },
+    {
+      "arm": "shared_port_tcp_bc_sc_tip_oracle_full_20260924",
+      "checkpoint": "/var/tmp/chmin_aic_20260918_act/shared_port_tcp_bc_sc_tip_oracle_full_20260924/best.pt",
+      "checkpoint_sha256": "15ae0ddf054684cd28a1785fff40308b30072ed9488d664b7353ad78f049d4c5",
+      "summary": {
+        "schema": "shared_port_tcp_bc_offline/v1",
+        "completed_updates": 1500,
+        "best_update": 500,
+        "best_selection_mm": 1.2858951091766357,
+        "train_rows": 146831,
+        "validation_rows": 22683,
+        "train_episodes": 261,
+        "validation_episodes": 39,
+        "parameters": 13632524,
+        "command_loss_weight": 1.0,
+        "near_oversample": 1.0,
+        "near_lateral_loss_weight": 0.0,
+        "include_elapsed": true,
+        "start_oversample": 4.0,
+        "oracle_sc_near_pose_noise_mm": null,
+        "oracle_sc_near_tip_noise_mm": 0.3,
+        "sc_near_oversample": 4.0,
+        "warm_start": "/var/tmp/chmin_aic_20260918_act/shared_port_tcp_bc_time_full_20260924/best.pt",
+        "checkpoint": "/var/tmp/chmin_aic_20260918_act/shared_port_tcp_bc_sc_tip_oracle_full_20260924/best.pt",
+        "offline_only": true,
+        "reserved_final_opened": false,
+        "rl_started": false
+      },
+      "fine_axis_metrics": "/var/tmp/chmin_aic_20260918_act/shared_port_tcp_bc_sc_tip_oracle_full_20260924/grouped_offline_metrics_fine_axis.json",
+      "sc_near_0_5mm": {
+        "episodes": 5,
+        "target_translation_mm": {
+          "count": 65,
+          "median": 1.4381023645401,
+          "p95": 3.696647262573241
+        },
+        "pose_translation_mm": {
+          "count": 65,
+          "median": 1.795642614364624,
+          "p95": 3.1062036514282227
+        },
+        "body_command_translation_mm": {
+          "count": 65,
+          "median": 0.8160148276024743,
+          "p95": 2.9833009967412534
+        },
+        "lateral_command_mm": {
+          "count": 65,
+          "median": 0.28875473141670227,
+          "p95": 0.714293611049652
+        },
+        "axial_command_mm": {
+          "count": 65,
+          "median": 0.7176380753517151,
+          "p95": 2.92374267578125
+        },
+        "lateral_target_mm": {
+          "count": 65,
+          "median": 0.43316414952278137,
+          "p95": 0.734818136692047
+        }
+      }
+    },
+    {
+      "arm": "shared_port_tcp_bc_joint_oracle_full_20260924",
+      "checkpoint": "/var/tmp/chmin_aic_20260918_act/shared_port_tcp_bc_joint_oracle_full_20260924/best.pt",
+      "checkpoint_sha256": "5ee532fddd24a428d8fe51d36123b81660f18d120c834db0149f6a323c48a27b",
+      "summary": {
+        "schema": "shared_port_tcp_bc_offline/v1",
+        "completed_updates": 1750,
+        "best_update": 750,
+        "best_selection_mm": 1.4382650554180145,
+        "train_rows": 146831,
+        "validation_rows": 22683,
+        "train_episodes": 261,
+        "validation_episodes": 39,
+        "parameters": 13632524,
+        "command_loss_weight": 1.0,
+        "near_oversample": 1.0,
+        "near_lateral_loss_weight": 0.0,
+        "include_elapsed": true,
+        "start_oversample": 4.0,
+        "oracle_sc_near_pose_noise_mm": 0.3,
+        "oracle_sc_near_tip_noise_mm": 0.3,
+        "sc_near_oversample": 4.0,
+        "warm_start": "/var/tmp/chmin_aic_20260918_act/shared_port_tcp_bc_sc_tip_oracle_full_20260924/best.pt",
+        "checkpoint": "/var/tmp/chmin_aic_20260918_act/shared_port_tcp_bc_joint_oracle_full_20260924/best.pt",
+        "offline_only": true,
+        "reserved_final_opened": false,
+        "rl_started": false
+      },
+      "fine_axis_metrics": "/var/tmp/chmin_aic_20260918_act/shared_port_tcp_bc_joint_oracle_full_20260924/grouped_offline_metrics_fine_axis.json",
+      "sc_near_0_5mm": {
+        "episodes": 5,
+        "target_translation_mm": {
+          "count": 65,
+          "median": 1.6092135906219482,
+          "p95": 3.107046604156494
+        },
+        "pose_translation_mm": {
+          "count": 65,
+          "median": 1.34784996509552,
+          "p95": 3.1802388191223145
+        },
+        "body_command_translation_mm": {
+          "count": 65,
+          "median": 1.7189716666038521,
+          "p95": 3.2418217543653216
+        },
+        "lateral_command_mm": {
+          "count": 65,
+          "median": 1.35065495967865,
+          "p95": 1.8677941560745237
+        },
+        "axial_command_mm": {
+          "count": 65,
+          "median": 1.2401258945465088,
+          "p95": 2.6610501289367674
+        },
+        "lateral_target_mm": {
+          "count": 65,
+          "median": 1.169416069984436,
+          "p95": 1.6227999448776245
+        }
+      }
+    },
+    {
+      "arm": "shared_port_tcp_bc_expanded2_full_20260924",
+      "checkpoint": "/var/tmp/chmin_aic_20260918_act/shared_port_tcp_bc_expanded2_full_20260924/best.pt",
+      "checkpoint_sha256": "55229e5c360ebbada4a903238958e8eb7bd7af04f6844e7e9e94536fcb53f89e",
+      "summary": {
+        "schema": "shared_port_tcp_bc_offline/v1",
+        "completed_updates": 2750,
+        "best_update": 1750,
+        "best_selection_mm": 1.4912148565053938,
+        "train_rows": 148410,
+        "validation_rows": 22683,
+        "train_episodes": 263,
+        "validation_episodes": 39,
+        "parameters": 13615160,
+        "command_loss_weight": 1.0,
+        "near_oversample": 4.0,
+        "near_lateral_loss_weight": 0.5,
+        "selection_metric": "near_lateral_p95",
+        "include_elapsed": true,
+        "start_oversample": 4.0,
+        "oracle_sc_near_pose_noise_mm": null,
+        "oracle_sc_near_tip_noise_mm": null,
+        "sc_near_oversample": 1.0,
+        "warm_start": "/var/tmp/chmin_aic_20260918_act/shared_port_tcp_bc_time_full_20260924/best.pt",
+        "checkpoint": "/var/tmp/chmin_aic_20260918_act/shared_port_tcp_bc_expanded2_full_20260924/best.pt",
+        "offline_only": true,
+        "reserved_final_opened": false,
+        "rl_started": false
+      },
+      "fine_axis_metrics": "/var/tmp/chmin_aic_20260918_act/shared_port_tcp_bc_expanded2_full_20260924/grouped_offline_metrics_fine_axis.json",
+      "sc_near_0_5mm": {
+        "episodes": 5,
+        "target_translation_mm": {
+          "count": 65,
+          "median": 1.441893458366394,
+          "p95": 3.155752611160278
+        },
+        "pose_translation_mm": {
+          "count": 65,
+          "median": 1.4820328950881958,
+          "p95": 3.7702217578887938
+        },
+        "body_command_translation_mm": {
+          "count": 65,
+          "median": 0.870437579302123,
+          "p95": 1.5435854316223894
+        },
+        "lateral_command_mm": {
+          "count": 65,
+          "median": 0.1981745958328247,
+          "p95": 0.3374589145183563
+        },
+        "axial_command_mm": {
+          "count": 65,
+          "median": 0.8372897505760193,
+          "p95": 1.5685513973236085
+        },
+        "lateral_target_mm": {
+          "count": 65,
+          "median": 0.4473581910133362,
+          "p95": 0.8143098711967468
+        }
+      },
+      "sfp_near_10_30mm": {
+        "episodes": 32,
+        "target_translation_mm": {
+          "count": 800,
+          "median": 2.2294939756393433,
+          "p95": 10.268841600418089
+        },
+        "pose_translation_mm": {
+          "count": 800,
+          "median": 1.383164644241333,
+          "p95": 4.923018813133232
+        },
+        "body_command_translation_mm": {
+          "count": 800,
+          "median": 1.656761376905106,
+          "p95": 10.366807052683122
+        },
+        "lateral_command_mm": {
+          "count": 800,
+          "median": 0.8434245884418488,
+          "p95": 2.64970667362213
+        },
+        "axial_command_mm": {
+          "count": 800,
+          "median": 1.2085512280464172,
+          "p95": 9.838778400421138
+        },
+        "lateral_target_mm": {
+          "count": 800,
+          "median": 1.2047938108444214,
+          "p95": 3.4374708533287044
+        }
+      }
+    }
+  ],
+  "decision": "Step5 remains failed. New SC near-port offline lateral p95 0.337 mm passes component precision, but guarded autonomous SC full start took wrong route and stopped at 42 N; SFP near-port p95 2.65 mm. Recovery RL/final scenes remain closed. Collect bounded DAgger teacher corrections to address off-expert transport, then repeat the same guarded development start.",
+  "sc_bc_expansion_batch1": {
+    "root": "/var/tmp/chmin_aic_20260918_act/sc_bc_expansion_batch1_20260924",
+    "status": "completed; 2/8 full insertions, 2 admitted; 1579 causal chunks",
+    "training_only": true,
+    "seed": 2026092424,
+    "trials": 8,
+    "score_report": "docs/experiments/2026-09-24-sc-bc-expansion-batch1-scored.json"
+  },
+  "teacher_retries": {
+    "lift_8cm": "docs/experiments/2026-09-24-sc-bc-expansion-lift-retry1-scored.json",
+    "near_cap_5mm": "docs/experiments/2026-09-24-sc-bc-expansion-nearcap-retry1-scored.json",
+    "full_insertions": 0
+  },
+  "guarded_sc_development": {
+    "trial": "trial_990501",
+    "privileged_runtime_input": false,
+    "command_mode": "absolute_pose",
+    "command_frame": "base_link",
+    "max_translation_per_component_m": 0.005,
+    "force_stop_n": 40,
+    "official_tier3": 0,
+    "completion": "diagnostic force abort",
+    "policy_force_stop_observed_n": 42,
+    "trace_force_peak_n": 43.49514180191152,
+    "trace_rows": 762,
+    "trace": "/var/tmp/chmin_aic_20260918_act/shared_port_tcp_bc_expanded2_full_20260924/eval_guarded_sc_dev/best/attempt_0001/tcp_force_trace.jsonl",
+    "camera_sheet": "outputs/experiments/2026-09-24_shared_sc_bc_diagnostics/guarded_sc_first_mid_last.jpg",
+    "teacher_comparison_plot": "outputs/experiments/2026-09-24_shared_sc_bc_diagnostics/guarded_sc_vs_teacher_tcp_path.png",
+    "archive_manifest": "docs/experiments/2026-09-24-shared-bc-expanded2-guarded-sc-mcap-archive.json"
+  },
+  "shared_student_correction_smoke": {
+    "root": "/var/tmp/chmin_aic_20260918_act/sc_shared_dagger_smoke_20260924",
+    "parent_trial": "trial_991002",
+    "trial": "trial_994001",
+    "training_only": true,
+    "student_probability_per_cycle": 0.5,
+    "position_clip_m": 0.01,
+    "rotation_clip_rad": 0.03,
+    "recorded_frames": 1167,
+    "student_active_frames": 200,
+    "max_observed_target_position_disagreement_mm": 10.0,
+    "peak_observed_force_n": 21.274751736579745,
+    "official_tier3": 40.414611345136834,
+    "admitted_for_bc": false,
+    "archive_manifest": "docs/experiments/2026-09-24-sc-shared-dagger-smoke-mcap-archive.json"
+  },
+  "shared_student_correction_smallclip": {
+    "root": "/var/tmp/chmin_aic_20260918_act/sc_shared_dagger_smallclip_20260924",
+    "parent_trial": "trial_991002",
+    "trial": "trial_994002",
+    "training_only": true,
+    "student_probability_per_cycle": 0.25,
+    "position_clip_m": 0.003,
+    "rotation_clip_rad": 0.01,
+    "status": "completed; failed admission",
+    "recorded_frames": 1159,
+    "student_active_frames": 100,
+    "official_tier3": 46.048551847406124,
+    "admitted_for_bc": false,
+    "archive_manifest": "docs/experiments/2026-09-24-sc-shared-dagger-smallclip-mcap-archive.json"
+  },
+  "shared_student_teacher_control": {
+    "root": "/var/tmp/chmin_aic_20260918_act/sc_shared_dagger_teacher_control_20260924",
+    "parent_trial": "trial_991002",
+    "trial": "trial_994003",
+    "student_probability_per_cycle": 0,
+    "status": "completed; partial insertion",
+    "purpose": "replay stability check",
+    "official_tier3": 46.05343063854605,
+    "archive_manifest": "docs/experiments/2026-09-24-sc-shared-dagger-teacher-control-mcap-archive.json"
+  },
+  "shared_student_originalid_control": {
+    "root": "/var/tmp/chmin_aic_20260918_act/sc_shared_dagger_originalid_control_20260924",
+    "trial": "trial_991002",
+    "student_probability_per_cycle": 0,
+    "status": "completed; partial insertion",
+    "official_tier3": 46.05118035596441,
+    "archive_manifest": "docs/experiments/2026-09-24-sc-shared-dagger-originalid-control-mcap-archive.json"
+  },
+  "shared_student_sequence_control": {
+    "root": "/var/tmp/chmin_aic_20260918_act/sc_shared_dagger_sequence_control_20260924",
+    "trials": [
+      "trial_991001",
+      "trial_991002"
+    ],
+    "student_probability_per_cycle": 0,
+    "status": "completed",
+    "official_tier3_by_trial": {
+      "trial_991001": 23.866254256518978,
+      "trial_991002": 75
+    },
+    "archive_manifest": "docs/experiments/2026-09-24-sc-shared-dagger-sequence-control-mcap-archive.json"
+  },
+  "shared_student_sequence_student": {
+    "root": "/var/tmp/chmin_aic_20260918_act/sc_shared_dagger_sequence_student_20260924",
+    "trials": [
+      "trial_991001",
+      "trial_991002"
+    ],
+    "matched_control": "/var/tmp/chmin_aic_20260918_act/sc_shared_dagger_sequence_control_20260924",
+    "student_probability_per_cycle": 0.25,
+    "position_clip_m": 0.003,
+    "rotation_clip_rad": 0.01,
+    "status": "completed; no successful student-active episode",
+    "official_tier3_by_trial": {
+      "trial_991001": 22.111683096339814,
+      "trial_991002": 75
+    },
+    "student_active_frames_by_trial": {
+      "trial_991001": 100,
+      "trial_991002": 0
+    },
+    "admitted_corrective_episodes": 0,
+    "archive_manifest": "docs/experiments/2026-09-24-sc-shared-dagger-sequence-student-mcap-archive.json"
+  },
+  "shared_student_secondonly": {
+    "root": "/var/tmp/chmin_aic_20260918_act/sc_shared_dagger_secondonly_student_20260924",
+    "trials": [
+      "trial_991001",
+      "trial_991002"
+    ],
+    "student_episode_indices": [
+      2
+    ],
+    "student_probability_per_cycle": 1.0,
+    "position_clip_m": 0.003,
+    "rotation_clip_rad": 0.01,
+    "status": "completed; admitted 1 corrective episode",
+    "official_tier3_by_trial": {
+      "trial_991001": 75,
+      "trial_991002": 75
+    },
+    "student_active_frames_by_trial": {
+      "trial_991001": 0,
+      "trial_991002": 400
+    },
+    "corrective_chunks": 910,
+    "corrective_student_active_anchor_chunks": 317,
+    "max_position_disagreement_mm": 3.0000000000000338,
+    "max_rotation_disagreement_deg": 0.5729577951308276,
+    "physical_grasp_drift_mm": 0.019430032235376232,
+    "peak_observation_force_n": 22.4398550622292,
+    "score_channel_peak_force_n": 56.68,
+    "admission_manifest": "/var/tmp/chmin_aic_20260918_act/sc_shared_dagger_secondonly_candidates_20260924/manifest.json",
+    "label_summary": "docs/experiments/2026-09-24-sc-shared-dagger-secondonly-labels.json",
+    "archive_manifest": "docs/experiments/2026-09-24-sc-shared-dagger-secondonly-mcap-archive.json"
+  },
+  "shared_bc_corrective_comparison": {
+    "matched_initial_checkpoint": "/var/tmp/chmin_aic_20260918_act/shared_port_tcp_bc_expanded2_full_20260924/best.pt",
+    "control_root": "/var/tmp/chmin_aic_20260918_act/shared_port_tcp_bc_corrective_control_20260924",
+    "treatment_root": "/var/tmp/chmin_aic_20260918_act/shared_port_tcp_bc_corrective_treatment_20260924",
+    "updates_per_arm": 2750,
+    "same_episode_grouped_validation": true,
+    "same_seed": 20260924,
+    "treatment_corrective_episode_boost": 5.0,
+    "status": "completed; no autonomous improvement",
+    "control_best_update": 1750,
+    "treatment_best_update": 2750,
+    "control_sc_0_5_lateral_median_p95_mm": [
+      0.24332036077976227,
+      0.3795576572418213
+    ],
+    "treatment_sc_0_5_lateral_median_p95_mm": [
+      0.44588330388069153,
+      0.6285796999931336
+    ],
+    "control_sfp_10_30_lateral_median_p95_mm": [
+      0.6461357176303864,
+      2.4114293694496154
+    ],
+    "treatment_sfp_10_30_lateral_median_p95_mm": [
+      0.6980046629905701,
+      2.115964150428771
+    ],
+    "control_guarded_sc_tier3": 0,
+    "treatment_guarded_sc_tier3": 0,
+    "control_guarded_total": -23,
+    "treatment_guarded_total": -35,
+    "guarded_contact_pair": [
+      "ur5e::wrist_2_link::wrist_2_link_collision",
+      "enclosure::enclosure_link::v1015026001_collider_box"
+    ],
+    "control_archive": "docs/experiments/2026-09-24-shared-bc-corrective-control-guarded-sc-mcap-archive.json",
+    "treatment_archive": "docs/experiments/2026-09-24-shared-bc-corrective-treatment-guarded-sc-mcap-archive.json"
+  },
+  "shared_student_multiscene": {
+    "root": "/var/tmp/chmin_aic_20260918_act/sc_shared_dagger_multiscene_20260924",
+    "source_teacher_suite": "/var/tmp/chmin_aic_20260918_act/sc_port_tracker_refreeze_eval_20260924",
+    "eligible_student_trials": [
+      "trial_990501",
+      "trial_990502",
+      "trial_990503",
+      "trial_990506",
+      "trial_990507"
+    ],
+    "position_clip_m": 0.003,
+    "rotation_clip_rad": 0.01,
+    "status": "completed; 3/8 admitted scored full insertion",
+    "admitted_trials": [
+      "trial_990502",
+      "trial_990503",
+      "trial_990507"
+    ],
+    "excluded_trials": [
+      "trial_990501",
+      "trial_990504",
+      "trial_990505",
+      "trial_990506",
+      "trial_990508"
+    ],
+    "admitted_corrective_chunks": 1138,
+    "student_active_anchor_chunks": 467,
+    "max_physical_grasp_drift_mm": 0.0057,
+    "label_summary": "docs/experiments/2026-09-24-sc-shared-dagger-multiscene-labels.json",
+    "archive_manifest": "docs/experiments/2026-09-24-sc-shared-dagger-multiscene-mcap-archive.json"
+  },
+  "fresh_sc_actor_development": {
+    "root": "/var/tmp/chmin_aic_20260918_act/shared_bc_corrective_fresh_dev_20260924",
+    "seed": 2026092431,
+    "trials": 8,
+    "actor_training_overlap": false,
+    "reserved_final_opened": false,
+    "four_trial_subset": [
+      "trial_995001",
+      "trial_995002",
+      "trial_995007",
+      "trial_995008"
+    ],
+    "subset_manifest": "/var/tmp/chmin_aic_20260918_act/shared_bc_corrective_fresh_dev_20260924/dev_four_manifest.json",
+    "baseline_checkpoint": "/var/tmp/chmin_aic_20260918_act/shared_port_tcp_bc_startaware_20260924/best.pt",
+    "status": "5mm multiscene and 20mm start-aware autonomous arms complete 0/4; early teacher-bounded diagnostic active",
+    "baseline_direct_preprocessing_tier3_by_trial": {
+      "trial_995001": 0,
+      "trial_995002": 0,
+      "trial_995007": 0,
+      "trial_995008": 0
+    },
+    "baseline_direct_contact": "wrist_2_link to enclosure in all four",
+    "baseline_direct_archive": "docs/experiments/2026-09-24-shared-bc-startaware-fresh-sc-four-direct-preprocess-mcap-archive.json",
+    "preprocessing_matched_run": "/var/tmp/chmin_aic_20260918_act/shared_port_tcp_bc_startaware_20260924/eval_fresh_sc_four_preprocess_matched",
+    "baseline_matched_preprocessing_tier3_by_trial": {
+      "trial_995001": 0,
+      "trial_995002": 0,
+      "trial_995007": 0,
+      "trial_995008": 0
+    },
+    "baseline_matched_contact": "wrist_2_link to enclosure in all four",
+    "baseline_matched_inference_p95_ms_by_trial": [
+      82.76,
+      98.33,
+      95.23,
+      95.87
+    ],
+    "baseline_matched_archive": "docs/experiments/2026-09-25-shared-bc-startaware-fresh-sc-four-matched-preprocess-mcap-archive.json",
+    "multiscene_checkpoint": "/var/tmp/chmin_aic_20260918_act/shared_port_tcp_bc_multiscene_startaware_20260924/best.pt",
+    "multiscene_matched_preprocessing_tier3_by_trial": {
+      "trial_995001": 0,
+      "trial_995002": 0,
+      "trial_995007": 0,
+      "trial_995008": 0
+    },
+    "multiscene_matched_archive": "docs/experiments/2026-09-25-shared-bc-multiscene-fresh-sc-four-mcap-archive.json",
+    "baseline_20mm_tier3_by_trial": {
+      "trial_995001": 0,
+      "trial_995002": 0,
+      "trial_995007": 0,
+      "trial_995008": 0
+    },
+    "baseline_20mm_archive": "docs/experiments/2026-09-25-shared-bc-startaware-fresh-sc-four-cap20mm-mcap-archive.json"
+  },
+  "shared_bc_corrective_lowweight": {
+    "root": "/var/tmp/chmin_aic_20260918_act/shared_port_tcp_bc_corrective_lowweight_20260924",
+    "corrective_episode_boost": 1.0,
+    "updates": 2750,
+    "status": "completed; offline component improvement, autonomous untested",
+    "best_update": 2750,
+    "sc_0_5_lateral_median_p95_mm": [
+      0.18174958229064941,
+      0.30850021243095394
+    ],
+    "sc_10_30_lateral_p95_mm": 0.448,
+    "sfp_10_30_lateral_p95_mm": 2.158,
+    "former_dev_first_command_error_mm": 14.735757513247451
+  },
+  "shared_bc_startaware": {
+    "root": "/var/tmp/chmin_aic_20260918_act/shared_port_tcp_bc_startaware_20260924",
+    "architecture": "same 13.615M complete-target shared actor",
+    "start_oversample": 8,
+    "start_command_loss_weight": 2,
+    "selection_metric": "start_plus_near",
+    "updates": 2750,
+    "status": "completed; offline transport improvement, autonomous untested",
+    "best_update": 2500,
+    "validation_sfp_start_command_p95_mm": 5.921309256553649,
+    "validation_sc_start_command_p95_mm": 5.985379409790038,
+    "former_dev_first_command_error_mm": 5.299942847983561,
+    "sc_0_5_lateral_median_p95_mm": [
+      0.245,
+      0.366
+    ],
+    "sfp_10_30_lateral_p95_mm": 2.307
+  },
+  "shared_bc_multiscene_startaware": {
+    "root": "/var/tmp/chmin_aic_20260918_act/shared_port_tcp_bc_multiscene_startaware_20260924",
+    "initial_checkpoint": "/var/tmp/chmin_aic_20260918_act/shared_port_tcp_bc_expanded2_full_20260924/best.pt",
+    "added_corrective_episodes": 3,
+    "compared_to": "/var/tmp/chmin_aic_20260918_act/shared_port_tcp_bc_startaware_20260924",
+    "updates": 2750,
+    "status": "trained; fresh autonomous corrected-runtime 5mm-cap Tier3=0/4",
+    "best_update": 1250,
+    "validation_sc_start_command_p95_mm": 4.547,
+    "sc_0_5_lateral_command_p95_mm": 0.881,
+    "baseline_sc_0_5_lateral_command_p95_mm": 0.366
+  },
+  "fresh_sfp_actor_development": {
+    "root": "/var/tmp/chmin_aic_20260918_act/shared_bc_corrective_fresh_sfp_dev_20260924",
+    "seed": 2026092432,
+    "trials": [
+      "trial_996001",
+      "trial_996002",
+      "trial_996003",
+      "trial_996004"
+    ],
+    "actor_training_overlap": false,
+    "reserved_final_opened": false,
+    "status": "frozen before policy evaluation"
+  },
+  "shared_bc_camera_preprocessing_parity": {
+    "report": "docs/experiments/2026-09-24-shared-bc-camera-preprocessing-parity.json",
+    "sampled_frames": 64,
+    "direct_target_difference_median_p95_mm": [
+      0.9020874202251434,
+      3.248342180252068
+    ],
+    "two_stage_target_difference_median_p95_mm": [
+      0.18472228199243546,
+      0.5770563185214991
+    ],
+    "jpeg_matched_target_difference_median_p95_mm": [
+      0.0749015137553215,
+      0.25593768581748
+    ],
+    "source_limitation": "saved native JPEG, not original raw ROS bytes",
+    "runtime_fix": "288x256 area -> JPEG quality95 -> PIL 224 bilinear"
+  },
+  "shared_sc_target_cap_audit": {
+    "report": "docs/experiments/2026-09-25-shared-sc-target-cap-audit.json",
+    "teacher_training_episodes": 25,
+    "command_anchors": 14528,
+    "all_command_max_component_gap_median_p95_mm": [
+      10.9949,
+      36.6551
+    ],
+    "all_fraction_port_frame_gap_over_5mm": 0.90508,
+    "transport_frame_20_40_median_p95_mm": [
+      36.1027,
+      48.9835
+    ],
+    "runtime_cap_m": 0.005,
+    "new_cap_ablation_m": 0.02,
+    "caveat": "port-frame teacher-current component gap is proxy, not exact body-frame runtime clipping count"
+  },
+  "fresh_teacher_reference": {
+    "root": "/var/tmp/chmin_aic_20260918_act/shared_bc_fresh_teacher_reference_20260925",
+    "trial_995001_tier3": 75,
+    "trial_995002_tier3": 24.83464323838726,
+    "teacher_trial_995001_base_y_displacement_at_5s_mm": 183.9,
+    "actor_5mm_trial_995001_base_y_displacement_at_5s_mm": -20.5,
+    "actor_20mm_trial_995001_base_y_displacement_at_5s_mm": -99.3,
+    "archive": "docs/experiments/2026-09-25-shared-bc-fresh-teacher-reference-mcap-archive.json"
+  },
+  "shared_sc_first_frame_audit": {
+    "report": "docs/experiments/2026-09-25-shared-sc-first-frame-audit.json",
+    "train_episodes": 25,
+    "train_actor_first_movement_median_p95_mm": [
+      3.34678,
+      7.63494
+    ],
+    "train_teacher_first_movement_median_p95_mm": [
+      0.005617,
+      0.407176
+    ],
+    "fresh_trial_995001_initial_actor_teacher_command_error_mm": 8.8
+  },
+  "early_student_diagnostic": {
+    "root_10mm": "/var/tmp/chmin_aic_20260918_act/shared_bc_early_student_probe_20260925",
+    "root_3mm": "/var/tmp/chmin_aic_20260918_act/shared_bc_early_student_3mm_20260925",
+    "teacher_bounded": true,
+    "student_start_sec": 0,
+    "student_end_sec": 35,
+    "clip_10mm_tier3": 46.05026992543597,
+    "clip_3mm_tier3": 75,
+    "clip_3mm_off_limit_contact": false,
+    "clip_3mm_force_penalty": false,
+    "development_scene_excluded_from_training": true,
+    "archives": [
+      "docs/experiments/2026-09-25-shared-bc-early-student-probe-mcap-archive.json",
+      "docs/experiments/2026-09-25-shared-bc-early-student-3mm-mcap-archive.json"
+    ]
+  },
+  "shared_bc_initial_gate": {
+    "root": "/var/tmp/chmin_aic_20260918_act/shared_port_tcp_bc_initial_gate_20260925",
+    "architecture": "same 13.615M complete-target shared actor",
+    "training_episodes": 264,
+    "validation_episodes": 39,
+    "completed_updates": 2000,
+    "best_update": 250,
+    "initial_command_loss_weight": 10,
+    "parent_fresh_trial_995001_first_target_error_mm": 8.8376,
+    "new_fresh_trial_995001_first_target_error_mm": 5.5873,
+    "status": "trained; matched fresh autonomous trial995001 Tier3=0, live force stop 44.3N",
+    "autonomous_trial_995001_tier3": 0,
+    "live_force_stop_n": 44.3,
+    "inference_p95_ms": 133.59,
+    "archive": "docs/experiments/2026-09-25-shared-bc-initial-gate-trial995001-mcap-archive.json"
+  },
+  "shared_bc_initial_low_lr": {
+    "root": "/var/tmp/chmin_aic_20260918_act/shared_port_tcp_bc_initial_low_lr_20260925",
+    "completed_updates": 2000,
+    "best_update": 250,
+    "learning_rate": 2e-05,
+    "initial_command_loss_weight": 20,
+    "validation_sc_initial_command_p95_mm": 2.7796,
+    "validation_sc_near_lateral_p95_mm": 0.28928,
+    "validation_sfp_initial_command_p95_mm": 4.0592,
+    "status": "trained; autonomous fresh trial995001 Tier3=0, scored wrist/enclosure contact",
+    "archive": "docs/experiments/2026-09-25-shared-bc-initial-low-lr-trial995001-mcap-archive.json"
+  },
+  "early_student_training_collection": {
+    "root": "/var/tmp/chmin_aic_20260918_act/sc_shared_early_dagger_training_20260925",
+    "source_scenes": "/var/tmp/chmin_aic_20260918_act/sc_port_tracker_refreeze_eval_20260924/engine_config.yaml",
+    "student_checkpoint": "/var/tmp/chmin_aic_20260918_act/shared_port_tcp_bc_initial_gate_20260925/best.pt",
+    "position_clip_m": 0.003,
+    "start_sec": 0,
+    "status": "invalidated: scratch filled before final score YAML; seven bags archived, zero candidates admitted",
+    "incomplete_archive": "docs/experiments/2026-09-25-sc-shared-early-dagger-incomplete-mcap-archive.json",
+    "episodes_recorded": 7,
+    "score_yaml_written": false
+  },
+  "early_student_training_retry": {
+    "root": "/var/tmp/chmin_aic_20260918_act/sc_shared_early_dagger_retry_20260925",
+    "scene_count": 7,
+    "scene_order": [
+      "trial_990501",
+      "trial_990502",
+      "trial_990503",
+      "trial_990504",
+      "trial_990505",
+      "trial_990506",
+      "trial_990507"
+    ],
+    "scratch_free_at_start_gb": 16,
+    "status": "complete; 3/7 admitted after official score, causal frame, force/contact, grasp-drift audit",
+    "admitted_trials": [
+      "trial_990501",
+      "trial_990503",
+      "trial_990507"
+    ],
+    "excluded_trials": [
+      "trial_990502",
+      "trial_990504",
+      "trial_990505",
+      "trial_990506"
+    ],
+    "admitted_corrective_chunks": 1725,
+    "student_active_frames": 1063,
+    "max_grasp_drift_mm": 0.0183,
+    "archive": "docs/experiments/2026-09-25-sc-shared-early-dagger-retry-mcap-archive.json",
+    "label_summary": "docs/experiments/2026-09-25-sc-shared-early-dagger-retry-labels.json",
+    "candidate_manifest": "/var/tmp/chmin_aic_20260918_act/sc_shared_early_dagger_retry_candidates_20260925/manifest.json"
+  },
+  "shared_bc_frozen_pose_start": {
+    "root": "/var/tmp/chmin_aic_20260918_act/shared_port_tcp_bc_frozen_pose_start_20260925",
+    "completed_updates": 2000,
+    "best_update": 1250,
+    "frozen_tensor_count": 139,
+    "frozen_tensor_changed_count": 0,
+    "validation_sc_initial_command_p95_mm": 4.3425,
+    "validation_sc_near_lateral_p95_mm": 0.7017,
+    "status": "trained; autonomous fresh trial995001 Tier3=0, scored wrist/enclosure contact",
+    "archive": "docs/experiments/2026-09-25-shared-bc-frozen-pose-trial995001-mcap-archive.json"
+  },
+  "space_relocation": "docs/experiments/2026-09-25-sc-old-bag-space-relocation.json",
+  "early_dagger_bc_matched": {
+    "parent": "/var/tmp/chmin_aic_20260918_act/shared_port_tcp_bc_initial_low_lr_20260925/best.pt",
+    "control_root": "/var/tmp/chmin_aic_20260918_act/shared_port_tcp_bc_early_dagger_control_20260925",
+    "treatment_root": "/var/tmp/chmin_aic_20260918_act/shared_port_tcp_bc_early_dagger_treatment_20260925",
+    "updates_per_arm": 1500,
+    "learning_rate": 1e-05,
+    "same_seed": 20260924,
+    "same_grouped_validation": true,
+    "status": "completed, both fresh autonomous SC trial995001 Tier3=0 with wrist/enclosure contact",
+    "control_best_update": 1500,
+    "treatment_best_update": 1250,
+    "control_training_episodes": 264,
+    "treatment_training_episodes": 267,
+    "control_sc_initial_p95_mm": 2.465,
+    "treatment_sc_initial_p95_mm": 3.471,
+    "control_sc_near_lateral_p95_mm": 0.516,
+    "treatment_sc_near_lateral_p95_mm": 0.407,
+    "control_archive": "docs/experiments/2026-09-25-shared-bc-early-dagger-control-trial995001-mcap-archive.json",
+    "treatment_archive": "docs/experiments/2026-09-25-shared-bc-early-dagger-treatment-trial995001-mcap-archive.json"
+  },
+  "early_student_pulse_boundary": {
+    "scene": "training-side trial_990501",
+    "checkpoint": "/var/tmp/chmin_aic_20260918_act/shared_port_tcp_bc_early_dagger_treatment_20260925/best.pt",
+    "teacher_assisted": true,
+    "runs": [
+      {
+        "clip_mm": 8,
+        "nominal_window_s": 1.0,
+        "measured_sim_window_s": 5.6,
+        "student_active_frames": 21,
+        "official_tier3": 16.883891794539466,
+        "outcome": "no insertion",
+        "archive": "docs/experiments/2026-09-25-sc-early-pulse-8mm-mcap-archive.json"
+      },
+      {
+        "clip_mm": 6,
+        "nominal_window_s": 0.5,
+        "measured_sim_window_s": 3.2,
+        "student_active_frames": 11,
+        "official_tier3": 46.05005715108295,
+        "outcome": "partial insertion",
+        "archive": "docs/experiments/2026-09-25-sc-early-pulse-6mm-halfsec-mcap-archive.json"
+      }
+    ],
+    "admitted_as_successful_bc": false
+  },
+  "startup_hold_diagnostic": {
+    "scene": "fresh SC development trial_995001",
+    "actor": "shared_port_tcp_bc_early_dagger_treatment_20260925/best.pt",
+    "hold_sim_seconds": 3,
+    "privileged_geometry_used": false,
+    "official_tier3": 0,
+    "official_total": -23,
+    "scored_contact": "wrist_2_link/enclosure",
+    "archive": "docs/experiments/2026-09-25-shared-bc-startup-hold3-trial995001-mcap-archive.json"
+  },
+  "sc80_diagnostic": {
+    "root": "/var/tmp/chmin_aic_20260918_act/shared_port_tcp_bc_sc80_diagnostic_20260925",
+    "checkpoint_sha256": "ead4fb727c4ede9a5db825291bd0e9e43c1adeb311d9783c65eca47a3655b47c",
+    "updates": 1500,
+    "best_update": 1000,
+    "sc_sampling_fraction": 0.8,
+    "heldout_sc_initial_command_p95_mm": 2.463,
+    "heldout_sc_near_lateral_p95_mm": 0.417,
+    "heldout_sfp_initial_command_p95_mm": 2.707,
+    "autonomous_scene": "trial_995001",
+    "autonomous_tier3": 0,
+    "scored_contact": "wrist_2_link/enclosure",
+    "archive": "docs/experiments/2026-09-25-shared-bc-sc80-trial995001-mcap-archive.json",
+    "transport_direction_audit": "docs/experiments/2026-09-25-shared-sc80-transport-direction-audit.json"
+  },
+  "new_early_student_batch1": {
+    "root": "/var/tmp/chmin_aic_20260918_act/sc_shared_early_dagger_newbatch1_20260925",
+    "scene_count": 4,
+    "card_counts": [
+      2,
+      2,
+      3,
+      1
+    ],
+    "student_clip_mm": 3,
+    "status": "complete; 3 successful episodes admitted as training candidates; 1 no-insertion excluded",
+    "admitted_trials": [
+      "trial_996001",
+      "trial_996002",
+      "trial_996003"
+    ],
+    "excluded_trials": [
+      "trial_996004"
+    ],
+    "causal_chunks": 1726,
+    "student_active_frames": 1231,
+    "max_grasp_drift_mm": 0.0197,
+    "candidate_root": "/var/tmp/chmin_aic_20260918_act/sc_shared_early_dagger_newbatch1_candidates_20260925",
+    "labels_summary": "docs/experiments/2026-09-25-sc-shared-early-dagger-newbatch1-labels.json",
+    "archive": "docs/experiments/2026-09-25-sc-shared-early-dagger-newbatch1-mcap-archive.json"
+  },
+  "new_early_student_batch2": {
+    "root": "/var/tmp/chmin_aic_20260918_act/sc_shared_early_dagger_newbatch2_20260925",
+    "scene_count": 4,
+    "card_counts": [
+      3,
+      2,
+      2,
+      1
+    ],
+    "status": "complete; 4/4 successful, causally admitted",
+    "admitted_trials": [
+      "trial_996101",
+      "trial_996102",
+      "trial_996103",
+      "trial_996104"
+    ],
+    "causal_chunks": 2043,
+    "student_active_frames": 1433,
+    "max_grasp_drift_mm": 0.0275,
+    "candidate_root": "/var/tmp/chmin_aic_20260918_act/sc_shared_early_dagger_newbatch2_candidates_20260925",
+    "labels_summary": "docs/experiments/2026-09-25-sc-shared-early-dagger-newbatch2-labels.json",
+    "archive": "docs/experiments/2026-09-25-sc-shared-early-dagger-newbatch2-mcap-archive.json"
+  },
+  "new_early_student_batch3": {
+    "root": "/var/tmp/chmin_aic_20260918_act/sc_shared_early_dagger_newbatch3_20260925",
+    "scene_count": 4,
+    "card_counts": [
+      1,
+      1,
+      2,
+      1
+    ],
+    "status": "complete; 2/4 full successful and admitted, two partial/no-insertion excluded",
+    "admitted_trials": [
+      "trial_996201",
+      "trial_996202"
+    ],
+    "excluded_trials": [
+      "trial_996203",
+      "trial_996204"
+    ],
+    "causal_chunks": 1090,
+    "student_active_frames": 823,
+    "max_grasp_drift_mm": 0.0124,
+    "candidate_root": "/var/tmp/chmin_aic_20260918_act/sc_shared_early_dagger_newbatch3_candidates_20260925",
+    "labels_summary": "docs/experiments/2026-09-25-sc-shared-early-dagger-newbatch3-labels.json",
+    "archive": "docs/experiments/2026-09-25-sc-shared-early-dagger-newbatch3-mcap-archive.json"
+  },
+  "new_early_student_totals": {
+    "scenes": 12,
+    "successful_admitted_episodes": 9,
+    "excluded_episodes": 3,
+    "causal_chunks": 4859,
+    "training_only": true
+  },
+  "new_sc_bc_matched": {
+    "control_root": "/var/tmp/chmin_aic_20260918_act/shared_port_tcp_bc_newsc_control_20260925",
+    "treatment_root": "/var/tmp/chmin_aic_20260918_act/shared_port_tcp_bc_newsc_treatment_20260925",
+    "parent": "/var/tmp/chmin_aic_20260918_act/shared_port_tcp_bc_sc80_diagnostic_20260925/best.pt",
+    "updates_per_arm": 1500,
+    "sc_sampling_fraction": 0.8,
+    "same_seed": 20260924,
+    "status": "complete; both autonomous fresh SC trial995001 Tier3=0 with wrist/enclosure contact",
+    "control_train_episodes": 267,
+    "treatment_train_episodes": 276,
+    "control_best_update": 250,
+    "treatment_best_update": 250,
+    "control_sc_initial_command_p95_mm": 2.764,
+    "treatment_sc_initial_command_p95_mm": 2.821,
+    "control_sc_near_lateral_p95_mm": 0.281,
+    "treatment_sc_near_lateral_p95_mm": 0.561,
+    "control_sfp_initial_command_p95_mm": 3.485,
+    "treatment_sfp_initial_command_p95_mm": 2.988,
+    "control_autonomous_tier3": 0,
+    "treatment_autonomous_tier3": 0,
+    "control_autonomous_total": -35,
+    "treatment_autonomous_total": -23,
+    "control_archive": "docs/experiments/2026-09-25-shared-bc-newsc-control-trial995001-mcap-archive.json",
+    "treatment_archive": "docs/experiments/2026-09-25-shared-bc-newsc-treatment-trial995001-mcap-archive.json"
+  },
+  "clock_alignment_audit": {
+    "sc_nominal_teacher_s_per_command": 0.05,
+    "example_sc_command_index": 51,
+    "example_nominal_s": 2.55,
+    "example_camera_sim_elapsed_s": 12.45,
+    "sfp_label_clock": "frame_index / 20",
+    "old_sc_label_clock": "simulation timestamp minus episode first timestamp",
+    "new_clock": "SC recorded nominal_expert_time, SFP frame_index / 20, runtime issued command count / 20",
+    "sc_rows_checked": 23399,
+    "no_geometry_or_target_change": true
+  },
+  "nominal_clock_matched": {
+    "control_root": "/var/tmp/chmin_aic_20260918_act/shared_port_tcp_bc_newsc_control_20260925",
+    "nominal_root": "/var/tmp/chmin_aic_20260918_act/shared_port_tcp_bc_nominal_clock_20260925",
+    "same_labels_seed_parent_updates": true,
+    "nominal_best_update": 1000,
+    "control_sc_initial_p95_mm": 2.764,
+    "nominal_sc_initial_p95_mm": 2.156,
+    "control_sc_near_lateral_p95_mm": 0.281,
+    "nominal_sc_near_lateral_p95_mm": 0.352,
+    "nominal_autonomous_tier3": 0,
+    "nominal_autonomous_total": -23,
+    "nominal_archive": "docs/experiments/2026-09-25-shared-bc-nominal-clock-trial995001-mcap-archive.json"
+  },
+  "nominal_clock_newsc": {
+    "root": "/var/tmp/chmin_aic_20260918_act/shared_port_tcp_bc_nominal_newsc_20260925",
+    "train_episodes": 276,
+    "best_update": 1,
+    "autonomous_status": "complete; failed",
+    "autonomous_tier3": 0,
+    "autonomous_total": -23,
+    "contact": "wrist_2_link/enclosure",
+    "archive": "docs/experiments/2026-09-25-shared-bc-nominal-newsc-trial995001-mcap-archive.json"
+  },
+  "teacher_prefix_takeover": {
+    "root": "/var/tmp/chmin_aic_20260918_act/shared_bc_takeover_after5nominal_20260925",
+    "scene": "fresh development trial_995001",
+    "teacher_prefix_nominal_s": 5,
+    "actor": "shared_port_tcp_bc_nominal_clock_20260925/best.pt",
+    "actor_body_cap_mm": 5,
+    "teacher_disagreement_clip": null,
+    "privileged_diagnostic": true,
+    "status": "complete; failed",
+    "first_actor_frame": 100,
+    "first_actor_nominal_s": 5,
+    "first_actor_sim_elapsed_s": 6.9,
+    "direct_actor_frames": 671,
+    "max_student_executed_position_disagreement_mm": 0,
+    "official_tier3": 0.4711750162044047,
+    "final_plug_port_distance_m": 0.19,
+    "contact": "wrist_3_link / NIC card",
+    "archive": "docs/experiments/2026-09-25-shared-bc-takeover-after5nominal-mcap-archive.json"
+  },
+  "teacher_prefix_takeover_later": {
+    "root": "/var/tmp/chmin_aic_20260918_act/shared_bc_takeover_after20nominal_20260925",
+    "teacher_prefix_nominal_s": 20,
+    "actor_cap_mm": 5,
+    "privileged_diagnostic": true,
+    "status": "complete; scored full insertion after actor handoff",
+    "handoff_frame": 399,
+    "handoff_nominal_s": 20,
+    "handoff_sim_elapsed_s": 27.8,
+    "actor_frames": 371,
+    "max_student_executed_position_disagreement_mm": 0,
+    "official_tier3": 75,
+    "off_limit_contact_score": 0,
+    "force_penalty_score": 0,
+    "event_wall_s_after_handoff": 87.327,
+    "handoff_tip_opening_axial_mm_approx": 13.8,
+    "handoff_tip_lateral_mm_approx": 0.08,
+    "last_tip_opening_axial_mm_approx": 14.9,
+    "interpretation": "teacher had already seated most of plug; actor likely completed only final ~1 mm, not independent approach/alignment",
+    "geometry_label_audit": "docs/experiments/2026-09-25-shared-bc-takeover-after20nominal-geometry-label-audit.json",
+    "archive": "docs/experiments/2026-09-25-shared-bc-takeover-after20nominal-mcap-archive.json"
+  },
+  "teacher_prefix_takeover_15": {
+    "root": "/var/tmp/chmin_aic_20260918_act/shared_bc_takeover_after15nominal_20260925",
+    "teacher_prefix_nominal_s": 15,
+    "status": "complete; failed",
+    "privileged_diagnostic": true,
+    "official_tier3": 5.149886683093649,
+    "handoff_frame": 300,
+    "handoff_nominal_s": 15,
+    "handoff_sim_elapsed_s": 20.1,
+    "actor_frames": 871,
+    "max_student_executed_position_disagreement_mm": 0,
+    "handoff_tip_axial_mm": -20.8,
+    "handoff_tip_lateral_mm": 0.62,
+    "tip_lateral_after_100_actor_frames_mm": 56.31,
+    "terminal_tip_lateral_mm": 157,
+    "contact": "wrist_1_link / NIC card",
+    "archive": "docs/experiments/2026-09-25-shared-bc-takeover-after15nominal-mcap-archive.json",
+    "geometry_label_audit": "docs/experiments/2026-09-25-shared-bc-takeover-after15nominal-geometry-label-audit.json"
+  },
+  "teacher_prefix_takeover_15_native": {
+    "root": "/var/tmp/chmin_aic_20260918_act/shared_bc_takeover_after15nominal_native_20260925",
+    "original_resolution_camera_every_n_frames": 4,
+    "purpose": "off-policy high-resolution pose estimator audit",
+    "status": "active"
+  },
+  "offpolicy_native_pose_audit": {
+    "root": "/var/tmp/chmin_aic_20260918_act/shared_bc_takeover_after15nominal_native_20260925",
+    "native_triplets": 293,
+    "handoff_locator_opening_px_median_p95": [
+      0.9,
+      2.2
+    ],
+    "handoff_fused_relative_lateral_mm_median_p95": [
+      0.14,
+      0.14
+    ],
+    "early_actor_locator_opening_px_median_p95": [
+      17.2,
+      41.1
+    ],
+    "early_actor_fused_lateral_mm_median_p95": [
+      0.16,
+      8.69
+    ],
+    "late_actor_fused_lateral_p95_mm": 298.04,
+    "physical_grasp_drift_max_mm": 0.4916,
+    "archive": "docs/experiments/2026-09-25-shared-bc-takeover-after15nominal-native-mcap-archive.json",
+    "relative_report": "docs/experiments/2026-09-25-shared-bc-takeover-native-relative-pose.json"
+  },
+  "oracle_pose_training_only": {
+    "root": "/var/tmp/chmin_aic_20260918_act/shared_port_tcp_bc_nominal_sc_pose_oracle_20260925",
+    "best_update": 250,
+    "grouped_sc_near_lateral_p95_mm": 0.999,
+    "baseline_grouped_sc_near_lateral_p95_mm": 0.352,
+    "deployable": false,
+    "audit": "docs/experiments/2026-09-25-shared-bc-takeover-oracle-pose-trained-audit.json"
+  },
+  "unbounded_takeover_training_scenes": {
+    "root": "/var/tmp/chmin_aic_20260918_act/sc_unbounded_takeover_training_20260925",
+    "scene_count": 4,
+    "all_failed_full_insertion": true,
+    "official_tier3_by_trial": {
+      "trial_996101": 17.13,
+      "trial_996102": 0,
+      "trial_996103": 0,
+      "trial_996104": 0
+    },
+    "all_scored_off_limit_contact_and_sustained_force_penalty": true,
+    "raw_archive": "docs/experiments/2026-09-25-sc-unbounded-takeover-training-mcap-archive.json"
+  },
+  "safe_local_corrections": {
+    "summary": "docs/experiments/2026-09-25-sc-safe-local-corrections.json",
+    "chunks": 25,
+    "episodes": 3,
+    "excluded_high_handoff_force_episode": "trial_996104",
+    "teacher_actor_target_gap_mm_median": 39.2086,
+    "whole_failed_episodes_admitted_as_expert": 0,
+    "matched_bc_status": "control training active"
+  },
+  "latest_20260925": {
+    "step5": "failed; supervised iteration active",
+    "autonomous_sc_new_dev_tier3": {
+      "nominal_clock": 0,
+      "local_correction_control": 0,
+      "local_correction_25rows": 0
+    },
+    "new_sc_successes": 9,
+    "new_sc_causal_chunks": 4859,
+    "safe_local_correction_rows": 25,
+    "safe_local_correction_episodes": 3,
+    "true_tip_upper_bound": {
+      "training_only": true,
+      "checkpoint": "/var/tmp/chmin_aic_20260918_act/shared_port_tcp_bc_nominal_sc_tip_oracle_20260925/best.pt",
+      "offline_failed_takeover_frame320_command_error_mm": 39.4,
+      "audit": "docs/experiments/2026-09-25-shared-bc-takeover-oracle-tip-trained-audit.json"
+    },
+    "matched_15x_local_sampling": {
+      "checkpoint": "/var/tmp/chmin_aic_20260918_act/shared_port_tcp_bc_local_correction_boost15_20260925/best.pt",
+      "offline_frame320_command_error_mm": 26.6,
+      "offline_frame400_command_error_mm": 136.7,
+      "autonomous_sc_tier3": 0,
+      "autonomous_sc_total": -23,
+      "bag_manifest": "docs/experiments/2026-09-25-shared-bc-local-correction-boost15-trial995001-mcap-archive.json"
+    },
+    "raw_bag_archives": "/home/nas/chmin/aic_archive_20260925/",
+    "rl_started": false,
+    "reserved_final_opened": false,
+    "teacher_rescue_2s_actor_probe": "running",
+    "teacher_rescue_near_port": {
+      "trials": 4,
+      "full_successes": 3,
+      "official_tier3": [
+        21.77735746747237,
+        75,
+        75,
+        75
+      ],
+      "admitted_causal_chunks": 2046,
+      "actor_active_anchor_chunks": 96,
+      "label_audit": "docs/experiments/2026-09-25-sc-rescue2s-labels.json",
+      "bag_manifest": "docs/experiments/2026-09-25-sc-rescue2s-mcap-archive.json",
+      "matched_bc_control": {
+        "initial_command_p95_mm": 2.7137858271598816,
+        "near_lateral_p95_mm": 0.4696014940738678,
+        "autonomous_sc_tier3": 0,
+        "autonomous_sc_total": 1
+      },
+      "matched_bc_rescue": {
+        "initial_command_p95_mm": 2.504539203643798,
+        "near_lateral_p95_mm": 0.5680395603179931,
+        "autonomous_sc_tier3": 0,
+        "autonomous_sc_total": -23
+      }
+    },
+    "first_target_only_runtime_replan": {
+      "autonomous_sc_tier3": 0,
+      "autonomous_sc_total": -23,
+      "bag_manifest": "docs/experiments/2026-09-25-shared-bc-replan1-trial995001-mcap-archive.json"
+    },
+    "early_teacher_rescue_probe": {
+      "two_second": {
+        "full_successes": 1,
+        "trials": 4,
+        "causal_chunks": 522,
+        "label_audit": "docs/experiments/2026-09-25-sc-early-rescue2s-labels.json"
+      },
+      "half_second": {
+        "full_successes": 1,
+        "trials": 4,
+        "causal_chunks": 515,
+        "label_audit": "docs/experiments/2026-09-25-sc-early-rescue0p5s-labels.json"
+      },
+      "early_bc_activeboost20": {
+        "completed_updates": 1500,
+        "selected_update": 1,
+        "offline_gate": "failed; no autonomous rollout"
+      }
+    },
+    "teacher_rescue_near_port_activeboost15": {
+      "heldout_sc_initial_p95_mm": 2.413185620307922,
+      "heldout_sc_near_lateral_p95_mm": 0.4364834547042846,
+      "autonomous_sc_tier3": 0,
+      "autonomous_sc_total": -23,
+      "bag_manifest": "docs/experiments/2026-09-25-shared-bc-rescue2s-activeboost15-trial995001-mcap-archive.json"
+    },
+    "all_phase_true_sc_pose_upper_bound": {
+      "training_only": true,
+      "completed_updates": 1500,
+      "selected_update": 1500,
+      "heldout_sc_initial_command_p95_mm": 4.816587948799133,
+      "heldout_sc_near_lateral_p95_mm": 0.919748866558075,
+      "nominal_parent_initial_command_p95_mm": 2.156199717521667,
+      "audit": "docs/experiments/2026-09-25-shared-bc-takeover-oracle-allphase-trained-audit.json",
+      "autonomous_evaluation": false
+    },
+    "sc_matrix_lift_reaudit": {
+      "candidate_success_episodes": 9,
+      "causal_chunks": 5034,
+      "already_in_original_sc_supplemental": true,
+      "new_training_scenes": 0,
+      "diversity_arm_valid": false,
+      "duplicate_guard_added": "scripts/train_shared_port_tcp_bc.py read_rows"
+    },
+    "fresh_sc_diversity_batch1": {
+      "trials": 8,
+      "full_successes": 5,
+      "admitted_causal_chunks": 2463,
+      "new_scene_overlap_check": "all prior SC BC label sources",
+      "admission": "docs/experiments/2026-09-25-sc-diversity-batch1-admission.json",
+      "matched_bc": {
+        "control": {
+          "train_episodes": 267,
+          "sc_initial_p95_mm": 3.123790037631988,
+          "sc_near_lateral_p95_mm": 0.31213854551315307,
+          "autonomous_sc_tier3": 0,
+          "autonomous_total": -23
+        },
+        "new5": {
+          "train_episodes": 272,
+          "sc_initial_p95_mm": 2.876,
+          "sc_near_lateral_p95_mm": 0.466,
+          "autonomous_sc_tier3": 0,
+          "autonomous_total": -23
+        },
+        "new7": {
+          "train_episodes": 274,
+          "sc_initial_p95_mm": 2.169,
+          "sc_near_lateral_p95_mm": 0.446,
+          "autonomous_sc_tier3": 0,
+          "autonomous_total": -23
+        }
+      },
+      "failed_scene_lift_retry": "running",
+      "lift_retry_trials": 3,
+      "lift_retry_full_successes": 2,
+      "lift_retry_admitted_causal_chunks": 1222,
+      "total_unique_full_successes": 7,
+      "total_unique_causal_chunks": 3685,
+      "lift_admission": "docs/experiments/2026-09-25-sc-diversity-batch1-lift-admission.json"
+    },
+    "scratch_new7": {
+      "completed_updates": 7000,
+      "selected_update": 5000,
+      "sc_initial_command_p95_mm": 2.118,
+      "sc_near_lateral_p95_mm": 1.114,
+      "selection_mm": 4.425,
+      "offline_gate": "failed; no autonomous evaluation"
+    },
+    "early_2mm_teacher_rescue": {
+      "trials": 5,
+      "full_successes": 2,
+      "causal_chunks": 1387,
+      "actor_owned_frames": 82,
+      "label_audit": "docs/experiments/2026-09-25-sc-diversity-actor-early2mm-labels.json",
+      "bag_manifest": "docs/experiments/2026-09-25-sc-diversity-actor-early2mm-mcap-archive.json",
+      "matched_bc": {
+        "control": {
+          "sc_initial_p95_mm": 2.7907265067100524,
+          "sc_near_lateral_p95_mm": 0.31856507658958433,
+          "autonomous_sc_tier3": 0,
+          "autonomous_total": -23
+        },
+        "corrected": {
+          "sc_initial_p95_mm": 2.525,
+          "sc_near_lateral_p95_mm": 0.312,
+          "autonomous_sc_tier3": 0,
+          "autonomous_total": -23
+        }
+      }
+    }
+  },
+  "fullstart_pose_action_20260925": {
+    "trial": "trial_995001",
+    "checkpoint": "/var/tmp/chmin_aic_20260918_act/shared_port_tcp_bc_early2mm_corrected_20260925/best.pt",
+    "tier3": 0,
+    "total_score": -35,
+    "actor_pose_error_frame0_mm": 28.2107,
+    "actor_pose_error_frame0_deg": 8.4548,
+    "action_error_frame0_mm": 5.8098,
+    "action_error_frame35_mm": 141.1,
+    "true_pose_substitution_action_error_frame0_mm": 24.359,
+    "frozen_global_locator_initial_visible_opening_error_px": "roughly 350-390 left/right; see phase audit",
+    "action_audit": "docs/experiments/2026-09-25-shared-corrected-fullstart-pose-action-audit.json",
+    "locator_phase_audit": "docs/experiments/2026-09-25-sc-global-opening-locator-phase-diagnostic.json",
+    "bag_archive": "docs/experiments/2026-09-25-shared-corrected-fullstart-teacher-trace-mcap-archive.json",
+    "decision": "step5_failed; far-view visual ablation underway; RL and final split closed"
+  },
+  "far_view_locator_20260925": {
+    "train_root": "/var/tmp/chmin_aic_20260918_act/sc_global_far_locator_gpu_20260925",
+    "selected_update": 1400,
+    "train_collection_heldout_far_opening_px": {
+      "median": 1.7963,
+      "p95": 14.6009,
+      "views": 178
+    },
+    "fresh_initial_side_opening_px": {
+      "left_median": 3.3,
+      "left_p95": 4.6,
+      "right_median": 3.8,
+      "right_p95": 9.8
+    },
+    "fresh_initial_lateral_mm_fixed_side2": {
+      "median": 1.2,
+      "p95": 2.3
+    },
+    "fresh_initial_lateral_mm_old_side2": {
+      "median": 125.7,
+      "p95": 140.5
+    },
+    "fresh_late_runaway_near_lateral_p95_mm_side2": 6.1,
+    "fresh_phase_audit": "docs/experiments/2026-09-25-sc-far-weighted-locator-fresh-phase-audit.json",
+    "triangulation": "docs/experiments/2026-09-25-sc-global-far-triangulation-side2.json",
+    "decision": "perception-only transport improvement; shared BC autonomous gate still failed; no RL"
+  },
+  "eight_scene_far_route_observability_20260925": {
+    "development_scenes": 8,
+    "target_outside_both_side_views_at_initial": 6,
+    "causal_side_pair_near_lateral_p95_mm": 1.62439,
+    "initial_pose_status": "six scenes lack directly visible target in side cameras",
+    "offscreen_regression_training_val_p95_px": 286.245,
+    "offscreen_regression_eight_scene_p95_px": 482.49,
+    "offscreen_regression_decision": "failed; no actor promotion",
+    "eight_causal_report": "docs/experiments/2026-09-25-sc-global-far-eight-causal40.json",
+    "next": "training-only from-scratch true-pose actor upper bound; no RL"
+  },
+  "scratch_pose_upper_bound_20260925": {
+    "same_grouped_train_rows": 154730,
+    "same_grouped_validation_rows": 22683,
+    "selected_update": 5000,
+    "oracle_selection_mm": 5.852428,
+    "observation_only_control_selection_mm": 4.42542,
+    "sc_initial_command_p95_mm": {
+      "oracle": 5.18,
+      "control": 2.12
+    },
+    "sc_near_lateral_p95_mm": {
+      "oracle": 1.93,
+      "control": 1.11
+    },
+    "decision": "failed offline; geometry is training-only and not deployable"
+  },
+  "cap2mm_fullstart_20260925": {
+    "trial": "trial_995001",
+    "tier3": 0,
+    "total_score": -35,
+    "max_force_n": 79.17,
+    "force_above_20_n_s": 47.11,
+    "contact": "wrist/enclosure",
+    "action_audit": "docs/experiments/2026-09-25-shared-corrected-fullstart-cap2mm-pose-action-audit.json",
+    "archive": "docs/experiments/2026-09-25-shared-corrected-fullstart-cap2mm-mcap-archive.json"
+  },
+  "sc_diversity_batch2_20260925": {
+    "original_scenes": 20,
+    "complete_official_scores": 20,
+    "full_tier3": 8,
+    "partial_or_failed": 12,
+    "admitted_episodes": 8,
+    "admitted_chunks": 3945,
+    "by_port": {
+      "0": 4,
+      "1": 4
+    },
+    "admission": "docs/experiments/2026-09-25-sc-diversity-batch2-admission.json",
+    "crash": "original long batch segfault after six; all scenes re-scored in independent chunks",
+    "mcap_archives": "docs/experiments/2026-09-25-sc-diversity-batch2-*-mcap-archive.json",
+    "lift_retry": {
+      "failed_original_scenes_retried": 12,
+      "full_tier3": 2,
+      "admitted_episodes": 2,
+      "admitted_chunks": 1755,
+      "admission": "docs/experiments/2026-09-25-sc-diversity-batch2-lift-admission.json"
+    },
+    "combined_admitted_episodes": 10,
+    "combined_admitted_chunks": 5700,
+    "matched_bc": {
+      "control": "/var/tmp/chmin_aic_20260918_act/shared_port_tcp_bc_early2mm_control_20260925",
+      "treatment": "/var/tmp/chmin_aic_20260918_act/shared_port_tcp_bc_diversity_batch2_treatment_20260925",
+      "episodes_control": 274,
+      "episodes_treatment": 284,
+      "train_rows_treatment": 160430,
+      "selected_updates": {
+        "control": 750,
+        "treatment": 250
+      },
+      "selection_mm": {
+        "control": 3.189,
+        "treatment": 3.089
+      },
+      "sc_initial_command_p95_mm": {
+        "control": 2.791,
+        "treatment": 2.565
+      },
+      "sc_near_lateral_p95_mm": {
+        "control": 0.319,
+        "treatment": 0.544
+      },
+      "new_dev_trials": [
+        "trial_999001",
+        "trial_999003"
+      ],
+      "new_dev_tier3": {
+        "control": [
+          0,
+          0
+        ],
+        "treatment": [
+          0,
+          0
+        ]
+      },
+      "new_dev_total": {
+        "control": [
+          -23,
+          -23
+        ],
+        "treatment": [
+          -23,
+          -23
+        ]
+      },
+      "decision": "no autonomous improvement; offline near-port threshold failed; step5 closed"
+    }
+  },
+  "sc99_diagnostic": {
+    "report": "docs/experiments/2026-09-25-shared-bc-sc99-gate.json",
+    "train_episodes": 284,
+    "sc_train_episodes": 48,
+    "sc_sampling_fraction": 0.99,
+    "best_update": 250,
+    "sc_initial_body_command_p95_mm": 1.995,
+    "sc_near_lateral_command_p95_mm": 0.409,
+    "new_dev_trials": [
+      "trial_999001",
+      "trial_999003"
+    ],
+    "new_dev_tier3": [
+      0,
+      0
+    ],
+    "new_dev_total": [
+      -23,
+      -23
+    ],
+    "decision": "offline SC metrics improved, autonomous full-start gate still failed; no RL"
+  },
+  "sc_batch3_teacher_collection": {
+    "source_report": "docs/experiments/2026-09-25-sc-diversity-batch3-scored.json",
+    "attempts": 60,
+    "full": 31,
+    "admitted_chunks": 17796,
+    "fivecard_original_full": 0,
+    "fivecard_lift_full": 3,
+    "fivecard_lift_admitted_chunks": 2287
+  },
+  "batch3_matched_gate": {
+    "report": "docs/experiments/2026-09-25-shared-bc-batch3-matched-gate.json",
+    "new_sc_episodes": 34,
+    "sc_train_episodes": 82,
+    "control_selection_mm": 2.7720985513925553,
+    "treatment_selection_mm": 3.1821899271011347,
+    "dev_trials": [
+      "trial_999001",
+      "trial_999003"
+    ],
+    "control_tier3": [
+      0,
+      0
+    ],
+    "treatment_tier3": [
+      0,
+      0
+    ],
+    "contact": "wrist/enclosure both arms, both scenes",
+    "decision": "step5 still failed; no RL"
+  }
+}

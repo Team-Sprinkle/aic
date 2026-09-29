@@ -1,0 +1,143 @@
+{
+  "schema": "aic_hierarchical_recovery_state/v1",
+  "as_of_utc": "2026-09-24T13:25:00Z",
+  "status": "single_scene_isaac_sc_mechanics_repaired_visual_and_rl_gates_open",
+  "official_eval_image_digest": "sha256:9aa2ffdbb946d38edde1bac7b5f02a44cfbea26e3b04a9c74e09f14c97472923",
+  "gazebo_incident_index": "outputs/experiments/2026-09-24_hierarchical_recovery/incident_index.json",
+  "gazebo_incidents": {
+    "total": 24,
+    "full": 8,
+    "partial": 11,
+    "none": 5
+  },
+  "trace_cohort": {
+    "summary": "outputs/experiments/2026-09-24_hierarchical_recovery/trace_cohorts.json",
+    "episodes": 17,
+    "scene_groups": 5,
+    "full": 6,
+    "partial": 8,
+    "none": 3,
+    "post_hoc_80mm_tracking_threshold": {
+      "none_flagged": 3,
+      "full_or_partial_flagged": 0,
+      "held_out_validated": false
+    }
+  },
+  "fresh_scene_check": {
+    "manifest": "docs/experiments/2026-09-24-hierarchical-recovery-fresh-scenes.json",
+    "episodes": 3,
+    "full": 1,
+    "partial": 2,
+    "none": 0,
+    "crossed_post_hoc_80mm_tracking_line": 0,
+    "sensitivity_validated": false
+  },
+  "fixed_route_scene_group": "fixed_seed_51500_routed",
+  "wide_trace_ids": [
+    2,
+    3,
+    4,
+    5,
+    6,
+    7,
+    8
+  ],
+  "strict_two_sample_vector_tared_trigger_count": 7,
+  "exploratory_vector_tared_progress_trigger_count": 7,
+  "force_norm_subtraction_is_valid": false,
+  "exploratory_diagnostic_hits": [
+    {
+      "repeat": 2,
+      "time_s": 93.95,
+      "outcome": "partial"
+    },
+    {
+      "repeat": 3,
+      "time_s": 73.39945,
+      "outcome": "partial"
+    },
+    {
+      "repeat": 4,
+      "time_s": 98.1,
+      "outcome": "partial"
+    },
+    {
+      "repeat": 5,
+      "time_s": 91.4,
+      "outcome": "partial"
+    },
+    {
+      "repeat": 6,
+      "time_s": 93.09684,
+      "outcome": "none"
+    },
+    {
+      "repeat": 7,
+      "time_s": 87.0,
+      "outcome": "partial"
+    },
+    {
+      "repeat": 8,
+      "time_s": 97.1,
+      "outcome": "partial"
+    }
+  ],
+  "diagnostic_is_deployable": false,
+  "trigger_specificity_gate_passed": false,
+  "named_contact_pair_known": false,
+  "canonical_sc_expert": {
+    "episodes": 21,
+    "train": 14,
+    "validation": 7,
+    "nic_card_count_coverage": [
+      1,
+      2,
+      3
+    ],
+    "nic_4_5_covered": false,
+    "port_frame_teacher_tcp_targets_audited": 13349,
+    "missing_command_indices": 84,
+    "image_time_gaps_over_250ms": 9,
+    "exact_fixed_50ms_connector_chunks_ready": false,
+    "observation_only_sc_port_estimator_validated": false,
+    "audit": "docs/experiments/2026-09-24-sc-port-target-audit.json"
+  },
+  "hierarchical_controller": {
+    "implementation": "aic_example_policies/aic_example_policies/ros/hierarchical_recovery.py",
+    "isolated_tests_passed": 4,
+    "live_rollouts": 0,
+    "demonstrated_full_insertion_gain": false
+  },
+  "sc_bc_checkpoint_trained_in_this_continuation": false,
+  "sc_serl_trained_in_this_continuation": false,
+  "isaac_sc_fidelity_probe": {
+    "summary": "docs/experiments/2026-09-24-isaac-sc-fidelity-summary.json",
+    "constructed_development_scenes": 1,
+    "normal_collision_full_start_final_axial_error_mm": 0.07339,
+    "normal_collision_full_start_final_lateral_error_mm": 0.05362,
+    "near_port_blocked_diagnostic_traces": 2,
+    "camera_renderer_available": true,
+    "autonomous_policy_rollouts": 0,
+    "camera_validation": "three_wrist_rgb_short_smoke_and_61_frame_motion_clip",
+    "visual_rl_replay_collected": false,
+    "camera_smoke_artifacts": "outputs/experiments/2026-09-24_isaac_sc_fidelity/camera_smoke_repaired/",
+    "distal_cable_appearance_validated_against_gazebo": false
+  },
+  "isaac_sc_collision_faithful_gate_passed": false,
+  "gazebo_transfer_complete": false,
+  "official_prod_eval_run_in_this_continuation": false,
+  "bulk_mcap_root": "/var/tmp/chmin_aic_cable_route_smooth_20260923/",
+  "readme": "docs/experiments/2026-09-24-hierarchical-recovery-continuation.md",
+  "isaac_sc_card_route_probe": {
+    "report": "docs/experiments/2026-09-24-isaac-sc-contact-routes.md",
+    "summary": "docs/experiments/2026-09-24-isaac-sc-contact-routes.json",
+    "constructed_development_scenes": 1,
+    "scripted_route_traces": 7,
+    "gripper_card_blockage_repeats": 2,
+    "plug_card_blockage_routes": 1,
+    "cable_card_contact_during_gripper_jam": true,
+    "independent_cable_snag_proven": false,
+    "visual_replay_available": false,
+    "training_demonstrations_accepted": 0
+  }
+}

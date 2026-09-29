@@ -1,0 +1,62 @@
+{
+  "schema": "sc_scored_mcap_archive/v1",
+  "verified_before_source_removal": true,
+  "files": [
+    {
+      "original_path": "/var/tmp/chmin_aic_20260918_act/sc_port_tracker_refreeze_eval_20260924/eval_collection/collection_config/attempt_0001/bag_trial_990501_20260924_203759_666/bag_trial_990501_20260924_203759_666_0.mcap",
+      "original_sha256": "2317d14ff613daf82b877dacd74b8128db7e1130c3054a5c9148342c9060962d",
+      "compressed": "/home/nas/chmin/aic_archive_20260924/sc_port_tracker_refreeze_eval_20260924/bag_trial_990501_20260924_203759_666_0.mcap.zst",
+      "compressed_bytes": 48356082,
+      "restore_command": "zstd -dc '/home/nas/chmin/aic_archive_20260924/sc_port_tracker_refreeze_eval_20260924/bag_trial_990501_20260924_203759_666_0.mcap.zst' > '/var/tmp/chmin_aic_20260918_act/sc_port_tracker_refreeze_eval_20260924/eval_collection/collection_config/attempt_0001/bag_trial_990501_20260924_203759_666/bag_trial_990501_20260924_203759_666_0.mcap'"
+    },
+    {
+      "original_path": "/var/tmp/chmin_aic_20260918_act/sc_port_tracker_refreeze_eval_20260924/eval_collection/collection_config/attempt_0001/bag_trial_990502_20260924_203906_726/bag_trial_990502_20260924_203906_726_0.mcap",
+      "original_sha256": "ba93590065f6928935425aab3c2561e3d3ae32f9837bece8ef1c8b709480aa9b",
+      "compressed": "/home/nas/chmin/aic_archive_20260924/sc_port_tracker_refreeze_eval_20260924/bag_trial_990502_20260924_203906_726_0.mcap.zst",
+      "compressed_bytes": 32729100,
+      "restore_command": "zstd -dc '/home/nas/chmin/aic_archive_20260924/sc_port_tracker_refreeze_eval_20260924/bag_trial_990502_20260924_203906_726_0.mcap.zst' > '/var/tmp/chmin_aic_20260918_act/sc_port_tracker_refreeze_eval_20260924/eval_collection/collection_config/attempt_0001/bag_trial_990502_20260924_203906_726/bag_trial_990502_20260924_203906_726_0.mcap'"
+    },
+    {
+      "original_path": "/var/tmp/chmin_aic_20260918_act/sc_port_tracker_refreeze_eval_20260924/eval_collection/collection_config/attempt_0001/bag_trial_990503_20260924_203948_416/bag_trial_990503_20260924_203948_416_0.mcap",
+      "original_sha256": "808f6e474fcf5465296996257a22699a48886dad12aed5f5ef43789ba050dd9f",
+      "compressed": "/home/nas/chmin/aic_archive_20260924/sc_port_tracker_refreeze_eval_20260924/bag_trial_990503_20260924_203948_416_0.mcap.zst",
+      "compressed_bytes": 56817480,
+      "restore_command": "zstd -dc '/home/nas/chmin/aic_archive_20260924/sc_port_tracker_refreeze_eval_20260924/bag_trial_990503_20260924_203948_416_0.mcap.zst' > '/var/tmp/chmin_aic_20260918_act/sc_port_tracker_refreeze_eval_20260924/eval_collection/collection_config/attempt_0001/bag_trial_990503_20260924_203948_416/bag_trial_990503_20260924_203948_416_0.mcap'"
+    },
+    {
+      "original_path": "/var/tmp/chmin_aic_20260918_act/sc_port_tracker_refreeze_eval_20260924/eval_collection/collection_config/attempt_0001/bag_trial_990504_20260924_204119_213/bag_trial_990504_20260924_204119_213_0.mcap",
+      "original_sha256": "c33340baae051db2cbf2da10adccf94c7b3f5c068654a3043abf60e969deb929",
+      "compressed": "/home/nas/chmin/aic_archive_20260924/sc_port_tracker_refreeze_eval_20260924/bag_trial_990504_20260924_204119_213_0.mcap.zst",
+      "compressed_bytes": 96447008,
+      "restore_command": "zstd -dc '/home/nas/chmin/aic_archive_20260924/sc_port_tracker_refreeze_eval_20260924/bag_trial_990504_20260924_204119_213_0.mcap.zst' > '/var/tmp/chmin_aic_20260918_act/sc_port_tracker_refreeze_eval_20260924/eval_collection/collection_config/attempt_0001/bag_trial_990504_20260924_204119_213/bag_trial_990504_20260924_204119_213_0.mcap'"
+    },
+    {
+      "original_path": "/var/tmp/chmin_aic_20260918_act/sc_port_tracker_refreeze_eval_20260924/eval_collection/collection_config/attempt_0001/bag_trial_990505_20260924_204327_582/bag_trial_990505_20260924_204327_582_0.mcap",
+      "original_sha256": "8e0900df2527e052a67b89993172080188a8bdcc6c54b3bd79f24713c10142b6",
+      "compressed": "/home/nas/chmin/aic_archive_20260924/sc_port_tracker_refreeze_eval_20260924/bag_trial_990505_20260924_204327_582_0.mcap.zst",
+      "compressed_bytes": 69152928,
+      "restore_command": "zstd -dc '/home/nas/chmin/aic_archive_20260924/sc_port_tracker_refreeze_eval_20260924/bag_trial_990505_20260924_204327_582_0.mcap.zst' > '/var/tmp/chmin_aic_20260918_act/sc_port_tracker_refreeze_eval_20260924/eval_collection/collection_config/attempt_0001/bag_trial_990505_20260924_204327_582/bag_trial_990505_20260924_204327_582_0.mcap'"
+    },
+    {
+      "original_path": "/var/tmp/chmin_aic_20260918_act/sc_port_tracker_refreeze_eval_20260924/eval_collection/collection_config/attempt_0001/bag_trial_990506_20260924_204459_954/bag_trial_990506_20260924_204459_954_0.mcap",
+      "original_sha256": "8f9e932d3290bfb3d0a5e9f2c2a19955217faee8d32c324475b9da5091d9fb55",
+      "compressed": "/home/nas/chmin/aic_archive_20260924/sc_port_tracker_refreeze_eval_20260924/bag_trial_990506_20260924_204459_954_0.mcap.zst",
+      "compressed_bytes": 53692486,
+      "restore_command": "zstd -dc '/home/nas/chmin/aic_archive_20260924/sc_port_tracker_refreeze_eval_20260924/bag_trial_990506_20260924_204459_954_0.mcap.zst' > '/var/tmp/chmin_aic_20260918_act/sc_port_tracker_refreeze_eval_20260924/eval_collection/collection_config/attempt_0001/bag_trial_990506_20260924_204459_954/bag_trial_990506_20260924_204459_954_0.mcap'"
+    },
+    {
+      "original_path": "/var/tmp/chmin_aic_20260918_act/sc_port_tracker_refreeze_eval_20260924/eval_collection/collection_config/attempt_0001/bag_trial_990507_20260924_204602_596/bag_trial_990507_20260924_204602_596_0.mcap",
+      "original_sha256": "8f1533aab29c73abe87464a37b5257e38edd8c4e3ed7d907c6a193659a6afbcf",
+      "compressed": "/home/nas/chmin/aic_archive_20260924/sc_port_tracker_refreeze_eval_20260924/bag_trial_990507_20260924_204602_596_0.mcap.zst",
+      "compressed_bytes": 36656768,
+      "restore_command": "zstd -dc '/home/nas/chmin/aic_archive_20260924/sc_port_tracker_refreeze_eval_20260924/bag_trial_990507_20260924_204602_596_0.mcap.zst' > '/var/tmp/chmin_aic_20260918_act/sc_port_tracker_refreeze_eval_20260924/eval_collection/collection_config/attempt_0001/bag_trial_990507_20260924_204602_596/bag_trial_990507_20260924_204602_596_0.mcap'"
+    },
+    {
+      "original_path": "/var/tmp/chmin_aic_20260918_act/sc_port_tracker_refreeze_eval_20260924/eval_collection/collection_config/attempt_0001/bag_trial_990508_20260924_204644_380/bag_trial_990508_20260924_204644_380_0.mcap",
+      "original_sha256": "dd6cd2fa8d7702a8f7de4fa2b356f17d75394bda534b37eb634f0f9c65d06017",
+      "compressed": "/home/nas/chmin/aic_archive_20260924/sc_port_tracker_refreeze_eval_20260924/bag_trial_990508_20260924_204644_380_0.mcap.zst",
+      "compressed_bytes": 97130522,
+      "restore_command": "zstd -dc '/home/nas/chmin/aic_archive_20260924/sc_port_tracker_refreeze_eval_20260924/bag_trial_990508_20260924_204644_380_0.mcap.zst' > '/var/tmp/chmin_aic_20260918_act/sc_port_tracker_refreeze_eval_20260924/eval_collection/collection_config/attempt_0001/bag_trial_990508_20260924_204644_380/bag_trial_990508_20260924_204644_380_0.mcap'"
+    }
+  ]
+}

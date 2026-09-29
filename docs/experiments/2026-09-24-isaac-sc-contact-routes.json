@@ -1,0 +1,625 @@
+{
+  "across_card_instrumented": {
+    "trace": "outputs/experiments/2026-09-24_isaac_sc_contact_routes/across_card_instrumented.json",
+    "sha256": "13ee31854e506ed1bf1012c35ce4e803f729f3e62be5a72a2c843ffb291f9bb5",
+    "rows": 181,
+    "contact_filter_paths": [
+      "{ENV_REGEX_NS}/task_board/base_visual",
+      "{ENV_REGEX_NS}/sc_port/sc_port_visual",
+      "{ENV_REGEX_NS}/sc_port_2/sc_port_visual",
+      "{ENV_REGEX_NS}/nic_card",
+      "{ENV_REGEX_NS}/nic_card_1",
+      "{ENV_REGEX_NS}/nic_card_2",
+      "{ENV_REGEX_NS}/nic_card_3",
+      "{ENV_REGEX_NS}/nic_card_4",
+      "{ENV_REGEX_NS}/Robot/aic_unified_robot/wrist_3_link",
+      "{ENV_REGEX_NS}/Robot/aic_unified_robot/flange",
+      "{ENV_REGEX_NS}/Robot/aic_unified_robot/tool0",
+      "{ENV_REGEX_NS}/Robot/aic_unified_robot/ati_base_link",
+      "{ENV_REGEX_NS}/Robot/aic_unified_robot/ati_tool_link",
+      "{ENV_REGEX_NS}/Robot/aic_unified_robot/gripper_tcp",
+      "{ENV_REGEX_NS}/Robot/aic_unified_robot/gripper_hande_finger_link_l",
+      "{ENV_REGEX_NS}/Robot/aic_unified_robot/gripper_hande_finger_link_r",
+      "{ENV_REGEX_NS}/Robot/aic_unified_robot/center_camera_camera_link",
+      "{ENV_REGEX_NS}/Robot/aic_unified_robot/left_camera_camera_link",
+      "{ENV_REGEX_NS}/Robot/aic_unified_robot/right_camera_camera_link",
+      "{ENV_REGEX_NS}/Robot/cable/sc_plug/sc_plug_link",
+      "{ENV_REGEX_NS}/Robot/cable/Rope/Rope/link_0",
+      "{ENV_REGEX_NS}/Robot/cable/Rope/Rope/link_1",
+      "{ENV_REGEX_NS}/Robot/cable/Rope/Rope/link_2",
+      "{ENV_REGEX_NS}/Robot/cable/Rope/Rope/link_3"
+    ],
+    "named_contacts": {
+      "gripper_base_card": {
+        "peak_n": 486.8256530761719,
+        "steps_over_1n": 94,
+        "steps_over_100n": 93
+      },
+      "finger_l_card": {
+        "peak_n": 79.72959899902344,
+        "steps_over_1n": 1,
+        "steps_over_100n": 0
+      },
+      "finger_r_card": {
+        "peak_n": 0.0,
+        "steps_over_1n": 0,
+        "steps_over_100n": 0
+      },
+      "plug_card": {
+        "peak_n": 0.0,
+        "steps_over_1n": 0,
+        "steps_over_100n": 0
+      },
+      "rope_link1_card": {
+        "peak_n": 66.68521118164062,
+        "steps_over_1n": 76
+      },
+      "rope_link2_card": {
+        "peak_n": 204.0618133544922,
+        "steps_over_1n": 95
+      },
+      "rope_link5_card": {
+        "peak_n": 0.0,
+        "steps_over_1n": 0
+      },
+      "rope_link10_card": {
+        "peak_n": 0.0,
+        "steps_over_1n": 0
+      },
+      "rope_link15_card": {
+        "peak_n": 0.0,
+        "steps_over_1n": 0
+      },
+      "rope_link19_card": {
+        "peak_n": 0.0,
+        "steps_over_1n": 0
+      },
+      "rope_link20_card": {
+        "peak_n": 0.0,
+        "steps_over_1n": 0
+      }
+    },
+    "windows": {
+      "25_99": {
+        "gripper_motion_mm": 6.744299417526008,
+        "plug_motion_mm": 6.785193520235381,
+        "peak_command_m": 0.020000001415610313,
+        "peak_wrist_force_n": 213.4331817626953
+      },
+      "100_110": {
+        "gripper_motion_mm": 48.99693656144436,
+        "plug_motion_mm": 47.358233861042436,
+        "peak_command_m": 0.020000001415610313,
+        "peak_wrist_force_n": 184.29270935058594
+      }
+    },
+    "final_tip_target_distance_mm": 0.0985179067356512,
+    "peak_wrist_force_n": 534.9498901367188
+  },
+  "gripper_card_route_01": {
+    "trace": "outputs/experiments/2026-09-24_isaac_sc_contact_routes/gripper_card_route_01.json",
+    "sha256": "8449c1d012c6c4773ec6340a91a07bbd5d719efe48352248e233dc7304713522",
+    "rows": 181,
+    "contact_filter_paths": [
+      "{ENV_REGEX_NS}/task_board/base_visual",
+      "{ENV_REGEX_NS}/sc_port/sc_port_visual",
+      "{ENV_REGEX_NS}/sc_port_2/sc_port_visual",
+      "{ENV_REGEX_NS}/nic_card",
+      "{ENV_REGEX_NS}/nic_card_1",
+      "{ENV_REGEX_NS}/nic_card_2",
+      "{ENV_REGEX_NS}/nic_card_3",
+      "{ENV_REGEX_NS}/nic_card_4",
+      "{ENV_REGEX_NS}/Robot/aic_unified_robot/wrist_3_link",
+      "{ENV_REGEX_NS}/Robot/aic_unified_robot/flange",
+      "{ENV_REGEX_NS}/Robot/aic_unified_robot/tool0",
+      "{ENV_REGEX_NS}/Robot/aic_unified_robot/ati_base_link",
+      "{ENV_REGEX_NS}/Robot/aic_unified_robot/ati_tool_link",
+      "{ENV_REGEX_NS}/Robot/aic_unified_robot/gripper_tcp",
+      "{ENV_REGEX_NS}/Robot/aic_unified_robot/gripper_hande_finger_link_l",
+      "{ENV_REGEX_NS}/Robot/aic_unified_robot/gripper_hande_finger_link_r",
+      "{ENV_REGEX_NS}/Robot/aic_unified_robot/center_camera_camera_link",
+      "{ENV_REGEX_NS}/Robot/aic_unified_robot/left_camera_camera_link",
+      "{ENV_REGEX_NS}/Robot/aic_unified_robot/right_camera_camera_link",
+      "{ENV_REGEX_NS}/Robot/cable/sc_plug/sc_plug_link",
+      "{ENV_REGEX_NS}/Robot/cable/Rope/Rope/link_0",
+      "{ENV_REGEX_NS}/Robot/cable/Rope/Rope/link_1",
+      "{ENV_REGEX_NS}/Robot/cable/Rope/Rope/link_2",
+      "{ENV_REGEX_NS}/Robot/cable/Rope/Rope/link_3"
+    ],
+    "named_contacts": {
+      "gripper_base_card": {
+        "peak_n": 268.89337158203125,
+        "steps_over_1n": 93,
+        "steps_over_100n": 93
+      },
+      "finger_l_card": {
+        "peak_n": 126.96792602539062,
+        "steps_over_1n": 1,
+        "steps_over_100n": 1
+      },
+      "finger_r_card": {
+        "peak_n": 0.0,
+        "steps_over_1n": 0,
+        "steps_over_100n": 0
+      },
+      "plug_card": {
+        "peak_n": 0.0,
+        "steps_over_1n": 0,
+        "steps_over_100n": 0
+      }
+    },
+    "windows": {
+      "25_99": {
+        "gripper_motion_mm": 6.201995449278302,
+        "plug_motion_mm": 6.218482350394995,
+        "peak_command_m": 0.020000001415610313,
+        "peak_wrist_force_n": 216.5426788330078
+      },
+      "100_110": {
+        "gripper_motion_mm": 48.22807435170724,
+        "plug_motion_mm": 44.16542928561317,
+        "peak_command_m": 0.020000001415610313,
+        "peak_wrist_force_n": 173.96401977539062
+      }
+    },
+    "final_tip_target_distance_mm": 0.0873471872182563,
+    "peak_wrist_force_n": 308.0809020996094
+  },
+  "gripper_card_route_02": {
+    "trace": "outputs/experiments/2026-09-24_isaac_sc_contact_routes/gripper_card_route_02.json",
+    "sha256": "e2664b1a4ae079c20cf01eea40253762b61278c8581f4c6369e19a2650afb500",
+    "rows": 181,
+    "contact_filter_paths": [
+      "{ENV_REGEX_NS}/task_board/base_visual",
+      "{ENV_REGEX_NS}/sc_port/sc_port_visual",
+      "{ENV_REGEX_NS}/sc_port_2/sc_port_visual",
+      "{ENV_REGEX_NS}/nic_card",
+      "{ENV_REGEX_NS}/nic_card_1",
+      "{ENV_REGEX_NS}/nic_card_2",
+      "{ENV_REGEX_NS}/nic_card_3",
+      "{ENV_REGEX_NS}/nic_card_4",
+      "{ENV_REGEX_NS}/Robot/aic_unified_robot/wrist_3_link",
+      "{ENV_REGEX_NS}/Robot/aic_unified_robot/flange",
+      "{ENV_REGEX_NS}/Robot/aic_unified_robot/tool0",
+      "{ENV_REGEX_NS}/Robot/aic_unified_robot/ati_base_link",
+      "{ENV_REGEX_NS}/Robot/aic_unified_robot/ati_tool_link",
+      "{ENV_REGEX_NS}/Robot/aic_unified_robot/gripper_tcp",
+      "{ENV_REGEX_NS}/Robot/aic_unified_robot/gripper_hande_finger_link_l",
+      "{ENV_REGEX_NS}/Robot/aic_unified_robot/gripper_hande_finger_link_r",
+      "{ENV_REGEX_NS}/Robot/aic_unified_robot/center_camera_camera_link",
+      "{ENV_REGEX_NS}/Robot/aic_unified_robot/left_camera_camera_link",
+      "{ENV_REGEX_NS}/Robot/aic_unified_robot/right_camera_camera_link",
+      "{ENV_REGEX_NS}/Robot/cable/sc_plug/sc_plug_link",
+      "{ENV_REGEX_NS}/Robot/cable/Rope/Rope/link_0",
+      "{ENV_REGEX_NS}/Robot/cable/Rope/Rope/link_1",
+      "{ENV_REGEX_NS}/Robot/cable/Rope/Rope/link_2",
+      "{ENV_REGEX_NS}/Robot/cable/Rope/Rope/link_3"
+    ],
+    "named_contacts": {
+      "gripper_base_card": {
+        "peak_n": 486.8256530761719,
+        "steps_over_1n": 94,
+        "steps_over_100n": 93
+      },
+      "finger_l_card": {
+        "peak_n": 79.72959899902344,
+        "steps_over_1n": 1,
+        "steps_over_100n": 0
+      },
+      "finger_r_card": {
+        "peak_n": 0.0,
+        "steps_over_1n": 0,
+        "steps_over_100n": 0
+      },
+      "plug_card": {
+        "peak_n": 0.0,
+        "steps_over_1n": 0,
+        "steps_over_100n": 0
+      }
+    },
+    "windows": {
+      "25_99": {
+        "gripper_motion_mm": 6.744299417526008,
+        "plug_motion_mm": 6.785193520235381,
+        "peak_command_m": 0.020000001415610313,
+        "peak_wrist_force_n": 213.4331817626953
+      },
+      "100_110": {
+        "gripper_motion_mm": 48.99693656144436,
+        "plug_motion_mm": 47.358233861042436,
+        "peak_command_m": 0.020000001415610313,
+        "peak_wrist_force_n": 184.29270935058594
+      }
+    },
+    "final_tip_target_distance_mm": 0.0985179067356512,
+    "peak_wrist_force_n": 534.9498901367188
+  },
+  "lane_mid_06": {
+    "trace": "outputs/experiments/2026-09-24_isaac_sc_contact_routes/lane_mid_06.json",
+    "sha256": "1da39a5233df3e376f089a1be8fcfec02016ff8543d8dee5ca4465d6db05f044",
+    "rows": 181,
+    "contact_filter_paths": [
+      "{ENV_REGEX_NS}/task_board/base_visual",
+      "{ENV_REGEX_NS}/sc_port/sc_port_visual",
+      "{ENV_REGEX_NS}/sc_port_2/sc_port_visual",
+      "{ENV_REGEX_NS}/nic_card",
+      "{ENV_REGEX_NS}/nic_card_1",
+      "{ENV_REGEX_NS}/nic_card_2",
+      "{ENV_REGEX_NS}/nic_card_3",
+      "{ENV_REGEX_NS}/nic_card_4",
+      "{ENV_REGEX_NS}/Robot/aic_unified_robot/wrist_3_link",
+      "{ENV_REGEX_NS}/Robot/aic_unified_robot/flange",
+      "{ENV_REGEX_NS}/Robot/aic_unified_robot/tool0",
+      "{ENV_REGEX_NS}/Robot/aic_unified_robot/ati_base_link",
+      "{ENV_REGEX_NS}/Robot/aic_unified_robot/ati_tool_link",
+      "{ENV_REGEX_NS}/Robot/aic_unified_robot/gripper_tcp",
+      "{ENV_REGEX_NS}/Robot/aic_unified_robot/gripper_hande_finger_link_l",
+      "{ENV_REGEX_NS}/Robot/aic_unified_robot/gripper_hande_finger_link_r",
+      "{ENV_REGEX_NS}/Robot/aic_unified_robot/center_camera_camera_link",
+      "{ENV_REGEX_NS}/Robot/aic_unified_robot/left_camera_camera_link",
+      "{ENV_REGEX_NS}/Robot/aic_unified_robot/right_camera_camera_link",
+      "{ENV_REGEX_NS}/Robot/cable/sc_plug/sc_plug_link",
+      "{ENV_REGEX_NS}/Robot/cable/Rope/Rope/link_0",
+      "{ENV_REGEX_NS}/Robot/cable/Rope/Rope/link_1",
+      "{ENV_REGEX_NS}/Robot/cable/Rope/Rope/link_2",
+      "{ENV_REGEX_NS}/Robot/cable/Rope/Rope/link_3"
+    ],
+    "named_contacts": {
+      "gripper_base_card": {
+        "peak_n": 0.0,
+        "steps_over_1n": 0,
+        "steps_over_100n": 0
+      },
+      "finger_l_card": {
+        "peak_n": 0.0,
+        "steps_over_1n": 0,
+        "steps_over_100n": 0
+      },
+      "finger_r_card": {
+        "peak_n": 0.0,
+        "steps_over_1n": 0,
+        "steps_over_100n": 0
+      },
+      "plug_card": {
+        "peak_n": 0.0,
+        "steps_over_1n": 0,
+        "steps_over_100n": 0
+      },
+      "rope_link1_card": {
+        "peak_n": 0.0,
+        "steps_over_1n": 0
+      },
+      "rope_link2_card": {
+        "peak_n": 0.0,
+        "steps_over_1n": 0
+      },
+      "rope_link5_card": {
+        "peak_n": 0.0,
+        "steps_over_1n": 0
+      },
+      "rope_link10_card": {
+        "peak_n": 0.0,
+        "steps_over_1n": 0
+      },
+      "rope_link15_card": {
+        "peak_n": 0.0,
+        "steps_over_1n": 0
+      },
+      "rope_link19_card": {
+        "peak_n": 0.0,
+        "steps_over_1n": 0
+      },
+      "rope_link20_card": {
+        "peak_n": 0.0,
+        "steps_over_1n": 0
+      }
+    },
+    "windows": {
+      "25_99": {
+        "gripper_motion_mm": 0.015423018572038137,
+        "plug_motion_mm": 0.013853881312710849,
+        "peak_command_m": 0.00016223163402173668,
+        "peak_wrist_force_n": 0.516227126121521
+      },
+      "100_110": {
+        "gripper_motion_mm": 59.27410307182462,
+        "plug_motion_mm": 59.378772849834725,
+        "peak_command_m": 0.019999999552965164,
+        "peak_wrist_force_n": 20.228515625
+      }
+    },
+    "final_tip_target_distance_mm": 0.07886115781730041,
+    "peak_wrist_force_n": 20.228515625
+  },
+  "lane_negative_10": {
+    "trace": "outputs/experiments/2026-09-24_isaac_sc_contact_routes/lane_negative_10.json",
+    "sha256": "0569c8ddd12b11206f462891cca65ea0c8720ecac298e4a12d343933b15380dc",
+    "rows": 181,
+    "contact_filter_paths": [
+      "{ENV_REGEX_NS}/task_board/base_visual",
+      "{ENV_REGEX_NS}/sc_port/sc_port_visual",
+      "{ENV_REGEX_NS}/sc_port_2/sc_port_visual",
+      "{ENV_REGEX_NS}/nic_card",
+      "{ENV_REGEX_NS}/nic_card_1",
+      "{ENV_REGEX_NS}/nic_card_2",
+      "{ENV_REGEX_NS}/nic_card_3",
+      "{ENV_REGEX_NS}/nic_card_4",
+      "{ENV_REGEX_NS}/Robot/aic_unified_robot/wrist_3_link",
+      "{ENV_REGEX_NS}/Robot/aic_unified_robot/flange",
+      "{ENV_REGEX_NS}/Robot/aic_unified_robot/tool0",
+      "{ENV_REGEX_NS}/Robot/aic_unified_robot/ati_base_link",
+      "{ENV_REGEX_NS}/Robot/aic_unified_robot/ati_tool_link",
+      "{ENV_REGEX_NS}/Robot/aic_unified_robot/gripper_tcp",
+      "{ENV_REGEX_NS}/Robot/aic_unified_robot/gripper_hande_finger_link_l",
+      "{ENV_REGEX_NS}/Robot/aic_unified_robot/gripper_hande_finger_link_r",
+      "{ENV_REGEX_NS}/Robot/aic_unified_robot/center_camera_camera_link",
+      "{ENV_REGEX_NS}/Robot/aic_unified_robot/left_camera_camera_link",
+      "{ENV_REGEX_NS}/Robot/aic_unified_robot/right_camera_camera_link",
+      "{ENV_REGEX_NS}/Robot/cable/sc_plug/sc_plug_link",
+      "{ENV_REGEX_NS}/Robot/cable/Rope/Rope/link_0",
+      "{ENV_REGEX_NS}/Robot/cable/Rope/Rope/link_1",
+      "{ENV_REGEX_NS}/Robot/cable/Rope/Rope/link_2",
+      "{ENV_REGEX_NS}/Robot/cable/Rope/Rope/link_3"
+    ],
+    "named_contacts": {
+      "gripper_base_card": {
+        "peak_n": 329.15362548828125,
+        "steps_over_1n": 112,
+        "steps_over_100n": 96
+      },
+      "finger_l_card": {
+        "peak_n": 0.0,
+        "steps_over_1n": 0,
+        "steps_over_100n": 0
+      },
+      "finger_r_card": {
+        "peak_n": 80.17525482177734,
+        "steps_over_1n": 1,
+        "steps_over_100n": 0
+      },
+      "plug_card": {
+        "peak_n": 0.0,
+        "steps_over_1n": 0,
+        "steps_over_100n": 0
+      },
+      "rope_link1_card": {
+        "peak_n": 72.25065612792969,
+        "steps_over_1n": 10
+      },
+      "rope_link2_card": {
+        "peak_n": 62.60544967651367,
+        "steps_over_1n": 81
+      },
+      "rope_link5_card": {
+        "peak_n": 0.2873040437698364,
+        "steps_over_1n": 0
+      },
+      "rope_link10_card": {
+        "peak_n": 0.0,
+        "steps_over_1n": 0
+      },
+      "rope_link15_card": {
+        "peak_n": 0.0,
+        "steps_over_1n": 0
+      },
+      "rope_link19_card": {
+        "peak_n": 0.0,
+        "steps_over_1n": 0
+      },
+      "rope_link20_card": {
+        "peak_n": 0.0,
+        "steps_over_1n": 0
+      }
+    },
+    "windows": {
+      "25_99": {
+        "gripper_motion_mm": 85.95908160358677,
+        "plug_motion_mm": 90.37431165294394,
+        "peak_command_m": 0.020000003278255463,
+        "peak_wrist_force_n": 190.3750762939453
+      },
+      "100_110": {
+        "gripper_motion_mm": 46.248114066900584,
+        "plug_motion_mm": 42.570908147961724,
+        "peak_command_m": 0.019999999552965164,
+        "peak_wrist_force_n": 215.83265686035156
+      }
+    },
+    "final_tip_target_distance_mm": 15.145487152040005,
+    "peak_wrist_force_n": 353.9924621582031
+  },
+  "outside_card_instrumented": {
+    "trace": "outputs/experiments/2026-09-24_isaac_sc_contact_routes/outside_card_instrumented.json",
+    "sha256": "caa7e2fd56a6950c251594229ff5397a195ec6279bee9a704288a918b3cebe3a",
+    "rows": 181,
+    "contact_filter_paths": [
+      "{ENV_REGEX_NS}/task_board/base_visual",
+      "{ENV_REGEX_NS}/sc_port/sc_port_visual",
+      "{ENV_REGEX_NS}/sc_port_2/sc_port_visual",
+      "{ENV_REGEX_NS}/nic_card",
+      "{ENV_REGEX_NS}/nic_card_1",
+      "{ENV_REGEX_NS}/nic_card_2",
+      "{ENV_REGEX_NS}/nic_card_3",
+      "{ENV_REGEX_NS}/nic_card_4",
+      "{ENV_REGEX_NS}/Robot/aic_unified_robot/wrist_3_link",
+      "{ENV_REGEX_NS}/Robot/aic_unified_robot/flange",
+      "{ENV_REGEX_NS}/Robot/aic_unified_robot/tool0",
+      "{ENV_REGEX_NS}/Robot/aic_unified_robot/ati_base_link",
+      "{ENV_REGEX_NS}/Robot/aic_unified_robot/ati_tool_link",
+      "{ENV_REGEX_NS}/Robot/aic_unified_robot/gripper_tcp",
+      "{ENV_REGEX_NS}/Robot/aic_unified_robot/gripper_hande_finger_link_l",
+      "{ENV_REGEX_NS}/Robot/aic_unified_robot/gripper_hande_finger_link_r",
+      "{ENV_REGEX_NS}/Robot/aic_unified_robot/center_camera_camera_link",
+      "{ENV_REGEX_NS}/Robot/aic_unified_robot/left_camera_camera_link",
+      "{ENV_REGEX_NS}/Robot/aic_unified_robot/right_camera_camera_link",
+      "{ENV_REGEX_NS}/Robot/cable/sc_plug/sc_plug_link",
+      "{ENV_REGEX_NS}/Robot/cable/Rope/Rope/link_0",
+      "{ENV_REGEX_NS}/Robot/cable/Rope/Rope/link_1",
+      "{ENV_REGEX_NS}/Robot/cable/Rope/Rope/link_2",
+      "{ENV_REGEX_NS}/Robot/cable/Rope/Rope/link_3"
+    ],
+    "named_contacts": {
+      "gripper_base_card": {
+        "peak_n": 0.0,
+        "steps_over_1n": 0,
+        "steps_over_100n": 0
+      },
+      "finger_l_card": {
+        "peak_n": 0.0,
+        "steps_over_1n": 0,
+        "steps_over_100n": 0
+      },
+      "finger_r_card": {
+        "peak_n": 0.0,
+        "steps_over_1n": 0,
+        "steps_over_100n": 0
+      },
+      "plug_card": {
+        "peak_n": 0.0,
+        "steps_over_1n": 0,
+        "steps_over_100n": 0
+      },
+      "rope_link1_card": {
+        "peak_n": 0.0,
+        "steps_over_1n": 0
+      },
+      "rope_link2_card": {
+        "peak_n": 0.0,
+        "steps_over_1n": 0
+      },
+      "rope_link5_card": {
+        "peak_n": 0.0,
+        "steps_over_1n": 0
+      },
+      "rope_link10_card": {
+        "peak_n": 0.0,
+        "steps_over_1n": 0
+      },
+      "rope_link15_card": {
+        "peak_n": 0.0,
+        "steps_over_1n": 0
+      },
+      "rope_link19_card": {
+        "peak_n": 0.0,
+        "steps_over_1n": 0
+      },
+      "rope_link20_card": {
+        "peak_n": 0.0,
+        "steps_over_1n": 0
+      }
+    },
+    "windows": {
+      "25_99": {
+        "gripper_motion_mm": 0.013399052556107984,
+        "plug_motion_mm": 0.01373111886034664,
+        "peak_command_m": 0.00018417734827380627,
+        "peak_wrist_force_n": 0.6417413353919983
+      },
+      "100_110": {
+        "gripper_motion_mm": 57.72932848977353,
+        "plug_motion_mm": 58.00053464711453,
+        "peak_command_m": 0.019999999552965164,
+        "peak_wrist_force_n": 17.262243270874023
+      }
+    },
+    "final_tip_target_distance_mm": 14.930366538465023,
+    "peak_wrist_force_n": 53.49405288696289
+  },
+  "staged_high_cross_01": {
+    "trace": "outputs/experiments/2026-09-24_isaac_sc_contact_routes/staged_high_cross_01.json",
+    "sha256": "ae35a6d24852ab05c83d3294415346d84ae681e7b1419f05f3273d20335cd685",
+    "rows": 211,
+    "contact_filter_paths": [
+      "{ENV_REGEX_NS}/task_board/base_visual",
+      "{ENV_REGEX_NS}/sc_port/sc_port_visual",
+      "{ENV_REGEX_NS}/sc_port_2/sc_port_visual",
+      "{ENV_REGEX_NS}/nic_card",
+      "{ENV_REGEX_NS}/nic_card_1",
+      "{ENV_REGEX_NS}/nic_card_2",
+      "{ENV_REGEX_NS}/nic_card_3",
+      "{ENV_REGEX_NS}/nic_card_4",
+      "{ENV_REGEX_NS}/Robot/aic_unified_robot/wrist_3_link",
+      "{ENV_REGEX_NS}/Robot/aic_unified_robot/flange",
+      "{ENV_REGEX_NS}/Robot/aic_unified_robot/tool0",
+      "{ENV_REGEX_NS}/Robot/aic_unified_robot/ati_base_link",
+      "{ENV_REGEX_NS}/Robot/aic_unified_robot/ati_tool_link",
+      "{ENV_REGEX_NS}/Robot/aic_unified_robot/gripper_tcp",
+      "{ENV_REGEX_NS}/Robot/aic_unified_robot/gripper_hande_finger_link_l",
+      "{ENV_REGEX_NS}/Robot/aic_unified_robot/gripper_hande_finger_link_r",
+      "{ENV_REGEX_NS}/Robot/aic_unified_robot/center_camera_camera_link",
+      "{ENV_REGEX_NS}/Robot/aic_unified_robot/left_camera_camera_link",
+      "{ENV_REGEX_NS}/Robot/aic_unified_robot/right_camera_camera_link",
+      "{ENV_REGEX_NS}/Robot/cable/sc_plug/sc_plug_link",
+      "{ENV_REGEX_NS}/Robot/cable/Rope/Rope/link_0",
+      "{ENV_REGEX_NS}/Robot/cable/Rope/Rope/link_1",
+      "{ENV_REGEX_NS}/Robot/cable/Rope/Rope/link_2",
+      "{ENV_REGEX_NS}/Robot/cable/Rope/Rope/link_3"
+    ],
+    "named_contacts": {
+      "gripper_base_card": {
+        "peak_n": 0.0,
+        "steps_over_1n": 0,
+        "steps_over_100n": 0
+      },
+      "finger_l_card": {
+        "peak_n": 0.0,
+        "steps_over_1n": 0,
+        "steps_over_100n": 0
+      },
+      "finger_r_card": {
+        "peak_n": 0.0,
+        "steps_over_1n": 0,
+        "steps_over_100n": 0
+      },
+      "plug_card": {
+        "peak_n": 326.6004638671875,
+        "steps_over_1n": 88,
+        "steps_over_100n": 87
+      },
+      "rope_link1_card": {
+        "peak_n": 0.0,
+        "steps_over_1n": 0
+      },
+      "rope_link2_card": {
+        "peak_n": 0.0,
+        "steps_over_1n": 0
+      },
+      "rope_link5_card": {
+        "peak_n": 0.0,
+        "steps_over_1n": 0
+      },
+      "rope_link10_card": {
+        "peak_n": 0.0,
+        "steps_over_1n": 0
+      },
+      "rope_link15_card": {
+        "peak_n": 0.042254284024238586,
+        "steps_over_1n": 0
+      },
+      "rope_link19_card": {
+        "peak_n": 0.0,
+        "steps_over_1n": 0
+      },
+      "rope_link20_card": {
+        "peak_n": 0.0,
+        "steps_over_1n": 0
+      }
+    },
+    "windows": {
+      "25_99": {
+        "gripper_motion_mm": 139.90045786771185,
+        "plug_motion_mm": 139.96282272957637,
+        "peak_command_m": 0.020000001415610313,
+        "peak_wrist_force_n": 30.827362060546875
+      },
+      "100_110": {
+        "gripper_motion_mm": 0.01243571316422692,
+        "plug_motion_mm": 0.014373867398534157,
+        "peak_command_m": 0.0001442028587916866,
+        "peak_wrist_force_n": 0.5644289255142212
+      }
+    },
+    "final_tip_target_distance_mm": 160.51289439201355,
+    "peak_wrist_force_n": 272.58624267578125
+  }
+}

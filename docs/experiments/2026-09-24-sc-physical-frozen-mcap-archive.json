@@ -1,0 +1,63 @@
+{
+  "schema": "sc_physical_pose_frozen_mcap_archive/v1",
+  "verified_before_source_removal": true,
+  "files": [
+    {
+      "original_path": "/var/tmp/chmin_aic_20260918_act/sc_physical_pose_frozen_eval_20260924/eval_collection/collection_config/attempt_0001/bag_trial_990201_20260924_200803_319/bag_trial_990201_20260924_200803_319_0.mcap",
+      "original_sha256": "5530bd49704bc795d6a0b91f70410a2abccdf2eab9c5db40c14008b7e1cd144e",
+      "compressed": "/home/nas/chmin/aic_archive_20260924/sc_physical_pose_frozen_eval_20260924/bag_trial_990201_20260924_200803_319_0.mcap.zst",
+      "compressed_bytes": 32919752,
+      "restore_command": "zstd -dc '/home/nas/chmin/aic_archive_20260924/sc_physical_pose_frozen_eval_20260924/bag_trial_990201_20260924_200803_319_0.mcap.zst' > '/var/tmp/chmin_aic_20260918_act/sc_physical_pose_frozen_eval_20260924/eval_collection/collection_config/attempt_0001/bag_trial_990201_20260924_200803_319/bag_trial_990201_20260924_200803_319_0.mcap'"
+    },
+    {
+      "original_path": "/var/tmp/chmin_aic_20260918_act/sc_physical_pose_frozen_eval_20260924/eval_collection/collection_config/attempt_0001/bag_trial_990202_20260924_200847_719/bag_trial_990202_20260924_200847_719_0.mcap",
+      "original_sha256": "c71382b360e2a5e9268160ef25c897e97ce567254ceec1ddf7d9836f971d53cf",
+      "compressed": "/home/nas/chmin/aic_archive_20260924/sc_physical_pose_frozen_eval_20260924/bag_trial_990202_20260924_200847_719_0.mcap.zst",
+      "compressed_bytes": 47801836,
+      "restore_command": "zstd -dc '/home/nas/chmin/aic_archive_20260924/sc_physical_pose_frozen_eval_20260924/bag_trial_990202_20260924_200847_719_0.mcap.zst' > '/var/tmp/chmin_aic_20260918_act/sc_physical_pose_frozen_eval_20260924/eval_collection/collection_config/attempt_0001/bag_trial_990202_20260924_200847_719/bag_trial_990202_20260924_200847_719_0.mcap'"
+    },
+    {
+      "original_path": "/var/tmp/chmin_aic_20260918_act/sc_physical_pose_frozen_eval_20260924/eval_collection/collection_config/attempt_0001/bag_trial_990203_20260924_201007_458/bag_trial_990203_20260924_201007_458_0.mcap",
+      "original_sha256": "427d5db2d5f2eff6c6ace262ae8e9acbca36ae6449a4254b8faeaf1eca3cbf5b",
+      "compressed": "/home/nas/chmin/aic_archive_20260924/sc_physical_pose_frozen_eval_20260924/bag_trial_990203_20260924_201007_458_0.mcap.zst",
+      "compressed_bytes": 37164734,
+      "restore_command": "zstd -dc '/home/nas/chmin/aic_archive_20260924/sc_physical_pose_frozen_eval_20260924/bag_trial_990203_20260924_201007_458_0.mcap.zst' > '/var/tmp/chmin_aic_20260918_act/sc_physical_pose_frozen_eval_20260924/eval_collection/collection_config/attempt_0001/bag_trial_990203_20260924_201007_458/bag_trial_990203_20260924_201007_458_0.mcap'"
+    },
+    {
+      "original_path": "/var/tmp/chmin_aic_20260918_act/sc_physical_pose_frozen_eval_20260924/eval_collection/collection_config/attempt_0001/bag_trial_990204_20260924_201054_104/bag_trial_990204_20260924_201054_104_0.mcap",
+      "original_sha256": "1707e4f7b0fddaa76835cf72fae7849b0bc6c37d9d95cef248819ed0b609a667",
+      "compressed": "/home/nas/chmin/aic_archive_20260924/sc_physical_pose_frozen_eval_20260924/bag_trial_990204_20260924_201054_104_0.mcap.zst",
+      "compressed_bytes": 55072672,
+      "restore_command": "zstd -dc '/home/nas/chmin/aic_archive_20260924/sc_physical_pose_frozen_eval_20260924/bag_trial_990204_20260924_201054_104_0.mcap.zst' > '/var/tmp/chmin_aic_20260918_act/sc_physical_pose_frozen_eval_20260924/eval_collection/collection_config/attempt_0001/bag_trial_990204_20260924_201054_104/bag_trial_990204_20260924_201054_104_0.mcap'"
+    },
+    {
+      "original_path": "/var/tmp/chmin_aic_20260918_act/sc_physical_pose_frozen_eval_20260924/eval_collection/collection_config/attempt_0001/bag_trial_990205_20260924_201218_022/bag_trial_990205_20260924_201218_022_0.mcap",
+      "original_sha256": "a2f26eca4afddeef013603aba038092709d299177d90e7819f619bcc864a42ed",
+      "compressed": "/home/nas/chmin/aic_archive_20260924/sc_physical_pose_frozen_eval_20260924/bag_trial_990205_20260924_201218_022_0.mcap.zst",
+      "compressed_bytes": 98011435,
+      "restore_command": "zstd -dc '/home/nas/chmin/aic_archive_20260924/sc_physical_pose_frozen_eval_20260924/bag_trial_990205_20260924_201218_022_0.mcap.zst' > '/var/tmp/chmin_aic_20260918_act/sc_physical_pose_frozen_eval_20260924/eval_collection/collection_config/attempt_0001/bag_trial_990205_20260924_201218_022/bag_trial_990205_20260924_201218_022_0.mcap'"
+    },
+    {
+      "original_path": "/var/tmp/chmin_aic_20260918_act/sc_physical_pose_frozen_eval_20260924/eval_collection/collection_config/attempt_0001/bag_trial_990206_20260924_201427_129/bag_trial_990206_20260924_201427_129_0.mcap",
+      "original_sha256": "96c7eea5211ec561c7d8afdd5de70d7ebce0f19e6563c155739ac35a3c12902c",
+      "compressed": "/home/nas/chmin/aic_archive_20260924/sc_physical_pose_frozen_eval_20260924/bag_trial_990206_20260924_201427_129_0.mcap.zst",
+      "compressed_bytes": 47723845,
+      "restore_command": "zstd -dc '/home/nas/chmin/aic_archive_20260924/sc_physical_pose_frozen_eval_20260924/bag_trial_990206_20260924_201427_129_0.mcap.zst' > '/var/tmp/chmin_aic_20260918_act/sc_physical_pose_frozen_eval_20260924/eval_collection/collection_config/attempt_0001/bag_trial_990206_20260924_201427_129/bag_trial_990206_20260924_201427_129_0.mcap'"
+    },
+    {
+      "original_path": "/var/tmp/chmin_aic_20260918_act/sc_physical_pose_frozen_eval_20260924/eval_collection/collection_config/attempt_0001/bag_trial_990207_20260924_201529_503/bag_trial_990207_20260924_201529_503_0.mcap",
+      "original_sha256": "da0b4f2285a69d9955347ac3d7c4866f973ee30719c631b1f6985db43561ea5e",
+      "compressed": "/home/nas/chmin/aic_archive_20260924/sc_physical_pose_frozen_eval_20260924/bag_trial_990207_20260924_201529_503_0.mcap.zst",
+      "compressed_bytes": 58518398,
+      "restore_command": "zstd -dc '/home/nas/chmin/aic_archive_20260924/sc_physical_pose_frozen_eval_20260924/bag_trial_990207_20260924_201529_503_0.mcap.zst' > '/var/tmp/chmin_aic_20260918_act/sc_physical_pose_frozen_eval_20260924/eval_collection/collection_config/attempt_0001/bag_trial_990207_20260924_201529_503/bag_trial_990207_20260924_201529_503_0.mcap'"
+    },
+    {
+      "original_path": "/var/tmp/chmin_aic_20260918_act/sc_physical_pose_frozen_eval_20260924/eval_collection/collection_config/attempt_0001/bag_trial_990208_20260924_201646_859/bag_trial_990208_20260924_201646_859_0.mcap",
+      "original_sha256": "83af1a3e968947f82766509d6bac0ef6e9efe149f3d888a7643529f1bea25388",
+      "compressed": "/home/nas/chmin/aic_archive_20260924/sc_physical_pose_frozen_eval_20260924/bag_trial_990208_20260924_201646_859_0.mcap.zst",
+      "compressed_bytes": 74883934,
+      "restore_command": "zstd -dc '/home/nas/chmin/aic_archive_20260924/sc_physical_pose_frozen_eval_20260924/bag_trial_990208_20260924_201646_859_0.mcap.zst' > '/var/tmp/chmin_aic_20260918_act/sc_physical_pose_frozen_eval_20260924/eval_collection/collection_config/attempt_0001/bag_trial_990208_20260924_201646_859/bag_trial_990208_20260924_201646_859_0.mcap'"
+    }
+  ],
+  "container_mount_limit": "Restore bags to original /var/tmp paths before reading them in the current ROS container, which does not mount /home/nas."
+}

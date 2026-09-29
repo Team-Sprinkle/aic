@@ -1,0 +1,62 @@
+{
+  "schema": "sc_scored_mcap_archive/v1",
+  "verified_before_source_removal": true,
+  "files": [
+    {
+      "original_path": "/var/tmp/chmin_aic_20260918_act/sc_yaw_boundary_refreeze_eval_20260924/eval_collection/collection_config/attempt_0001/bag_trial_990601_20260924_212420_802/bag_trial_990601_20260924_212420_802_0.mcap",
+      "original_sha256": "2f3e42b9544151639d41300c23461b3623d7a8100df479cc5874a9c3ff920cc1",
+      "compressed": "/home/nas/chmin/aic_archive_20260924/sc_yaw_boundary_refreeze_eval_20260924/bag_trial_990601_20260924_212420_802_0.mcap.zst",
+      "compressed_bytes": 46234313,
+      "restore_command": "zstd -dc '/home/nas/chmin/aic_archive_20260924/sc_yaw_boundary_refreeze_eval_20260924/bag_trial_990601_20260924_212420_802_0.mcap.zst' > '/var/tmp/chmin_aic_20260918_act/sc_yaw_boundary_refreeze_eval_20260924/eval_collection/collection_config/attempt_0001/bag_trial_990601_20260924_212420_802/bag_trial_990601_20260924_212420_802_0.mcap'"
+    },
+    {
+      "original_path": "/var/tmp/chmin_aic_20260918_act/sc_yaw_boundary_refreeze_eval_20260924/eval_collection/collection_config/attempt_0001/bag_trial_990602_20260924_212520_532/bag_trial_990602_20260924_212520_532_0.mcap",
+      "original_sha256": "c350f6eb332fcf8c95d81e31d6662ba94d232d7172c791e20b266e7c51631a3e",
+      "compressed": "/home/nas/chmin/aic_archive_20260924/sc_yaw_boundary_refreeze_eval_20260924/bag_trial_990602_20260924_212520_532_0.mcap.zst",
+      "compressed_bytes": 35040797,
+      "restore_command": "zstd -dc '/home/nas/chmin/aic_archive_20260924/sc_yaw_boundary_refreeze_eval_20260924/bag_trial_990602_20260924_212520_532_0.mcap.zst' > '/var/tmp/chmin_aic_20260918_act/sc_yaw_boundary_refreeze_eval_20260924/eval_collection/collection_config/attempt_0001/bag_trial_990602_20260924_212520_532/bag_trial_990602_20260924_212520_532_0.mcap'"
+    },
+    {
+      "original_path": "/var/tmp/chmin_aic_20260918_act/sc_yaw_boundary_refreeze_eval_20260924/eval_collection/collection_config/attempt_0001/bag_trial_990603_20260924_212606_496/bag_trial_990603_20260924_212606_496_0.mcap",
+      "original_sha256": "2461148d65c88e3d1c1f393c0709db35798492b4787c5318bb77b7b9933cb58a",
+      "compressed": "/home/nas/chmin/aic_archive_20260924/sc_yaw_boundary_refreeze_eval_20260924/bag_trial_990603_20260924_212606_496_0.mcap.zst",
+      "compressed_bytes": 68567173,
+      "restore_command": "zstd -dc '/home/nas/chmin/aic_archive_20260924/sc_yaw_boundary_refreeze_eval_20260924/bag_trial_990603_20260924_212606_496_0.mcap.zst' > '/var/tmp/chmin_aic_20260918_act/sc_yaw_boundary_refreeze_eval_20260924/eval_collection/collection_config/attempt_0001/bag_trial_990603_20260924_212606_496/bag_trial_990603_20260924_212606_496_0.mcap'"
+    },
+    {
+      "original_path": "/var/tmp/chmin_aic_20260918_act/sc_yaw_boundary_refreeze_eval_20260924/eval_collection/collection_config/attempt_0001/bag_trial_990604_20260924_212736_159/bag_trial_990604_20260924_212736_159_0.mcap",
+      "original_sha256": "f4aaa4d5149033025621bf1dac3332e5710f45235430e9e89bfae2cbc353681e",
+      "compressed": "/home/nas/chmin/aic_archive_20260924/sc_yaw_boundary_refreeze_eval_20260924/bag_trial_990604_20260924_212736_159_0.mcap.zst",
+      "compressed_bytes": 39940894,
+      "restore_command": "zstd -dc '/home/nas/chmin/aic_archive_20260924/sc_yaw_boundary_refreeze_eval_20260924/bag_trial_990604_20260924_212736_159_0.mcap.zst' > '/var/tmp/chmin_aic_20260918_act/sc_yaw_boundary_refreeze_eval_20260924/eval_collection/collection_config/attempt_0001/bag_trial_990604_20260924_212736_159/bag_trial_990604_20260924_212736_159_0.mcap'"
+    },
+    {
+      "original_path": "/var/tmp/chmin_aic_20260918_act/sc_yaw_boundary_refreeze_eval_20260924/eval_collection/collection_config/attempt_0001/bag_trial_990605_20260924_212825_791/bag_trial_990605_20260924_212825_791_0.mcap",
+      "original_sha256": "bea38ccfa0ef6b14e3133d1f1b81b1bf56068dce0d062bc8b9dc244e59f082b6",
+      "compressed": "/home/nas/chmin/aic_archive_20260924/sc_yaw_boundary_refreeze_eval_20260924/bag_trial_990605_20260924_212825_791_0.mcap.zst",
+      "compressed_bytes": 71352008,
+      "restore_command": "zstd -dc '/home/nas/chmin/aic_archive_20260924/sc_yaw_boundary_refreeze_eval_20260924/bag_trial_990605_20260924_212825_791_0.mcap.zst' > '/var/tmp/chmin_aic_20260918_act/sc_yaw_boundary_refreeze_eval_20260924/eval_collection/collection_config/attempt_0001/bag_trial_990605_20260924_212825_791/bag_trial_990605_20260924_212825_791_0.mcap'"
+    },
+    {
+      "original_path": "/var/tmp/chmin_aic_20260918_act/sc_yaw_boundary_refreeze_eval_20260924/eval_collection/collection_config/attempt_0001/bag_trial_990606_20260924_212958_593/bag_trial_990606_20260924_212958_593_0.mcap",
+      "original_sha256": "5b5075a3f0840660b52b211a1a6efca28bc220c399e5bff8fec81b6819a99f8f",
+      "compressed": "/home/nas/chmin/aic_archive_20260924/sc_yaw_boundary_refreeze_eval_20260924/bag_trial_990606_20260924_212958_593_0.mcap.zst",
+      "compressed_bytes": 68980383,
+      "restore_command": "zstd -dc '/home/nas/chmin/aic_archive_20260924/sc_yaw_boundary_refreeze_eval_20260924/bag_trial_990606_20260924_212958_593_0.mcap.zst' > '/var/tmp/chmin_aic_20260918_act/sc_yaw_boundary_refreeze_eval_20260924/eval_collection/collection_config/attempt_0001/bag_trial_990606_20260924_212958_593/bag_trial_990606_20260924_212958_593_0.mcap'"
+    },
+    {
+      "original_path": "/var/tmp/chmin_aic_20260918_act/sc_yaw_boundary_refreeze_eval_20260924/eval_collection/collection_config/attempt_0001/bag_trial_990607_20260924_213126_662/bag_trial_990607_20260924_213126_662_0.mcap",
+      "original_sha256": "d98bbee0e7e0a2f888a289e95f2b8e1bdeb5f2021f6b366f4494ac8a0dcbd30c",
+      "compressed": "/home/nas/chmin/aic_archive_20260924/sc_yaw_boundary_refreeze_eval_20260924/bag_trial_990607_20260924_213126_662_0.mcap.zst",
+      "compressed_bytes": 104957114,
+      "restore_command": "zstd -dc '/home/nas/chmin/aic_archive_20260924/sc_yaw_boundary_refreeze_eval_20260924/bag_trial_990607_20260924_213126_662_0.mcap.zst' > '/var/tmp/chmin_aic_20260918_act/sc_yaw_boundary_refreeze_eval_20260924/eval_collection/collection_config/attempt_0001/bag_trial_990607_20260924_213126_662/bag_trial_990607_20260924_213126_662_0.mcap'"
+    },
+    {
+      "original_path": "/var/tmp/chmin_aic_20260918_act/sc_yaw_boundary_refreeze_eval_20260924/eval_collection/collection_config/attempt_0001/bag_trial_990608_20260924_213348_585/bag_trial_990608_20260924_213348_585_0.mcap",
+      "original_sha256": "42c8e27379844bdcd5eba2761df23c3e7e610be04648f2632f4af8e5bb9b9e96",
+      "compressed": "/home/nas/chmin/aic_archive_20260924/sc_yaw_boundary_refreeze_eval_20260924/bag_trial_990608_20260924_213348_585_0.mcap.zst",
+      "compressed_bytes": 73197201,
+      "restore_command": "zstd -dc '/home/nas/chmin/aic_archive_20260924/sc_yaw_boundary_refreeze_eval_20260924/bag_trial_990608_20260924_213348_585_0.mcap.zst' > '/var/tmp/chmin_aic_20260918_act/sc_yaw_boundary_refreeze_eval_20260924/eval_collection/collection_config/attempt_0001/bag_trial_990608_20260924_213348_585/bag_trial_990608_20260924_213348_585_0.mcap'"
+    }
+  ]
+}

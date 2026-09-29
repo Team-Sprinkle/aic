@@ -1,0 +1,28 @@
+{
+  "schema": "sc_pilot_mcap_archive/v1",
+  "reason": "Preserve scored raw bags while freeing rootless experiment scratch space; each decompressed stream was verified against its source SHA-256 before source removal.",
+  "files": [
+    {
+      "compressed": "/home/nas/chmin/aic_archive_20260924/sc_bc_matrix_pilot_20260924/bag_trial_960012_20260924_185332_660_0.mcap.zst",
+      "compressed_bytes": 115430688,
+      "original_sha256": "16a8dff7d744dd4d87b7b9ad68a00d7bdd4f0ea118e3510c034b8bc600af19c5",
+      "restore_command": "zstd -dc '/home/nas/chmin/aic_archive_20260924/sc_bc_matrix_pilot_20260924/bag_trial_960012_20260924_185332_660_0.mcap.zst' > '/var/tmp/chmin_aic_20260918_act/sc_bc_matrix_pilot_20260924/eval_collection/collection_config/attempt_0001/bag_trial_960012_20260924_185332_660/bag_trial_960012_20260924_185332_660_0.mcap'",
+      "original_path": "/var/tmp/chmin_aic_20260918_act/sc_bc_matrix_pilot_20260924/eval_collection/collection_config/attempt_0001/bag_trial_960012_20260924_185332_660/bag_trial_960012_20260924_185332_660_0.mcap"
+    },
+    {
+      "compressed": "/home/nas/chmin/aic_archive_20260924/sc_bc_matrix_pilot_20260924/bag_trial_960014_20260924_185737_675_0.mcap.zst",
+      "compressed_bytes": 113459078,
+      "original_sha256": "ced947bac485f46ffdb2ae3b88ee654223999262feff44677f691a4863404135",
+      "restore_command": "zstd -dc '/home/nas/chmin/aic_archive_20260924/sc_bc_matrix_pilot_20260924/bag_trial_960014_20260924_185737_675_0.mcap.zst' > '/var/tmp/chmin_aic_20260918_act/sc_bc_matrix_pilot_20260924/eval_collection/collection_config/attempt_0001/bag_trial_960014_20260924_185737_675/bag_trial_960014_20260924_185737_675_0.mcap'",
+      "original_path": "/var/tmp/chmin_aic_20260918_act/sc_bc_matrix_pilot_20260924/eval_collection/collection_config/attempt_0001/bag_trial_960014_20260924_185737_675/bag_trial_960014_20260924_185737_675_0.mcap"
+    },
+    {
+      "compressed": "/home/nas/chmin/aic_archive_20260924/sc_bc_matrix_pilot_20260924/bag_trial_960016_20260924_190117_650_0.mcap.zst",
+      "compressed_bytes": 94297518,
+      "original_sha256": "8ee9880acf446b98b974a275400c94187f63a50a0bfe65524f9f8896561cf4a0",
+      "restore_command": "zstd -dc '/home/nas/chmin/aic_archive_20260924/sc_bc_matrix_pilot_20260924/bag_trial_960016_20260924_190117_650_0.mcap.zst' > '/var/tmp/chmin_aic_20260918_act/sc_bc_matrix_pilot_20260924/eval_collection/collection_config/attempt_0001/bag_trial_960016_20260924_190117_650/bag_trial_960016_20260924_190117_650_0.mcap'",
+      "original_path": "/var/tmp/chmin_aic_20260918_act/sc_bc_matrix_pilot_20260924/eval_collection/collection_config/attempt_0001/bag_trial_960016_20260924_190117_650/bag_trial_960016_20260924_190117_650_0.mcap"
+    }
+  ],
+  "container_mount_limit": "The current rootless ROS container does not mount /home/nas; restore a required bag into its original /var/tmp directory before running ROS bag tools in that container."
+}

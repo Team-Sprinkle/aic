@@ -1,0 +1,297 @@
+{
+  "schema": "sc_native_pose_labels_summary/v1",
+  "labels": "/var/tmp/chmin_aic_20260918_act/sc_fresh_train_20260924/pose_labels.jsonl",
+  "training_label_only": true,
+  "image_size": [
+    1152,
+    1024
+  ],
+  "horizontal_fov_rad": 0.8718,
+  "focal_px": 1236.6314774257871,
+  "verified_manifest": "outputs/trajectory_datasets/expert_verified/manifest.json",
+  "tcp_to_optical": {
+    "center": [
+      -8.110621119294949e-10,
+      -0.116079182624172,
+      -0.20543789102822196,
+      -0.13052832987412713,
+      1.8272077641080097e-06,
+      -2.877053629764446e-07,
+      0.9914445799422424
+    ],
+    "left": [
+      -0.10051658396221153,
+      -0.05803259313640371,
+      -0.20543589102822196,
+      -0.11303994734332103,
+      0.0652657276653435,
+      -0.4957223896476733,
+      0.85861613512613
+    ],
+    "right": [
+      0.10051658313858014,
+      -0.058032594562973966,
+      -0.20543589102822196,
+      -0.11304177464842796,
+      -0.06526256267877945,
+      0.4957218900393923,
+      0.8586164235749891
+    ]
+  },
+  "include_failed_for_pose_only": true,
+  "validation_trials": [],
+  "episodes": [
+    {
+      "trial": "trial_910001",
+      "admitted": true,
+      "official_tier3": 75,
+      "expert_bc_eligible": false,
+      "pose_label_only": true,
+      "split": "train",
+      "frames": 181,
+      "near_port_frames": 84,
+      "in_frame_counts": {
+        "center": {
+          "tip": 181,
+          "opening": 170
+        },
+        "left": {
+          "tip": 181,
+          "opening": 181
+        },
+        "right": {
+          "tip": 181,
+          "opening": 172
+        }
+      },
+      "scene_sha256": "757f87d14b377707405199413f6dd135d5a16338d1e565fcf99f78234eb32cba"
+    },
+    {
+      "trial": "trial_910002",
+      "admitted": true,
+      "official_tier3": 75,
+      "expert_bc_eligible": false,
+      "pose_label_only": true,
+      "split": "train",
+      "frames": 143,
+      "near_port_frames": 79,
+      "in_frame_counts": {
+        "center": {
+          "tip": 143,
+          "opening": 143
+        },
+        "left": {
+          "tip": 143,
+          "opening": 143
+        },
+        "right": {
+          "tip": 143,
+          "opening": 143
+        }
+      },
+      "scene_sha256": "72cb4106e97254fbfa9c58c97b92ec2353788dc53c1ed6621bcc8728d38560ac"
+    },
+    {
+      "trial": "trial_910003",
+      "admitted": true,
+      "official_tier3": 15.216468773136866,
+      "expert_bc_eligible": false,
+      "pose_label_only": true,
+      "split": "train",
+      "frames": 154,
+      "near_port_frames": 0,
+      "in_frame_counts": {
+        "center": {
+          "tip": 154,
+          "opening": 144
+        },
+        "left": {
+          "tip": 154,
+          "opening": 147
+        },
+        "right": {
+          "tip": 154,
+          "opening": 147
+        }
+      },
+      "scene_sha256": "819deb85e29259c71be94648627f0fc8ac2c43d8c038b493dc4baefd91e431c5"
+    },
+    {
+      "trial": "trial_910004",
+      "admitted": true,
+      "official_tier3": 16.50246942659859,
+      "expert_bc_eligible": false,
+      "pose_label_only": true,
+      "split": "train",
+      "frames": 154,
+      "near_port_frames": 0,
+      "in_frame_counts": {
+        "center": {
+          "tip": 154,
+          "opening": 145
+        },
+        "left": {
+          "tip": 154,
+          "opening": 154
+        },
+        "right": {
+          "tip": 154,
+          "opening": 154
+        }
+      },
+      "scene_sha256": "89ea729eea16db85a13db1ae37c68d78ef0b119ad060ac69db73a8d9486baeb1"
+    },
+    {
+      "trial": "trial_910005",
+      "admitted": true,
+      "official_tier3": 75,
+      "expert_bc_eligible": false,
+      "pose_label_only": true,
+      "split": "train",
+      "frames": 90,
+      "near_port_frames": 33,
+      "in_frame_counts": {
+        "center": {
+          "tip": 90,
+          "opening": 79
+        },
+        "left": {
+          "tip": 90,
+          "opening": 82
+        },
+        "right": {
+          "tip": 90,
+          "opening": 82
+        }
+      },
+      "scene_sha256": "0b64f8083d0fa1886bf7312520a3f87e0aeebd9ca8c61f0e248e6a362ffa02b6"
+    },
+    {
+      "trial": "trial_910006",
+      "admitted": true,
+      "official_tier3": 17.35788267257965,
+      "expert_bc_eligible": false,
+      "pose_label_only": true,
+      "split": "train",
+      "frames": 154,
+      "near_port_frames": 0,
+      "in_frame_counts": {
+        "center": {
+          "tip": 154,
+          "opening": 143
+        },
+        "left": {
+          "tip": 154,
+          "opening": 149
+        },
+        "right": {
+          "tip": 154,
+          "opening": 144
+        }
+      },
+      "scene_sha256": "ae2b2efd6b1077ae0aaf4b6446572e91dacaa1685209b2efa6657cd2ea7f015b"
+    },
+    {
+      "trial": "trial_910007",
+      "admitted": true,
+      "official_tier3": 19.349266639217838,
+      "expert_bc_eligible": false,
+      "pose_label_only": true,
+      "split": "train",
+      "frames": 154,
+      "near_port_frames": 0,
+      "in_frame_counts": {
+        "center": {
+          "tip": 154,
+          "opening": 145
+        },
+        "left": {
+          "tip": 154,
+          "opening": 148
+        },
+        "right": {
+          "tip": 154,
+          "opening": 150
+        }
+      },
+      "scene_sha256": "851010cf420fbbbf2e3ee8b28bcb91a6fe847ca5c96232e511cb674792ee4610"
+    },
+    {
+      "trial": "trial_910008",
+      "admitted": true,
+      "official_tier3": 4.939087585775218,
+      "expert_bc_eligible": false,
+      "pose_label_only": true,
+      "split": "train",
+      "frames": 153,
+      "near_port_frames": 0,
+      "in_frame_counts": {
+        "center": {
+          "tip": 153,
+          "opening": 135
+        },
+        "left": {
+          "tip": 153,
+          "opening": 143
+        },
+        "right": {
+          "tip": 153,
+          "opening": 137
+        }
+      },
+      "scene_sha256": "1ec7bb3f406c638226a931b6036403439b140dffa18415af188e58737fc5f853"
+    },
+    {
+      "trial": "trial_910009",
+      "admitted": true,
+      "official_tier3": 75,
+      "expert_bc_eligible": false,
+      "pose_label_only": true,
+      "split": "train",
+      "frames": 90,
+      "near_port_frames": 34,
+      "in_frame_counts": {
+        "center": {
+          "tip": 90,
+          "opening": 84
+        },
+        "left": {
+          "tip": 90,
+          "opening": 90
+        },
+        "right": {
+          "tip": 90,
+          "opening": 90
+        }
+      },
+      "scene_sha256": "0e61e13d4eb5d470960c5b01e0809399e831fa46b1af25ee0c5f089064c4c34d"
+    },
+    {
+      "trial": "trial_910010",
+      "admitted": true,
+      "official_tier3": 21.709962724178105,
+      "expert_bc_eligible": false,
+      "pose_label_only": true,
+      "split": "train",
+      "frames": 234,
+      "near_port_frames": 175,
+      "in_frame_counts": {
+        "center": {
+          "tip": 234,
+          "opening": 223
+        },
+        "left": {
+          "tip": 234,
+          "opening": 229
+        },
+        "right": {
+          "tip": 234,
+          "opening": 224
+        }
+      },
+      "scene_sha256": "e6f92567204ff9e2ee0b18da193e1e70723f7ae2d539027354fe45a58ba4c529"
+    }
+  ],
+  "train_scene_count": 10,
+  "validation_scene_count": 0
+}

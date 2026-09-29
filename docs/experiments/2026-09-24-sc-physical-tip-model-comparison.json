@@ -1,0 +1,685 @@
+{
+  "schema": "sc_physical_tip_model_comparison/v1",
+  "frozen_for_new_suite": "/var/tmp/chmin_aic_20260918_act/sc_physical_pose_frozen_eval_20260924/frozen_bundle.json",
+  "physical_tip_model_sha256": "04ac4ae813f6ba540bce014fd76d1b57f53c8b4a49901d21d2fc442ef8edb880",
+  "heldout_old_development": {
+    "episodes": 12,
+    "tip_only_causal": {
+      "near_frames": 665,
+      "near_episodes": 12,
+      "lateral_mm": {
+        "count": 665,
+        "median": 0.04546082776475484,
+        "p95": 0.29007806364794997
+      },
+      "axial_mm": {
+        "count": 665,
+        "median": 0.06052269502785628,
+        "p95": 0.2861920593613666
+      },
+      "history_initialized_rate": 1.0,
+      "near_acceptance_rate": 0.6601503759398496,
+      "per_episode": {
+        "trial_000504": {
+          "frames": 23,
+          "lateral_mm": {
+            "count": 23,
+            "median": 0.016787721322249507,
+            "p95": 0.024049326902155676
+          },
+          "axial_mm": {
+            "count": 23,
+            "median": 0.02927134174940676,
+            "p95": 0.046195571698896334
+          },
+          "first_near_history_length": 31
+        },
+        "trial_000505": {
+          "frames": 17,
+          "lateral_mm": {
+            "count": 17,
+            "median": 0.0030436290682455164,
+            "p95": 0.0059124159139338685
+          },
+          "axial_mm": {
+            "count": 17,
+            "median": 0.049630145146578555,
+            "p95": 0.05907623724606253
+          },
+          "first_near_history_length": 38
+        },
+        "trial_000511": {
+          "frames": 18,
+          "lateral_mm": {
+            "count": 18,
+            "median": 0.026831708334254002,
+            "p95": 0.035480565938912356
+          },
+          "axial_mm": {
+            "count": 18,
+            "median": 0.0695387645915405,
+            "p95": 0.07855705735861437
+          },
+          "first_near_history_length": 39
+        },
+        "trial_000513": {
+          "frames": 15,
+          "lateral_mm": {
+            "count": 15,
+            "median": 0.007916204417942144,
+            "p95": 0.010990720827966694
+          },
+          "axial_mm": {
+            "count": 15,
+            "median": 0.06052731518478073,
+            "p95": 0.07817411163486972
+          },
+          "first_near_history_length": 38
+        },
+        "trial_100253": {
+          "frames": 76,
+          "lateral_mm": {
+            "count": 76,
+            "median": 0.023915905497159627,
+            "p95": 0.04722427004397795
+          },
+          "axial_mm": {
+            "count": 76,
+            "median": 0.04765507016443056,
+            "p95": 0.07468085761047077
+          },
+          "first_near_history_length": 40
+        },
+        "trial_100254": {
+          "frames": 69,
+          "lateral_mm": {
+            "count": 69,
+            "median": 0.011595810108538896,
+            "p95": 0.03911046886113287
+          },
+          "axial_mm": {
+            "count": 69,
+            "median": 0.06091584724300479,
+            "p95": 0.09492161064670407
+          },
+          "first_near_history_length": 40
+        },
+        "trial_100256": {
+          "frames": 12,
+          "lateral_mm": {
+            "count": 12,
+            "median": 0.010528632999115802,
+            "p95": 0.011371981425910806
+          },
+          "axial_mm": {
+            "count": 12,
+            "median": 0.04709280769081831,
+            "p95": 0.04935571295667578
+          },
+          "first_near_history_length": 40
+        },
+        "trial_900001": {
+          "frames": 42,
+          "lateral_mm": {
+            "count": 42,
+            "median": 0.2921465073306163,
+            "p95": 0.30216946891799285
+          },
+          "axial_mm": {
+            "count": 42,
+            "median": 0.18627717052686898,
+            "p95": 0.1950145534705069
+          },
+          "first_near_history_length": 29
+        },
+        "trial_900002": {
+          "frames": 51,
+          "lateral_mm": {
+            "count": 51,
+            "median": 0.04574889220557649,
+            "p95": 0.04975872467697812
+          },
+          "axial_mm": {
+            "count": 51,
+            "median": 0.1457315114340565,
+            "p95": 0.15542833828868796
+          },
+          "first_near_history_length": 30
+        },
+        "trial_900003": {
+          "frames": 165,
+          "lateral_mm": {
+            "count": 165,
+            "median": 0.17098049709071855,
+            "p95": 0.20396919439403752
+          },
+          "axial_mm": {
+            "count": 165,
+            "median": 0.28392873172730293,
+            "p95": 0.29206502328635076
+          },
+          "first_near_history_length": 30
+        },
+        "trial_900004": {
+          "frames": 39,
+          "lateral_mm": {
+            "count": 39,
+            "median": 0.18597646725211608,
+            "p95": 0.18701324297377014
+          },
+          "axial_mm": {
+            "count": 39,
+            "median": 0.0543707395138276,
+            "p95": 0.058740101058237036
+          },
+          "first_near_history_length": 29
+        },
+        "trial_900005": {
+          "frames": 138,
+          "lateral_mm": {
+            "count": 138,
+            "median": 0.04172733467732,
+            "p95": 0.061320744164392114
+          },
+          "axial_mm": {
+            "count": 138,
+            "median": 0.028140923187319075,
+            "p95": 0.040647626935606085
+          },
+          "first_near_history_length": 30
+        }
+      }
+    }
+  },
+  "earlier_eight_scene_check": {
+    "physical_tip_baseline": {
+      "near_frames": 239,
+      "near_episodes": 7,
+      "lateral_mm": {
+        "count": 239,
+        "median": 2.025620972139305,
+        "p95": 6.829476072940963
+      },
+      "axial_mm": {
+        "count": 239,
+        "median": 1.0727122816386438,
+        "p95": 3.2086086344786273
+      }
+    },
+    "first_corrected_joint": {
+      "near_frames": 239,
+      "near_episodes": 7,
+      "lateral_mm": {
+        "count": 239,
+        "median": 0.2236847714791589,
+        "p95": 0.5548845670079193
+      },
+      "axial_mm": {
+        "count": 239,
+        "median": 0.14137826101760786,
+        "p95": 0.26254982572959346
+      },
+      "history_initialized_rate": 0.9874476987447699,
+      "near_acceptance_rate": 0.5230125523012552,
+      "per_episode": {
+        "trial_970001": {
+          "frames": 17,
+          "lateral_mm": {
+            "count": 17,
+            "median": 0.5348872162174406,
+            "p95": 0.5411882558293301
+          },
+          "axial_mm": {
+            "count": 17,
+            "median": 0.14336833135760604,
+            "p95": 0.1795183894535493
+          },
+          "first_near_history_length": 11
+        },
+        "trial_970002": {
+          "frames": 13,
+          "lateral_mm": {
+            "count": 13,
+            "median": 0.10664439416196958,
+            "p95": 0.11637601992731794
+          },
+          "axial_mm": {
+            "count": 13,
+            "median": 0.09108043238287535,
+            "p95": 0.105182854200824
+          },
+          "first_near_history_length": 5
+        },
+        "trial_970003": {
+          "frames": 14,
+          "lateral_mm": {
+            "count": 14,
+            "median": 0.07869766834678582,
+            "p95": 0.08238601438672354
+          },
+          "axial_mm": {
+            "count": 14,
+            "median": 0.25098232289878386,
+            "p95": 0.25455652061886297
+          },
+          "first_near_history_length": 8
+        },
+        "trial_970004": {
+          "frames": 22,
+          "lateral_mm": {
+            "count": 22,
+            "median": 0.2237528484277121,
+            "p95": 11.468055738877956
+          },
+          "axial_mm": {
+            "count": 22,
+            "median": 0.05175361328811288,
+            "p95": 9.939130659996426
+          },
+          "first_near_history_length": 1
+        },
+        "trial_970006": {
+          "frames": 20,
+          "lateral_mm": {
+            "count": 20,
+            "median": 0.3134015732180871,
+            "p95": 0.336724633658583
+          },
+          "axial_mm": {
+            "count": 20,
+            "median": 0.028740436769119207,
+            "p95": 0.030911250513302665
+          },
+          "first_near_history_length": 7
+        },
+        "trial_970007": {
+          "frames": 84,
+          "lateral_mm": {
+            "count": 84,
+            "median": 0.13238323315981193,
+            "p95": 0.15496501834432116
+          },
+          "axial_mm": {
+            "count": 84,
+            "median": 0.26245039608615894,
+            "p95": 0.26255849700994327
+          },
+          "first_near_history_length": 5
+        },
+        "trial_970008": {
+          "frames": 69,
+          "lateral_mm": {
+            "count": 69,
+            "median": 0.5467116585740318,
+            "p95": 0.5564405322529531
+          },
+          "axial_mm": {
+            "count": 69,
+            "median": 0.12358753957038279,
+            "p95": 0.13876939383161102
+          },
+          "first_near_history_length": 7
+        }
+      }
+    },
+    "augmented_joint": {
+      "near_frames": 239,
+      "near_episodes": 7,
+      "lateral_mm": {
+        "count": 239,
+        "median": 0.13386135405774083,
+        "p95": 0.40107870626493863
+      },
+      "axial_mm": {
+        "count": 239,
+        "median": 0.18652298853530147,
+        "p95": 0.31465979141048755
+      },
+      "history_initialized_rate": 0.9874476987447699,
+      "near_acceptance_rate": 0.5648535564853556,
+      "per_episode": {
+        "trial_970001": {
+          "frames": 17,
+          "lateral_mm": {
+            "count": 17,
+            "median": 0.4010835684245903,
+            "p95": 0.40928688749184555
+          },
+          "axial_mm": {
+            "count": 17,
+            "median": 0.017208127604684008,
+            "p95": 0.029420722489121698
+          },
+          "first_near_history_length": 14
+        },
+        "trial_970002": {
+          "frames": 13,
+          "lateral_mm": {
+            "count": 13,
+            "median": 0.13676219993949582,
+            "p95": 0.14275478469375105
+          },
+          "axial_mm": {
+            "count": 13,
+            "median": 0.01870597859787204,
+            "p95": 0.024571388374883783
+          },
+          "first_near_history_length": 5
+        },
+        "trial_970003": {
+          "frames": 14,
+          "lateral_mm": {
+            "count": 14,
+            "median": 0.1315644501707513,
+            "p95": 0.13934723020898684
+          },
+          "axial_mm": {
+            "count": 14,
+            "median": 0.22276323339528895,
+            "p95": 0.23253920035414813
+          },
+          "first_near_history_length": 8
+        },
+        "trial_970004": {
+          "frames": 22,
+          "lateral_mm": {
+            "count": 22,
+            "median": 0.16882036495369326,
+            "p95": 11.489451182255126
+          },
+          "axial_mm": {
+            "count": 22,
+            "median": 0.10835050625223075,
+            "p95": 8.415756199903896
+          },
+          "first_near_history_length": 1
+        },
+        "trial_970006": {
+          "frames": 20,
+          "lateral_mm": {
+            "count": 20,
+            "median": 0.13385708287516437,
+            "p95": 0.1365692807063202
+          },
+          "axial_mm": {
+            "count": 20,
+            "median": 0.02655555305216309,
+            "p95": 0.026867036085983977
+          },
+          "first_near_history_length": 7
+        },
+        "trial_970007": {
+          "frames": 84,
+          "lateral_mm": {
+            "count": 84,
+            "median": 0.03704358466229484,
+            "p95": 0.040555028981238105
+          },
+          "axial_mm": {
+            "count": 84,
+            "median": 0.3146414717741328,
+            "p95": 0.3146651168857371
+          },
+          "first_near_history_length": 5
+        },
+        "trial_970008": {
+          "frames": 69,
+          "lateral_mm": {
+            "count": 69,
+            "median": 0.3092687138164235,
+            "p95": 0.34502015005576053
+          },
+          "axial_mm": {
+            "count": 69,
+            "median": 0.14513626536266566,
+            "p95": 0.21411557594345107
+          },
+          "first_near_history_length": 6
+        }
+      }
+    },
+    "separate_tip_crop": {
+      "near_frames": 239,
+      "near_episodes": 7,
+      "lateral_mm": {
+        "count": 239,
+        "median": 0.259392039106811,
+        "p95": 0.4575409375517352
+      },
+      "axial_mm": {
+        "count": 239,
+        "median": 0.019999051497148687,
+        "p95": 0.17703497372905516
+      },
+      "history_initialized_rate": 1.0,
+      "near_acceptance_rate": 0.6150627615062761,
+      "per_episode": {
+        "trial_970001": {
+          "frames": 17,
+          "lateral_mm": {
+            "count": 17,
+            "median": 0.4630283486885001,
+            "p95": 0.4671033804921455
+          },
+          "axial_mm": {
+            "count": 17,
+            "median": 0.008679638568527787,
+            "p95": 0.039100184644990675
+          },
+          "first_near_history_length": 38
+        },
+        "trial_970002": {
+          "frames": 13,
+          "lateral_mm": {
+            "count": 13,
+            "median": 0.15699616843318168,
+            "p95": 0.1625580513494012
+          },
+          "axial_mm": {
+            "count": 13,
+            "median": 0.019317635005122985,
+            "p95": 0.030003344816552636
+          },
+          "first_near_history_length": 29
+        },
+        "trial_970003": {
+          "frames": 14,
+          "lateral_mm": {
+            "count": 14,
+            "median": 0.1802243270839651,
+            "p95": 0.18388777208937293
+          },
+          "axial_mm": {
+            "count": 14,
+            "median": 0.1854623298283523,
+            "p95": 0.1867261551419329
+          },
+          "first_near_history_length": 33
+        },
+        "trial_970004": {
+          "frames": 22,
+          "lateral_mm": {
+            "count": 22,
+            "median": 0.06341039159382048,
+            "p95": 0.06801192013466528
+          },
+          "axial_mm": {
+            "count": 22,
+            "median": 0.016918313340308508,
+            "p95": 0.018203938673970212
+          },
+          "first_near_history_length": 29
+        },
+        "trial_970006": {
+          "frames": 20,
+          "lateral_mm": {
+            "count": 20,
+            "median": 0.12800987933824703,
+            "p95": 0.15912810394598553
+          },
+          "axial_mm": {
+            "count": 20,
+            "median": 0.01046261521724345,
+            "p95": 0.024802953586945883
+          },
+          "first_near_history_length": 31
+        },
+        "trial_970007": {
+          "frames": 84,
+          "lateral_mm": {
+            "count": 84,
+            "median": 0.31295994663652127,
+            "p95": 0.31527537635156316
+          },
+          "axial_mm": {
+            "count": 84,
+            "median": 0.01999527524381796,
+            "p95": 0.020243534162795847
+          },
+          "first_near_history_length": 29
+        },
+        "trial_970008": {
+          "frames": 69,
+          "lateral_mm": {
+            "count": 69,
+            "median": 0.23728628074253622,
+            "p95": 0.2844446334400749
+          },
+          "axial_mm": {
+            "count": 69,
+            "median": 0.027127715736254523,
+            "p95": 0.0939503949997761
+          },
+          "first_near_history_length": 32
+        }
+      }
+    },
+    "fused_relative_pose": {
+      "near_frames": 239,
+      "near_episodes": 7,
+      "relative_lateral_mm": {
+        "count": 239,
+        "median": 0.301930613525434,
+        "p95": 0.44964221742503796
+      },
+      "relative_axial_mm": {
+        "count": 239,
+        "median": 0.0736802041165276,
+        "p95": 0.1743656693741101
+      },
+      "both_histories_initialized_rate": 1.0,
+      "per_episode": {
+        "trial_970001": {
+          "frames": 17,
+          "relative_lateral_mm": {
+            "count": 17,
+            "median": 0.4551342202089108,
+            "p95": 0.4581660410533028
+          },
+          "relative_axial_mm": {
+            "count": 17,
+            "median": 0.10963847086778783,
+            "p95": 0.12208089283640597
+          },
+          "first_near_port_history": 15,
+          "first_near_tip_history": 38
+        },
+        "trial_970002": {
+          "frames": 13,
+          "relative_lateral_mm": {
+            "count": 13,
+            "median": 0.2088363949656049,
+            "p95": 0.23839868750528181
+          },
+          "relative_axial_mm": {
+            "count": 13,
+            "median": 0.11929018290670453,
+            "p95": 0.1310775787745053
+          },
+          "first_near_port_history": 6,
+          "first_near_tip_history": 29
+        },
+        "trial_970003": {
+          "frames": 14,
+          "relative_lateral_mm": {
+            "count": 14,
+            "median": 0.2780722530688432,
+            "p95": 0.28668093934816535
+          },
+          "relative_axial_mm": {
+            "count": 14,
+            "median": 0.10887259115736932,
+            "p95": 0.11307184545950041
+          },
+          "first_near_port_history": 8,
+          "first_near_tip_history": 33
+        },
+        "trial_970004": {
+          "frames": 22,
+          "relative_lateral_mm": {
+            "count": 22,
+            "median": 0.1128196835724248,
+            "p95": 0.1307866847166793
+          },
+          "relative_axial_mm": {
+            "count": 22,
+            "median": 0.16073249880845233,
+            "p95": 0.2067123229705389
+          },
+          "first_near_port_history": 2,
+          "first_near_tip_history": 29
+        },
+        "trial_970006": {
+          "frames": 20,
+          "relative_lateral_mm": {
+            "count": 20,
+            "median": 0.1556148313176186,
+            "p95": 0.20096871766432792
+          },
+          "relative_axial_mm": {
+            "count": 20,
+            "median": 0.1287522019402666,
+            "p95": 0.13747964673496776
+          },
+          "first_near_port_history": 6,
+          "first_near_tip_history": 31
+        },
+        "trial_970007": {
+          "frames": 84,
+          "relative_lateral_mm": {
+            "count": 84,
+            "median": 0.408912303453598,
+            "p95": 0.40893380596358614
+          },
+          "relative_axial_mm": {
+            "count": 84,
+            "median": 0.06504080747934576,
+            "p95": 0.10610298619740464
+          },
+          "first_near_port_history": 5,
+          "first_near_tip_history": 29
+        },
+        "trial_970008": {
+          "frames": 69,
+          "relative_lateral_mm": {
+            "count": 69,
+            "median": 0.2732551560152148,
+            "p95": 0.36744674419278844
+          },
+          "relative_axial_mm": {
+            "count": 69,
+            "median": 0.06264574849029594,
+            "p95": 0.2060817538831368
+          },
+          "first_near_port_history": 7,
+          "first_near_tip_history": 32
+        }
+      }
+    }
+  },
+  "limitations": [
+    "The earlier eight-scene suite motivated a separate tip crop and is development evidence, not the new post-freeze confirmation.",
+    "A complete live ROS-to-action latency and autonomous insertion remain unmeasured.",
+    "Four reserved final IK configurations remain sealed."
+  ]
+}

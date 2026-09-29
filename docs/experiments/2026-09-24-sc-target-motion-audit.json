@@ -1,0 +1,37 @@
+{
+  "schema": "aic_sc_teacher_target_motion_audit/v1",
+  "source": "outputs/experiments/2026-09-24_hierarchical_recovery/sc_connector_waypoint_chunks_held.jsonl",
+  "interpretation": "Teacher target is a controller setpoint, not necessarily the TCP/plug motion realized in the next 50 ms. A small step alone is not a failure label.",
+  "phases": {
+    "all": {
+      "episodes": 21,
+      "setpoint_gap_mm": {
+        "count": 12944,
+        "median": 14.491634481560979,
+        "p95": 35.8815095257028
+      },
+      "projected_next_motion_mm_for_setpoint_gt5mm": {
+        "count": 12109,
+        "median": 0.33116551317935683,
+        "p95": 2.6504743192105855
+      },
+      "fraction_negative_projected_motion_for_setpoint_gt5mm": 0.16111982822693863,
+      "fraction_next_motion_lt1mm_for_setpoint_gt5mm": 0.7737220249401272
+    },
+    "near_port": {
+      "episodes": 21,
+      "setpoint_gap_mm": {
+        "count": 5388,
+        "median": 10.749523787191896,
+        "p95": 32.23091479611265
+      },
+      "projected_next_motion_mm_for_setpoint_gt5mm": {
+        "count": 4671,
+        "median": 0.00858511487662162,
+        "p95": 0.864270456721882
+      },
+      "fraction_negative_projected_motion_for_setpoint_gt5mm": 0.29522586169985016,
+      "fraction_next_motion_lt1mm_for_setpoint_gt5mm": 0.9529008777563691
+    }
+  }
+}

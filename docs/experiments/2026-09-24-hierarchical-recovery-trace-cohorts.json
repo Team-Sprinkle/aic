@@ -1,0 +1,193 @@
+{
+  "schema": "aic_recovery_trace_cohorts/v1",
+  "rows": [
+    {
+      "incident_id": "wide_across_repeat_02",
+      "outcome": "partial",
+      "scene_group": "fixed_seed_51500_routed",
+      "samples": 2214,
+      "peak_tracking_error_mm": 70.41080337516598,
+      "peak_vector_tared_force_n": 22.286305506277685,
+      "first_80mm_tracking_error_s": null,
+      "recent_10s_tared_force_at_80mm_n": null,
+      "end_time_s": 110.67155
+    },
+    {
+      "incident_id": "wide_across_repeat_03",
+      "outcome": "partial",
+      "scene_group": "fixed_seed_51500_routed",
+      "samples": 2061,
+      "peak_tracking_error_mm": 72.63405491108423,
+      "peak_vector_tared_force_n": 54.254188821412306,
+      "first_80mm_tracking_error_s": null,
+      "recent_10s_tared_force_at_80mm_n": null,
+      "end_time_s": 103.0374
+    },
+    {
+      "incident_id": "wide_across_repeat_04",
+      "outcome": "partial",
+      "scene_group": "fixed_seed_51500_routed",
+      "samples": 2300,
+      "peak_tracking_error_mm": 71.57701198701407,
+      "peak_vector_tared_force_n": 14.357136776586284,
+      "first_80mm_tracking_error_s": null,
+      "recent_10s_tared_force_at_80mm_n": null,
+      "end_time_s": 115.02644
+    },
+    {
+      "incident_id": "wide_across_repeat_05",
+      "outcome": "partial",
+      "scene_group": "fixed_seed_51500_routed",
+      "samples": 2137,
+      "peak_tracking_error_mm": 70.22758685495172,
+      "peak_vector_tared_force_n": 42.932913179875406,
+      "first_80mm_tracking_error_s": null,
+      "recent_10s_tared_force_at_80mm_n": null,
+      "end_time_s": 106.83434
+    },
+    {
+      "incident_id": "wide_across_repeat_06",
+      "outcome": "none",
+      "scene_group": "fixed_seed_51500_routed",
+      "samples": 2315,
+      "peak_tracking_error_mm": 112.1964383761793,
+      "peak_vector_tared_force_n": 72.30801707607712,
+      "first_80mm_tracking_error_s": 98.09415,
+      "recent_10s_tared_force_at_80mm_n": 72.30801707607712,
+      "end_time_s": 115.70844
+    },
+    {
+      "incident_id": "wide_across_repeat_07",
+      "outcome": "partial",
+      "scene_group": "fixed_seed_51500_routed",
+      "samples": 2073,
+      "peak_tracking_error_mm": 70.37514773067053,
+      "peak_vector_tared_force_n": 17.235548526012874,
+      "first_80mm_tracking_error_s": null,
+      "recent_10s_tared_force_at_80mm_n": null,
+      "end_time_s": 103.63953
+    },
+    {
+      "incident_id": "wide_across_repeat_08",
+      "outcome": "partial",
+      "scene_group": "fixed_seed_51500_routed",
+      "samples": 2279,
+      "peak_tracking_error_mm": 71.07383645042817,
+      "peak_vector_tared_force_n": 14.930229990640564,
+      "first_80mm_tracking_error_s": null,
+      "recent_10s_tared_force_at_80mm_n": null,
+      "end_time_s": 113.98227
+    },
+    {
+      "incident_id": "targeted_trial_01_exact_q3_repeat_1",
+      "outcome": "full",
+      "scene_group": "targeted_exact_trial_3_[0, 1, 2]",
+      "samples": 1059,
+      "peak_tracking_error_mm": 56.52097912357496,
+      "peak_vector_tared_force_n": 12.482152593682406,
+      "first_80mm_tracking_error_s": null,
+      "recent_10s_tared_force_at_80mm_n": null,
+      "end_time_s": 52.92841
+    },
+    {
+      "incident_id": "targeted_trial_02_exact_q3_repeat_2",
+      "outcome": "full",
+      "scene_group": "targeted_exact_trial_3_[0, 1, 2]",
+      "samples": 1150,
+      "peak_tracking_error_mm": 55.8474238046399,
+      "peak_vector_tared_force_n": 12.882545684503084,
+      "first_80mm_tracking_error_s": null,
+      "recent_10s_tared_force_at_80mm_n": null,
+      "end_time_s": 57.51711
+    },
+    {
+      "incident_id": "targeted_trial_03_exact_q3_repeat_3",
+      "outcome": "full",
+      "scene_group": "targeted_exact_trial_3_[0, 1, 2]",
+      "samples": 1004,
+      "peak_tracking_error_mm": 56.20464789426355,
+      "peak_vector_tared_force_n": 12.812244493386277,
+      "first_80mm_tracking_error_s": null,
+      "recent_10s_tared_force_at_80mm_n": null,
+      "end_time_s": 50.1947
+    },
+    {
+      "incident_id": "targeted_trial_04_five_cards_sc1_repeat_1",
+      "outcome": "partial",
+      "scene_group": "targeted_card-occupancy variant_[0, 1, 2, 3, 4]",
+      "samples": 1023,
+      "peak_tracking_error_mm": 61.272125638177336,
+      "peak_vector_tared_force_n": 12.97091948868387,
+      "first_80mm_tracking_error_s": null,
+      "recent_10s_tared_force_at_80mm_n": null,
+      "end_time_s": 51.1243
+    },
+    {
+      "incident_id": "targeted_trial_05_five_cards_sc1_repeat_2",
+      "outcome": "partial",
+      "scene_group": "targeted_card-occupancy variant_[0, 1, 2, 3, 4]",
+      "samples": 975,
+      "peak_tracking_error_mm": 61.16515929377991,
+      "peak_vector_tared_force_n": 12.941459976171968,
+      "first_80mm_tracking_error_s": null,
+      "recent_10s_tared_force_at_80mm_n": null,
+      "end_time_s": 48.73652
+    },
+    {
+      "incident_id": "targeted_trial_06_five_cards_sc0_repeat_1",
+      "outcome": "none",
+      "scene_group": "targeted_target-rail variant_[0, 1, 2, 3, 4]",
+      "samples": 1053,
+      "peak_tracking_error_mm": 89.22797497930196,
+      "peak_vector_tared_force_n": 45.952909873860946,
+      "first_80mm_tracking_error_s": 42.39931,
+      "recent_10s_tared_force_at_80mm_n": 17.855492501012645,
+      "end_time_s": 52.62528
+    },
+    {
+      "incident_id": "targeted_trial_07_five_cards_sc0_repeat_2",
+      "outcome": "none",
+      "scene_group": "targeted_target-rail variant_[0, 1, 2, 3, 4]",
+      "samples": 1110,
+      "peak_tracking_error_mm": 126.77271171493342,
+      "peak_vector_tared_force_n": 29.919984372965253,
+      "first_80mm_tracking_error_s": 35.3487,
+      "recent_10s_tared_force_at_80mm_n": 16.420902239800697,
+      "end_time_s": 55.46868
+    },
+    {
+      "incident_id": "targeted_trial_08_five_cards_grasp_y_pitch_repeat_1",
+      "outcome": "full",
+      "scene_group": "targeted_documented grasp-norm variant_[0, 1, 2, 3, 4]",
+      "samples": 1026,
+      "peak_tracking_error_mm": 57.531920024128866,
+      "peak_vector_tared_force_n": 12.85090472252697,
+      "first_80mm_tracking_error_s": null,
+      "recent_10s_tared_force_at_80mm_n": null,
+      "end_time_s": 51.26344
+    },
+    {
+      "incident_id": "targeted_trial_09_five_cards_grasp_y_pitch_repeat_2",
+      "outcome": "full",
+      "scene_group": "targeted_documented grasp-norm variant_[0, 1, 2, 3, 4]",
+      "samples": 1046,
+      "peak_tracking_error_mm": 57.52722743126725,
+      "peak_vector_tared_force_n": 13.305272507032207,
+      "first_80mm_tracking_error_s": null,
+      "recent_10s_tared_force_at_80mm_n": null,
+      "end_time_s": 52.26823
+    },
+    {
+      "incident_id": "targeted_trial_10_five_cards_grasp_y_pitch_repeat_3",
+      "outcome": "full",
+      "scene_group": "targeted_documented grasp-norm variant_[0, 1, 2, 3, 4]",
+      "samples": 1155,
+      "peak_tracking_error_mm": 58.011830569069225,
+      "peak_vector_tared_force_n": 13.183908074949246,
+      "first_80mm_tracking_error_s": null,
+      "recent_10s_tared_force_at_80mm_n": null,
+      "end_time_s": 57.73841
+    }
+  ],
+  "warning": "Thresholds were inspected after outcomes and are diagnostic only. Repeats within a scene group are correlated. High tracking error and force do not identify a cable contact."
+}

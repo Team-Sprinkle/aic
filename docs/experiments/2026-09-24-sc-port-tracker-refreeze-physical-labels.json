@@ -1,0 +1,35 @@
+{
+  "schema": "sc_physical_tip_relabel/v1",
+  "source_labels": "/var/tmp/chmin_aic_20260918_act/sc_port_tracker_refreeze_eval_20260924/pose_labels.jsonl",
+  "source_labels_sha256": "87ac784e2e1b40e55401acbbc43bb8b566020c7385aec6cb09ae7497f48bc2ce",
+  "edges": "/var/tmp/chmin_aic_20260918_act/sc_port_tracker_refreeze_eval_20260924/edges_joined.json",
+  "edges_sha256": "cfd26b88ce6e13498fd1c26eaf60994769b37c4a83cac76265a96a06d8aa8ea8",
+  "calibrations": {
+    "/var/tmp/chmin_aic_20260918_act/sc_port_tracker_refreeze_eval_20260924/dynamic_grasp_calibration.json": "68ebf67d0586e6b7e998a4b7949e946240b9ac1e6f6a8d16c887b0fb1ed5a650"
+  },
+  "fixed_proxy_calibration_sha256": "35fa4e3383776da6d3927804304deb610568b33c35b69fdbf2f713b05883bbc8",
+  "rows": 602,
+  "episodes": 8,
+  "rows_by_trial": {
+    "trial_990501": 66,
+    "trial_990502": 43,
+    "trial_990503": 77,
+    "trial_990504": 117,
+    "trial_990505": 78,
+    "trial_990506": 61,
+    "trial_990507": 43,
+    "trial_990508": 117
+  },
+  "calibration_by_trial": {
+    "trial_990501": "/var/tmp/chmin_aic_20260918_act/sc_port_tracker_refreeze_eval_20260924/dynamic_grasp_calibration.json",
+    "trial_990502": "/var/tmp/chmin_aic_20260918_act/sc_port_tracker_refreeze_eval_20260924/dynamic_grasp_calibration.json",
+    "trial_990503": "/var/tmp/chmin_aic_20260918_act/sc_port_tracker_refreeze_eval_20260924/dynamic_grasp_calibration.json",
+    "trial_990504": "/var/tmp/chmin_aic_20260918_act/sc_port_tracker_refreeze_eval_20260924/dynamic_grasp_calibration.json",
+    "trial_990505": "/var/tmp/chmin_aic_20260918_act/sc_port_tracker_refreeze_eval_20260924/dynamic_grasp_calibration.json",
+    "trial_990506": "/var/tmp/chmin_aic_20260918_act/sc_port_tracker_refreeze_eval_20260924/dynamic_grasp_calibration.json",
+    "trial_990507": "/var/tmp/chmin_aic_20260918_act/sc_port_tracker_refreeze_eval_20260924/dynamic_grasp_calibration.json",
+    "trial_990508": "/var/tmp/chmin_aic_20260918_act/sc_port_tracker_refreeze_eval_20260924/dynamic_grasp_calibration.json"
+  },
+  "runtime_physical_tf_input": false,
+  "caveat": "Episode-start physical grasp is nearly rigid in audited scenes; hold-out policy must predict plug from RGB, not read this calibration."
+}

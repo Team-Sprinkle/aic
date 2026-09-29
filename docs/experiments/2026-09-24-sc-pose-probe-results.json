@@ -1,0 +1,640 @@
+{
+  "schema": "aic_sc_pose_probe_comparison/v1",
+  "status": "diagnostic_not_promoted",
+  "training_images": "score-verified Gazebo SC 288x256 wrist cameras",
+  "labels": "privileged TF training targets only; image+32D robot state+10D task vector at evaluation",
+  "split": "21 complete scene/episode groups: 14 train, 7 validation; zero scene hash overlap",
+  "near_port_definition": "absolute axial tip distance to scored port opening <30 mm",
+  "constant_near_mean": {
+    "train_near_mean_xyz_m": [
+      0.0003366833070408999,
+      -2.663594678795064e-05,
+      -0.0011748251716466654
+    ],
+    "validation_near_count": 1857,
+    "lateral_median_mm": 0.6408564254683122,
+    "lateral_p95_mm": 4.377982393011917,
+    "caveat": "Phase-aware mean uses true near-port phase in analysis only; not deployable"
+  },
+  "variants": {
+    "state_task": {
+      "best_epoch": 10,
+      "train_episodes": 14,
+      "validation_episodes": 7,
+      "train_scene_groups": 14,
+      "validation_scene_groups": 7,
+      "near_port": {
+        "count": 1857,
+        "episodes": 7,
+        "translation_mm": {
+          "median": 3.0701115617689005,
+          "p95": 7.029143721556812
+        },
+        "lateral_mm": {
+          "median": 1.3465787492592036,
+          "p95": 3.8229189045852383
+        },
+        "axial_mm": {
+          "median": 2.2083473205566406,
+          "p95": 6.684170722961426
+        },
+        "orientation_deg": {
+          "median": 1.5399877369034187,
+          "p95": 3.1269586799152624
+        },
+        "lateral_sign_accuracy": 0.6488960689283791
+      },
+      "all": {
+        "count": 4657,
+        "episodes": 7,
+        "translation_mm": {
+          "median": 3.2596183301310164,
+          "p95": 8.292082350396486
+        },
+        "lateral_mm": {
+          "median": 1.6607241733622855,
+          "p95": 5.596510597387278
+        },
+        "axial_mm": {
+          "median": 2.1637229919433594,
+          "p95": 6.932217597961426
+        },
+        "orientation_deg": {
+          "median": 1.462833455048846,
+          "p95": 3.591827025225424
+        },
+        "lateral_sign_accuracy": 0.7794717629375134
+      },
+      "per_episode_near_port": {
+        "253": {
+          "count": 267,
+          "episodes": 1,
+          "translation_mm": {
+            "median": 2.122732572619008,
+            "p95": 6.18883762447062
+          },
+          "lateral_mm": {
+            "median": 1.024772615380374,
+            "p95": 3.149851563239938
+          },
+          "axial_mm": {
+            "median": 1.6056164503097534,
+            "p95": 5.799132347106934
+          },
+          "orientation_deg": {
+            "median": 1.3619758577473335,
+            "p95": 2.5253814086043445
+          },
+          "lateral_sign_accuracy": 0.7191011235955056
+        },
+        "254": {
+          "count": 191,
+          "episodes": 1,
+          "translation_mm": {
+            "median": 3.2002615527461593,
+            "p95": 6.823749484614045
+          },
+          "lateral_mm": {
+            "median": 1.9796307721852198,
+            "p95": 4.693687486437158
+          },
+          "axial_mm": {
+            "median": 1.8991175889968872,
+            "p95": 6.454344272613525
+          },
+          "orientation_deg": {
+            "median": 1.4182801145256938,
+            "p95": 2.6170145948096883
+          },
+          "lateral_sign_accuracy": 0.7015706806282722
+        },
+        "256": {
+          "count": 157,
+          "episodes": 1,
+          "translation_mm": {
+            "median": 2.656847153185454,
+            "p95": 7.115036440454068
+          },
+          "lateral_mm": {
+            "median": 1.102934042105267,
+            "p95": 5.077422130997476
+          },
+          "axial_mm": {
+            "median": 1.9596182107925415,
+            "p95": 7.03472900390625
+          },
+          "orientation_deg": {
+            "median": 1.3317572721765294,
+            "p95": 2.885858088017035
+          },
+          "lateral_sign_accuracy": 0.6369426751592356
+        },
+        "279": {
+          "count": 224,
+          "episodes": 1,
+          "translation_mm": {
+            "median": 4.782266407497401,
+            "p95": 7.985116796318619
+          },
+          "lateral_mm": {
+            "median": 1.195200705956863,
+            "p95": 3.09426584353302
+          },
+          "axial_mm": {
+            "median": 4.445531368255615,
+            "p95": 7.197013854980469
+          },
+          "orientation_deg": {
+            "median": 1.4846088416185304,
+            "p95": 2.608026150077576
+          },
+          "lateral_sign_accuracy": 0.6607142857142857
+        },
+        "280": {
+          "count": 149,
+          "episodes": 1,
+          "translation_mm": {
+            "median": 2.9281705902900512,
+            "p95": 7.345794430443947
+          },
+          "lateral_mm": {
+            "median": 1.8741878468158135,
+            "p95": 4.879028539773516
+          },
+          "axial_mm": {
+            "median": 1.703493356704712,
+            "p95": 6.52011251449585
+          },
+          "orientation_deg": {
+            "median": 1.415518090157617,
+            "p95": 2.5826921180324707
+          },
+          "lateral_sign_accuracy": 0.5570469798657718
+        },
+        "283": {
+          "count": 284,
+          "episodes": 1,
+          "translation_mm": {
+            "median": 3.411364801109891,
+            "p95": 6.572885773692453
+          },
+          "lateral_mm": {
+            "median": 1.8793405633356854,
+            "p95": 3.869775395242689
+          },
+          "axial_mm": {
+            "median": 2.121048927307129,
+            "p95": 6.080565929412842
+          },
+          "orientation_deg": {
+            "median": 1.0675173397386442,
+            "p95": 2.545141004310521
+          },
+          "lateral_sign_accuracy": 0.7605633802816901
+        },
+        "285": {
+          "count": 585,
+          "episodes": 1,
+          "translation_mm": {
+            "median": 2.9044620092426268,
+            "p95": 6.982377523401426
+          },
+          "lateral_mm": {
+            "median": 1.231730808169388,
+            "p95": 2.703028390281541
+          },
+          "axial_mm": {
+            "median": 2.3182332515716553,
+            "p95": 6.645603656768799
+          },
+          "orientation_deg": {
+            "median": 2.3100880450493126,
+            "p95": 3.442484145478699
+          },
+          "lateral_sign_accuracy": 0.5675213675213675
+        }
+      },
+      "checkpoint": "outputs/experiments/2026-09-24_sc_pose_probe/state_task_best.pt",
+      "checkpoint_sha256": "327884e8e1de369070371c9b67b2948d7b09c8d1800b1a96031032757915ec17"
+    },
+    "visual_task": {
+      "best_epoch": 12,
+      "train_episodes": 14,
+      "validation_episodes": 7,
+      "train_scene_groups": 14,
+      "validation_scene_groups": 7,
+      "near_port": {
+        "count": 1857,
+        "episodes": 7,
+        "translation_mm": {
+          "median": 0.6014640839069149,
+          "p95": 3.087206370806407
+        },
+        "lateral_mm": {
+          "median": 0.41265723230283397,
+          "p95": 1.7016170761041238
+        },
+        "axial_mm": {
+          "median": 0.3765304684638977,
+          "p95": 2.7321510314941406
+        },
+        "orientation_deg": {
+          "median": 0.27976461788404605,
+          "p95": 0.7022045421598009
+        },
+        "lateral_sign_accuracy": 0.8788368336025848
+      },
+      "all": {
+        "count": 4657,
+        "episodes": 7,
+        "translation_mm": {
+          "median": 1.4953514727832125,
+          "p95": 5.629671699952784
+        },
+        "lateral_mm": {
+          "median": 0.7530039607778558,
+          "p95": 4.610851299324488
+        },
+        "axial_mm": {
+          "median": 0.8039830923080444,
+          "p95": 3.307804584503174
+        },
+        "orientation_deg": {
+          "median": 0.44234686540746404,
+          "p95": 0.9117086682062551
+        },
+        "lateral_sign_accuracy": 0.88876959415933
+      },
+      "per_episode_near_port": {
+        "253": {
+          "count": 267,
+          "episodes": 1,
+          "translation_mm": {
+            "median": 0.7181498105168068,
+            "p95": 1.4511016749143744
+          },
+          "lateral_mm": {
+            "median": 0.442106296987784,
+            "p95": 0.8957457589500262
+          },
+          "axial_mm": {
+            "median": 0.3264350891113281,
+            "p95": 1.3765925168991089
+          },
+          "orientation_deg": {
+            "median": 0.3039021769133917,
+            "p95": 0.752770764725871
+          },
+          "lateral_sign_accuracy": 0.9213483146067416
+        },
+        "254": {
+          "count": 191,
+          "episodes": 1,
+          "translation_mm": {
+            "median": 0.8792214781991877,
+            "p95": 2.161563082343764
+          },
+          "lateral_mm": {
+            "median": 0.44450490785999525,
+            "p95": 1.6114105797232896
+          },
+          "axial_mm": {
+            "median": 0.4677448868751526,
+            "p95": 1.3404227495193481
+          },
+          "orientation_deg": {
+            "median": 0.3815481506014797,
+            "p95": 0.7641223426339544
+          },
+          "lateral_sign_accuracy": 0.8848167539267016
+        },
+        "256": {
+          "count": 157,
+          "episodes": 1,
+          "translation_mm": {
+            "median": 0.4915909633774528,
+            "p95": 1.5658228798945504
+          },
+          "lateral_mm": {
+            "median": 0.39196199095571704,
+            "p95": 1.5646478414908243
+          },
+          "axial_mm": {
+            "median": 0.22361962497234344,
+            "p95": 1.156160593032837
+          },
+          "orientation_deg": {
+            "median": 0.34034838756639696,
+            "p95": 0.6440672057470749
+          },
+          "lateral_sign_accuracy": 0.9490445859872612
+        },
+        "279": {
+          "count": 224,
+          "episodes": 1,
+          "translation_mm": {
+            "median": 2.923813038973727,
+            "p95": 3.6315489935396044
+          },
+          "lateral_mm": {
+            "median": 0.8320821871489527,
+            "p95": 2.0964653410700524
+          },
+          "axial_mm": {
+            "median": 2.582110643386841,
+            "p95": 3.3490183353424072
+          },
+          "orientation_deg": {
+            "median": 0.29341961392889215,
+            "p95": 0.6379621496955654
+          },
+          "lateral_sign_accuracy": 0.5357142857142857
+        },
+        "280": {
+          "count": 149,
+          "episodes": 1,
+          "translation_mm": {
+            "median": 1.4508908145295427,
+            "p95": 4.082416451453937
+          },
+          "lateral_mm": {
+            "median": 0.45382285761923724,
+            "p95": 3.5380633489502347
+          },
+          "axial_mm": {
+            "median": 1.2837834358215332,
+            "p95": 2.400773525238037
+          },
+          "orientation_deg": {
+            "median": 0.34034838756639696,
+            "p95": 0.9270326590275052
+          },
+          "lateral_sign_accuracy": 0.9395973154362416
+        },
+        "283": {
+          "count": 284,
+          "episodes": 1,
+          "translation_mm": {
+            "median": 0.4549724657396143,
+            "p95": 1.6580259455366586
+          },
+          "lateral_mm": {
+            "median": 0.3663171763277193,
+            "p95": 0.5531406393049835
+          },
+          "axial_mm": {
+            "median": 0.2572382688522339,
+            "p95": 1.5678080320358276
+          },
+          "orientation_deg": {
+            "median": 0.27695284044298,
+            "p95": 0.641632153960256
+          },
+          "lateral_sign_accuracy": 0.9612676056338029
+        },
+        "285": {
+          "count": 585,
+          "episodes": 1,
+          "translation_mm": {
+            "median": 0.4948370337732496,
+            "p95": 1.1475673586410138
+          },
+          "lateral_mm": {
+            "median": 0.4079545785535197,
+            "p95": 0.7642671464900249
+          },
+          "axial_mm": {
+            "median": 0.2817893326282501,
+            "p95": 0.8511021733283997
+          },
+          "orientation_deg": {
+            "median": 0.24066260858483682,
+            "p95": 0.5868397088116528
+          },
+          "lateral_sign_accuracy": 0.9145299145299145
+        }
+      },
+      "checkpoint": "outputs/experiments/2026-09-24_sc_pose_probe/visual_task_best.pt",
+      "checkpoint_sha256": "8d6eca45b70647f5447d19e69abfa1e5a7c78f025faec12e57d28ab12b1870e2"
+    },
+    "visual_no_task": {
+      "best_epoch": 12,
+      "train_episodes": 14,
+      "validation_episodes": 7,
+      "train_scene_groups": 14,
+      "validation_scene_groups": 7,
+      "near_port": {
+        "count": 1857,
+        "episodes": 7,
+        "translation_mm": {
+          "median": 0.9869277642116339,
+          "p95": 2.661514876350423
+        },
+        "lateral_mm": {
+          "median": 0.5588783800157805,
+          "p95": 1.3455858531891993
+        },
+        "axial_mm": {
+          "median": 0.7414277791976929,
+          "p95": 2.437426805496216
+        },
+        "orientation_deg": {
+          "median": 0.41116845559372023,
+          "p95": 0.6977318423919344
+        },
+        "lateral_sign_accuracy": 0.8379106085083468
+      },
+      "all": {
+        "count": 4657,
+        "episodes": 7,
+        "translation_mm": {
+          "median": 1.5537529531488796,
+          "p95": 5.572993164488172
+        },
+        "lateral_mm": {
+          "median": 0.7300575075913877,
+          "p95": 3.9586837791890837
+        },
+        "axial_mm": {
+          "median": 1.0029151439666748,
+          "p95": 3.8678197860717773
+        },
+        "orientation_deg": {
+          "median": 0.5410393897857161,
+          "p95": 1.3276368621473196
+        },
+        "lateral_sign_accuracy": 0.8954262400687137
+      },
+      "per_episode_near_port": {
+        "253": {
+          "count": 267,
+          "episodes": 1,
+          "translation_mm": {
+            "median": 0.7587935964188537,
+            "p95": 1.5478506383080837
+          },
+          "lateral_mm": {
+            "median": 0.5618778858184311,
+            "p95": 1.1418930440084158
+          },
+          "axial_mm": {
+            "median": 0.48676878213882446,
+            "p95": 1.1032689809799194
+          },
+          "orientation_deg": {
+            "median": 0.36261645025781997,
+            "p95": 0.6572987620709584
+          },
+          "lateral_sign_accuracy": 0.8539325842696629
+        },
+        "254": {
+          "count": 191,
+          "episodes": 1,
+          "translation_mm": {
+            "median": 1.1124736814084737,
+            "p95": 2.345375335113395
+          },
+          "lateral_mm": {
+            "median": 0.5804071716564255,
+            "p95": 1.4066438755365285
+          },
+          "axial_mm": {
+            "median": 0.7977858185768127,
+            "p95": 1.9434057474136353
+          },
+          "orientation_deg": {
+            "median": 0.5337572222973261,
+            "p95": 0.7412453694309512
+          },
+          "lateral_sign_accuracy": 0.8743455497382199
+        },
+        "256": {
+          "count": 157,
+          "episodes": 1,
+          "translation_mm": {
+            "median": 0.6351630950836895,
+            "p95": 1.3957517058548434
+          },
+          "lateral_mm": {
+            "median": 0.479689678702121,
+            "p95": 1.2119463022267063
+          },
+          "axial_mm": {
+            "median": 0.30868127942085266,
+            "p95": 0.857815146446228
+          },
+          "orientation_deg": {
+            "median": 0.47477652193551806,
+            "p95": 0.7783304032885752
+          },
+          "lateral_sign_accuracy": 0.9808917197452229
+        },
+        "279": {
+          "count": 224,
+          "episodes": 1,
+          "translation_mm": {
+            "median": 1.8202916756040461,
+            "p95": 2.9162246283629516
+          },
+          "lateral_mm": {
+            "median": 0.6167002025311366,
+            "p95": 2.4696427552852422
+          },
+          "axial_mm": {
+            "median": 1.4348254203796387,
+            "p95": 2.701543092727661
+          },
+          "orientation_deg": {
+            "median": 0.4054175585565102,
+            "p95": 0.674923888776303
+          },
+          "lateral_sign_accuracy": 0.6785714285714286
+        },
+        "280": {
+          "count": 149,
+          "episodes": 1,
+          "translation_mm": {
+            "median": 2.203603263737541,
+            "p95": 4.618056211948547
+          },
+          "lateral_mm": {
+            "median": 0.7939177192501251,
+            "p95": 3.8751626258362926
+          },
+          "axial_mm": {
+            "median": 2.0678210258483887,
+            "p95": 2.975857973098755
+          },
+          "orientation_deg": {
+            "median": 0.4829488469984121,
+            "p95": 0.9779791615697411
+          },
+          "lateral_sign_accuracy": 0.7583892617449665
+        },
+        "283": {
+          "count": 284,
+          "episodes": 1,
+          "translation_mm": {
+            "median": 0.8640627657094895,
+            "p95": 1.8990054988043241
+          },
+          "lateral_mm": {
+            "median": 0.3231907716909206,
+            "p95": 1.121609890581351
+          },
+          "axial_mm": {
+            "median": 0.6915382146835327,
+            "p95": 1.680681586265564
+          },
+          "orientation_deg": {
+            "median": 0.4054175585565102,
+            "p95": 0.6039293568595779
+          },
+          "lateral_sign_accuracy": 0.971830985915493
+        },
+        "285": {
+          "count": 585,
+          "episodes": 1,
+          "translation_mm": {
+            "median": 0.9666927320087563,
+            "p95": 1.6218168775793755
+          },
+          "lateral_mm": {
+            "median": 0.5792132111205825,
+            "p95": 0.9798917866157358
+          },
+          "axial_mm": {
+            "median": 0.760414183139801,
+            "p95": 1.2995600700378418
+          },
+          "orientation_deg": {
+            "median": 0.34034838756639696,
+            "p95": 0.6440672057470749
+          },
+          "lateral_sign_accuracy": 0.7965811965811965
+        }
+      },
+      "checkpoint": "outputs/experiments/2026-09-24_sc_pose_probe/visual_no_task_best.pt",
+      "checkpoint_sha256": "daa987079077d869a3460da1926c19560b3a69ff506d0a6988151e7fef9374be"
+    }
+  },
+  "offline_latency": {
+    "schema": "aic_sc_pose_probe_offline_latency/v1",
+    "checkpoint": "/sc_fix/sc_pose_probe_visual_task/best.pt",
+    "source_image": "one held-out Gazebo SC JPEG triplet, repeatedly decoded from file cache",
+    "scope": "JPEG decode, resize, normalization, GPU transfer, shared ResNet-18 and pose head; excludes live ROS/actor/control",
+    "repeats": 100,
+    "device": "cuda",
+    "p50_ms": 7.4462409829720855,
+    "p95_ms": 8.103818167001009,
+    "p99_ms": 10.794107103720307,
+    "parameter_count": 12184135,
+    "checkpoint_bytes": 48815833
+  },
+  "gate": {
+    "required_near_lateral_p95_mm": 0.5,
+    "best_task_conditioned_p95_mm": 1.7016170761041238,
+    "passed": false,
+    "reason": "held-out near-port p95 remains above insertion corridor; no shared BC or RL training permitted"
+  }
+}

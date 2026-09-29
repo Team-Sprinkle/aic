@@ -1,0 +1,23 @@
+{
+  "schema": "sc_physical_tip_relabel/v1",
+  "source_labels": "/var/tmp/chmin_aic_20260918_act/sc_lift_route_probe_20260924/pose_labels.jsonl",
+  "source_labels_sha256": "a2b6799cfc3bf7864f734540944d1f13d035be13d5283fc8fd2ec3c4db1bf505",
+  "edges": "/var/tmp/chmin_aic_20260918_act/sc_lift_route_probe_20260924/edges_joined.json",
+  "edges_sha256": "a0781dc146f0db1ffb8cb556c85035ea98de904dc54d2985e7c4761dd44619e6",
+  "calibrations": {
+    "/var/tmp/chmin_aic_20260918_act/sc_lift_route_probe_20260924/dynamic_grasp_calibration.json": "6ac94d95438cbdc1c7f6f417a5025da7b51cddcbaa1333be57d2f08435d38b42"
+  },
+  "fixed_proxy_calibration_sha256": "35fa4e3383776da6d3927804304deb610568b33c35b69fdbf2f713b05883bbc8",
+  "rows": 145,
+  "episodes": 2,
+  "rows_by_trial": {
+    "trial_980011": 58,
+    "trial_980013": 87
+  },
+  "calibration_by_trial": {
+    "trial_980011": "/var/tmp/chmin_aic_20260918_act/sc_lift_route_probe_20260924/dynamic_grasp_calibration.json",
+    "trial_980013": "/var/tmp/chmin_aic_20260918_act/sc_lift_route_probe_20260924/dynamic_grasp_calibration.json"
+  },
+  "runtime_physical_tf_input": false,
+  "caveat": "Episode-start physical grasp is nearly rigid in audited scenes; hold-out policy must predict plug from RGB, not read this calibration."
+}

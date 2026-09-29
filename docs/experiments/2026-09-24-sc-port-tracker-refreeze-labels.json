@@ -1,0 +1,256 @@
+{
+  "schema": "sc_native_pose_labels_summary/v1",
+  "labels": "/var/tmp/chmin_aic_20260918_act/sc_port_tracker_refreeze_eval_20260924/pose_labels.jsonl",
+  "training_label_only": true,
+  "image_size": [
+    1152,
+    1024
+  ],
+  "horizontal_fov_rad": 0.8718,
+  "focal_px": 1236.6314774257871,
+  "verified_manifest": "outputs/trajectory_datasets/expert_verified/manifest.json",
+  "tcp_to_optical": {
+    "center": [
+      -8.110621119294949e-10,
+      -0.116079182624172,
+      -0.20543789102822196,
+      -0.13052832987412713,
+      1.8272077641080097e-06,
+      -2.877053629764446e-07,
+      0.9914445799422424
+    ],
+    "left": [
+      -0.10051658396221153,
+      -0.05803259313640371,
+      -0.20543589102822196,
+      -0.11303994734332103,
+      0.0652657276653435,
+      -0.4957223896476733,
+      0.85861613512613
+    ],
+    "right": [
+      0.10051658313858014,
+      -0.058032594562973966,
+      -0.20543589102822196,
+      -0.11304177464842796,
+      -0.06526256267877945,
+      0.4957218900393923,
+      0.8586164235749891
+    ]
+  },
+  "include_failed_for_pose_only": true,
+  "validation_trials": [
+    "trial_990501",
+    "trial_990502",
+    "trial_990503",
+    "trial_990504",
+    "trial_990505",
+    "trial_990506",
+    "trial_990507",
+    "trial_990508"
+  ],
+  "episodes": [
+    {
+      "trial": "trial_990501",
+      "admitted": true,
+      "official_tier3": 75,
+      "expert_bc_eligible": false,
+      "pose_label_only": true,
+      "split": "validation",
+      "frames": 66,
+      "near_port_frames": 38,
+      "in_frame_counts": {
+        "center": {
+          "tip": 66,
+          "opening": 60
+        },
+        "left": {
+          "tip": 66,
+          "opening": 62
+        },
+        "right": {
+          "tip": 66,
+          "opening": 61
+        }
+      },
+      "scene_sha256": "bb2d8078ff6ce373be6caad7d1b933615b776fa559ee388388701d0243008d56"
+    },
+    {
+      "trial": "trial_990502",
+      "admitted": true,
+      "official_tier3": 75,
+      "expert_bc_eligible": false,
+      "pose_label_only": true,
+      "split": "validation",
+      "frames": 43,
+      "near_port_frames": 15,
+      "in_frame_counts": {
+        "center": {
+          "tip": 43,
+          "opening": 37
+        },
+        "left": {
+          "tip": 43,
+          "opening": 38
+        },
+        "right": {
+          "tip": 43,
+          "opening": 38
+        }
+      },
+      "scene_sha256": "1a96a2655ee8f57fa4b5f1f546948a9e5327d2ae015c7db44586483d2b94a8e2"
+    },
+    {
+      "trial": "trial_990503",
+      "admitted": true,
+      "official_tier3": 75,
+      "expert_bc_eligible": false,
+      "pose_label_only": true,
+      "split": "validation",
+      "frames": 77,
+      "near_port_frames": 49,
+      "in_frame_counts": {
+        "center": {
+          "tip": 77,
+          "opening": 72
+        },
+        "left": {
+          "tip": 77,
+          "opening": 77
+        },
+        "right": {
+          "tip": 77,
+          "opening": 77
+        }
+      },
+      "scene_sha256": "1b1ed08ed96ce9953e5e74c62f14bc8dff14431b9075137353a4486e6541e86b"
+    },
+    {
+      "trial": "trial_990504",
+      "admitted": true,
+      "official_tier3": 18.98382732222555,
+      "expert_bc_eligible": false,
+      "pose_label_only": true,
+      "split": "validation",
+      "frames": 117,
+      "near_port_frames": 0,
+      "in_frame_counts": {
+        "center": {
+          "tip": 117,
+          "opening": 112
+        },
+        "left": {
+          "tip": 117,
+          "opening": 117
+        },
+        "right": {
+          "tip": 117,
+          "opening": 117
+        }
+      },
+      "scene_sha256": "a9e1f10181aa9b47f9d9c155b9672a3f3d6e553cd425d048a4ed4eb6526acfe3"
+    },
+    {
+      "trial": "trial_990505",
+      "admitted": true,
+      "official_tier3": 18.672331670209978,
+      "expert_bc_eligible": false,
+      "pose_label_only": true,
+      "split": "validation",
+      "frames": 78,
+      "near_port_frames": 0,
+      "in_frame_counts": {
+        "center": {
+          "tip": 78,
+          "opening": 72
+        },
+        "left": {
+          "tip": 78,
+          "opening": 75
+        },
+        "right": {
+          "tip": 78,
+          "opening": 73
+        }
+      },
+      "scene_sha256": "3bcc0cb9915c0ed9e823c9e97ce9161c4ff73db9a7260cf590751c1a86ee0097"
+    },
+    {
+      "trial": "trial_990506",
+      "admitted": true,
+      "official_tier3": 75,
+      "expert_bc_eligible": false,
+      "pose_label_only": true,
+      "split": "validation",
+      "frames": 61,
+      "near_port_frames": 28,
+      "in_frame_counts": {
+        "center": {
+          "tip": 61,
+          "opening": 56
+        },
+        "left": {
+          "tip": 61,
+          "opening": 61
+        },
+        "right": {
+          "tip": 61,
+          "opening": 57
+        }
+      },
+      "scene_sha256": "e27157951a3a72688982f5d45884828092a3633a0cb082d753bc71e9c1768aa8"
+    },
+    {
+      "trial": "trial_990507",
+      "admitted": true,
+      "official_tier3": 75,
+      "expert_bc_eligible": false,
+      "pose_label_only": true,
+      "split": "validation",
+      "frames": 43,
+      "near_port_frames": 15,
+      "in_frame_counts": {
+        "center": {
+          "tip": 43,
+          "opening": 38
+        },
+        "left": {
+          "tip": 43,
+          "opening": 43
+        },
+        "right": {
+          "tip": 43,
+          "opening": 43
+        }
+      },
+      "scene_sha256": "9dfb9235b663efdb3b0ddca322a791e197ce7a6d153b9c94896d43bf5815de00"
+    },
+    {
+      "trial": "trial_990508",
+      "admitted": true,
+      "official_tier3": 21.625297634264427,
+      "expert_bc_eligible": false,
+      "pose_label_only": true,
+      "split": "validation",
+      "frames": 117,
+      "near_port_frames": 80,
+      "in_frame_counts": {
+        "center": {
+          "tip": 117,
+          "opening": 111
+        },
+        "left": {
+          "tip": 117,
+          "opening": 112
+        },
+        "right": {
+          "tip": 117,
+          "opening": 111
+        }
+      },
+      "scene_sha256": "db5244d9b989c85d155da380ff2c66175f613072ad3b5bac71d89f493ebfb231"
+    }
+  ],
+  "train_scene_count": 0,
+  "validation_scene_count": 8
+}

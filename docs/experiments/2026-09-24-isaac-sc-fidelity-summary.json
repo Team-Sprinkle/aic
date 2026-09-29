@@ -1,0 +1,112 @@
+{
+  "schema": "aic_isaac_sc_fidelity_probes/v1",
+  "date_utc": "2026-09-24",
+  "status": "diagnostic_physics_only_not_visual_rl_replay",
+  "scene": {
+    "path": "configs/hierarchical_recovery/isaac_sc_fidelity/episodes/episode_000001.yaml",
+    "sha256": "354ff524705aa2ea23f46ae799ed54d1539dc23755d960a4c8c456c8070fde5a",
+    "count": 1,
+    "cards": 5,
+    "construction": "development scene using scored train bag 251 SC geometry and additional cards; source bag had three cards"
+  },
+  "assets": {
+    "robot_usd": "aic_unified_robot_cable_reversed_gazebo_firstlink_aligned_filtered.generated.usd",
+    "robot_sha256": "d797c81de7510f90efa0c0d92bfa67478894aca50555548c1c67f55c49fa606d",
+    "port_usd": "sc_port_sdf_aligned.generated.usd",
+    "port_sha256": "3ea2034e05c50bfbd0bcab3c2f618ed8b207cde21f7bb73b559ad7d88c24795f",
+    "builder": "scripts/build_sc_isaac_fidelity_assets.sh"
+  },
+  "controller": "privileged_scripted_target_body_pose_root_diagnostic_only",
+  "gpu": 1,
+  "camera_status": "unavailable_installed_driver_535.104_below_renderer_minimum_535.129; corrected-asset smoke test failed RTX verification; earlier output read also hit CUDA illegal memory access",
+  "camera_smoke_log": "outputs/experiments/2026-09-24_isaac_sc_fidelity/camera_smoke.log",
+  "results": [
+    {
+      "id": "wrong_frame_near_centered_control",
+      "artifact": "outputs/experiments/2026-09-24_isaac_sc_fidelity/filtered_full_port.json",
+      "artifact_sha256": "7401cbda34e7b105c685ed88f00fec4c69821745f0007827fcb0f147d38efc40",
+      "port_usd_override": "sc_port_sdf_collisions.generated.usd",
+      "port_usd_override_sha256": "ba722f22bf2d4be71b34f7286ad3f071cca1fc09a5704ef479364dd99ce47a0e",
+      "recorded_rows": 121,
+      "min_command_target_distance_mm": 7.65793,
+      "final_true_axial_error_mm": 7.73122,
+      "final_true_lateral_error_mm": 0.35009,
+      "peak_plug_port_contact_n": 40.0452,
+      "peak_gripper_first_link_contact_n": 0.0,
+      "use_for_training": false
+    },
+    {
+      "id": "corrected_near_centered",
+      "artifact": "outputs/experiments/2026-09-24_isaac_sc_fidelity/filtered_aligned_port.json",
+      "artifact_sha256": "55b7c7a9c4e7f87aba8acb9872a276233c1bbae1f7c2e337de8b02638ff4c0ba",
+      "recorded_rows": 121,
+      "min_command_target_distance_mm": 0.07386,
+      "final_true_axial_error_mm": 0.07284,
+      "final_true_lateral_error_mm": 0.01585,
+      "peak_plug_port_contact_n": 1.1025,
+      "peak_gripper_first_link_contact_n": 0.0
+    },
+    {
+      "id": "corrected_full_start_centered",
+      "artifact": "outputs/experiments/2026-09-24_isaac_sc_fidelity/full_start_five.json",
+      "artifact_sha256": "759d1c0d24e8c662f4b458723c4b692ec87557b0ed74ce4973c361e64b4f6313",
+      "recorded_rows": 161,
+      "min_command_target_distance_mm": 0.07798,
+      "final_true_axial_error_mm": 0.07339,
+      "final_true_lateral_error_mm": 0.05362,
+      "peak_plug_port_contact_n": 1.0431,
+      "peak_gripper_first_link_contact_n": 0.0
+    },
+    {
+      "id": "corrected_near_plus3mm_lateral_command",
+      "artifact": "outputs/experiments/2026-09-24_isaac_sc_fidelity/offset_plus3_x.json",
+      "artifact_sha256": "d3058147a4353f5dda424b615c69aa3adb1fcbf64877f79121932315eaf5b73d",
+      "recorded_rows": 121,
+      "min_command_target_distance_mm": 5.94054,
+      "final_true_axial_error_mm": 5.26731,
+      "final_true_lateral_error_mm": 0.38235,
+      "final_orientation_error_deg": 0.74125,
+      "peak_plug_port_contact_n": 54.3661,
+      "peak_gripper_first_link_contact_n": 0.0
+    },
+    {
+      "id": "corrected_near_minus3mm_lateral_command",
+      "artifact": "outputs/experiments/2026-09-24_isaac_sc_fidelity/offset_minus3_x.json",
+      "artifact_sha256": "3524a688fbf223cafe91ab10f0f53882dffd920be4d6697748561e6d55bbf5a7",
+      "recorded_rows": 121,
+      "min_command_target_distance_mm": 12.86385,
+      "final_true_axial_error_mm": 12.67238,
+      "final_true_lateral_error_mm": 0.75324,
+      "final_orientation_error_deg": 0.87848,
+      "peak_plug_port_contact_n": 92.1983,
+      "peak_gripper_first_link_contact_n": 0.0
+    }
+  ],
+  "limitations": [
+    "one constructed development scene; no held-out scene score",
+    "no official Isaac scorer insertion event",
+    "privileged diagnostic controller; no autonomous policy",
+    "RGB unavailable on current rootless Isaac renderer",
+    "distal cable dynamics and Gazebo-to-Isaac contact equivalence not yet validated"
+  ],
+  "camera_followup": {
+    "status": "short_rgb_smoke_passed_in_existing_rootless_gpu1_container",
+    "original_camera_status_preserved_in_camera_status": "failed_without_driver_check_override",
+    "driver_check_override_script": "aic_utils/aic_isaac/aic_isaaclab/scripts/patch_isaac_rtx_driver_check.sh",
+    "three_wrist_cameras": true,
+    "frames_per_wrist_video": 4,
+    "resolution": [
+      224,
+      224
+    ],
+    "diagnostic_overview_camera": true,
+    "cable_orange_visible_in_overview": true,
+    "visual_policy_rollouts": 0,
+    "artifacts": "outputs/experiments/2026-09-24_isaac_sc_fidelity/camera_smoke_repaired/",
+    "moving_clear_lane_frames": 61,
+    "moving_clear_lane_fps": 20,
+    "moving_clear_lane_artifacts": "outputs/experiments/2026-09-24_isaac_sc_fidelity/camera_motion_clear_lane/",
+    "moving_distal_cable_shape_validated_against_gazebo": false,
+    "moving_distal_cable_appearance_concern": "sharp kinks and loops in overview/left frames"
+  }
+}

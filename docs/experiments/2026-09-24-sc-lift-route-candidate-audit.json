@@ -1,0 +1,50 @@
+{
+  "schema": "sc_new_expert_candidate_audit/v1",
+  "source_edges": "/var/tmp/chmin_aic_20260918_act/sc_lift_route_probe_20260924/edges_joined.json",
+  "source_edges_sha256": "a0781dc146f0db1ffb8cb556c85035ea98de904dc54d2985e7c4761dd44619e6",
+  "note": "Candidate integrity only; physical plug TF, setpoint reachability, and causal chunk masks need separate audit before BC admission.",
+  "candidate_pass_count": 1,
+  "candidate_fail_count": 1,
+  "episodes": [
+    {
+      "trial": "trial_980011",
+      "episode": "/var/tmp/chmin_aic_20260918_act/sc_lift_route_probe_20260924/episodes/episode_0001_1790278419356607832",
+      "scene_sha256": "c3877ebc7799a3aa9ccc90fc1dd5f1fd3cd37b5fbdd5747e9c1139ebc35e9bd8",
+      "frames_sha256": "1bd2d25deede14dabb9552b4923ff70d943510795f24063e5a9c77b7adb28413",
+      "score_tier3": 75,
+      "score_full_insertion": true,
+      "frames": 573,
+      "native_frames": 58,
+      "sim_duration_s": 36.05,
+      "time_strictly_increasing": true,
+      "command_index_nondecreasing": true,
+      "command_index_last": 573,
+      "target_max_component_error": 3.378927855336746e-16,
+      "nonzero_perturbation_rows": 0,
+      "student_active_rows": 0,
+      "missing_image_files": 0,
+      "rgb_triplets_complete": true,
+      "candidate_pass": true
+    },
+    {
+      "trial": "trial_980013",
+      "episode": "/var/tmp/chmin_aic_20260918_act/sc_lift_route_probe_20260924/episodes/episode_0002_1790278471689701133",
+      "scene_sha256": "3bd6477e4c74d3b4c93446f18256444e31f7736578b279c505de1151c082e2b1",
+      "frames_sha256": "d49ea5d407b66e099e538909d6c652584ee3048bd301f8610bfd6af1e79251a4",
+      "score_tier3": 16.373945732765495,
+      "score_full_insertion": false,
+      "frames": 869,
+      "native_frames": 87,
+      "sim_duration_s": 55.099999999999994,
+      "time_strictly_increasing": true,
+      "command_index_nondecreasing": true,
+      "command_index_last": 871,
+      "target_max_component_error": 2.2891120727265264e-16,
+      "nonzero_perturbation_rows": 0,
+      "student_active_rows": 0,
+      "missing_image_files": 0,
+      "rgb_triplets_complete": true,
+      "candidate_pass": false
+    }
+  ]
+}

@@ -1,0 +1,1576 @@
+{
+  "schema": "shared_bc_camera_preprocessing_parity/v1",
+  "episode": "/var/tmp/chmin_aic_20260918_act/sc_port_tracker_refreeze_eval_20260924/episodes/episode_0001_1790282279828716560",
+  "checkpoint": "/var/tmp/chmin_aic_20260918_act/shared_port_tcp_bc_startaware_20260924/best.pt",
+  "comparison": "saved native JPEG direct INTER_AREA versus saved 288x256 JPEG then PIL BILINEAR; exact raw ROS bytes unavailable",
+  "frames": 64,
+  "pixel_mae_rgb_mean_by_camera": [
+    1.2249526458532631,
+    1.443902255726509,
+    1.3654689659066752
+  ],
+  "two_stage_pixel_mae_rgb_mean_by_camera": [
+    0.6253934068744688,
+    0.7272554773862674,
+    0.7204076027383609
+  ],
+  "jpeg_pixel_mae_rgb_mean_by_camera": [
+    0.23747512921184097,
+    0.3203823582655719,
+    0.3172419541547088
+  ],
+  "target_translation_difference_mm_median_p95": [
+    0.9020874202251434,
+    3.248342180252068
+  ],
+  "two_stage_target_difference_mm_median_p95": [
+    0.18472228199243546,
+    0.5770563185214991
+  ],
+  "jpeg_target_difference_mm_median_p95": [
+    0.0749015137553215,
+    0.25593768581748
+  ],
+  "pose_translation_difference_mm_median_p95": [
+    0.9481152594089508,
+    3.796724963188161
+  ],
+  "rows": [
+    {
+      "frame": 0,
+      "pixel_mae_rgb": [
+        1.1159784226190477,
+        1.1391302614795917,
+        0.9287242240646258
+      ],
+      "two_stage_pixel_mae_rgb": [
+        0.3506922300170068,
+        0.47761213860544216,
+        0.2900324192176871
+      ],
+      "jpeg_pixel_mae_rgb": [
+        0.1932796556122449,
+        0.2540656887755102,
+        0.18185985331632654
+      ],
+      "target_translation_difference_mm": 2.202225685119629,
+      "pose_translation_difference_mm": 2.1454901695251465,
+      "two_stage_target_difference_mm": 0.16954416036605835,
+      "two_stage_pose_difference_mm": 0.16793431341648102,
+      "jpeg_target_difference_mm": 0.24252553284168243,
+      "jpeg_pose_difference_mm": 0.26294562220573425
+    },
+    {
+      "frame": 10,
+      "pixel_mae_rgb": [
+        1.1786046449829932,
+        1.115586468962585,
+        0.9415989051870748
+      ],
+      "two_stage_pixel_mae_rgb": [
+        0.3701238307823129,
+        0.45893787202380953,
+        0.29558620323129253
+      ],
+      "jpeg_pixel_mae_rgb": [
+        0.20578231292517007,
+        0.24212106717687074,
+        0.18308221726190477
+      ],
+      "target_translation_difference_mm": 3.432950973510742,
+      "pose_translation_difference_mm": 4.066315650939941,
+      "two_stage_target_difference_mm": 0.4949447512626648,
+      "two_stage_pose_difference_mm": 0.49556583166122437,
+      "jpeg_target_difference_mm": 0.23294277489185333,
+      "jpeg_pose_difference_mm": 0.25792640447616577
+    },
+    {
+      "frame": 20,
+      "pixel_mae_rgb": [
+        1.097025138180272,
+        1.1736753295068028,
+        0.9685041985544217
+      ],
+      "two_stage_pixel_mae_rgb": [
+        0.38527715773809523,
+        0.46873007015306123,
+        0.29904735331632654
+      ],
+      "jpeg_pixel_mae_rgb": [
+        0.218218537414966,
+        0.2361221832482993,
+        0.1887688669217687
+      ],
+      "target_translation_difference_mm": 3.7182979583740234,
+      "pose_translation_difference_mm": 4.707777976989746,
+      "two_stage_target_difference_mm": 0.5915465950965881,
+      "two_stage_pose_difference_mm": 0.5429330468177795,
+      "jpeg_target_difference_mm": 0.2743070423603058,
+      "jpeg_pose_difference_mm": 0.32760488986968994
+    },
+    {
+      "frame": 30,
+      "pixel_mae_rgb": [
+        1.3802415497448979,
+        1.1801525297619047,
+        0.9579945259353742
+      ],
+      "two_stage_pixel_mae_rgb": [
+        0.44029682185374147,
+        0.4412202380952381,
+        0.3059630102040816
+      ],
+      "jpeg_pixel_mae_rgb": [
+        0.243874893707483,
+        0.2284359056122449,
+        0.1845105229591837
+      ],
+      "target_translation_difference_mm": 6.537246227264404,
+      "pose_translation_difference_mm": 9.079357147216797,
+      "two_stage_target_difference_mm": 0.970704972743988,
+      "two_stage_pose_difference_mm": 1.280464768409729,
+      "jpeg_target_difference_mm": 0.6956859230995178,
+      "jpeg_pose_difference_mm": 0.9966100454330444
+    },
+    {
+      "frame": 40,
+      "pixel_mae_rgb": [
+        1.453762755102041,
+        1.3139283056972788,
+        1.0847151360544218
+      ],
+      "two_stage_pixel_mae_rgb": [
+        0.46603954081632654,
+        0.48911830357142855,
+        0.3817827912414966
+      ],
+      "jpeg_pixel_mae_rgb": [
+        0.2691060799319728,
+        0.26753826530612246,
+        0.19777715773809523
+      ],
+      "target_translation_difference_mm": 4.88178825378418,
+      "pose_translation_difference_mm": 7.191877841949463,
+      "two_stage_target_difference_mm": 1.3756672143936157,
+      "two_stage_pose_difference_mm": 1.9382036924362183,
+      "jpeg_target_difference_mm": 0.07565499097108841,
+      "jpeg_pose_difference_mm": 0.1077255830168724
+    },
+    {
+      "frame": 50,
+      "pixel_mae_rgb": [
+        1.4586654974489797,
+        1.3549107142857142,
+        1.1154536033163265
+      ],
+      "two_stage_pixel_mae_rgb": [
+        0.48723161139455784,
+        0.5136253720238095,
+        0.4550449085884354
+      ],
+      "jpeg_pixel_mae_rgb": [
+        0.26474808673469385,
+        0.2868370004251701,
+        0.23788929634353742
+      ],
+      "target_translation_difference_mm": 1.7492066621780396,
+      "pose_translation_difference_mm": 2.2690443992614746,
+      "two_stage_target_difference_mm": 0.3661300837993622,
+      "two_stage_pose_difference_mm": 0.6250261068344116,
+      "jpeg_target_difference_mm": 0.03723815828561783,
+      "jpeg_pose_difference_mm": 0.031806979328393936
+    },
+    {
+      "frame": 60,
+      "pixel_mae_rgb": [
+        1.2832496279761905,
+        1.5277357036564625,
+        1.2124853847789117
+      ],
+      "two_stage_pixel_mae_rgb": [
+        0.4261267006802721,
+        0.5954971832482994,
+        0.48923788265306123
+      ],
+      "jpeg_pixel_mae_rgb": [
+        0.22543314200680273,
+        0.3181467899659864,
+        0.2486779868197279
+      ],
+      "target_translation_difference_mm": 1.3299071788787842,
+      "pose_translation_difference_mm": 2.0248072147369385,
+      "two_stage_target_difference_mm": 0.15041571855545044,
+      "two_stage_pose_difference_mm": 0.2147885262966156,
+      "jpeg_target_difference_mm": 0.0611053965985775,
+      "jpeg_pose_difference_mm": 0.09830541908740997
+    },
+    {
+      "frame": 70,
+      "pixel_mae_rgb": [
+        1.3224051339285714,
+        1.5800050488945578,
+        1.3431853210034013
+      ],
+      "two_stage_pixel_mae_rgb": [
+        0.4589578018707483,
+        0.6341810161564626,
+        0.5374747555272109
+      ],
+      "jpeg_pixel_mae_rgb": [
+        0.24326371173469388,
+        0.317562181122449,
+        0.2725871598639456
+      ],
+      "target_translation_difference_mm": 0.6258729100227356,
+      "pose_translation_difference_mm": 0.19534145295619965,
+      "two_stage_target_difference_mm": 0.2024843990802765,
+      "two_stage_pose_difference_mm": 0.22329965233802795,
+      "jpeg_target_difference_mm": 0.11994552612304688,
+      "jpeg_pose_difference_mm": 0.13852426409721375
+    },
+    {
+      "frame": 80,
+      "pixel_mae_rgb": [
+        1.317469175170068,
+        1.5897308142006803,
+        1.4036192602040816
+      ],
+      "two_stage_pixel_mae_rgb": [
+        0.4839498299319728,
+        0.6427309204931972,
+        0.5897906037414966
+      ],
+      "jpeg_pixel_mae_rgb": [
+        0.24068611819727892,
+        0.32825786564625853,
+        0.29712744472789115
+      ],
+      "target_translation_difference_mm": 0.4852900803089142,
+      "pose_translation_difference_mm": 0.5376360416412354,
+      "two_stage_target_difference_mm": 0.05419491231441498,
+      "two_stage_pose_difference_mm": 0.07322457432746887,
+      "jpeg_target_difference_mm": 0.07859908044338226,
+      "jpeg_pose_difference_mm": 0.0981273353099823
+    },
+    {
+      "frame": 90,
+      "pixel_mae_rgb": [
+        1.296237244897959,
+        1.586196588010204,
+        1.4439639136904763
+      ],
+      "two_stage_pixel_mae_rgb": [
+        0.4916892538265306,
+        0.652961575255102,
+        0.6090826955782312
+      ],
+      "jpeg_pixel_mae_rgb": [
+        0.24722310799319727,
+        0.331679156037415,
+        0.2955795599489796
+      ],
+      "target_translation_difference_mm": 0.32216423749923706,
+      "pose_translation_difference_mm": 0.3064347505569458,
+      "two_stage_target_difference_mm": 0.11835978180170059,
+      "two_stage_pose_difference_mm": 0.2055438607931137,
+      "jpeg_target_difference_mm": 0.1377895027399063,
+      "jpeg_pose_difference_mm": 0.17749430239200592
+    },
+    {
+      "frame": 100,
+      "pixel_mae_rgb": [
+        1.2501926551870748,
+        1.595264668367347,
+        1.4521285076530612
+      ],
+      "two_stage_pixel_mae_rgb": [
+        0.4862151892006803,
+        0.6637104060374149,
+        0.6146099064625851
+      ],
+      "jpeg_pixel_mae_rgb": [
+        0.247336043792517,
+        0.32027264030612246,
+        0.30626195790816324
+      ],
+      "target_translation_difference_mm": 0.2244882583618164,
+      "pose_translation_difference_mm": 0.42486947774887085,
+      "two_stage_target_difference_mm": 0.23424065113067627,
+      "two_stage_pose_difference_mm": 0.2286663055419922,
+      "jpeg_target_difference_mm": 0.1065741628408432,
+      "jpeg_pose_difference_mm": 0.13244572281837463
+    },
+    {
+      "frame": 110,
+      "pixel_mae_rgb": [
+        1.2418287627551021,
+        1.6039740114795917,
+        1.455709236819728
+      ],
+      "two_stage_pixel_mae_rgb": [
+        0.48151838860544216,
+        0.6630527210884354,
+        0.6207482993197279
+      ],
+      "jpeg_pixel_mae_rgb": [
+        0.243695525085034,
+        0.3215016475340136,
+        0.30082775297619047
+      ],
+      "target_translation_difference_mm": 0.47651976346969604,
+      "pose_translation_difference_mm": 0.30223795771598816,
+      "two_stage_target_difference_mm": 0.3753322660923004,
+      "two_stage_pose_difference_mm": 0.413767009973526,
+      "jpeg_target_difference_mm": 0.009199192747473717,
+      "jpeg_pose_difference_mm": 0.04116416350007057
+    },
+    {
+      "frame": 120,
+      "pixel_mae_rgb": [
+        1.251959768282313,
+        1.6081127763605443,
+        1.5159438775510203
+      ],
+      "two_stage_pixel_mae_rgb": [
+        0.46527556335034015,
+        0.6829958545918368,
+        0.6461920705782312
+      ],
+      "jpeg_pixel_mae_rgb": [
+        0.2275988520408163,
+        0.32306946215986393,
+        0.3119751806972789
+      ],
+      "target_translation_difference_mm": 0.8251159191131592,
+      "pose_translation_difference_mm": 0.6820550560951233,
+      "two_stage_target_difference_mm": 0.15895915031433105,
+      "two_stage_pose_difference_mm": 0.15911675989627838,
+      "jpeg_target_difference_mm": 0.07964728027582169,
+      "jpeg_pose_difference_mm": 0.04058968275785446
+    },
+    {
+      "frame": 130,
+      "pixel_mae_rgb": [
+        1.1457469706632653,
+        1.6321681016156462,
+        1.668686224489796
+      ],
+      "two_stage_pixel_mae_rgb": [
+        0.42073235544217685,
+        0.7249813988095238,
+        0.7451969068877551
+      ],
+      "jpeg_pixel_mae_rgb": [
+        0.21805245535714285,
+        0.34677269345238093,
+        0.33926578443877553
+      ],
+      "target_translation_difference_mm": 0.4700404107570648,
+      "pose_translation_difference_mm": 0.9846170544624329,
+      "two_stage_target_difference_mm": 0.2972757816314697,
+      "two_stage_pose_difference_mm": 0.4216727316379547,
+      "jpeg_target_difference_mm": 0.07268763333559036,
+      "jpeg_pose_difference_mm": 0.1329832673072815
+    },
+    {
+      "frame": 140,
+      "pixel_mae_rgb": [
+        1.2080210990646258,
+        1.6481119791666667,
+        1.7166440795068028
+      ],
+      "two_stage_pixel_mae_rgb": [
+        0.45556308460884354,
+        0.7486514136904762,
+        0.7839604591836735
+      ],
+      "jpeg_pixel_mae_rgb": [
+        0.21699617346938777,
+        0.34121890943877553,
+        0.35194116709183676
+      ],
+      "target_translation_difference_mm": 0.5495754480361938,
+      "pose_translation_difference_mm": 0.9210087060928345,
+      "two_stage_target_difference_mm": 0.3544306457042694,
+      "two_stage_pose_difference_mm": 0.2659989297389984,
+      "jpeg_target_difference_mm": 0.06703402101993561,
+      "jpeg_pose_difference_mm": 0.06263943016529083
+    },
+    {
+      "frame": 150,
+      "pixel_mae_rgb": [
+        1.2585631909013606,
+        1.7403605973639455,
+        1.759041507227891
+      ],
+      "two_stage_pixel_mae_rgb": [
+        0.5250717474489796,
+        0.8040763180272109,
+        0.8249893707482994
+      ],
+      "jpeg_pixel_mae_rgb": [
+        0.2225831738945578,
+        0.3695259353741497,
+        0.37116018282312924
+      ],
+      "target_translation_difference_mm": 0.1688135862350464,
+      "pose_translation_difference_mm": 0.7231535911560059,
+      "two_stage_target_difference_mm": 0.18638356029987335,
+      "two_stage_pose_difference_mm": 0.2957085967063904,
+      "jpeg_target_difference_mm": 0.1336611807346344,
+      "jpeg_pose_difference_mm": 0.12173441052436829
+    },
+    {
+      "frame": 160,
+      "pixel_mae_rgb": [
+        1.2352386267006803,
+        1.7528167517006803,
+        1.7757759353741496
+      ],
+      "two_stage_pixel_mae_rgb": [
+        0.5350034545068028,
+        0.8187978316326531,
+        0.8477293261054422
+      ],
+      "jpeg_pixel_mae_rgb": [
+        0.22623033588435373,
+        0.3711269664115646,
+        0.3677455357142857
+      ],
+      "target_translation_difference_mm": 0.7666671872138977,
+      "pose_translation_difference_mm": 0.8541873693466187,
+      "two_stage_target_difference_mm": 0.114117830991745,
+      "two_stage_pose_difference_mm": 0.210488423705101,
+      "jpeg_target_difference_mm": 0.14176684617996216,
+      "jpeg_pose_difference_mm": 0.17091211676597595
+    },
+    {
+      "frame": 170,
+      "pixel_mae_rgb": [
+        1.1693372661564625,
+        1.6395089285714286,
+        1.7108245642006803
+      ],
+      "two_stage_pixel_mae_rgb": [
+        0.463242718962585,
+        0.7489570046768708,
+        0.7887303358843537
+      ],
+      "jpeg_pixel_mae_rgb": [
+        0.21763392857142858,
+        0.3499282525510204,
+        0.35764774659863946
+      ],
+      "target_translation_difference_mm": 0.42444711923599243,
+      "pose_translation_difference_mm": 0.5340172052383423,
+      "two_stage_target_difference_mm": 0.30100324749946594,
+      "two_stage_pose_difference_mm": 0.3257479667663574,
+      "jpeg_target_difference_mm": 0.039574675261974335,
+      "jpeg_pose_difference_mm": 0.06416093558073044
+    },
+    {
+      "frame": 180,
+      "pixel_mae_rgb": [
+        1.0809483949829932,
+        1.6039872980442176,
+        1.6059337797619047
+      ],
+      "two_stage_pixel_mae_rgb": [
+        0.3684829400510204,
+        0.7342554209183674,
+        0.75320206207483
+      ],
+      "jpeg_pixel_mae_rgb": [
+        0.19962399022108843,
+        0.3225579294217687,
+        0.35500372023809523
+      ],
+      "target_translation_difference_mm": 0.7564635276794434,
+      "pose_translation_difference_mm": 1.277925729751587,
+      "two_stage_target_difference_mm": 0.23264706134796143,
+      "two_stage_pose_difference_mm": 0.178388774394989,
+      "jpeg_target_difference_mm": 0.23780696094036102,
+      "jpeg_pose_difference_mm": 0.26316437125205994
+    },
+    {
+      "frame": 190,
+      "pixel_mae_rgb": [
+        1.09906462585034,
+        1.624103156887755,
+        1.6407512223639455
+      ],
+      "two_stage_pixel_mae_rgb": [
+        0.4265718005952381,
+        0.7717966092687075,
+        0.7933806335034014
+      ],
+      "jpeg_pixel_mae_rgb": [
+        0.22032445790816327,
+        0.3515292835884354,
+        0.34707828443877553
+      ],
+      "target_translation_difference_mm": 0.10661931335926056,
+      "pose_translation_difference_mm": 0.46395790576934814,
+      "two_stage_target_difference_mm": 0.24919825792312622,
+      "two_stage_pose_difference_mm": 0.39879029989242554,
+      "jpeg_target_difference_mm": 0.19708697497844696,
+      "jpeg_pose_difference_mm": 0.22911004722118378
+    },
+    {
+      "frame": 200,
+      "pixel_mae_rgb": [
+        1.1595915710034013,
+        1.597742612670068,
+        1.690163956207483
+      ],
+      "two_stage_pixel_mae_rgb": [
+        0.49645913052721086,
+        0.7682092368197279,
+        0.8526719281462585
+      ],
+      "jpeg_pixel_mae_rgb": [
+        0.2465189200680272,
+        0.34523809523809523,
+        0.35790683460884354
+      ],
+      "target_translation_difference_mm": 0.3529188632965088,
+      "pose_translation_difference_mm": 0.3313734233379364,
+      "two_stage_target_difference_mm": 0.241735577583313,
+      "two_stage_pose_difference_mm": 0.30998286604881287,
+      "jpeg_target_difference_mm": 0.04123961552977562,
+      "jpeg_pose_difference_mm": 0.03420988470315933
+    },
+    {
+      "frame": 210,
+      "pixel_mae_rgb": [
+        1.172937925170068,
+        1.5999880420918366,
+        1.6681746917517006
+      ],
+      "two_stage_pixel_mae_rgb": [
+        0.5639814519557823,
+        0.7904908056972789,
+        0.8553691007653061
+      ],
+      "jpeg_pixel_mae_rgb": [
+        0.2194342580782313,
+        0.3436902104591837,
+        0.36888818027210885
+      ],
+      "target_translation_difference_mm": 0.5578649044036865,
+      "pose_translation_difference_mm": 0.7092409133911133,
+      "two_stage_target_difference_mm": 0.2092081904411316,
+      "two_stage_pose_difference_mm": 0.20385710895061493,
+      "jpeg_target_difference_mm": 0.025160090997815132,
+      "jpeg_pose_difference_mm": 0.046150557696819305
+    },
+    {
+      "frame": 220,
+      "pixel_mae_rgb": [
+        1.1767910289115646,
+        1.5773942389455782,
+        1.5946734162414966
+      ],
+      "two_stage_pixel_mae_rgb": [
+        0.5327447385204082,
+        0.7781808035714286,
+        0.8046675701530612
+      ],
+      "jpeg_pixel_mae_rgb": [
+        0.2177202912414966,
+        0.3610557504251701,
+        0.34204267644557823
+      ],
+      "target_translation_difference_mm": 0.5214406847953796,
+      "pose_translation_difference_mm": 0.450547456741333,
+      "two_stage_target_difference_mm": 0.09927380830049515,
+      "two_stage_pose_difference_mm": 0.1166781336069107,
+      "jpeg_target_difference_mm": 0.2305852472782135,
+      "jpeg_pose_difference_mm": 0.2516602575778961
+    },
+    {
+      "frame": 230,
+      "pixel_mae_rgb": [
+        1.100492931547619,
+        1.5582217261904763,
+        1.519969706632653
+      ],
+      "two_stage_pixel_mae_rgb": [
+        0.5299479166666666,
+        0.7779881483843537,
+        0.7572611075680272
+      ],
+      "jpeg_pixel_mae_rgb": [
+        0.23083413052721088,
+        0.3441685267857143,
+        0.3420028167517007
+      ],
+      "target_translation_difference_mm": 0.21979327499866486,
+      "pose_translation_difference_mm": 0.20736101269721985,
+      "two_stage_target_difference_mm": 0.2972644567489624,
+      "two_stage_pose_difference_mm": 0.3421626091003418,
+      "jpeg_target_difference_mm": 0.08064677566289902,
+      "jpeg_pose_difference_mm": 0.08053316920995712
+    },
+    {
+      "frame": 240,
+      "pixel_mae_rgb": [
+        1.109554368622449,
+        1.545991443452381,
+        1.498764349489796
+      ],
+      "two_stage_pixel_mae_rgb": [
+        0.5588926977040817,
+        0.7760682397959183,
+        0.7594467474489796
+      ],
+      "jpeg_pixel_mae_rgb": [
+        0.22628348214285715,
+        0.3455769026360544,
+        0.336116868622449
+      ],
+      "target_translation_difference_mm": 0.3918132781982422,
+      "pose_translation_difference_mm": 0.43064260482788086,
+      "two_stage_target_difference_mm": 0.09390558302402496,
+      "two_stage_pose_difference_mm": 0.15840907394886017,
+      "jpeg_target_difference_mm": 0.06959418952465057,
+      "jpeg_pose_difference_mm": 0.08936722576618195
+    },
+    {
+      "frame": 250,
+      "pixel_mae_rgb": [
+        1.156515731292517,
+        1.5391754357993197,
+        1.496014030612245
+      ],
+      "two_stage_pixel_mae_rgb": [
+        0.5902357036564626,
+        0.7797951211734694,
+        0.7737165178571429
+      ],
+      "jpeg_pixel_mae_rgb": [
+        0.23224914965986396,
+        0.34589578018707484,
+        0.3511771896258503
+      ],
+      "target_translation_difference_mm": 0.3616844713687897,
+      "pose_translation_difference_mm": 0.44109871983528137,
+      "two_stage_target_difference_mm": 0.2137366235256195,
+      "two_stage_pose_difference_mm": 0.16736651957035065,
+      "jpeg_target_difference_mm": 0.25830453634262085,
+      "jpeg_pose_difference_mm": 0.321689635515213
+    },
+    {
+      "frame": 260,
+      "pixel_mae_rgb": [
+        1.1519318664965987,
+        1.5123830782312926,
+        1.4574564200680271
+      ],
+      "two_stage_pixel_mae_rgb": [
+        0.6269199085884354,
+        0.7776759141156463,
+        0.7854817708333334
+      ],
+      "jpeg_pixel_mae_rgb": [
+        0.22216464710884354,
+        0.33555883290816324,
+        0.3523264774659864
+      ],
+      "target_translation_difference_mm": 0.19015060365200043,
+      "pose_translation_difference_mm": 0.22618132829666138,
+      "two_stage_target_difference_mm": 0.49290359020233154,
+      "two_stage_pose_difference_mm": 0.4457111358642578,
+      "jpeg_target_difference_mm": 0.12157102674245834,
+      "jpeg_pose_difference_mm": 0.1388983577489853
+    },
+    {
+      "frame": 270,
+      "pixel_mae_rgb": [
+        1.2225964604591837,
+        1.4849728954081634,
+        1.4201211734693877
+      ],
+      "two_stage_pixel_mae_rgb": [
+        0.6441326530612245,
+        0.7663026147959183,
+        0.7695843962585034
+      ],
+      "jpeg_pixel_mae_rgb": [
+        0.223898543792517,
+        0.33824936224489793,
+        0.3395713754251701
+      ],
+      "target_translation_difference_mm": 0.8712226152420044,
+      "pose_translation_difference_mm": 0.8741204142570496,
+      "two_stage_target_difference_mm": 0.21763642132282257,
+      "two_stage_pose_difference_mm": 0.19462299346923828,
+      "jpeg_target_difference_mm": 0.039248473942279816,
+      "jpeg_pose_difference_mm": 0.038048066198825836
+    },
+    {
+      "frame": 280,
+      "pixel_mae_rgb": [
+        1.1595118516156462,
+        1.4751408375850341,
+        1.4008622980442176
+      ],
+      "two_stage_pixel_mae_rgb": [
+        0.6510549532312925,
+        0.7616589604591837,
+        0.7633264243197279
+      ],
+      "jpeg_pixel_mae_rgb": [
+        0.2456220769557823,
+        0.3209701849489796,
+        0.33911963222789115
+      ],
+      "target_translation_difference_mm": 0.6275492906570435,
+      "pose_translation_difference_mm": 0.6395480036735535,
+      "two_stage_target_difference_mm": 0.1346069872379303,
+      "two_stage_pose_difference_mm": 0.16350533068180084,
+      "jpeg_target_difference_mm": 0.04277076944708824,
+      "jpeg_pose_difference_mm": 0.03858981654047966
+    },
+    {
+      "frame": 290,
+      "pixel_mae_rgb": [
+        1.1877723745748299,
+        1.4551777742346939,
+        1.4093856292517006
+      ],
+      "two_stage_pixel_mae_rgb": [
+        0.6352572278911565,
+        0.7577527104591837,
+        0.7725938031462585
+      ],
+      "jpeg_pixel_mae_rgb": [
+        0.24841225552721088,
+        0.31505102040816324,
+        0.3445405505952381
+      ],
+      "target_translation_difference_mm": 0.38473764061927795,
+      "pose_translation_difference_mm": 0.5189083814620972,
+      "two_stage_target_difference_mm": 0.14006316661834717,
+      "two_stage_pose_difference_mm": 0.18833531439304352,
+      "jpeg_target_difference_mm": 0.03501265123486519,
+      "jpeg_pose_difference_mm": 0.05451571196317673
+    },
+    {
+      "frame": 300,
+      "pixel_mae_rgb": [
+        1.1594122023809523,
+        1.4593165391156462,
+        1.4072464923469388
+      ],
+      "two_stage_pixel_mae_rgb": [
+        0.6754756590136054,
+        0.7660833864795918,
+        0.7811769238945578
+      ],
+      "jpeg_pixel_mae_rgb": [
+        0.240679474914966,
+        0.33225047831632654,
+        0.32623830782312924
+      ],
+      "target_translation_difference_mm": 0.17806819081306458,
+      "pose_translation_difference_mm": 0.28787776827812195,
+      "two_stage_target_difference_mm": 0.06992766261100769,
+      "two_stage_pose_difference_mm": 0.126039057970047,
+      "jpeg_target_difference_mm": 0.0996171087026596,
+      "jpeg_pose_difference_mm": 0.07938232272863388
+    },
+    {
+      "frame": 310,
+      "pixel_mae_rgb": [
+        1.1689187393707483,
+        1.4667304421768708,
+        1.4142817283163265
+      ],
+      "two_stage_pixel_mae_rgb": [
+        0.6440994366496599,
+        0.7735504357993197,
+        0.7962505314625851
+      ],
+      "jpeg_pixel_mae_rgb": [
+        0.24355601615646258,
+        0.32536803784013607,
+        0.3534624787414966
+      ],
+      "target_translation_difference_mm": 0.7589207887649536,
+      "pose_translation_difference_mm": 0.7576256394386292,
+      "two_stage_target_difference_mm": 0.6007143259048462,
+      "two_stage_pose_difference_mm": 0.5519993901252747,
+      "jpeg_target_difference_mm": 0.08113501965999603,
+      "jpeg_pose_difference_mm": 0.10575204342603683
+    },
+    {
+      "frame": 320,
+      "pixel_mae_rgb": [
+        1.192555537840136,
+        1.4564665710034013,
+        1.3750531462585034
+      ],
+      "two_stage_pixel_mae_rgb": [
+        0.6623751062925171,
+        0.7765664859693877,
+        0.781867825255102
+      ],
+      "jpeg_pixel_mae_rgb": [
+        0.2486248405612245,
+        0.33125398596938777,
+        0.3340640943877551
+      ],
+      "target_translation_difference_mm": 0.8055230379104614,
+      "pose_translation_difference_mm": 0.7845793962478638,
+      "two_stage_target_difference_mm": 0.04943405091762543,
+      "two_stage_pose_difference_mm": 0.030810479074716568,
+      "jpeg_target_difference_mm": 0.06354789435863495,
+      "jpeg_pose_difference_mm": 0.07060015946626663
+    },
+    {
+      "frame": 330,
+      "pixel_mae_rgb": [
+        1.1843245110544218,
+        1.4443492240646258,
+        1.378560799319728
+      ],
+      "two_stage_pixel_mae_rgb": [
+        0.70703125,
+        0.7707669005102041,
+        0.7738626700680272
+      ],
+      "jpeg_pixel_mae_rgb": [
+        0.23321906887755103,
+        0.33001169217687076,
+        0.3341105973639456
+      ],
+      "target_translation_difference_mm": 0.6570649147033691,
+      "pose_translation_difference_mm": 0.7098026275634766,
+      "two_stage_target_difference_mm": 0.09474164247512817,
+      "two_stage_pose_difference_mm": 0.10734553635120392,
+      "jpeg_target_difference_mm": 0.16734276711940765,
+      "jpeg_pose_difference_mm": 0.16507641971111298
+    },
+    {
+      "frame": 340,
+      "pixel_mae_rgb": [
+        1.2413637329931972,
+        1.4292091836734695,
+        1.3569502019557824
+      ],
+      "two_stage_pixel_mae_rgb": [
+        0.7243768601190477,
+        0.7764668367346939,
+        0.7741549744897959
+      ],
+      "jpeg_pixel_mae_rgb": [
+        0.23162468112244897,
+        0.3296263818027211,
+        0.32890226403061223
+      ],
+      "target_translation_difference_mm": 0.4957875907421112,
+      "pose_translation_difference_mm": 0.507081151008606,
+      "two_stage_target_difference_mm": 0.14967399835586548,
+      "two_stage_pose_difference_mm": 0.1954912394285202,
+      "jpeg_target_difference_mm": 0.01894686557352543,
+      "jpeg_pose_difference_mm": 0.023612290620803833
+    },
+    {
+      "frame": 350,
+      "pixel_mae_rgb": [
+        1.2004145408163265,
+        1.4039381377551021,
+        1.3338581526360545
+      ],
+      "two_stage_pixel_mae_rgb": [
+        0.7079413796768708,
+        0.7591145833333334,
+        0.7867041347789115
+      ],
+      "jpeg_pixel_mae_rgb": [
+        0.2510562818877551,
+        0.31934922406462585,
+        0.3199869791666667
+      ],
+      "target_translation_difference_mm": 0.44991758465766907,
+      "pose_translation_difference_mm": 0.4762841761112213,
+      "two_stage_target_difference_mm": 0.12308941036462784,
+      "two_stage_pose_difference_mm": 0.1300605833530426,
+      "jpeg_target_difference_mm": 0.06665411591529846,
+      "jpeg_pose_difference_mm": 0.055798307061195374
+    },
+    {
+      "frame": 360,
+      "pixel_mae_rgb": [
+        1.2155147215136055,
+        1.398517219387755,
+        1.3283575148809523
+      ],
+      "two_stage_pixel_mae_rgb": [
+        0.7240114795918368,
+        0.7508835565476191,
+        0.7784000318877551
+      ],
+      "jpeg_pixel_mae_rgb": [
+        0.24964790603741496,
+        0.32447119472789115,
+        0.32459077380952384
+      ],
+      "target_translation_difference_mm": 0.3715890049934387,
+      "pose_translation_difference_mm": 0.3507058322429657,
+      "two_stage_target_difference_mm": 0.27999067306518555,
+      "two_stage_pose_difference_mm": 0.2251269519329071,
+      "jpeg_target_difference_mm": 0.04163382574915886,
+      "jpeg_pose_difference_mm": 0.03695640712976456
+    },
+    {
+      "frame": 370,
+      "pixel_mae_rgb": [
+        1.2175807823129252,
+        1.392312393707483,
+        1.3113639987244898
+      ],
+      "two_stage_pixel_mae_rgb": [
+        0.7126979698129252,
+        0.7662760416666666,
+        0.7829971832482994
+      ],
+      "jpeg_pixel_mae_rgb": [
+        0.24610703656462585,
+        0.31071295705782315,
+        0.32678970025510207
+      ],
+      "target_translation_difference_mm": 1.4138890504837036,
+      "pose_translation_difference_mm": 1.2881138324737549,
+      "two_stage_target_difference_mm": 0.1809709668159485,
+      "two_stage_pose_difference_mm": 0.17895102500915527,
+      "jpeg_target_difference_mm": 0.011802207678556442,
+      "jpeg_pose_difference_mm": 0.021368496119976044
+    },
+    {
+      "frame": 380,
+      "pixel_mae_rgb": [
+        1.202586894132653,
+        1.3748405612244898,
+        1.3065675488945578
+      ],
+      "two_stage_pixel_mae_rgb": [
+        0.7345610119047619,
+        0.7660435267857143,
+        0.7843191964285714
+      ],
+      "jpeg_pixel_mae_rgb": [
+        0.2522454294217687,
+        0.32473692602040816,
+        0.32926764455782315
+      ],
+      "target_translation_difference_mm": 0.7804128527641296,
+      "pose_translation_difference_mm": 0.6587798595428467,
+      "two_stage_target_difference_mm": 0.3514876961708069,
+      "two_stage_pose_difference_mm": 0.34784913063049316,
+      "jpeg_target_difference_mm": 0.02998034842312336,
+      "jpeg_pose_difference_mm": 0.015911873430013657
+    },
+    {
+      "frame": 390,
+      "pixel_mae_rgb": [
+        1.243974542942177,
+        1.3694528592687074,
+        1.2917198129251701
+      ],
+      "two_stage_pixel_mae_rgb": [
+        0.7481133078231292,
+        0.7655120642006803,
+        0.7759021577380952
+      ],
+      "jpeg_pixel_mae_rgb": [
+        0.24028087797619047,
+        0.31707722151360546,
+        0.3155559098639456
+      ],
+      "target_translation_difference_mm": 1.2055306434631348,
+      "pose_translation_difference_mm": 1.083715796470642,
+      "two_stage_target_difference_mm": 0.12526798248291016,
+      "two_stage_pose_difference_mm": 0.14281246066093445,
+      "jpeg_target_difference_mm": 0.19057592749595642,
+      "jpeg_pose_difference_mm": 0.19517195224761963
+    },
+    {
+      "frame": 400,
+      "pixel_mae_rgb": [
+        1.2475154124149659,
+        1.3680976296768708,
+        1.2896271789965987
+      ],
+      "two_stage_pixel_mae_rgb": [
+        0.7503520939625851,
+        0.7647015837585034,
+        0.7772308142006803
+      ],
+      "jpeg_pixel_mae_rgb": [
+        0.2489503613945578,
+        0.32325547406462585,
+        0.3305497980442177
+      ],
+      "target_translation_difference_mm": 1.220139503479004,
+      "pose_translation_difference_mm": 1.0829336643218994,
+      "two_stage_target_difference_mm": 0.18306100368499756,
+      "two_stage_pose_difference_mm": 0.20765170454978943,
+      "jpeg_target_difference_mm": 0.05425634980201721,
+      "jpeg_pose_difference_mm": 0.051704902201890945
+    },
+    {
+      "frame": 410,
+      "pixel_mae_rgb": [
+        1.241649394132653,
+        1.3681109162414966,
+        1.2924173575680271
+      ],
+      "two_stage_pixel_mae_rgb": [
+        0.7477412840136054,
+        0.7656914328231292,
+        0.7794031675170068
+      ],
+      "jpeg_pixel_mae_rgb": [
+        0.24372874149659865,
+        0.31606744260204084,
+        0.3232355442176871
+      ],
+      "target_translation_difference_mm": 1.1001602411270142,
+      "pose_translation_difference_mm": 0.9858258962631226,
+      "two_stage_target_difference_mm": 0.2668168842792511,
+      "two_stage_pose_difference_mm": 0.2776949405670166,
+      "jpeg_target_difference_mm": 0.08043196052312851,
+      "jpeg_pose_difference_mm": 0.08105912804603577
+    },
+    {
+      "frame": 420,
+      "pixel_mae_rgb": [
+        1.2440874787414966,
+        1.3676857461734695,
+        1.2889628507653061
+      ],
+      "two_stage_pixel_mae_rgb": [
+        0.7516143176020408,
+        0.7641501913265306,
+        0.7788982780612245
+      ],
+      "jpeg_pixel_mae_rgb": [
+        0.24964790603741496,
+        0.30917171556122447,
+        0.31919642857142855
+      ],
+      "target_translation_difference_mm": 1.0456132888793945,
+      "pose_translation_difference_mm": 0.9166274070739746,
+      "two_stage_target_difference_mm": 0.2661149799823761,
+      "two_stage_pose_difference_mm": 0.27673351764678955,
+      "jpeg_target_difference_mm": 0.11884962022304535,
+      "jpeg_pose_difference_mm": 0.11968810111284256
+    },
+    {
+      "frame": 430,
+      "pixel_mae_rgb": [
+        1.2444727891156462,
+        1.3698846726190477,
+        1.2916799532312926
+      ],
+      "two_stage_pixel_mae_rgb": [
+        0.7505713222789115,
+        0.7658708014455783,
+        0.7797286883503401
+      ],
+      "jpeg_pixel_mae_rgb": [
+        0.2560653167517007,
+        0.31671184098639454,
+        0.32784598214285715
+      ],
+      "target_translation_difference_mm": 1.0481454133987427,
+      "pose_translation_difference_mm": 0.9218564033508301,
+      "two_stage_target_difference_mm": 0.2813580632209778,
+      "two_stage_pose_difference_mm": 0.2929428219795227,
+      "jpeg_target_difference_mm": 0.035662710666656494,
+      "jpeg_pose_difference_mm": 0.031192172318696976
+    },
+    {
+      "frame": 440,
+      "pixel_mae_rgb": [
+        1.2466916454081634,
+        1.3680444834183674,
+        1.2937526573129252
+      ],
+      "two_stage_pixel_mae_rgb": [
+        0.7535275829081632,
+        0.7629145408163265,
+        0.781608737244898
+      ],
+      "jpeg_pixel_mae_rgb": [
+        0.24544935161564627,
+        0.3148384353741497,
+        0.32896869685374147
+      ],
+      "target_translation_difference_mm": 1.155813217163086,
+      "pose_translation_difference_mm": 1.0630310773849487,
+      "two_stage_target_difference_mm": 0.2091117650270462,
+      "two_stage_pose_difference_mm": 0.21312594413757324,
+      "jpeg_target_difference_mm": 0.09438947588205338,
+      "jpeg_pose_difference_mm": 0.09332571178674698
+    },
+    {
+      "frame": 450,
+      "pixel_mae_rgb": [
+        1.2503919536564625,
+        1.3624309098639455,
+        1.2948753720238095
+      ],
+      "two_stage_pixel_mae_rgb": [
+        0.7581247342687075,
+        0.7611474277210885,
+        0.7829772534013606
+      ],
+      "jpeg_pixel_mae_rgb": [
+        0.24195498511904762,
+        0.326523968962585,
+        0.3192296449829932
+      ],
+      "target_translation_difference_mm": 1.1814687252044678,
+      "pose_translation_difference_mm": 1.066503882408142,
+      "two_stage_target_difference_mm": 0.18210595846176147,
+      "two_stage_pose_difference_mm": 0.2010812610387802,
+      "jpeg_target_difference_mm": 0.08753886818885803,
+      "jpeg_pose_difference_mm": 0.11045460402965546
+    },
+    {
+      "frame": 460,
+      "pixel_mae_rgb": [
+        1.251959768282313,
+        1.3694329294217686,
+        1.2940117453231292
+      ],
+      "two_stage_pixel_mae_rgb": [
+        0.7588422087585034,
+        0.7691326530612245,
+        0.7805657419217688
+      ],
+      "jpeg_pixel_mae_rgb": [
+        0.2432703550170068,
+        0.3195950255102041,
+        0.33139349489795916
+      ],
+      "target_translation_difference_mm": 1.2814208269119263,
+      "pose_translation_difference_mm": 1.1687633991241455,
+      "two_stage_target_difference_mm": 0.0797741562128067,
+      "two_stage_pose_difference_mm": 0.10488349199295044,
+      "jpeg_target_difference_mm": 0.28174498677253723,
+      "jpeg_pose_difference_mm": 0.2813224792480469
+    },
+    {
+      "frame": 470,
+      "pixel_mae_rgb": [
+        1.252663956207483,
+        1.3703297725340136,
+        1.2925568664965987
+      ],
+      "two_stage_pixel_mae_rgb": [
+        0.7607820471938775,
+        0.7686609800170068,
+        0.7799080569727891
+      ],
+      "jpeg_pixel_mae_rgb": [
+        0.2567827912414966,
+        0.32798549107142855,
+        0.33077566964285715
+      ],
+      "target_translation_difference_mm": 1.2199206352233887,
+      "pose_translation_difference_mm": 1.132779598236084,
+      "two_stage_target_difference_mm": 0.1038006991147995,
+      "two_stage_pose_difference_mm": 0.12013904750347137,
+      "jpeg_target_difference_mm": 0.07128981500864029,
+      "jpeg_pose_difference_mm": 0.11010856181383133
+    },
+    {
+      "frame": 480,
+      "pixel_mae_rgb": [
+        1.250086362670068,
+        1.369233630952381,
+        1.2886971194727892
+      ],
+      "two_stage_pixel_mae_rgb": [
+        0.760655824829932,
+        0.7677109906462585,
+        0.7755367772108843
+      ],
+      "jpeg_pixel_mae_rgb": [
+        0.24624654549319727,
+        0.31610065901360546,
+        0.3303704294217687
+      ],
+      "target_translation_difference_mm": 1.2006947994232178,
+      "pose_translation_difference_mm": 1.09523344039917,
+      "two_stage_target_difference_mm": 0.12647861242294312,
+      "two_stage_pose_difference_mm": 0.15102992951869965,
+      "jpeg_target_difference_mm": 0.016816336661577225,
+      "jpeg_pose_difference_mm": 0.017888663336634636
+    },
+    {
+      "frame": 490,
+      "pixel_mae_rgb": [
+        1.250252444727891,
+        1.369406356292517,
+        1.2884978210034013
+      ],
+      "two_stage_pixel_mae_rgb": [
+        0.7606491815476191,
+        0.7683487457482994,
+        0.7749388818027211
+      ],
+      "jpeg_pixel_mae_rgb": [
+        0.2370987457482993,
+        0.3239596619897959,
+        0.33642910289115646
+      ],
+      "target_translation_difference_mm": 1.1086087226867676,
+      "pose_translation_difference_mm": 1.0143359899520874,
+      "two_stage_target_difference_mm": 0.19393686950206757,
+      "two_stage_pose_difference_mm": 0.21367943286895752,
+      "jpeg_target_difference_mm": 0.05156064033508301,
+      "jpeg_pose_difference_mm": 0.034501973539590836
+    },
+    {
+      "frame": 500,
+      "pixel_mae_rgb": [
+        1.2476017750850341,
+        1.3697252338435375,
+        1.2935865752551021
+      ],
+      "two_stage_pixel_mae_rgb": [
+        0.7600712159863946,
+        0.7679966517857143,
+        0.7821468431122449
+      ],
+      "jpeg_pixel_mae_rgb": [
+        0.23799558886054423,
+        0.324929581207483,
+        0.3228502338435374
+      ],
+      "target_translation_difference_mm": 1.138323426246643,
+      "pose_translation_difference_mm": 1.0852952003479004,
+      "two_stage_target_difference_mm": 0.08909116685390472,
+      "two_stage_pose_difference_mm": 0.10298039019107819,
+      "jpeg_target_difference_mm": 0.013679677620530128,
+      "jpeg_pose_difference_mm": 0.017805766314268112
+    },
+    {
+      "frame": 510,
+      "pixel_mae_rgb": [
+        1.2445259353741496,
+        1.371804581207483,
+        1.296522906037415
+      ],
+      "two_stage_pixel_mae_rgb": [
+        0.7583971088435374,
+        0.7679767219387755,
+        0.7823527848639455
+      ],
+      "jpeg_pixel_mae_rgb": [
+        0.23717846513605442,
+        0.3261984481292517,
+        0.32357435161564624
+      ],
+      "target_translation_difference_mm": 1.2615101337432861,
+      "pose_translation_difference_mm": 1.19123113155365,
+      "two_stage_target_difference_mm": 0.0645921379327774,
+      "two_stage_pose_difference_mm": 0.07728714495897293,
+      "jpeg_target_difference_mm": 0.04163314402103424,
+      "jpeg_pose_difference_mm": 0.043023526668548584
+    },
+    {
+      "frame": 520,
+      "pixel_mae_rgb": [
+        1.2487311330782314,
+        1.3730933779761905,
+        1.2973865327380953
+      ],
+      "two_stage_pixel_mae_rgb": [
+        0.7630474064625851,
+        0.7706672512755102,
+        0.7837412308673469
+      ],
+      "jpeg_pixel_mae_rgb": [
+        0.2375969919217687,
+        0.3260589392006803,
+        0.3256736288265306
+      ],
+      "target_translation_difference_mm": 1.2471030950546265,
+      "pose_translation_difference_mm": 1.1982356309890747,
+      "two_stage_target_difference_mm": 0.04932737722992897,
+      "two_stage_pose_difference_mm": 0.07192572951316833,
+      "jpeg_target_difference_mm": 0.1179419457912445,
+      "jpeg_pose_difference_mm": 0.12851093709468842
+    },
+    {
+      "frame": 530,
+      "pixel_mae_rgb": [
+        1.2515345982142858,
+        1.3738839285714286,
+        1.2967354910714286
+      ],
+      "two_stage_pixel_mae_rgb": [
+        0.7634260735544217,
+        0.770335087159864,
+        0.7852625425170068
+      ],
+      "jpeg_pixel_mae_rgb": [
+        0.24180218962585034,
+        0.32425860969387754,
+        0.32119605654761907
+      ],
+      "target_translation_difference_mm": 1.1066789627075195,
+      "pose_translation_difference_mm": 1.0774983167648315,
+      "two_stage_target_difference_mm": 0.05836489796638489,
+      "two_stage_pose_difference_mm": 0.0794629231095314,
+      "jpeg_target_difference_mm": 0.050884347409009933,
+      "jpeg_pose_difference_mm": 0.039096202701330185
+    },
+    {
+      "frame": 540,
+      "pixel_mae_rgb": [
+        1.2474290497448979,
+        1.3714790603741496,
+        1.2935467155612246
+      ],
+      "two_stage_pixel_mae_rgb": [
+        0.7602572278911565,
+        0.7673123937074829,
+        0.7801472151360545
+      ],
+      "jpeg_pixel_mae_rgb": [
+        0.24250637755102042,
+        0.3227904443027211,
+        0.3322704081632653
+      ],
+      "target_translation_difference_mm": 1.0714353322982788,
+      "pose_translation_difference_mm": 1.0577266216278076,
+      "two_stage_target_difference_mm": 0.053985901176929474,
+      "two_stage_pose_difference_mm": 0.07543792575597763,
+      "jpeg_target_difference_mm": 0.0417955256998539,
+      "jpeg_pose_difference_mm": 0.01729441061615944
+    },
+    {
+      "frame": 550,
+      "pixel_mae_rgb": [
+        1.2470437393707483,
+        1.3724423363095237,
+        1.2954400510204083
+      ],
+      "two_stage_pixel_mae_rgb": [
+        0.7591943027210885,
+        0.7679833652210885,
+        0.7822398490646258
+      ],
+      "jpeg_pixel_mae_rgb": [
+        0.2471500318877551,
+        0.3194953762755102,
+        0.32988546981292516
+      ],
+      "target_translation_difference_mm": 0.9941492676734924,
+      "pose_translation_difference_mm": 0.9900575876235962,
+      "two_stage_target_difference_mm": 0.10572577267885208,
+      "two_stage_pose_difference_mm": 0.13546372950077057,
+      "jpeg_target_difference_mm": 0.07446099072694778,
+      "jpeg_pose_difference_mm": 0.0638979896903038
+    },
+    {
+      "frame": 560,
+      "pixel_mae_rgb": [
+        1.245203550170068,
+        1.3707084396258504,
+        1.2934204931972788
+      ],
+      "two_stage_pixel_mae_rgb": [
+        0.7586628401360545,
+        0.7675382653061225,
+        0.7817349596088435
+      ],
+      "jpeg_pixel_mae_rgb": [
+        0.24472523384353742,
+        0.31701078869047616,
+        0.32988546981292516
+      ],
+      "target_translation_difference_mm": 1.0997735261917114,
+      "pose_translation_difference_mm": 1.107072353363037,
+      "two_stage_target_difference_mm": 0.06963438540697098,
+      "two_stage_pose_difference_mm": 0.09048564732074738,
+      "jpeg_target_difference_mm": 0.05653620511293411,
+      "jpeg_pose_difference_mm": 0.07033764570951462
+    },
+    {
+      "frame": 570,
+      "pixel_mae_rgb": [
+        1.2454493516156462,
+        1.369937818877551,
+        1.2959515837585034
+      ],
+      "two_stage_pixel_mae_rgb": [
+        0.7582243835034014,
+        0.7690529336734694,
+        0.7811702806122449
+      ],
+      "jpeg_pixel_mae_rgb": [
+        0.24352279974489796,
+        0.3271417942176871,
+        0.3296595982142857
+      ],
+      "target_translation_difference_mm": 1.124215006828308,
+      "pose_translation_difference_mm": 1.12522292137146,
+      "two_stage_target_difference_mm": 0.08648976683616638,
+      "two_stage_pose_difference_mm": 0.10128744691610336,
+      "jpeg_target_difference_mm": 0.04853411018848419,
+      "jpeg_pose_difference_mm": 0.04649759829044342
+    },
+    {
+      "frame": 580,
+      "pixel_mae_rgb": [
+        1.250896843112245,
+        1.373040231717687,
+        1.2935267857142858
+      ],
+      "two_stage_pixel_mae_rgb": [
+        0.7642631271258503,
+        0.7696109693877551,
+        0.7824524340986394
+      ],
+      "jpeg_pixel_mae_rgb": [
+        0.23584980867346939,
+        0.3144265518707483,
+        0.32482993197278914
+      ],
+      "target_translation_difference_mm": 1.2358001470565796,
+      "pose_translation_difference_mm": 1.2274640798568726,
+      "two_stage_target_difference_mm": 0.05490345507860184,
+      "two_stage_pose_difference_mm": 0.08146564662456512,
+      "jpeg_target_difference_mm": 0.10958440601825714,
+      "jpeg_pose_difference_mm": 0.12062355130910873
+    },
+    {
+      "frame": 590,
+      "pixel_mae_rgb": [
+        1.248385682397959,
+        1.369060905612245,
+        1.2937061543367347
+      ],
+      "two_stage_pixel_mae_rgb": [
+        0.7606226084183674,
+        0.7667410714285714,
+        0.7811702806122449
+      ],
+      "jpeg_pixel_mae_rgb": [
+        0.2504716730442177,
+        0.31304474914965985,
+        0.3318452380952381
+      ],
+      "target_translation_difference_mm": 1.1158987283706665,
+      "pose_translation_difference_mm": 1.1344958543777466,
+      "two_stage_target_difference_mm": 0.11079712957143784,
+      "two_stage_pose_difference_mm": 0.12362166494131088,
+      "jpeg_target_difference_mm": 0.11411627382040024,
+      "jpeg_pose_difference_mm": 0.11600680649280548
+    },
+    {
+      "frame": 600,
+      "pixel_mae_rgb": [
+        1.245296556122449,
+        1.3644172512755102,
+        1.2941778273809523
+      ],
+      "two_stage_pixel_mae_rgb": [
+        0.7530492665816326,
+        0.7662096088435374,
+        0.781422725340136
+      ],
+      "jpeg_pixel_mae_rgb": [
+        0.23660714285714285,
+        0.30795599489795916,
+        0.3179740646258503
+      ],
+      "target_translation_difference_mm": 0.9874886870384216,
+      "pose_translation_difference_mm": 1.0227391719818115,
+      "two_stage_target_difference_mm": 0.2695853114128113,
+      "two_stage_pose_difference_mm": 0.264791876077652,
+      "jpeg_target_difference_mm": 0.07534203678369522,
+      "jpeg_pose_difference_mm": 0.06005795672535896
+    },
+    {
+      "frame": 610,
+      "pixel_mae_rgb": [
+        1.2411046449829932,
+        1.361235119047619,
+        1.2888166985544218
+      ],
+      "two_stage_pixel_mae_rgb": [
+        0.7506377551020408,
+        0.7605096726190477,
+        0.7759752338435374
+      ],
+      "jpeg_pixel_mae_rgb": [
+        0.24513711734693877,
+        0.30742453231292516,
+        0.3221859056122449
+      ],
+      "target_translation_difference_mm": 0.8732202649116516,
+      "pose_translation_difference_mm": 0.9145850539207458,
+      "two_stage_target_difference_mm": 0.3968455195426941,
+      "two_stage_pose_difference_mm": 0.38924655318260193,
+      "jpeg_target_difference_mm": 0.07141611725091934,
+      "jpeg_pose_difference_mm": 0.057352662086486816
+    },
+    {
+      "frame": 620,
+      "pixel_mae_rgb": [
+        1.2445325786564625,
+        1.3689944727891157,
+        1.289142219387755
+      ],
+      "two_stage_pixel_mae_rgb": [
+        0.7528964710884354,
+        0.7670798788265306,
+        0.7765664859693877
+      ],
+      "jpeg_pixel_mae_rgb": [
+        0.24405426232993196,
+        0.306109162414966,
+        0.32695578231292516
+      ],
+      "target_translation_difference_mm": 1.0199131965637207,
+      "pose_translation_difference_mm": 1.0346335172653198,
+      "two_stage_target_difference_mm": 0.2661443054676056,
+      "two_stage_pose_difference_mm": 0.27747079730033875,
+      "jpeg_target_difference_mm": 0.06480233371257782,
+      "jpeg_pose_difference_mm": 0.062380217015743256
+    },
+    {
+      "frame": 630,
+      "pixel_mae_rgb": [
+        1.240579825680272,
+        1.3664833120748299,
+        1.2917463860544218
+      ],
+      "two_stage_pixel_mae_rgb": [
+        0.7511957908163265,
+        0.7657312925170068,
+        0.7773703231292517
+      ],
+      "jpeg_pixel_mae_rgb": [
+        0.24274553571428573,
+        0.3048336522108844,
+        0.3232754039115646
+      ],
+      "target_translation_difference_mm": 0.9309545755386353,
+      "pose_translation_difference_mm": 0.9743741154670715,
+      "two_stage_target_difference_mm": 0.315199613571167,
+      "two_stage_pose_difference_mm": 0.30552101135253906,
+      "jpeg_target_difference_mm": 0.07790727913379669,
+      "jpeg_pose_difference_mm": 0.08777142316102982
+    }
+  ]
+}

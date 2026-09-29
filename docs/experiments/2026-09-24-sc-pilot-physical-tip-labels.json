@@ -1,0 +1,51 @@
+{
+  "schema": "sc_physical_tip_relabel/v1",
+  "source_labels": "/var/tmp/chmin_aic_20260918_act/sc_bc_matrix_pilot_20260924/pose_labels.jsonl",
+  "source_labels_sha256": "d225f63426ad045f2eaf9fad1b76e3aa236a3ac8d4c3c041bcc7b0f09f2368d0",
+  "edges": "/var/tmp/chmin_aic_20260918_act/sc_bc_matrix_pilot_20260924/edges_joined.json",
+  "edges_sha256": "7af9fb42c948d1abea752b0e04d18200d93c4651d2fc79d918457629dc675624",
+  "calibrations": {
+    "/var/tmp/chmin_aic_20260918_act/sc_bc_matrix_pilot_20260924/dynamic_grasp_calibration.json": "9bfd0df86740f3c0bfaa3237fcc12671abf6a27aa7679b6b35dc0f985a6acf90"
+  },
+  "fixed_proxy_calibration_sha256": "35fa4e3383776da6d3927804304deb610568b33c35b69fdbf2f713b05883bbc8",
+  "rows": 1217,
+  "episodes": 16,
+  "rows_by_trial": {
+    "trial_960001": 48,
+    "trial_960002": 48,
+    "trial_960003": 50,
+    "trial_960004": 46,
+    "trial_960005": 77,
+    "trial_960006": 116,
+    "trial_960007": 46,
+    "trial_960008": 77,
+    "trial_960009": 117,
+    "trial_960010": 77,
+    "trial_960011": 77,
+    "trial_960012": 117,
+    "trial_960013": 77,
+    "trial_960014": 116,
+    "trial_960015": 51,
+    "trial_960016": 77
+  },
+  "calibration_by_trial": {
+    "trial_960001": "/var/tmp/chmin_aic_20260918_act/sc_bc_matrix_pilot_20260924/dynamic_grasp_calibration.json",
+    "trial_960002": "/var/tmp/chmin_aic_20260918_act/sc_bc_matrix_pilot_20260924/dynamic_grasp_calibration.json",
+    "trial_960003": "/var/tmp/chmin_aic_20260918_act/sc_bc_matrix_pilot_20260924/dynamic_grasp_calibration.json",
+    "trial_960004": "/var/tmp/chmin_aic_20260918_act/sc_bc_matrix_pilot_20260924/dynamic_grasp_calibration.json",
+    "trial_960005": "/var/tmp/chmin_aic_20260918_act/sc_bc_matrix_pilot_20260924/dynamic_grasp_calibration.json",
+    "trial_960006": "/var/tmp/chmin_aic_20260918_act/sc_bc_matrix_pilot_20260924/dynamic_grasp_calibration.json",
+    "trial_960007": "/var/tmp/chmin_aic_20260918_act/sc_bc_matrix_pilot_20260924/dynamic_grasp_calibration.json",
+    "trial_960008": "/var/tmp/chmin_aic_20260918_act/sc_bc_matrix_pilot_20260924/dynamic_grasp_calibration.json",
+    "trial_960009": "/var/tmp/chmin_aic_20260918_act/sc_bc_matrix_pilot_20260924/dynamic_grasp_calibration.json",
+    "trial_960010": "/var/tmp/chmin_aic_20260918_act/sc_bc_matrix_pilot_20260924/dynamic_grasp_calibration.json",
+    "trial_960011": "/var/tmp/chmin_aic_20260918_act/sc_bc_matrix_pilot_20260924/dynamic_grasp_calibration.json",
+    "trial_960012": "/var/tmp/chmin_aic_20260918_act/sc_bc_matrix_pilot_20260924/dynamic_grasp_calibration.json",
+    "trial_960013": "/var/tmp/chmin_aic_20260918_act/sc_bc_matrix_pilot_20260924/dynamic_grasp_calibration.json",
+    "trial_960014": "/var/tmp/chmin_aic_20260918_act/sc_bc_matrix_pilot_20260924/dynamic_grasp_calibration.json",
+    "trial_960015": "/var/tmp/chmin_aic_20260918_act/sc_bc_matrix_pilot_20260924/dynamic_grasp_calibration.json",
+    "trial_960016": "/var/tmp/chmin_aic_20260918_act/sc_bc_matrix_pilot_20260924/dynamic_grasp_calibration.json"
+  },
+  "runtime_physical_tf_input": false,
+  "caveat": "Episode-start physical grasp is nearly rigid in audited scenes; hold-out policy must predict plug from RGB, not read this calibration."
+}

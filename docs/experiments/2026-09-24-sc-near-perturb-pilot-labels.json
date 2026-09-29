@@ -1,0 +1,71 @@
+{
+  "schema": "sc_native_pose_labels_summary/v1",
+  "labels": "/var/tmp/chmin_aic_20260918_act/sc_near_perturb_pilot_20260924/pose_labels.jsonl",
+  "training_label_only": true,
+  "image_size": [
+    1152,
+    1024
+  ],
+  "horizontal_fov_rad": 0.8718,
+  "focal_px": 1236.6314774257871,
+  "verified_manifest": "outputs/trajectory_datasets/expert_verified/manifest.json",
+  "tcp_to_optical": {
+    "center": [
+      -8.110621119294949e-10,
+      -0.116079182624172,
+      -0.20543789102822196,
+      -0.13052832987412713,
+      1.8272077641080097e-06,
+      -2.877053629764446e-07,
+      0.9914445799422424
+    ],
+    "left": [
+      -0.10051658396221153,
+      -0.05803259313640371,
+      -0.20543589102822196,
+      -0.11303994734332103,
+      0.0652657276653435,
+      -0.4957223896476733,
+      0.85861613512613
+    ],
+    "right": [
+      0.10051658313858014,
+      -0.058032594562973966,
+      -0.20543589102822196,
+      -0.11304177464842796,
+      -0.06526256267877945,
+      0.4957218900393923,
+      0.8586164235749891
+    ]
+  },
+  "include_failed_for_pose_only": true,
+  "validation_trials": [],
+  "episodes": [
+    {
+      "trial": "trial_000501",
+      "admitted": true,
+      "official_tier3": 38.20900039049491,
+      "expert_bc_eligible": false,
+      "split": "train",
+      "frames": 230,
+      "near_port_frames": 168,
+      "in_frame_counts": {
+        "center": {
+          "tip": 230,
+          "opening": 220
+        },
+        "left": {
+          "tip": 230,
+          "opening": 230
+        },
+        "right": {
+          "tip": 230,
+          "opening": 227
+        }
+      },
+      "scene_sha256": "8cd0f3d082ed24d79e75e93104996bb3a5c650b003b6f94a9acfb6d489287f9d"
+    }
+  ],
+  "train_scene_count": 1,
+  "validation_scene_count": 0
+}

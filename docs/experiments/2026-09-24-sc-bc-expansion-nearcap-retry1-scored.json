@@ -1,0 +1,26 @@
+{
+  "schema": "sc_bc_nearcap_retry1_scored/v1",
+  "teacher_only": true,
+  "variant": "5mm near-port bias cap",
+  "root": "/var/tmp/chmin_aic_20260918_act/sc_bc_expansion_nearcap_retry1_20260924",
+  "attempts": [
+    {
+      "retry": "trial_993001",
+      "parent": "trial_991001",
+      "parent_tier3_rounded": 38.36,
+      "retry_tier3": 20.92356019842997,
+      "message": "No insertion detected. Final plug port distance: 0.05m.",
+      "bc_admitted": false
+    },
+    {
+      "retry": "trial_993002",
+      "parent": "trial_991008",
+      "parent_tier3_rounded": 23.29,
+      "retry_tier3": 23.576261891330237,
+      "message": "No insertion detected. Final plug port distance: 0.03m.",
+      "bc_admitted": false
+    }
+  ],
+  "full_successes": 0,
+  "archive_manifest": "docs/experiments/2026-09-24-sc-bc-expansion-nearcap-retry1-mcap-archive.json"
+}

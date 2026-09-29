@@ -1,0 +1,20 @@
+{
+  "schema": "sc_scored_mcap_archive/v1",
+  "verified_before_source_removal": true,
+  "files": [
+    {
+      "original_path": "/var/tmp/chmin_aic_20260918_act/sc_shared_dagger_secondonly_student_20260924/eval_collection/collection_config/attempt_0001/bag_trial_991001_20260924_231029_582/bag_trial_991001_20260924_231029_582_0.mcap",
+      "original_sha256": "acc276a00b94722b52f51133f7b4b4dd4d4a981ed383dc524c03c2d27dcb475d",
+      "compressed": "/home/nas/chmin/aic_archive_20260924/sc_shared_dagger_secondonly_student_20260924/bag_trial_991001_20260924_231029_582_0.mcap.zst",
+      "compressed_bytes": 35733651,
+      "restore_command": "zstd -dc '/home/nas/chmin/aic_archive_20260924/sc_shared_dagger_secondonly_student_20260924/bag_trial_991001_20260924_231029_582_0.mcap.zst' > '/var/tmp/chmin_aic_20260918_act/sc_shared_dagger_secondonly_student_20260924/eval_collection/collection_config/attempt_0001/bag_trial_991001_20260924_231029_582/bag_trial_991001_20260924_231029_582_0.mcap'"
+    },
+    {
+      "original_path": "/var/tmp/chmin_aic_20260918_act/sc_shared_dagger_secondonly_student_20260924/eval_collection/collection_config/attempt_0001/bag_trial_991002_20260924_231117_090/bag_trial_991002_20260924_231117_090_0.mcap",
+      "original_sha256": "efffbd230e6126ee93716d0e287210938f303b63dc0c0da182b5e7da7f4bd52d",
+      "compressed": "/home/nas/chmin/aic_archive_20260924/sc_shared_dagger_secondonly_student_20260924/bag_trial_991002_20260924_231117_090_0.mcap.zst",
+      "compressed_bytes": 141402323,
+      "restore_command": "zstd -dc '/home/nas/chmin/aic_archive_20260924/sc_shared_dagger_secondonly_student_20260924/bag_trial_991002_20260924_231117_090_0.mcap.zst' > '/var/tmp/chmin_aic_20260918_act/sc_shared_dagger_secondonly_student_20260924/eval_collection/collection_config/attempt_0001/bag_trial_991002_20260924_231117_090/bag_trial_991002_20260924_231117_090_0.mcap'"
+    }
+  ]
+}

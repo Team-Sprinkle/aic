@@ -1,0 +1,75 @@
+{
+  "schema": "aic_fresh_recovery_scenes/v1",
+  "official_eval_image_digest": "sha256:9aa2ffdbb946d38edde1bac7b5f02a44cfbea26e3b04a9c74e09f14c97472923",
+  "normal_collisions": true,
+  "autonomous_policy": false,
+  "scenes": [
+    {
+      "scene": "fresh_scene_01",
+      "route": "privileged_across_cards_then_stock_cheatcode",
+      "official_total": 82.66938544776292,
+      "official_tier3": 75,
+      "official_tier3_message": "Cable insertion successful.",
+      "official_force_message": "Insertion force above 20.00 N, detected for a time of 0.08 seconds. Max detected force: 22.01N. This is below the threshold of 1.00 seconds. Penalty not applied.",
+      "config": "configs/hierarchical_recovery/fresh_scene_01.eval_config.yaml",
+      "config_sha256": "088df7bbb1eccfed1c8de906dea2b4245493380e2674eceed1c00875deed509a",
+      "bag": "/var/tmp/chmin_aic_hierarchical_recovery_20260924/fresh_scene_01/results/bag_trial_000001_20260924_010606_294",
+      "video": "artifacts/hierarchical_recovery/fresh_scene_01/all_views_20fps.mp4",
+      "video_sha256": "43e31b9b98ac4dfbd377486e12daa5bedc45560dc2f06375b0a956028838a099",
+      "trace": "outputs/experiments/2026-09-24_hierarchical_recovery/fresh_scene_01_trace.jsonl",
+      "trace_metrics": {
+        "samples": 2124,
+        "peak_tracking_error_mm": 56.56349015028322,
+        "peak_vector_tared_force_n": 27.773995442497288,
+        "first_80mm_tracking_error_s": null,
+        "recent_10s_tared_force_at_80mm_n": null,
+        "end_time_s": 106.1636
+      }
+    },
+    {
+      "scene": "fresh_scene_02",
+      "route": "privileged_across_cards_then_stock_cheatcode",
+      "official_total": 47.79157203197166,
+      "official_tier3": 39.66900698969358,
+      "official_tier3_message": "Partial insertion detected with distance of 0.01m.",
+      "official_force_message": "Insertion force above 20.00 N, detected for a time of 0.04 seconds. Max detected force: 24.62N. This is below the threshold of 1.00 seconds. Penalty not applied.",
+      "config": "configs/hierarchical_recovery/fresh_scene_02.eval_config.yaml",
+      "config_sha256": "36f803152a8f73ca85c94fd5d13ad2f2b5e26d66354407e39583f76b403c374d",
+      "bag": "/var/tmp/chmin_aic_hierarchical_recovery_20260924/fresh_scene_02/results/bag_trial_000001_20260924_010838_560",
+      "video": "artifacts/hierarchical_recovery/fresh_scene_02/all_views_20fps.mp4",
+      "video_sha256": "956d925dca70240c1a25550a20664a116e4838440d13b121d115edc843d22944",
+      "trace": "outputs/experiments/2026-09-24_hierarchical_recovery/fresh_scene_02_trace.jsonl",
+      "trace_metrics": {
+        "samples": 2510,
+        "peak_tracking_error_mm": 71.49389873815628,
+        "peak_vector_tared_force_n": 28.39709406075305,
+        "first_80mm_tracking_error_s": null,
+        "recent_10s_tared_force_at_80mm_n": null,
+        "end_time_s": 128.81184
+      }
+    },
+    {
+      "scene": "fresh_scene_03",
+      "route": "stock_cheatcode",
+      "official_total": 52.502400113971916,
+      "official_tier3": 38.9961182256336,
+      "official_tier3_message": "Partial insertion detected with distance of 0.01m.",
+      "official_force_message": "Insertion force above 20.00 N, detected for a time of 0.49 seconds. Max detected force: 31.43N. This is below the threshold of 1.00 seconds. Penalty not applied.",
+      "config": "configs/hierarchical_recovery/fresh_scene_03.eval_config.yaml",
+      "config_sha256": "82af592c142af4c4cb86ab2e26704eeccc2567dbe40b35da8330a874d02b82b3",
+      "bag": "/var/tmp/chmin_aic_hierarchical_recovery_20260924/fresh_scene_03/results/bag_trial_000001_20260924_012701_058",
+      "video": "artifacts/hierarchical_recovery/fresh_scene_03/all_views_20fps.mp4",
+      "video_sha256": "4d597781879defacdc4a1450669fa57dd4f62882c6ec26fb10816f58e5c90e49",
+      "trace": "outputs/experiments/2026-09-24_hierarchical_recovery/fresh_scene_03_trace.jsonl",
+      "trace_metrics": {
+        "samples": 1158,
+        "peak_tracking_error_mm": 75.52946318824714,
+        "peak_vector_tared_force_n": 29.152098554076797,
+        "first_80mm_tracking_error_s": null,
+        "recent_10s_tared_force_at_80mm_n": null,
+        "end_time_s": 57.8712
+      }
+    }
+  ],
+  "interpretation": "Three development variations provide one full and two partial controls for the post-hoc 80 mm tracking line. The third perturbs a previously non-inserting rail-0 layout by 7 mm in board X and 4 mm in board Y yet becomes partial; no new no-insertion sensitivity test, named contact, or learned recovery result."
+}

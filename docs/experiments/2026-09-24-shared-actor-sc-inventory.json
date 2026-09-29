@@ -1,0 +1,283 @@
+{
+  "schema": "aic_shared_sc_inventory/v1",
+  "source_manifest": "outputs/trajectory_datasets/expert_verified/manifest.json",
+  "source_manifest_sha256": "ecb6fd1398a4ef9d416b1e7e0f315df15b56c67d43402c48fb836bcef52b5199",
+  "canonical_episodes": 289,
+  "training_episodes": 250,
+  "validation_episodes": 39,
+  "scene_hashes": 287,
+  "cross_split_scene_hashes": 0,
+  "task_encoding": {
+    "name": "aic_option_a_task_vector",
+    "dim": 10,
+    "dtype": "float32",
+    "fields": [
+      {
+        "name": "task_family_onehot",
+        "offset": 0,
+        "size": 2,
+        "values": {
+          "sfp_to_nic": [
+            1,
+            0
+          ],
+          "sc_to_sc": [
+            0,
+            1
+          ]
+        }
+      },
+      {
+        "name": "target_port_index_onehot",
+        "offset": 2,
+        "size": 2,
+        "values": {
+          "0": [
+            1,
+            0
+          ],
+          "1": [
+            0,
+            1
+          ]
+        }
+      },
+      {
+        "name": "target_card_index_onehot",
+        "offset": 4,
+        "size": 5,
+        "valid_when": "target_card_valid == 1"
+      },
+      {
+        "name": "target_card_valid",
+        "offset": 9,
+        "size": 1
+      }
+    ],
+    "names": [
+      "task_family_sfp_to_nic",
+      "task_family_sc_to_sc",
+      "target_port_0",
+      "target_port_1",
+      "target_card_0",
+      "target_card_1",
+      "target_card_2",
+      "target_card_3",
+      "target_card_4",
+      "target_card_valid"
+    ],
+    "examples": {
+      "sfp_to_nic_card3_port1": [
+        1,
+        0,
+        0,
+        1,
+        0,
+        0,
+        0,
+        1,
+        0,
+        1
+      ],
+      "sc_to_sc_port0": [
+        0,
+        1,
+        1,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0
+      ]
+    }
+  },
+  "by_task_split_cards_target_port": [
+    {
+      "task": "sc_to_sc",
+      "split": "train",
+      "nic_cards": 1,
+      "target_port": 0,
+      "episodes": 4
+    },
+    {
+      "task": "sc_to_sc",
+      "split": "train",
+      "nic_cards": 1,
+      "target_port": 1,
+      "episodes": 4
+    },
+    {
+      "task": "sc_to_sc",
+      "split": "train",
+      "nic_cards": 2,
+      "target_port": 0,
+      "episodes": 4
+    },
+    {
+      "task": "sc_to_sc",
+      "split": "train",
+      "nic_cards": 3,
+      "target_port": 0,
+      "episodes": 2
+    },
+    {
+      "task": "sc_to_sc",
+      "split": "validation",
+      "nic_cards": 1,
+      "target_port": 0,
+      "episodes": 2
+    },
+    {
+      "task": "sc_to_sc",
+      "split": "validation",
+      "nic_cards": 1,
+      "target_port": 1,
+      "episodes": 1
+    },
+    {
+      "task": "sc_to_sc",
+      "split": "validation",
+      "nic_cards": 2,
+      "target_port": 0,
+      "episodes": 2
+    },
+    {
+      "task": "sc_to_sc",
+      "split": "validation",
+      "nic_cards": 3,
+      "target_port": 0,
+      "episodes": 2
+    },
+    {
+      "task": "sfp_to_nic",
+      "split": "train",
+      "nic_cards": 1,
+      "target_port": 0,
+      "episodes": 9
+    },
+    {
+      "task": "sfp_to_nic",
+      "split": "train",
+      "nic_cards": 1,
+      "target_port": 1,
+      "episodes": 130
+    },
+    {
+      "task": "sfp_to_nic",
+      "split": "train",
+      "nic_cards": 2,
+      "target_port": 1,
+      "episodes": 26
+    },
+    {
+      "task": "sfp_to_nic",
+      "split": "train",
+      "nic_cards": 3,
+      "target_port": 1,
+      "episodes": 27
+    },
+    {
+      "task": "sfp_to_nic",
+      "split": "train",
+      "nic_cards": 4,
+      "target_port": 1,
+      "episodes": 23
+    },
+    {
+      "task": "sfp_to_nic",
+      "split": "train",
+      "nic_cards": 5,
+      "target_port": 1,
+      "episodes": 21
+    },
+    {
+      "task": "sfp_to_nic",
+      "split": "validation",
+      "nic_cards": 1,
+      "target_port": 0,
+      "episodes": 1
+    },
+    {
+      "task": "sfp_to_nic",
+      "split": "validation",
+      "nic_cards": 1,
+      "target_port": 1,
+      "episodes": 15
+    },
+    {
+      "task": "sfp_to_nic",
+      "split": "validation",
+      "nic_cards": 2,
+      "target_port": 1,
+      "episodes": 4
+    },
+    {
+      "task": "sfp_to_nic",
+      "split": "validation",
+      "nic_cards": 3,
+      "target_port": 1,
+      "episodes": 4
+    },
+    {
+      "task": "sfp_to_nic",
+      "split": "validation",
+      "nic_cards": 4,
+      "target_port": 1,
+      "episodes": 4
+    },
+    {
+      "task": "sfp_to_nic",
+      "split": "validation",
+      "nic_cards": 5,
+      "target_port": 1,
+      "episodes": 4
+    }
+  ],
+  "sealed_final": {
+    "source": "outputs/experiments/2026-09-20_isaac_world_rl/configs/varied_final/episodes",
+    "evaluation_opened": false,
+    "configs": [
+      {
+        "path": "outputs/experiments/2026-09-20_isaac_world_rl/configs/varied_final/episodes/episode_000001.yaml",
+        "sha256": "14cdcf8bf4f7404cf6b0719eca07c2034d2f1e8a72ed48c64985663d23518d57"
+      },
+      {
+        "path": "outputs/experiments/2026-09-20_isaac_world_rl/configs/varied_final/episodes/episode_000002.yaml",
+        "sha256": "49d0813fbd90deef6e55d7c47b24c36d5e9a704503ac7775c70fe09e7ff0ba77"
+      },
+      {
+        "path": "outputs/experiments/2026-09-20_isaac_world_rl/configs/varied_final/episodes/episode_000003.yaml",
+        "sha256": "0ca2fad1f295c376c100b2f3f4f818cc608c407c8ad893d7dbf6367f60cee926"
+      },
+      {
+        "path": "outputs/experiments/2026-09-20_isaac_world_rl/configs/varied_final/episodes/episode_000004.yaml",
+        "sha256": "540a34dd3887813ffd6d20c8bea0b25b78f99be2e8d9194cde64d4b998dbef04"
+      }
+    ]
+  },
+  "historical_checkpoints_not_shared_sc_actor": [
+    {
+      "path": "outputs/experiments/2026-09-22_rpdp_dppo/bc_repair_direct/training/aic_rpdp/checkpoint.pt",
+      "sha256": "2b23f1bc3b1263a5f69ac51511621dca97e66f1050a5cdd6035f5f031ba20ff6"
+    },
+    {
+      "path": "outputs/experiments/2026-09-22_serl_recovery/online_selected/checkpoint_latest.pt",
+      "sha256": "b8823db6656f647055e01198497c9ce2f61be23c52d75a53db8eba515d83bd91"
+    }
+  ],
+  "important_limitations": [
+    "Only 21 canonical SC successes; one to three NIC cards and restricted target-port coverage.",
+    "Old selected RPDP/SERL policy is Isaac SFP near-port, not shared-task/full-episode SC.",
+    "Hashing sealed YAML bytes does not evaluate or tune on their scenes."
+  ],
+  "code_snapshot": {
+    "git_head": "18b0882110a711e8127d9fa8748f45481190f954",
+    "tracked_patch_path": "/var/tmp/aic_shared_sc_20260924/inventory/tracked_worktree.patch",
+    "tracked_patch_sha256": "e38baa535261295e4b1463a33f5d4018938153fbcc13fb1a00c72002544c322e",
+    "untracked_snapshot_path": "/var/tmp/aic_shared_sc_20260924/inventory/untracked_snapshot.tar",
+    "untracked_snapshot_sha256": "8eaa0a131dc592ea7cdb12df07f841a4c4794a67e160a8b258c88245e3116984",
+    "note": "Snapshot is local and not a Git commit; later execution may change code."
+  }
+}

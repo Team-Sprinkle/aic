@@ -1,0 +1,73 @@
+{
+  "schema": "sc_privileged_lift_route_probe/v1",
+  "teacher_only": true,
+  "score_success_threshold": 75,
+  "comparison": {
+    "four_card_port1": {
+      "stock_trial": "trial_960011",
+      "stock_score": 17.397499232917166,
+      "lift08_trial": "trial_980011",
+      "lift08_score": 75
+    },
+    "five_card_port0": {
+      "stock_trial": "trial_960013",
+      "stock_score": 17.73969029076547,
+      "lift08_trial": "trial_980013",
+      "lift08_score": 16.373945732765495,
+      "lift12_trial": "trial_990013",
+      "lift12_score": 16.930655724153027
+    }
+  },
+  "runs": [
+    {
+      "run_dir": "/var/tmp/chmin_aic_20260918_act/sc_bc_matrix_pilot_20260924",
+      "parent_run": null,
+      "pre_route_lift_m": 0,
+      "engine_config_sha256": "712c8d2db0ae5398f60fd0b9baf097512ca3b640249634d11ea044816bb6a58b",
+      "run_script_sha256": "fd1e5ed292a4cea89ce509072035958323b5ad1023843801389f472128283417",
+      "scoring_sha256": "c03faa8efadc8026b4ba8beeb46cf72c7cb5f808c7970028e9497c18cfc08c8a",
+      "tier3": {
+        "trial_960001": 75,
+        "trial_960002": 75,
+        "trial_960003": 75,
+        "trial_960004": 75,
+        "trial_960005": 13.50818637909227,
+        "trial_960006": 21.09527124115502,
+        "trial_960007": 75,
+        "trial_960008": 18.063090403102194,
+        "trial_960009": 23.21064155253461,
+        "trial_960010": 16.17113004678058,
+        "trial_960011": 17.397499232917166,
+        "trial_960012": 20.51894358738182,
+        "trial_960013": 17.73969029076547,
+        "trial_960014": 46.05086876932275,
+        "trial_960015": 75,
+        "trial_960016": 18.504098342746648
+      }
+    },
+    {
+      "run_dir": "/var/tmp/chmin_aic_20260918_act/sc_lift_route_probe_20260924",
+      "parent_run": "sc_bc_matrix_pilot_20260924",
+      "pre_route_lift_m": 0.08,
+      "engine_config_sha256": "78192614a3401f68030ca22f8ca2f9ff107f59f69cba07a88cce701446da58b1",
+      "run_script_sha256": "ce4748bdea94937432e0291f760e03e6d3cd183f78948b796c832735235ed2ed",
+      "scoring_sha256": "d4b35fd8c49d4d1e150beab2edffa135fe037cb8b6f3f54289bcacc50b1b14a0",
+      "tier3": {
+        "trial_980011": 75,
+        "trial_980013": 16.373945732765495
+      }
+    },
+    {
+      "run_dir": "/var/tmp/chmin_aic_20260918_act/sc_lift12_route_probe_20260924",
+      "parent_run": "sc_bc_matrix_pilot_20260924",
+      "pre_route_lift_m": 0.12,
+      "engine_config_sha256": "53cc30962a97b7c67551be12d2fda792dad6880768bbd5098cb0e696916182d4",
+      "run_script_sha256": "d033a49734116c93911e93cb2ed8bdab72313d181b98480b3470d77a33be34c8",
+      "scoring_sha256": "d611af63796dcce5170801c936d6a0c752ca861c5721b55c28fc3ecc0619f320",
+      "tier3": {
+        "trial_990013": 16.930655724153027
+      }
+    }
+  ],
+  "limit": "No autonomous actor; teacher uses privileged TF for alignment. A single recovered scene does not prove a general route rule."
+}

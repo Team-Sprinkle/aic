@@ -1,0 +1,44 @@
+{
+  "schema": "sc_bc_admission/v1",
+  "candidate_manifest": "/var/tmp/chmin_aic_20260918_act/sc_bc_expansion_batch1_candidates_20260924/manifest.json",
+  "candidate_manifest_sha256": "91d66824fa00d810c3394bce6c9f2d25cf10a0f9d06872f4d7af3f05ef4cbb95",
+  "waypoint_labels": "/var/tmp/chmin_aic_20260918_act/sc_bc_expansion_batch1_candidates_20260924/physical_waypoint_chunks.jsonl",
+  "waypoint_labels_sha256": "9ed6b2a4e21cebe273a977d74125f8e6ee656e117a384c653776f0557bca2b3e",
+  "verified_manifest": "outputs/trajectory_datasets/expert_verified/manifest.json",
+  "verified_manifest_sha256": "ecb6fd1398a4ef9d416b1e7e0f315df15b56c67d43402c48fb836bcef52b5199",
+  "all_episode_splits": "train; no scene overlaps verified data",
+  "training_label_only_geometry": true,
+  "admitted_episodes": 2,
+  "admitted_chunks": 1579,
+  "episodes": [
+    {
+      "episode_index": 991002,
+      "trial_id": "trial_991002",
+      "scene_sha256": "cfe348b6f8905fd1db9a6090aaf13016bb48992c03610f1987ab89d0d9c920e1",
+      "score_tier3": 75,
+      "physical_grasp_drift_mm": 0.03450141321680978,
+      "causal_chunks": 1019,
+      "baseline_force_n": 20.800578916959616,
+      "force_above_baseline_plus_10_n_chunks": 0,
+      "severe_force_stall_chunks": 0,
+      "teacher_setpoint_gap_p95_mm": 32.43685722293555,
+      "teacher_setpoint_gap_max_mm": 40.10716212590496,
+      "admitted": true
+    },
+    {
+      "episode_index": 991006,
+      "trial_id": "trial_991006",
+      "scene_sha256": "43e1f2ae6ed12f2d9c0c6a3188aed4789a62c2fd6a24db8884efd635c0ac9a27",
+      "score_tier3": 75,
+      "physical_grasp_drift_mm": 0.006912475417006078,
+      "causal_chunks": 560,
+      "baseline_force_n": 20.7980154945229,
+      "force_above_baseline_plus_10_n_chunks": 0,
+      "severe_force_stall_chunks": 0,
+      "teacher_setpoint_gap_p95_mm": 44.51050507596156,
+      "teacher_setpoint_gap_max_mm": 55.86094088914504,
+      "admitted": true
+    }
+  ],
+  "caveat": "Official success and a force/stall screen support BC admission. Large teacher setpoint lookahead is retained and must be validated by autonomous rollout; these are not recovery demonstrations."
+}

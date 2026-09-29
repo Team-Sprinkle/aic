@@ -1,0 +1,159 @@
+{
+  "schema": "aic_recovery_trace_diagnostic/v1",
+  "traces": [
+    {
+      "trace": "outputs/experiments/2026-09-24_hierarchical_recovery/wide_repeat_02_trace.jsonl",
+      "samples": 2214,
+      "force_norm_baseline_first_5s_n": 20.92695275812977,
+      "force_vector_baseline_first_5s_n": [
+        0.1427016520734,
+        0.4813714169257447,
+        20.91877571650155
+      ],
+      "peak_vector_tared_force_n": 22.286305506277685,
+      "peak_force_norm_n": 27.61028981161493,
+      "strict_two_sample_trigger_time_s": 54.7364,
+      "exploratory_vector_tared_force_latch_progress_trigger": {
+        "time_s": 93.94896,
+        "force_excess_recent_10s_n": 15.885776966015484,
+        "tcp_displacement_recent_2s_mm": 0.058170944022755154,
+        "tracking_error_mm": 40.29888473730476,
+        "tracking_error_growth_recent_2s_mm": 9.809961972341153
+      },
+      "incorrect_norm_subtraction_trigger_time_s_for_comparison_only": null,
+      "warning": "All thresholds are exploratory. Tared vector force is physically meaningful; subtracting norms can miss directional changes. This is observation-side diagnosis, not contact identification or a live controller."
+    },
+    {
+      "trace": "outputs/experiments/2026-09-24_hierarchical_recovery/wide_repeat_03_trace.jsonl",
+      "samples": 2061,
+      "force_norm_baseline_first_5s_n": 20.995608684427346,
+      "force_vector_baseline_first_5s_n": [
+        0.15922199397261583,
+        0.48084657364004213,
+        20.98967129271452
+      ],
+      "peak_vector_tared_force_n": 54.254188821412306,
+      "peak_force_norm_n": 33.32186810896496,
+      "strict_two_sample_trigger_time_s": 47.29744,
+      "exploratory_vector_tared_force_latch_progress_trigger": {
+        "time_s": 73.39945,
+        "force_excess_recent_10s_n": 54.254188821412306,
+        "tcp_displacement_recent_2s_mm": 0.266032305520079,
+        "tracking_error_mm": 40.119333444517395,
+        "tracking_error_growth_recent_2s_mm": 10.280639433533686
+      },
+      "incorrect_norm_subtraction_trigger_time_s_for_comparison_only": 73.39945,
+      "warning": "All thresholds are exploratory. Tared vector force is physically meaningful; subtracting norms can miss directional changes. This is observation-side diagnosis, not contact identification or a live controller."
+    },
+    {
+      "trace": "outputs/experiments/2026-09-24_hierarchical_recovery/wide_repeat_04_trace.jsonl",
+      "samples": 2300,
+      "force_norm_baseline_first_5s_n": 20.938074622106015,
+      "force_vector_baseline_first_5s_n": [
+        0.1767245445453665,
+        0.46998055562770924,
+        20.934016688820847
+      ],
+      "peak_vector_tared_force_n": 14.357136776586284,
+      "peak_force_norm_n": 22.96861611446111,
+      "strict_two_sample_trigger_time_s": 59.39041,
+      "exploratory_vector_tared_force_latch_progress_trigger": {
+        "time_s": 98.09575,
+        "force_excess_recent_10s_n": 11.870546095625723,
+        "tcp_displacement_recent_2s_mm": 0.05873112896125112,
+        "tracking_error_mm": 40.37920031045918,
+        "tracking_error_growth_recent_2s_mm": 8.514627594978322
+      },
+      "incorrect_norm_subtraction_trigger_time_s_for_comparison_only": null,
+      "warning": "All thresholds are exploratory. Tared vector force is physically meaningful; subtracting norms can miss directional changes. This is observation-side diagnosis, not contact identification or a live controller."
+    },
+    {
+      "trace": "outputs/experiments/2026-09-24_hierarchical_recovery/wide_repeat_05_trace.jsonl",
+      "samples": 2137,
+      "force_norm_baseline_first_5s_n": 20.918953241133238,
+      "force_vector_baseline_first_5s_n": [
+        0.23610886685357863,
+        0.4349562073841695,
+        20.91182361246943
+      ],
+      "peak_vector_tared_force_n": 42.932913179875406,
+      "peak_force_norm_n": 26.82061791400024,
+      "strict_two_sample_trigger_time_s": 26.32729,
+      "exploratory_vector_tared_force_latch_progress_trigger": {
+        "time_s": 91.39705,
+        "force_excess_recent_10s_n": 16.353018762305677,
+        "tcp_displacement_recent_2s_mm": 0.31996739286081716,
+        "tracking_error_mm": 40.49597909965507,
+        "tracking_error_growth_recent_2s_mm": 11.423729465668455
+      },
+      "incorrect_norm_subtraction_trigger_time_s_for_comparison_only": null,
+      "warning": "All thresholds are exploratory. Tared vector force is physically meaningful; subtracting norms can miss directional changes. This is observation-side diagnosis, not contact identification or a live controller."
+    },
+    {
+      "trace": "outputs/experiments/2026-09-24_hierarchical_recovery/wide_repeat_06_trace.jsonl",
+      "samples": 2315,
+      "force_norm_baseline_first_5s_n": 20.94906711749777,
+      "force_vector_baseline_first_5s_n": [
+        0.22683923950327756,
+        0.49237501721505983,
+        20.945188427239735
+      ],
+      "peak_vector_tared_force_n": 72.30801707607712,
+      "peak_force_norm_n": 52.85815956342992,
+      "strict_two_sample_trigger_time_s": 58.33063,
+      "exploratory_vector_tared_force_latch_progress_trigger": {
+        "time_s": 93.09684,
+        "force_excess_recent_10s_n": 72.30801707607712,
+        "tcp_displacement_recent_2s_mm": 1.88214362269893,
+        "tracking_error_mm": 57.1905974968416,
+        "tracking_error_growth_recent_2s_mm": 8.27700118042651
+      },
+      "incorrect_norm_subtraction_trigger_time_s_for_comparison_only": 93.09684,
+      "warning": "All thresholds are exploratory. Tared vector force is physically meaningful; subtracting norms can miss directional changes. This is observation-side diagnosis, not contact identification or a live controller."
+    },
+    {
+      "trace": "outputs/experiments/2026-09-24_hierarchical_recovery/wide_repeat_07_trace.jsonl",
+      "samples": 2073,
+      "force_norm_baseline_first_5s_n": 20.992545219688253,
+      "force_vector_baseline_first_5s_n": [
+        0.1820173268503978,
+        0.5144048765546329,
+        20.987570421069744
+      ],
+      "peak_vector_tared_force_n": 17.235548526012874,
+      "peak_force_norm_n": 26.356532843441283,
+      "strict_two_sample_trigger_time_s": 51.19784,
+      "exploratory_vector_tared_force_latch_progress_trigger": {
+        "time_s": 86.99988,
+        "force_excess_recent_10s_n": 12.393055929281592,
+        "tcp_displacement_recent_2s_mm": 0.01690032046224043,
+        "tracking_error_mm": 40.32073325632551,
+        "tracking_error_growth_recent_2s_mm": 9.196182734864774
+      },
+      "incorrect_norm_subtraction_trigger_time_s_for_comparison_only": null,
+      "warning": "All thresholds are exploratory. Tared vector force is physically meaningful; subtracting norms can miss directional changes. This is observation-side diagnosis, not contact identification or a live controller."
+    },
+    {
+      "trace": "outputs/experiments/2026-09-24_hierarchical_recovery/wide_repeat_08_trace.jsonl",
+      "samples": 2279,
+      "force_norm_baseline_first_5s_n": 20.970266714268817,
+      "force_vector_baseline_first_5s_n": [
+        0.16559929247242297,
+        0.4500178288603273,
+        20.969256834492935
+      ],
+      "peak_vector_tared_force_n": 14.930229990640564,
+      "peak_force_norm_n": 22.862929029976794,
+      "strict_two_sample_trigger_time_s": 59.18288,
+      "exploratory_vector_tared_force_latch_progress_trigger": {
+        "time_s": 97.09882,
+        "force_excess_recent_10s_n": 13.495488971564232,
+        "tcp_displacement_recent_2s_mm": 0.13912081516601002,
+        "tracking_error_mm": 40.43199423659967,
+        "tracking_error_growth_recent_2s_mm": 10.33822150688787
+      },
+      "incorrect_norm_subtraction_trigger_time_s_for_comparison_only": null,
+      "warning": "All thresholds are exploratory. Tared vector force is physically meaningful; subtracting norms can miss directional changes. This is observation-side diagnosis, not contact identification or a live controller."
+    }
+  ]
+}

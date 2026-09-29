@@ -1,0 +1,218 @@
+{
+  "schema": "sc_native_pose_labels_summary/v1",
+  "labels": "/var/tmp/chmin_aic_20260918_act/sc_native_ablation_20260924/pose_labels.jsonl",
+  "training_label_only": true,
+  "image_size": [
+    1152,
+    1024
+  ],
+  "horizontal_fov_rad": 0.8718,
+  "focal_px": 1236.6314774257871,
+  "validation_trials": [
+    "trial_000504",
+    "trial_000506",
+    "trial_000516"
+  ],
+  "episodes": [
+    {
+      "trial": "trial_000501",
+      "admitted": true,
+      "split": "train",
+      "frames": 54,
+      "near_port_frames": 22,
+      "in_frame_counts": {
+        "center": {
+          "tip": 54,
+          "opening": 49
+        },
+        "left": {
+          "tip": 54,
+          "opening": 54
+        },
+        "right": {
+          "tip": 54,
+          "opening": 52
+        }
+      },
+      "scene_sha256": "8cd0f3d082ed24d79e75e93104996bb3a5c650b003b6f94a9acfb6d489287f9d"
+    },
+    {
+      "trial": "trial_000502",
+      "admitted": true,
+      "split": "train",
+      "frames": 58,
+      "near_port_frames": 24,
+      "in_frame_counts": {
+        "center": {
+          "tip": 58,
+          "opening": 53
+        },
+        "left": {
+          "tip": 58,
+          "opening": 58
+        },
+        "right": {
+          "tip": 58,
+          "opening": 56
+        }
+      },
+      "scene_sha256": "7bb089caedd59264eba2f5bff0ecf4b06d73af22271bbbda786e19516b366d72"
+    },
+    {
+      "trial": "trial_000504",
+      "admitted": true,
+      "split": "validation",
+      "frames": 53,
+      "near_port_frames": 23,
+      "in_frame_counts": {
+        "center": {
+          "tip": 53,
+          "opening": 48
+        },
+        "left": {
+          "tip": 53,
+          "opening": 53
+        },
+        "right": {
+          "tip": 53,
+          "opening": 50
+        }
+      },
+      "scene_sha256": "430d28c1f48c8abf51f0229de2020becdb92ba64829c9c327d1b27f5ce7fdb01"
+    },
+    {
+      "trial": "trial_000505",
+      "admitted": true,
+      "split": "train",
+      "frames": 54,
+      "near_port_frames": 17,
+      "in_frame_counts": {
+        "center": {
+          "tip": 54,
+          "opening": 50
+        },
+        "left": {
+          "tip": 54,
+          "opening": 54
+        },
+        "right": {
+          "tip": 54,
+          "opening": 54
+        }
+      },
+      "scene_sha256": "55521aeb59c6755256a7585f44ca2369bc754d3a9bff03053435f487285793c5"
+    },
+    {
+      "trial": "trial_000506",
+      "admitted": true,
+      "split": "validation",
+      "frames": 70,
+      "near_port_frames": 33,
+      "in_frame_counts": {
+        "center": {
+          "tip": 70,
+          "opening": 66
+        },
+        "left": {
+          "tip": 70,
+          "opening": 70
+        },
+        "right": {
+          "tip": 70,
+          "opening": 70
+        }
+      },
+      "scene_sha256": "bfab199830d7549736d82c83bac97bfa8fe19cf4b0b8f31b3e05f6d86adbd848"
+    },
+    {
+      "trial": "trial_000510",
+      "admitted": true,
+      "split": "train",
+      "frames": 77,
+      "near_port_frames": 34,
+      "in_frame_counts": {
+        "center": {
+          "tip": 77,
+          "opening": 74
+        },
+        "left": {
+          "tip": 77,
+          "opening": 77
+        },
+        "right": {
+          "tip": 77,
+          "opening": 77
+        }
+      },
+      "scene_sha256": "dc26d0b7f2c101db4e6cf6467d2c88e6dbed2170903ebe4011d512bd514f1e0f"
+    },
+    {
+      "trial": "trial_000512",
+      "admitted": true,
+      "split": "train",
+      "frames": 78,
+      "near_port_frames": 41,
+      "in_frame_counts": {
+        "center": {
+          "tip": 78,
+          "opening": 74
+        },
+        "left": {
+          "tip": 78,
+          "opening": 78
+        },
+        "right": {
+          "tip": 78,
+          "opening": 78
+        }
+      },
+      "scene_sha256": "93307b502f81a1e41cfd2325eb027850ea14ba4d081a2e516d4e693e26c2455d"
+    },
+    {
+      "trial": "trial_000514",
+      "admitted": true,
+      "split": "train",
+      "frames": 53,
+      "near_port_frames": 17,
+      "in_frame_counts": {
+        "center": {
+          "tip": 53,
+          "opening": 49
+        },
+        "left": {
+          "tip": 53,
+          "opening": 53
+        },
+        "right": {
+          "tip": 53,
+          "opening": 53
+        }
+      },
+      "scene_sha256": "4d33503e6a3b0ada08df6c49adbdb06e01d2eb9853af778d605ad823e2edcce0"
+    },
+    {
+      "trial": "trial_000516",
+      "admitted": true,
+      "split": "validation",
+      "frames": 53,
+      "near_port_frames": 19,
+      "in_frame_counts": {
+        "center": {
+          "tip": 53,
+          "opening": 49
+        },
+        "left": {
+          "tip": 53,
+          "opening": 53
+        },
+        "right": {
+          "tip": 53,
+          "opening": 53
+        }
+      },
+      "scene_sha256": "8b923e5932366a5baba649245f13029d2cee42a209e2d07e3ad7f8f31c086dcd"
+    }
+  ],
+  "train_scene_count": 6,
+  "validation_scene_count": 3
+}

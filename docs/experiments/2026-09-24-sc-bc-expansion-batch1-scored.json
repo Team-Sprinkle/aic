@@ -1,0 +1,82 @@
+{
+  "schema": "sc_bc_expansion_batch1_scored/v1",
+  "training_only": true,
+  "profile": "qualification_eval_like",
+  "seed": 2026092424,
+  "source_manifest": "/var/tmp/chmin_aic_20260918_act/sc_bc_expansion_batch1_20260924/source_manifest.json",
+  "source_manifest_sha256": "5368839ba94312d493ada5a852438a1b72ec6da9985d80790a3676def3f7de5d",
+  "scoring": "/var/tmp/chmin_aic_20260918_act/sc_bc_expansion_batch1_20260924/eval_collection/collection_config/attempt_0001/scoring.yaml",
+  "archive_manifest": "docs/experiments/2026-09-24-sc-bc-expansion-batch1-mcap-archive.json",
+  "candidate_manifest": "/var/tmp/chmin_aic_20260918_act/sc_bc_expansion_batch1_candidates_20260924/manifest.json",
+  "admission": "docs/experiments/2026-09-24-sc-bc-expansion-batch1-admission.json",
+  "attempts": [
+    {
+      "trial": "trial_991001",
+      "nic_cards": 2,
+      "target_module": "sc_port_0",
+      "tier3": 38.35872682041263,
+      "message": "Partial insertion detected with distance of 0.02m.",
+      "clean_bc_admitted": false
+    },
+    {
+      "trial": "trial_991002",
+      "nic_cards": 3,
+      "target_module": "sc_port_0",
+      "tier3": 75,
+      "message": "Cable insertion successful.",
+      "clean_bc_admitted": true
+    },
+    {
+      "trial": "trial_991003",
+      "nic_cards": 1,
+      "target_module": "sc_port_1",
+      "tier3": 0,
+      "message": "No insertion detected. Final plug port distance: 0.07m.",
+      "clean_bc_admitted": false
+    },
+    {
+      "trial": "trial_991004",
+      "nic_cards": 2,
+      "target_module": "sc_port_1",
+      "tier3": 20.60613151313731,
+      "message": "No insertion detected. Final plug port distance: 0.05m.",
+      "clean_bc_admitted": false
+    },
+    {
+      "trial": "trial_991005",
+      "nic_cards": 2,
+      "target_module": "sc_port_0",
+      "tier3": 17.965756168969907,
+      "message": "No insertion detected. Final plug port distance: 0.07m.",
+      "clean_bc_admitted": false
+    },
+    {
+      "trial": "trial_991006",
+      "nic_cards": 1,
+      "target_module": "sc_port_1",
+      "tier3": 75,
+      "message": "Cable insertion successful.",
+      "clean_bc_admitted": true
+    },
+    {
+      "trial": "trial_991007",
+      "nic_cards": 1,
+      "target_module": "sc_port_0",
+      "tier3": 12.563434267456444,
+      "message": "No insertion detected. Final plug port distance: 0.07m.",
+      "clean_bc_admitted": false
+    },
+    {
+      "trial": "trial_991008",
+      "nic_cards": 2,
+      "target_module": "sc_port_0",
+      "tier3": 23.286913972975988,
+      "message": "No insertion detected. Final plug port distance: 0.03m.",
+      "clean_bc_admitted": false
+    }
+  ],
+  "full_successes": 2,
+  "admitted_successes": 2,
+  "causal_chunks": 1579,
+  "reserved_final_opened": false
+}
