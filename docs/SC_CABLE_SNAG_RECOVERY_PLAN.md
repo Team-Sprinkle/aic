@@ -1,6 +1,60 @@
 # SC-to-SC cable-snag recovery plan
 
-Status: reprioritized by observed failures; SC mechanics gate remains open, 2026-09-23
+**September 26 route sensitivity:** On a fixed five-card all-left-rail Gazebo
+development scene, lowering while farther behind the row and then traveling
+beside and beyond the row improved the teacher route. It fully inserted in
+6/7 one-axis ±10 mm tests, but the shortened forward traverse partially
+inserted; a separate forward-margin gate also failed. The route is still not
+qualified as robust or proven cable-contact-free. See the
+[scores, videos, and metric caveats](experiments/2026-09-26-sc-far-return-route-sensitivity.md).
+The [selected-port visibility and two-actor handoff](POSE_VISIBILITY_HANDOFF.md)
+is proposed supervised work, not an autonomous result. Keep RL and final
+scenes gated.
+
+**September 25 lateral route update:** A new opt-in Gazebo teacher route
+travels behind and beside a five-card row before approaching the selected
+SC port. Two bounded scenes reached full insertion with sampled cable-center
+clearance of 11.50 and 13.81 mm from simplified main PCB boxes; another
+full-insertion route came within 2.11 mm and is excluded from BC admission.
+A wider-lane rerun failed insertion. The wide-view recording, exact commands,
+failed cases, and the proposed visibility-gated transport/local-policy handoff
+are in the [lateral bypass experiment](experiments/2026-09-25-sc-lateral-bypass-and-policy-handoff.md).
+These are privileged teacher routes, not autonomous policy successes or
+verified cable-snag recoveries. The supervised full-start insertion gate
+remains open; RL remains deferred.
+
+Status: superseded for execution by the September 24 hierarchical continuation;
+one constructed Isaac five-card SC mechanics scene now passes, and a short
+three-camera smoke test works after a container-local driver-check override;
+broader scene, moving-cable visuals, and cable-snag gates remain open
+
+The later [Isaac SC fidelity repair](experiments/2026-09-24-isaac-sc-fidelity-fix.md)
+fixed the gripped-end calibration, port collision frame, and internal contact
+artifacts. One full-start scripted five-card scene reached the Gazebo-derived
+SC tip target with normal scene collisions; two deliberate lateral offsets
+yielded local plug/port blockages. This overturns the earlier provisional
+Isaac gripper/card incident as a training label. No corrected-scene cable/card
+snag, visual RL episode, or autonomous SC insertion is established.
+
+Subsequent [corrected-asset route probes](experiments/2026-09-24-isaac-sc-contact-routes.md)
+do reproduce a named gripper/card jam on a deliberate crossing route and a
+separate plug/card jam. Cable/card contact occurs during the gripper jam;
+there is still no isolated cable-snag episode or visual replay. This updates
+the provisional statement above only for those new, deliberately bad routes.
+
+The current ordered plan is
+[hierarchical recovery continuation](experiments/2026-09-24-hierarchical-recovery-continuation.md),
+with its controller rationale in [hierarchical recovery](HIERARCHICAL_RECOVERY.md).
+The seven 20 Hz wide-view five-card repeats added one high-force no-insertion
+run, but no named contact pair; it is an ambiguous obstruction, not a causal
+cable-snag label. The steps below preserve the September 23 planning history.
+The September 24 execution [audited 17 force/TCP traces and two fresh
+five-card scenes](experiments/2026-09-24-hierarchical-recovery-continuation.md):
+force plus instantaneous stall is nonspecific, and a post-hoc 80 mm tracking
+line still needs new failed-scene validation. All 21 canonical SC teacher TCP
+targets can be expressed in their selected port base frames, but exact
+fixed-timing connector chunks and an observation-only SC port estimate remain
+open. No SC BC or RL training has been promoted.
 
 The latest [fixed five-card route probe](experiments/2026-09-23-fixed-five-card-route-probe.md)
 created a route-sensitive candidate in collision-normal Gazebo: one of three

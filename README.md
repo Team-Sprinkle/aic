@@ -3,7 +3,7 @@
 > **Returning to `feat/hybrid-train`?** Start with the [working documentation](docs/README.md):
 > [current status](docs/STATUS.md), [experiment history](docs/EXPERIMENTS.md),
 > [rootless setup and local model testing](docs/LOCAL_WORKFLOW.md), and
-> [artifact locations](outputs_README.md). Reviewed 2026-09-23. The frozen
+> [artifact locations](outputs_README.md). Reviewed 2026-09-24. The frozen
 > natural-cable pose estimate reached 0.322/0.626 mm lateral median/p95. Generic
 > pose concatenation and an additive correction both failed their control
 > gates. The repaired controller now predicts four complete connector
@@ -34,6 +34,18 @@
 > [SERL experiment](docs/experiments/2026-09-22-serl-mixture-recovery.md),
 > [video failure analysis](docs/experiments/2026-09-23-serl-video-failure-analysis.md),
 > and [ordered SC cable-snag plan](docs/SC_CABLE_SNAG_RECOVERY_PLAN.md).
+> A later five-card Gazebo route probe produced an abrupt high-force approach
+> stall, but did not identify a named contact pair. The proposed core
+> continuation is [hierarchical recovery](docs/HIERARCHICAL_RECOVERY.md):
+> measured-pose local retreat, then an earlier route checkpoint and a different
+> cable corridor after repeated blockage. This is a research hypothesis, not
+> a validated insertion gain. The first 17-trace force/TCP audit and two fresh
+> five-card Gazebo controls are diagnostic only. The later Isaac mechanics
+> repair and SC label audit passed their bounded checks. The active
+> [shared SFP/SC execution plan](docs/experiments/2026-09-24-shared-actor-sc-serl-execution.md)
+> is testing native-image SC perception on new resets before collecting the
+> missing successful SC demonstrations and training one full-task actor. A
+> frozen eight-scene pose check is running; no shared BC or SC RL result exists.
 > Superseded plans, reports, and handoffs are in the [historical archive](obsolete/README.md).
 
 [![build](https://github.com/intrinsic-dev/aic/actions/workflows/build.yml/badge.svg)](https://github.com/intrinsic-dev/aic/actions/workflows/build.yml)

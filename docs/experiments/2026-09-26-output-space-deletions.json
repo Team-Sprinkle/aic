@@ -1,0 +1,28 @@
+{
+  "schema": "aic_output_space_deletions/v1",
+  "date": "2026-09-26",
+  "entries": [
+    {
+      "path": "/data1/chmin/yj/ws_aic/src/aic/outputs/train/hf_smoke",
+      "bytes_on_disk_before": 13875208192,
+      "disposition": "deleted",
+      "backup": "none",
+      "reason": "Old May smoke-only checkpoint or derived conversion; no canonical expert episodes or selected September checkpoint."
+    },
+    {
+      "path": "/data1/chmin/yj/ws_aic/src/aic/outputs/hf_converted/sfp2nic_target_card0_port0_randomized_smoke",
+      "bytes_on_disk_before": 3389894656,
+      "disposition": "deleted",
+      "backup": "none",
+      "reason": "Old May smoke-only checkpoint or derived conversion; no canonical expert episodes or selected September checkpoint."
+    },
+    {
+      "path": "/data1/chmin/yj/ws_aic/src/aic/outputs/train/hf_sweeps",
+      "bytes_on_disk_before": 53616238592,
+      "disposition": "non-selected checkpoint tree deleted; local README retained",
+      "backup": "/home/nas/chmin/aic_archive_20260926/metadata_only/hf_sweeps",
+      "metadata_files_verified": 926,
+      "reason": "May 8-9 non-selected parameter-sweep checkpoints; configs and metrics kept on NAS; canonical verified expert data and selected models elsewhere."
+    }
+  ]
+}

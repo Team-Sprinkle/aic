@@ -1,0 +1,22 @@
+{
+  "schema": "aic_output_space_migration/v1",
+  "date": "2026-09-26",
+  "runs": [
+    {
+      "source": "/data1/chmin/yj/ws_aic/src/aic/outputs/agentic_reward_curriculum_20260527",
+      "archive": "/home/nas/chmin/aic_archive_20260926/old_policy_runs/agentic_reward_curriculum_20260527",
+      "source_bytes_before": 71646138368,
+      "files_verified": 26164,
+      "verification": "rsync recursive checksum dry-run empty plus equal file counts",
+      "local_is_symlink": true
+    },
+    {
+      "source": "/data1/chmin/yj/ws_aic/src/aic/outputs/agentic_reward_curriculum_20260528",
+      "archive": "/home/nas/chmin/aic_archive_20260926/old_policy_runs/agentic_reward_curriculum_20260528",
+      "source_bytes_before": 119977185280,
+      "files_verified": 3372,
+      "verification": "rsync recursive checksum dry-run empty plus equal file counts",
+      "local_is_symlink": true
+    }
+  ]
+}

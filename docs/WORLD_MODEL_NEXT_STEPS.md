@@ -1,5 +1,15 @@
 # World-model follow-up: visual fidelity, dynamics, and control
 
+**Current branch, September 24:** world dynamics remains parked. The approved
+work is [hierarchical measured-pose recovery](HIERARCHICAL_RECOVERY.md) with an
+[ordered SC BC, recovery, and SERL plan](experiments/2026-09-24-hierarchical-recovery-continuation.md).
+The fixed five-card Gazebo stop is reproducible as an ambiguous high-force
+obstruction, but its contact pair is not yet known.
+The continuation has not opened SC BC/RL: the tared force/stall trigger was
+nonspecific on seven fixed-scene repeats, a post-hoc tracking-error candidate
+has only two fresh full/partial controls, and SC pose/connector-chunk labels
+plus faithful Isaac mechanics remain gated. See the [execution record](experiments/2026-09-24-hierarchical-recovery-continuation.md#current-gate-disposition).
+
 ## Parked after the bounded RPDP plus model-free RL evaluation (2026-09-23)
 
 World-model and SEER work remains parked. The earlier PoseInsert-inspired

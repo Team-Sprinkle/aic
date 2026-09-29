@@ -1,5 +1,615 @@
 # Current experiment status
 
+**September 26, storage cleanup.** `/data1` filled. Old May smoke artifacts
+and non-selected sweep checkpoints were removed; sweep configs and metrics
+were verified on NAS first. The older May 27/28 policy-run trees passed
+full-content checks (26,164 and 3,372 files) before local release and now
+resolve through NAS symlinks. `/data1` has about **244 GB free**, up from zero.
+Canonical verified expert episodes, original failed trajectories, September results,
+and selected checkpoints remain protected. See the
+[cleanup ledger](experiments/2026-09-26-output-space-cleanup.md).
+
+**September 26, SC route sensitivity and proposed two-actor handoff.** A
+five-card, all-left-rail Gazebo teacher route now crosses farther behind the
+row, lowers while behind it, travels in an outside lane, passes the last card,
+then returns to the selected SC port. On one development scene, its fixed
+baseline and five of six one-axis ±10 mm variants fully inserted; the shorter
+forward variant inserted only about 10 mm. A larger forward-margin check also
+failed its preregistered all-insertion gate. The candidate therefore is **not
+yet a robust cable-safe route**. Overhead/side video and sampled cable-link
+geometry support a better outside path but cannot prove zero cable/card
+contact or generality. A separate corrective teacher has inserted on this
+scene; no autonomous actor was trained or promoted. Exact variants, failures,
+videos, and limitations are in the [route-sensitivity record](experiments/2026-09-26-sc-far-return-route-sensitivity.md).
+The [perception and handoff design](POSE_VISIBILITY_HANDOFF.md) specifies two
+task-conditioned actors, selected-port visibility/confidence labels, and a
+proposed temporal gate. It is a proposal, not a trained system. Step 5 stays
+open, final scenes sealed, and RL deferred.
+
+**September 25, SC teacher route correction.** The old teacher lift still
+crossed the card region and is no longer a route-quality example for crowded
+SC scenes. An opt-in privileged Gazebo teacher now moves behind the five-card
+row, travels beside it in an outside-left lane, and approaches the port after
+the last card. It scored full insertion on a five-card port-0 egress scene
+and on a fixed five-card wide-camera diagnostic, with sampled cable-center
+to main-PCB gaps **11.50 and 13.81 mm** respectively. The first port-0
+attempt was deliberately rejected before motion by its clearance gate. A
+five-card port-1 scene inserted with an 85 mm lane but passed within
+**2.11 mm** of a main PCB, so it is not route-quality BC data. Widening that
+lane to 110 mm only improved the gap to **3.25 mm** and lost insertion,
+ending 40 mm from the port. Stop the simple lane-width sweep. These are
+privileged teacher runs, not autonomous policy insertions; causal/grasp
+admission and broader scene coverage remain open. The
+[experiment and videos](experiments/2026-09-25-sc-lateral-bypass-and-policy-handoff.md)
+include a synchronized 20 Hz overhead/side full-cable view, failures, exact
+commands, geometry, scores, and NAS bag archives. Step 5 and RL remain gated.
+
+**September 25, current gate.** The shared SFP/SC BC actor still has no
+autonomous full-start SC insertion on the two opened, preregistered
+development scenes. Adding ten new verified SC successes improved one
+offline starting-command metric but scored Tier 3 = 0/2 in Gazebo. A further
+SC-heavy continuation improved held-out SC initial-command p95 to 1.995 mm
+and near-port lateral p95 to 0.409 mm, yet also scored Tier 3 = 0/2 and
+contacted the enclosure. Its [raw bags](experiments/2026-09-25-shared-bc-sc99-dev2-mcap-archive.json)
+are archived. A fresh 60-scene SC teacher collection has now scored **31/60**
+full insertions and admitted **17,796** causal chunks. A matched six-scene
+five-card teacher replay scored 0/6 without a route lift and 3/6 with an
+80 mm pre-route lift; the three full lift trajectories added **2,287**
+admitted chunks. The [source scores](experiments/2026-09-25-sc-diversity-batch3-scored.json)
+and [paired lift scores](experiments/2026-09-25-sc-fivecard-lift-scored.json)
+preserve successes and failures. A same-parent, same-budget BC control versus
+34-new-episode treatment then scored **Tier 3 = 0/2 in both arms**, with
+wrist/enclosure contact and final plug-port distances about 0.9 m. The
+treatment's offline selection error also worsened, 2.772→3.182 mm.
+The [matched gate](experiments/2026-09-25-shared-bc-batch3-matched-gate.json)
+keeps this negative result. The posthoc teacher trace on the same two opened
+development scenes is complete and excluded from BC. At the successful
+teacher start, the frozen actor pose was wrong by about 42–44 mm while its
+first command was within 0.5–1.6 mm; substituting true pose in the frozen
+action head made that command much worse. A corrected offscreen locator
+still missed held-out offscreen openings by 22.46 px median / 118.78 px p95.
+The expanded three-camera visible-opening locator reached 14.44 px p95 on
+held-out far views, but its only geometrically visible view in one difficult
+development start missed by 104.69 px. It is not a usable full-start pose
+cue. See the [diagnosis](experiments/2026-09-24-shared-actor-sc-serl-execution.md#september-25-expanded-bc-full-start-diagnosis).
+An explicit direct TCP-body full-target BC ablation (same shared actor,
+pose head auxiliary only) changed the same two autonomous SC starts from
+runaway/contact at about 0.9 m to no scored contact at **0.04/0.14 m**.
+Neither inserted; its SC near-port lateral held-out p95 **0.644 mm** was
+worse than the port-frame treatment's **0.399 mm**. The training budgets
+differ, so this is a promising diagnostic rather than a promoted policy.
+See the [body-target gate](experiments/2026-09-25-shared-body-bc-batch3-gate.json).
+Its lower-rate continuation also failed insertion on the same two scenes.
+A training-only two-second body-actor takeover followed by teacher rescue
+fully inserted on **3/4** scenes and produced **2,135** verified correction
+chunks, including 123 actor-owned frames. Twenty additional frozen training
+scenes completed; 15 inserted under teacher rescue. Across pilot and
+expansion, 18 distinct successful scenes yielded 9,524 causal chunks,
+including 467 actor-owned anchors. A matched same-parent body-target BC
+comparison trained both arms for 1,500 updates. The treatment's offline
+selection error was 2.633 mm versus 2.645 mm for control, but both remained
+**0/2 autonomous insertions** on the same opened SC development scenes.
+Overall official scores were 41.50 treatment and 43.80 control; neither
+had scored contact. See the [matched gate](experiments/2026-09-25-shared-body-bc-rescue18-matched-gate.json).
+This is supervised teacher rescue, not autonomous success or RL.
+Continuous near-port body-actor teacher-rescue pilots scored only **1/4**
+full insertion each at two and one seconds; one short rerun had off-limit
+contact and 18.17 mm grasp drift. A separate interleaved training-only
+pilot used 0.2 s actor pulses every 4 s and scored **4/4** teacher-rescued
+insertions. Strict force and grasp checks admitted only **2/4** episodes
+as correction labels. The 20-scene expansion then scored 14/20 full
+teacher-rescued insertions; the combined 24-scene strict audit admitted 16
+episodes with 10,042 causal chunks and 347 actor-owned anchors. Two whole
+episode BC replay weights worsened held-out SC initial and near-port
+metrics. A focused 0.5 s post-pulse correction selection kept 1,458 rows;
+its matched treatment improved combined offline selection 2.645→2.621 mm
+but worsened SC initial p95 1.760→2.315 mm and near-port lateral p95
+0.312→0.439 mm. The frozen two-scene autonomous comparison finished
+**0/2 full insertions in both arms**. The treatment's higher partial score
+(45.64 versus 28.17) is not reliable evidence of improvement: identical
+control weights scored 43.80 in an earlier repeat. See the
+[collection gate](experiments/2026-09-25-sc-body-interleaved-rescue-batch20-gate.json)
+and [matched live gate](experiments/2026-09-25-shared-body-bc-window0p5s-matched-live-gate.json).
+The frozen four-target cadence comparison also finished **0/2 insertions
+for both cadences**. Its scored-trace diagnosis found the actor commanding
+away from the opening at ~20–30 s, with measured plug motion following
+that direction and no scored contact. The bags lack synchronized RGB, so
+visibility and target-recognition versus action-mapping remain unresolved.
+See the [diagnosis and plot](experiments/2026-09-25-step5-body-cadence-scored-diagnosis.json).
+Routine BC/data expansion has stopped. The [revised, bounded next
+experiment](experiments/2026-09-25-step5-next-steps-recommendation.md#executed-update-and-revised-next-experiment-september-25)
+records synchronized frozen-actor observations on at most four training-only
+starts and permits one targeted command-generation repair only if a common
+cause is demonstrated; its budget and continuation gate are predeclared.
+The other four development scenes and four reserved final IK scenes remain
+sealed. Step 5 is open; supervisor and SERL experiments have not begun. See
+the [execution record](experiments/2026-09-24-shared-actor-sc-serl-execution.md).
+
+**September 25, full-start root-cause update.** A fresh SC rollout of the
+latest corrected shared BC actor still scored Tier 3 = 0 (total −35) with
+enclosure contact. Posthoc scored geometry shows its auxiliary pose already
+wrong by 28.21 mm at frame 0; action error grows from 5.81 mm at frame 0 to
+141.1 mm by frame 35. A separate frozen native RGB locator misses the
+opening by roughly 350–390 px in initial side views, despite subpixel median
+error near the port. A bounded far-view RGB retrain brought initial side-view
+opening error to 3–4 px median. Fixed left/right calibrated triangulation
+then reduced initial lateral port error from 125.7/140.5 mm to **1.2/2.3 mm
+median/p95**; including the center view gave 103.8 mm median because the
+opening was outside that view. Near-port p95 after actor runaway remains
+6.1 mm, so this does not meet the insertion corridor. A nondeployable
+exact-pose substitution **worsened** frame-0 action error to 24.36 mm, so
+perception and action mapping both need work. See the
+[execution record](experiments/2026-09-24-shared-actor-sc-serl-execution.md),
+[action audit](experiments/2026-09-25-shared-corrected-fullstart-pose-action-audit.json),
+and [matched triangulation](experiments/2026-09-25-sc-global-far-triangulation-side2.json).
+The shared BC gate remains closed; no RL or final scene evaluation.
+
+An eight-scene yaw-edge development check then found that the opening is
+outside **both side cameras** at frame 0 in six of eight starts. The causal
+side-view filter's near-port lateral p95 was 1.624 mm across seven near
+episodes, so the single-scene 0.236 mm p95 did not generalize. A bounded
+offscreen visual extrapolation ablation was tested with training-only
+labels. See the [eight-scene report](experiments/2026-09-25-sc-global-far-eight-causal40.json).
+
+That offscreen regression failed: eight-scene offscreen opening p95 was
+482 px. A from-scratch true-pose actor upper bound also failed its matched
+offline gate (selection score 5.852 mm versus 4.425 mm for the
+observation-only control). A 2 mm action cap slowed the fresh actor's drift
+but still scored Tier 3 = 0, total −35 with enclosure contact. The data
+inventory showed only **38 SC training episodes** in the 274-episode shared
+BC set. The subsequent 20-scene training-only SC teacher batch and lift
+retries yielded ten causally audited successes. The
+[execution record](experiments/2026-09-24-shared-actor-sc-serl-execution.md)
+contains the commands and negative comparisons. No RL or final scenes.
+
+The 20-scene SC teacher batch yielded eight audited full insertions; an
+8 cm lift retry of its 12 failures yielded two more. The matched BC
+treatment added 10 SC successes and 5,700 chunks. Its grouped initial SC
+command p95 improved **2.791→2.565 mm**, but near-port lateral p95 worsened
+**0.319→0.544 mm**. On two new, pre-registered development starts, both
+control and treatment scored **Tier 3 = 0/2 and total −23 on each trial**
+with contact penalties. The four remaining development starts and four
+reserved final IK configurations remain sealed. Step 5 is still failed;
+no SERL training has begun.
+
+**September 25, latest shared SFP/SC actor gate.** The 14-step plan remains at
+step 5: the single shared BC actor has **no autonomous full-start SC insertion**
+on the new development start, so recovery RL and final evaluation remain
+closed. Nine additional scored, successful 3 mm teacher-bounded SC episodes
+(4,859 causal chunks) did not change that outcome in a matched 1,500-update
+BC comparison. Correcting an SC/SFP clock mismatch improved grouped offline
+SC initial-command p95 from 2.764 to 2.156 mm, but autonomous Tier 3 stayed
+zero. Teacher-prefix handoff showed the actor could finish the last ~1 mm
+when the privileged teacher had already placed the plug ~13.8 mm inside the
+opening; when handed control ~20.8 mm before the opening, it drifted laterally,
+hit the wrist/card, and failed. A frozen high-resolution SC estimator was
+accurate at that handoff (~0.14 mm lateral error) but lost the target after
+large actor-driven drift. Four training-side direct-takeover failures supplied
+only 25 safe local teacher-correction chunks; their matched BC continuation
+still scored Tier 3 = 0. A separate, nondeployable true physical-tip input
+continuation was trained as an information upper bound and has not fixed the
+failed-handoff action error in offline replay. A bounded 15× local-row
+sampling ablation still scored Tier 3 = 0. A direct two-nominal-second actor
+takeover followed by teacher rescue produced three scored full SC successes
+in four training-side scenes and 2,046 causal chunks. Adding them in a
+matched BC continuation still scored Tier 3 = 0 autonomously, and grouped
+held-out near-port lateral p95 worsened from 0.470 to 0.568 mm. A runtime
+ablation that replanned after each command also scored zero. Stronger
+sampling of actor-owned rescue rows and an earlier takeover window were
+also tested. The 15× near-port actor-row sampling still scored Tier 3 = 0
+autonomously with wrist/enclosure contact. Direct actor control during the
+first 2.0 or 0.5 nominal seconds followed by teacher rescue produced only
+one full success per four-scene batch. Their two admitted episodes and 1,037
+chunks did not pass the offline BC checkpoint gate when actor-owned rows
+were sampled 20×. A nondeployable all-phase true-SC-pose upper bound is
+training to test whether early geometry alone can repair action learning.
+That privileged all-phase geometry upper bound also failed its offline
+gate: held-out SC initial-command p95 was 4.817 mm versus 2.156 mm for the
+observation-only parent. A provenance re-audit found nine historical
+matrix/lift successes already present in the original SC supplemental
+source; a later arm that duplicated them is invalid as a diversity test.
+The trainer now rejects duplicate episode/frame rows. A genuinely new
+eight-scene clean-teacher batch scored **5/8 full SC insertions** and
+admitted **2,463 unique causal chunks** after all-source overlap checks.
+A lift retry rescued two more starts, giving **seven unique full-success
+episodes and 3,685 causal chunks**. In a matched BC continuation,
+held-out SC initial-command p95 improved from 3.124 to 2.169 mm with
+seven new scenes, but near-port lateral p95 worsened from 0.312 to
+0.446 mm. Control, +5, and +7 actors all scored **Tier 3 = 0** on the
+same fresh autonomous SC start with enclosure contact. The supervised
+gate remains closed.
+Two more full-success SC teacher recoveries were collected after the +7
+actor directly controlled the first two nominal seconds with a 2 mm
+per-command cap. Their 1,387 causal chunks improved matched grouped BC
+metrics, but control and corrected actors both still scored Tier 3 = 0
+on the fresh autonomous SC start; the corrected arm contacted the
+forearm/enclosure wall. A longer from-scratch +7 BC fit also failed the
+offline gate. The next diagnosis is the earliest autonomous command and
+pose trace, before changing the architecture or opening RL.
+See the [execution record](experiments/2026-09-24-shared-actor-sc-serl-execution.md)
+and [artifact map](../outputs_README.md). No offline or online SERL began;
+the four reserved final configurations remain sealed.
+
+**September 25 latest shared BC gate.** Three clean 3 mm early teacher-assisted
+SC episodes were admitted as causal labels and compared in a matched
+1,500-update continuation against the same BC run without them. Both actors
+scored **Tier 3 = 0** on the same new autonomous SC start with wrist/enclosure
+contact; the added episodes did not solve full-start transport. On the same
+training-side teacher scene, 8 mm and 6 mm bounded early actor pulses followed
+by teacher control scored **16.88** (no insertion) and **46.05** (partial),
+respectively. Their nominal 1.0/0.5 s intervention windows were actually
+5.6/3.2 simulation seconds; neither episode was admitted as successful BC.
+A 3 simulation-second observation-only startup hold followed by the same
+actor still scored Tier 3 = 0 with wrist/enclosure collision on that fresh
+scene. An SC-weighted 1,500-update continuation improved held-out first-command
+p95 from 3.47 to 2.46 mm but also scored Tier 3 = 0 with the same contact.
+On 242 held-out teacher-state SC transport frames, its direction agreed with
+the teacher (median cosine 0.998); the fresh closed-loop route still fails.
+A separate four-scene training-only bounded student collection is running.
+The supervised autonomous gate remains closed, so offline/online SERL,
+Gazebo transfer, and reserved final configurations have not started. See the
+[execution record](experiments/2026-09-24-shared-actor-sc-serl-execution.md).
+
+**September 24, shared-actor correction gate.** The guarded shared BC
+actor still has no autonomous full-start insertion and stopped at 42 N in
+its SC development rollout. A DAgger-style collector now executes short,
+bounded actions from that same observation-only actor while the privileged
+teacher supplies correction targets. Isolated repeats of a previously
+successful SC teacher scene ended at partial insertion even with zero
+student input. Replaying the original two-scene reset order restored a
+Tier 3 = 75 control. A second-only student intervention in that order
+also scored 75; its admitted episode has 400 student-active frames and
+910 causal supervised chunks, 317 anchored during student control.
+The warm-up scene and all failed/zero-intervention probes remain outside
+corrective BC. The matched 2,750-update continuation finished:
+SC held-out 0–5 mm lateral command p95 was **0.380 mm without** and
+**0.629 mm with** fivefold-sampled corrective data. Both autonomous
+guarded SC rollouts scored Tier 3 = 0 and hit a scored wrist/enclosure
+contact; the corrective arm also incurred a sustained-force penalty.
+This one-scene correction did not solve transport. The unit-weight
+ablation improved offline near-port SC error, and three more scored
+student-correction successes were admitted from an eight-scene collection.
+A start-aware shared model trained on those additions, with newly generated
+actor development scenes kept separate from training. No RL,
+reserved final scene, or autonomous promotion has followed from this
+teacher-assisted result. See the [execution record](experiments/2026-09-24-shared-actor-sc-serl-execution.md)
+and [artifact map](../outputs_README.md).
+
+**September 25 supervised gate:** a start-aware shared actor still scored zero on
+four new SC development starts, all with wrist/enclosure contacts.
+Training used 288×256 JPEG images followed by PIL 224×224 bilinear resize;
+live inference had used direct native-to-224 OpenCV area resize. On 64
+paired saved frames, this changed predicted targets by **0.90/3.25 mm
+median/p95**. Matching the training JPEG path reduced the disagreement to
+**0.075/0.256 mm**. The converter and one-hot task encoding passed
+posthoc checks. The same-checkpoint, same-scene corrected-image rerun
+also scored **0/4**. A second model with three extra successful
+teacher-correction episodes scored **0/4** on those scenes. The runtime
+then proved to have a 5 mm per-coordinate target cap despite teacher
+setpoints commonly being 10–40 mm away; raising the cap to 20 mm scored
+**0/4** and worsened off-limit contact. A scored teacher-only reference
+on the first fresh scene inserted fully, while the actor moved in the
+opposite board-direction within seconds. The actor predicts 3.35 mm
+median first movement on SC training starts where the teacher almost
+holds still. Corrective collection previously began after 3 s, missing
+this failure. A bounded 3 mm teacher-assisted early-intervention probe
+fully inserted on one development scene without scored force/contact
+penalty, but it is not an autonomous actor result. A stronger first-command
+loss improved teacher-state predictions yet the actor still went the wrong
+way and hit its 44 N live force stop. The first early corrective
+training-suite run filled scratch before its final score file and admitted
+no episodes; its seven bag byte streams are archived. A replay with more
+space and the same scene order is active. These findings
+are in the
+[experiment record](experiments/2026-09-24-shared-actor-sc-serl-execution.md);
+there is still **no autonomous shared-actor full-start insertion** and
+offline or online RL remains closed.
+
+**September 24, latest gate.** The fourth SC perception suite was frozen
+before eight new scenes were generated. Four scenes reached near-port views
+(154 frames); the observation-only physical plug-to-opening lateral error was
+**0.156/0.294 mm median/p95**, axial **0.201/0.309 mm**, and the frozen
+board-line yaw error **0.048/0.084°**. Both position histories and yaw history
+initialized on every near-port frame. These numbers are independent
+confirmation of SC perception, not autonomous insertion. Eight raw MCAPs were
+losslessly archived and SHA256 verified on NAS; images and scored metrics
+remain under `sc_yaw_boundary_refreeze_eval_20260924/` in the existing
+`/var/tmp/chmin_aic_20260918_act/` root. Only four of eight scenes reached
+near-port, so broader coverage and complete live latency are still open.
+
+The shared BC actor still fails its supervised insertion gate. A causal
+elapsed-time variant improved the matched initial SC command error to
+**5.29 mm**, but grouped near-port SC body-command error remained
+**1.158/3.338 mm median/p95**. A bounded **training-only oracle pose**
+diagnostic then supplied noisy ground-truth **robot TCP** pose near the opening and
+selected update 2,000 of 3,000. Its grouped SC near-port body-command error
+was **1.167/3.270 mm**: accurate TCP localization alone did not close the
+action gap.
+This diagnostic checkpoint explicitly refuses deployment. It does **not**
+test the physical plug-tip pose estimated by the high-resolution SC cameras.
+A separate noisy **ground-truth physical-tip** input test reached
+**0.289/0.714 mm** lateral command error in the 0–5 mm SC band, a modest
+improvement over the elapsed-time actor's **0.369/0.820 mm**. Giving both
+oracle TCP and plug-tip inputs worsened this to **1.351/1.868 mm** in its
+selected checkpoint; that branch failed and is not evidence that RGB pose
+cannot help. All oracle checkpoints are nondeployable and selected by an
+all-phase validation median. A near-port lateral-weighted
+nonprivileged BC arm lowered SC 0–30 mm lateral p95 from **1.204 to 0.916
+mm**, but worsened its median from **0.366 to 0.595 mm**; the 0–5 mm band
+was **0.586/0.752 mm median/p95**. SFP near-port lateral p95 was **2.736
+mm**. A new eight-start qualification-like SC teacher batch yielded **2/8
+full insertions**, both admitted as 1,579 causal BC chunks. Four failures
+ended with less than 0.4 mm TCP motion over the final five seconds while
+32–76 mm from the issued setpoint; a specific cable/card contact is still
+unproven. Matched 8 cm teacher pre-route lift rescued **0/3** starts.
+A 5 mm near-port cap rescued **0/2** closer failures. The
+near-lateral-selected BC rerun with the two new successes selected update
+1,750/2,750 and reached **0.198/0.337 mm** lateral command error in the
+0–5 mm SC TCP-axial band over 65 frames from five held-out episodes.
+SFP 10–30 mm lateral p95 remains **2.650 mm**, and the matched first SC
+command still misses by **7.17 mm**. The guarded absolute-base Gazebo
+development rollout **failed**: the actor moved about **0.416 m** along a
+different transport route from the scored teacher and stopped itself at
+42.0 N near an enclosure-looking structure. Scored Tier 3 was zero.
+Its exact contact pair is unverified. Near-port offline precision therefore
+does not establish autonomous transport or insertion. Next is bounded
+student-perturbed teacher correction data, then the same guarded start.
+No recovery RL or final
+reserved scenes have been opened.
+
+**September 24, current continuation.** A third, independently generated
+eight-scene SC perception suite completed with the revised frozen
+observation-only tracker. Six scenes reached near-port observations, giving
+228 frames. Combined physical plug-to-opening lateral median/p95 was
+**0.213/0.443 mm**; 227/228 frames initialized. One scene's own p95 was
+**1.004 mm**, and yaw p95 was **0.672°** overall with a **0.981°** scene
+outlier. Complete offline native-image perception took **147.36 ms p95** on
+one GPU, excluding ROS, actor, and command conversion. This supports the
+pooled 0.5 mm perception gate but does not prove every scene or autonomous
+insertion. A principled rail-yaw search-boundary rejection improved the prior
+development suite from 0.132° to **0.083° p95** and the now-inspected third
+suite from 0.672° to **0.085° p95**. It was frozen before a fourth independent
+scene suite (`sc_yaw_boundary_refreeze_eval_20260924/`) was generated; its
+completed result is summarized above. The [audit](experiments/2026-09-24-sc-supervision-audit.md#third-independent-frozen-check-september-24)
+has exact metrics and artifacts; all eight raw MCAPs were losslessly archived
+with SHA256 verification. Shared BC labels use complete recorded TCP targets
+in port-opening frame. A first **13.60M-parameter shared supervised actor**
+was trained from 268 SFP plus 32 successful SC episodes on one GPU in rootless
+Docker. It stopped at 6,500 updates after a 2,000-update plateau, selecting
+update 4,500. Held-out first-target translation median/p95 was **2.48/11.81
+mm SFP** and **2.63/5.55 mm SC**. A no-privilege SC development rollout
+failed badly: no insertion, final plug 0.51 m from the port, peak force
+785.95 N and an off-limit wrist contact. On the matched scored teacher
+scene, the model's first command was 16.01 mm from the near-zero teacher
+command; its current TCP-in-port pose estimate was 6.04 mm and 8.06° wrong.
+No further live rollout of that checkpoint is planned. A warm-started
+command-loss/initial-phase-balanced supervised run completed 4,000 updates.
+It reduced held-out SC near-port command error from **1.57/4.98** to
+**1.46/3.84 mm median/p95**, but SFP near-port p95 remained **9.16 mm** and
+the matched initial SC command still missed by **10.66 mm**. The guarded
+absolute-setpoint runtime has not been live tested because these offline
+gates failed. **No SC recovery RL checkpoint exists.**
+
+**September 24, earlier continuation.** The second frozen eight-scene SC
+perception check exposed a genuine port-tracker failure: the original
+three-view causal tracker seeded a false position before the target was
+visible and held it after correct detections appeared. Its physical
+plug-to-opening lateral p95 was **45.5 mm**, so that frozen candidate failed.
+The apparent **1.44° yaw p95** was a *scoring bug*: the metric combined a
+scene-specific physical-tip label with the old fixed TCP-to-tip orientation.
+Scoring against the selected port's bag TF directly gives **0.132° yaw p95**;
+the image estimator and its inputs were unchanged. The separate plug crop
+gave **0.197 mm physical-tip lateral p95**. An observation-only three-view/
+two-view fallback tracker, with proximity acquisition and stable-target
+history, gives **0.395 mm combined lateral p95** on those now-inspected
+scenes and **0.164 mm port lateral p95** on the earlier eight-scene suite.
+These are development results. Exact scorer/tracker code and thresholds were
+frozen before generating a **third, separate eight-scene confirmation**;
+that completed run is under
+`/var/tmp/chmin_aic_20260918_act/sc_port_tracker_refreeze_eval_20260924/`.
+
+The SC teacher search now has at least one scored, causally audited
+full-insertion candidate in **all 12** `(0–5 NIC cards, selected SC port)`
+cells. A 5 mm near-port integrator cap turned the previously missing
+two-card/port-1 start from partial to **Tier 3 = 75**, but reduced the matched
+five-card/port-0 control from 75 to **16.0**. This cap is a teacher data probe,
+not a deployable universal rule. The 21 canonical SC experts plus 11
+supplemental successful candidates have physically corrected port-frame
+waypoint labels. A separate [admission audit](experiments/2026-09-24-sc-bc-admission.json)
+passed all 11 new episodes and 6,220 causal chunks after scene-split,
+image/command, physical-grasp, and force/stall checks; the original candidate
+manifest remains unchanged for provenance. See the
+[matrix](experiments/2026-09-24-sc-near-bias-and-success-matrix.json) and
+[execution log](experiments/2026-09-24-shared-actor-sc-serl-execution.md).
+That earlier audit preceded the shared BC checkpoints summarized above;
+no SC recovery RL checkpoint exists.
+
+The active [shared SFP/SC actor and recovery execution plan](experiments/2026-09-24-shared-actor-sc-serl-execution.md)
+starts by freezing scene/data inventory and validating Isaac distal-cable
+fidelity, SC action targets, and observation-only SC pose. It then fills
+missing successful Gazebo SC demonstrations before shared BC and gated Isaac
+RL. One actor will own normal motion and post-retreat choices; the measured
+backoff supervisor is deterministic. Shared BC has since trained and failed
+its autonomous gate; SC recovery RL remains unopened.
+
+The bounded Isaac SC mechanics gate now passes with robot self-collision off:
+0/3/5-card scripted scenes insert, and external plug/port and gripper/card
+contacts remain active. The [fidelity record](experiments/2026-09-24-isaac-sc-fidelity-fix.md#cable-self-collision-diagnosis-and-corrected-moving-view)
+preserves the failed kinked cable and corrected 20 Hz video. The next SC
+supervision audit found a quaternion-order bug in the old port-frame TF
+conversion. It is corrected in the [v2 audit](experiments/2026-09-24-sc-port-target-audit.json);
+the old label orientations were wrong by 153.7° in a checked terminal sample.
+Strict and held-target connector chunks are now built from scored Gazebo
+episodes. The older low-resolution [SC pose probe](experiments/2026-09-24-sc-pose-probe-results.json)
+reached 1.70 mm near-port lateral p95 on seven held-out episodes. The
+[native-image continuation](experiments/2026-09-24-sc-native-pose-ablation.md)
+recollected 1152×1024 RGB from all 21 verified SC reset groups and generated
+new, episode-grouped training and development scenes. It exposed wrong-port
+detections after occlusion, so raw per-frame predictions are not treated as
+ready for control. A three-camera landmark model and causal fixed-port filter
+use RGB, measured TCP, and fixed calibration only. After adding 12 yaw-edge
+training scenes, the position head reached **0.141 mm lateral and 0.106 mm
+axial p95** over 208 near-port frames in four separate yaw-edge episodes;
+its history initialized in all four. The yaw-constrained orientation head
+reached **0.804° p95** on the same suite, but one episode had no trusted
+orientation history. A position-anchored fallback for only the first two
+orientation updates reached **0.806° p95 with 100% initialized coverage**
+there; on the older 12 development scenes it gave **0.596° p95**. This
+fallback was designed after inspecting the yaw-edge suite, so these numbers
+are **development evidence**, not an untouched confirmation. The frozen
+eight-scene follow-up and its failure are described below. Offline CNN
+perception p95 was 37.5 ms after retraining, excluding the rail stage;
+live ROS+actor latency and autonomous insertion are unmeasured.
+The SC perception gate and shared BC/RL remain open. The
+[supervision audit](experiments/2026-09-24-sc-supervision-audit.md) records
+the quaternion fix, timings, camera provenance, and label limits.
+
+That eight-scene check confirmed the position filter (**0.214 mm lateral
+p95**, seven near-port episodes) but exposed **1.608° orientation p95** in
+one partly occluded scene. A new [board-rail yaw estimator](experiments/2026-09-24-sc-native-pose-ablation.md#frozen-suite-failure-and-board-rail-yaw-ablation)
+uses long visible rail lines in the original RGB views, measured camera pose,
+and a coarse learned visual yaw prior. It reached **0.064° p95** on the 12
+grouped development scenes and **0.078° p95** on the already inspected
+eight-scene suite, with every near-port episode initialized. The rail stage
+measured **88.8 ms p95 offline**, separately from the 37.5 ms CNN stage.
+Because the failed scene motivated the rail method, a different eight-scene
+development suite was generated only after checkpoint/code/threshold hashes
+were frozen. The [fresh evaluation](experiments/2026-09-24-sc-board-lines-fresh-evaluation.json)
+measured **0.165 mm lateral / 0.183 mm axial / 0.109° board yaw p95**
+over 236 near-port frames in seven of eight new scenes, with both causal
+histories initialized on all near-port frames. The eighth scene never reached
+the near-port region. This establishes development accuracy for the **port**
+and board yaw. The [physical-tip audit](experiments/2026-09-24-sc-supervision-audit.md#fresh-native-image-confirmation-and-remaining-physical-tip-question)
+then found that the fixed TCP-to-tip proxy is wrong by 1.15–10.58 mm across
+16 scored pilot scenes, while the episode-specific physical grasp is nearly
+rigid. The frozen RGB tip head failed on the new eight-scene suite at
+**6.83 mm lateral p95** against the actual tip. A first retrained shared-crop
+head reached **0.356 mm lateral p95** on 12 grouped development episodes,
+but **0.555 mm** on the inspected eight-scene check, with a cold-start
+failure. The revised [separate plug-crop candidate](experiments/2026-09-24-sc-physical-tip-model-comparison.json)
+uses scored physical-tip labels for training and a frozen RGB locator for
+crop selection. It reached **0.290 mm tip lateral p95** on 12 held-out
+development episodes. On the earlier eight-scene check, its combined
+physical plug-to-opening error was **0.450 mm lateral / 0.174 mm axial p95**
+with both histories initialized throughout near-port motion. Because that
+check motivated the new crop, a second eight-scene suite was generated only
+after freezing the candidate. Offline four-model perception measured
+**128.3 ms p95** including native image decode and rail extraction; full
+live ROS+actor latency and autonomous insertion remain unmeasured. Shared BC
+stays gated on the new confirmation and SC teacher-data admission.
+
+## September 24 corrected Isaac SC route contacts
+
+After the [mechanics repair](experiments/2026-09-24-isaac-sc-fidelity-fix.md),
+controlled five-card routes reproduced named **gripper/card** blockage twice
+and **plug/card** blockage on a different route. In the instrumented across-card
+run, the gripper moved only 6.74 mm over 75 commanded steps while gripper/card
+contact exceeded 100 N; route reversal cleared it. Cable links 1/2 also touched
+a card, but only during the gripper-led jam. A nearby clear lane had no sampled
+scene contact and reached the transport waypoint. See the [route record, plot,
+and raw trace map](experiments/2026-09-24-isaac-sc-contact-routes.md).
+This is one constructed scene with a privileged scripted controller. An
+**independent cable snag is still unproven**, and the high-force routes are
+unsafe as training demonstrations. Gazebo's retained bridge logs only
+off-limit contact pairs, so the historical Gazebo cable-trap candidate remains
+causally ambiguous. The newer Isaac container now passes a three-camera
+[RGB smoke test](experiments/2026-09-24-isaac-sc-fidelity-fix.md#camera-follow-up-september-24)
+after the same local driver-check override used by the earlier working
+container. A diagnostic view visibly shows orange cable and the card row.
+A 61-frame moving clear-lane clip also renders, but its distal cable looks
+sharply kinked/looped relative to the retained Gazebo wide view. Distal cable
+fidelity and cross-simulator appearance checks remain before visual SC
+recovery training. No SC BC or RL training was started.
+
+## September 24 Isaac SC mechanics repair
+
+The [SC fidelity repair](experiments/2026-09-24-isaac-sc-fidelity-fix.md)
+calibrated the SC grasp and first cable links from scored Gazebo TF, restored
+the source SC-port SDF colliders in the correct port frame, and removed two
+measured internal grasp-contact artifacts without disabling scene collisions.
+In one constructed five-card development scene, a privileged scripted
+full-start Isaac probe reached the scored Gazebo port-base target with
+0.073 mm final axial and 0.054 mm lateral error; peak plug/port contact was
+1.04 N. Two deliberate near-port lateral commands yielded plug/port
+blockage at 54 and 92 N, with gripper/first-link contact zero. The old
+gripper/card item-2 collision did not recur on the centered route with the
+calibrated grasp. Deliberate card-crossing routes above reproduce a separate,
+named gripper/card incident.
+These are [physics-only diagnostic traces and exact hashes](experiments/2026-09-24-isaac-sc-fidelity-summary.json),
+not autonomous insertions or RL replay. The original camera attempt failed
+under the rootless Isaac Sim 5.1 driver check; the later container-local
+override passed a short repaired-scene RGB smoke test. Distal cable and cable/card snag
+fidelity also remain unverified. No SC BC or SERL training was started.
+
+## September 24 hierarchical recovery continuation
+
+The fixed five-card Gazebo route probe now has seven 20 Hz wide-view reruns:
+six partial insertions and one no-insertion stop with 52.9 N peak raw wrist
+force norm (72.16 N vector-tared official force maximum),
+38.7 mm plug axial distance before the opening, 4.45 mm lateral offset, and
+111.6 mm final TCP command error. The cable visibly crosses the cards, but
+the contact pair is unknown and the new run differs from the older nearly
+stationary-cable candidate. Official post-friction evaluation image and
+single-trial reset evidence make the historical ghost-collider bug a poor
+explanation. Preserve both incidents as **ambiguous obstruction**, not proven
+cable snags. Videos, commands, geometry, and toolkit cross-check are in the
+[fixed-route record](experiments/2026-09-23-fixed-five-card-route-probe.md).
+
+The approved branch is [hierarchical recovery](HIERARCHICAL_RECOVERY.md):
+learned policy for normal motion and retry choices, deterministic measured-pose
+retreat on a validated force-plus-stall trigger, and escalation to an earlier
+safe route checkpoint after repeated same-corridor blockage. The existing
+Isaac controller only performs local position backtracking; neither the
+hierarchy nor SC-to-SC learned recovery has been validated. The
+[execution plan](experiments/2026-09-24-hierarchical-recovery-continuation.md)
+ranks failures, specifies the SC BC gate, matched no/local/hierarchical
+ablations, optional offline critic warm-up, online SERL, Gazebo transfer, and
+unchanged official-evaluation gate. Hierarchical assembly and cable recovery
+have prior art, but the two closest papers reviewed in the
+[core design](HIERARCHICAL_RECOVERY.md#related-work-and-claim-boundary) do not
+describe our proposed local-to-route measured-path checkpoint escalation.
+Any publication claim still depends on a measured gain and a wider novelty
+review.
+
+Execution update: an [indexed incident audit](experiments/2026-09-24-hierarchical-recovery-continuation.md#execution-log)
+contains 24 retained Gazebo SC route/targeted episodes (8 full, 11 partial,
+5 none); fixed-seed repeats are one scene group. Seven 20 Hz bags now have
+measured TCP, command, and force-vector traces. The initial two-sample
+force-plus-stall trigger, when correctly tared as a vector, marked **7/7**,
+including six partial-insertion runs; a longer-window variant also marked
+**7/7**. Subtracting force norms had misleadingly marked zero and two runs,
+respectively. Neither is approved for robot control. A simulator-independent hierarchical
+checkpoint prototype passes four isolated tests but has not driven an
+autonomous rollout. Canonical SC supervision remains 21 verified Gazebo
+episodes, all NIC1–3. The later corrected Isaac SC grasp/port now passes one
+scripted five-card mechanics scene, but image collection and broader scene
+validation remain open. **No SC BC, offline SERL, online SERL, Gazebo transfer, or
+official score is claimed for this continuation.** The precise gate and
+commands are in the execution record.
+
+A broader read-only audit of 17 Gazebo traces across five scene/config groups
+found peak TCP target-tracking error of 89–127 mm in the three no-insertion
+runs versus 56–73 mm in fourteen full/partial runs. An 80 mm line separated
+these saved cases, but it was selected after seeing them, and neither force
+nor tracking error reveals the contact pair. This remains a candidate
+diagnostic for new-scene validation, not a deployed backoff trigger.
+Three fresh normal-collision five-card Gazebo variations then yielded one full
+and two partial insertions, using either the privileged route plus stock
+CheatCode or stock CheatCode alone. None exceeded 80 mm tracking error; there
+is still no fresh failed-scene sensitivity check. The stock run's layout was
+only 7 mm in X and 4 mm in Y from an earlier no-insertion layout, yet became
+partial. Their [scores, config hashes, traces, and videos](experiments/2026-09-24-hierarchical-recovery-fresh-scenes.json)
+are saved. These are diagnostic teacher runs, not learned recovery.
+
+The SC supervision audit then reconstructed 13,349 recorded teacher TCP
+targets in the selected port base frame from all 21 canonical scored bags.
+It found 84 missing command indices and nine image-time gaps over 250 ms;
+four adjacent recorded targets can span 150–450 ms. The labels are useful,
+but they are not yet exact fixed-50-ms connector-waypoint chunks, and there
+is no validated observation-only SC port estimator. See the
+[port-frame audit](experiments/2026-09-24-sc-port-target-audit.json) and
+[execution notes](experiments/2026-09-24-hierarchical-recovery-continuation.md#sc-teacher-target-frame-audit-details).
+
 ## Fixed five-card route probe and S3 audit (September 23)
 
 The SC cable's opposite SFP-module end is free. A free end can still drape
