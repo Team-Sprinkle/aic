@@ -1,0 +1,90 @@
+{
+  "schema": "shared_body_target_bc_window0p5s_matched_live_gate/v1",
+  "evaluation": "autonomous_gazebo_development_only",
+  "scene_ids": [
+    "trial_999001",
+    "trial_999003"
+  ],
+  "evaluation_command": "/var/tmp/chmin_aic_20260918_act/run_body_window0p5s_eval.sh",
+  "offline_gate": "docs/experiments/2026-09-25-shared-body-bc-window0p5s-offline-gate.json",
+  "arms": {
+    "control": {
+      "scored_total": 28.168951362467,
+      "autonomous_insertions": 0,
+      "trials": {
+        "trial_999001": {
+          "tier3": 0.8396930315453731,
+          "message": "No insertion detected. Final plug port distance: 0.19m.",
+          "final_distance_m": 0.19,
+          "contact_score": 0,
+          "force_score": 0
+        },
+        "trial_999003": {
+          "tier3": 6.145547897290053,
+          "message": "No insertion detected. Final plug port distance: 0.15m.",
+          "final_distance_m": 0.15,
+          "contact_score": 0,
+          "force_score": 0
+        }
+      },
+      "inference_latency_log_snapshots": [
+        {
+          "n": 793,
+          "p50_ms": 57.65,
+          "p95_ms": 87.05,
+          "p99_ms": 115.2
+        },
+        {
+          "n": 801,
+          "p50_ms": 57.28,
+          "p95_ms": 84.14,
+          "p99_ms": 111.07
+        }
+      ],
+      "eval_dir": "/var/tmp/chmin_aic_20260918_act/shared_body_target_bc_window0p5s_control_20260925/eval_new_dev2_replan1/best/attempt_0001",
+      "archive": "docs/experiments/2026-09-25-shared-body-bc-window0p5s-control-dev2-mcap-archive.json"
+    },
+    "treatment": {
+      "scored_total": 45.63570777237063,
+      "autonomous_insertions": 0,
+      "trials": {
+        "trial_999001": {
+          "tier3": 12.362801008772836,
+          "message": "No insertion detected. Final plug port distance: 0.11m.",
+          "final_distance_m": 0.11,
+          "contact_score": 0,
+          "force_score": 0
+        },
+        "trial_999003": {
+          "tier3": 17.07156207639846,
+          "message": "No insertion detected. Final plug port distance: 0.07m.",
+          "final_distance_m": 0.07,
+          "contact_score": 0,
+          "force_score": 0
+        }
+      },
+      "inference_latency_log_snapshots": [
+        {
+          "n": 664,
+          "p50_ms": 76.32,
+          "p95_ms": 119.34,
+          "p99_ms": 145.98
+        },
+        {
+          "n": 774,
+          "p50_ms": 59.48,
+          "p95_ms": 98.95,
+          "p99_ms": 116.13
+        }
+      ],
+      "eval_dir": "/var/tmp/chmin_aic_20260918_act/shared_body_target_bc_window0p5s_treatment_20260925/eval_new_dev2_replan1/best/attempt_0001",
+      "archive": "docs/experiments/2026-09-25-shared-body-bc-window0p5s-treatment-dev2-mcap-archive.json"
+    }
+  },
+  "rl_started": false,
+  "supervisor_used": false,
+  "reserved_final_opened": false,
+  "promoted": false,
+  "score_delta_treatment_minus_control": 17.46675640990363,
+  "interpretation": "No autonomous insertion. Score increase on one paired run is not a reliable gain; identical control weights scored 43.80 in a prior repeat versus 28.17 here."
+}

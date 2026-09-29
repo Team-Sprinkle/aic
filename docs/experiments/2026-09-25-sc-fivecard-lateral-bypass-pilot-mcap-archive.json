@@ -1,0 +1,20 @@
+{
+  "schema": "sc_scored_mcap_archive/v1",
+  "verified_before_source_removal": true,
+  "files": [
+    {
+      "original_path": "/var/tmp/chmin_aic_20260918_act/sc_fivecard_lateral_bypass_pilot_20260925/eval_collection/collection_config/attempt_0001/bag_trial_1002001_20260925_182724_702/bag_trial_1002001_20260925_182724_702_0.mcap",
+      "original_sha256": "1c7dfef7379ab1492e1d94ce487c36936fb090b410de8005caea9c892f4793b7",
+      "compressed": "/home/nas/chmin/aic_archive_20260925/bag_trial_1002001_20260925_182724_702_0.mcap.zst",
+      "compressed_bytes": 1157894,
+      "restore_command": "zstd -dc '/home/nas/chmin/aic_archive_20260925/bag_trial_1002001_20260925_182724_702_0.mcap.zst' > '/var/tmp/chmin_aic_20260918_act/sc_fivecard_lateral_bypass_pilot_20260925/eval_collection/collection_config/attempt_0001/bag_trial_1002001_20260925_182724_702/bag_trial_1002001_20260925_182724_702_0.mcap'"
+    },
+    {
+      "original_path": "/var/tmp/chmin_aic_20260918_act/sc_fivecard_lateral_bypass_pilot_20260925/eval_collection/collection_config/attempt_0001/bag_trial_1002003_20260925_182729_499/bag_trial_1002003_20260925_182729_499_0.mcap",
+      "original_sha256": "15a562c05cc04bc820d8df819d03ffc5224bfd6598f128e36bfa39611a5a5431",
+      "compressed": "/home/nas/chmin/aic_archive_20260925/bag_trial_1002003_20260925_182729_499_0.mcap.zst",
+      "compressed_bytes": 78263185,
+      "restore_command": "zstd -dc '/home/nas/chmin/aic_archive_20260925/bag_trial_1002003_20260925_182729_499_0.mcap.zst' > '/var/tmp/chmin_aic_20260918_act/sc_fivecard_lateral_bypass_pilot_20260925/eval_collection/collection_config/attempt_0001/bag_trial_1002003_20260925_182729_499/bag_trial_1002003_20260925_182729_499_0.mcap'"
+    }
+  ]
+}

@@ -1,0 +1,76 @@
+{
+  "schema": "sc_global_opening_locator_phase_diagnostic/v1",
+  "labels": "/var/tmp/chmin_aic_20260918_act/shared_bc_takeover_after15nominal_native_20260925/pose_labels.jsonl",
+  "predictions": "/var/tmp/chmin_aic_20260918_act/shared_bc_takeover_after15nominal_native_20260925/opening_predictions.jsonl",
+  "use_of_scored_geometry": "posthoc error calculation only; predictions use RGB/task",
+  "bins": {
+    "initial_0_40": {
+      "center": {
+        "visible_frames": 0,
+        "median_error_px": null,
+        "p95_error_px": null
+      },
+      "left": {
+        "visible_frames": 10,
+        "median_error_px": 382.01616527529353,
+        "p95_error_px": 389.7141050703083
+      },
+      "right": {
+        "visible_frames": 10,
+        "median_error_px": 347.86366599625774,
+        "p95_error_px": 355.2222572978419
+      }
+    },
+    "transport_40_120": {
+      "center": {
+        "visible_frames": 18,
+        "median_error_px": 262.2618217005687,
+        "p95_error_px": 364.0064438766877
+      },
+      "left": {
+        "visible_frames": 20,
+        "median_error_px": 250.8942313092765,
+        "p95_error_px": 337.1542319768053
+      },
+      "right": {
+        "visible_frames": 20,
+        "median_error_px": 251.21746758519419,
+        "p95_error_px": 315.7814668510075
+      }
+    },
+    "mid_120_240": {
+      "center": {
+        "visible_frames": 30,
+        "median_error_px": 183.03508513250893,
+        "p95_error_px": 223.34231471112062
+      },
+      "left": {
+        "visible_frames": 30,
+        "median_error_px": 177.63850053748297,
+        "p95_error_px": 218.30003544448425
+      },
+      "right": {
+        "visible_frames": 30,
+        "median_error_px": 173.6841641218811,
+        "p95_error_px": 224.79852476975685
+      }
+    },
+    "near_240_400": {
+      "center": {
+        "visible_frames": 40,
+        "median_error_px": 0.6340522065973293,
+        "p95_error_px": 80.90095858917799
+      },
+      "left": {
+        "visible_frames": 40,
+        "median_error_px": 0.6360456544446951,
+        "p95_error_px": 64.31496684731123
+      },
+      "right": {
+        "visible_frames": 40,
+        "median_error_px": 1.007263668673822,
+        "p95_error_px": 74.32449323415314
+      }
+    }
+  }
+}

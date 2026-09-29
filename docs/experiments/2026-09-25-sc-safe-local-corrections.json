@@ -1,0 +1,37 @@
+{
+  "schema": "sc_safe_local_corrections/v1",
+  "training_only": true,
+  "successful_expert_episodes": 0,
+  "whole_failed_episodes_admitted": 0,
+  "selected_chunks": 25,
+  "by_episode": {
+    "996101": 10,
+    "996102": 9,
+    "996103": 6
+  },
+  "excluded_reasons": {
+    "teacher_owned": 1172,
+    "moved_beyond_handoff_corridor": 44,
+    "outside_early_window": 1240,
+    "force_over_gate": 10,
+    "episode_high_force_at_handoff": 330
+  },
+  "teacher_actor_target_gap_mm_median": 39.2086118219465,
+  "teacher_actor_target_gap_mm_p95": 66.2115767590226,
+  "window_s": 2.0,
+  "max_force_rise_n": 8.0,
+  "absolute_force_ceiling_n": 35.0,
+  "max_handoff_baseline_force_n": 35.0,
+  "handoff_force_baseline_n": {
+    "996101": 19.560501385366173,
+    "996102": 20.328451090673994,
+    "996103": 19.55792495568096,
+    "996104": 63.90620099448871
+  },
+  "max_lateral_mm": 200.0,
+  "max_abs_axial_mm": 300.0,
+  "max_tcp_displacement_from_handoff_mm": 25.0,
+  "privileged_geometry_training_selection_only": true,
+  "labels": "/var/tmp/chmin_aic_20260918_act/sc_unbounded_takeover_training_20260925/safe_local_corrections.jsonl",
+  "source_manifest": "/var/tmp/chmin_aic_20260918_act/sc_unbounded_takeover_training_20260925/local_geometry_manifest.json"
+}

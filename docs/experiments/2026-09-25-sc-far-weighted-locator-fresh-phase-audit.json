@@ -1,0 +1,77 @@
+{
+  "schema": "sc_far_weighted_locator_fresh_phase_audit/v1",
+  "source_labels": "/var/tmp/chmin_aic_20260918_act/shared_bc_takeover_after15nominal_native_20260925/pose_labels.jsonl",
+  "frozen_checkpoint": "/var/tmp/chmin_aic_20260918_act/sc_global_far_locator_gpu_20260925/locator.pt",
+  "predictions": "/var/tmp/chmin_aic_20260918_act/sc_global_far_locator_fresh_20260925/pose_labels_predicted_crops.jsonl",
+  "scored_tf_use": "posthoc pixel errors only; prediction input is RGB/task",
+  "bins": {
+    "initial_0_40": {
+      "center": {
+        "visible_frames": 0,
+        "median_error_px": null,
+        "p95_error_px": null
+      },
+      "left": {
+        "visible_frames": 10,
+        "median_error_px": 3.316408784686317,
+        "p95_error_px": 4.581053820101299
+      },
+      "right": {
+        "visible_frames": 10,
+        "median_error_px": 3.7542661423177632,
+        "p95_error_px": 9.805185949691737
+      }
+    },
+    "transport_40_120": {
+      "center": {
+        "visible_frames": 18,
+        "median_error_px": 0.9669675271436458,
+        "p95_error_px": 3.3104502851737143
+      },
+      "left": {
+        "visible_frames": 20,
+        "median_error_px": 1.4100045951701752,
+        "p95_error_px": 2.7696169765414096
+      },
+      "right": {
+        "visible_frames": 20,
+        "median_error_px": 1.1006439556025773,
+        "p95_error_px": 2.326850945662701
+      }
+    },
+    "mid_120_240": {
+      "center": {
+        "visible_frames": 30,
+        "median_error_px": 1.351072833459274,
+        "p95_error_px": 2.5185394500069473
+      },
+      "left": {
+        "visible_frames": 30,
+        "median_error_px": 1.1168896186420425,
+        "p95_error_px": 1.8372771457038775
+      },
+      "right": {
+        "visible_frames": 30,
+        "median_error_px": 0.8569809848809609,
+        "p95_error_px": 2.413309891649107
+      }
+    },
+    "near_240_400": {
+      "center": {
+        "visible_frames": 40,
+        "median_error_px": 2.3807592820067187,
+        "p95_error_px": 35.24961011456185
+      },
+      "left": {
+        "visible_frames": 40,
+        "median_error_px": 1.6403931359910828,
+        "p95_error_px": 29.017128470858758
+      },
+      "right": {
+        "visible_frames": 40,
+        "median_error_px": 2.0171292921577435,
+        "p95_error_px": 36.634253233784015
+      }
+    }
+  }
+}

@@ -1,0 +1,81 @@
+{
+  "schema": "sc_fivecard_teacher_attempts/v1",
+  "source_manifest": "/var/tmp/chmin_aic_20260918_act/sc_fivecard_batch_20260925/source_manifest.json",
+  "source_manifest_sha256": "279ba469b3b00c2b8eec7d6f07aba24bee3b37c7c7c458acbc8df0592c90c21a",
+  "attempts": 6,
+  "full_insertions": 0,
+  "trials": {
+    "trial_1001534": {
+      "tier3": 18.522226397900287,
+      "tier2": 5.691830242912136,
+      "target_module": "sc_port_0",
+      "source_scene": {
+        "source_trial": "trial_534",
+        "target_module": "sc_port_0",
+        "source_yaml_sha256": "99bb03fe2bb49d7e5d7c14635652894815feb132d2dc28ab4299ab8f7541a4ba",
+        "nic_card_count": 5
+      }
+    },
+    "trial_1001923": {
+      "tier3": 15.204461094015741,
+      "tier2": 11.563127634532165,
+      "target_module": "sc_port_1",
+      "source_scene": {
+        "source_trial": "trial_923",
+        "target_module": "sc_port_1",
+        "source_yaml_sha256": "99bb03fe2bb49d7e5d7c14635652894815feb132d2dc28ab4299ab8f7541a4ba",
+        "nic_card_count": 5
+      }
+    },
+    "trial_1001991": {
+      "tier3": 17.951998633392364,
+      "tier2": 11.483112446944144,
+      "target_module": "sc_port_1",
+      "source_scene": {
+        "source_trial": "trial_991",
+        "target_module": "sc_port_1",
+        "source_yaml_sha256": "99bb03fe2bb49d7e5d7c14635652894815feb132d2dc28ab4299ab8f7541a4ba",
+        "nic_card_count": 5
+      }
+    },
+    "trial_1001038": {
+      "tier3": 24.18812970928106,
+      "tier2": 3.178838178485877,
+      "target_module": "sc_port_0",
+      "source_scene": {
+        "source_trial": "trial_38",
+        "target_module": "sc_port_0",
+        "source_yaml_sha256": "99bb03fe2bb49d7e5d7c14635652894815feb132d2dc28ab4299ab8f7541a4ba",
+        "nic_card_count": 5
+      }
+    },
+    "trial_1001119": {
+      "tier3": 21.01503704870471,
+      "tier2": 3.1630434427832728,
+      "target_module": "sc_port_0",
+      "source_scene": {
+        "source_trial": "trial_119",
+        "target_module": "sc_port_0",
+        "source_yaml_sha256": "99bb03fe2bb49d7e5d7c14635652894815feb132d2dc28ab4299ab8f7541a4ba",
+        "nic_card_count": 5
+      }
+    },
+    "trial_1001453": {
+      "tier3": 19.115089715175205,
+      "tier2": 10.303672059600913,
+      "target_module": "sc_port_1",
+      "source_scene": {
+        "source_trial": "trial_453",
+        "target_module": "sc_port_1",
+        "source_yaml_sha256": "99bb03fe2bb49d7e5d7c14635652894815feb132d2dc28ab4299ab8f7541a4ba",
+        "nic_card_count": 5
+      }
+    }
+  },
+  "archive_manifests": [
+    "docs/experiments/sc_fivecard_batch_archives/sc_fivecard_batch_20260925_part001_003-mcap-archive.json",
+    "docs/experiments/sc_fivecard_batch_archives/sc_fivecard_batch_20260925_part004_006-mcap-archive.json"
+  ],
+  "retry_source": "/var/tmp/chmin_aic_20260918_act/sc_fivecard_lift_retry_20260925/source_manifest.json",
+  "training_only": true
+}

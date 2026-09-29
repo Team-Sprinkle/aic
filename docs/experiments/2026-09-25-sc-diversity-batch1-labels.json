@@ -1,0 +1,72 @@
+{
+  "schema": "aic_sc_connector_waypoint_labels/v1",
+  "labels": "/var/tmp/chmin_aic_20260918_act/sc_diversity_batch1_candidates_20260925/physical_waypoint_chunks.jsonl",
+  "training_label_only": true,
+  "port_edges": "/var/tmp/chmin_aic_20260918_act/sc_diversity_batch1_candidates_20260925/port_edges.json",
+  "tcp_tip_calibration": "configs/hierarchical_recovery/sc_tcp_tip_gazebo_tf_251.json",
+  "episode_tip_calibrations": "/var/tmp/chmin_aic_20260918_act/sc_diversity_batch1_candidates_20260925/physical_grasp_calibrations.json",
+  "port_opening_calibration": "configs/hierarchical_recovery/sc_port_opening_gazebo_tf_251.json",
+  "pose_quaternion_order": "xyzw",
+  "timing": {
+    "resample_mode": "causal_hold",
+    "step_s": 0.05,
+    "tolerance_s": 0.01,
+    "max_hold_s": 0.15,
+    "first_target_semantics": "teacher command recorded with anchor image; target held until next recorded command when resampling"
+  },
+  "counts_by_split": {
+    "train": 2463
+  },
+  "episodes": 5,
+  "train_scene_groups": 5,
+  "validation_scene_groups": 0,
+  "max_tcp_target_roundtrip_m": 1.6883057536160649e-16,
+  "max_tcp_target_roundtrip_deg": 9.16023629644227e-15,
+  "episode_reports": [
+    {
+      "episode_index": 997001,
+      "scene_sha256": "2a3aba3efe131d1fca40880442a4a76600fb632c41f3864f8ab830acff05de78",
+      "split": "train",
+      "frames": 490,
+      "valid_chunks": 481,
+      "invalid_timing_chunks": 6,
+      "missing_image_chunks": 0
+    },
+    {
+      "episode_index": 997002,
+      "scene_sha256": "0bbbc7d31cdff8c38af1a9f5821ee6d7a50d3bc3e57cda0d300343f8fa907f29",
+      "split": "train",
+      "frames": 471,
+      "valid_chunks": 462,
+      "invalid_timing_chunks": 6,
+      "missing_image_chunks": 0
+    },
+    {
+      "episode_index": 997003,
+      "scene_sha256": "e17f80ff13643036b939dee6aa47e8c76b57d9456b0c68042d4c3ab18aac92e9",
+      "split": "train",
+      "frames": 644,
+      "valid_chunks": 626,
+      "invalid_timing_chunks": 15,
+      "missing_image_chunks": 0
+    },
+    {
+      "episode_index": 997005,
+      "scene_sha256": "b582fc644b0ae97dfbd6ed1663c3da5846730470b3a32aa536178ccbf1271e30",
+      "split": "train",
+      "frames": 483,
+      "valid_chunks": 473,
+      "invalid_timing_chunks": 7,
+      "missing_image_chunks": 0
+    },
+    {
+      "episode_index": 997006,
+      "scene_sha256": "8a4e1c5f85205ed547f6e0574c597e6131c5d2aabc5239ff886f07ed5100397b",
+      "split": "train",
+      "frames": 427,
+      "valid_chunks": 421,
+      "invalid_timing_chunks": 3,
+      "missing_image_chunks": 0
+    }
+  ]
+}

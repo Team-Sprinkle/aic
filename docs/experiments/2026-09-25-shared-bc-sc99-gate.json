@@ -1,0 +1,123 @@
+{
+  "schema": "shared_bc_sc99_diagnostic/v1",
+  "training_summary": {
+    "schema": "shared_port_tcp_bc_offline/v1",
+    "completed_updates": 1500,
+    "best_update": 250,
+    "best_selection_mm": 2.9432580560445785,
+    "train_rows": 160430,
+    "validation_rows": 22683,
+    "train_episodes": 284,
+    "validation_episodes": 39,
+    "parameters": 13615160,
+    "command_loss_weight": 1.0,
+    "near_oversample": 4.0,
+    "sc_sampling_fraction": 0.99,
+    "near_lateral_loss_weight": 0.5,
+    "selection_metric": "initial_plus_near",
+    "include_elapsed": true,
+    "time_coordinate": "nominal_decision",
+    "start_oversample": 12.0,
+    "start_command_loss_weight": 2.0,
+    "initial_command_loss_weight": 20.0,
+    "freeze_pose_encoder": false,
+    "trainable_parameters": 13615160,
+    "oracle_sc_near_pose_noise_mm": null,
+    "oracle_sc_pose_all_phases": false,
+    "oracle_sc_near_tip_noise_mm": null,
+    "sc_near_oversample": 1.0,
+    "corrective_episode_boost": 1.0,
+    "local_correction_boost": 1.0,
+    "rescue_actor_active_boost": 5.0,
+    "corrective_train_episodes": 4,
+    "warm_start": "/var/tmp/chmin_aic_20260918_act/shared_port_tcp_bc_diversity_batch2_treatment_20260925/best.pt",
+    "checkpoint": "/var/tmp/chmin_aic_20260918_act/shared_port_tcp_bc_diversity_batch2_sc_only_probe_20260925/best.pt",
+    "offline_only": true,
+    "reserved_final_opened": false,
+    "rl_started": false
+  },
+  "checkpoint_sha256": "6312fedce7dac6dd02c068ba79a13abdbc0db40cc6a3f3e44740aadcc3480063",
+  "run_sha256": "cb720364338b4f43b216dd6c6d2ce420bafa33861d5a675a0970bceb03037ed1",
+  "evaluation_summary": "/var/tmp/chmin_aic_20260918_act/shared_port_tcp_bc_diversity_batch2_sc_only_probe_20260925/eval_new_dev2_replan1/best/attempt_0001/eval_summary.json",
+  "evaluation_score": {
+    "total": -46,
+    "trial_999001": {
+      "tier_1": {
+        "score": 1,
+        "message": "Model validation succeeded."
+      },
+      "tier_2": {
+        "score": -24,
+        "message": "Scoring succeeded.",
+        "categories": {
+          "contacts": {
+            "score": -24,
+            "message": "Contacts detected (only first reported) between entity named [ur5e::wrist_2_link::wrist_2_link_collision] and [enclosure walls::enclosure_walls_link::v1015062006_collider_box]. Penalty applied."
+          },
+          "duration": {
+            "score": 0,
+            "message": "Task not completed."
+          },
+          "insertion force": {
+            "score": 0,
+            "message": "Insertion force above 20.00 N, detected for a time of 0.04 seconds. Max detected force: 32.23N. This is below the threshold of 1.00 seconds. Penalty not applied."
+          },
+          "trajectory efficiency": {
+            "score": 0,
+            "message": "Task not completed."
+          },
+          "trajectory smoothness": {
+            "score": 0,
+            "message": "Task not completed."
+          }
+        }
+      },
+      "tier_3": {
+        "score": 0,
+        "message": "Task not completed."
+      }
+    },
+    "trial_999003": {
+      "tier_1": {
+        "score": 1,
+        "message": "Model validation succeeded."
+      },
+      "tier_2": {
+        "score": -24,
+        "message": "Scoring succeeded.",
+        "categories": {
+          "contacts": {
+            "score": -24,
+            "message": "Contacts detected (only first reported) between entity named [ur5e::wrist_2_link::wrist_2_link_collision] and [enclosure walls::enclosure_walls_link::v1015062006_collider_box]. Penalty applied."
+          },
+          "duration": {
+            "score": 0,
+            "message": "Plug is not within max bounding radius from target port, not assigning time bonus"
+          },
+          "insertion force": {
+            "score": 0,
+            "message": "Insertion force above 20.00 N, detected for a time of 0.02 seconds. Max detected force: 23.81N. This is below the threshold of 1.00 seconds. Penalty not applied."
+          },
+          "trajectory efficiency": {
+            "score": 0,
+            "message": "Plug is not within max bounding radius from target port, not assigning efficiency bonus"
+          },
+          "trajectory smoothness": {
+            "score": 0,
+            "message": "Plug is not within max bounding radius from target port, not assigning jerk bonus"
+          }
+        }
+      },
+      "tier_3": {
+        "score": 0,
+        "message": "No insertion detected. Final plug port distance: 0.90m."
+      }
+    }
+  },
+  "raw_bag_archive": "docs/experiments/2026-09-25-shared-bc-sc99-dev2-mcap-archive.json",
+  "autonomous": true,
+  "privileged_actor_input": false,
+  "promotion": false,
+  "reserved_final_opened": false,
+  "rl_started": false
+}

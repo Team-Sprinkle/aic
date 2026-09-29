@@ -1,0 +1,249 @@
+{
+  "schema": "sc_body_early_rescue_batch20_gate/v1",
+  "date": "2026-09-25",
+  "training_only": true,
+  "actor_checkpoint": "/var/tmp/chmin_aic_20260918_act/shared_body_target_bc_batch3_20260925/best.pt",
+  "actor_window_nominal_s": [
+    0,
+    2
+  ],
+  "direct_actor_action_cap_m": 0.02,
+  "teacher_finishes": true,
+  "groups": [
+    {
+      "group": 1,
+      "root": "/var/tmp/chmin_aic_20260918_act/sc_body_early_rescue_batch20_20260925/group_01",
+      "run_command": "/var/tmp/chmin_aic_20260918_act/sc_body_early_rescue_batch20_20260925/group_01/run.sh",
+      "score": "/var/tmp/chmin_aic_20260918_act/sc_body_early_rescue_batch20_20260925/group_01/eval_collection/collection_config/attempt_0001/scoring.yaml",
+      "edges": "/var/tmp/chmin_aic_20260918_act/sc_body_early_rescue_batch20_20260925/group_01/edges_joined.json",
+      "grasp_calibration": "/var/tmp/chmin_aic_20260918_act/sc_body_early_rescue_batch20_20260925/group_01/dynamic_grasp_calibration.json",
+      "bag_archive": "docs/experiments/2026-09-25-sc-body-early-rescue-batch20-group-01-mcap-archive.json",
+      "trials": {
+        "trial_1003201": {
+          "source_trial": "trial_999106",
+          "nic_card_count": 1,
+          "target_module": "sc_port_0",
+          "tier3": 75,
+          "full": true
+        },
+        "trial_1003202": {
+          "source_trial": "trial_999112",
+          "nic_card_count": 1,
+          "target_module": "sc_port_1",
+          "tier3": 75,
+          "full": true
+        },
+        "trial_1003203": {
+          "source_trial": "trial_999125",
+          "nic_card_count": 2,
+          "target_module": "sc_port_0",
+          "tier3": 75,
+          "full": true
+        },
+        "trial_1003204": {
+          "source_trial": "trial_999135",
+          "nic_card_count": 2,
+          "target_module": "sc_port_1",
+          "tier3": 0,
+          "full": false
+        }
+      }
+    },
+    {
+      "group": 2,
+      "root": "/var/tmp/chmin_aic_20260918_act/sc_body_early_rescue_batch20_20260925/group_02",
+      "run_command": "/var/tmp/chmin_aic_20260918_act/sc_body_early_rescue_batch20_20260925/group_02/run.sh",
+      "score": "/var/tmp/chmin_aic_20260918_act/sc_body_early_rescue_batch20_20260925/group_02/eval_collection/collection_config/attempt_0001/scoring.yaml",
+      "edges": "/var/tmp/chmin_aic_20260918_act/sc_body_early_rescue_batch20_20260925/group_02/edges_joined.json",
+      "grasp_calibration": "/var/tmp/chmin_aic_20260918_act/sc_body_early_rescue_batch20_20260925/group_02/dynamic_grasp_calibration.json",
+      "bag_archive": "docs/experiments/2026-09-25-sc-body-early-rescue-batch20-group-02-mcap-archive.json",
+      "trials": {
+        "trial_1003205": {
+          "source_trial": "trial_999137",
+          "nic_card_count": 3,
+          "target_module": "sc_port_0",
+          "tier3": 17.503667545707096,
+          "full": false
+        },
+        "trial_1003206": {
+          "source_trial": "trial_999105",
+          "nic_card_count": 4,
+          "target_module": "sc_port_1",
+          "tier3": 18.457917897480737,
+          "full": false
+        },
+        "trial_1003207": {
+          "source_trial": "trial_999108",
+          "nic_card_count": 1,
+          "target_module": "sc_port_0",
+          "tier3": 75,
+          "full": true
+        },
+        "trial_1003208": {
+          "source_trial": "trial_999116",
+          "nic_card_count": 1,
+          "target_module": "sc_port_1",
+          "tier3": 75,
+          "full": true
+        }
+      }
+    },
+    {
+      "group": 3,
+      "root": "/var/tmp/chmin_aic_20260918_act/sc_body_early_rescue_batch20_20260925/group_03",
+      "run_command": "/var/tmp/chmin_aic_20260918_act/sc_body_early_rescue_batch20_20260925/group_03/run.sh",
+      "score": "/var/tmp/chmin_aic_20260918_act/sc_body_early_rescue_batch20_20260925/group_03/eval_collection/collection_config/attempt_0001/scoring.yaml",
+      "edges": "/var/tmp/chmin_aic_20260918_act/sc_body_early_rescue_batch20_20260925/group_03/edges_joined.json",
+      "grasp_calibration": "/var/tmp/chmin_aic_20260918_act/sc_body_early_rescue_batch20_20260925/group_03/dynamic_grasp_calibration.json",
+      "bag_archive": "docs/experiments/2026-09-25-sc-body-early-rescue-batch20-group-03-mcap-archive.json",
+      "trials": {
+        "trial_1003209": {
+          "source_trial": "trial_999129",
+          "nic_card_count": 2,
+          "target_module": "sc_port_0",
+          "tier3": 75,
+          "full": true
+        },
+        "trial_1003210": {
+          "source_trial": "trial_999140",
+          "nic_card_count": 2,
+          "target_module": "sc_port_1",
+          "tier3": 75,
+          "full": true
+        },
+        "trial_1003211": {
+          "source_trial": "trial_999149",
+          "nic_card_count": 3,
+          "target_module": "sc_port_0",
+          "tier3": 75,
+          "full": true
+        },
+        "trial_1003212": {
+          "source_trial": "trial_999113",
+          "nic_card_count": 1,
+          "target_module": "sc_port_0",
+          "tier3": 75,
+          "full": true
+        }
+      }
+    },
+    {
+      "group": 4,
+      "root": "/var/tmp/chmin_aic_20260918_act/sc_body_early_rescue_batch20_20260925/group_04",
+      "run_command": "/var/tmp/chmin_aic_20260918_act/sc_body_early_rescue_batch20_20260925/group_04/run.sh",
+      "score": "/var/tmp/chmin_aic_20260918_act/sc_body_early_rescue_batch20_20260925/group_04/eval_collection/collection_config/attempt_0001/scoring.yaml",
+      "edges": "/var/tmp/chmin_aic_20260918_act/sc_body_early_rescue_batch20_20260925/group_04/edges_joined.json",
+      "grasp_calibration": "/var/tmp/chmin_aic_20260918_act/sc_body_early_rescue_batch20_20260925/group_04/dynamic_grasp_calibration.json",
+      "bag_archive": "docs/experiments/2026-09-25-sc-body-early-rescue-batch20-group-04-mcap-archive.json",
+      "trials": {
+        "trial_1003213": {
+          "source_trial": "trial_999117",
+          "nic_card_count": 1,
+          "target_module": "sc_port_1",
+          "tier3": 39.57235003168167,
+          "full": false
+        },
+        "trial_1003214": {
+          "source_trial": "trial_999156",
+          "nic_card_count": 2,
+          "target_module": "sc_port_0",
+          "tier3": 75,
+          "full": true
+        },
+        "trial_1003215": {
+          "source_trial": "trial_999148",
+          "nic_card_count": 2,
+          "target_module": "sc_port_1",
+          "tier3": 24.88324949854932,
+          "full": false
+        },
+        "trial_1003216": {
+          "source_trial": "trial_999120",
+          "nic_card_count": 1,
+          "target_module": "sc_port_0",
+          "tier3": 75,
+          "full": true
+        }
+      }
+    },
+    {
+      "group": 5,
+      "root": "/var/tmp/chmin_aic_20260918_act/sc_body_early_rescue_batch20_20260925/group_05",
+      "run_command": "/var/tmp/chmin_aic_20260918_act/sc_body_early_rescue_batch20_20260925/group_05/run.sh",
+      "score": "/var/tmp/chmin_aic_20260918_act/sc_body_early_rescue_batch20_20260925/group_05/eval_collection/collection_config/attempt_0001/scoring.yaml",
+      "edges": "/var/tmp/chmin_aic_20260918_act/sc_body_early_rescue_batch20_20260925/group_05/edges_joined.json",
+      "grasp_calibration": "/var/tmp/chmin_aic_20260918_act/sc_body_early_rescue_batch20_20260925/group_05/dynamic_grasp_calibration.json",
+      "bag_archive": "docs/experiments/2026-09-25-sc-body-early-rescue-batch20-group-05-mcap-archive.json",
+      "trials": {
+        "trial_1003217": {
+          "source_trial": "trial_999122",
+          "nic_card_count": 1,
+          "target_module": "sc_port_1",
+          "tier3": 75,
+          "full": true
+        },
+        "trial_1003218": {
+          "source_trial": "trial_999160",
+          "nic_card_count": 2,
+          "target_module": "sc_port_0",
+          "tier3": 75,
+          "full": true
+        },
+        "trial_1003219": {
+          "source_trial": "trial_999153",
+          "nic_card_count": 2,
+          "target_module": "sc_port_1",
+          "tier3": 75,
+          "full": true
+        },
+        "trial_1003220": {
+          "source_trial": "trial_999136",
+          "nic_card_count": 1,
+          "target_module": "sc_port_0",
+          "tier3": 75,
+          "full": true
+        }
+      }
+    }
+  ],
+  "full_insertions": 15,
+  "attempts": 20,
+  "cells": {
+    "1cards/sc_port_0": {
+      "attempts": 5,
+      "full": 5
+    },
+    "1cards/sc_port_1": {
+      "attempts": 4,
+      "full": 3
+    },
+    "2cards/sc_port_0": {
+      "attempts": 4,
+      "full": 4
+    },
+    "2cards/sc_port_1": {
+      "attempts": 4,
+      "full": 2
+    },
+    "3cards/sc_port_0": {
+      "attempts": 2,
+      "full": 1
+    },
+    "4cards/sc_port_1": {
+      "attempts": 1,
+      "full": 0
+    }
+  },
+  "combined_with_pilot_manifest": "/var/tmp/chmin_aic_20260918_act/sc_body_early_rescue_combined_candidates_20260925/manifest.json",
+  "admitted_episodes_combined": 18,
+  "excluded_episodes_combined": 6,
+  "actor_owned_frames_combined": 738,
+  "actor_owned_label_anchors_combined": 467,
+  "causal_chunks_combined": 9524,
+  "label_file": "/var/tmp/chmin_aic_20260918_act/sc_body_early_rescue_combined_candidates_20260925/corrective_waypoint_chunks.jsonl",
+  "label_sha256": "2cef064d5e76a4260d446896f56f9b7b12c00a766d866d656e47c6c2e98b5a5c",
+  "label_audit": "docs/experiments/2026-09-25-sc-body-early-rescue-combined-labels.json",
+  "autonomous_insertions": 0,
+  "rl_started": false,
+  "reserved_final_opened": false
+}

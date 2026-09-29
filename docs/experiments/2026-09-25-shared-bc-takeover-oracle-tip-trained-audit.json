@@ -1,0 +1,205 @@
+{
+  "schema": "shared_takeover_pose_action_audit/v1",
+  "privileged_labels_used_for_posthoc_audit_only": true,
+  "checkpoint": "/var/tmp/chmin_aic_20260918_act/shared_port_tcp_bc_nominal_sc_tip_oracle_20260925/best.pt",
+  "labels": "/var/tmp/chmin_aic_20260918_act/shared_bc_takeover_after15nominal_20260925/geometry_diagnostic_chunks.jsonl",
+  "frames": "/var/tmp/chmin_aic_20260918_act/shared_bc_takeover_after15nominal_20260925/episodes/episode_0001_1790305663833898103/frames.jsonl",
+  "rows": [
+    {
+      "requested_frame": 297,
+      "frame": 297,
+      "nominal_time_s": 14.850000000000001,
+      "pose_error_mm": 9.897392272949219,
+      "target_error_mm": 9.108798027038574,
+      "actor_port_delta_mm": [
+        -5.8423848152160645,
+        3.47595477104187,
+        1.5709959268569946
+      ],
+      "teacher_port_delta_mm": [
+        -5.607085704803467,
+        3.5141029357910156,
+        2.3780205249786377
+      ],
+      "delta_error_mm": 0.8414924740791321,
+      "training_only_true_physical_tip_input": false,
+      "oracle_tcp_pose_substitution": {
+        "training_only": true,
+        "oracle_port_delta_mm": [
+          -6.113365650177002,
+          2.3405261039733887,
+          11.386558532714844
+        ],
+        "delta_error_mm": 9.098755836486816
+      }
+    },
+    {
+      "requested_frame": 302,
+      "frame": 302,
+      "nominal_time_s": 15.100000000000001,
+      "pose_error_mm": 6.339052200317383,
+      "target_error_mm": 4.367598533630371,
+      "actor_port_delta_mm": [
+        -6.079133987426758,
+        2.949695587158203,
+        -1.5195980072021484
+      ],
+      "teacher_port_delta_mm": [
+        -5.917336463928223,
+        2.6879138946533203,
+        0.5377269983291626
+      ],
+      "delta_error_mm": 2.0802149772644043,
+      "training_only_true_physical_tip_input": false,
+      "oracle_tcp_pose_substitution": {
+        "training_only": true,
+        "oracle_port_delta_mm": [
+          -5.486279010772705,
+          0.6686220765113831,
+          4.3220744132995605
+        ],
+        "delta_error_mm": 4.310990333557129
+      }
+    },
+    {
+      "requested_frame": 305,
+      "frame": 305,
+      "nominal_time_s": 15.25,
+      "pose_error_mm": 2.289076805114746,
+      "target_error_mm": 6.028026580810547,
+      "actor_port_delta_mm": [
+        -6.913533687591553,
+        2.0346884727478027,
+        9.436230659484863
+      ],
+      "teacher_port_delta_mm": [
+        -5.407874584197998,
+        2.9967875480651855,
+        1.3410449028015137
+      ],
+      "delta_error_mm": 8.290035247802734,
+      "training_only_true_physical_tip_input": false,
+      "oracle_tcp_pose_substitution": {
+        "training_only": true,
+        "oracle_port_delta_mm": [
+          -6.498177528381348,
+          2.1123085021972656,
+          5.264103412628174
+        ],
+        "delta_error_mm": 4.166707515716553
+      }
+    },
+    {
+      "requested_frame": 320,
+      "frame": 320,
+      "nominal_time_s": 16.0,
+      "pose_error_mm": 32.258121490478516,
+      "target_error_mm": 9.375911712646484,
+      "actor_port_delta_mm": [
+        -3.7927510738372803,
+        -1.4075344800949097,
+        22.72617530822754
+      ],
+      "teacher_port_delta_mm": [
+        -6.326328754425049,
+        0.6959910988807678,
+        -16.532142639160156
+      ],
+      "delta_error_mm": 39.396183013916016,
+      "training_only_true_physical_tip_input": true,
+      "oracle_tcp_pose_substitution": {
+        "training_only": true,
+        "oracle_port_delta_mm": [
+          -3.5703606605529785,
+          -3.438852548599243,
+          -23.33083152770996
+        ],
+        "delta_error_mm": 8.421072959899902
+      }
+    },
+    {
+      "requested_frame": 349,
+      "frame": 349,
+      "nominal_time_s": 17.45,
+      "pose_error_mm": 60.35401916503906,
+      "target_error_mm": 53.17473220825195,
+      "actor_port_delta_mm": [
+        8.815847396850586,
+        -9.668184280395508,
+        -3.7634224891662598
+      ],
+      "teacher_port_delta_mm": [
+        2.9053239822387695,
+        5.350937366485596,
+        -15.955516815185547
+      ],
+      "delta_error_mm": 20.227590560913086,
+      "training_only_true_physical_tip_input": true,
+      "oracle_tcp_pose_substitution": {
+        "training_only": true,
+        "oracle_port_delta_mm": [
+          -0.18734949827194214,
+          -4.985210418701172,
+          -59.11075210571289
+        ],
+        "delta_error_mm": 44.483421325683594
+      }
+    },
+    {
+      "requested_frame": 400,
+      "frame": 400,
+      "nominal_time_s": 20.0,
+      "pose_error_mm": 87.16353607177734,
+      "target_error_mm": 52.799983978271484,
+      "actor_port_delta_mm": [
+        -0.8054263591766357,
+        -1.9041872024536133,
+        51.7741584777832
+      ],
+      "teacher_port_delta_mm": [
+        61.73393249511719,
+        -82.70301055908203,
+        -36.20774841308594
+      ],
+      "delta_error_mm": 134.8348388671875,
+      "training_only_true_physical_tip_input": true,
+      "oracle_tcp_pose_substitution": {
+        "training_only": true,
+        "oracle_port_delta_mm": [
+          21.757457733154297,
+          -38.97667694091797,
+          -67.86213684082031
+        ],
+        "delta_error_mm": 67.17224884033203
+      }
+    },
+    {
+      "requested_frame": 500,
+      "frame": 500,
+      "nominal_time_s": 25.0,
+      "pose_error_mm": 60.47880554199219,
+      "target_error_mm": 52.693729400634766,
+      "actor_port_delta_mm": [
+        0.09296461939811707,
+        -2.014369249343872,
+        20.191736221313477
+      ],
+      "teacher_port_delta_mm": [
+        67.71121215820312,
+        -90.92182159423828,
+        37.90231704711914
+      ],
+      "delta_error_mm": 113.09477233886719,
+      "training_only_true_physical_tip_input": false,
+      "oracle_tcp_pose_substitution": {
+        "training_only": true,
+        "oracle_port_delta_mm": [
+          25.684057235717773,
+          -48.2784309387207,
+          10.870914459228516
+        ],
+        "delta_error_mm": 65.69198608398438
+      }
+    }
+  ]
+}

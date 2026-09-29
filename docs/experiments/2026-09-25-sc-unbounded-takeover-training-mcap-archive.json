@@ -1,0 +1,34 @@
+{
+  "schema": "sc_scored_mcap_archive/v1",
+  "verified_before_source_removal": true,
+  "files": [
+    {
+      "original_path": "/var/tmp/chmin_aic_20260918_act/sc_unbounded_takeover_training_20260925/eval_collection/collection_config/attempt_0001/bag_trial_996101_20260925_033225_806/bag_trial_996101_20260925_033225_806_0.mcap",
+      "original_sha256": "e0c74d8b4fec53bf3880f0661f37148b2456486b8fa43a392d91bafcccabf3c3",
+      "compressed": "/home/nas/chmin/aic_archive_20260925/sc_unbounded_takeover_training_20260925/bag_trial_996101_20260925_033225_806_0.mcap.zst",
+      "compressed_bytes": 189278828,
+      "restore_command": "zstd -dc '/home/nas/chmin/aic_archive_20260925/sc_unbounded_takeover_training_20260925/bag_trial_996101_20260925_033225_806_0.mcap.zst' > '/var/tmp/chmin_aic_20260918_act/sc_unbounded_takeover_training_20260925/eval_collection/collection_config/attempt_0001/bag_trial_996101_20260925_033225_806/bag_trial_996101_20260925_033225_806_0.mcap'"
+    },
+    {
+      "original_path": "/var/tmp/chmin_aic_20260918_act/sc_unbounded_takeover_training_20260925/eval_collection/collection_config/attempt_0001/bag_trial_996102_20260925_033723_308/bag_trial_996102_20260925_033723_308_0.mcap",
+      "original_sha256": "bdfb2f7847ddc22f3a64b9ea91c8386dfdfd1c9cc68b142efe4476934d972ed0",
+      "compressed": "/home/nas/chmin/aic_archive_20260925/sc_unbounded_takeover_training_20260925/bag_trial_996102_20260925_033723_308_0.mcap.zst",
+      "compressed_bytes": 204228007,
+      "restore_command": "zstd -dc '/home/nas/chmin/aic_archive_20260925/sc_unbounded_takeover_training_20260925/bag_trial_996102_20260925_033723_308_0.mcap.zst' > '/var/tmp/chmin_aic_20260918_act/sc_unbounded_takeover_training_20260925/eval_collection/collection_config/attempt_0001/bag_trial_996102_20260925_033723_308/bag_trial_996102_20260925_033723_308_0.mcap'"
+    },
+    {
+      "original_path": "/var/tmp/chmin_aic_20260918_act/sc_unbounded_takeover_training_20260925/eval_collection/collection_config/attempt_0001/bag_trial_996103_20260925_034223_803/bag_trial_996103_20260925_034223_803_0.mcap",
+      "original_sha256": "e023063e7bdadfcd1ab696428a3103cd5b7115734948e73a2891ca39bf09a983",
+      "compressed": "/home/nas/chmin/aic_archive_20260925/sc_unbounded_takeover_training_20260925/bag_trial_996103_20260925_034223_803_0.mcap.zst",
+      "compressed_bytes": 128985032,
+      "restore_command": "zstd -dc '/home/nas/chmin/aic_archive_20260925/sc_unbounded_takeover_training_20260925/bag_trial_996103_20260925_034223_803_0.mcap.zst' > '/var/tmp/chmin_aic_20260918_act/sc_unbounded_takeover_training_20260925/eval_collection/collection_config/attempt_0001/bag_trial_996103_20260925_034223_803/bag_trial_996103_20260925_034223_803_0.mcap'"
+    },
+    {
+      "original_path": "/var/tmp/chmin_aic_20260918_act/sc_unbounded_takeover_training_20260925/eval_collection/collection_config/attempt_0001/bag_trial_996104_20260925_034546_475/bag_trial_996104_20260925_034546_475_0.mcap",
+      "original_sha256": "e9e8e7e92aa93540964dcdb75f8371952a7ac687940193f578f74d0a8fc20090",
+      "compressed": "/home/nas/chmin/aic_archive_20260925/sc_unbounded_takeover_training_20260925/bag_trial_996104_20260925_034546_475_0.mcap.zst",
+      "compressed_bytes": 103410272,
+      "restore_command": "zstd -dc '/home/nas/chmin/aic_archive_20260925/sc_unbounded_takeover_training_20260925/bag_trial_996104_20260925_034546_475_0.mcap.zst' > '/var/tmp/chmin_aic_20260918_act/sc_unbounded_takeover_training_20260925/eval_collection/collection_config/attempt_0001/bag_trial_996104_20260925_034546_475/bag_trial_996104_20260925_034546_475_0.mcap'"
+    }
+  ]
+}

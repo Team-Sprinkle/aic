@@ -1,0 +1,85 @@
+{
+  "schema": "sc_body_near_rescue_1s_pilot_gate/v1",
+  "training_only": true,
+  "run": "/var/tmp/chmin_aic_20260918_act/sc_body_near_rescue_1s_pilot_20260925",
+  "checkpoint": "/var/tmp/chmin_aic_20260918_act/shared_body_target_bc_rescue18_control_20260925/best.pt",
+  "student_nominal_window_s": [
+    15,
+    16
+  ],
+  "score_by_trial": {
+    "trial_1003101": {
+      "tier3": 20.68388266725639,
+      "message": "No insertion detected. Final plug port distance: 0.05m.",
+      "contact_score": 0
+    },
+    "trial_1003102": {
+      "tier3": 17.591801025648813,
+      "message": "No insertion detected. Final plug port distance: 0.08m.",
+      "contact_score": 0
+    },
+    "trial_1003103": {
+      "tier3": 0,
+      "message": "No insertion detected. Final plug port distance: 0.13m.",
+      "contact_score": -24
+    },
+    "trial_1003104": {
+      "tier3": 75,
+      "message": "Cable insertion successful.",
+      "contact_score": 0
+    }
+  },
+  "full_insertions": 1,
+  "candidate_manifest": "/var/tmp/chmin_aic_20260918_act/sc_body_near_rescue_1s_pilot_candidates_20260925/manifest.json",
+  "admitted_episodes": 1,
+  "excluded": [
+    {
+      "trial": "trial_1003101",
+      "tier3": 20.68388266725639,
+      "reason": "no_full_scored_insertion"
+    },
+    {
+      "trial": "trial_1003102",
+      "tier3": 17.591801025648813,
+      "reason": "no_full_scored_insertion"
+    },
+    {
+      "trial": "trial_1003103",
+      "tier3": 0.0,
+      "reason": "no_full_scored_insertion"
+    }
+  ],
+  "student_teacher_gaps": [
+    {
+      "episode": "episode_0001_1790342353967802439",
+      "student_active_frames": 21,
+      "first_teacher_gap_mm": 1.6703575244914044,
+      "median_teacher_gap_mm": 5.413619397743954,
+      "max_teacher_gap_mm": 12.517459199694208
+    },
+    {
+      "episode": "episode_0002_1790342508996310568",
+      "student_active_frames": 21,
+      "first_teacher_gap_mm": 68.3701066627402,
+      "median_teacher_gap_mm": 68.3701066627402,
+      "max_teacher_gap_mm": 75.69852123668826
+    },
+    {
+      "episode": "episode_0003_1790342648200340879",
+      "student_active_frames": 21,
+      "first_teacher_gap_mm": 231.6069223625079,
+      "median_teacher_gap_mm": 287.21138671653745,
+      "max_teacher_gap_mm": 464.8882548743058
+    },
+    {
+      "episode": "episode_0004_1790342816299830374",
+      "student_active_frames": 21,
+      "first_teacher_gap_mm": 46.13771603961786,
+      "median_teacher_gap_mm": 108.392989098693,
+      "max_teacher_gap_mm": 158.86398712574155
+    }
+  ],
+  "bag_archive": "docs/experiments/2026-09-25-sc-body-near-rescue-1s-pilot-mcap-archive.json",
+  "autonomous_actor_evidence": false,
+  "rl_started": false
+}

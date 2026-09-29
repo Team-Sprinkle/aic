@@ -1,0 +1,86 @@
+{
+  "schema": "sc_body_interleaved_rescue_pilot_gate/v1",
+  "training_only": true,
+  "run": "/var/tmp/chmin_aic_20260918_act/sc_body_interleaved_rescue_pilot_20260925",
+  "checkpoint": "/var/tmp/chmin_aic_20260918_act/shared_body_target_bc_rescue18_control_20260925/best.pt",
+  "student_nominal_window_s": [
+    0,
+    30
+  ],
+  "pulse_cycle_s": 4,
+  "pulse_duration_s": 0.2,
+  "score_by_trial": {
+    "trial_1003101": {
+      "tier3": 75,
+      "message": "Cable insertion successful.",
+      "contact_score": 0,
+      "force_score": 0
+    },
+    "trial_1003102": {
+      "tier3": 75,
+      "message": "Cable insertion successful.",
+      "contact_score": 0,
+      "force_score": 0
+    },
+    "trial_1003103": {
+      "tier3": 75,
+      "message": "Cable insertion successful.",
+      "contact_score": 0,
+      "force_score": -12
+    },
+    "trial_1003104": {
+      "tier3": 75,
+      "message": "Cable insertion successful.",
+      "contact_score": 0,
+      "force_score": 0
+    }
+  },
+  "full_insertions": 4,
+  "candidate_manifest": "/var/tmp/chmin_aic_20260918_act/sc_body_interleaved_rescue_pilot_candidates_20260925/manifest.json",
+  "admitted_episodes": 2,
+  "excluded": [
+    {
+      "trial": "trial_1003103",
+      "tier3": 75.0,
+      "reason": "official_force_or_off_limit_contact_gate",
+      "scored_peak_force_n": 44.79,
+      "force_score": -12.0,
+      "contact_score": 0.0
+    },
+    {
+      "trial": "trial_1003104",
+      "tier3": 75.0,
+      "reason": "physical_grasp_drift_over_0.25mm",
+      "drift_mm": 0.31059466139785974
+    }
+  ],
+  "student_teacher_gaps": [
+    {
+      "episode": "episode_0001_1790343146423179695",
+      "student_active_frames": 33,
+      "median_teacher_gap_mm": 1.152947535527732,
+      "max_teacher_gap_mm": 27.566452456489834
+    },
+    {
+      "episode": "episode_0002_1790343214921914283",
+      "student_active_frames": 32,
+      "median_teacher_gap_mm": 15.63519250250975,
+      "max_teacher_gap_mm": 31.66968193188488
+    },
+    {
+      "episode": "episode_0003_1790343302808118831",
+      "student_active_frames": 33,
+      "median_teacher_gap_mm": 1.443928609715659,
+      "max_teacher_gap_mm": 8.985017576918397
+    },
+    {
+      "episode": "episode_0004_1790343421537083240",
+      "student_active_frames": 33,
+      "median_teacher_gap_mm": 2.441605693510652,
+      "max_teacher_gap_mm": 5.802548901374754
+    }
+  ],
+  "bag_archive": "docs/experiments/2026-09-25-sc-body-interleaved-rescue-pilot-mcap-archive.json",
+  "autonomous_actor_evidence": false,
+  "rl_started": false
+}

@@ -1,0 +1,49 @@
+{
+  "schema": "shared_bc_sc_new_development_reservation/v1",
+  "seed": 202609253,
+  "trial_base": 999001,
+  "generator_profile": "qualification_eval_like",
+  "training_only": false,
+  "purpose": "autonomous development after BC training; never actor training or checkpoint selection",
+  "engine_config": "/var/tmp/chmin_aic_20260918_act/sc_shared_bc_new_dev6_20260925/engine_config.yaml",
+  "engine_sha256": "8231584eb093d57ef5590afc5bd1c63f1dc9b7b313b3233b8ba5795764ab9c85",
+  "scenes": [
+    {
+      "trial": "trial_999001",
+      "scene_sha256": "01a361d9776f06b15ad391e0eef461de1278549eea1475aaa9efbcd524c39fc5",
+      "target": "sc_port_0",
+      "nic_cards": 2
+    },
+    {
+      "trial": "trial_999002",
+      "scene_sha256": "23e8bc56bc489e7eaf5ee8b4fcad6bfd8eadeb2d43ab38f6b69def6a570d9d15",
+      "target": "sc_port_0",
+      "nic_cards": 2
+    },
+    {
+      "trial": "trial_999003",
+      "scene_sha256": "6cd97681fe2a23e74cda3c9441d3da023b3fceb49a0e8997c9dac29659bd41cd",
+      "target": "sc_port_1",
+      "nic_cards": 3
+    },
+    {
+      "trial": "trial_999004",
+      "scene_sha256": "9995dd0f992e23df3b154a5e24afbc1e4641944628e48c5d2508618979fedff2",
+      "target": "sc_port_0",
+      "nic_cards": 1
+    },
+    {
+      "trial": "trial_999005",
+      "scene_sha256": "0f0e1314ca9c333bb969e5dddcea90b42e368ce3a023e10d6a84f15a8e83d0e0",
+      "target": "sc_port_0",
+      "nic_cards": 1
+    },
+    {
+      "trial": "trial_999006",
+      "scene_sha256": "4d7ae9dfa84108e9ab2035f384ff3f946d1486a28b18e6e507f418fbdffb03d3",
+      "target": "sc_port_1",
+      "nic_cards": 3
+    }
+  ],
+  "reserved_final_ik_configs_opened": false
+}

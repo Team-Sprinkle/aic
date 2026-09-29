@@ -1,0 +1,237 @@
+{
+  "schema": "sc_body_interleaved_rescue_batch20_gate/v1",
+  "training_only": true,
+  "schedule": {
+    "actor_checkpoint": "/var/tmp/chmin_aic_20260918_act/shared_body_target_bc_rescue18_control_20260925/best.pt",
+    "nominal_time_s": [
+      0,
+      30
+    ],
+    "pulse_every_s": 4,
+    "pulse_duration_s": 0.2,
+    "actor_target_execution": "direct; teacher between pulses"
+  },
+  "scene_groups": 6,
+  "scenes": 24,
+  "scores": {
+    "sc_body_interleaved_rescue_pilot_20260925": {
+      "trial_1003101": {
+        "tier3": 75,
+        "message": "Cable insertion successful.",
+        "contact_score": 0,
+        "force_score": 0
+      },
+      "trial_1003102": {
+        "tier3": 75,
+        "message": "Cable insertion successful.",
+        "contact_score": 0,
+        "force_score": 0
+      },
+      "trial_1003103": {
+        "tier3": 75,
+        "message": "Cable insertion successful.",
+        "contact_score": 0,
+        "force_score": -12
+      },
+      "trial_1003104": {
+        "tier3": 75,
+        "message": "Cable insertion successful.",
+        "contact_score": 0,
+        "force_score": 0
+      }
+    },
+    "group_01": {
+      "trial_1003201": {
+        "tier3": 21.061883487841683,
+        "message": "No insertion detected. Final plug port distance: 0.05m.",
+        "contact_score": 0,
+        "force_score": 0
+      },
+      "trial_1003202": {
+        "tier3": 75,
+        "message": "Cable insertion successful.",
+        "contact_score": 0,
+        "force_score": 0
+      },
+      "trial_1003203": {
+        "tier3": 75,
+        "message": "Cable insertion successful.",
+        "contact_score": 0,
+        "force_score": 0
+      },
+      "trial_1003204": {
+        "tier3": 49.94740971579307,
+        "message": "Partial insertion detected with distance of 0.00m.",
+        "contact_score": 0,
+        "force_score": 0
+      }
+    },
+    "group_02": {
+      "trial_1003205": {
+        "tier3": 75,
+        "message": "Cable insertion successful.",
+        "contact_score": 0,
+        "force_score": 0
+      },
+      "trial_1003206": {
+        "tier3": 46.082651101920305,
+        "message": "Partial insertion detected with distance of 0.01m.",
+        "contact_score": 0,
+        "force_score": 0
+      },
+      "trial_1003207": {
+        "tier3": 75,
+        "message": "Cable insertion successful.",
+        "contact_score": 0,
+        "force_score": 0
+      },
+      "trial_1003208": {
+        "tier3": 75,
+        "message": "Cable insertion successful.",
+        "contact_score": 0,
+        "force_score": 0
+      }
+    },
+    "group_03": {
+      "trial_1003209": {
+        "tier3": 75,
+        "message": "Cable insertion successful.",
+        "contact_score": 0,
+        "force_score": 0
+      },
+      "trial_1003210": {
+        "tier3": 75,
+        "message": "Cable insertion successful.",
+        "contact_score": 0,
+        "force_score": 0
+      },
+      "trial_1003211": {
+        "tier3": 17.928092001309345,
+        "message": "No insertion detected. Final plug port distance: 0.07m.",
+        "contact_score": 0,
+        "force_score": 0
+      },
+      "trial_1003212": {
+        "tier3": 75,
+        "message": "Cable insertion successful.",
+        "contact_score": 0,
+        "force_score": 0
+      }
+    },
+    "group_04": {
+      "trial_1003213": {
+        "tier3": 75,
+        "message": "Cable insertion successful.",
+        "contact_score": 0,
+        "force_score": 0
+      },
+      "trial_1003214": {
+        "tier3": 17.61457303963655,
+        "message": "No insertion detected. Final plug port distance: 0.07m.",
+        "contact_score": 0,
+        "force_score": 0
+      },
+      "trial_1003215": {
+        "tier3": 75,
+        "message": "Cable insertion successful.",
+        "contact_score": 0,
+        "force_score": 0
+      },
+      "trial_1003216": {
+        "tier3": 75,
+        "message": "Cable insertion successful.",
+        "contact_score": 0,
+        "force_score": 0
+      }
+    },
+    "group_05": {
+      "trial_1003217": {
+        "tier3": 75,
+        "message": "Cable insertion successful.",
+        "contact_score": 0,
+        "force_score": 0
+      },
+      "trial_1003218": {
+        "tier3": 75,
+        "message": "Cable insertion successful.",
+        "contact_score": 0,
+        "force_score": 0
+      },
+      "trial_1003219": {
+        "tier3": 75,
+        "message": "Cable insertion successful.",
+        "contact_score": 0,
+        "force_score": 0
+      },
+      "trial_1003220": {
+        "tier3": 46.051759206758845,
+        "message": "Partial insertion detected with distance of 0.01m.",
+        "contact_score": 0,
+        "force_score": 0
+      }
+    }
+  },
+  "full_insertions": 18,
+  "admitted_episodes": 16,
+  "excluded": [
+    {
+      "trial": "trial_1003103",
+      "tier3": 75.0,
+      "reason": "official_force_or_off_limit_contact_gate",
+      "scored_peak_force_n": 44.79,
+      "force_score": -12.0,
+      "contact_score": 0.0
+    },
+    {
+      "trial": "trial_1003104",
+      "tier3": 75.0,
+      "reason": "physical_grasp_drift_over_0.25mm",
+      "drift_mm": 0.31059466139785974
+    },
+    {
+      "trial": "trial_1003201",
+      "tier3": 21.061883487841683,
+      "reason": "no_full_scored_insertion"
+    },
+    {
+      "trial": "trial_1003204",
+      "tier3": 49.94740971579307,
+      "reason": "no_full_scored_insertion"
+    },
+    {
+      "trial": "trial_1003206",
+      "tier3": 46.082651101920305,
+      "reason": "no_full_scored_insertion"
+    },
+    {
+      "trial": "trial_1003211",
+      "tier3": 17.928092001309345,
+      "reason": "no_full_scored_insertion"
+    },
+    {
+      "trial": "trial_1003214",
+      "tier3": 17.61457303963655,
+      "reason": "no_full_scored_insertion"
+    },
+    {
+      "trial": "trial_1003220",
+      "tier3": 46.051759206758845,
+      "reason": "no_full_scored_insertion"
+    }
+  ],
+  "student_active_frames_admitted": 468,
+  "labels": "/var/tmp/chmin_aic_20260918_act/sc_body_interleaved_rescue_combined_candidates_20260925/corrective_waypoint_chunks.jsonl",
+  "labels_sha256": "2ecb5c62ca11d33083026cbfeb55d97b28ea6e272b88d8c67d2b8152c9588d1a",
+  "label_summary": "docs/experiments/2026-09-25-sc-body-interleaved-rescue-combined-labels.json",
+  "bag_archives": [
+    "docs/experiments/2026-09-25-sc-body-interleaved-rescue-pilot-mcap-archive.json",
+    "docs/experiments/2026-09-25-sc-body-interleaved-rescue-batch20-group-01-mcap-archive.json",
+    "docs/experiments/2026-09-25-sc-body-interleaved-rescue-batch20-group-02-mcap-archive.json",
+    "docs/experiments/2026-09-25-sc-body-interleaved-rescue-batch20-group-03-mcap-archive.json",
+    "docs/experiments/2026-09-25-sc-body-interleaved-rescue-batch20-group-04-mcap-archive.json",
+    "docs/experiments/2026-09-25-sc-body-interleaved-rescue-batch20-group-05-mcap-archive.json"
+  ],
+  "autonomous_actor_evidence": false,
+  "rl_started": false,
+  "reserved_final_opened": false
+}

@@ -1,0 +1,39 @@
+{
+  "schema": "shared_body_target_bc_window0p5s_offline_gate/v1",
+  "training_label_selection": "docs/experiments/2026-09-25-sc-body-interleaved-rescue-window0p5s-selection.json",
+  "same_parent": "/var/tmp/chmin_aic_20260918_act/shared_body_target_bc_batch3_20260925/best.pt",
+  "same_updates_sampler_seed_architecture": true,
+  "runs": {
+    "control": {
+      "run_command": "/var/tmp/chmin_aic_20260918_act/shared_body_target_bc_window0p5s_control_20260925/run.sh",
+      "checkpoint": "/var/tmp/chmin_aic_20260918_act/shared_body_target_bc_window0p5s_control_20260925/best.pt",
+      "checkpoint_sha256": "cb5c94f883e4f088eed17ce8a59bc5aa05918711944e4a13762483561cbbbbb1",
+      "train_episodes": 318,
+      "train_rows": 180513,
+      "completed_updates": 1500,
+      "best_update": 250,
+      "best_selection_mm": 2.644622252583499,
+      "sfp_initial_p95_mm": 1.8999755144119264,
+      "sfp_near_lateral_p95_mm": 2.7810066580772315,
+      "sc_initial_p95_mm": 1.7598782956600187,
+      "sc_near_lateral_p95_mm": 0.3123255610466003
+    },
+    "treatment": {
+      "run_command": "/var/tmp/chmin_aic_20260918_act/shared_body_target_bc_window0p5s_treatment_20260925/run.sh",
+      "checkpoint": "/var/tmp/chmin_aic_20260918_act/shared_body_target_bc_window0p5s_treatment_20260925/best.pt",
+      "checkpoint_sha256": "8f010a23392bab01f5863dba231e15349629ceb12128e46a1486d2226a5a1d88",
+      "train_episodes": 334,
+      "train_rows": 181971,
+      "completed_updates": 1500,
+      "best_update": 1,
+      "best_selection_mm": 2.6205568528175314,
+      "sfp_initial_p95_mm": 1.7230956017971033,
+      "sfp_near_lateral_p95_mm": 2.379000866413109,
+      "sc_initial_p95_mm": 2.314741349220276,
+      "sc_near_lateral_p95_mm": 0.43941066861152644
+    }
+  },
+  "autonomous_evaluation": "running on same two already-open SC development scenes",
+  "reserved_final_opened": false,
+  "rl_started": false
+}

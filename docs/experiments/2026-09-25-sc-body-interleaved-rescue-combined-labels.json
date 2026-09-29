@@ -1,0 +1,171 @@
+{
+  "schema": "aic_sc_connector_waypoint_labels/v1",
+  "labels": "/var/tmp/chmin_aic_20260918_act/sc_body_interleaved_rescue_combined_candidates_20260925/corrective_waypoint_chunks.jsonl",
+  "training_label_only": true,
+  "port_edges": "/var/tmp/chmin_aic_20260918_act/sc_body_interleaved_rescue_combined_candidates_20260925/port_edges.json",
+  "tcp_tip_calibration": "configs/hierarchical_recovery/sc_tcp_tip_gazebo_tf_251.json",
+  "episode_tip_calibrations": "/var/tmp/chmin_aic_20260918_act/sc_body_interleaved_rescue_combined_candidates_20260925/physical_grasp_calibrations.json",
+  "port_opening_calibration": "configs/hierarchical_recovery/sc_port_opening_gazebo_tf_251.json",
+  "pose_quaternion_order": "xyzw",
+  "timing": {
+    "resample_mode": "causal_hold",
+    "step_s": 0.05,
+    "tolerance_s": 0.01,
+    "max_hold_s": 0.15,
+    "first_target_semantics": "teacher command recorded with anchor image; target held until next recorded command when resampling"
+  },
+  "counts_by_split": {
+    "train": 10042
+  },
+  "episodes": 16,
+  "train_scene_groups": 16,
+  "validation_scene_groups": 0,
+  "max_tcp_target_roundtrip_m": 2.8441001681421824e-16,
+  "max_tcp_target_roundtrip_deg": 9.249458578795286e-15,
+  "episode_reports": [
+    {
+      "episode_index": 99893906820944,
+      "scene_sha256": "8ee511f7a64de012ecf6340ad59de791a7347e25b04c7acbb9124040eba38a39",
+      "split": "train",
+      "frames": 623,
+      "valid_chunks": 588,
+      "invalid_timing_chunks": 32,
+      "missing_image_chunks": 0
+    },
+    {
+      "episode_index": 32397864065469,
+      "scene_sha256": "e95c41a26ac620add794e6cc29aa78d3fd11796f821f99812f4ac62aa0d7d31f",
+      "split": "train",
+      "frames": 769,
+      "valid_chunks": 741,
+      "invalid_timing_chunks": 25,
+      "missing_image_chunks": 0
+    },
+    {
+      "episode_index": 218208350795118,
+      "scene_sha256": "bdb4cbdbf7955c66d4d07c8ac834ff999a1e87dd411c90cbbfeef737eac4db1c",
+      "split": "train",
+      "frames": 420,
+      "valid_chunks": 402,
+      "invalid_timing_chunks": 15,
+      "missing_image_chunks": 0
+    },
+    {
+      "episode_index": 17428239455814,
+      "scene_sha256": "5681ce065f6cd3f13fc08284415f660242920453946412d2b1c114d6988e6b05",
+      "split": "train",
+      "frames": 504,
+      "valid_chunks": 482,
+      "invalid_timing_chunks": 19,
+      "missing_image_chunks": 0
+    },
+    {
+      "episode_index": 113021547951067,
+      "scene_sha256": "38022c4ac211c53344858f3f0a3caf23989ca86a1dd93c1f21a16085edfb3d73",
+      "split": "train",
+      "frames": 647,
+      "valid_chunks": 619,
+      "invalid_timing_chunks": 25,
+      "missing_image_chunks": 0
+    },
+    {
+      "episode_index": 106480903742347,
+      "scene_sha256": "03f1d506d2103d798ccfb4a5358ca94989fe3032ebf293758a3cac8ac2118d1f",
+      "split": "train",
+      "frames": 997,
+      "valid_chunks": 952,
+      "invalid_timing_chunks": 42,
+      "missing_image_chunks": 0
+    },
+    {
+      "episode_index": 217816480298797,
+      "scene_sha256": "7b312b4080b797b98a475aa6af31cfc40bbd05cd3896cbc4ffab1ea67d420980",
+      "split": "train",
+      "frames": 466,
+      "valid_chunks": 444,
+      "invalid_timing_chunks": 19,
+      "missing_image_chunks": 0
+    },
+    {
+      "episode_index": 248470594019087,
+      "scene_sha256": "48c357156cdcf727932087a37e708394d2c29d2f19f2721e4569906224760500",
+      "split": "train",
+      "frames": 970,
+      "valid_chunks": 942,
+      "invalid_timing_chunks": 25,
+      "missing_image_chunks": 0
+    },
+    {
+      "episode_index": 100034828025803,
+      "scene_sha256": "720d63c7543e7e9e5a2a4bf1f10d661d001d97562553590832be9dadc71093b7",
+      "split": "train",
+      "frames": 1119,
+      "valid_chunks": 1087,
+      "invalid_timing_chunks": 29,
+      "missing_image_chunks": 0
+    },
+    {
+      "episode_index": 243922247303897,
+      "scene_sha256": "4079f0a47ee7a83cebe40c3c9a441d83c43f0997faae7e492f21e1a4f5fbd789",
+      "split": "train",
+      "frames": 402,
+      "valid_chunks": 380,
+      "invalid_timing_chunks": 19,
+      "missing_image_chunks": 0
+    },
+    {
+      "episode_index": 8893275646108,
+      "scene_sha256": "a8a883c8d89bd28373d68bc3a856b29e3ae58684e375c352f7cd156a206c90dd",
+      "split": "train",
+      "frames": 471,
+      "valid_chunks": 451,
+      "invalid_timing_chunks": 17,
+      "missing_image_chunks": 0
+    },
+    {
+      "episode_index": 137138765043718,
+      "scene_sha256": "38392f56faf06d37127182df7716fd73ede8e02d96cddda1e479a9755f5a9197",
+      "split": "train",
+      "frames": 1091,
+      "valid_chunks": 1039,
+      "invalid_timing_chunks": 49,
+      "missing_image_chunks": 0
+    },
+    {
+      "episode_index": 116085369483136,
+      "scene_sha256": "70f134d42f47d4d3b1d66129a01041f33a0572cac9151883ee434b5350611a77",
+      "split": "train",
+      "frames": 399,
+      "valid_chunks": 370,
+      "invalid_timing_chunks": 26,
+      "missing_image_chunks": 0
+    },
+    {
+      "episode_index": 257726835645524,
+      "scene_sha256": "b8ef7f4bc57b6afffea41784f258cdeb224049b20e7742b3a9420550dfa4cb75",
+      "split": "train",
+      "frames": 532,
+      "valid_chunks": 501,
+      "invalid_timing_chunks": 28,
+      "missing_image_chunks": 0
+    },
+    {
+      "episode_index": 47177773376321,
+      "scene_sha256": "624cdb93a3aa138b156904c2f072c106b2e55fefcca1277b888afc6f32f977b6",
+      "split": "train",
+      "frames": 454,
+      "valid_chunks": 435,
+      "invalid_timing_chunks": 16,
+      "missing_image_chunks": 0
+    },
+    {
+      "episode_index": 88709766265630,
+      "scene_sha256": "dc85ea0d8811fc79c26ced9c7d3df6d81e53263ae6b8a219b1ea316b94362d99",
+      "split": "train",
+      "frames": 636,
+      "valid_chunks": 609,
+      "invalid_timing_chunks": 24,
+      "missing_image_chunks": 0
+    }
+  ]
+}

@@ -1,0 +1,93 @@
+{
+  "schema": "sc_interleaved_correction_row_selection/v1",
+  "source": "/var/tmp/chmin_aic_20260918_act/sc_body_interleaved_rescue_combined_candidates_20260925/corrective_waypoint_chunks.jsonl",
+  "source_sha256": "2ecb5c62ca11d33083026cbfeb55d97b28ea6e272b88d8c67d2b8152c9588d1a",
+  "output": "/var/tmp/chmin_aic_20260918_act/sc_body_interleaved_rescue_combined_candidates_20260925/correction_window_0p5s_waypoint_chunks.jsonl",
+  "output_sha256": "27d64031ab3eebf45f7fe1ac22f24fc6cdb3f511b3b612ae57ef7e6c23d56226",
+  "after_pulse_seconds": 0.5,
+  "complete_success_admission_required": true,
+  "episodes": {
+    "99893906820944": {
+      "all": 588,
+      "actor": 22,
+      "after": 80
+    },
+    "32397864065469": {
+      "all": 741,
+      "actor": 24,
+      "after": 80
+    },
+    "218208350795118": {
+      "all": 402,
+      "actor": 20,
+      "after": 60
+    },
+    "17428239455814": {
+      "all": 482,
+      "actor": 20,
+      "after": 70
+    },
+    "113021547951067": {
+      "all": 619,
+      "actor": 28,
+      "after": 80
+    },
+    "106480903742347": {
+      "all": 952,
+      "actor": 24,
+      "after": 80
+    },
+    "217816480298797": {
+      "all": 444,
+      "actor": 17,
+      "after": 56
+    },
+    "248470594019087": {
+      "all": 942,
+      "actor": 24,
+      "after": 80
+    },
+    "100034828025803": {
+      "all": 1087,
+      "actor": 24,
+      "after": 77
+    },
+    "243922247303897": {
+      "all": 380,
+      "actor": 17,
+      "after": 50
+    },
+    "8893275646108": {
+      "all": 451,
+      "actor": 22,
+      "after": 60
+    },
+    "137138765043718": {
+      "all": 1039,
+      "actor": 28,
+      "after": 79
+    },
+    "116085369483136": {
+      "all": 370,
+      "actor": 16,
+      "after": 50
+    },
+    "257726835645524": {
+      "all": 501,
+      "actor": 18,
+      "after": 70
+    },
+    "47177773376321": {
+      "all": 435,
+      "actor": 20,
+      "after": 60
+    },
+    "88709766265630": {
+      "all": 609,
+      "actor": 23,
+      "after": 79
+    }
+  },
+  "total_actor_rows": 347,
+  "total_after_rows": 1111
+}

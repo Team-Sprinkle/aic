@@ -1,0 +1,58 @@
+{
+  "schema": "sc_fivecard_lift_retry/v1",
+  "source_manifest": "/var/tmp/chmin_aic_20260918_act/sc_fivecard_lift_retry_20260925/source_manifest.json",
+  "source_manifest_sha256": "fdece77fbff5c233f93995f3e80c984658503c8a69324f826e768d3fa7f9af90",
+  "route": "teacher-only 80 mm pre-route lift",
+  "attempts": 6,
+  "full_insertions": 3,
+  "trials": {
+    "trial_1002001": {
+      "tier3": 75,
+      "tier2": 10.012466841573893,
+      "original_trial": "trial_1001038",
+      "original_tier3": 24.18812970928106,
+      "target_module": "sc_port_0"
+    },
+    "trial_1002002": {
+      "tier3": 75,
+      "tier2": 8.350528692371013,
+      "original_trial": "trial_1001119",
+      "original_tier3": 21.01503704870471,
+      "target_module": "sc_port_0"
+    },
+    "trial_1002003": {
+      "tier3": 46.06006907590559,
+      "tier2": 9.723148154795805,
+      "original_trial": "trial_1001453",
+      "original_tier3": 19.115089715175205,
+      "target_module": "sc_port_1"
+    },
+    "trial_1002004": {
+      "tier3": 75,
+      "tier2": 13.50369371447178,
+      "original_trial": "trial_1001534",
+      "original_tier3": 18.522226397900287,
+      "target_module": "sc_port_0"
+    },
+    "trial_1002005": {
+      "tier3": 19.259273281690596,
+      "tier2": 8.146279046052157,
+      "original_trial": "trial_1001923",
+      "original_tier3": 15.204461094015741,
+      "target_module": "sc_port_1"
+    },
+    "trial_1002006": {
+      "tier3": 20.98350773558877,
+      "tier2": 10.228673718330615,
+      "original_trial": "trial_1001991",
+      "original_tier3": 17.951998633392364,
+      "target_module": "sc_port_1"
+    }
+  },
+  "archive_manifests": [
+    "docs/experiments/sc_fivecard_lift_archives/sc_fivecard_lift_retry_20260925_part001_003-mcap-archive.json",
+    "docs/experiments/sc_fivecard_lift_archives/sc_fivecard_lift_retry_20260925_part004_006-mcap-archive.json"
+  ],
+  "admission": "docs/experiments/2026-09-25-sc-fivecard-lift-admission.json",
+  "training_only": true
+}

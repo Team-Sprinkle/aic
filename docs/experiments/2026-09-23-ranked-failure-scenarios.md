@@ -3,6 +3,30 @@
 Date: 2026-09-23
 Status: evidence audit and bounded Gazebo reproduction complete; training plan selected
 
+**September 24 update:** the same fixed across-card route was rerun seven
+times at 20 Hz with overhead and side views. Six were partial and one was no
+insertion with 52.9 N peak wrist force and 111.6 mm final TCP command error.
+The cable was visibly across the card row, but its motion and the 4.45 mm
+terminal lateral error leave the causal contact unresolved. This strengthens
+the feasibility of reproducing an abrupt approach stop; it does not promote a
+verified cable-to-card snag label. See the
+[route record](2026-09-23-fixed-five-card-route-probe.md) and the
+[current ranked matrix and training gates](2026-09-24-hierarchical-recovery-continuation.md).
+The later 17-bag control-trace audit found that tared force plus an
+instantaneous stall is **not** specific: it marks all seven fixed-route
+repeats. A post-hoc 80 mm TCP tracking-error line marked the three
+no-insertion traces but none of fourteen full/partial traces; three fresh
+five-card scene controls (one full, two partial) also stayed below it.
+This supports prioritizing **large approach/tracking blockage** for further
+contact/controller diagnosis, not relabeling it as cable snag. See the
+[cross-scene trace metrics](2026-09-24-hierarchical-recovery-trace-cohorts.json)
+and [new scene scores](2026-09-24-hierarchical-recovery-fresh-scenes.json).
+The subsequent [Isaac SC mechanics repair](2026-09-24-isaac-sc-fidelity-fix.md)
+supports the local plug/port blockage class with two named-contact physics
+traces. The old Isaac gripper/card hit did **not** recur after calibrating the
+grasp, so it is removed as a valid item-2 Isaac example. No corrected-scene
+cable/card contact has yet been recorded.
+
 ## Coverage correction: ordinary development evaluation
 
 The bounded audit below did **not** exhaust every ordinary development setting.

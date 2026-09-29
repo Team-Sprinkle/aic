@@ -1,0 +1,654 @@
+{
+  "schema": "sc_diversity_batch3_scored/v1",
+  "date": "2026-09-25",
+  "source_manifest": "/var/tmp/chmin_aic_20260918_act/sc_diversity_batch3_20260925/source_manifest.json",
+  "source_manifest_sha256": "320469e9cb9af7cfc062491591e8d5cfabc32c5e98f4d8a7a2a425aa3205361b",
+  "collection_done": "/var/tmp/chmin_aic_20260918_act/sc_diversity_batch3_20260925/collection_done",
+  "attempts": 60,
+  "full_insertions": 31,
+  "partial_or_failed": 29,
+  "attempts_by_cell": {
+    "3cards/sc_port_1": 6,
+    "2cards/sc_port_1": 16,
+    "4cards/sc_port_1": 1,
+    "1cards/sc_port_0": 9,
+    "2cards/sc_port_0": 9,
+    "1cards/sc_port_1": 11,
+    "3cards/sc_port_0": 6,
+    "5cards/sc_port_1": 1,
+    "5cards/sc_port_0": 1
+  },
+  "full_by_cell": {
+    "3cards/sc_port_1": 1,
+    "4cards/sc_port_1": 1,
+    "1cards/sc_port_0": 6,
+    "2cards/sc_port_0": 5,
+    "1cards/sc_port_1": 9,
+    "3cards/sc_port_0": 3,
+    "2cards/sc_port_1": 6
+  },
+  "trials": {
+    "trial_999101": {
+      "tier3": 75,
+      "tier2": 14.629165446916332,
+      "source": {
+        "source_trial": "trial_1",
+        "target_module": "sc_port_1",
+        "source_yaml_sha256": "281d3f799981269cd3a3202486002d486e99a7e2c5f3f3187cab1492298aaa4c",
+        "nic_card_count": 3
+      }
+    },
+    "trial_999102": {
+      "tier3": 19.142027280027555,
+      "tier2": 10.828368729873496,
+      "source": {
+        "source_trial": "trial_2",
+        "target_module": "sc_port_1",
+        "source_yaml_sha256": "281d3f799981269cd3a3202486002d486e99a7e2c5f3f3187cab1492298aaa4c",
+        "nic_card_count": 2
+      }
+    },
+    "trial_999103": {
+      "tier3": 18.26143568955877,
+      "tier2": 11.363257764727555,
+      "source": {
+        "source_trial": "trial_3",
+        "target_module": "sc_port_1",
+        "source_yaml_sha256": "281d3f799981269cd3a3202486002d486e99a7e2c5f3f3187cab1492298aaa4c",
+        "nic_card_count": 3
+      }
+    },
+    "trial_999104": {
+      "tier3": 22.748430472904122,
+      "tier2": 8.792016590981786,
+      "source": {
+        "source_trial": "trial_4",
+        "target_module": "sc_port_1",
+        "source_yaml_sha256": "281d3f799981269cd3a3202486002d486e99a7e2c5f3f3187cab1492298aaa4c",
+        "nic_card_count": 2
+      }
+    },
+    "trial_999105": {
+      "tier3": 75,
+      "tier2": 14.228493356359657,
+      "source": {
+        "source_trial": "trial_5",
+        "target_module": "sc_port_1",
+        "source_yaml_sha256": "281d3f799981269cd3a3202486002d486e99a7e2c5f3f3187cab1492298aaa4c",
+        "nic_card_count": 4
+      }
+    },
+    "trial_999106": {
+      "tier3": 75,
+      "tier2": 14.992254244538547,
+      "source": {
+        "source_trial": "trial_6",
+        "target_module": "sc_port_0",
+        "source_yaml_sha256": "281d3f799981269cd3a3202486002d486e99a7e2c5f3f3187cab1492298aaa4c",
+        "nic_card_count": 1
+      }
+    },
+    "trial_999107": {
+      "tier3": 17.035259197972803,
+      "tier2": 6.593707919889502,
+      "source": {
+        "source_trial": "trial_7",
+        "target_module": "sc_port_0",
+        "source_yaml_sha256": "281d3f799981269cd3a3202486002d486e99a7e2c5f3f3187cab1492298aaa4c",
+        "nic_card_count": 1
+      }
+    },
+    "trial_999108": {
+      "tier3": 75,
+      "tier2": 13.64289166203921,
+      "source": {
+        "source_trial": "trial_8",
+        "target_module": "sc_port_0",
+        "source_yaml_sha256": "281d3f799981269cd3a3202486002d486e99a7e2c5f3f3187cab1492298aaa4c",
+        "nic_card_count": 1
+      }
+    },
+    "trial_999109": {
+      "tier3": 75,
+      "tier2": -3.58183497138986,
+      "source": {
+        "source_trial": "trial_9",
+        "target_module": "sc_port_0",
+        "source_yaml_sha256": "281d3f799981269cd3a3202486002d486e99a7e2c5f3f3187cab1492298aaa4c",
+        "nic_card_count": 2
+      }
+    },
+    "trial_999110": {
+      "tier3": 46.053543346585066,
+      "tier2": 10.946834450815913,
+      "source": {
+        "source_trial": "trial_10",
+        "target_module": "sc_port_0",
+        "source_yaml_sha256": "281d3f799981269cd3a3202486002d486e99a7e2c5f3f3187cab1492298aaa4c",
+        "nic_card_count": 2
+      }
+    },
+    "trial_999111": {
+      "tier3": 0,
+      "tier2": 0,
+      "source": {
+        "source_trial": "trial_11",
+        "target_module": "sc_port_0",
+        "source_yaml_sha256": "281d3f799981269cd3a3202486002d486e99a7e2c5f3f3187cab1492298aaa4c",
+        "nic_card_count": 1
+      }
+    },
+    "trial_999112": {
+      "tier3": 75,
+      "tier2": 17.033822836048117,
+      "source": {
+        "source_trial": "trial_12",
+        "target_module": "sc_port_1",
+        "source_yaml_sha256": "281d3f799981269cd3a3202486002d486e99a7e2c5f3f3187cab1492298aaa4c",
+        "nic_card_count": 1
+      }
+    },
+    "trial_999113": {
+      "tier3": 75,
+      "tier2": 10.899953373642653,
+      "source": {
+        "source_trial": "trial_13",
+        "target_module": "sc_port_0",
+        "source_yaml_sha256": "281d3f799981269cd3a3202486002d486e99a7e2c5f3f3187cab1492298aaa4c",
+        "nic_card_count": 1
+      }
+    },
+    "trial_999114": {
+      "tier3": 25,
+      "tier2": -1.4207652480315893,
+      "source": {
+        "source_trial": "trial_14",
+        "target_module": "sc_port_1",
+        "source_yaml_sha256": "281d3f799981269cd3a3202486002d486e99a7e2c5f3f3187cab1492298aaa4c",
+        "nic_card_count": 1
+      }
+    },
+    "trial_999115": {
+      "tier3": 19.7195096972224,
+      "tier2": 10.725141314272705,
+      "source": {
+        "source_trial": "trial_15",
+        "target_module": "sc_port_0",
+        "source_yaml_sha256": "281d3f799981269cd3a3202486002d486e99a7e2c5f3f3187cab1492298aaa4c",
+        "nic_card_count": 1
+      }
+    },
+    "trial_999116": {
+      "tier3": 75,
+      "tier2": 14.961618167753384,
+      "source": {
+        "source_trial": "trial_16",
+        "target_module": "sc_port_1",
+        "source_yaml_sha256": "281d3f799981269cd3a3202486002d486e99a7e2c5f3f3187cab1492298aaa4c",
+        "nic_card_count": 1
+      }
+    },
+    "trial_999117": {
+      "tier3": 75,
+      "tier2": 15.328079926822056,
+      "source": {
+        "source_trial": "trial_17",
+        "target_module": "sc_port_1",
+        "source_yaml_sha256": "281d3f799981269cd3a3202486002d486e99a7e2c5f3f3187cab1492298aaa4c",
+        "nic_card_count": 1
+      }
+    },
+    "trial_999118": {
+      "tier3": 22.704020748036893,
+      "tier2": 10.342645195325483,
+      "source": {
+        "source_trial": "trial_18",
+        "target_module": "sc_port_1",
+        "source_yaml_sha256": "281d3f799981269cd3a3202486002d486e99a7e2c5f3f3187cab1492298aaa4c",
+        "nic_card_count": 2
+      }
+    },
+    "trial_999119": {
+      "tier3": 21.224625425674386,
+      "tier2": 9.752968262986432,
+      "source": {
+        "source_trial": "trial_19",
+        "target_module": "sc_port_0",
+        "source_yaml_sha256": "281d3f799981269cd3a3202486002d486e99a7e2c5f3f3187cab1492298aaa4c",
+        "nic_card_count": 2
+      }
+    },
+    "trial_999120": {
+      "tier3": 75,
+      "tier2": 16.77943983616059,
+      "source": {
+        "source_trial": "trial_20",
+        "target_module": "sc_port_0",
+        "source_yaml_sha256": "281d3f799981269cd3a3202486002d486e99a7e2c5f3f3187cab1492298aaa4c",
+        "nic_card_count": 1
+      }
+    },
+    "trial_999121": {
+      "tier3": 48.473335975538866,
+      "tier2": -10.648914792660053,
+      "source": {
+        "source_trial": "trial_21",
+        "target_module": "sc_port_1",
+        "source_yaml_sha256": "281d3f799981269cd3a3202486002d486e99a7e2c5f3f3187cab1492298aaa4c",
+        "nic_card_count": 2
+      }
+    },
+    "trial_999122": {
+      "tier3": 75,
+      "tier2": 16.90938318812035,
+      "source": {
+        "source_trial": "trial_22",
+        "target_module": "sc_port_1",
+        "source_yaml_sha256": "281d3f799981269cd3a3202486002d486e99a7e2c5f3f3187cab1492298aaa4c",
+        "nic_card_count": 1
+      }
+    },
+    "trial_999123": {
+      "tier3": 17.386711851351503,
+      "tier2": 9.936153171348767,
+      "source": {
+        "source_trial": "trial_23",
+        "target_module": "sc_port_0",
+        "source_yaml_sha256": "281d3f799981269cd3a3202486002d486e99a7e2c5f3f3187cab1492298aaa4c",
+        "nic_card_count": 2
+      }
+    },
+    "trial_999124": {
+      "tier3": 47.78427467082534,
+      "tier2": 8.211062691465974,
+      "source": {
+        "source_trial": "trial_24",
+        "target_module": "sc_port_1",
+        "source_yaml_sha256": "281d3f799981269cd3a3202486002d486e99a7e2c5f3f3187cab1492298aaa4c",
+        "nic_card_count": 3
+      }
+    },
+    "trial_999125": {
+      "tier3": 75,
+      "tier2": 16.037884300598968,
+      "source": {
+        "source_trial": "trial_25",
+        "target_module": "sc_port_0",
+        "source_yaml_sha256": "281d3f799981269cd3a3202486002d486e99a7e2c5f3f3187cab1492298aaa4c",
+        "nic_card_count": 2
+      }
+    },
+    "trial_999126": {
+      "tier3": 19.394851555008103,
+      "tier2": 6.448311778460703,
+      "source": {
+        "source_trial": "trial_26",
+        "target_module": "sc_port_1",
+        "source_yaml_sha256": "281d3f799981269cd3a3202486002d486e99a7e2c5f3f3187cab1492298aaa4c",
+        "nic_card_count": 1
+      }
+    },
+    "trial_999127": {
+      "tier3": 75,
+      "tier2": 11.351687425607798,
+      "source": {
+        "source_trial": "trial_27",
+        "target_module": "sc_port_0",
+        "source_yaml_sha256": "281d3f799981269cd3a3202486002d486e99a7e2c5f3f3187cab1492298aaa4c",
+        "nic_card_count": 3
+      }
+    },
+    "trial_999128": {
+      "tier3": 75,
+      "tier2": 16.531268670531063,
+      "source": {
+        "source_trial": "trial_28",
+        "target_module": "sc_port_1",
+        "source_yaml_sha256": "281d3f799981269cd3a3202486002d486e99a7e2c5f3f3187cab1492298aaa4c",
+        "nic_card_count": 1
+      }
+    },
+    "trial_999129": {
+      "tier3": 75,
+      "tier2": 13.037417739234387,
+      "source": {
+        "source_trial": "trial_29",
+        "target_module": "sc_port_0",
+        "source_yaml_sha256": "281d3f799981269cd3a3202486002d486e99a7e2c5f3f3187cab1492298aaa4c",
+        "nic_card_count": 2
+      }
+    },
+    "trial_999130": {
+      "tier3": 19.826221263037837,
+      "tier2": 7.054261295885853,
+      "source": {
+        "source_trial": "trial_30",
+        "target_module": "sc_port_1",
+        "source_yaml_sha256": "281d3f799981269cd3a3202486002d486e99a7e2c5f3f3187cab1492298aaa4c",
+        "nic_card_count": 3
+      }
+    },
+    "trial_999131": {
+      "tier3": 46.05467925711681,
+      "tier2": 4.433417967332345,
+      "source": {
+        "source_trial": "trial_31",
+        "target_module": "sc_port_0",
+        "source_yaml_sha256": "281d3f799981269cd3a3202486002d486e99a7e2c5f3f3187cab1492298aaa4c",
+        "nic_card_count": 3
+      }
+    },
+    "trial_999132": {
+      "tier3": 21.967903234371988,
+      "tier2": 4.775916495844696,
+      "source": {
+        "source_trial": "trial_32",
+        "target_module": "sc_port_1",
+        "source_yaml_sha256": "281d3f799981269cd3a3202486002d486e99a7e2c5f3f3187cab1492298aaa4c",
+        "nic_card_count": 5
+      }
+    },
+    "trial_999133": {
+      "tier3": 75,
+      "tier2": 12.633560757508622,
+      "source": {
+        "source_trial": "trial_33",
+        "target_module": "sc_port_1",
+        "source_yaml_sha256": "281d3f799981269cd3a3202486002d486e99a7e2c5f3f3187cab1492298aaa4c",
+        "nic_card_count": 2
+      }
+    },
+    "trial_999134": {
+      "tier3": 75,
+      "tier2": 18.12000052802452,
+      "source": {
+        "source_trial": "trial_34",
+        "target_module": "sc_port_1",
+        "source_yaml_sha256": "281d3f799981269cd3a3202486002d486e99a7e2c5f3f3187cab1492298aaa4c",
+        "nic_card_count": 1
+      }
+    },
+    "trial_999135": {
+      "tier3": 75,
+      "tier2": 8.674778875243677,
+      "source": {
+        "source_trial": "trial_35",
+        "target_module": "sc_port_1",
+        "source_yaml_sha256": "281d3f799981269cd3a3202486002d486e99a7e2c5f3f3187cab1492298aaa4c",
+        "nic_card_count": 2
+      }
+    },
+    "trial_999136": {
+      "tier3": 75,
+      "tier2": 14.636479608313907,
+      "source": {
+        "source_trial": "trial_36",
+        "target_module": "sc_port_0",
+        "source_yaml_sha256": "281d3f799981269cd3a3202486002d486e99a7e2c5f3f3187cab1492298aaa4c",
+        "nic_card_count": 1
+      }
+    },
+    "trial_999137": {
+      "tier3": 75,
+      "tier2": 11.122382813114893,
+      "source": {
+        "source_trial": "trial_37",
+        "target_module": "sc_port_0",
+        "source_yaml_sha256": "281d3f799981269cd3a3202486002d486e99a7e2c5f3f3187cab1492298aaa4c",
+        "nic_card_count": 3
+      }
+    },
+    "trial_999138": {
+      "tier3": 75,
+      "tier2": 9.906460322695395,
+      "source": {
+        "source_trial": "trial_38",
+        "target_module": "sc_port_1",
+        "source_yaml_sha256": "281d3f799981269cd3a3202486002d486e99a7e2c5f3f3187cab1492298aaa4c",
+        "nic_card_count": 1
+      }
+    },
+    "trial_999139": {
+      "tier3": 20.50859009626481,
+      "tier2": 4.872756913830301,
+      "source": {
+        "source_trial": "trial_39",
+        "target_module": "sc_port_1",
+        "source_yaml_sha256": "281d3f799981269cd3a3202486002d486e99a7e2c5f3f3187cab1492298aaa4c",
+        "nic_card_count": 2
+      }
+    },
+    "trial_999140": {
+      "tier3": 75,
+      "tier2": 17.38402444466859,
+      "source": {
+        "source_trial": "trial_40",
+        "target_module": "sc_port_1",
+        "source_yaml_sha256": "281d3f799981269cd3a3202486002d486e99a7e2c5f3f3187cab1492298aaa4c",
+        "nic_card_count": 2
+      }
+    },
+    "trial_999141": {
+      "tier3": 75,
+      "tier2": 12.60822724982162,
+      "source": {
+        "source_trial": "trial_41",
+        "target_module": "sc_port_1",
+        "source_yaml_sha256": "281d3f799981269cd3a3202486002d486e99a7e2c5f3f3187cab1492298aaa4c",
+        "nic_card_count": 1
+      }
+    },
+    "trial_999142": {
+      "tier3": 16.358178463634946,
+      "tier2": 9.548013314076925,
+      "source": {
+        "source_trial": "trial_42",
+        "target_module": "sc_port_0",
+        "source_yaml_sha256": "281d3f799981269cd3a3202486002d486e99a7e2c5f3f3187cab1492298aaa4c",
+        "nic_card_count": 2
+      }
+    },
+    "trial_999143": {
+      "tier3": 21.737274872811753,
+      "tier2": 9.44208133047076,
+      "source": {
+        "source_trial": "trial_43",
+        "target_module": "sc_port_1",
+        "source_yaml_sha256": "281d3f799981269cd3a3202486002d486e99a7e2c5f3f3187cab1492298aaa4c",
+        "nic_card_count": 3
+      }
+    },
+    "trial_999144": {
+      "tier3": 16.8002488151966,
+      "tier2": -8.19961418314893,
+      "source": {
+        "source_trial": "trial_44",
+        "target_module": "sc_port_1",
+        "source_yaml_sha256": "281d3f799981269cd3a3202486002d486e99a7e2c5f3f3187cab1492298aaa4c",
+        "nic_card_count": 2
+      }
+    },
+    "trial_999145": {
+      "tier3": 75,
+      "tier2": 16.639432394065967,
+      "source": {
+        "source_trial": "trial_45",
+        "target_module": "sc_port_0",
+        "source_yaml_sha256": "281d3f799981269cd3a3202486002d486e99a7e2c5f3f3187cab1492298aaa4c",
+        "nic_card_count": 1
+      }
+    },
+    "trial_999146": {
+      "tier3": 75,
+      "tier2": 15.776535351483851,
+      "source": {
+        "source_trial": "trial_46",
+        "target_module": "sc_port_1",
+        "source_yaml_sha256": "281d3f799981269cd3a3202486002d486e99a7e2c5f3f3187cab1492298aaa4c",
+        "nic_card_count": 1
+      }
+    },
+    "trial_999147": {
+      "tier3": 39.491099080455385,
+      "tier2": 9.184968617250037,
+      "source": {
+        "source_trial": "trial_47",
+        "target_module": "sc_port_1",
+        "source_yaml_sha256": "281d3f799981269cd3a3202486002d486e99a7e2c5f3f3187cab1492298aaa4c",
+        "nic_card_count": 2
+      }
+    },
+    "trial_999148": {
+      "tier3": 75,
+      "tier2": 13.123563774530261,
+      "source": {
+        "source_trial": "trial_48",
+        "target_module": "sc_port_1",
+        "source_yaml_sha256": "281d3f799981269cd3a3202486002d486e99a7e2c5f3f3187cab1492298aaa4c",
+        "nic_card_count": 2
+      }
+    },
+    "trial_999149": {
+      "tier3": 75,
+      "tier2": 14.817960030476845,
+      "source": {
+        "source_trial": "trial_49",
+        "target_module": "sc_port_0",
+        "source_yaml_sha256": "281d3f799981269cd3a3202486002d486e99a7e2c5f3f3187cab1492298aaa4c",
+        "nic_card_count": 3
+      }
+    },
+    "trial_999150": {
+      "tier3": 46.0641768825729,
+      "tier2": 10.67174246336716,
+      "source": {
+        "source_trial": "trial_50",
+        "target_module": "sc_port_1",
+        "source_yaml_sha256": "281d3f799981269cd3a3202486002d486e99a7e2c5f3f3187cab1492298aaa4c",
+        "nic_card_count": 2
+      }
+    },
+    "trial_999151": {
+      "tier3": 15.632811611322813,
+      "tier2": 12.335847940697898,
+      "source": {
+        "source_trial": "trial_51",
+        "target_module": "sc_port_1",
+        "source_yaml_sha256": "281d3f799981269cd3a3202486002d486e99a7e2c5f3f3187cab1492298aaa4c",
+        "nic_card_count": 2
+      }
+    },
+    "trial_999152": {
+      "tier3": 20.515203902436486,
+      "tier2": 8.98786081764294,
+      "source": {
+        "source_trial": "trial_52",
+        "target_module": "sc_port_1",
+        "source_yaml_sha256": "281d3f799981269cd3a3202486002d486e99a7e2c5f3f3187cab1492298aaa4c",
+        "nic_card_count": 3
+      }
+    },
+    "trial_999153": {
+      "tier3": 75,
+      "tier2": 16.63405512360601,
+      "source": {
+        "source_trial": "trial_53",
+        "target_module": "sc_port_1",
+        "source_yaml_sha256": "281d3f799981269cd3a3202486002d486e99a7e2c5f3f3187cab1492298aaa4c",
+        "nic_card_count": 2
+      }
+    },
+    "trial_999154": {
+      "tier3": 75,
+      "tier2": 7.843293051758372,
+      "source": {
+        "source_trial": "trial_54",
+        "target_module": "sc_port_1",
+        "source_yaml_sha256": "281d3f799981269cd3a3202486002d486e99a7e2c5f3f3187cab1492298aaa4c",
+        "nic_card_count": 2
+      }
+    },
+    "trial_999155": {
+      "tier3": 17.14999050546306,
+      "tier2": 10.999716316302562,
+      "source": {
+        "source_trial": "trial_55",
+        "target_module": "sc_port_0",
+        "source_yaml_sha256": "281d3f799981269cd3a3202486002d486e99a7e2c5f3f3187cab1492298aaa4c",
+        "nic_card_count": 3
+      }
+    },
+    "trial_999156": {
+      "tier3": 75,
+      "tier2": 14.385844472488,
+      "source": {
+        "source_trial": "trial_56",
+        "target_module": "sc_port_0",
+        "source_yaml_sha256": "281d3f799981269cd3a3202486002d486e99a7e2c5f3f3187cab1492298aaa4c",
+        "nic_card_count": 2
+      }
+    },
+    "trial_999157": {
+      "tier3": 40.432742219060025,
+      "tier2": 8.816025721037978,
+      "source": {
+        "source_trial": "trial_57",
+        "target_module": "sc_port_0",
+        "source_yaml_sha256": "281d3f799981269cd3a3202486002d486e99a7e2c5f3f3187cab1492298aaa4c",
+        "nic_card_count": 3
+      }
+    },
+    "trial_999158": {
+      "tier3": 19.36801615432552,
+      "tier2": 4.062367954959644,
+      "source": {
+        "source_trial": "trial_58",
+        "target_module": "sc_port_1",
+        "source_yaml_sha256": "281d3f799981269cd3a3202486002d486e99a7e2c5f3f3187cab1492298aaa4c",
+        "nic_card_count": 2
+      }
+    },
+    "trial_999159": {
+      "tier3": 17.886838010368564,
+      "tier2": -4.730523611600663,
+      "source": {
+        "source_trial": "trial_59",
+        "target_module": "sc_port_0",
+        "source_yaml_sha256": "281d3f799981269cd3a3202486002d486e99a7e2c5f3f3187cab1492298aaa4c",
+        "nic_card_count": 5
+      }
+    },
+    "trial_999160": {
+      "tier3": 75,
+      "tier2": 17.649005180618037,
+      "source": {
+        "source_trial": "trial_60",
+        "target_module": "sc_port_0",
+        "source_yaml_sha256": "281d3f799981269cd3a3202486002d486e99a7e2c5f3f3187cab1492298aaa4c",
+        "nic_card_count": 2
+      }
+    }
+  },
+  "archive_manifests": [
+    "docs/experiments/sc_diversity_batch3_archives/sc_diversity_batch3_20260925_part001_004-mcap-archive.json",
+    "docs/experiments/sc_diversity_batch3_archives/sc_diversity_batch3_20260925_part005_008-mcap-archive.json",
+    "docs/experiments/sc_diversity_batch3_archives/sc_diversity_batch3_20260925_part009_012-mcap-archive.json",
+    "docs/experiments/sc_diversity_batch3_archives/sc_diversity_batch3_20260925_part013_016-mcap-archive.json",
+    "docs/experiments/sc_diversity_batch3_archives/sc_diversity_batch3_20260925_part017_020-mcap-archive.json",
+    "docs/experiments/sc_diversity_batch3_archives/sc_diversity_batch3_20260925_part021_024-mcap-archive.json",
+    "docs/experiments/sc_diversity_batch3_archives/sc_diversity_batch3_20260925_part025_028-mcap-archive.json",
+    "docs/experiments/sc_diversity_batch3_archives/sc_diversity_batch3_20260925_part029_032-mcap-archive.json",
+    "docs/experiments/sc_diversity_batch3_archives/sc_diversity_batch3_20260925_part033_036-mcap-archive.json",
+    "docs/experiments/sc_diversity_batch3_archives/sc_diversity_batch3_20260925_part037_040-mcap-archive.json",
+    "docs/experiments/sc_diversity_batch3_archives/sc_diversity_batch3_20260925_part041_044-mcap-archive.json",
+    "docs/experiments/sc_diversity_batch3_archives/sc_diversity_batch3_20260925_part045_048-mcap-archive.json",
+    "docs/experiments/sc_diversity_batch3_archives/sc_diversity_batch3_20260925_part049_052-mcap-archive.json",
+    "docs/experiments/sc_diversity_batch3_archives/sc_diversity_batch3_20260925_part053_056-mcap-archive.json",
+    "docs/experiments/sc_diversity_batch3_archives/sc_diversity_batch3_20260925_part057_060-mcap-archive.json"
+  ],
+  "candidate_manifest": "/var/tmp/chmin_aic_20260918_act/sc_diversity_batch3_candidates_20260925/manifest.json",
+  "admission": "docs/experiments/2026-09-25-sc-diversity-batch3-admission.json",
+  "admitted_chunks": 17796,
+  "privileged_teacher_for_training_only": true,
+  "reserved_final_opened": false
+}

@@ -1,0 +1,82 @@
+{
+  "schema": "sc_bc_admission/v1",
+  "candidate_manifest": "/var/tmp/chmin_aic_20260918_act/sc_diversity_batch1_lift_candidates_20260925/manifest.json",
+  "candidate_manifest_sha256": "962851ce551eca8944c7a55096b905341bb4aacfff3a810dd85cd1d9d069d10e",
+  "waypoint_labels": "/var/tmp/chmin_aic_20260918_act/sc_diversity_batch1_lift_candidates_20260925/physical_waypoint_chunks.jsonl",
+  "waypoint_labels_sha256": "0004c32dee57dcc415fc64bef815bf3ab98c46648a27dd47e91ceea584822ee6",
+  "verified_manifest": "outputs/trajectory_datasets/expert_verified/manifest.json",
+  "verified_manifest_sha256": "ecb6fd1398a4ef9d416b1e7e0f315df15b56c67d43402c48fb836bcef52b5199",
+  "existing_labels": [
+    {
+      "path": "/var/tmp/chmin_aic_20260918_act/sc_canonical_21_port_tcp_waypoint_chunks.jsonl",
+      "sha256": "eeb3f393b70d960d1af5f4056f80b953efdfdccbdd22f423cd85acc87d240f03"
+    },
+    {
+      "path": "/var/tmp/chmin_aic_20260918_act/sc_supplemental_candidates_v2_20260924/port_tcp_waypoint_chunks.jsonl",
+      "sha256": "76a57bd3b1c99cac86c67bec55a2d1ba58998e616680ef20985c0b07d0cbcea0"
+    },
+    {
+      "path": "/var/tmp/chmin_aic_20260918_act/sc_bc_expansion_batch1_candidates_20260924/physical_waypoint_chunks.jsonl",
+      "sha256": "9ed6b2a4e21cebe273a977d74125f8e6ee656e117a384c653776f0557bca2b3e"
+    },
+    {
+      "path": "/var/tmp/chmin_aic_20260918_act/sc_shared_dagger_secondonly_candidates_20260924/corrective_waypoint_chunks.jsonl",
+      "sha256": "4307b478b078ead04659b7912d74ce8fbed2d9bc9ad0e2c4ccdd5e864acb0e22"
+    },
+    {
+      "path": "/var/tmp/chmin_aic_20260918_act/sc_shared_early_dagger_retry_candidates_20260925/corrective_waypoint_chunks.jsonl",
+      "sha256": "49de3e82d8d9122755b8ca49ac82f40b381d416cb385e7d9ab60189fe9531bdd"
+    },
+    {
+      "path": "/var/tmp/chmin_aic_20260918_act/sc_shared_early_dagger_newbatch1_candidates_20260925/corrective_waypoint_chunks.jsonl",
+      "sha256": "86dfb913679bfb8abd10fc816d290f097bd02f46cf7560339301dca187f2bdb0"
+    },
+    {
+      "path": "/var/tmp/chmin_aic_20260918_act/sc_shared_early_dagger_newbatch2_candidates_20260925/corrective_waypoint_chunks.jsonl",
+      "sha256": "d5f34bbee5a2184b4f09b361e838cbcc0e6b85d0b66246617a15606b7d22268f"
+    },
+    {
+      "path": "/var/tmp/chmin_aic_20260918_act/sc_shared_early_dagger_newbatch3_candidates_20260925/corrective_waypoint_chunks.jsonl",
+      "sha256": "87765e40daaf22811ba3bc1b26429286cc5b50154dd9b63a51cad60d129dc240"
+    },
+    {
+      "path": "/var/tmp/chmin_aic_20260918_act/sc_diversity_batch1_candidates_20260925/physical_waypoint_chunks.jsonl",
+      "sha256": "d72403dc6ebd3aeb673d98c90875b59d32e75a78dff2f70f1eb9b5e0dc8222cb"
+    }
+  ],
+  "all_episode_splits": "train; no scene overlaps verified data",
+  "training_label_only_geometry": true,
+  "admitted_episodes": 2,
+  "admitted_chunks": 1222,
+  "episodes": [
+    {
+      "episode_index": 997004,
+      "trial_id": "trial_997004",
+      "scene_sha256": "ec41430e1e8339d74f14c797dcf8b7f47a68b233c9a73291cd548210f9712e2d",
+      "score_tier3": 75,
+      "physical_grasp_drift_mm": 0.05583302070910768,
+      "causal_chunks": 598,
+      "baseline_force_n": 20.86566758601849,
+      "force_above_baseline_plus_10_n_chunks": 0,
+      "severe_force_stall_chunks": 0,
+      "teacher_setpoint_gap_p95_mm": 52.53556436302374,
+      "teacher_setpoint_gap_max_mm": 63.03197057830904,
+      "admitted": true
+    },
+    {
+      "episode_index": 997008,
+      "trial_id": "trial_997008",
+      "scene_sha256": "ec0f1af11f653da3012ae37f547494139836882dba79a72b1c906f6387d783c8",
+      "score_tier3": 75,
+      "physical_grasp_drift_mm": 0.03170516721925197,
+      "causal_chunks": 624,
+      "baseline_force_n": 20.854809160680254,
+      "force_above_baseline_plus_10_n_chunks": 0,
+      "severe_force_stall_chunks": 0,
+      "teacher_setpoint_gap_p95_mm": 46.70884750202608,
+      "teacher_setpoint_gap_max_mm": 61.53722007722247,
+      "admitted": true
+    }
+  ],
+  "caveat": "Official success and a force/stall screen support BC admission. Large teacher setpoint lookahead is retained and must be validated by autonomous rollout; these are not recovery demonstrations."
+}

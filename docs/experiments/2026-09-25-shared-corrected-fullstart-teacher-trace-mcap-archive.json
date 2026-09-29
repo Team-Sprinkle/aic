@@ -1,0 +1,13 @@
+{
+  "schema": "sc_scored_mcap_archive/v1",
+  "verified_before_source_removal": true,
+  "files": [
+    {
+      "original_path": "/var/tmp/chmin_aic_20260918_act/shared_corrected_fullstart_teacher_trace_20260925/eval_collection/collection_config/attempt_0001/bag_trial_995001_20260925_054002_204/bag_trial_995001_20260925_054002_204_0.mcap",
+      "original_sha256": "471e41978fc4f972ce9357b869389e82d393e3f3e63ae5de72f43b0c1d02d2c8",
+      "compressed": "/home/nas/chmin/aic_archive_20260925/bag_trial_995001_20260925_054002_204_0.mcap.zst",
+      "compressed_bytes": 105850436,
+      "restore_command": "zstd -dc '/home/nas/chmin/aic_archive_20260925/bag_trial_995001_20260925_054002_204_0.mcap.zst' > '/var/tmp/chmin_aic_20260918_act/shared_corrected_fullstart_teacher_trace_20260925/eval_collection/collection_config/attempt_0001/bag_trial_995001_20260925_054002_204/bag_trial_995001_20260925_054002_204_0.mcap'"
+    }
+  ]
+}

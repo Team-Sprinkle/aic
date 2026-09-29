@@ -1,0 +1,46 @@
+{
+  "schema": "shared_sc_fresh_start_pose_audit/v1",
+  "scene": "trial_995001",
+  "scope": "posthoc teacher-first-frame scored TF only; no privileged geometry in actor inference",
+  "teacher_frames": "/var/tmp/chmin_aic_20260918_act/shared_bc_fresh_teacher_reference_20260925/episodes/episode_0001_1790295839287144436/frames.jsonl",
+  "scored_edges": "/var/tmp/chmin_aic_20260918_act/shared_bc_fresh_teacher_reference_20260925/first_teacher_edges_995001.json",
+  "opening_calibration": "configs/hierarchical_recovery/sc_port_opening_gazebo_tf_251.json",
+  "true_tcp_in_selected_opening_xyz_m": [
+    0.21783807,
+    -0.05270938,
+    -0.28809287
+  ],
+  "checkpoints": [
+    {
+      "name": "startaware",
+      "path": "/var/tmp/chmin_aic_20260918_act/shared_port_tcp_bc_startaware_20260924/best.pt",
+      "predicted_tcp_in_opening_xyz_m": [
+        0.2208938,
+        -0.05317136,
+        -0.287211
+      ],
+      "position_error_mm": 3.21
+    },
+    {
+      "name": "initial_gate",
+      "path": "/var/tmp/chmin_aic_20260918_act/shared_port_tcp_bc_initial_gate_20260925/best.pt",
+      "predicted_tcp_in_opening_xyz_m": [
+        0.20577678,
+        -0.05259649,
+        -0.28097698
+      ],
+      "position_error_mm": 14.0
+    },
+    {
+      "name": "initial_low_lr",
+      "path": "/var/tmp/chmin_aic_20260918_act/shared_port_tcp_bc_initial_low_lr_20260925/best.pt",
+      "predicted_tcp_in_opening_xyz_m": [
+        0.22398086,
+        -0.05712923,
+        -0.2911555
+      ],
+      "position_error_mm": 8.16
+    }
+  ],
+  "interpretation": "The startup action loss changed the separately output pose head; teacher-state complete action error may improve while port/TCP prediction worsens. Correlation does not by itself establish the autonomous failure cause."
+}

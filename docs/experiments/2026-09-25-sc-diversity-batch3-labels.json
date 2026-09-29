@@ -1,0 +1,306 @@
+{
+  "schema": "aic_sc_connector_waypoint_labels/v1",
+  "labels": "/var/tmp/chmin_aic_20260918_act/sc_diversity_batch3_candidates_20260925/physical_waypoint_chunks.jsonl",
+  "training_label_only": true,
+  "port_edges": "/var/tmp/chmin_aic_20260918_act/sc_diversity_batch3_candidates_20260925/port_edges.json",
+  "tcp_tip_calibration": "configs/hierarchical_recovery/sc_tcp_tip_gazebo_tf_251.json",
+  "episode_tip_calibrations": "/var/tmp/chmin_aic_20260918_act/sc_diversity_batch3_candidates_20260925/physical_grasp_calibrations.json",
+  "port_opening_calibration": "configs/hierarchical_recovery/sc_port_opening_gazebo_tf_251.json",
+  "pose_quaternion_order": "xyzw",
+  "timing": {
+    "resample_mode": "causal_hold",
+    "step_s": 0.05,
+    "tolerance_s": 0.01,
+    "max_hold_s": 0.15,
+    "first_target_semantics": "teacher command recorded with anchor image; target held until next recorded command when resampling"
+  },
+  "counts_by_split": {
+    "train": 17796
+  },
+  "episodes": 31,
+  "train_scene_groups": 31,
+  "validation_scene_groups": 0,
+  "max_tcp_target_roundtrip_m": 2.833924464077117e-16,
+  "max_tcp_target_roundtrip_deg": 1.026491562744746e-14,
+  "episode_reports": [
+    {
+      "episode_index": 999101,
+      "scene_sha256": "7ce5d024d130536567d9e6b1b93bdb9e706cef54cb7e6d5946e17c9d5b46b85a",
+      "split": "train",
+      "frames": 526,
+      "valid_chunks": 517,
+      "invalid_timing_chunks": 6,
+      "missing_image_chunks": 0
+    },
+    {
+      "episode_index": 999105,
+      "scene_sha256": "2c7015ff98b07e93e465dc0f240335da615210e84f3538c94eb1310e1760414e",
+      "split": "train",
+      "frames": 596,
+      "valid_chunks": 587,
+      "invalid_timing_chunks": 6,
+      "missing_image_chunks": 0
+    },
+    {
+      "episode_index": 999106,
+      "scene_sha256": "34bbaa4828007e65e53730dc02e4bce843591c602bfde1bbab8f420e55cb8151",
+      "split": "train",
+      "frames": 593,
+      "valid_chunks": 584,
+      "invalid_timing_chunks": 6,
+      "missing_image_chunks": 0
+    },
+    {
+      "episode_index": 999108,
+      "scene_sha256": "03f1d506d2103d798ccfb4a5358ca94989fe3032ebf293758a3cac8ac2118d1f",
+      "split": "train",
+      "frames": 699,
+      "valid_chunks": 689,
+      "invalid_timing_chunks": 7,
+      "missing_image_chunks": 0
+    },
+    {
+      "episode_index": 999109,
+      "scene_sha256": "8ee511f7a64de012ecf6340ad59de791a7347e25b04c7acbb9124040eba38a39",
+      "split": "train",
+      "frames": 682,
+      "valid_chunks": 675,
+      "invalid_timing_chunks": 4,
+      "missing_image_chunks": 0
+    },
+    {
+      "episode_index": 999112,
+      "scene_sha256": "bdb4cbdbf7955c66d4d07c8ac834ff999a1e87dd411c90cbbfeef737eac4db1c",
+      "split": "train",
+      "frames": 434,
+      "valid_chunks": 417,
+      "invalid_timing_chunks": 14,
+      "missing_image_chunks": 0
+    },
+    {
+      "episode_index": 999113,
+      "scene_sha256": "4079f0a47ee7a83cebe40c3c9a441d83c43f0997faae7e492f21e1a4f5fbd789",
+      "split": "train",
+      "frames": 1101,
+      "valid_chunks": 1078,
+      "invalid_timing_chunks": 20,
+      "missing_image_chunks": 0
+    },
+    {
+      "episode_index": 999116,
+      "scene_sha256": "7b312b4080b797b98a475aa6af31cfc40bbd05cd3896cbc4ffab1ea67d420980",
+      "split": "train",
+      "frames": 483,
+      "valid_chunks": 474,
+      "invalid_timing_chunks": 6,
+      "missing_image_chunks": 0
+    },
+    {
+      "episode_index": 999117,
+      "scene_sha256": "a8a883c8d89bd28373d68bc3a856b29e3ae58684e375c352f7cd156a206c90dd",
+      "split": "train",
+      "frames": 523,
+      "valid_chunks": 515,
+      "invalid_timing_chunks": 5,
+      "missing_image_chunks": 0
+    },
+    {
+      "episode_index": 999120,
+      "scene_sha256": "70f134d42f47d4d3b1d66129a01041f33a0572cac9151883ee434b5350611a77",
+      "split": "train",
+      "frames": 464,
+      "valid_chunks": 452,
+      "invalid_timing_chunks": 9,
+      "missing_image_chunks": 0
+    },
+    {
+      "episode_index": 999122,
+      "scene_sha256": "b8ef7f4bc57b6afffea41784f258cdeb224049b20e7742b3a9420550dfa4cb75",
+      "split": "train",
+      "frames": 455,
+      "valid_chunks": 449,
+      "invalid_timing_chunks": 3,
+      "missing_image_chunks": 0
+    },
+    {
+      "episode_index": 999125,
+      "scene_sha256": "5681ce065f6cd3f13fc08284415f660242920453946412d2b1c114d6988e6b05",
+      "split": "train",
+      "frames": 473,
+      "valid_chunks": 464,
+      "invalid_timing_chunks": 6,
+      "missing_image_chunks": 0
+    },
+    {
+      "episode_index": 999127,
+      "scene_sha256": "5159dc9675d51b323e2ac71df6c889c21e6d61d209f12e91c4c4fb066ffddfae",
+      "split": "train",
+      "frames": 744,
+      "valid_chunks": 739,
+      "invalid_timing_chunks": 2,
+      "missing_image_chunks": 0
+    },
+    {
+      "episode_index": 999128,
+      "scene_sha256": "acea808b19c4c54d0e5c9461638bbe992e59f2258c2cb1d46962da630e50206c",
+      "split": "train",
+      "frames": 482,
+      "valid_chunks": 477,
+      "invalid_timing_chunks": 2,
+      "missing_image_chunks": 0
+    },
+    {
+      "episode_index": 999129,
+      "scene_sha256": "48c357156cdcf727932087a37e708394d2c29d2f19f2721e4569906224760500",
+      "split": "train",
+      "frames": 617,
+      "valid_chunks": 605,
+      "invalid_timing_chunks": 9,
+      "missing_image_chunks": 0
+    },
+    {
+      "episode_index": 999133,
+      "scene_sha256": "e95c41a26ac620add794e6cc29aa78d3fd11796f821f99812f4ac62aa0d7d31f",
+      "split": "train",
+      "frames": 621,
+      "valid_chunks": 610,
+      "invalid_timing_chunks": 8,
+      "missing_image_chunks": 0
+    },
+    {
+      "episode_index": 999134,
+      "scene_sha256": "09b72b35cd452a334857449c3fe1c1530773114973d089b0fd714550759e9a41",
+      "split": "train",
+      "frames": 420,
+      "valid_chunks": 413,
+      "invalid_timing_chunks": 4,
+      "missing_image_chunks": 0
+    },
+    {
+      "episode_index": 999135,
+      "scene_sha256": "93d1153a45f9726cecbec0bb8cec9f80e041d26090386a4e26fac1b97743e621",
+      "split": "train",
+      "frames": 769,
+      "valid_chunks": 758,
+      "invalid_timing_chunks": 8,
+      "missing_image_chunks": 0
+    },
+    {
+      "episode_index": 999136,
+      "scene_sha256": "7446b2c2e914751d6c5c90720611647d049aaf422878dfb50ccaa07f61b63650",
+      "split": "train",
+      "frames": 602,
+      "valid_chunks": 591,
+      "invalid_timing_chunks": 8,
+      "missing_image_chunks": 0
+    },
+    {
+      "episode_index": 999137,
+      "scene_sha256": "38022c4ac211c53344858f3f0a3caf23989ca86a1dd93c1f21a16085edfb3d73",
+      "split": "train",
+      "frames": 620,
+      "valid_chunks": 607,
+      "invalid_timing_chunks": 10,
+      "missing_image_chunks": 0
+    },
+    {
+      "episode_index": 999138,
+      "scene_sha256": "d5e87fc2d95f61094484c390288c21e836b3501f54c528e4308d1dc9c7d149f5",
+      "split": "train",
+      "frames": 767,
+      "valid_chunks": 759,
+      "invalid_timing_chunks": 5,
+      "missing_image_chunks": 0
+    },
+    {
+      "episode_index": 999140,
+      "scene_sha256": "720d63c7543e7e9e5a2a4bf1f10d661d001d97562553590832be9dadc71093b7",
+      "split": "train",
+      "frames": 431,
+      "valid_chunks": 426,
+      "invalid_timing_chunks": 2,
+      "missing_image_chunks": 0
+    },
+    {
+      "episode_index": 999141,
+      "scene_sha256": "1ea1ce458af9b10544714886322805db39894905ae1aebb47246427bce2a27b2",
+      "split": "train",
+      "frames": 609,
+      "valid_chunks": 597,
+      "invalid_timing_chunks": 9,
+      "missing_image_chunks": 0
+    },
+    {
+      "episode_index": 999145,
+      "scene_sha256": "cbbf47a6dcae652295f0497b45a83425fa0e0917c771f318afe05105c5a6c961",
+      "split": "train",
+      "frames": 477,
+      "valid_chunks": 463,
+      "invalid_timing_chunks": 11,
+      "missing_image_chunks": 0
+    },
+    {
+      "episode_index": 999146,
+      "scene_sha256": "7c19c48684ddc828922fa9940659fad9285fbf8812fb67896d293f1c62b8a11e",
+      "split": "train",
+      "frames": 514,
+      "valid_chunks": 507,
+      "invalid_timing_chunks": 4,
+      "missing_image_chunks": 0
+    },
+    {
+      "episode_index": 999148,
+      "scene_sha256": "38392f56faf06d37127182df7716fd73ede8e02d96cddda1e479a9755f5a9197",
+      "split": "train",
+      "frames": 573,
+      "valid_chunks": 566,
+      "invalid_timing_chunks": 4,
+      "missing_image_chunks": 0
+    },
+    {
+      "episode_index": 999149,
+      "scene_sha256": "7a44837d244dcefe9a0fe428051265e512e7091e091aaf402b558f2181128c62",
+      "split": "train",
+      "frames": 513,
+      "valid_chunks": 504,
+      "invalid_timing_chunks": 6,
+      "missing_image_chunks": 0
+    },
+    {
+      "episode_index": 999153,
+      "scene_sha256": "dc85ea0d8811fc79c26ced9c7d3df6d81e53263ae6b8a219b1ea316b94362d99",
+      "split": "train",
+      "frames": 432,
+      "valid_chunks": 428,
+      "invalid_timing_chunks": 1,
+      "missing_image_chunks": 0
+    },
+    {
+      "episode_index": 999154,
+      "scene_sha256": "44e75dfee9d94816a933636573db48c3df41e98312616a1fe7d4a348d0412bbc",
+      "split": "train",
+      "frames": 851,
+      "valid_chunks": 822,
+      "invalid_timing_chunks": 26,
+      "missing_image_chunks": 0
+    },
+    {
+      "episode_index": 999156,
+      "scene_sha256": "c25c387057bfd8893fd237b8ddf8f503230c2d38121dc30492cb670ffb77ce15",
+      "split": "train",
+      "frames": 617,
+      "valid_chunks": 606,
+      "invalid_timing_chunks": 8,
+      "missing_image_chunks": 0
+    },
+    {
+      "episode_index": 999160,
+      "scene_sha256": "624cdb93a3aa138b156904c2f072c106b2e55fefcca1277b888afc6f32f977b6",
+      "split": "train",
+      "frames": 421,
+      "valid_chunks": 417,
+      "invalid_timing_chunks": 1,
+      "missing_image_chunks": 0
+    }
+  ]
+}

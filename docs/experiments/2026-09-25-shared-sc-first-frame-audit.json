@@ -1,0 +1,606 @@
+{
+  "schema": "shared_sc_first_frame_audit/v1",
+  "checkpoint": "/var/tmp/chmin_aic_20260918_act/shared_port_tcp_bc_startaware_20260924/best.pt",
+  "rows": [
+    {
+      "source": "/var/tmp/chmin_aic_20260918_act/sc_canonical_21_port_tcp_waypoint_chunks.jsonl",
+      "episode": 251,
+      "split": "train",
+      "frame": 0,
+      "predicted_base_delta_mm": [
+        0.019603884236107927,
+        1.5564009573886262,
+        2.151724615943096
+      ],
+      "teacher_port_delta_mm": [
+        -0.022313777181842687,
+        -0.01695874940502856,
+        -0.043511792973627283
+      ],
+      "predicted_delta_norm_mm": 2.6556895668155263,
+      "teacher_delta_norm_mm": 0.05175693152886172
+    },
+    {
+      "source": "/var/tmp/chmin_aic_20260918_act/sc_canonical_21_port_tcp_waypoint_chunks.jsonl",
+      "episode": 252,
+      "split": "train",
+      "frame": 0,
+      "predicted_base_delta_mm": [
+        0.3998313944626464,
+        0.1779403957846981,
+        2.0890221930930375
+      ],
+      "teacher_port_delta_mm": [
+        -4.8771360283694776e-06,
+        -2.4609515814066896e-08,
+        2.036926460835531e-06
+      ],
+      "predicted_delta_norm_mm": 2.1343714886788576,
+      "teacher_delta_norm_mm": 5.285464111536486e-06
+    },
+    {
+      "source": "/var/tmp/chmin_aic_20260918_act/sc_canonical_21_port_tcp_waypoint_chunks.jsonl",
+      "episode": 253,
+      "split": "validation",
+      "frame": 0,
+      "predicted_base_delta_mm": [
+        0.6038139766055273,
+        0.2631430721525274,
+        4.2091456341076805
+      ],
+      "teacher_port_delta_mm": [
+        9.643344495158246e-05,
+        0.0007030297117446849,
+        -0.0013395310579089603
+      ],
+      "predicted_delta_norm_mm": 4.260368829560863,
+      "teacher_delta_norm_mm": 0.0015158804834167312
+    },
+    {
+      "source": "/var/tmp/chmin_aic_20260918_act/sc_canonical_21_port_tcp_waypoint_chunks.jsonl",
+      "episode": 254,
+      "split": "validation",
+      "frame": 0,
+      "predicted_base_delta_mm": [
+        0.10147867018572843,
+        2.0740832801157962,
+        2.4711378284725805
+      ],
+      "teacher_port_delta_mm": [
+        -0.013108990233184903,
+        -0.010360782340769481,
+        -0.0268682979494006
+      ],
+      "predicted_delta_norm_mm": 3.227792053504492,
+      "teacher_delta_norm_mm": 0.03164011489145231
+    },
+    {
+      "source": "/var/tmp/chmin_aic_20260918_act/sc_canonical_21_port_tcp_waypoint_chunks.jsonl",
+      "episode": 255,
+      "split": "train",
+      "frame": 0,
+      "predicted_base_delta_mm": [
+        0.5648162332166917,
+        0.23020518777494559,
+        2.507263081186928
+      ],
+      "teacher_port_delta_mm": [
+        -0.003766737544180776,
+        0.0016041196418611903,
+        -0.02481037327956015
+      ],
+      "predicted_delta_norm_mm": 2.5803836854364426,
+      "teacher_delta_norm_mm": 0.025145896958017985
+    },
+    {
+      "source": "/var/tmp/chmin_aic_20260918_act/sc_canonical_21_port_tcp_waypoint_chunks.jsonl",
+      "episode": 256,
+      "split": "validation",
+      "frame": 0,
+      "predicted_base_delta_mm": [
+        0.1964398621482344,
+        0.7205036821482103,
+        1.9349088898302225
+      ],
+      "teacher_port_delta_mm": [
+        0.0027897283654820804,
+        0.001958382103726952,
+        -0.003980426562133488
+      ],
+      "predicted_delta_norm_mm": 2.0740266602370303,
+      "teacher_delta_norm_mm": 0.005240385523404851
+    },
+    {
+      "source": "/var/tmp/chmin_aic_20260918_act/sc_canonical_21_port_tcp_waypoint_chunks.jsonl",
+      "episode": 257,
+      "split": "train",
+      "frame": 0,
+      "predicted_base_delta_mm": [
+        0.205729605772087,
+        -0.12242891641986442,
+        5.002278674616001
+      ],
+      "teacher_port_delta_mm": [
+        -0.00030079130808324805,
+        0.0016803671861881364,
+        -0.0021921913008760008
+      ],
+      "predicted_delta_norm_mm": 5.0080041382555684,
+      "teacher_delta_norm_mm": 0.002778454964737179
+    },
+    {
+      "source": "/var/tmp/chmin_aic_20260918_act/sc_canonical_21_port_tcp_waypoint_chunks.jsonl",
+      "episode": 258,
+      "split": "train",
+      "frame": 0,
+      "predicted_base_delta_mm": [
+        0.43534554922414204,
+        0.4906008845978471,
+        3.693692606492993
+      ],
+      "teacher_port_delta_mm": [
+        -1.5132272795925772e-05,
+        -7.37464995528847e-05,
+        4.570557476935022e-05
+      ],
+      "predicted_delta_norm_mm": 3.751477048638104,
+      "teacher_delta_norm_mm": 8.807117258939273e-05
+    },
+    {
+      "source": "/var/tmp/chmin_aic_20260918_act/sc_canonical_21_port_tcp_waypoint_chunks.jsonl",
+      "episode": 259,
+      "split": "train",
+      "frame": 0,
+      "predicted_base_delta_mm": [
+        0.006262540284129869,
+        0.16721996072896483,
+        4.349580223727056
+      ],
+      "teacher_port_delta_mm": [
+        0.0025511720462556564,
+        0.001631407116522987,
+        0.00452365621989026
+      ],
+      "predicted_delta_norm_mm": 4.352797934353777,
+      "teacher_delta_norm_mm": 0.005443659943933856
+    },
+    {
+      "source": "/var/tmp/chmin_aic_20260918_act/sc_canonical_21_port_tcp_waypoint_chunks.jsonl",
+      "episode": 277,
+      "split": "train",
+      "frame": 0,
+      "predicted_base_delta_mm": [
+        0.057806374216540224,
+        -0.05083754105297822,
+        5.183494229413554
+      ],
+      "teacher_port_delta_mm": [
+        0.0008467889731078593,
+        0.0004995416913039508,
+        0.0015686462413455615
+      ],
+      "predicted_delta_norm_mm": 5.184065823158884,
+      "teacher_delta_norm_mm": 0.001851281852343244
+    },
+    {
+      "source": "/var/tmp/chmin_aic_20260918_act/sc_canonical_21_port_tcp_waypoint_chunks.jsonl",
+      "episode": 278,
+      "split": "train",
+      "frame": 0,
+      "predicted_base_delta_mm": [
+        0.4586416320903064,
+        -1.4472953990034843,
+        2.816589560403482
+      ],
+      "teacher_port_delta_mm": [
+        0.01013344279995887,
+        0.005794771806857946,
+        -0.009890192331274417
+      ],
+      "predicted_delta_norm_mm": 3.199717623546958,
+      "teacher_delta_norm_mm": 0.015299736848168117
+    },
+    {
+      "source": "/var/tmp/chmin_aic_20260918_act/sc_canonical_21_port_tcp_waypoint_chunks.jsonl",
+      "episode": 279,
+      "split": "validation",
+      "frame": 0,
+      "predicted_base_delta_mm": [
+        0.3919523017686388,
+        -1.6328841108991243,
+        2.3978726128446315
+      ],
+      "teacher_port_delta_mm": [
+        0.009845231645322361,
+        0.006716138572018804,
+        -0.00762052130404145
+      ],
+      "predicted_delta_norm_mm": 2.927410151297371,
+      "teacher_delta_norm_mm": 0.014145933988746208
+    },
+    {
+      "source": "/var/tmp/chmin_aic_20260918_act/sc_canonical_21_port_tcp_waypoint_chunks.jsonl",
+      "episode": 280,
+      "split": "validation",
+      "frame": 0,
+      "predicted_base_delta_mm": [
+        0.29551301706742805,
+        0.9258837127796293,
+        4.403158413868735
+      ],
+      "teacher_port_delta_mm": [
+        3.6627318955595456e-06,
+        7.929844357545957e-06,
+        -1.3789777819628313e-05
+      ],
+      "predicted_delta_norm_mm": 4.509145441263779,
+      "teacher_delta_norm_mm": 1.632348029031694e-05
+    },
+    {
+      "source": "/var/tmp/chmin_aic_20260918_act/sc_canonical_21_port_tcp_waypoint_chunks.jsonl",
+      "episode": 281,
+      "split": "train",
+      "frame": 0,
+      "predicted_base_delta_mm": [
+        0.8148712848867201,
+        -1.225265902682099,
+        2.715521432104906
+      ],
+      "teacher_port_delta_mm": [
+        -5.997535801327558e-08,
+        7.502130382197603e-06,
+        -7.663119638845473e-06
+      ],
+      "predicted_delta_norm_mm": 3.0885835574627722,
+      "teacher_delta_norm_mm": 1.0724223044786058e-05
+    },
+    {
+      "source": "/var/tmp/chmin_aic_20260918_act/sc_canonical_21_port_tcp_waypoint_chunks.jsonl",
+      "episode": 282,
+      "split": "train",
+      "frame": 0,
+      "predicted_base_delta_mm": [
+        1.6884756611594276,
+        -3.237897549668578,
+        4.279801953495143
+      ],
+      "teacher_port_delta_mm": [
+        -0.0012155522057799573,
+        -0.0007943545916946904,
+        0.0011471561954801146
+      ],
+      "predicted_delta_norm_mm": 5.6259786136829915,
+      "teacher_delta_norm_mm": 0.0018505495721950734
+    },
+    {
+      "source": "/var/tmp/chmin_aic_20260918_act/sc_canonical_21_port_tcp_waypoint_chunks.jsonl",
+      "episode": 283,
+      "split": "validation",
+      "frame": 0,
+      "predicted_base_delta_mm": [
+        0.6107646523630939,
+        -0.27506742433605624,
+        2.168904591835441
+      ],
+      "teacher_port_delta_mm": [
+        0.0005461995226385685,
+        0.00039704746564867,
+        -0.00082175679261276
+      ],
+      "predicted_delta_norm_mm": 2.2699873737516567,
+      "teacher_delta_norm_mm": 0.001063609343092586
+    },
+    {
+      "source": "/var/tmp/chmin_aic_20260918_act/sc_canonical_21_port_tcp_waypoint_chunks.jsonl",
+      "episode": 284,
+      "split": "train",
+      "frame": 0,
+      "predicted_base_delta_mm": [
+        0.5604705080864969,
+        -0.9491503095646336,
+        1.5252406684568842
+      ],
+      "teacher_port_delta_mm": [
+        0.0036849426549301345,
+        0.002728619118118336,
+        -0.0032444629133321357
+      ],
+      "predicted_delta_norm_mm": 1.8818535004872665,
+      "teacher_delta_norm_mm": 0.005617001358186776
+    },
+    {
+      "source": "/var/tmp/chmin_aic_20260918_act/sc_canonical_21_port_tcp_waypoint_chunks.jsonl",
+      "episode": 285,
+      "split": "validation",
+      "frame": 0,
+      "predicted_base_delta_mm": [
+        0.780752197395651,
+        -1.2749297177487573,
+        2.1858513436255333
+      ],
+      "teacher_port_delta_mm": [
+        0.004194019327719012,
+        0.0024166106279630006,
+        -0.0041022934462175975
+      ],
+      "predicted_delta_norm_mm": 2.6482004975769136,
+      "teacher_delta_norm_mm": 0.006344967814523901
+    },
+    {
+      "source": "/var/tmp/chmin_aic_20260918_act/sc_canonical_21_port_tcp_waypoint_chunks.jsonl",
+      "episode": 286,
+      "split": "train",
+      "frame": 0,
+      "predicted_base_delta_mm": [
+        0.8621375240782103,
+        -1.0301107784303487,
+        2.253340300772011
+      ],
+      "teacher_port_delta_mm": [
+        0.004431101339602561,
+        0.0031072949490326685,
+        -0.003751458861223078
+      ],
+      "predicted_delta_norm_mm": 2.6233474488419146,
+      "teacher_delta_norm_mm": 0.006585088045695418
+    },
+    {
+      "source": "/var/tmp/chmin_aic_20260918_act/sc_canonical_21_port_tcp_waypoint_chunks.jsonl",
+      "episode": 287,
+      "split": "train",
+      "frame": 0,
+      "predicted_base_delta_mm": [
+        0.9579902060722345,
+        -1.4147612559862188,
+        2.5763106866382723
+      ],
+      "teacher_port_delta_mm": [
+        0.002965120856956993,
+        0.0017477928450290725,
+        -0.002926465298425107
+      ],
+      "predicted_delta_norm_mm": 3.09138664687169,
+      "teacher_delta_norm_mm": 0.004517844692813438
+    },
+    {
+      "source": "/var/tmp/chmin_aic_20260918_act/sc_canonical_21_port_tcp_waypoint_chunks.jsonl",
+      "episode": 288,
+      "split": "train",
+      "frame": 0,
+      "predicted_base_delta_mm": [
+        0.7457573257629302,
+        -0.9829101204431034,
+        2.422207968296397
+      ],
+      "teacher_port_delta_mm": [
+        0.011477401961862421,
+        0.008120004169075157,
+        -0.009495820235683183
+      ],
+      "predicted_delta_norm_mm": 2.7183373108348996,
+      "teacher_delta_norm_mm": 0.016965725019826634
+    },
+    {
+      "source": "/var/tmp/chmin_aic_20260918_act/sc_supplemental_candidates_v2_20260924/port_tcp_waypoint_chunks.jsonl",
+      "episode": 960001,
+      "split": "train",
+      "frame": 0,
+      "predicted_base_delta_mm": [
+        1.225669995302936,
+        -2.871227563350953,
+        3.7990889405866146
+      ],
+      "teacher_port_delta_mm": [
+        0.005057142585557228,
+        0.0055009618703666385,
+        0.007095252360589388
+      ],
+      "predicted_delta_norm_mm": 4.917244292936815,
+      "teacher_delta_norm_mm": 0.010304265072790652
+    },
+    {
+      "source": "/var/tmp/chmin_aic_20260918_act/sc_supplemental_candidates_v2_20260924/port_tcp_waypoint_chunks.jsonl",
+      "episode": 960002,
+      "split": "train",
+      "frame": 0,
+      "predicted_base_delta_mm": [
+        0.32580729236691974,
+        0.3722300181605853,
+        -5.912440876878922
+      ],
+      "teacher_port_delta_mm": [
+        0.0015654075243842769,
+        0.0008149294012660402,
+        -0.0010107838834261251
+      ],
+      "predicted_delta_norm_mm": 5.933098912100496,
+      "teacher_delta_norm_mm": 0.0020337882646531166
+    },
+    {
+      "source": "/var/tmp/chmin_aic_20260918_act/sc_supplemental_candidates_v2_20260924/port_tcp_waypoint_chunks.jsonl",
+      "episode": 960003,
+      "split": "train",
+      "frame": 0,
+      "predicted_base_delta_mm": [
+        0.17175612426928444,
+        0.34120314799235274,
+        -7.253167530593352
+      ],
+      "teacher_port_delta_mm": [
+        0.002659701022256211,
+        0.0011476554230838154,
+        -0.006311120934410219
+      ],
+      "predicted_delta_norm_mm": 7.263219601614532,
+      "teacher_delta_norm_mm": 0.006944160852592294
+    },
+    {
+      "source": "/var/tmp/chmin_aic_20260918_act/sc_supplemental_candidates_v2_20260924/port_tcp_waypoint_chunks.jsonl",
+      "episode": 960004,
+      "split": "train",
+      "frame": 0,
+      "predicted_base_delta_mm": [
+        0.201489199864624,
+        -1.348430371378273,
+        1.3417877630578778
+      ],
+      "teacher_port_delta_mm": [
+        -0.0018688494864971261,
+        -0.001347858239283961,
+        0.0018786070053455894
+      ],
+      "predicted_delta_norm_mm": 1.9129183895841708,
+      "teacher_delta_norm_mm": 0.0029729588824805087
+    },
+    {
+      "source": "/var/tmp/chmin_aic_20260918_act/sc_supplemental_candidates_v2_20260924/port_tcp_waypoint_chunks.jsonl",
+      "episode": 960007,
+      "split": "train",
+      "frame": 0,
+      "predicted_base_delta_mm": [
+        0.8599419613222192,
+        -0.976963278318782,
+        0.35109280354128636
+      ],
+      "teacher_port_delta_mm": [
+        -0.01636405568611332,
+        -0.011728187202228457,
+        -0.024281345284371536
+      ],
+      "predicted_delta_norm_mm": 1.3480443541384561,
+      "teacher_delta_norm_mm": 0.031542295768818174
+    },
+    {
+      "source": "/var/tmp/chmin_aic_20260918_act/sc_supplemental_candidates_v2_20260924/port_tcp_waypoint_chunks.jsonl",
+      "episode": 960015,
+      "split": "train",
+      "frame": 0,
+      "predicted_base_delta_mm": [
+        0.14964314195720085,
+        0.45758196930487105,
+        1.0011725376622982
+      ],
+      "teacher_port_delta_mm": [
+        -0.001402883743700789,
+        -0.0008977904763368683,
+        0.0013788114647805827
+      ],
+      "predicted_delta_norm_mm": 1.1109098877662908,
+      "teacher_delta_norm_mm": 0.0021622283859831963
+    },
+    {
+      "source": "/var/tmp/chmin_aic_20260918_act/sc_supplemental_candidates_v2_20260924/port_tcp_waypoint_chunks.jsonl",
+      "episode": 980011,
+      "split": "train",
+      "frame": 0,
+      "predicted_base_delta_mm": [
+        1.869336028231916,
+        -1.0436118165113584,
+        8.108945313546167
+      ],
+      "teacher_port_delta_mm": [
+        -0.038256050949481146,
+        -0.4450843283019673,
+        0.007138992918431786
+      ],
+      "predicted_delta_norm_mm": 8.386807313160972,
+      "teacher_delta_norm_mm": 0.44678244141209505
+    },
+    {
+      "source": "/var/tmp/chmin_aic_20260918_act/sc_supplemental_candidates_v2_20260924/port_tcp_waypoint_chunks.jsonl",
+      "episode": 990101,
+      "split": "train",
+      "frame": 0,
+      "predicted_base_delta_mm": [
+        1.316291169603745,
+        0.19250214079472028,
+        3.0710345732788413
+      ],
+      "teacher_port_delta_mm": [
+        0.023974372161089663,
+        -0.3391640176463179,
+        0.2329856999996882
+      ],
+      "predicted_delta_norm_mm": 3.3467794769989405,
+      "teacher_delta_norm_mm": 0.4121763430752121
+    },
+    {
+      "source": "/var/tmp/chmin_aic_20260918_act/sc_supplemental_candidates_v2_20260924/port_tcp_waypoint_chunks.jsonl",
+      "episode": 990103,
+      "split": "train",
+      "frame": 0,
+      "predicted_base_delta_mm": [
+        2.121070269071268,
+        -5.2651504738426,
+        5.243964818491431
+      ],
+      "teacher_port_delta_mm": [
+        0.010166023535707058,
+        0.007561845371333378,
+        -0.009990640254642358
+      ],
+      "predicted_delta_norm_mm": 7.727866174832409,
+      "teacher_delta_norm_mm": 0.01613513038826108
+    },
+    {
+      "source": "/var/tmp/chmin_aic_20260918_act/sc_supplemental_candidates_v2_20260924/port_tcp_waypoint_chunks.jsonl",
+      "episode": 990009,
+      "split": "train",
+      "frame": 0,
+      "predicted_base_delta_mm": [
+        1.066298185404102,
+        -0.7105414210591687,
+        -5.915668233054006
+      ],
+      "teacher_port_delta_mm": [
+        0.00043502400465245117,
+        0.0001988664966173781,
+        -0.0009497128137248012
+      ],
+      "predicted_delta_norm_mm": 6.0528498721512305,
+      "teacher_delta_norm_mm": 0.001063366445141939
+    },
+    {
+      "source": "/var/tmp/chmin_aic_20260918_act/sc_supplemental_candidates_v2_20260924/port_tcp_waypoint_chunks.jsonl",
+      "episode": 990401,
+      "split": "train",
+      "frame": 0,
+      "predicted_base_delta_mm": [
+        1.0477232814685156,
+        -2.6503942609951148,
+        3.9961124638452916
+      ],
+      "teacher_port_delta_mm": [
+        -0.11358192463478689,
+        -0.3701184677910446,
+        -0.0039856930824644365
+      ],
+      "predicted_delta_norm_mm": 4.908281637900038,
+      "teacher_delta_norm_mm": 0.38717492113136737
+    }
+  ],
+  "summary": {
+    "train": {
+      "episodes": 25,
+      "predicted_delta_norm_mm_p50_p95": [
+        3.3467794769989405,
+        7.634936860188832
+      ],
+      "teacher_delta_norm_mm_p50_p95": [
+        0.005617001358186776,
+        0.4071760586864431
+      ]
+    },
+    "validation": {
+      "episodes": 7,
+      "predicted_delta_norm_mm_p50_p95": [
+        2.927410151297371,
+        4.434512457752904
+      ],
+      "teacher_delta_norm_mm_p50_p95": [
+        0.005240385523404851,
+        0.02639186062064047
+      ]
+    }
+  }
+}

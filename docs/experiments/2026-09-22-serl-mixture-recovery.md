@@ -161,6 +161,17 @@ eight configurations, three arms, and three cameras. All clips passed an
 Open the [local review page](../../outputs/experiments/2026-09-22_serl_recovery/videos/index.html)
 or the [committed per-episode failure analysis](2026-09-23-serl-video-failure-analysis.md).
 
+Clarification for the 1/8 versus 3/8 video comparison: the controller did
+**not** sample a random left/right mode during these evaluations. It used the
+selected RL actor's deterministic full-action proposal. When its observation
+side force/stall rule entered recovery, it retraced measured positions; during
+the subsequent retry it retained the actor's lateral component and limited
+motion back toward the blocked direction. No true port position chose the
+direction, and no online expert target was generated. This selected RPDP BC
+checkpoint used **Isaac** `cheatcode_transform` target commands and safe DAgger
+teacher queries; it used no Gazebo BC rows. Per-step recovery events were not saved, so the two extra recorded
+successes cannot be assigned causally to a particular retreat or retry.
+
 These new recording-enabled outcomes do not replace the frozen metrics-only
 comparison above. BC and tight-trust RL each scored 3/8 there but 1/8 in the
 recorded rerun. Simulator/contact nondeterminism and recording overhead are

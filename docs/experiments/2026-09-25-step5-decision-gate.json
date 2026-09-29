@@ -1,0 +1,36 @@
+{
+  "schema": "step5_decision_gate/v1",
+  "date": "2026-09-25",
+  "status": "open_failed_autonomous_full_insertion",
+  "comparison": {
+    "focused_interleaved_bc_control_insertions": 0,
+    "focused_interleaved_bc_treatment_insertions": 0,
+    "scenes_per_arm": 2,
+    "control_score_total": 28.168951362467,
+    "treatment_score_total": 45.63570777237063,
+    "repeat_variability_note": "Identical control weights previously scored 43.80 on the same scene definitions; partial-score difference is not a reliable policy gain.",
+    "source": "docs/experiments/2026-09-25-shared-body-bc-window0p5s-matched-live-gate.json"
+  },
+  "frozen_cadence": {
+    "replan_insertions": 0,
+    "chunk4_insertions": 0,
+    "scenes_per_arm": 2,
+    "source": "docs/experiments/2026-09-25-step5-body-cadence-scored-diagnosis.json"
+  },
+  "bounded_diagnosis": {
+    "finding": "First sustained regression at 20-30 s was commanded outward and physically followed; no scored contact.",
+    "unresolved": "Actual RGB visibility and visual target recognition versus full-target action mapping, because scored bags lack synchronized RGB and pose-head outputs.",
+    "source": "docs/experiments/2026-09-25-step5-body-cadence-scored-diagnosis.json"
+  },
+  "decision": {
+    "routine_bc_retraining_or_data_expansion": "stop",
+    "supervisor_or_rl_started": false,
+    "final_scenes_opened": false,
+    "next_experiment": "Frozen actor synchronized observation/action trace on at most four training-only SC full starts.",
+    "budget": "At most one GPU and 90 minutes; no training or new development starts.",
+    "continue_to_targeted_repair_if": "Complete causal traces and at least three of four first sustained >=20 mm regression events support the same actionable cause.",
+    "targeted_repair_if_eligible": "One observation-only full-target action-head repair, at most 1500 updates on one GPU plus four matched autonomous development runs. Continue only if grouped SC offline metrics do not regress, p95 latency <300 ms, and treatment scores at least one full insertion without off-limit contact while control does not.",
+    "otherwise": "Stop this BC branch; if recovery is still a plausible bottleneck, propose a separately budgeted RL diagnostic exception using observable near-completion incidents."
+  },
+  "narrative_plan": "docs/experiments/2026-09-25-step5-next-steps-recommendation.md"
+}

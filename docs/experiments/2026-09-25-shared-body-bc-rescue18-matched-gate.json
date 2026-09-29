@@ -1,0 +1,179 @@
+{
+  "schema": "shared_body_target_bc_rescue18_matched_gate/v1",
+  "date": "2026-09-25",
+  "evaluation": "autonomous_gazebo_development_only",
+  "scene_ids": [
+    "trial_999001",
+    "trial_999003"
+  ],
+  "evaluation_command": "/var/tmp/chmin_aic_20260918_act/run_body_rescue18_eval.sh",
+  "training_label_audit": "docs/experiments/2026-09-25-sc-body-early-rescue-combined-labels.json",
+  "training_label_sha256": "2cef064d5e76a4260d446896f56f9b7b12c00a766d866d656e47c6c2e98b5a5c",
+  "arms": {
+    "control": {
+      "checkpoint": "/var/tmp/chmin_aic_20260918_act/shared_body_target_bc_rescue18_control_20260925/best.pt",
+      "checkpoint_sha256": "36082c65d2cc07434f5d056cef2381929172a5395abb69cf1d2525233390d67d",
+      "training_command": "/var/tmp/chmin_aic_20260918_act/shared_body_target_bc_rescue18_control_20260925/run.sh",
+      "training_summary": "/var/tmp/chmin_aic_20260918_act/shared_body_target_bc_rescue18_control_20260925/summary.json",
+      "train_episodes": 318,
+      "validation_episodes": 39,
+      "best_update": 250,
+      "completed_updates": 1500,
+      "best_selection_mm": 2.644622252583499,
+      "best_validation": {
+        "sfp": {
+          "rows": 320,
+          "first_target_mm_median": 0.9839067757129669,
+          "first_target_mm_p95": 5.928943061828625,
+          "fourth_target_mm_median": 1.430235743522644,
+          "pose_mm_median": 8.659517765045166,
+          "pose_mm_p95": 64.50187873840333,
+          "first_body_command_mm_median": 0.9839067757129669,
+          "first_body_command_mm_p95": 5.928943061828625,
+          "near_lateral_command_mm_p95": 2.7810066580772315,
+          "near_lateral_rows": 174,
+          "start_body_command_mm_p95": 1.8540642857551575,
+          "start_rows": 86,
+          "initial_body_command_mm_p95": 1.8999755144119264,
+          "initial_rows": 80
+        },
+        "sc": {
+          "rows": 320,
+          "first_target_mm_median": 0.8463413119316101,
+          "first_target_mm_p95": 2.3231617331504824,
+          "fourth_target_mm_median": 1.3367985486984253,
+          "pose_mm_median": 4.160474061965942,
+          "pose_mm_p95": 15.049256992340101,
+          "first_body_command_mm_median": 0.8463413119316101,
+          "first_body_command_mm_p95": 2.3231617331504824,
+          "near_lateral_command_mm_p95": 0.3123255610466003,
+          "near_lateral_rows": 65,
+          "start_body_command_mm_p95": 2.1913323163986203,
+          "start_rows": 80,
+          "initial_body_command_mm_p95": 1.7598782956600187,
+          "initial_rows": 70
+        }
+      },
+      "target_frame": "observed_tcp_full_teacher_target",
+      "scored_total": 43.80454189361812,
+      "trials": {
+        "trial_999001": {
+          "tier3": 15.236790845138138,
+          "message": "No insertion detected. Final plug port distance: 0.08m.",
+          "final_distance_m": 0.08,
+          "contacts_score": 0,
+          "insertion_force_score": 0
+        },
+        "trial_999003": {
+          "tier3": 7.273949199528516,
+          "message": "No insertion detected. Final plug port distance: 0.14m.",
+          "final_distance_m": 0.14,
+          "contacts_score": 0,
+          "insertion_force_score": 0
+        }
+      },
+      "autonomous_insertions": 0,
+      "inference_latency_log_snapshots": [
+        {
+          "n": 747,
+          "p50_ms": 57.97,
+          "p95_ms": 125.4,
+          "p99_ms": 150.3
+        },
+        {
+          "n": 855,
+          "p50_ms": 49.64,
+          "p95_ms": 74.91,
+          "p99_ms": 91.24
+        }
+      ],
+      "evaluation_dir": "/var/tmp/chmin_aic_20260918_act/shared_body_target_bc_rescue18_control_20260925/eval_new_dev2_replan1/best/attempt_0001",
+      "bag_archive": "docs/experiments/2026-09-25-shared-body-bc-rescue18-control-dev2-mcap-archive.json"
+    },
+    "treatment": {
+      "checkpoint": "/var/tmp/chmin_aic_20260918_act/shared_body_target_bc_rescue18_treatment_20260925/best.pt",
+      "checkpoint_sha256": "35adbb989e0fc0696d28c26b8c03224f352830307d868d363bdad7f13cae88fa",
+      "training_command": "/var/tmp/chmin_aic_20260918_act/shared_body_target_bc_rescue18_treatment_20260925/run.sh",
+      "training_summary": "/var/tmp/chmin_aic_20260918_act/shared_body_target_bc_rescue18_treatment_20260925/summary.json",
+      "train_episodes": 336,
+      "validation_episodes": 39,
+      "best_update": 250,
+      "completed_updates": 1500,
+      "best_selection_mm": 2.6327393990755046,
+      "best_validation": {
+        "sfp": {
+          "rows": 320,
+          "first_target_mm_median": 1.1638049483299255,
+          "first_target_mm_p95": 7.638184905052187,
+          "fourth_target_mm_median": 1.4552937746047974,
+          "pose_mm_median": 8.821013450622559,
+          "pose_mm_p95": 70.50387382507327,
+          "first_body_command_mm_median": 1.1638049483299255,
+          "first_body_command_mm_p95": 7.638184905052187,
+          "near_lateral_command_mm_p95": 2.674033880233758,
+          "near_lateral_rows": 174,
+          "start_body_command_mm_p95": 1.9919170439243317,
+          "start_rows": 86,
+          "initial_body_command_mm_p95": 1.9148990094661709,
+          "initial_rows": 80
+        },
+        "sc": {
+          "rows": 320,
+          "first_target_mm_median": 0.9010168313980103,
+          "first_target_mm_p95": 2.6365466117858887,
+          "fourth_target_mm_median": 1.6502248644828796,
+          "pose_mm_median": 5.042654275894165,
+          "pose_mm_p95": 17.292609024047856,
+          "first_body_command_mm_median": 0.9010168313980103,
+          "first_body_command_mm_p95": 2.6365466117858887,
+          "near_lateral_command_mm_p95": 0.31710004806518555,
+          "near_lateral_rows": 65,
+          "start_body_command_mm_p95": 2.6366316437721253,
+          "start_rows": 80,
+          "initial_body_command_mm_p95": 1.8756757736206053,
+          "initial_rows": 70
+        }
+      },
+      "target_frame": "observed_tcp_full_teacher_target",
+      "scored_total": 41.496566007328745,
+      "trials": {
+        "trial_999001": {
+          "tier3": 15.82045045426954,
+          "message": "No insertion detected. Final plug port distance: 0.08m.",
+          "final_distance_m": 0.08,
+          "contacts_score": 0,
+          "insertion_force_score": 0
+        },
+        "trial_999003": {
+          "tier3": 7.493596097797034,
+          "message": "No insertion detected. Final plug port distance: 0.14m.",
+          "final_distance_m": 0.14,
+          "contacts_score": 0,
+          "insertion_force_score": 0
+        }
+      },
+      "autonomous_insertions": 0,
+      "inference_latency_log_snapshots": [
+        {
+          "n": 692,
+          "p50_ms": 69.08,
+          "p95_ms": 119.9,
+          "p99_ms": 156.68
+        },
+        {
+          "n": 829,
+          "p50_ms": 53.57,
+          "p95_ms": 77.59,
+          "p99_ms": 94.86
+        }
+      ],
+      "evaluation_dir": "/var/tmp/chmin_aic_20260918_act/shared_body_target_bc_rescue18_treatment_20260925/eval_new_dev2_replan1/best/attempt_0001",
+      "bag_archive": "docs/experiments/2026-09-25-shared-body-bc-rescue18-treatment-dev2-mcap-archive.json"
+    }
+  },
+  "reserved_final_opened": false,
+  "rl_started": false,
+  "supervisor_used": false,
+  "promoted": false,
+  "delta_treatment_minus_control_total": -2.307975886289377
+}

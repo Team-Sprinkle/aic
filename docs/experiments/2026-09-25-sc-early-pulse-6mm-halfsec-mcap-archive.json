@@ -1,0 +1,13 @@
+{
+  "schema": "sc_scored_mcap_archive/v1",
+  "verified_before_source_removal": true,
+  "files": [
+    {
+      "original_path": "/var/tmp/chmin_aic_20260918_act/sc_early_pulse_6mm_halfsec_training_probe_20260925/eval_collection/collection_config/attempt_0001/bag_trial_990501_20260925_014129_567/bag_trial_990501_20260925_014129_567_0.mcap",
+      "original_sha256": "603ce6323ab0195a41a001375ebf82c7f5d8ff37305696c4db08743d08aa829a",
+      "compressed": "/home/nas/chmin/aic_archive_20260925/sc_early_pulse_6mm_halfsec_training_probe_20260925/bag_trial_990501_20260925_014129_567_0.mcap.zst",
+      "compressed_bytes": 88495163,
+      "restore_command": "zstd -dc '/home/nas/chmin/aic_archive_20260925/sc_early_pulse_6mm_halfsec_training_probe_20260925/bag_trial_990501_20260925_014129_567_0.mcap.zst' > '/var/tmp/chmin_aic_20260918_act/sc_early_pulse_6mm_halfsec_training_probe_20260925/eval_collection/collection_config/attempt_0001/bag_trial_990501_20260925_014129_567/bag_trial_990501_20260925_014129_567_0.mcap'"
+    }
+  ]
+}

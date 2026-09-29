@@ -1,0 +1,33 @@
+{
+  "schema": "shared_body_target_bc_batch3_gate/v1",
+  "date": "2026-09-25",
+  "checkpoint": "/var/tmp/chmin_aic_20260918_act/shared_body_target_bc_batch3_20260925/best.pt",
+  "checkpoint_sha256": "3d82c32a10da52a3ca31955137fe63005baeced804f15b8e4c30295a2d299d88",
+  "run_command": "/var/tmp/chmin_aic_20260918_act/shared_body_target_bc_batch3_20260925/run.sh",
+  "training_summary": "/var/tmp/chmin_aic_20260918_act/shared_body_target_bc_batch3_20260925/summary.json",
+  "train_episodes": 318,
+  "validation_episodes": 39,
+  "best_update": 3750,
+  "completed_updates": 4000,
+  "best_selection_mm": 2.8169152921438183,
+  "target_frame": "observed_tcp_full_teacher_target",
+  "pose_conditioning": false,
+  "rgb_state_task_only": true,
+  "evaluation": "development_only",
+  "eval_dir": "/var/tmp/chmin_aic_20260918_act/shared_body_target_bc_batch3_20260925/eval_new_dev2_replan1_retry1/best/attempt_0001",
+  "bag_archive": "docs/experiments/2026-09-25-shared-body-bc-batch3-dev2-mcap-archive.json",
+  "trial_999001": {
+    "tier3": 22.088366144663656,
+    "final_distance_m": 0.04,
+    "contact_score": 0
+  },
+  "trial_999003": {
+    "tier3": 8.509974486200973,
+    "final_distance_m": 0.14,
+    "contact_score": 0
+  },
+  "full_insertions": 0,
+  "rl_started": false,
+  "reserved_final_opened": false,
+  "promoted": false
+}

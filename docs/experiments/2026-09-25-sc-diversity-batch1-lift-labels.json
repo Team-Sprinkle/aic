@@ -1,0 +1,45 @@
+{
+  "schema": "aic_sc_connector_waypoint_labels/v1",
+  "labels": "/var/tmp/chmin_aic_20260918_act/sc_diversity_batch1_lift_candidates_20260925/physical_waypoint_chunks.jsonl",
+  "training_label_only": true,
+  "port_edges": "/var/tmp/chmin_aic_20260918_act/sc_diversity_batch1_lift_candidates_20260925/port_edges.json",
+  "tcp_tip_calibration": "configs/hierarchical_recovery/sc_tcp_tip_gazebo_tf_251.json",
+  "episode_tip_calibrations": "/var/tmp/chmin_aic_20260918_act/sc_diversity_batch1_lift_candidates_20260925/physical_grasp_calibrations.json",
+  "port_opening_calibration": "configs/hierarchical_recovery/sc_port_opening_gazebo_tf_251.json",
+  "pose_quaternion_order": "xyzw",
+  "timing": {
+    "resample_mode": "causal_hold",
+    "step_s": 0.05,
+    "tolerance_s": 0.01,
+    "max_hold_s": 0.15,
+    "first_target_semantics": "teacher command recorded with anchor image; target held until next recorded command when resampling"
+  },
+  "counts_by_split": {
+    "train": 1222
+  },
+  "episodes": 2,
+  "train_scene_groups": 2,
+  "validation_scene_groups": 0,
+  "max_tcp_target_roundtrip_m": 1.4946834900704541e-16,
+  "max_tcp_target_roundtrip_deg": 7.275144359745092e-15,
+  "episode_reports": [
+    {
+      "episode_index": 997004,
+      "scene_sha256": "ec41430e1e8339d74f14c797dcf8b7f47a68b233c9a73291cd548210f9712e2d",
+      "split": "train",
+      "frames": 604,
+      "valid_chunks": 598,
+      "invalid_timing_chunks": 3,
+      "missing_image_chunks": 0
+    },
+    {
+      "episode_index": 997008,
+      "scene_sha256": "ec0f1af11f653da3012ae37f547494139836882dba79a72b1c906f6387d783c8",
+      "split": "train",
+      "frames": 638,
+      "valid_chunks": 624,
+      "invalid_timing_chunks": 11,
+      "missing_image_chunks": 0
+    }
+  ]
+}

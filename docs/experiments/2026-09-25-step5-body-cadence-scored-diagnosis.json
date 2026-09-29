@@ -1,0 +1,152 @@
+{
+  "schema": "step5_body_cadence_scored_diagnosis/v1",
+  "date": "2026-09-25",
+  "model": "/var/tmp/chmin_aic_20260918_act/shared_body_target_bc_batch3_20260925/best.pt",
+  "model_sha256": "3d82c32a10da52a3ca31955137fe63005baeced804f15b8e4c30295a2d299d88",
+  "evaluation": "two already-open Gazebo SC development scenes",
+  "scene_definition_matched": true,
+  "physical_initial_state_exactly_matched": false,
+  "autonomous_without_privileged_input": true,
+  "arms": {
+    "replan1": {
+      "score_total": 50.245371873312635,
+      "trials": {
+        "trial_999001": {
+          "tier3": 22.088366144663656,
+          "message": "No insertion detected. Final plug port distance: 0.04m.",
+          "contact_score": 0
+        },
+        "trial_999003": {
+          "tier3": 8.509974486200973,
+          "message": "No insertion detected. Final plug port distance: 0.14m.",
+          "contact_score": 0
+        }
+      },
+      "trial999001_trace": "docs/experiments/2026-09-25-body-parent-replan1-trial999001-scored-trace.json",
+      "bag_archive": "docs/experiments/2026-09-25-shared-body-bc-batch3-dev2-mcap-archive.json",
+      "latency_snapshots": [
+        {
+          "n": 783,
+          "p50_ms": 56.76,
+          "p95_ms": 96.42,
+          "p99_ms": 133.77
+        },
+        {
+          "n": 859,
+          "p50_ms": 48.87,
+          "p95_ms": 76.83,
+          "p99_ms": 91.37
+        }
+      ],
+      "trial999001_min_actual_distance_mm": 41.2673204883772,
+      "trial999001_min_lateral_mm": 36.01689735321048
+    },
+    "chunk4": {
+      "score_total": 31.427510070459636,
+      "trials": {
+        "trial_999001": {
+          "tier3": 0,
+          "message": "No insertion detected. Final plug port distance: 0.20m.",
+          "contact_score": 0
+        },
+        "trial_999003": {
+          "tier3": 18.98336752149251,
+          "message": "No insertion detected. Final plug port distance: 0.06m.",
+          "contact_score": 0
+        }
+      },
+      "trial999001_trace": "docs/experiments/2026-09-25-body-parent-chunk4-trial999001-scored-trace.json",
+      "bag_archive": "docs/experiments/2026-09-25-shared-body-parent-chunk4-dev2-mcap-archive.json",
+      "latency_snapshots": [
+        {
+          "n": 332,
+          "p50_ms": 61.27,
+          "p95_ms": 109.61,
+          "p99_ms": 135.12
+        },
+        {
+          "n": 323,
+          "p50_ms": 68.86,
+          "p95_ms": 117.5,
+          "p99_ms": 137.46
+        }
+      ],
+      "trial999001_min_actual_distance_mm": 92.12493036406427,
+      "trial999001_min_lateral_mm": 39.671972292916834
+    }
+  },
+  "first_divergence": {
+    "replan1": {
+      "interval_s": [
+        20,
+        30
+      ],
+      "actual_distance_mm_at_start_end": [
+        102.6910191708139,
+        120.08891779771646
+      ],
+      "commanded_proxy_distance_mm_at_start_end": [
+        98.80802574556172,
+        119.71204032002677
+      ],
+      "actual_tip_motion_mm": [
+        -5.6590900140362805,
+        -10.187028550168314,
+        -19.501936553741658
+      ],
+      "commanded_proxy_tip_motion_mm": [
+        -4.463424522924129,
+        -9.446421829931019,
+        -20.162774745080128
+      ],
+      "motion_direction_cosine": 0.9976597380278899,
+      "mean_tcp_reference_error_mm": 24.271297572194996,
+      "force_n_at_start_end": [
+        20.38612494035946,
+        21.304115434718245
+      ],
+      "opening_in_all_three_camera_frustums_each_sample": true
+    },
+    "chunk4": {
+      "interval_s": [
+        20,
+        30
+      ],
+      "actual_distance_mm_at_start_end": [
+        93.99675673043896,
+        151.32882986751892
+      ],
+      "commanded_proxy_distance_mm_at_start_end": [
+        91.97260220286843,
+        159.14919363744994
+      ],
+      "actual_tip_motion_mm": [
+        6.471059366181031,
+        33.11785069179035,
+        -58.71341660861539
+      ],
+      "commanded_proxy_tip_motion_mm": [
+        6.794759245926825,
+        45.95006399782147,
+        -64.87020877867076
+      ],
+      "motion_direction_cosine": 0.9947169323056806,
+      "mean_tcp_reference_error_mm": 28.298155720195247,
+      "force_n_at_start_end": [
+        20.37615009769227,
+        23.667708347448155
+      ],
+      "opening_in_all_three_camera_frustums_each_sample": true
+    }
+  },
+  "limitations": [
+    "No camera RGB or actor auxiliary pose was retained in these scored bags; geometric camera frustum is not proof of actual visual visibility or correct target recognition.",
+    "Commanded connector position uses fixed TCP-to-tip grasp as a proxy; physical connector position uses scored dynamic TF.",
+    "The same scene definition can vary between Gazebo repeats; this is a causal trace diagnosis, not a statistical performance claim."
+  ],
+  "step5_passed": false,
+  "rl_started": false,
+  "reserved_final_opened": false,
+  "interpretation": "At the first sustained regression (about 20-30 s) the four-target actor commanded movement away from the opening and the physical plug followed in nearly the same direction. No scored off-limit contact and no force jump sufficient to explain a stall. This points to the commanded route/target rather than a primary controller blockage. The scored bag cannot distinguish incorrect visual inference from action mapping.",
+  "plot": "docs/experiments/figures/2026-09-25-step5-body-cadence-first-divergence.png"
+}

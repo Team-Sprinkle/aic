@@ -1,0 +1,63 @@
+{
+  "schema": "aic_sc_connector_waypoint_labels/v1",
+  "labels": "/var/tmp/chmin_aic_20260918_act/sc_shared_early_dagger_newbatch2_candidates_20260925/corrective_waypoint_chunks.jsonl",
+  "training_label_only": true,
+  "port_edges": "/var/tmp/chmin_aic_20260918_act/sc_shared_early_dagger_newbatch2_candidates_20260925/port_edges.json",
+  "tcp_tip_calibration": "configs/hierarchical_recovery/sc_tcp_tip_gazebo_tf_251.json",
+  "episode_tip_calibrations": "/var/tmp/chmin_aic_20260918_act/sc_shared_early_dagger_newbatch2_candidates_20260925/physical_grasp_calibrations.json",
+  "port_opening_calibration": "configs/hierarchical_recovery/sc_port_opening_gazebo_tf_251.json",
+  "pose_quaternion_order": "xyzw",
+  "timing": {
+    "resample_mode": "causal_hold",
+    "step_s": 0.05,
+    "tolerance_s": 0.01,
+    "max_hold_s": 0.15,
+    "first_target_semantics": "teacher command recorded with anchor image; target held until next recorded command when resampling"
+  },
+  "counts_by_split": {
+    "train": 2043
+  },
+  "episodes": 4,
+  "train_scene_groups": 4,
+  "validation_scene_groups": 0,
+  "max_tcp_target_roundtrip_m": 2.2929868617541516e-16,
+  "max_tcp_target_roundtrip_deg": 6.364794533143476e-15,
+  "episode_reports": [
+    {
+      "episode_index": 33321458781002,
+      "scene_sha256": "a634502e74cf2755abb560f574a1b2f9632284f8f9fec95551b0ca08be04939c",
+      "split": "train",
+      "frames": 498,
+      "valid_chunks": 425,
+      "invalid_timing_chunks": 70,
+      "missing_image_chunks": 0
+    },
+    {
+      "episode_index": 121506575996080,
+      "scene_sha256": "8addd4f27554d98af5654112c3704ab4a6c15b98a9e29cfdb8814d827412ba86",
+      "split": "train",
+      "frames": 650,
+      "valid_chunks": 495,
+      "invalid_timing_chunks": 152,
+      "missing_image_chunks": 0
+    },
+    {
+      "episode_index": 83994278662980,
+      "scene_sha256": "3503035a2009fb7047a98c5459f34495d4fc0ca24e7cce36c12cfc2d6f03b696",
+      "split": "train",
+      "frames": 842,
+      "valid_chunks": 791,
+      "invalid_timing_chunks": 48,
+      "missing_image_chunks": 0
+    },
+    {
+      "episode_index": 106362031545440,
+      "scene_sha256": "d0087966132c37e107723b191b73a8938f6c212c6b5656cd5197b5bafe8b54c3",
+      "split": "train",
+      "frames": 405,
+      "valid_chunks": 332,
+      "invalid_timing_chunks": 70,
+      "missing_image_chunks": 0
+    }
+  ]
+}

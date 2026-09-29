@@ -1,0 +1,120 @@
+{
+  "schema": "sc_bc_admission/v1",
+  "candidate_manifest": "/var/tmp/chmin_aic_20260918_act/sc_diversity_batch1_candidates_20260925/manifest.json",
+  "candidate_manifest_sha256": "2cdb05a6a8f60c74bd85dfd3d8135072d9962a8b0e1d9793e10649d17740c25d",
+  "waypoint_labels": "/var/tmp/chmin_aic_20260918_act/sc_diversity_batch1_candidates_20260925/physical_waypoint_chunks.jsonl",
+  "waypoint_labels_sha256": "d72403dc6ebd3aeb673d98c90875b59d32e75a78dff2f70f1eb9b5e0dc8222cb",
+  "verified_manifest": "outputs/trajectory_datasets/expert_verified/manifest.json",
+  "verified_manifest_sha256": "ecb6fd1398a4ef9d416b1e7e0f315df15b56c67d43402c48fb836bcef52b5199",
+  "existing_labels": [
+    {
+      "path": "/var/tmp/chmin_aic_20260918_act/sc_canonical_21_port_tcp_waypoint_chunks.jsonl",
+      "sha256": "eeb3f393b70d960d1af5f4056f80b953efdfdccbdd22f423cd85acc87d240f03"
+    },
+    {
+      "path": "/var/tmp/chmin_aic_20260918_act/sc_supplemental_candidates_v2_20260924/port_tcp_waypoint_chunks.jsonl",
+      "sha256": "76a57bd3b1c99cac86c67bec55a2d1ba58998e616680ef20985c0b07d0cbcea0"
+    },
+    {
+      "path": "/var/tmp/chmin_aic_20260918_act/sc_bc_expansion_batch1_candidates_20260924/physical_waypoint_chunks.jsonl",
+      "sha256": "9ed6b2a4e21cebe273a977d74125f8e6ee656e117a384c653776f0557bca2b3e"
+    },
+    {
+      "path": "/var/tmp/chmin_aic_20260918_act/sc_shared_dagger_secondonly_candidates_20260924/corrective_waypoint_chunks.jsonl",
+      "sha256": "4307b478b078ead04659b7912d74ce8fbed2d9bc9ad0e2c4ccdd5e864acb0e22"
+    },
+    {
+      "path": "/var/tmp/chmin_aic_20260918_act/sc_shared_early_dagger_retry_candidates_20260925/corrective_waypoint_chunks.jsonl",
+      "sha256": "49de3e82d8d9122755b8ca49ac82f40b381d416cb385e7d9ab60189fe9531bdd"
+    },
+    {
+      "path": "/var/tmp/chmin_aic_20260918_act/sc_shared_early_dagger_newbatch1_candidates_20260925/corrective_waypoint_chunks.jsonl",
+      "sha256": "86dfb913679bfb8abd10fc816d290f097bd02f46cf7560339301dca187f2bdb0"
+    },
+    {
+      "path": "/var/tmp/chmin_aic_20260918_act/sc_shared_early_dagger_newbatch2_candidates_20260925/corrective_waypoint_chunks.jsonl",
+      "sha256": "d5f34bbee5a2184b4f09b361e838cbcc0e6b85d0b66246617a15606b7d22268f"
+    },
+    {
+      "path": "/var/tmp/chmin_aic_20260918_act/sc_shared_early_dagger_newbatch3_candidates_20260925/corrective_waypoint_chunks.jsonl",
+      "sha256": "87765e40daaf22811ba3bc1b26429286cc5b50154dd9b63a51cad60d129dc240"
+    }
+  ],
+  "all_episode_splits": "train; no scene overlaps verified data",
+  "training_label_only_geometry": true,
+  "admitted_episodes": 5,
+  "admitted_chunks": 2463,
+  "episodes": [
+    {
+      "episode_index": 997001,
+      "trial_id": "trial_997001",
+      "scene_sha256": "2a3aba3efe131d1fca40880442a4a76600fb632c41f3864f8ab830acff05de78",
+      "score_tier3": 75,
+      "physical_grasp_drift_mm": 0.003725247266084407,
+      "causal_chunks": 481,
+      "baseline_force_n": 20.862570745757132,
+      "force_above_baseline_plus_10_n_chunks": 0,
+      "severe_force_stall_chunks": 0,
+      "teacher_setpoint_gap_p95_mm": 27.66044344956553,
+      "teacher_setpoint_gap_max_mm": 33.10193885907565,
+      "admitted": true
+    },
+    {
+      "episode_index": 997002,
+      "trial_id": "trial_997002",
+      "scene_sha256": "0bbbc7d31cdff8c38af1a9f5821ee6d7a50d3bc3e57cda0d300343f8fa907f29",
+      "score_tier3": 75,
+      "physical_grasp_drift_mm": 0.011632453562898947,
+      "causal_chunks": 462,
+      "baseline_force_n": 20.9536926751394,
+      "force_above_baseline_plus_10_n_chunks": 0,
+      "severe_force_stall_chunks": 0,
+      "teacher_setpoint_gap_p95_mm": 51.73012590427207,
+      "teacher_setpoint_gap_max_mm": 58.47784850214452,
+      "admitted": true
+    },
+    {
+      "episode_index": 997003,
+      "trial_id": "trial_997003",
+      "scene_sha256": "e17f80ff13643036b939dee6aa47e8c76b57d9456b0c68042d4c3ab18aac92e9",
+      "score_tier3": 75,
+      "physical_grasp_drift_mm": 0.013004287127861301,
+      "causal_chunks": 626,
+      "baseline_force_n": 20.821284565385525,
+      "force_above_baseline_plus_10_n_chunks": 0,
+      "severe_force_stall_chunks": 0,
+      "teacher_setpoint_gap_p95_mm": 50.55086469993182,
+      "teacher_setpoint_gap_max_mm": 55.418491266471435,
+      "admitted": true
+    },
+    {
+      "episode_index": 997005,
+      "trial_id": "trial_997005",
+      "scene_sha256": "b582fc644b0ae97dfbd6ed1663c3da5846730470b3a32aa536178ccbf1271e30",
+      "score_tier3": 75,
+      "physical_grasp_drift_mm": 0.0004066278477253422,
+      "causal_chunks": 473,
+      "baseline_force_n": 20.81841208467352,
+      "force_above_baseline_plus_10_n_chunks": 0,
+      "severe_force_stall_chunks": 0,
+      "teacher_setpoint_gap_p95_mm": 52.23735951756037,
+      "teacher_setpoint_gap_max_mm": 62.66988074501245,
+      "admitted": true
+    },
+    {
+      "episode_index": 997006,
+      "trial_id": "trial_997006",
+      "scene_sha256": "8a4e1c5f85205ed547f6e0574c597e6131c5d2aabc5239ff886f07ed5100397b",
+      "score_tier3": 75,
+      "physical_grasp_drift_mm": 0.0006129079373366484,
+      "causal_chunks": 421,
+      "baseline_force_n": 20.906879315299072,
+      "force_above_baseline_plus_10_n_chunks": 0,
+      "severe_force_stall_chunks": 0,
+      "teacher_setpoint_gap_p95_mm": 39.53483956582783,
+      "teacher_setpoint_gap_max_mm": 45.93742224696687,
+      "admitted": true
+    }
+  ],
+  "caveat": "Official success and a force/stall screen support BC admission. Large teacher setpoint lookahead is retained and must be validated by autonomous rollout; these are not recovery demonstrations."
+}

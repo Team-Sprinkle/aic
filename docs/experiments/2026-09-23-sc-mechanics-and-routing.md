@@ -3,6 +3,15 @@
 Date: 2026-09-23  
 Status: mechanics partly validated; multi-card result is diagnostic proxy evidence
 
+> **Later correction (September 24):** the empirical `-4.65 mm` target and
+> 30 mm extension below were interim approximations. A scored Gazebo TF audit
+> and [repaired Isaac grasp/port asset](2026-09-24-isaac-sc-fidelity-fix.md)
+> placed the target at the SC port-base frame (`+2 mm` in the imported rigid
+> root). One normal-collision full-start five-card scripted probe reached
+> 0.073 mm axial / 0.054 mm lateral error. The old gripper/card contact no
+> longer reproduced with the calibrated grasp. Read the remainder as the
+> historical diagnosis that led to the repair, not the current SC recipe.
+
 > **Scope correction:** these are Isaac development-scene mechanics probes, not
 > runs of the released Gazebo production evaluation. Do not use the failure
 > categories or rates below as production evidence. The separate

@@ -1,0 +1,90 @@
+{
+  "schema": "shared_sc_target_cap_audit/v1",
+  "sources": [
+    "/var/tmp/chmin_aic_20260918_act/sc_canonical_21_port_tcp_waypoint_chunks.jsonl",
+    "/var/tmp/chmin_aic_20260918_act/sc_supplemental_candidates_v2_20260924/port_tcp_waypoint_chunks.jsonl"
+  ],
+  "scope": "scored SC training label setpoints versus observed TCP; a port-frame component difference is a conservative proxy for TCP-frame component clipping, since the frames rotate",
+  "summary": {
+    "all": {
+      "rows": 14528,
+      "episodes": 25,
+      "max_component_gap_mm_p50_p90_p95_p99": [
+        10.994918839101711,
+        30.25177998051135,
+        36.65506750580837,
+        47.01942772190424
+      ],
+      "fraction_any_component_exceeds_cap": {
+        "5": 0.905079845814978,
+        "20": 0.22239812775330398,
+        "50": 0.0028909691629955946
+      },
+      "absolute_xyz_gap_mm_p95": [
+        36.65506750580837,
+        11.399297093158248,
+        25.06824007281116
+      ]
+    },
+    "early_frame_0_50": {
+      "rows": 1245,
+      "episodes": 25,
+      "max_component_gap_mm_p50_p90_p95_p99": [
+        29.408619794924373,
+        44.55317190332965,
+        46.62721935383921,
+        52.18036733226251
+      ],
+      "fraction_any_component_exceeds_cap": {
+        "5": 0.9052208835341365,
+        "20": 0.6184738955823293,
+        "50": 0.024899598393574297
+      },
+      "absolute_xyz_gap_mm_p95": [
+        46.62721935383921,
+        19.71588230777676,
+        15.854009827849179
+      ]
+    },
+    "transport_frame_20_40": {
+      "rows": 516,
+      "episodes": 25,
+      "max_component_gap_mm_p50_p90_p95_p99": [
+        36.10268962019876,
+        46.02999222428316,
+        48.98348660691387,
+        53.490504800855334
+      ],
+      "fraction_any_component_exceeds_cap": {
+        "5": 1.0,
+        "20": 0.7965116279069767,
+        "50": 0.046511627906976744
+      },
+      "absolute_xyz_gap_mm_p95": [
+        48.98348660691387,
+        23.91074306842492,
+        15.703784588097651
+      ]
+    },
+    "later_frame_100_plus": {
+      "rows": 12099,
+      "episodes": 25,
+      "max_component_gap_mm_p50_p90_p95_p99": [
+        9.790347872928706,
+        24.742593167849147,
+        30.688090834149108,
+        45.40435452567303
+      ],
+      "fraction_any_component_exceeds_cap": {
+        "5": 0.8960244648318043,
+        "20": 0.1668732953136623,
+        "50": 0.0009091660467807257
+      },
+      "absolute_xyz_gap_mm_p95": [
+        23.416207646542702,
+        9.44373287373719,
+        25.748756324058007
+      ]
+    }
+  }
+}

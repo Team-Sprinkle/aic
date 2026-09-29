@@ -1,0 +1,492 @@
+{
+  "schema": "sc_pairwise_port_tracker/v1",
+  "runtime_inputs": "RGB opening pixels, selected port task bit, observed TCP, fixed training camera calibration",
+  "scored_geometry_used_in_estimator": false,
+  "settings": {
+    "port_0_fallback_cameras": [
+      "left",
+      "right"
+    ],
+    "port_1_fallback_cameras": [
+      "center",
+      "right"
+    ],
+    "three_view_gate_px": 1.5,
+    "acquire_distance_m": 0.04,
+    "stable_distance_m": 0.002,
+    "accept_distance_m": 0.0005,
+    "reset_distance_m": 0.005,
+    "window": 40
+  },
+  "near_frames": 154,
+  "near_episodes": 1,
+  "initialized_rate": 1.0,
+  "lateral_mm": {
+    "count": 154,
+    "median": 8.524637556133634,
+    "p95": 298.0735976917792
+  },
+  "axial_mm": {
+    "count": 154,
+    "median": 1.9508153590689674,
+    "p95": 31.204656558414868
+  },
+  "per_episode": {
+    "trial_995001": {
+      "near_frames": 154,
+      "initialized_rate": 1.0,
+      "lateral_mm": {
+        "count": 154,
+        "median": 8.524637556133634,
+        "p95": 298.0735976917792
+      },
+      "axial_mm": {
+        "count": 154,
+        "median": 1.9508153590689674,
+        "p95": 31.204656558414868
+      }
+    }
+  },
+  "worst_near": [
+    {
+      "trial": "trial_995001",
+      "frame": 824,
+      "near": true,
+      "selected_port": 0,
+      "camera_pair": [
+        "left",
+        "right"
+      ],
+      "used_three_views": false,
+      "three_view_reprojection_px": 47.628387862284626,
+      "tip_candidate_distance_mm": 24.072317776362116,
+      "accepted": true,
+      "history_length": 2,
+      "estimated_base_xyz_m": [
+        -0.6428002823623045,
+        0.22382457480678772,
+        -0.001240067381526564
+      ],
+      "lateral_mm": 298.0735976917792,
+      "axial_mm": 31.204656558414868
+    },
+    {
+      "trial": "trial_995001",
+      "frame": 828,
+      "near": true,
+      "selected_port": 0,
+      "camera_pair": [
+        "left",
+        "right"
+      ],
+      "used_three_views": false,
+      "three_view_reprojection_px": 51.231274463075295,
+      "tip_candidate_distance_mm": 28.147349728989703,
+      "accepted": false,
+      "history_length": 2,
+      "estimated_base_xyz_m": [
+        -0.6428002823623045,
+        0.22382457480678772,
+        -0.001240067381526564
+      ],
+      "lateral_mm": 298.0735976917792,
+      "axial_mm": 31.204656558414868
+    },
+    {
+      "trial": "trial_995001",
+      "frame": 832,
+      "near": true,
+      "selected_port": 0,
+      "camera_pair": [
+        "left",
+        "right"
+      ],
+      "used_three_views": false,
+      "three_view_reprojection_px": 61.115590439808535,
+      "tip_candidate_distance_mm": 31.396763716517643,
+      "accepted": false,
+      "history_length": 2,
+      "estimated_base_xyz_m": [
+        -0.6428002823623045,
+        0.22382457480678772,
+        -0.001240067381526564
+      ],
+      "lateral_mm": 298.0735976917792,
+      "axial_mm": 31.204656558414868
+    },
+    {
+      "trial": "trial_995001",
+      "frame": 836,
+      "near": true,
+      "selected_port": 0,
+      "camera_pair": [
+        "left",
+        "right"
+      ],
+      "used_three_views": false,
+      "three_view_reprojection_px": 63.63961898802887,
+      "tip_candidate_distance_mm": 33.18382934067021,
+      "accepted": false,
+      "history_length": 2,
+      "estimated_base_xyz_m": [
+        -0.6428002823623045,
+        0.22382457480678772,
+        -0.001240067381526564
+      ],
+      "lateral_mm": 298.0735976917792,
+      "axial_mm": 31.204656558414868
+    },
+    {
+      "trial": "trial_995001",
+      "frame": 840,
+      "near": true,
+      "selected_port": 0,
+      "camera_pair": [
+        "left",
+        "right"
+      ],
+      "used_three_views": false,
+      "three_view_reprojection_px": 51.614254537839024,
+      "tip_candidate_distance_mm": 28.988702573784092,
+      "accepted": false,
+      "history_length": 2,
+      "estimated_base_xyz_m": [
+        -0.6428002823623045,
+        0.22382457480678772,
+        -0.001240067381526564
+      ],
+      "lateral_mm": 298.0735976917792,
+      "axial_mm": 31.204656558414868
+    },
+    {
+      "trial": "trial_995001",
+      "frame": 844,
+      "near": true,
+      "selected_port": 0,
+      "camera_pair": [
+        "left",
+        "right"
+      ],
+      "used_three_views": false,
+      "three_view_reprojection_px": 43.01185873187928,
+      "tip_candidate_distance_mm": 24.28279002575754,
+      "accepted": false,
+      "history_length": 2,
+      "estimated_base_xyz_m": [
+        -0.6428002823623045,
+        0.22382457480678772,
+        -0.001240067381526564
+      ],
+      "lateral_mm": 298.0735976917792,
+      "axial_mm": 31.204656558414868
+    },
+    {
+      "trial": "trial_995001",
+      "frame": 848,
+      "near": true,
+      "selected_port": 0,
+      "camera_pair": [
+        "left",
+        "right"
+      ],
+      "used_three_views": false,
+      "three_view_reprojection_px": 37.01116304413463,
+      "tip_candidate_distance_mm": 19.884427598528458,
+      "accepted": false,
+      "history_length": 2,
+      "estimated_base_xyz_m": [
+        -0.6428002823623045,
+        0.22382457480678772,
+        -0.001240067381526564
+      ],
+      "lateral_mm": 298.0735976917792,
+      "axial_mm": 31.204656558414868
+    },
+    {
+      "trial": "trial_995001",
+      "frame": 852,
+      "near": true,
+      "selected_port": 0,
+      "camera_pair": [
+        "left",
+        "right"
+      ],
+      "used_three_views": false,
+      "three_view_reprojection_px": 25.214332446156426,
+      "tip_candidate_distance_mm": 16.868784562938906,
+      "accepted": false,
+      "history_length": 2,
+      "estimated_base_xyz_m": [
+        -0.6428002823623045,
+        0.22382457480678772,
+        -0.001240067381526564
+      ],
+      "lateral_mm": 298.0735976917792,
+      "axial_mm": 31.204656558414868
+    },
+    {
+      "trial": "trial_995001",
+      "frame": 856,
+      "near": true,
+      "selected_port": 0,
+      "camera_pair": [
+        "left",
+        "right"
+      ],
+      "used_three_views": false,
+      "three_view_reprojection_px": 27.936917099231366,
+      "tip_candidate_distance_mm": 15.924933248904074,
+      "accepted": false,
+      "history_length": 2,
+      "estimated_base_xyz_m": [
+        -0.6428002823623045,
+        0.22382457480678772,
+        -0.001240067381526564
+      ],
+      "lateral_mm": 298.0735976917792,
+      "axial_mm": 31.204656558414868
+    },
+    {
+      "trial": "trial_995001",
+      "frame": 860,
+      "near": true,
+      "selected_port": 0,
+      "camera_pair": [
+        "left",
+        "right"
+      ],
+      "used_three_views": false,
+      "three_view_reprojection_px": 27.966085601600447,
+      "tip_candidate_distance_mm": 13.303025231995871,
+      "accepted": false,
+      "history_length": 2,
+      "estimated_base_xyz_m": [
+        -0.6428002823623045,
+        0.22382457480678772,
+        -0.001240067381526564
+      ],
+      "lateral_mm": 298.0735976917792,
+      "axial_mm": 31.204656558414868
+    },
+    {
+      "trial": "trial_995001",
+      "frame": 880,
+      "near": true,
+      "selected_port": 0,
+      "camera_pair": [
+        "left",
+        "right"
+      ],
+      "used_three_views": false,
+      "three_view_reprojection_px": 29.89220465640432,
+      "tip_candidate_distance_mm": 15.340708362070282,
+      "accepted": false,
+      "history_length": 2,
+      "estimated_base_xyz_m": [
+        -0.6428002823623045,
+        0.22382457480678772,
+        -0.001240067381526564
+      ],
+      "lateral_mm": 298.0735976917792,
+      "axial_mm": 31.204656558414868
+    },
+    {
+      "trial": "trial_995001",
+      "frame": 884,
+      "near": true,
+      "selected_port": 0,
+      "camera_pair": [
+        "left",
+        "right"
+      ],
+      "used_three_views": false,
+      "three_view_reprojection_px": 32.936247716767106,
+      "tip_candidate_distance_mm": 19.813337820147964,
+      "accepted": false,
+      "history_length": 2,
+      "estimated_base_xyz_m": [
+        -0.6428002823623045,
+        0.22382457480678772,
+        -0.001240067381526564
+      ],
+      "lateral_mm": 298.0735976917792,
+      "axial_mm": 31.204656558414868
+    },
+    {
+      "trial": "trial_995001",
+      "frame": 888,
+      "near": true,
+      "selected_port": 0,
+      "camera_pair": [
+        "left",
+        "right"
+      ],
+      "used_three_views": false,
+      "three_view_reprojection_px": 30.237429459460433,
+      "tip_candidate_distance_mm": 19.832560406716095,
+      "accepted": false,
+      "history_length": 2,
+      "estimated_base_xyz_m": [
+        -0.6428002823623045,
+        0.22382457480678772,
+        -0.001240067381526564
+      ],
+      "lateral_mm": 298.0735976917792,
+      "axial_mm": 31.204656558414868
+    },
+    {
+      "trial": "trial_995001",
+      "frame": 892,
+      "near": true,
+      "selected_port": 0,
+      "camera_pair": [
+        "left",
+        "right"
+      ],
+      "used_three_views": false,
+      "three_view_reprojection_px": 24.488089017727795,
+      "tip_candidate_distance_mm": 21.238047508031816,
+      "accepted": false,
+      "history_length": 2,
+      "estimated_base_xyz_m": [
+        -0.6428002823623045,
+        0.22382457480678772,
+        -0.001240067381526564
+      ],
+      "lateral_mm": 298.0735976917792,
+      "axial_mm": 31.204656558414868
+    },
+    {
+      "trial": "trial_995001",
+      "frame": 896,
+      "near": true,
+      "selected_port": 0,
+      "camera_pair": [
+        "left",
+        "right"
+      ],
+      "used_three_views": false,
+      "three_view_reprojection_px": 24.051335727005092,
+      "tip_candidate_distance_mm": 21.46965581054045,
+      "accepted": false,
+      "history_length": 2,
+      "estimated_base_xyz_m": [
+        -0.6428002823623045,
+        0.22382457480678772,
+        -0.001240067381526564
+      ],
+      "lateral_mm": 298.0735976917792,
+      "axial_mm": 31.204656558414868
+    },
+    {
+      "trial": "trial_995001",
+      "frame": 900,
+      "near": true,
+      "selected_port": 0,
+      "camera_pair": [
+        "left",
+        "right"
+      ],
+      "used_three_views": false,
+      "three_view_reprojection_px": 33.32703514826529,
+      "tip_candidate_distance_mm": 21.997324040190353,
+      "accepted": false,
+      "history_length": 2,
+      "estimated_base_xyz_m": [
+        -0.6428002823623045,
+        0.22382457480678772,
+        -0.001240067381526564
+      ],
+      "lateral_mm": 298.0735976917792,
+      "axial_mm": 31.204656558414868
+    },
+    {
+      "trial": "trial_995001",
+      "frame": 904,
+      "near": true,
+      "selected_port": 0,
+      "camera_pair": [
+        "left",
+        "right"
+      ],
+      "used_three_views": false,
+      "three_view_reprojection_px": 34.58412673125739,
+      "tip_candidate_distance_mm": 21.510237384556053,
+      "accepted": false,
+      "history_length": 2,
+      "estimated_base_xyz_m": [
+        -0.6428002823623045,
+        0.22382457480678772,
+        -0.001240067381526564
+      ],
+      "lateral_mm": 298.0735976917792,
+      "axial_mm": 31.204656558414868
+    },
+    {
+      "trial": "trial_995001",
+      "frame": 908,
+      "near": true,
+      "selected_port": 0,
+      "camera_pair": [
+        "left",
+        "right"
+      ],
+      "used_three_views": false,
+      "three_view_reprojection_px": 27.129668109881532,
+      "tip_candidate_distance_mm": 16.793144481848902,
+      "accepted": false,
+      "history_length": 2,
+      "estimated_base_xyz_m": [
+        -0.6428002823623045,
+        0.22382457480678772,
+        -0.001240067381526564
+      ],
+      "lateral_mm": 298.0735976917792,
+      "axial_mm": 31.204656558414868
+    },
+    {
+      "trial": "trial_995001",
+      "frame": 912,
+      "near": true,
+      "selected_port": 0,
+      "camera_pair": [
+        "left",
+        "right"
+      ],
+      "used_three_views": false,
+      "three_view_reprojection_px": 20.5290571450339,
+      "tip_candidate_distance_mm": 11.982344558261989,
+      "accepted": false,
+      "history_length": 2,
+      "estimated_base_xyz_m": [
+        -0.6428002823623045,
+        0.22382457480678772,
+        -0.001240067381526564
+      ],
+      "lateral_mm": 298.0735976917792,
+      "axial_mm": 31.204656558414868
+    },
+    {
+      "trial": "trial_995001",
+      "frame": 916,
+      "near": true,
+      "selected_port": 0,
+      "camera_pair": [
+        "left",
+        "right"
+      ],
+      "used_three_views": false,
+      "three_view_reprojection_px": 19.33983253948103,
+      "tip_candidate_distance_mm": 11.002220577620534,
+      "accepted": false,
+      "history_length": 2,
+      "estimated_base_xyz_m": [
+        -0.6428002823623045,
+        0.22382457480678772,
+        -0.001240067381526564
+      ],
+      "lateral_mm": 298.0735976917792,
+      "axial_mm": 31.204656558414868
+    }
+  ]
+}

@@ -1,0 +1,348 @@
+{
+  "schema": "shared_bc_batch3_dev2_teacher_diagnostic/v1",
+  "date": "2026-09-25",
+  "teacher_source": "/var/tmp/chmin_aic_20260918_act/sc_shared_bc_dev2_teacher_diag_20260925/edges_joined.json",
+  "raw_archive": "docs/experiments/2026-09-25-shared-bc-dev2-teacher-diagnostic-mcap-archive.json",
+  "development_only": true,
+  "forbidden_from_bc": true,
+  "trials": {
+    "trial_999001": {
+      "teacher_tier3": 24.95061987917382,
+      "arms": {
+        "control": {
+          "report": "docs/experiments/2026-09-25-shared-bc-batch3-control-trial_999001-teacher-diagnostic.json",
+          "first": {
+            "frame": 0,
+            "sim_time": 23.3,
+            "decision_time_s": 0.0,
+            "pose_position_error_mm": 31.52225384788862,
+            "pose_orientation_error_deg": 4.470494084486549,
+            "predicted_body_translation_mm": [
+              -0.32153242408358707,
+              1.0418589722630545,
+              -1.2459850014188145
+            ],
+            "teacher_body_translation_mm": [
+              -0.00309469136033913,
+              0.001072752380315567,
+              -0.0005367416164303584
+            ],
+            "first_command_translation_error_mm": 1.6540193206140341,
+            "oracle_pose_first_command_translation_error_mm": 32.288873472447584,
+            "teacher_target_gap_mm": 0.0033190365843176004
+          },
+          "phases": {
+            "early_0_100": {
+              "samples": 10,
+              "pose_position_error_mm": {
+                "median": 11.253695974433517,
+                "p95": 31.548422306214807
+              },
+              "pose_orientation_error_deg": {
+                "median": 3.747371091904047,
+                "p95": 7.746667574964704
+              },
+              "first_command_translation_error_mm": {
+                "median": 3.660638648274921,
+                "p95": 6.448591007148095
+              },
+              "oracle_pose_first_command_translation_error_mm": {
+                "median": 7.21790903314946,
+                "p95": 31.465334406203407
+              }
+            },
+            "transport_100_400": {
+              "samples": 30,
+              "pose_position_error_mm": {
+                "median": 8.292535689692187,
+                "p95": 17.890172696851547
+              },
+              "pose_orientation_error_deg": {
+                "median": 3.0779929269825774,
+                "p95": 11.536826547635322
+              },
+              "first_command_translation_error_mm": {
+                "median": 4.035620716051783,
+                "p95": 8.373386243413734
+              },
+              "oracle_pose_first_command_translation_error_mm": {
+                "median": 9.707679032942313,
+                "p95": 15.917517290474558
+              }
+            },
+            "later_400_plus": {
+              "samples": 77,
+              "pose_position_error_mm": {
+                "median": 25.525289062049513,
+                "p95": 27.92967439407094
+              },
+              "pose_orientation_error_deg": {
+                "median": 47.66348723374112,
+                "p95": 57.73965699904414
+              },
+              "first_command_translation_error_mm": {
+                "median": 38.504001739016495,
+                "p95": 43.17226558531483
+              },
+              "oracle_pose_first_command_translation_error_mm": {
+                "median": 26.318444176987164,
+                "p95": 28.645748374026446
+              }
+            }
+          }
+        },
+        "treatment": {
+          "report": "docs/experiments/2026-09-25-shared-bc-batch3-treatment-trial_999001-teacher-diagnostic.json",
+          "first": {
+            "frame": 0,
+            "sim_time": 23.3,
+            "decision_time_s": 0.0,
+            "pose_position_error_mm": 25.593271424865595,
+            "pose_orientation_error_deg": 2.1717882050055137,
+            "predicted_body_translation_mm": [
+              -0.7810610388529343,
+              1.0976142395943966,
+              -1.3270286313118995
+            ],
+            "teacher_body_translation_mm": [
+              -0.00309469136033913,
+              0.001072752380315567,
+              -0.0005367416164303584
+            ],
+            "first_command_translation_error_mm": 1.8887073898411302,
+            "oracle_pose_first_command_translation_error_mm": 26.757663354995387,
+            "teacher_target_gap_mm": 0.0033190365843176004
+          },
+          "phases": {
+            "early_0_100": {
+              "samples": 10,
+              "pose_position_error_mm": {
+                "median": 9.66786444593586,
+                "p95": 25.088556080427328
+              },
+              "pose_orientation_error_deg": {
+                "median": 2.576443555033796,
+                "p95": 3.418565896911652
+              },
+              "first_command_translation_error_mm": {
+                "median": 2.978571802436326,
+                "p95": 4.618097843800179
+              },
+              "oracle_pose_first_command_translation_error_mm": {
+                "median": 7.323024031968602,
+                "p95": 25.87255137628514
+              }
+            },
+            "transport_100_400": {
+              "samples": 30,
+              "pose_position_error_mm": {
+                "median": 5.0581232049151925,
+                "p95": 15.152523098551926
+              },
+              "pose_orientation_error_deg": {
+                "median": 2.7567656215948695,
+                "p95": 9.872750702586973
+              },
+              "first_command_translation_error_mm": {
+                "median": 4.857854588876458,
+                "p95": 7.198400793607206
+              },
+              "oracle_pose_first_command_translation_error_mm": {
+                "median": 6.219823669527889,
+                "p95": 12.247694649279927
+              }
+            },
+            "later_400_plus": {
+              "samples": 77,
+              "pose_position_error_mm": {
+                "median": 27.11400985507798,
+                "p95": 29.18330272336981
+              },
+              "pose_orientation_error_deg": {
+                "median": 44.5853551418714,
+                "p95": 55.30268639290459
+              },
+              "first_command_translation_error_mm": {
+                "median": 37.867047037749565,
+                "p95": 42.852599982459694
+              },
+              "oracle_pose_first_command_translation_error_mm": {
+                "median": 26.570269160391398,
+                "p95": 28.37333503279889
+              }
+            }
+          }
+        }
+      }
+    },
+    "trial_999003": {
+      "teacher_tier3": 75,
+      "arms": {
+        "control": {
+          "report": "docs/experiments/2026-09-25-shared-bc-batch3-control-trial_999003-teacher-diagnostic.json",
+          "first": {
+            "frame": 0,
+            "sim_time": 109.15,
+            "decision_time_s": 0.0,
+            "pose_position_error_mm": 44.34438388427536,
+            "pose_orientation_error_deg": 2.4095283068368873,
+            "predicted_body_translation_mm": [
+              -0.00112133117624591,
+              -0.030923100453772445,
+              -0.4805718339488396
+            ],
+            "teacher_body_translation_mm": [
+              0.007989226901872204,
+              -0.009405373404658413,
+              -0.01580681806701012
+            ],
+            "first_command_translation_error_mm": 0.465352054721468,
+            "oracle_pose_first_command_translation_error_mm": 44.18500657886915,
+            "teacher_target_gap_mm": 0.020053535667662496
+          },
+          "phases": {
+            "early_0_100": {
+              "samples": 10,
+              "pose_position_error_mm": {
+                "median": 19.055657596301785,
+                "p95": 40.43590480050876
+              },
+              "pose_orientation_error_deg": {
+                "median": 0.580416183935194,
+                "p95": 1.9206382458704874
+              },
+              "first_command_translation_error_mm": {
+                "median": 3.882844674974366,
+                "p95": 5.199007543899468
+              },
+              "oracle_pose_first_command_translation_error_mm": {
+                "median": 21.35043803918095,
+                "p95": 40.4960746928063
+              }
+            },
+            "transport_100_400": {
+              "samples": 30,
+              "pose_position_error_mm": {
+                "median": 12.577157458693994,
+                "p95": 15.899978274703983
+              },
+              "pose_orientation_error_deg": {
+                "median": 2.5715575098567616,
+                "p95": 6.448077246801103
+              },
+              "first_command_translation_error_mm": {
+                "median": 3.091058124106306,
+                "p95": 6.620144400228496
+              },
+              "oracle_pose_first_command_translation_error_mm": {
+                "median": 13.417926802155401,
+                "p95": 17.508542825826225
+              }
+            },
+            "later_400_plus": {
+              "samples": 71,
+              "pose_position_error_mm": {
+                "median": 6.899277670852126,
+                "p95": 14.253714659428905
+              },
+              "pose_orientation_error_deg": {
+                "median": 4.921351930821338,
+                "p95": 9.58031016426866
+              },
+              "first_command_translation_error_mm": {
+                "median": 2.986618345910125,
+                "p95": 8.8535401766596
+              },
+              "oracle_pose_first_command_translation_error_mm": {
+                "median": 6.674839816870839,
+                "p95": 11.721859852186046
+              }
+            }
+          }
+        },
+        "treatment": {
+          "report": "docs/experiments/2026-09-25-shared-bc-batch3-treatment-trial_999003-teacher-diagnostic.json",
+          "first": {
+            "frame": 0,
+            "sim_time": 109.15,
+            "decision_time_s": 0.0,
+            "pose_position_error_mm": 41.80700755142811,
+            "pose_orientation_error_deg": 1.384783599694272,
+            "predicted_body_translation_mm": [
+              -0.1623396551697076,
+              0.85451018812438,
+              -1.378176897781913
+            ],
+            "teacher_body_translation_mm": [
+              0.007989226901872204,
+              -0.009405373404658413,
+              -0.01580681806701012
+            ],
+            "first_command_translation_error_mm": 1.6221634503409879,
+            "oracle_pose_first_command_translation_error_mm": 40.98198647123695,
+            "teacher_target_gap_mm": 0.020053535667662496
+          },
+          "phases": {
+            "early_0_100": {
+              "samples": 10,
+              "pose_position_error_mm": {
+                "median": 18.221515011515613,
+                "p95": 36.40967103966432
+              },
+              "pose_orientation_error_deg": {
+                "median": 0.8256549431749649,
+                "p95": 1.3615301366832824
+              },
+              "first_command_translation_error_mm": {
+                "median": 3.6466079997861387,
+                "p95": 5.007657854333648
+              },
+              "oracle_pose_first_command_translation_error_mm": {
+                "median": 18.14690476945008,
+                "p95": 36.31470863004055
+              }
+            },
+            "transport_100_400": {
+              "samples": 30,
+              "pose_position_error_mm": {
+                "median": 11.072408587374737,
+                "p95": 15.403133512687882
+              },
+              "pose_orientation_error_deg": {
+                "median": 2.8612985815362375,
+                "p95": 6.087025983324558
+              },
+              "first_command_translation_error_mm": {
+                "median": 3.4408240969903874,
+                "p95": 7.352340502857055
+              },
+              "oracle_pose_first_command_translation_error_mm": {
+                "median": 12.37654547314165,
+                "p95": 16.45345753700709
+              }
+            },
+            "later_400_plus": {
+              "samples": 71,
+              "pose_position_error_mm": {
+                "median": 6.425915865445093,
+                "p95": 13.61242012617983
+              },
+              "pose_orientation_error_deg": {
+                "median": 4.849933758137888,
+                "p95": 9.247374601337285
+              },
+              "first_command_translation_error_mm": {
+                "median": 2.5591028755497494,
+                "p95": 8.271554435319082
+              },
+              "oracle_pose_first_command_translation_error_mm": {
+                "median": 6.551568766840109,
+                "p95": 11.50477059691955
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}

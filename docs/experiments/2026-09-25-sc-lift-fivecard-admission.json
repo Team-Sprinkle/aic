@@ -1,0 +1,58 @@
+{
+  "schema": "sc_bc_admission/v1",
+  "candidate_manifest": "/var/tmp/chmin_aic_20260918_act/sc_lift_fivecard_candidates_20260925/manifest.json",
+  "candidate_manifest_sha256": "5d118a6ecd7013890c365ff2db778e24e19dbc1cd8e4427052394141765cc3c5",
+  "waypoint_labels": "/var/tmp/chmin_aic_20260918_act/sc_lift_fivecard_candidates_20260925/physical_waypoint_chunks.jsonl",
+  "waypoint_labels_sha256": "40e8062cccd072dea558e5967cf4f6988bf709d46f45774853051c6735fcb8d6",
+  "verified_manifest": "outputs/trajectory_datasets/expert_verified/manifest.json",
+  "verified_manifest_sha256": "ecb6fd1398a4ef9d416b1e7e0f315df15b56c67d43402c48fb836bcef52b5199",
+  "all_episode_splits": "train; no scene overlaps verified data",
+  "training_label_only_geometry": true,
+  "admitted_episodes": 3,
+  "admitted_chunks": 2228,
+  "episodes": [
+    {
+      "episode_index": 980011,
+      "trial_id": "trial_980011",
+      "scene_sha256": "c3877ebc7799a3aa9ccc90fc1dd5f1fd3cd37b5fbdd5747e9c1139ebc35e9bd8",
+      "score_tier3": 75,
+      "physical_grasp_drift_mm": 0.001895253192293806,
+      "causal_chunks": 562,
+      "baseline_force_n": 20.813725159491685,
+      "force_above_baseline_plus_10_n_chunks": 0,
+      "severe_force_stall_chunks": 0,
+      "teacher_setpoint_gap_p95_mm": 41.082758423217975,
+      "teacher_setpoint_gap_max_mm": 51.677600790488825,
+      "admitted": true
+    },
+    {
+      "episode_index": 990101,
+      "trial_id": "trial_990101",
+      "scene_sha256": "d951f05767543c1dc978ddae0ba5ebd07c25fe3685e7986dba45cf1d12aa1a9a",
+      "score_tier3": 75,
+      "physical_grasp_drift_mm": 0.06760272737202937,
+      "causal_chunks": 1100,
+      "baseline_force_n": 20.798643673309616,
+      "force_above_baseline_plus_10_n_chunks": 0,
+      "severe_force_stall_chunks": 0,
+      "teacher_setpoint_gap_p95_mm": 49.688512624167146,
+      "teacher_setpoint_gap_max_mm": 55.753299593952235,
+      "admitted": true
+    },
+    {
+      "episode_index": 990103,
+      "trial_id": "trial_990103",
+      "scene_sha256": "8a295e0f9bab8cc5e66518a4a751d3b80670e084da9a8e136c661298a3f52324",
+      "score_tier3": 75,
+      "physical_grasp_drift_mm": 0.001439205642877034,
+      "causal_chunks": 566,
+      "baseline_force_n": 20.83017710710463,
+      "force_above_baseline_plus_10_n_chunks": 0,
+      "severe_force_stall_chunks": 0,
+      "teacher_setpoint_gap_p95_mm": 43.665716565066965,
+      "teacher_setpoint_gap_max_mm": 56.474390795503204,
+      "admitted": true
+    }
+  ],
+  "caveat": "Official success and a force/stall screen support BC admission. Large teacher setpoint lookahead is retained and must be validated by autonomous rollout; these are not recovery demonstrations."
+}

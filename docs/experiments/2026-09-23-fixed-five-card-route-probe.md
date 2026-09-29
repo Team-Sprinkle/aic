@@ -203,6 +203,48 @@ retains all repeat outcomes, source roots, rates, timestamps, and measured
 geometry. Full JPEG frames and MCAP bags are at
 `/var/tmp/chmin_aic_cable_route_smooth_20260923/`.
 
+### Official toolkit and Discourse cross-check (2026-09-24)
+
+The organizers documented two Gazebo problems in their [April 16
+announcement](https://discourse.openrobotics.org/t/note-to-participants-gazebo-bug-fix-changes-to-friction-properties-of-the-cable/54098):
+excessive cable friction/inertia on the board, and nested-model collision
+meshes that survived removal between `aic_engine` trials. The former was
+changed in [#454](https://github.com/intrinsic-dev/aic/commit/88d42a5cd7e01d6307e0417d80436337509f7c05),
+and the latter was addressed by pinning patched `gz-physics` in
+[#484](https://github.com/intrinsic-dev/aic/commit/c11bf850ff9a1f96c5d242f2663873f870c993c6).
+The announcement specifically says the phantom-collider symptom appeared
+after multiple engine trials and not in a single trial. A separate
+[Discourse report](https://discourse.openrobotics.org/t/aic-gazebo-friction-during-evaluation/53640)
+described the arm stopping when cable lay over boxes. The official
+[issue #396](https://github.com/intrinsic-dev/aic/issues/396) still lists
+intermittent stock CheatCode failure in evaluation case 3 as an open known
+issue, with no identified cause in the issue.
+
+Our fixed-scene reruns each used a fresh, single-trial Gazebo container. The
+image digest `sha256:9aa2ffdbb946d38edde1bac7b5f02a44cfbea26e3b04a9c74e09f14c97472923`
+was created 2026-04-16 02:29 UTC; on 2026-09-24 the registry's `aic_eval:latest`
+still resolved to that digest. Its installed reversed-cable SDF SHA-256
+`40ca072efced8fe31aae5b95fae488fd4278cdc2ba8bb0dd3c7a4bd62d37c767`
+matches the post-friction-fix source. The repository's `aic.repos` pins the
+patched physics commit `26d8e66ad113b4da6d21dc9dcedd40c509f75749`, and
+the official announcement says the evaluation image contains that patch; the
+image itself does not expose a build-source revision that independently proves
+its physics binary's commit. The old *between-trial* phantom-collider bug is
+therefore a poor fit for these first-trial stalls. The measured force and
+commanded-versus-actual motion establish a real obstruction in the simulated
+run, but do not identify the contact pair. Cable/card friction, another
+collision, and approach misalignment remain possible contributors.
+
+One version caveat: upstream [#501](https://github.com/intrinsic-dev/aic/commit/50c4a5705ff3992ac7973825a623a2a91bb562a9)
+later shortened an SC-mount collision box from 25.812 mm to 9 mm; the still
+published evaluation image retains the older box. The scene includes an SC
+mount, but this change alone does **not** establish that the mount blocked
+repeat 06. A decisive follow-up would log named Gazebo contact pairs at the
+first TCP tracking stall while replaying the same scene and route, then compare
+those contacts with the cable and gripper geometry. Any source-build rerun
+using #501 would be a physics ablation, not a like-for-like evaluation-image
+replay.
+
 To reproduce a smooth-view run on one GPU, prepare a new audit directory with
 the saved scene config and generated camera-only world/bridge, then run:
 

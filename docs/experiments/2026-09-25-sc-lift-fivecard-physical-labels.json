@@ -1,0 +1,54 @@
+{
+  "schema": "aic_sc_connector_waypoint_labels/v1",
+  "labels": "/var/tmp/chmin_aic_20260918_act/sc_lift_fivecard_candidates_20260925/physical_waypoint_chunks.jsonl",
+  "training_label_only": true,
+  "port_edges": "/var/tmp/chmin_aic_20260918_act/sc_lift_fivecard_candidates_20260925/port_edges.json",
+  "tcp_tip_calibration": "configs/hierarchical_recovery/sc_tcp_tip_gazebo_tf_251.json",
+  "episode_tip_calibrations": "/var/tmp/chmin_aic_20260918_act/sc_lift_fivecard_candidates_20260925/physical_grasp_calibrations.json",
+  "port_opening_calibration": "configs/hierarchical_recovery/sc_port_opening_gazebo_tf_251.json",
+  "pose_quaternion_order": "xyzw",
+  "timing": {
+    "resample_mode": "causal_hold",
+    "step_s": 0.05,
+    "tolerance_s": 0.01,
+    "max_hold_s": 0.15,
+    "first_target_semantics": "teacher command recorded with anchor image; target held until next recorded command when resampling"
+  },
+  "counts_by_split": {
+    "train": 2228
+  },
+  "episodes": 3,
+  "train_scene_groups": 3,
+  "validation_scene_groups": 0,
+  "max_tcp_target_roundtrip_m": 1.7772239894833365e-16,
+  "max_tcp_target_roundtrip_deg": 7.59034152289166e-15,
+  "episode_reports": [
+    {
+      "episode_index": 980011,
+      "scene_sha256": "c3877ebc7799a3aa9ccc90fc1dd5f1fd3cd37b5fbdd5747e9c1139ebc35e9bd8",
+      "split": "train",
+      "frames": 573,
+      "valid_chunks": 562,
+      "invalid_timing_chunks": 8,
+      "missing_image_chunks": 0
+    },
+    {
+      "episode_index": 990101,
+      "scene_sha256": "d951f05767543c1dc978ddae0ba5ebd07c25fe3685e7986dba45cf1d12aa1a9a",
+      "split": "train",
+      "frames": 1112,
+      "valid_chunks": 1100,
+      "invalid_timing_chunks": 9,
+      "missing_image_chunks": 0
+    },
+    {
+      "episode_index": 990103,
+      "scene_sha256": "8a295e0f9bab8cc5e66518a4a751d3b80670e084da9a8e136c661298a3f52324",
+      "split": "train",
+      "frames": 579,
+      "valid_chunks": 566,
+      "invalid_timing_chunks": 10,
+      "missing_image_chunks": 0
+    }
+  ]
+}

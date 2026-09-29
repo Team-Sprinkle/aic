@@ -1,0 +1,21 @@
+{
+  "schema": "sc_physical_tip_relabel/v1",
+  "source_labels": "/var/tmp/chmin_aic_20260918_act/shared_bc_takeover_after15nominal_native_20260925/pose_labels.jsonl",
+  "source_labels_sha256": "46cc0f6904ec52e5095cfa6820b52307d22334f7085fcecb250c366280cc068b",
+  "edges": "/var/tmp/chmin_aic_20260918_act/shared_bc_takeover_after15nominal_native_20260925/edges_for_pose_audit.json",
+  "edges_sha256": "6ccde077768279bbe23f96099d2c48b8c0381c889a0799ebf3c819da3ce4af0e",
+  "calibrations": {
+    "/var/tmp/chmin_aic_20260918_act/shared_bc_takeover_after15nominal_native_20260925/dynamic_grasp_calibration.json": "36d31211a3c7b3992f162eb51e0a3d8de3821366fe09a17c025c5faa0216af30"
+  },
+  "fixed_proxy_calibration_sha256": "35fa4e3383776da6d3927804304deb610568b33c35b69fdbf2f713b05883bbc8",
+  "rows": 293,
+  "episodes": 1,
+  "rows_by_trial": {
+    "trial_995001": 293
+  },
+  "calibration_by_trial": {
+    "trial_995001": "/var/tmp/chmin_aic_20260918_act/shared_bc_takeover_after15nominal_native_20260925/dynamic_grasp_calibration.json"
+  },
+  "runtime_physical_tf_input": false,
+  "caveat": "Episode-start physical grasp is nearly rigid in audited scenes; hold-out policy must predict plug from RGB, not read this calibration."
+}

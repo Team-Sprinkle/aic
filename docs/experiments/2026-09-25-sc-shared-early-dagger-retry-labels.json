@@ -1,0 +1,54 @@
+{
+  "schema": "aic_sc_connector_waypoint_labels/v1",
+  "labels": "/var/tmp/chmin_aic_20260918_act/sc_shared_early_dagger_retry_candidates_20260925/corrective_waypoint_chunks.jsonl",
+  "training_label_only": true,
+  "port_edges": "/var/tmp/chmin_aic_20260918_act/sc_shared_early_dagger_retry_candidates_20260925/port_edges.json",
+  "tcp_tip_calibration": "configs/hierarchical_recovery/sc_tcp_tip_gazebo_tf_251.json",
+  "episode_tip_calibrations": "/var/tmp/chmin_aic_20260918_act/sc_shared_early_dagger_retry_candidates_20260925/physical_grasp_calibrations.json",
+  "port_opening_calibration": "configs/hierarchical_recovery/sc_port_opening_gazebo_tf_251.json",
+  "pose_quaternion_order": "xyzw",
+  "timing": {
+    "resample_mode": "causal_hold",
+    "step_s": 0.05,
+    "tolerance_s": 0.01,
+    "max_hold_s": 0.15,
+    "first_target_semantics": "teacher command recorded with anchor image; target held until next recorded command when resampling"
+  },
+  "counts_by_split": {
+    "train": 1725
+  },
+  "episodes": 3,
+  "train_scene_groups": 3,
+  "validation_scene_groups": 0,
+  "max_tcp_target_roundtrip_m": 1.7772239894833365e-16,
+  "max_tcp_target_roundtrip_deg": 8.05519201032205e-15,
+  "episode_reports": [
+    {
+      "episode_index": 177236244079777,
+      "scene_sha256": "bb2d8078ff6ce373be6caad7d1b933615b776fa559ee388388701d0243008d56",
+      "split": "train",
+      "frames": 487,
+      "valid_chunks": 406,
+      "invalid_timing_chunks": 78,
+      "missing_image_chunks": 0
+    },
+    {
+      "episode_index": 198658941432180,
+      "scene_sha256": "1b1ed08ed96ce9953e5e74c62f14bc8dff14431b9075137353a4486e6541e86b",
+      "split": "train",
+      "frames": 484,
+      "valid_chunks": 434,
+      "invalid_timing_chunks": 47,
+      "missing_image_chunks": 0
+    },
+    {
+      "episode_index": 184947559337020,
+      "scene_sha256": "9dfb9235b663efdb3b0ddca322a791e197ce7a6d153b9c94896d43bf5815de00",
+      "split": "train",
+      "frames": 1006,
+      "valid_chunks": 885,
+      "invalid_timing_chunks": 118,
+      "missing_image_chunks": 0
+    }
+  ]
+}

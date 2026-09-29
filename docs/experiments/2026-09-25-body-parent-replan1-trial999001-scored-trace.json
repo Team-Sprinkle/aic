@@ -1,0 +1,2964 @@
+{
+  "schema": "sc_body_actor_scored_trace/v1",
+  "diagnostic_only": true,
+  "privileged_geometry_at_autonomous_runtime": false,
+  "bag": "/var/tmp/chmin_aic_20260918_act/shared_body_target_bc_batch3_20260925/eval_new_dev2_replan1_retry1/best/attempt_0001/bag_trial_999001_20260925_112933_465",
+  "selected_port": 0,
+  "topic_counts": {
+    "states": 33180,
+    "commands": 782,
+    "tips": 33707,
+    "forces": 3353
+  },
+  "camera_visibility_semantics": "geometric frustum only; no occlusion ray test or saved RGB",
+  "rows_1hz": [
+    {
+      "time_from_first_command_s": 0,
+      "actual_tip_opening_xyz_mm": [
+        188.68394819574837,
+        -90.7085390872209,
+        -269.6047073447072
+      ],
+      "actual_tip_distance_mm": 341.3449422395166,
+      "commanded_proxy_tip_opening_xyz_mm": [
+        186.25185206921583,
+        -93.06242751788896,
+        -270.9383181067275
+      ],
+      "commanded_proxy_tip_distance_mm": 341.69860993752616,
+      "tcp_reference_error_mm": 11.700055894421475,
+      "tcp_state_error_mm": 11.700055894421475,
+      "force_n": 20.84388573561769,
+      "opening_camera_projection": {
+        "center": {
+          "frustum": false,
+          "u_native_px": 353.8703401675567,
+          "v_native_px": -72.60133014906387,
+          "depth_m": 0.4530511353116259
+        },
+        "left": {
+          "frustum": true,
+          "u_native_px": 944.3616711605044,
+          "v_native_px": 21.778673667932992,
+          "depth_m": 0.46142537598574934
+        },
+        "right": {
+          "frustum": true,
+          "u_native_px": 32.50318278629118,
+          "v_native_px": 395.8397630768086,
+          "depth_m": 0.49790519870754174
+        }
+      },
+      "nearest_stamp_gap_ms": {
+        "state": 0.0,
+        "command": 0.0,
+        "tip": 0.0,
+        "force": 3.999999999997783
+      }
+    },
+    {
+      "time_from_first_command_s": 1,
+      "actual_tip_opening_xyz_mm": [
+        186.147092453357,
+        -88.48010815890426,
+        -262.2472227535366
+      ],
+      "actual_tip_distance_mm": 333.54621180668966,
+      "commanded_proxy_tip_opening_xyz_mm": [
+        180.13552598139376,
+        -90.20801943511225,
+        -262.8866047617833
+      ],
+      "commanded_proxy_tip_distance_mm": 331.20335362761205,
+      "tcp_reference_error_mm": 4.686706126082404,
+      "tcp_state_error_mm": 4.686706126082404,
+      "force_n": 20.95571969195111,
+      "opening_camera_projection": {
+        "center": {
+          "frustum": false,
+          "u_native_px": 353.19401456314336,
+          "v_native_px": -86.91188441004806,
+          "depth_m": 0.4413901435095019
+        },
+        "left": {
+          "frustum": true,
+          "u_native_px": 962.0672526563458,
+          "v_native_px": 18.76090992781525,
+          "depth_m": 0.45051976071828176
+        },
+        "right": {
+          "frustum": true,
+          "u_native_px": 15.952518872250153,
+          "v_native_px": 393.3493887102429,
+          "depth_m": 0.48616880471897944
+        }
+      },
+      "nearest_stamp_gap_ms": {
+        "state": 0.0,
+        "command": 57.99999999999983,
+        "tip": 0.0,
+        "force": 2.0000000000024443
+      }
+    },
+    {
+      "time_from_first_command_s": 2,
+      "actual_tip_opening_xyz_mm": [
+        177.43109718872498,
+        -84.3339150224772,
+        -251.4052264015767
+      ],
+      "actual_tip_distance_mm": 319.05891514678166,
+      "commanded_proxy_tip_opening_xyz_mm": [
+        165.51512496336144,
+        -84.5230413948968,
+        -248.6227641692353
+      ],
+      "commanded_proxy_tip_distance_mm": 310.40728081253474,
+      "tcp_reference_error_mm": 6.546647968431806,
+      "tcp_state_error_mm": 6.546647968431806,
+      "force_n": 20.8913082223014,
+      "opening_camera_projection": {
+        "center": {
+          "frustum": false,
+          "u_native_px": 353.31389518820686,
+          "v_native_px": -98.56311717020287,
+          "depth_m": 0.42381395901776864
+        },
+        "left": {
+          "frustum": true,
+          "u_native_px": 982.0799433340876,
+          "v_native_px": 20.40695200453456,
+          "depth_m": 0.4336863769764475
+        },
+        "right": {
+          "frustum": false,
+          "u_native_px": -2.0990845330250067,
+          "v_native_px": 393.8030102959262,
+          "depth_m": 0.46789740134334507
+        }
+      },
+      "nearest_stamp_gap_ms": {
+        "state": 0.0,
+        "command": 25.9999999999998,
+        "tip": 0.0,
+        "force": 8.000000000002672
+      }
+    },
+    {
+      "time_from_first_command_s": 3,
+      "actual_tip_opening_xyz_mm": [
+        164.3374568666825,
+        -79.40861730507274,
+        -237.6947397811644
+      ],
+      "actual_tip_distance_mm": 299.6853642594975,
+      "commanded_proxy_tip_opening_xyz_mm": [
+        150.31994217548555,
+        -79.84521988689772,
+        -233.06045703375196
+      ],
+      "commanded_proxy_tip_distance_mm": 288.59750655057593,
+      "tcp_reference_error_mm": 13.212790965007928,
+      "tcp_state_error_mm": 13.212790965007928,
+      "force_n": 20.7373351175994,
+      "opening_camera_projection": {
+        "center": {
+          "frustum": false,
+          "u_native_px": 352.48350344262155,
+          "v_native_px": -107.57762562549499,
+          "depth_m": 0.40174955915338795
+        },
+        "left": {
+          "frustum": true,
+          "u_native_px": 1003.6551503283582,
+          "v_native_px": 25.093930915350995,
+          "depth_m": 0.4121954337578407
+        },
+        "right": {
+          "frustum": false,
+          "u_native_px": -22.26762432867565,
+          "v_native_px": 398.5210596095433,
+          "depth_m": 0.44474626117572985
+        }
+      },
+      "nearest_stamp_gap_ms": {
+        "state": 0.0,
+        "command": 73.99999999999807,
+        "tip": 0.0,
+        "force": 3.999999999997783
+      }
+    },
+    {
+      "time_from_first_command_s": 4,
+      "actual_tip_opening_xyz_mm": [
+        148.22569980753013,
+        -75.48862345529957,
+        -222.42836269424225
+      ],
+      "actual_tip_distance_mm": 277.7476676507823,
+      "commanded_proxy_tip_opening_xyz_mm": [
+        133.37962245034763,
+        -77.95897902112164,
+        -218.55850934258277
+      ],
+      "commanded_proxy_tip_distance_mm": 267.6481797081101,
+      "tcp_reference_error_mm": 14.402939441932201,
+      "tcp_state_error_mm": 14.402939441932201,
+      "force_n": 20.42978219002265,
+      "opening_camera_projection": {
+        "center": {
+          "frustum": false,
+          "u_native_px": 348.3760133362519,
+          "v_native_px": -105.28539125247983,
+          "depth_m": 0.379384770090714
+        },
+        "left": {
+          "frustum": true,
+          "u_native_px": 1017.0360758970412,
+          "v_native_px": 33.42220321367199,
+          "depth_m": 0.389714755378764
+        },
+        "right": {
+          "frustum": false,
+          "u_native_px": -37.36360607478173,
+          "v_native_px": 412.1617746329374,
+          "depth_m": 0.42101840131855656
+        }
+      },
+      "nearest_stamp_gap_ms": {
+        "state": 0.0,
+        "command": 62.000000000001165,
+        "tip": 0.0,
+        "force": 8.000000000002672
+      }
+    },
+    {
+      "time_from_first_command_s": 5,
+      "actual_tip_opening_xyz_mm": [
+        129.70001131396754,
+        -77.44348175568031,
+        -204.82888856364556
+      ],
+      "actual_tip_distance_mm": 254.50826979000905,
+      "commanded_proxy_tip_opening_xyz_mm": [
+        113.18518312930581,
+        -87.12703721083733,
+        -198.92047314604596
+      ],
+      "commanded_proxy_tip_distance_mm": 244.89050804349262,
+      "tcp_reference_error_mm": 18.16791307453796,
+      "tcp_state_error_mm": 18.16791307453796,
+      "force_n": 20.325942250812062,
+      "opening_camera_projection": {
+        "center": {
+          "frustum": false,
+          "u_native_px": 323.31880176033854,
+          "v_native_px": -95.5958519833116,
+          "depth_m": 0.3551210471284142
+        },
+        "left": {
+          "frustum": true,
+          "u_native_px": 1019.9615739463284,
+          "v_native_px": 28.87662963736102,
+          "depth_m": 0.36379009776325955
+        },
+        "right": {
+          "frustum": false,
+          "u_native_px": -57.94420337045187,
+          "v_native_px": 447.3216144352789,
+          "depth_m": 0.3963174387470162
+        }
+      },
+      "nearest_stamp_gap_ms": {
+        "state": 0.0,
+        "command": 28.000000000002245,
+        "tip": 0.0,
+        "force": 2.0000000000024443
+      }
+    },
+    {
+      "time_from_first_command_s": 6,
+      "actual_tip_opening_xyz_mm": [
+        111.7767929029453,
+        -84.60084938121237,
+        -187.5587775930925
+      ],
+      "actual_tip_distance_mm": 234.15731933874207,
+      "commanded_proxy_tip_opening_xyz_mm": [
+        97.20445812999006,
+        -96.96427815617017,
+        -185.32055876288337
+      ],
+      "commanded_proxy_tip_distance_mm": 230.63930154871574,
+      "tcp_reference_error_mm": 16.488934073816388,
+      "tcp_state_error_mm": 16.488934073816388,
+      "force_n": 20.712091539216225,
+      "opening_camera_projection": {
+        "center": {
+          "frustum": false,
+          "u_native_px": 279.9969070908192,
+          "v_native_px": -65.44693362306123,
+          "depth_m": 0.3364162727950848
+        },
+        "left": {
+          "frustum": true,
+          "u_native_px": 996.7085310840698,
+          "v_native_px": 15.653245265681448,
+          "depth_m": 0.34175277431645806
+        },
+        "right": {
+          "frustum": false,
+          "u_native_px": -68.06577833088659,
+          "v_native_px": 503.9818278484379,
+          "depth_m": 0.37785019321127283
+        }
+      },
+      "nearest_stamp_gap_ms": {
+        "state": 0.0,
+        "command": 46.00000000000293,
+        "tip": 0.0,
+        "force": 8.000000000002672
+      }
+    },
+    {
+      "time_from_first_command_s": 7,
+      "actual_tip_opening_xyz_mm": [
+        99.87972348199482,
+        -88.82530250827756,
+        -175.67818858456684
+      ],
+      "actual_tip_distance_mm": 220.74582549366906,
+      "commanded_proxy_tip_opening_xyz_mm": [
+        94.2430526586782,
+        -100.45510768990256,
+        -175.0759194152715
+      ],
+      "commanded_proxy_tip_distance_mm": 222.7657047090484,
+      "tcp_reference_error_mm": 20.093014404635458,
+      "tcp_state_error_mm": 20.093014404635458,
+      "force_n": 20.86114452556663,
+      "opening_camera_projection": {
+        "center": {
+          "frustum": false,
+          "u_native_px": 246.98885339256873,
+          "v_native_px": -34.607699043198636,
+          "depth_m": 0.3253922117207917
+        },
+        "left": {
+          "frustum": true,
+          "u_native_px": 970.3370001803119,
+          "v_native_px": 7.773292712556554,
+          "depth_m": 0.32808478294371846
+        },
+        "right": {
+          "frustum": false,
+          "u_native_px": -68.42611084250643,
+          "v_native_px": 549.2836719330344,
+          "depth_m": 0.36689293997835537
+        }
+      },
+      "nearest_stamp_gap_ms": {
+        "state": 0.0,
+        "command": 27.999999999998693,
+        "tip": 0.0,
+        "force": 4.000000000001336
+      }
+    },
+    {
+      "time_from_first_command_s": 8,
+      "actual_tip_opening_xyz_mm": [
+        94.39270709320326,
+        -83.4479964575835,
+        -168.26713688363816
+      ],
+      "actual_tip_distance_mm": 210.20794613949576,
+      "commanded_proxy_tip_opening_xyz_mm": [
+        79.00320437570174,
+        -66.57651481232183,
+        -170.08215736315856
+      ],
+      "commanded_proxy_tip_distance_mm": 199.0022082276738,
+      "tcp_reference_error_mm": 24.368720543283906,
+      "tcp_state_error_mm": 24.368720543283906,
+      "force_n": 20.599611829861647,
+      "opening_camera_projection": {
+        "center": {
+          "frustum": false,
+          "u_native_px": 245.6103833969368,
+          "v_native_px": -18.79280694004126,
+          "depth_m": 0.31678769888862657
+        },
+        "left": {
+          "frustum": true,
+          "u_native_px": 967.055354967785,
+          "v_native_px": 20.44585156285075,
+          "depth_m": 0.3192205901517953
+        },
+        "right": {
+          "frustum": false,
+          "u_native_px": -66.56205373323712,
+          "v_native_px": 562.9248231928724,
+          "depth_m": 0.35716083144726196
+        }
+      },
+      "nearest_stamp_gap_ms": {
+        "state": 7.105427357601002e-12,
+        "command": 22.00000000000557,
+        "tip": 7.105427357601002e-12,
+        "force": 9.99999999999801
+      }
+    },
+    {
+      "time_from_first_command_s": 9,
+      "actual_tip_opening_xyz_mm": [
+        88.84692561807044,
+        -75.10241357964364,
+        -160.97794590031978
+      ],
+      "actual_tip_distance_mm": 198.61532615474835,
+      "commanded_proxy_tip_opening_xyz_mm": [
+        88.75626866038989,
+        -90.09076439568949,
+        -160.8075738388346
+      ],
+      "commanded_proxy_tip_distance_mm": 204.5802944074702,
+      "tcp_reference_error_mm": 25.869086926147617,
+      "tcp_state_error_mm": 25.869086926147617,
+      "force_n": 20.31543483381655,
+      "opening_camera_projection": {
+        "center": {
+          "frustum": true,
+          "u_native_px": 255.5012616957336,
+          "v_native_px": 2.288430801035645,
+          "depth_m": 0.30926789087032347
+        },
+        "left": {
+          "frustum": true,
+          "u_native_px": 963.618569254653,
+          "v_native_px": 45.47426672422057,
+          "depth_m": 0.3118948993584777
+        },
+        "right": {
+          "frustum": false,
+          "u_native_px": -56.552242356324086,
+          "v_native_px": 570.4239442988006,
+          "depth_m": 0.34782563978228076
+        }
+      },
+      "nearest_stamp_gap_ms": {
+        "state": 7.105427357601002e-12,
+        "command": 23.999999999993804,
+        "tip": 7.105427357601002e-12,
+        "force": 1.9999999999953388
+      }
+    },
+    {
+      "time_from_first_command_s": 10,
+      "actual_tip_opening_xyz_mm": [
+        83.24863323014077,
+        -69.72729320917584,
+        -152.0128054124714
+      ],
+      "actual_tip_distance_mm": 186.81574709412155,
+      "commanded_proxy_tip_opening_xyz_mm": [
+        85.75670997429826,
+        -84.0356032994144,
+        -152.17614237824768
+      ],
+      "commanded_proxy_tip_distance_mm": 193.83955797678956,
+      "tcp_reference_error_mm": 26.759098576314226,
+      "tcp_state_error_mm": 26.759098576314226,
+      "force_n": 20.614014319991494,
+      "opening_camera_projection": {
+        "center": {
+          "frustum": true,
+          "u_native_px": 260.5617923447637,
+          "v_native_px": 32.06929461880918,
+          "depth_m": 0.30282978782524833
+        },
+        "left": {
+          "frustum": true,
+          "u_native_px": 950.2927529752584,
+          "v_native_px": 69.68528008352428,
+          "depth_m": 0.30508085458445755
+        },
+        "right": {
+          "frustum": false,
+          "u_native_px": -41.33959640689636,
+          "v_native_px": 585.2117267604067,
+          "depth_m": 0.3397081020549929
+        }
+      },
+      "nearest_stamp_gap_ms": {
+        "state": 7.105427357601002e-12,
+        "command": 43.99999999999693,
+        "tip": 7.105427357601002e-12,
+        "force": 8.000000000002672
+      }
+    },
+    {
+      "time_from_first_command_s": 11,
+      "actual_tip_opening_xyz_mm": [
+        79.04674623159099,
+        -64.28295910556886,
+        -143.63051765157374
+      ],
+      "actual_tip_distance_mm": 176.09773570954516,
+      "commanded_proxy_tip_opening_xyz_mm": [
+        55.79520212842202,
+        -48.0808583501299,
+        -143.25512514255857
+      ],
+      "commanded_proxy_tip_distance_mm": 161.0804283575346,
+      "tcp_reference_error_mm": 28.712456264281062,
+      "tcp_state_error_mm": 28.712456264281062,
+      "force_n": 20.57159640137884,
+      "opening_camera_projection": {
+        "center": {
+          "frustum": true,
+          "u_native_px": 271.3501577685271,
+          "v_native_px": 59.739739287761836,
+          "depth_m": 0.29757636510585406
+        },
+        "left": {
+          "frustum": true,
+          "u_native_px": 939.8527472477117,
+          "v_native_px": 97.32128899357298,
+          "depth_m": 0.29979844720835097
+        },
+        "right": {
+          "frustum": false,
+          "u_native_px": -24.432689141639685,
+          "v_native_px": 594.2125065005354,
+          "depth_m": 0.3326612192079947
+        }
+      },
+      "nearest_stamp_gap_ms": {
+        "state": 7.105427357601002e-12,
+        "command": 28.000000000005798,
+        "tip": 7.105427357601002e-12,
+        "force": 7.105427357601002e-12
+      }
+    },
+    {
+      "time_from_first_command_s": 12,
+      "actual_tip_opening_xyz_mm": [
+        74.08573300146648,
+        -57.12798420934012,
+        -137.0920952694421
+      ],
+      "actual_tip_distance_mm": 165.9715186396539,
+      "commanded_proxy_tip_opening_xyz_mm": [
+        76.73527924576086,
+        -69.56690876753864,
+        -138.2986188317836
+      ],
+      "commanded_proxy_tip_distance_mm": 172.78415971140097,
+      "tcp_reference_error_mm": 10.869961494254637,
+      "tcp_state_error_mm": 10.869961494254637,
+      "force_n": 20.60414572020082,
+      "opening_camera_projection": {
+        "center": {
+          "frustum": true,
+          "u_native_px": 295.1478447463073,
+          "v_native_px": 89.67933960999403,
+          "depth_m": 0.2952145955016482
+        },
+        "left": {
+          "frustum": true,
+          "u_native_px": 929.5282288286528,
+          "v_native_px": 135.41672863859458,
+          "depth_m": 0.2979181707389133
+        },
+        "right": {
+          "frustum": true,
+          "u_native_px": 2.064030410970531,
+          "v_native_px": 592.8615996793878,
+          "depth_m": 0.32797335232293956
+        }
+      },
+      "nearest_stamp_gap_ms": {
+        "state": 7.105427357601002e-12,
+        "command": 14.000000000002899,
+        "tip": 7.105427357601002e-12,
+        "force": 9.99999999999801
+      }
+    },
+    {
+      "time_from_first_command_s": 13,
+      "actual_tip_opening_xyz_mm": [
+        70.0963278070053,
+        -51.389303474959654,
+        -129.63939644101896
+      ],
+      "actual_tip_distance_mm": 156.07923882842434,
+      "commanded_proxy_tip_opening_xyz_mm": [
+        73.85363779661418,
+        -63.49138196502051,
+        -130.5585333359597
+      ],
+      "commanded_proxy_tip_distance_mm": 162.88353516073536,
+      "tcp_reference_error_mm": 27.772713608667082,
+      "tcp_state_error_mm": 27.772713608667082,
+      "force_n": 20.48845304295175,
+      "opening_camera_projection": {
+        "center": {
+          "frustum": true,
+          "u_native_px": 314.96742461293894,
+          "v_native_px": 117.20234431849661,
+          "depth_m": 0.29167967247672216
+        },
+        "left": {
+          "frustum": true,
+          "u_native_px": 921.1028679392354,
+          "v_native_px": 169.6993573002003,
+          "depth_m": 0.2947670200756624
+        },
+        "right": {
+          "frustum": true,
+          "u_native_px": 24.254450530890608,
+          "v_native_px": 594.1419614468177,
+          "depth_m": 0.3223666738611473
+        }
+      },
+      "nearest_stamp_gap_ms": {
+        "state": 7.105427357601002e-12,
+        "command": 29.99999999999403,
+        "tip": 7.105427357601002e-12,
+        "force": 8.000000000002672
+      }
+    },
+    {
+      "time_from_first_command_s": 14,
+      "actual_tip_opening_xyz_mm": [
+        67.4890263586805,
+        -45.659060848654235,
+        -121.157918694772
+      ],
+      "actual_tip_distance_mm": 146.00945099161478,
+      "commanded_proxy_tip_opening_xyz_mm": [
+        45.00796166889465,
+        -30.695811822382716,
+        -117.28310289678781
+      ],
+      "commanded_proxy_tip_distance_mm": 129.31850487119908,
+      "tcp_reference_error_mm": 11.55894217622696,
+      "tcp_state_error_mm": 11.55894217622696,
+      "force_n": 20.779667433707623,
+      "opening_camera_projection": {
+        "center": {
+          "frustum": true,
+          "u_native_px": 335.1633241030165,
+          "v_native_px": 142.1481402013428,
+          "depth_m": 0.28676799408605497
+        },
+        "left": {
+          "frustum": true,
+          "u_native_px": 916.9877587161743,
+          "v_native_px": 204.22858168239384,
+          "depth_m": 0.2903828480535274
+        },
+        "right": {
+          "frustum": true,
+          "u_native_px": 43.11153805868207,
+          "v_native_px": 594.9782142809477,
+          "depth_m": 0.3154182592503245
+        }
+      },
+      "nearest_stamp_gap_ms": {
+        "state": 7.105427357601002e-12,
+        "command": 27.999999999991587,
+        "tip": 7.105427357601002e-12,
+        "force": 7.105427357601002e-12
+      }
+    },
+    {
+      "time_from_first_command_s": 15,
+      "actual_tip_opening_xyz_mm": [
+        65.68490280087532,
+        -40.53008235474403,
+        -113.47040148600173
+      ],
+      "actual_tip_distance_mm": 137.2323797251844,
+      "commanded_proxy_tip_opening_xyz_mm": [
+        43.22669228592456,
+        -25.815036308139092,
+        -110.18859106835937
+      ],
+      "commanded_proxy_tip_distance_mm": 121.14655846206558,
+      "tcp_reference_error_mm": 27.24722726296696,
+      "tcp_state_error_mm": 27.24722726296696,
+      "force_n": 20.40577942811443,
+      "opening_camera_projection": {
+        "center": {
+          "frustum": true,
+          "u_native_px": 354.4258455052628,
+          "v_native_px": 163.97549407797538,
+          "depth_m": 0.2823251315771096
+        },
+        "left": {
+          "frustum": true,
+          "u_native_px": 914.4995401150372,
+          "v_native_px": 235.97240790711862,
+          "depth_m": 0.28647942984962443
+        },
+        "right": {
+          "frustum": true,
+          "u_native_px": 59.9795436545005,
+          "v_native_px": 594.7402654712026,
+          "depth_m": 0.30915553782740723
+        }
+      },
+      "nearest_stamp_gap_ms": {
+        "state": 7.105427357601002e-12,
+        "command": 24.000000000008015,
+        "tip": 7.105427357601002e-12,
+        "force": 8.000000000002672
+      }
+    },
+    {
+      "time_from_first_command_s": 16,
+      "actual_tip_opening_xyz_mm": [
+        63.49834096193539,
+        -35.45207505861686,
+        -105.37466782043548
+      ],
+      "actual_tip_distance_mm": 128.0340171561727,
+      "commanded_proxy_tip_opening_xyz_mm": [
+        68.23717848316211,
+        -46.043621166253466,
+        -104.39779576082766
+      ],
+      "commanded_proxy_tip_distance_mm": 132.94821298973474,
+      "tcp_reference_error_mm": 10.583854085417805,
+      "tcp_state_error_mm": 10.583854085417805,
+      "force_n": 20.40940101772351,
+      "opening_camera_projection": {
+        "center": {
+          "frustum": true,
+          "u_native_px": 374.6407005624948,
+          "v_native_px": 189.53460609286708,
+          "depth_m": 0.2781303405817464
+        },
+        "left": {
+          "frustum": true,
+          "u_native_px": 909.3162599778466,
+          "v_native_px": 270.1729064344215,
+          "depth_m": 0.2827465307689768
+        },
+        "right": {
+          "frustum": true,
+          "u_native_px": 80.20458587996325,
+          "v_native_px": 595.5469583975686,
+          "depth_m": 0.3030475614311198
+        }
+      },
+      "nearest_stamp_gap_ms": {
+        "state": 7.105427357601002e-12,
+        "command": 8.000000000002672,
+        "tip": 7.105427357601002e-12,
+        "force": 3.999999999997783
+      }
+    },
+    {
+      "time_from_first_command_s": 17,
+      "actual_tip_opening_xyz_mm": [
+        60.568603475462695,
+        -30.53538593690133,
+        -95.28409309519614
+      ],
+      "actual_tip_distance_mm": 116.96163438605562,
+      "commanded_proxy_tip_opening_xyz_mm": [
+        68.22095271421227,
+        -41.62750610690055,
+        -94.86653975662868
+      ],
+      "commanded_proxy_tip_distance_mm": 124.04276689638473,
+      "tcp_reference_error_mm": 12.87225241958498,
+      "tcp_state_error_mm": 12.87225241958498,
+      "force_n": 20.467496508729454,
+      "opening_camera_projection": {
+        "center": {
+          "frustum": true,
+          "u_native_px": 394.7743832230053,
+          "v_native_px": 222.95954672939115,
+          "depth_m": 0.2728445978973233
+        },
+        "left": {
+          "frustum": true,
+          "u_native_px": 899.8131026271426,
+          "v_native_px": 309.2925703936056,
+          "depth_m": 0.2777322763556774
+        },
+        "right": {
+          "frustum": true,
+          "u_native_px": 104.56990211301934,
+          "v_native_px": 601.3771045870842,
+          "depth_m": 0.2956561099877822
+        }
+      },
+      "nearest_stamp_gap_ms": {
+        "state": 7.105427357601002e-12,
+        "command": 36.00000000000847,
+        "tip": 7.105427357601002e-12,
+        "force": 6.000000000007333
+      }
+    },
+    {
+      "time_from_first_command_s": 18,
+      "actual_tip_opening_xyz_mm": [
+        60.43080211233166,
+        -29.529056610750366,
+        -85.54354292851008
+      ],
+      "actual_tip_distance_mm": 108.8188621748203,
+      "commanded_proxy_tip_opening_xyz_mm": [
+        37.007081813298036,
+        -26.691586575571492,
+        -85.06717016430079
+      ],
+      "commanded_proxy_tip_distance_mm": 96.53179962074398,
+      "tcp_reference_error_mm": 22.142615055125308,
+      "tcp_state_error_mm": 22.142615055125308,
+      "force_n": 20.510152828822353,
+      "opening_camera_projection": {
+        "center": {
+          "frustum": true,
+          "u_native_px": 396.0499270025822,
+          "v_native_px": 246.50674991724463,
+          "depth_m": 0.26595743241008124
+        },
+        "left": {
+          "frustum": true,
+          "u_native_px": 892.9052901452865,
+          "v_native_px": 329.0146689254123,
+          "depth_m": 0.27052923664693573
+        },
+        "right": {
+          "frustum": true,
+          "u_native_px": 111.9397737112576,
+          "v_native_px": 618.1726439726913,
+          "depth_m": 0.28787766877695287
+        }
+      },
+      "nearest_stamp_gap_ms": {
+        "state": 7.105427357601002e-12,
+        "command": 4.0000000000048885,
+        "tip": 7.105427357601002e-12,
+        "force": 5.999999999993122
+      }
+    },
+    {
+      "time_from_first_command_s": 19,
+      "actual_tip_opening_xyz_mm": [
+        51.548895377063836,
+        -27.134424843786864,
+        -80.43543922497287
+      ],
+      "actual_tip_distance_mm": 99.31477991473825,
+      "commanded_proxy_tip_opening_xyz_mm": [
+        28.482627906295225,
+        -29.780818928661063,
+        -85.14061658547982
+      ],
+      "commanded_proxy_tip_distance_mm": 94.58901554126592,
+      "tcp_reference_error_mm": 21.44077108652133,
+      "tcp_state_error_mm": 21.44077108652133,
+      "force_n": 20.15306169358597,
+      "opening_camera_projection": {
+        "center": {
+          "frustum": true,
+          "u_native_px": 411.56631910679783,
+          "v_native_px": 295.6003821533683,
+          "depth_m": 0.268801892074802
+        },
+        "left": {
+          "frustum": true,
+          "u_native_px": 856.0526161948619,
+          "v_native_px": 364.41370243450297,
+          "depth_m": 0.2726840035444098
+        },
+        "right": {
+          "frustum": true,
+          "u_native_px": 158.38730047310622,
+          "v_native_px": 628.7332400562002,
+          "depth_m": 0.2887060719398268
+        }
+      },
+      "nearest_stamp_gap_ms": {
+        "state": 7.105427357601002e-12,
+        "command": 32.00000000000358,
+        "tip": 7.105427357601002e-12,
+        "force": 4.0000000000048885
+      }
+    },
+    {
+      "time_from_first_command_s": 20,
+      "actual_tip_opening_xyz_mm": [
+        49.79294767716769,
+        -31.69078301878664,
+        -84.03452892481455
+      ],
+      "actual_tip_distance_mm": 102.6910191708139,
+      "commanded_proxy_tip_opening_xyz_mm": [
+        23.840703915632186,
+        -36.41916089085088,
+        -88.7033906260018
+      ],
+      "commanded_proxy_tip_distance_mm": 98.80802574556172,
+      "tcp_reference_error_mm": 23.98404044549043,
+      "tcp_state_error_mm": 23.98404044549043,
+      "force_n": 20.38612494035946,
+      "opening_camera_projection": {
+        "center": {
+          "frustum": true,
+          "u_native_px": 395.9500684974912,
+          "v_native_px": 296.6559633452646,
+          "depth_m": 0.2737392772198473
+        },
+        "left": {
+          "frustum": true,
+          "u_native_px": 840.2900060683372,
+          "v_native_px": 346.86466419372437,
+          "depth_m": 0.2766128258629272
+        },
+        "right": {
+          "frustum": true,
+          "u_native_px": 160.37038938677637,
+          "v_native_px": 636.8902995139816,
+          "depth_m": 0.2944788679086728
+        }
+      },
+      "nearest_stamp_gap_ms": {
+        "state": 7.105427357601002e-12,
+        "command": 13.999999999995794,
+        "tip": 7.105427357601002e-12,
+        "force": 3.999999999997783
+      }
+    },
+    {
+      "time_from_first_command_s": 21,
+      "actual_tip_opening_xyz_mm": [
+        49.244094986448026,
+        -37.24652200025358,
+        -85.51476378711942
+      ],
+      "actual_tip_distance_mm": 105.47539579312571,
+      "commanded_proxy_tip_opening_xyz_mm": [
+        24.2643202086913,
+        -44.592480510282854,
+        -88.8392938846183
+      ],
+      "commanded_proxy_tip_distance_mm": 102.32138921636786,
+      "tcp_reference_error_mm": 23.61697413794514,
+      "tcp_state_error_mm": 23.61697413794514,
+      "force_n": 20.653648761586535,
+      "opening_camera_projection": {
+        "center": {
+          "frustum": true,
+          "u_native_px": 374.78486146230244,
+          "v_native_px": 297.38831248837744,
+          "depth_m": 0.27594881866447935
+        },
+        "left": {
+          "frustum": true,
+          "u_native_px": 826.6915917798142,
+          "v_native_px": 326.92718821455054,
+          "depth_m": 0.27764529740166516
+        },
+        "right": {
+          "frustum": true,
+          "u_native_px": 155.78088972606264,
+          "v_native_px": 651.396297006805,
+          "depth_m": 0.2977728173995935
+        }
+      },
+      "nearest_stamp_gap_ms": {
+        "state": 7.105427357601002e-12,
+        "command": 34.000000000006025,
+        "tip": 7.105427357601002e-12,
+        "force": 8.000000000002672
+      }
+    },
+    {
+      "time_from_first_command_s": 22,
+      "actual_tip_opening_xyz_mm": [
+        48.74011453018765,
+        -40.844401588817384,
+        -87.13526370423952
+      ],
+      "actual_tip_distance_mm": 107.8722303763659,
+      "commanded_proxy_tip_opening_xyz_mm": [
+        22.744113853494564,
+        -46.360873317419085,
+        -92.67058744239563
+      ],
+      "commanded_proxy_tip_distance_mm": 106.08705418972288,
+      "tcp_reference_error_mm": 24.58276649365625,
+      "tcp_state_error_mm": 24.58276649365625,
+      "force_n": 22.34529874846956,
+      "opening_camera_projection": {
+        "center": {
+          "frustum": true,
+          "u_native_px": 362.4797517146084,
+          "v_native_px": 297.41734725523384,
+          "depth_m": 0.278318942979513
+        },
+        "left": {
+          "frustum": true,
+          "u_native_px": 817.3864734790116,
+          "v_native_px": 314.055572884191,
+          "depth_m": 0.27927944193260995
+        },
+        "right": {
+          "frustum": true,
+          "u_native_px": 154.3463307828319,
+          "v_native_px": 658.7275328653052,
+          "depth_m": 0.3008213579007367
+        }
+      },
+      "nearest_stamp_gap_ms": {
+        "state": 7.105427357601002e-12,
+        "command": 23.999999999993804,
+        "tip": 7.105427357601002e-12,
+        "force": 7.105427357601002e-12
+      }
+    },
+    {
+      "time_from_first_command_s": 23,
+      "actual_tip_opening_xyz_mm": [
+        48.061506986876026,
+        -42.46626999444017,
+        -90.43018667679448
+      ],
+      "actual_tip_distance_mm": 110.86438203268946,
+      "commanded_proxy_tip_opening_xyz_mm": [
+        21.671868672052366,
+        -47.77474982936696,
+        -97.04036298205429
+      ],
+      "commanded_proxy_tip_distance_mm": 110.31286715830632,
+      "tcp_reference_error_mm": 25.101898263238677,
+      "tcp_state_error_mm": 25.101898263238677,
+      "force_n": 20.576248278883266,
+      "opening_camera_projection": {
+        "center": {
+          "frustum": true,
+          "u_native_px": 359.14592560398637,
+          "v_native_px": 294.7921177655599,
+          "depth_m": 0.28219089264497565
+        },
+        "left": {
+          "frustum": true,
+          "u_native_px": 812.0600038526196,
+          "v_native_px": 306.25399607721846,
+          "depth_m": 0.28286020286539043
+        },
+        "right": {
+          "frustum": true,
+          "u_native_px": 156.49283602698233,
+          "v_native_px": 656.8331081038186,
+          "depth_m": 0.30504285801429654
+        }
+      },
+      "nearest_stamp_gap_ms": {
+        "state": 7.105427357601002e-12,
+        "command": 19.99999999999602,
+        "tip": 7.105427357601002e-12,
+        "force": 10.000000000005116
+      }
+    },
+    {
+      "time_from_first_command_s": 24,
+      "actual_tip_opening_xyz_mm": [
+        47.25285662823617,
+        -42.908093409912915,
+        -94.4234796641592
+      ],
+      "actual_tip_distance_mm": 113.9724986630123,
+      "commanded_proxy_tip_opening_xyz_mm": [
+        20.75137155655406,
+        -46.99030694658563,
+        -101.63305361941009
+      ],
+      "commanded_proxy_tip_distance_mm": 113.87706510276062,
+      "tcp_reference_error_mm": 25.434746777099352,
+      "tcp_state_error_mm": 25.434746777099352,
+      "force_n": 20.51907781289908,
+      "opening_camera_projection": {
+        "center": {
+          "frustum": true,
+          "u_native_px": 360.93341305557794,
+          "v_native_px": 292.03389564723517,
+          "depth_m": 0.2868492791069467
+        },
+        "left": {
+          "frustum": true,
+          "u_native_px": 808.1766583334204,
+          "v_native_px": 302.2435360369023,
+          "depth_m": 0.28745465207571813
+        },
+        "right": {
+          "frustum": true,
+          "u_native_px": 161.45478415939516,
+          "v_native_px": 650.5150507287524,
+          "depth_m": 0.3098176305218519
+        }
+      },
+      "nearest_stamp_gap_ms": {
+        "state": 7.105427357601002e-12,
+        "command": 5.999999999993122,
+        "tip": 7.105427357601002e-12,
+        "force": 7.105427357601002e-12
+      }
+    },
+    {
+      "time_from_first_command_s": 25,
+      "actual_tip_opening_xyz_mm": [
+        46.54531263838657,
+        -42.84331530223795,
+        -97.69654119262583
+      ],
+      "actual_tip_distance_mm": 116.38999078827423,
+      "commanded_proxy_tip_opening_xyz_mm": [
+        20.911797597295962,
+        -47.16237814763875,
+        -103.48839804449034
+      ],
+      "commanded_proxy_tip_distance_mm": 115.63495025772276,
+      "tcp_reference_error_mm": 24.198117530566936,
+      "tcp_state_error_mm": 24.198117530566936,
+      "force_n": 21.482758198758884,
+      "opening_camera_projection": {
+        "center": {
+          "frustum": true,
+          "u_native_px": 364.22875444758097,
+          "v_native_px": 290.53746157654706,
+          "depth_m": 0.2908141260663934
+        },
+        "left": {
+          "frustum": true,
+          "u_native_px": 805.1658903226156,
+          "v_native_px": 300.9175829398552,
+          "depth_m": 0.2914379928641575
+        },
+        "right": {
+          "frustum": true,
+          "u_native_px": 166.85255868357513,
+          "v_native_px": 644.315595425721,
+          "depth_m": 0.31376267412649833
+        }
+      },
+      "nearest_stamp_gap_ms": {
+        "state": 7.105427357601002e-12,
+        "command": 12.00000000000756,
+        "tip": 7.105427357601002e-12,
+        "force": 1.9999999999953388
+      }
+    },
+    {
+      "time_from_first_command_s": 26,
+      "actual_tip_opening_xyz_mm": [
+        45.92621668525587,
+        -42.589580231740534,
+        -99.77675143632747
+      ],
+      "actual_tip_distance_mm": 117.80700255300454,
+      "commanded_proxy_tip_opening_xyz_mm": [
+        20.05293935624857,
+        -46.72528447242945,
+        -106.54188906119325
+      ],
+      "commanded_proxy_tip_distance_mm": 118.05315205695463,
+      "tcp_reference_error_mm": 24.86873407389791,
+      "tcp_state_error_mm": 24.86873407389791,
+      "force_n": 21.950172883765422,
+      "opening_camera_projection": {
+        "center": {
+          "frustum": true,
+          "u_native_px": 367.48784934123046,
+          "v_native_px": 291.285866853586,
+          "depth_m": 0.2937501864492776
+        },
+        "left": {
+          "frustum": true,
+          "u_native_px": 801.9039556113823,
+          "v_native_px": 301.6590825924776,
+          "depth_m": 0.2943800428051593
+        },
+        "right": {
+          "frustum": true,
+          "u_native_px": 172.46107606948124,
+          "v_native_px": 640.0911649489124,
+          "depth_m": 0.31658306746975295
+        }
+      },
+      "nearest_stamp_gap_ms": {
+        "state": 7.105427357601002e-12,
+        "command": 3.999999999997783,
+        "tip": 7.105427357601002e-12,
+        "force": 7.999999999995566
+      }
+    },
+    {
+      "time_from_first_command_s": 27,
+      "actual_tip_opening_xyz_mm": [
+        45.40281306493269,
+        -42.545760401238475,
+        -101.50662360274066
+      ],
+      "actual_tip_distance_mm": 119.05944648601925,
+      "commanded_proxy_tip_opening_xyz_mm": [
+        20.021569439657643,
+        -47.18160450299945,
+        -107.60105207126571
+      ],
+      "commanded_proxy_tip_distance_mm": 119.18453529358466,
+      "tcp_reference_error_mm": 24.18747557248436,
+      "tcp_state_error_mm": 24.18747557248436,
+      "force_n": 20.96360204995611,
+      "opening_camera_projection": {
+        "center": {
+          "frustum": true,
+          "u_native_px": 369.7335082944735,
+          "v_native_px": 292.15012075005893,
+          "depth_m": 0.2962563446031902
+        },
+        "left": {
+          "frustum": true,
+          "u_native_px": 798.7556393160535,
+          "v_native_px": 301.9782371255093,
+          "depth_m": 0.2968581605215031
+        },
+        "right": {
+          "frustum": true,
+          "u_native_px": 177.1525969822343,
+          "v_native_px": 637.0313567180705,
+          "depth_m": 0.31900944359038985
+        }
+      },
+      "nearest_stamp_gap_ms": {
+        "state": 7.105427357601002e-12,
+        "command": 23.999999999993804,
+        "tip": 7.105427357601002e-12,
+        "force": 7.105427357601002e-12
+      }
+    },
+    {
+      "time_from_first_command_s": 28,
+      "actual_tip_opening_xyz_mm": [
+        44.980810051615386,
+        -42.805540600911904,
+        -102.48507244017424
+      ],
+      "actual_tip_distance_mm": 119.82811711824392,
+      "commanded_proxy_tip_opening_xyz_mm": [
+        19.458294961431402,
+        -47.12374906615247,
+        -109.13405529403639
+      ],
+      "commanded_proxy_tip_distance_mm": 120.45544816975928,
+      "tcp_reference_error_mm": 24.27725790436012,
+      "tcp_state_error_mm": 24.27725790436012,
+      "force_n": 21.80535233381375,
+      "opening_camera_projection": {
+        "center": {
+          "frustum": true,
+          "u_native_px": 370.236289296608,
+          "v_native_px": 293.6589588917682,
+          "depth_m": 0.297927660685884
+        },
+        "left": {
+          "frustum": true,
+          "u_native_px": 795.4734074644845,
+          "v_native_px": 301.81894671594205,
+          "depth_m": 0.298429864090643
+        },
+        "right": {
+          "frustum": true,
+          "u_native_px": 180.55041152973195,
+          "v_native_px": 636.2303557030216,
+          "depth_m": 0.3206518173317794
+        }
+      },
+      "nearest_stamp_gap_ms": {
+        "state": 7.105427357601002e-12,
+        "command": 26.000000000003354,
+        "tip": 7.105427357601002e-12,
+        "force": 8.000000000002672
+      }
+    },
+    {
+      "time_from_first_command_s": 29,
+      "actual_tip_opening_xyz_mm": [
+        44.436155554263,
+        -41.880103377269855,
+        -103.8897536800043
+      ],
+      "actual_tip_distance_mm": 120.50558451385328,
+      "commanded_proxy_tip_opening_xyz_mm": [
+        19.219830805307954,
+        -45.673836364631015,
+        -110.12831308910334
+      ],
+      "commanded_proxy_tip_distance_mm": 120.76318382809939,
+      "tcp_reference_error_mm": 23.485971616641415,
+      "tcp_state_error_mm": 23.485971616641415,
+      "force_n": 20.969531814900574,
+      "opening_camera_projection": {
+        "center": {
+          "frustum": true,
+          "u_native_px": 375.5936172697779,
+          "v_native_px": 295.2386460157878,
+          "depth_m": 0.30013133163237404
+        },
+        "left": {
+          "frustum": true,
+          "u_native_px": 793.673880060639,
+          "v_native_px": 305.51986303090166,
+          "depth_m": 0.3007696880743524
+        },
+        "right": {
+          "frustum": true,
+          "u_native_px": 186.5706128141801,
+          "v_native_px": 631.4288924749253,
+          "depth_m": 0.3225731322967056
+        }
+      },
+      "nearest_stamp_gap_ms": {
+        "state": 7.105427357601002e-12,
+        "command": 21.99999999999136,
+        "tip": 7.105427357601002e-12,
+        "force": 7.105427357601002e-12
+      }
+    },
+    {
+      "time_from_first_command_s": 30,
+      "actual_tip_opening_xyz_mm": [
+        44.13385766313141,
+        -41.877811568954954,
+        -103.53646547855621
+      ],
+      "actual_tip_distance_mm": 120.08891779771646,
+      "commanded_proxy_tip_opening_xyz_mm": [
+        19.377279392708058,
+        -45.8655827207819,
+        -108.86616537108193
+      ],
+      "commanded_proxy_tip_distance_mm": 119.71204032002677,
+      "tcp_reference_error_mm": 23.24629047876433,
+      "tcp_state_error_mm": 23.24629047876433,
+      "force_n": 21.304115434718245,
+      "opening_camera_projection": {
+        "center": {
+          "frustum": true,
+          "u_native_px": 376.31609253190504,
+          "v_native_px": 298.02243944661757,
+          "depth_m": 0.30040550854371556
+        },
+        "left": {
+          "frustum": true,
+          "u_native_px": 791.3755189563732,
+          "v_native_px": 307.3545502381474,
+          "depth_m": 0.3009855344747829
+        },
+        "right": {
+          "frustum": true,
+          "u_native_px": 189.26033167262517,
+          "v_native_px": 632.1034609703718,
+          "depth_m": 0.32273022329726303
+        }
+      },
+      "nearest_stamp_gap_ms": {
+        "state": 7.105427357601002e-12,
+        "command": 28.000000000005798,
+        "tip": 7.105427357601002e-12,
+        "force": 1.9999999999953388
+      }
+    },
+    {
+      "time_from_first_command_s": 31,
+      "actual_tip_opening_xyz_mm": [
+        43.78494676358524,
+        -42.08957746324954,
+        -102.43310890753054
+      ],
+      "actual_tip_distance_mm": 119.08482646662793,
+      "commanded_proxy_tip_opening_xyz_mm": [
+        19.303193101584593,
+        -46.633636603106105,
+        -107.30583142746141
+      ],
+      "commanded_proxy_tip_distance_mm": 118.58267489429637,
+      "tcp_reference_error_mm": 23.066447133675457,
+      "tcp_state_error_mm": 23.066447133675457,
+      "force_n": 21.034488309405695,
+      "opening_camera_projection": {
+        "center": {
+          "frustum": true,
+          "u_native_px": 375.75628159729047,
+          "v_native_px": 302.39194544849016,
+          "depth_m": 0.3000820786430439
+        },
+        "left": {
+          "frustum": true,
+          "u_native_px": 787.9967327784052,
+          "v_native_px": 309.3630282729233,
+          "depth_m": 0.3005146555570888
+        },
+        "right": {
+          "frustum": true,
+          "u_native_px": 191.88455847436285,
+          "v_native_px": 634.9734688746154,
+          "depth_m": 0.3222968370612605
+        }
+      },
+      "nearest_stamp_gap_ms": {
+        "state": 7.105427357601002e-12,
+        "command": 27.999999999991587,
+        "tip": 7.105427357601002e-12,
+        "force": 9.99999999999801
+      }
+    },
+    {
+      "time_from_first_command_s": 32,
+      "actual_tip_opening_xyz_mm": [
+        31.55376506565133,
+        -43.809782672619704,
+        -101.46696670190481
+      ],
+      "actual_tip_distance_mm": 114.93686301324718,
+      "commanded_proxy_tip_opening_xyz_mm": [
+        14.627750555790996,
+        -47.15340565714484,
+        -106.99629958009405
+      ],
+      "commanded_proxy_tip_distance_mm": 117.83727286059762,
+      "tcp_reference_error_mm": 15.61326581637526,
+      "tcp_state_error_mm": 15.61326581637526,
+      "force_n": 20.33600337582874,
+      "opening_camera_projection": {
+        "center": {
+          "frustum": true,
+          "u_native_px": 373.4053477024175,
+          "v_native_px": 349.68534408548055,
+          "depth_m": 0.3064173232160962
+        },
+        "left": {
+          "frustum": true,
+          "u_native_px": 739.7861945244109,
+          "v_native_px": 326.66999154692064,
+          "depth_m": 0.30494655190039555
+        },
+        "right": {
+          "frustum": true,
+          "u_native_px": 233.88322322410698,
+          "v_native_px": 656.5752341853697,
+          "depth_m": 0.3274498224091757
+        }
+      },
+      "nearest_stamp_gap_ms": {
+        "state": 7.105427357601002e-12,
+        "command": 10.000000000005116,
+        "tip": 7.105427357601002e-12,
+        "force": 8.000000000002672
+      }
+    },
+    {
+      "time_from_first_command_s": 33,
+      "actual_tip_opening_xyz_mm": [
+        20.155291209233262,
+        -46.31287869196113,
+        -100.95820172812809
+      ],
+      "actual_tip_distance_mm": 112.88789568701645,
+      "commanded_proxy_tip_opening_xyz_mm": [
+        5.559375905963983,
+        -48.44903314893352,
+        -105.15585125730462
+      ],
+      "commanded_proxy_tip_distance_mm": 115.91362528701553,
+      "tcp_reference_error_mm": 13.018206031915259,
+      "tcp_state_error_mm": 13.018206031915259,
+      "force_n": 20.719658108779512,
+      "opening_camera_projection": {
+        "center": {
+          "frustum": true,
+          "u_native_px": 367.23299160384,
+          "v_native_px": 390.46401874136103,
+          "depth_m": 0.3123023392073009
+        },
+        "left": {
+          "frustum": true,
+          "u_native_px": 695.4666006620073,
+          "v_native_px": 337.9809150178994,
+          "depth_m": 0.3088781645941475
+        },
+        "right": {
+          "frustum": true,
+          "u_native_px": 268.942081616719,
+          "v_native_px": 678.3872843294333,
+          "depth_m": 0.33251250272070215
+        }
+      },
+      "nearest_stamp_gap_ms": {
+        "state": 7.105427357601002e-12,
+        "command": 4.0000000000048885,
+        "tip": 7.105427357601002e-12,
+        "force": 7.105427357601002e-12
+      }
+    },
+    {
+      "time_from_first_command_s": 34,
+      "actual_tip_opening_xyz_mm": [
+        11.154959747536664,
+        -48.19260220569541,
+        -99.41354111053569
+      ],
+      "actual_tip_distance_mm": 111.04058803186216,
+      "commanded_proxy_tip_opening_xyz_mm": [
+        3.3237454984714154,
+        -52.99090425601432,
+        -101.15456847682063
+      ],
+      "commanded_proxy_tip_distance_mm": 114.2424174365217,
+      "tcp_reference_error_mm": 15.711876565697784,
+      "tcp_state_error_mm": 15.711876565697784,
+      "force_n": 20.89377759123479,
+      "opening_camera_projection": {
+        "center": {
+          "frustum": true,
+          "u_native_px": 362.3951009119507,
+          "v_native_px": 424.183558957718,
+          "depth_m": 0.3161076202666294
+        },
+        "left": {
+          "frustum": true,
+          "u_native_px": 660.06973847574,
+          "v_native_px": 348.57260315718645,
+          "depth_m": 0.31110408894836566
+        },
+        "right": {
+          "frustum": true,
+          "u_native_px": 296.8478059229582,
+          "v_native_px": 697.1155287100389,
+          "depth_m": 0.3355808530527341
+        }
+      },
+      "nearest_stamp_gap_ms": {
+        "state": 7.105427357601002e-12,
+        "command": 25.99999999999625,
+        "tip": 7.105427357601002e-12,
+        "force": 5.999999999993122
+      }
+    },
+    {
+      "time_from_first_command_s": 35,
+      "actual_tip_opening_xyz_mm": [
+        2.7552231914820813,
+        -48.63326844517285,
+        -100.23406578755667
+      ],
+      "actual_tip_distance_mm": 111.44350137535774,
+      "commanded_proxy_tip_opening_xyz_mm": [
+        -13.767544407575308,
+        -48.11859686693553,
+        -106.64241902632195
+      ],
+      "commanded_proxy_tip_distance_mm": 117.80301430457054,
+      "tcp_reference_error_mm": 15.64924541710178,
+      "tcp_state_error_mm": 15.64924541710178,
+      "force_n": 20.811736704482918,
+      "opening_camera_projection": {
+        "center": {
+          "frustum": true,
+          "u_native_px": 364.21427229879345,
+          "v_native_px": 450.8970442779156,
+          "depth_m": 0.3217112630791002
+        },
+        "left": {
+          "frustum": true,
+          "u_native_px": 631.5084374907708,
+          "v_native_px": 360.22564423256347,
+          "depth_m": 0.31559017833942965
+        },
+        "right": {
+          "frustum": true,
+          "u_native_px": 324.29215777407285,
+          "v_native_px": 706.2146025021887,
+          "depth_m": 0.34028873824281675
+        }
+      },
+      "nearest_stamp_gap_ms": {
+        "state": 7.105427357601002e-12,
+        "command": 1.9999999999953388,
+        "tip": 7.105427357601002e-12,
+        "force": 7.105427357601002e-12
+      }
+    },
+    {
+      "time_from_first_command_s": 36,
+      "actual_tip_opening_xyz_mm": [
+        -5.495584048801627,
+        -45.99369894360891,
+        -102.40267269113446
+      ],
+      "actual_tip_distance_mm": 112.39185540260641,
+      "commanded_proxy_tip_opening_xyz_mm": [
+        -14.098536291150857,
+        -46.79027323491098,
+        -103.82367067950906
+      ],
+      "commanded_proxy_tip_distance_mm": 114.74952282392147,
+      "tcp_reference_error_mm": 6.884231582908298,
+      "tcp_state_error_mm": 6.884231582908298,
+      "force_n": 20.673415933795805,
+      "opening_camera_projection": {
+        "center": {
+          "frustum": true,
+          "u_native_px": 377.8668669662452,
+          "v_native_px": 473.2259174586347,
+          "depth_m": 0.3283602428162734
+        },
+        "left": {
+          "frustum": true,
+          "u_native_px": 611.4763142287916,
+          "v_native_px": 379.4655445307236,
+          "depth_m": 0.32187369902901947
+        },
+        "right": {
+          "frustum": true,
+          "u_native_px": 354.613871052952,
+          "v_native_px": 703.5832058976437,
+          "depth_m": 0.345457634967138
+        }
+      },
+      "nearest_stamp_gap_ms": {
+        "state": 7.105427357601002e-12,
+        "command": 14.000000000002899,
+        "tip": 7.105427357601002e-12,
+        "force": 9.99999999999801
+      }
+    },
+    {
+      "time_from_first_command_s": 37,
+      "actual_tip_opening_xyz_mm": [
+        -5.979547711984223,
+        -44.86585612323235,
+        -94.55674992127139
+      ],
+      "actual_tip_distance_mm": 104.83166979584146,
+      "commanded_proxy_tip_opening_xyz_mm": [
+        -15.658248718295818,
+        -45.40089218730915,
+        -91.88105427078104
+      ],
+      "commanded_proxy_tip_distance_mm": 103.67521351913337,
+      "tcp_reference_error_mm": 8.87323752891221,
+      "tcp_state_error_mm": 8.87323752891221,
+      "force_n": 20.8992431240033,
+      "opening_camera_projection": {
+        "center": {
+          "frustum": true,
+          "u_native_px": 379.3545230901323,
+          "v_native_px": 491.8635996581136,
+          "depth_m": 0.3223238588369371
+        },
+        "left": {
+          "frustum": true,
+          "u_native_px": 603.5847082267223,
+          "v_native_px": 394.8208281121656,
+          "depth_m": 0.3157122831981066
+        },
+        "right": {
+          "frustum": true,
+          "u_native_px": 363.13819706909726,
+          "v_native_px": 715.860241454396,
+          "depth_m": 0.3386888544544763
+        }
+      },
+      "nearest_stamp_gap_ms": {
+        "state": 7.105427357601002e-12,
+        "command": 20.000000000003126,
+        "tip": 7.105427357601002e-12,
+        "force": 6.000000000007333
+      }
+    },
+    {
+      "time_from_first_command_s": 38,
+      "actual_tip_opening_xyz_mm": [
+        -7.924199351279221,
+        -44.88005528574812,
+        -81.50095863992313
+      ],
+      "actual_tip_distance_mm": 93.37782690252051,
+      "commanded_proxy_tip_opening_xyz_mm": [
+        -17.849801677101016,
+        -47.491582441296906,
+        -75.85219570526309
+      ],
+      "commanded_proxy_tip_distance_mm": 91.25580209498939,
+      "tcp_reference_error_mm": 11.373893855145687,
+      "tcp_state_error_mm": 11.373893855145687,
+      "force_n": 20.731210597769397,
+      "opening_camera_projection": {
+        "center": {
+          "frustum": true,
+          "u_native_px": 375.0098715279778,
+          "v_native_px": 527.2407305519142,
+          "depth_m": 0.31273740780357856
+        },
+        "left": {
+          "frustum": true,
+          "u_native_px": 583.2455650674698,
+          "v_native_px": 416.8236663501334,
+          "depth_m": 0.3054044474439925
+        },
+        "right": {
+          "frustum": true,
+          "u_native_px": 377.72638110717367,
+          "v_native_px": 743.8539769526449,
+          "depth_m": 0.3281902488821612
+        }
+      },
+      "nearest_stamp_gap_ms": {
+        "state": 7.105427357601002e-12,
+        "command": 35.99999999999426,
+        "tip": 7.105427357601002e-12,
+        "force": 1.9999999999953388
+      }
+    },
+    {
+      "time_from_first_command_s": 39,
+      "actual_tip_opening_xyz_mm": [
+        -14.51057624553312,
+        -45.97968782437958,
+        -69.28859387842733
+      ],
+      "actual_tip_distance_mm": 84.41325581361299,
+      "commanded_proxy_tip_opening_xyz_mm": [
+        -31.97096965953373,
+        -49.06969170262145,
+        -67.99654492751395
+      ],
+      "commanded_proxy_tip_distance_mm": 89.7413375587893,
+      "tcp_reference_error_mm": 10.680078126649734,
+      "tcp_state_error_mm": 10.680078126649734,
+      "force_n": 20.492620335500412,
+      "opening_camera_projection": {
+        "center": {
+          "frustum": true,
+          "u_native_px": 368.3332861945196,
+          "v_native_px": 576.0378472341908,
+          "depth_m": 0.306325406734366
+        },
+        "left": {
+          "frustum": true,
+          "u_native_px": 546.3921947027045,
+          "v_native_px": 442.14569262116754,
+          "depth_m": 0.29756898319168706
+        },
+        "right": {
+          "frustum": true,
+          "u_native_px": 405.071356495273,
+          "v_native_px": 779.0956759314522,
+          "depth_m": 0.32062908450451116
+        }
+      },
+      "nearest_stamp_gap_ms": {
+        "state": 7.105427357601002e-12,
+        "command": 23.999999999993804,
+        "tip": 7.105427357601002e-12,
+        "force": 6.000000000007333
+      }
+    },
+    {
+      "time_from_first_command_s": 40,
+      "actual_tip_opening_xyz_mm": [
+        -24.379470631757577,
+        -49.416378487609016,
+        -61.966646995320396
+      ],
+      "actual_tip_distance_mm": 82.92287013217769,
+      "commanded_proxy_tip_opening_xyz_mm": [
+        -32.885625553726186,
+        -54.67606088539844,
+        -62.75940571183401
+      ],
+      "commanded_proxy_tip_distance_mm": 89.49681003983477,
+      "tcp_reference_error_mm": 7.129919938166763,
+      "tcp_state_error_mm": 7.129919938166763,
+      "force_n": 20.92496138365881,
+      "opening_camera_projection": {
+        "center": {
+          "frustum": true,
+          "u_native_px": 355.55916791820925,
+          "v_native_px": 623.7770404896944,
+          "depth_m": 0.30587915853280195
+        },
+        "left": {
+          "frustum": true,
+          "u_native_px": 498.75484071316566,
+          "v_native_px": 457.3053508050356,
+          "depth_m": 0.2949730574397949
+        },
+        "right": {
+          "frustum": true,
+          "u_native_px": 436.23099222494005,
+          "v_native_px": 814.6576467441882,
+          "depth_m": 0.3194160966827668
+        }
+      },
+      "nearest_stamp_gap_ms": {
+        "state": 0.0,
+        "command": 26.00000000001046,
+        "tip": 0.0,
+        "force": 7.999999999995566
+      }
+    },
+    {
+      "time_from_first_command_s": 41,
+      "actual_tip_opening_xyz_mm": [
+        -28.63007883239957,
+        -53.362356477562045,
+        -56.54992025295513
+      ],
+      "actual_tip_distance_mm": 82.85599545840607,
+      "commanded_proxy_tip_opening_xyz_mm": [
+        -43.19446615291091,
+        -57.668658600309456,
+        -57.417714141277784
+      ],
+      "commanded_proxy_tip_distance_mm": 92.13159060932088,
+      "tcp_reference_error_mm": 4.339007542881686,
+      "tcp_state_error_mm": 4.339007542881686,
+      "force_n": 20.693485130038734,
+      "opening_camera_projection": {
+        "center": {
+          "frustum": true,
+          "u_native_px": 338.8850788542916,
+          "v_native_px": 650.2543409252494,
+          "depth_m": 0.3038240093918756
+        },
+        "left": {
+          "frustum": true,
+          "u_native_px": 469.39954732875765,
+          "v_native_px": 458.78259727306533,
+          "depth_m": 0.2913606735063706
+        },
+        "right": {
+          "frustum": true,
+          "u_native_px": 446.9084527654612,
+          "v_native_px": 842.7945563482626,
+          "depth_m": 0.3174760053881111
+        }
+      },
+      "nearest_stamp_gap_ms": {
+        "state": 0.0,
+        "command": 3.9999999999906777,
+        "tip": 0.0,
+        "force": 0.0
+      }
+    },
+    {
+      "time_from_first_command_s": 42,
+      "actual_tip_opening_xyz_mm": [
+        -31.261334760896652,
+        -55.85038391747446,
+        -52.63324423311011
+      ],
+      "actual_tip_distance_mm": 82.86612596993028,
+      "commanded_proxy_tip_opening_xyz_mm": [
+        -36.688315364224856,
+        -56.37625780434779,
+        -55.26522159766839
+      ],
+      "commanded_proxy_tip_distance_mm": 87.05492316076383,
+      "tcp_reference_error_mm": 11.717564216470095,
+      "tcp_state_error_mm": 11.717564216470095,
+      "force_n": 20.08814212894178,
+      "opening_camera_projection": {
+        "center": {
+          "frustum": true,
+          "u_native_px": 328.019056251384,
+          "v_native_px": 668.2604835847987,
+          "depth_m": 0.3021385366193955
+        },
+        "left": {
+          "frustum": true,
+          "u_native_px": 449.94570941555105,
+          "v_native_px": 460.4595137525698,
+          "depth_m": 0.28868264309738634
+        },
+        "right": {
+          "frustum": true,
+          "u_native_px": 453.98902243922714,
+          "v_native_px": 861.7619784387205,
+          "depth_m": 0.31584326816414
+        }
+      },
+      "nearest_stamp_gap_ms": {
+        "state": 0.0,
+        "command": 31.999999999996476,
+        "tip": 0.0,
+        "force": 9.999999999990905
+      }
+    },
+    {
+      "time_from_first_command_s": 43,
+      "actual_tip_opening_xyz_mm": [
+        -32.429770122467865,
+        -56.623657046734444,
+        -51.32095028068417
+      ],
+      "actual_tip_distance_mm": 83.01667582633483,
+      "commanded_proxy_tip_opening_xyz_mm": [
+        -43.47006640608697,
+        -63.36493781426214,
+        -53.79028874988818
+      ],
+      "commanded_proxy_tip_distance_mm": 93.7984924257915,
+      "tcp_reference_error_mm": 10.092426424174818,
+      "tcp_state_error_mm": 10.092426424174818,
+      "force_n": 20.473728695211776,
+      "opening_camera_projection": {
+        "center": {
+          "frustum": true,
+          "u_native_px": 324.6255877570751,
+          "v_native_px": 674.1253492445878,
+          "depth_m": 0.30171783385517437
+        },
+        "left": {
+          "frustum": true,
+          "u_native_px": 443.4776920513933,
+          "v_native_px": 461.0372813111609,
+          "depth_m": 0.287937131584983
+        },
+        "right": {
+          "frustum": true,
+          "u_native_px": 456.52072865706805,
+          "v_native_px": 867.7454375670604,
+          "depth_m": 0.3154311115686984
+        }
+      },
+      "nearest_stamp_gap_ms": {
+        "state": 0.0,
+        "command": 20.000000000010232,
+        "tip": 0.0,
+        "force": 1.9999999999953388
+      }
+    },
+    {
+      "time_from_first_command_s": 44,
+      "actual_tip_opening_xyz_mm": [
+        -34.56791841984253,
+        -54.77996159030246,
+        -51.583249089449446
+      ],
+      "actual_tip_distance_mm": 82.80469046098831,
+      "commanded_proxy_tip_opening_xyz_mm": [
+        -49.59363960174156,
+        -45.52087756806555,
+        -56.27770240746084
+      ],
+      "commanded_proxy_tip_distance_mm": 87.74314316102976,
+      "tcp_reference_error_mm": 18.18240562662524,
+      "tcp_state_error_mm": 18.18240562662524,
+      "force_n": 21.027538746846776,
+      "opening_camera_projection": {
+        "center": {
+          "frustum": true,
+          "u_native_px": 333.2445316257194,
+          "v_native_px": 677.2849797964317,
+          "depth_m": 0.30321292494210195
+        },
+        "left": {
+          "frustum": true,
+          "u_native_px": 443.2337307413847,
+          "v_native_px": 469.2163039392819,
+          "depth_m": 0.28966636611359775
+        },
+        "right": {
+          "frustum": true,
+          "u_native_px": 464.88827656835707,
+          "v_native_px": 862.0901520579544,
+          "depth_m": 0.31634921222273665
+        }
+      },
+      "nearest_stamp_gap_ms": {
+        "state": 0.0,
+        "command": 20.000000000010232,
+        "tip": 0.0,
+        "force": 7.999999999995566
+      }
+    },
+    {
+      "time_from_first_command_s": 45,
+      "actual_tip_opening_xyz_mm": [
+        -38.177164470383715,
+        -51.18599379162417,
+        -49.77874249611691
+      ],
+      "actual_tip_distance_mm": 80.96557942687518,
+      "commanded_proxy_tip_opening_xyz_mm": [
+        -57.963715151404685,
+        -39.29020133956018,
+        -48.91470752532358
+      ],
+      "commanded_proxy_tip_distance_mm": 85.41756732513696,
+      "tcp_reference_error_mm": 23.19441077726147,
+      "tcp_state_error_mm": 23.19441077726147,
+      "force_n": 20.42368659660041,
+      "opening_camera_projection": {
+        "center": {
+          "frustum": true,
+          "u_native_px": 348.67164034435245,
+          "v_native_px": 690.3784263823973,
+          "depth_m": 0.3040481570881853
+        },
+        "left": {
+          "frustum": true,
+          "u_native_px": 438.8558773926266,
+          "v_native_px": 489.4110797460047,
+          "depth_m": 0.29087068565384416
+        },
+        "right": {
+          "frustum": true,
+          "u_native_px": 483.4817096328545,
+          "v_native_px": 857.2225624699738,
+          "depth_m": 0.31592665713663787
+        }
+      },
+      "nearest_stamp_gap_ms": {
+        "state": 0.0,
+        "command": 10.000000000005116,
+        "tip": 0.0,
+        "force": 2.0000000000095497
+      }
+    },
+    {
+      "time_from_first_command_s": 46,
+      "actual_tip_opening_xyz_mm": [
+        -40.984323356604484,
+        -46.62341541846826,
+        -44.426172195131564
+      ],
+      "actual_tip_distance_mm": 76.33572166550377,
+      "commanded_proxy_tip_opening_xyz_mm": [
+        -61.934229066192195,
+        -34.39625366423235,
+        -39.91518746638893
+      ],
+      "commanded_proxy_tip_distance_mm": 81.31527031643414,
+      "tcp_reference_error_mm": 7.153233067313161,
+      "tcp_state_error_mm": 7.153233067313161,
+      "force_n": 20.517996253616126,
+      "opening_camera_projection": {
+        "center": {
+          "frustum": true,
+          "u_native_px": 366.4655661968646,
+          "v_native_px": 712.0873673519598,
+          "depth_m": 0.3017253959455898
+        },
+        "left": {
+          "frustum": true,
+          "u_native_px": 432.67493670034634,
+          "v_native_px": 518.9008930088412,
+          "depth_m": 0.28907433124849025
+        },
+        "right": {
+          "frustum": true,
+          "u_native_px": 506.1532389928959,
+          "v_native_px": 857.4076688036182,
+          "depth_m": 0.31199262772902386
+        }
+      },
+      "nearest_stamp_gap_ms": {
+        "state": 0.0,
+        "command": 33.999999999991815,
+        "tip": 0.0,
+        "force": 7.999999999995566
+      }
+    },
+    {
+      "time_from_first_command_s": 47,
+      "actual_tip_opening_xyz_mm": [
+        -42.52633516219376,
+        -41.92350515217797,
+        -37.086490634257615
+      ],
+      "actual_tip_distance_mm": 70.29564178622176,
+      "commanded_proxy_tip_opening_xyz_mm": [
+        -45.01178505856016,
+        -51.093569163738024,
+        -37.90356372774539
+      ],
+      "commanded_proxy_tip_distance_mm": 77.93133995582879,
+      "tcp_reference_error_mm": 23.566077279167146,
+      "tcp_state_error_mm": 23.566077279167146,
+      "force_n": 20.557158813305964,
+      "opening_camera_projection": {
+        "center": {
+          "frustum": true,
+          "u_native_px": 384.2709076917582,
+          "v_native_px": 737.294485991373,
+          "depth_m": 0.2971826208170863
+        },
+        "left": {
+          "frustum": true,
+          "u_native_px": 426.75640571167384,
+          "v_native_px": 552.0885748549169,
+          "depth_m": 0.2851499877754737
+        },
+        "right": {
+          "frustum": true,
+          "u_native_px": 528.8355471261785,
+          "v_native_px": 861.0976699528258,
+          "depth_m": 0.3058050380695721
+        }
+      },
+      "nearest_stamp_gap_ms": {
+        "state": 0.0,
+        "command": 18.000000000000682,
+        "tip": 0.0,
+        "force": 4.0000000000048885
+      }
+    },
+    {
+      "time_from_first_command_s": 48,
+      "actual_tip_opening_xyz_mm": [
+        -44.09334130473963,
+        -38.113847764568995,
+        -27.697344236975894
+      ],
+      "actual_tip_distance_mm": 64.52930354977141,
+      "commanded_proxy_tip_opening_xyz_mm": [
+        -63.50457688554294,
+        -28.66893114486888,
+        -19.59437021992887
+      ],
+      "commanded_proxy_tip_distance_mm": 72.37871401673769,
+      "tcp_reference_error_mm": 5.9070273504293835,
+      "tcp_state_error_mm": 5.9070273504293835,
+      "force_n": 20.860360338813816,
+      "opening_camera_projection": {
+        "center": {
+          "frustum": true,
+          "u_native_px": 398.0764760723025,
+          "v_native_px": 770.5403243708862,
+          "depth_m": 0.2910724805725864
+        },
+        "left": {
+          "frustum": true,
+          "u_native_px": 414.15219885401086,
+          "v_native_px": 587.696024300244,
+          "depth_m": 0.27934616035548426
+        },
+        "right": {
+          "frustum": true,
+          "u_native_px": 553.9336215388879,
+          "v_native_px": 873.5563723431962,
+          "depth_m": 0.29811984161882954
+        }
+      },
+      "nearest_stamp_gap_ms": {
+        "state": 0.0,
+        "command": 25.99999999999625,
+        "tip": 0.0,
+        "force": 3.9999999999906777
+      }
+    },
+    {
+      "time_from_first_command_s": 49,
+      "actual_tip_opening_xyz_mm": [
+        -45.578836327564126,
+        -34.70201877270112,
+        -15.760609504702483
+      ],
+      "actual_tip_distance_mm": 59.41428481295974,
+      "commanded_proxy_tip_opening_xyz_mm": [
+        -63.7271102742171,
+        -27.188963971039545,
+        -5.94746484871049
+      ],
+      "commanded_proxy_tip_distance_mm": 69.5396051458977,
+      "tcp_reference_error_mm": 5.554510034809444,
+      "tcp_state_error_mm": 5.554510034809444,
+      "force_n": 20.670544903269143,
+      "opening_camera_projection": {
+        "center": {
+          "frustum": true,
+          "u_native_px": 410.3322515771948,
+          "v_native_px": 814.3686899961215,
+          "depth_m": 0.283063157994795
+        },
+        "left": {
+          "frustum": true,
+          "u_native_px": 394.7858404172582,
+          "v_native_px": 629.8550435122324,
+          "depth_m": 0.27144744718938646
+        },
+        "right": {
+          "frustum": true,
+          "u_native_px": 583.9542724113282,
+          "v_native_px": 894.8956609566624,
+          "depth_m": 0.2884469672323219
+        }
+      },
+      "nearest_stamp_gap_ms": {
+        "state": 0.0,
+        "command": 9.999999999990905,
+        "tip": 0.0,
+        "force": 8.000000000009777
+      }
+    },
+    {
+      "time_from_first_command_s": 50,
+      "actual_tip_opening_xyz_mm": [
+        -44.48918633732374,
+        -32.293036628055525,
+        -4.556079890208009
+      ],
+      "actual_tip_distance_mm": 55.16235835770627,
+      "commanded_proxy_tip_opening_xyz_mm": [
+        -48.39488890933405,
+        -37.983252381457746,
+        -4.210560343884236
+      ],
+      "commanded_proxy_tip_distance_mm": 61.66458912884922,
+      "tcp_reference_error_mm": 20.77930110010231,
+      "tcp_state_error_mm": 20.77930110010231,
+      "force_n": 20.084070293674905,
+      "opening_camera_projection": {
+        "center": {
+          "frustum": true,
+          "u_native_px": 418.15995522064,
+          "v_native_px": 852.0063623203371,
+          "depth_m": 0.27400250223911565
+        },
+        "left": {
+          "frustum": true,
+          "u_native_px": 381.0512819811913,
+          "v_native_px": 666.1672308729844,
+          "depth_m": 0.26258557514590863
+        },
+        "right": {
+          "frustum": true,
+          "u_native_px": 604.5373523775897,
+          "v_native_px": 917.5011493347079,
+          "depth_m": 0.2782634583546746
+        }
+      },
+      "nearest_stamp_gap_ms": {
+        "state": 0.0,
+        "command": 19.99999999999602,
+        "tip": 0.0,
+        "force": 9.999999999990905
+      }
+    },
+    {
+      "time_from_first_command_s": 51,
+      "actual_tip_opening_xyz_mm": [
+        -40.82298443863927,
+        -32.143020234893406,
+        3.84919866109934
+      ],
+      "actual_tip_distance_mm": 52.10092262744259,
+      "commanded_proxy_tip_opening_xyz_mm": [
+        -46.320564185056924,
+        -35.39779344558151,
+        4.2714862665677655
+      ],
+      "commanded_proxy_tip_distance_mm": 58.4537769708982,
+      "tcp_reference_error_mm": 4.117696212330433,
+      "tcp_state_error_mm": 4.117696212330433,
+      "force_n": 20.319531367882433,
+      "opening_camera_projection": {
+        "center": {
+          "frustum": true,
+          "u_native_px": 415.3839754157845,
+          "v_native_px": 874.8978983250863,
+          "depth_m": 0.2653417862326826
+        },
+        "left": {
+          "frustum": true,
+          "u_native_px": 374.85815153459384,
+          "v_native_px": 685.2892878176449,
+          "depth_m": 0.2540128813323331
+        },
+        "right": {
+          "frustum": true,
+          "u_native_px": 607.4450953474337,
+          "v_native_px": 939.9527917959392,
+          "depth_m": 0.2694622431303374
+        }
+      },
+      "nearest_stamp_gap_ms": {
+        "state": 0.0,
+        "command": 21.99999999999136,
+        "tip": 0.0,
+        "force": 2.0000000000095497
+      }
+    },
+    {
+      "time_from_first_command_s": 52,
+      "actual_tip_opening_xyz_mm": [
+        -36.23790752675907,
+        -33.09030345464975,
+        9.781100401914378
+      ],
+      "actual_tip_distance_mm": 50.038225884927975,
+      "commanded_proxy_tip_opening_xyz_mm": [
+        -42.83151076692065,
+        -34.15729262294591,
+        10.621094390303558
+      ],
+      "commanded_proxy_tip_distance_mm": 55.80382244931016,
+      "tcp_reference_error_mm": 5.036358105297202,
+      "tcp_state_error_mm": 5.036358105297202,
+      "force_n": 20.832838412184998,
+      "opening_camera_projection": {
+        "center": {
+          "frustum": true,
+          "u_native_px": 407.2142520921574,
+          "v_native_px": 887.0600974829183,
+          "depth_m": 0.2578700322237886
+        },
+        "left": {
+          "frustum": true,
+          "u_native_px": 373.91810928925236,
+          "v_native_px": 693.0370986397652,
+          "depth_m": 0.24658411866306357
+        },
+        "right": {
+          "frustum": true,
+          "u_native_px": 600.0286886663383,
+          "v_native_px": 959.691021363854,
+          "depth_m": 0.26236215249365524
+        }
+      },
+      "nearest_stamp_gap_ms": {
+        "state": 0.0,
+        "command": 42.00000000000159,
+        "tip": 0.0,
+        "force": 10.000000000005116
+      }
+    },
+    {
+      "time_from_first_command_s": 53,
+      "actual_tip_opening_xyz_mm": [
+        -32.2753710322079,
+        -31.746057170223914,
+        16.119324376391077
+      ],
+      "actual_tip_distance_mm": 48.055637957196296,
+      "commanded_proxy_tip_opening_xyz_mm": [
+        -38.185285630042685,
+        -32.63225763102158,
+        17.76464779895554
+      ],
+      "commanded_proxy_tip_distance_mm": 53.27816614867902,
+      "tcp_reference_error_mm": 5.283575844994569,
+      "tcp_state_error_mm": 5.283575844994569,
+      "force_n": 20.65181904928564,
+      "opening_camera_projection": {
+        "center": {
+          "frustum": true,
+          "u_native_px": 410.05400426916054,
+          "v_native_px": 903.0460124413487,
+          "depth_m": 0.25053373818394176
+        },
+        "left": {
+          "frustum": true,
+          "u_native_px": 376.30756961972804,
+          "v_native_px": 712.5445187655562,
+          "depth_m": 0.2397202415044492
+        },
+        "right": {
+          "frustum": true,
+          "u_native_px": 600.7029457889819,
+          "v_native_px": 973.6677425310505,
+          "depth_m": 0.254791484510238
+        }
+      },
+      "nearest_stamp_gap_ms": {
+        "state": 0.0,
+        "command": 21.99999999999136,
+        "tip": 0.0,
+        "force": 2.0000000000095497
+      }
+    },
+    {
+      "time_from_first_command_s": 54,
+      "actual_tip_opening_xyz_mm": [
+        -30.67160087077822,
+        -31.268653161031196,
+        18.11957535934838
+      ],
+      "actual_tip_distance_mm": 47.40036689398401,
+      "commanded_proxy_tip_opening_xyz_mm": [
+        -35.30389101966672,
+        -32.19303489125117,
+        20.091567478030363
+      ],
+      "commanded_proxy_tip_distance_mm": 51.83075631670898,
+      "tcp_reference_error_mm": 4.280935957487093,
+      "tcp_state_error_mm": 4.280935957487093,
+      "force_n": 18.976905653723183,
+      "opening_camera_projection": {
+        "center": {
+          "frustum": true,
+          "u_native_px": 411.0483385411078,
+          "v_native_px": 907.5468043754001,
+          "depth_m": 0.24789830121269368
+        },
+        "left": {
+          "frustum": true,
+          "u_native_px": 378.4803598058815,
+          "v_native_px": 718.9187823356771,
+          "depth_m": 0.23728841754118535
+        },
+        "right": {
+          "frustum": true,
+          "u_native_px": 599.7067522902921,
+          "v_native_px": 978.1020309037658,
+          "depth_m": 0.2521117623289202
+        }
+      },
+      "nearest_stamp_gap_ms": {
+        "state": 0.0,
+        "command": 14.000000000010004,
+        "tip": 0.0,
+        "force": 7.999999999995566
+      }
+    },
+    {
+      "time_from_first_command_s": 55,
+      "actual_tip_opening_xyz_mm": [
+        -30.10780023803006,
+        -31.115507273351326,
+        18.094213324314047
+      ],
+      "actual_tip_distance_mm": 46.92605868679881,
+      "commanded_proxy_tip_opening_xyz_mm": [
+        -33.5492948200337,
+        -31.595430295262858,
+        19.730142461111054
+      ],
+      "commanded_proxy_tip_distance_mm": 50.13087790972837,
+      "tcp_reference_error_mm": 3.66185749680888,
+      "tcp_state_error_mm": 3.66185749680888,
+      "force_n": 19.846350814158324,
+      "opening_camera_projection": {
+        "center": {
+          "frustum": true,
+          "u_native_px": 411.46234332878953,
+          "v_native_px": 906.0991015807239,
+          "depth_m": 0.2474330204602031
+        },
+        "left": {
+          "frustum": true,
+          "u_native_px": 381.0152556096185,
+          "v_native_px": 718.9505034357261,
+          "depth_m": 0.2369260131419878
+        },
+        "right": {
+          "frustum": true,
+          "u_native_px": 597.7883002740994,
+          "v_native_px": 977.4342924191408,
+          "depth_m": 0.251684397531603
+        }
+      },
+      "nearest_stamp_gap_ms": {
+        "state": 0.0,
+        "command": 26.00000000001046,
+        "tip": 0.0,
+        "force": 8.000000000009777
+      }
+    },
+    {
+      "time_from_first_command_s": 56,
+      "actual_tip_opening_xyz_mm": [
+        -29.13574050225251,
+        -30.759998212178395,
+        18.064566388815926
+      ],
+      "actual_tip_distance_mm": 46.05863028188912,
+      "commanded_proxy_tip_opening_xyz_mm": [
+        -32.29642645032984,
+        -31.02188315197462,
+        19.743793673642116
+      ],
+      "commanded_proxy_tip_distance_mm": 48.94112569591838,
+      "tcp_reference_error_mm": 3.6096230507668183,
+      "tcp_state_error_mm": 3.6096230507668183,
+      "force_n": 19.239922072661454,
+      "opening_camera_projection": {
+        "center": {
+          "frustum": true,
+          "u_native_px": 412.69657362327996,
+          "v_native_px": 903.4022552480211,
+          "depth_m": 0.24672138608593602
+        },
+        "left": {
+          "frustum": true,
+          "u_native_px": 385.6626298830569,
+          "v_native_px": 719.2247124840126,
+          "depth_m": 0.23641024079908496
+        },
+        "right": {
+          "frustum": true,
+          "u_native_px": 594.7483217217356,
+          "v_native_px": 975.6970908064761,
+          "depth_m": 0.251015784447996
+        }
+      },
+      "nearest_stamp_gap_ms": {
+        "state": 0.0,
+        "command": 24.00000000000091,
+        "tip": 0.0,
+        "force": 0.0
+      }
+    },
+    {
+      "time_from_first_command_s": 57,
+      "actual_tip_opening_xyz_mm": [
+        -27.262841742348222,
+        -30.11625961635758,
+        18.74006168534703
+      ],
+      "actual_tip_distance_mm": 44.73747361126673,
+      "commanded_proxy_tip_opening_xyz_mm": [
+        -31.518796312489453,
+        -30.354485537884425,
+        19.116310359200188
+      ],
+      "commanded_proxy_tip_distance_mm": 47.752095608539506,
+      "tcp_reference_error_mm": 3.5393159876459515,
+      "tcp_state_error_mm": 3.5393159876459515,
+      "force_n": 20.93703650316002,
+      "opening_camera_projection": {
+        "center": {
+          "frustum": true,
+          "u_native_px": 414.74357256117423,
+          "v_native_px": 900.9832968808032,
+          "depth_m": 0.24495824658442594
+        },
+        "left": {
+          "frustum": true,
+          "u_native_px": 392.82884978268623,
+          "v_native_px": 721.5448335446861,
+          "depth_m": 0.23497888760209706
+        },
+        "right": {
+          "frustum": true,
+          "u_native_px": 590.1963962426195,
+          "v_native_px": 974.5914657291455,
+          "depth_m": 0.2492982731480458
+        }
+      },
+      "nearest_stamp_gap_ms": {
+        "state": 0.0,
+        "command": 40.00000000000625,
+        "tip": 0.0,
+        "force": 6.000000000000227
+      }
+    },
+    {
+      "time_from_first_command_s": 58,
+      "actual_tip_opening_xyz_mm": [
+        -25.305098783528905,
+        -29.220447490839017,
+        20.234706688870617
+      ],
+      "actual_tip_distance_mm": 43.63056188950197,
+      "commanded_proxy_tip_opening_xyz_mm": [
+        -30.638696952425285,
+        -29.51601299955672,
+        20.548710004899963
+      ],
+      "commanded_proxy_tip_distance_mm": 47.24589143193334,
+      "tcp_reference_error_mm": 4.465307158229611,
+      "tcp_state_error_mm": 4.465307158229611,
+      "force_n": 20.03608186092808,
+      "opening_camera_projection": {
+        "center": {
+          "frustum": true,
+          "u_native_px": 417.94000221658297,
+          "v_native_px": 901.849759641271,
+          "depth_m": 0.24254909566296945
+        },
+        "left": {
+          "frustum": true,
+          "u_native_px": 399.19710536162927,
+          "v_native_px": 727.4967504808164,
+          "depth_m": 0.23293485660518914
+        },
+        "right": {
+          "frustum": true,
+          "u_native_px": 587.5265818014209,
+          "v_native_px": 975.2063852368201,
+          "depth_m": 0.24683235248288665
+        }
+      },
+      "nearest_stamp_gap_ms": {
+        "state": 1.9999999999953388,
+        "command": 13.999999999995794,
+        "tip": 0.0,
+        "force": 9.999999999990905
+      }
+    },
+    {
+      "time_from_first_command_s": 59,
+      "actual_tip_opening_xyz_mm": [
+        -24.945813164588465,
+        -28.984965262978307,
+        20.221296505794406
+      ],
+      "actual_tip_distance_mm": 43.258786831277035,
+      "commanded_proxy_tip_opening_xyz_mm": [
+        -30.362668209749405,
+        -29.235698284527842,
+        20.892146945381942
+      ],
+      "commanded_proxy_tip_distance_mm": 47.04359126370672,
+      "tcp_reference_error_mm": 4.418075662464576,
+      "tcp_state_error_mm": 4.418075662464576,
+      "force_n": 19.53638650172931,
+      "opening_camera_projection": {
+        "center": {
+          "frustum": true,
+          "u_native_px": 418.9449147702412,
+          "v_native_px": 900.762839676705,
+          "depth_m": 0.24229460960951138
+        },
+        "left": {
+          "frustum": true,
+          "u_native_px": 401.29255464781124,
+          "v_native_px": 728.000502894269,
+          "depth_m": 0.23277696816648996
+        },
+        "right": {
+          "frustum": true,
+          "u_native_px": 586.5979584270408,
+          "v_native_px": 974.1087789286488,
+          "depth_m": 0.24657161408508513
+        }
+      },
+      "nearest_stamp_gap_ms": {
+        "state": 0.0,
+        "command": 33.999999999991815,
+        "tip": 0.0,
+        "force": 1.9999999999953388
+      }
+    },
+    {
+      "time_from_first_command_s": 60,
+      "actual_tip_opening_xyz_mm": [
+        -24.501057840195433,
+        -28.612468264189783,
+        20.209547391761618
+      ],
+      "actual_tip_distance_mm": 42.74811084992796,
+      "commanded_proxy_tip_opening_xyz_mm": [
+        -30.18230384097729,
+        -29.012770764270723,
+        20.95629830380626
+      ],
+      "commanded_proxy_tip_distance_mm": 46.81750496520834,
+      "tcp_reference_error_mm": 4.622956399355465,
+      "tcp_state_error_mm": 4.622956399355465,
+      "force_n": 19.78461339866991,
+      "opening_camera_projection": {
+        "center": {
+          "frustum": true,
+          "u_native_px": 420.63317226900256,
+          "v_native_px": 899.392486749578,
+          "depth_m": 0.24199098485883008
+        },
+        "left": {
+          "frustum": true,
+          "u_native_px": 404.12790465825935,
+          "v_native_px": 728.9651843782854,
+          "depth_m": 0.23261166000561234
+        },
+        "right": {
+          "frustum": true,
+          "u_native_px": 585.6692693610818,
+          "v_native_px": 972.3959281284955,
+          "depth_m": 0.2462409148267882
+        }
+      },
+      "nearest_stamp_gap_ms": {
+        "state": 0.0,
+        "command": 44.00000000001114,
+        "tip": 0.0,
+        "force": 6.000000000000227
+      }
+    },
+    {
+      "time_from_first_command_s": 61,
+      "actual_tip_opening_xyz_mm": [
+        -24.18208284706705,
+        -28.34530297885307,
+        20.19742851209716
+      ],
+      "actual_tip_distance_mm": 42.38119217632589,
+      "commanded_proxy_tip_opening_xyz_mm": [
+        -29.262089051304518,
+        -28.277256466495242,
+        21.555996301520256
+      ],
+      "commanded_proxy_tip_distance_mm": 46.04925694807222,
+      "tcp_reference_error_mm": 4.714768828672311,
+      "tcp_state_error_mm": 4.714768828672311,
+      "force_n": 20.141623745148813,
+      "opening_camera_projection": {
+        "center": {
+          "frustum": true,
+          "u_native_px": 421.8263464859119,
+          "v_native_px": 898.4311216902468,
+          "depth_m": 0.24174839051678215
+        },
+        "left": {
+          "frustum": true,
+          "u_native_px": 406.18785176571635,
+          "v_native_px": 729.6839085100285,
+          "depth_m": 0.2324692985371477
+        },
+        "right": {
+          "frustum": true,
+          "u_native_px": 584.9591202972971,
+          "v_native_px": 971.2191304779058,
+          "depth_m": 0.24598032212054927
+        }
+      },
+      "nearest_stamp_gap_ms": {
+        "state": 0.0,
+        "command": 20.000000000010232,
+        "tip": 0.0,
+        "force": 1.9999999999953388
+      }
+    },
+    {
+      "time_from_first_command_s": 62,
+      "actual_tip_opening_xyz_mm": [
+        -24.069955364913078,
+        -28.22251383985175,
+        20.18494825565198
+      ],
+      "actual_tip_distance_mm": 42.2291981310666,
+      "commanded_proxy_tip_opening_xyz_mm": [
+        -29.267313494263423,
+        -28.100510934017723,
+        21.863505887528895
+      ],
+      "commanded_proxy_tip_distance_mm": 46.08933980453998,
+      "tcp_reference_error_mm": 4.982633078218063,
+      "tcp_state_error_mm": 4.982633078218063,
+      "force_n": 19.629590572374923,
+      "opening_camera_projection": {
+        "center": {
+          "frustum": true,
+          "u_native_px": 422.3899422185389,
+          "v_native_px": 898.1090644627088,
+          "depth_m": 0.24163622728603157
+        },
+        "left": {
+          "frustum": true,
+          "u_native_px": 407.038020444352,
+          "v_native_px": 730.0968177863575,
+          "depth_m": 0.23240095866819882
+        },
+        "right": {
+          "frustum": true,
+          "u_native_px": 584.7370556515481,
+          "v_native_px": 970.7361047317543,
+          "depth_m": 0.24585634398133
+        }
+      },
+      "nearest_stamp_gap_ms": {
+        "state": 0.0,
+        "command": 46.00000000000648,
+        "tip": 0.0,
+        "force": 1.9999999999953388
+      }
+    },
+    {
+      "time_from_first_command_s": 63,
+      "actual_tip_opening_xyz_mm": [
+        -23.8602472447062,
+        -28.021670369304363,
+        20.1728505801293
+      ],
+      "actual_tip_distance_mm": 41.969861917722376,
+      "commanded_proxy_tip_opening_xyz_mm": [
+        -29.07135380803671,
+        -27.939614323862248,
+        21.298594492655933
+      ],
+      "commanded_proxy_tip_distance_mm": 45.60039241235554,
+      "tcp_reference_error_mm": 4.701699688295615,
+      "tcp_state_error_mm": 4.701699688295615,
+      "force_n": 19.75886220230797,
+      "opening_camera_projection": {
+        "center": {
+          "frustum": true,
+          "u_native_px": 423.29700797602345,
+          "v_native_px": 897.467857218061,
+          "depth_m": 0.24146341892677697
+        },
+        "left": {
+          "frustum": true,
+          "u_native_px": 408.4977658927044,
+          "v_native_px": 730.681285045425,
+          "depth_m": 0.23230084444668886
+        },
+        "right": {
+          "frustum": true,
+          "u_native_px": 584.2942040430206,
+          "v_native_px": 969.8807187303178,
+          "depth_m": 0.24566720698233943
+        }
+      },
+      "nearest_stamp_gap_ms": {
+        "state": 0.0,
+        "command": 50.00000000001137,
+        "tip": 0.0,
+        "force": 7.999999999995566
+      }
+    },
+    {
+      "time_from_first_command_s": 64,
+      "actual_tip_opening_xyz_mm": [
+        -23.528372769468785,
+        -27.718020250310616,
+        20.166660177457054
+      ],
+      "actual_tip_distance_mm": 41.57604063025653,
+      "commanded_proxy_tip_opening_xyz_mm": [
+        -28.750269078942097,
+        -27.435899002665934,
+        21.210394522043885
+      ],
+      "commanded_proxy_tip_distance_mm": 45.04650221689592,
+      "tcp_reference_error_mm": 4.899662925945359,
+      "tcp_state_error_mm": 4.899662925945359,
+      "force_n": 19.797914045581823,
+      "opening_camera_projection": {
+        "center": {
+          "frustum": true,
+          "u_native_px": 424.68691607884557,
+          "v_native_px": 896.4682350967392,
+          "depth_m": 0.2412157678547947
+        },
+        "left": {
+          "frustum": true,
+          "u_native_px": 410.7103550095633,
+          "v_native_px": 731.5467102120201,
+          "depth_m": 0.23216313568840818
+        },
+        "right": {
+          "frustum": true,
+          "u_native_px": 583.6364934298798,
+          "v_native_px": 968.5424950110208,
+          "depth_m": 0.24539424849572283
+        }
+      },
+      "nearest_stamp_gap_ms": {
+        "state": 0.0,
+        "command": 37.9999999999967,
+        "tip": 0.0,
+        "force": 4.0000000000048885
+      }
+    },
+    {
+      "time_from_first_command_s": 65,
+      "actual_tip_opening_xyz_mm": [
+        -23.408815864936816,
+        -27.568438216535178,
+        20.15410626843139
+      ],
+      "actual_tip_distance_mm": 41.40265022165441,
+      "commanded_proxy_tip_opening_xyz_mm": [
+        -28.904509111072354,
+        -27.353312298101134,
+        21.549385876387163
+      ],
+      "commanded_proxy_tip_distance_mm": 45.2553905328299,
+      "tcp_reference_error_mm": 5.093803529531278,
+      "tcp_state_error_mm": 5.093803529531278,
+      "force_n": 19.434157431830172,
+      "opening_camera_projection": {
+        "center": {
+          "frustum": true,
+          "u_native_px": 425.38071754522093,
+          "v_native_px": 896.1092596188988,
+          "depth_m": 0.2410957158822185
+        },
+        "left": {
+          "frustum": true,
+          "u_native_px": 411.6823699938241,
+          "v_native_px": 732.0552633041295,
+          "depth_m": 0.23209413073942103
+        },
+        "right": {
+          "frustum": true,
+          "u_native_px": 583.430481950016,
+          "v_native_px": 967.9506054994774,
+          "depth_m": 0.2452580192221544
+        }
+      },
+      "nearest_stamp_gap_ms": {
+        "state": 0.0,
+        "command": 34.000000000006025,
+        "tip": 0.0,
+        "force": 1.9999999999953388
+      }
+    },
+    {
+      "time_from_first_command_s": 66,
+      "actual_tip_opening_xyz_mm": [
+        -23.305927492075025,
+        -27.459982496094966,
+        20.143853785677067
+      ],
+      "actual_tip_distance_mm": 41.2673204883772,
+      "commanded_proxy_tip_opening_xyz_mm": [
+        -28.879834392028233,
+        -27.14431521137565,
+        21.625520008572575
+      ],
+      "commanded_proxy_tip_distance_mm": 45.14999223085945,
+      "tcp_reference_error_mm": 5.249759828181722,
+      "tcp_state_error_mm": 5.249759828181722,
+      "force_n": 19.513292049863388,
+      "opening_camera_projection": {
+        "center": {
+          "frustum": true,
+          "u_native_px": 425.8741582348705,
+          "v_native_px": 895.8090129921924,
+          "depth_m": 0.24099422618345506
+        },
+        "left": {
+          "frustum": true,
+          "u_native_px": 412.44993759832255,
+          "v_native_px": 732.4099848921696,
+          "depth_m": 0.23203162020640616
+        },
+        "right": {
+          "frustum": true,
+          "u_native_px": 583.2128879579055,
+          "v_native_px": 967.5211100984172,
+          "depth_m": 0.2451468579396251
+        }
+      },
+      "nearest_stamp_gap_ms": {
+        "state": 0.0,
+        "command": 16.000000000005343,
+        "tip": 0.0,
+        "force": 3.9999999999906777
+      }
+    }
+  ]
+}

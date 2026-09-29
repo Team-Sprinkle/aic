@@ -1,0 +1,63 @@
+{
+  "schema": "sc_lateral_bypass_bounded_summary/v1",
+  "date": "2026-09-25",
+  "environment": "Gazebo, rootless Docker, training/diagnostic scenes only",
+  "privileged_teacher_only": true,
+  "autonomous_actor_evaluation": false,
+  "rl_training": false,
+  "final_scenes_opened": false,
+  "route": "Optional behind-first outside-left waypoint bypass; initial right-side egress when the starting TCP is too close to card x corridor; stock insertion controller after route",
+  "runs": [
+    {
+      "id": "trial_1002001_initial_safety_rejection",
+      "result": "no_attempt",
+      "start_card_x_gap_mm": 34.26,
+      "reason": "Original bypass planner refused to cross from a close starting side without first moving outward"
+    },
+    {
+      "id": "trial_1002003_left_85mm",
+      "target_port": 1,
+      "nic_cards": 5,
+      "tier3": 75,
+      "full_insertion": true,
+      "minimum_cable_center_main_pcb_gap_mm": 2.1109,
+      "route_quality_gate_5mm": false,
+      "video": "outputs/experiments/2026-09-25_sc_lateral_bypass/pilot_fivecard_port1_wrist_3view.mp4"
+    },
+    {
+      "id": "trial_1002001_left_85mm_with_egress",
+      "target_port": 0,
+      "nic_cards": 5,
+      "tier3": 75,
+      "full_insertion": true,
+      "minimum_cable_center_main_pcb_gap_mm": 11.4973,
+      "route_quality_gate_5mm": true,
+      "video": "outputs/experiments/2026-09-25_sc_lateral_bypass/pilot_fivecard_port0_egress_wrist_3view.mp4"
+    },
+    {
+      "id": "fixed_seed_51500_behind_first_left",
+      "target_port": 0,
+      "nic_cards": 5,
+      "tier3": 75,
+      "full_insertion": true,
+      "minimum_cable_center_main_pcb_gap_mm": 13.8136,
+      "route_quality_gate_5mm": true,
+      "video": "outputs/experiments/2026-09-25_sc_lateral_bypass/wide_51500/all_views_20fps.mp4"
+    },
+    {
+      "id": "trial_1002003_left_110mm",
+      "target_port": 1,
+      "nic_cards": 5,
+      "tier3": 22.0187,
+      "full_insertion": false,
+      "final_plug_port_distance_mm": 40,
+      "scored_peak_force_n": 41.32,
+      "minimum_cable_center_main_pcb_gap_mm": 3.2520,
+      "route_quality_gate_5mm": false,
+      "video": "outputs/experiments/2026-09-25_sc_lateral_bypass/pilot_fivecard_port1_110mm_lane_failed_wrist_3view.mp4"
+    }
+  ],
+  "gap_caveat": "Distance is from sampled cable link centers to simplified main PCB boxes; omits cable radius, protrusions, and named physics contacts.",
+  "decision": "Stop the lane-width sweep. Retain route-valid port-0 teacher episode as a candidate pending causal/grasp audit. Exclude both tested port-1 episodes from route-valid BC. No claim of all-scene generalization or autonomous insertion.",
+  "record": "docs/experiments/2026-09-25-sc-lateral-bypass-and-policy-handoff.md"
+}

@@ -1,0 +1,21 @@
+{
+  "schema": "sc_old_bag_space_relocation/v1",
+  "entries": [
+    {
+      "source_path": "/var/tmp/chmin_aic_20260918_act/sc_yaw_extremes_20260924/eval_collection/collection_config/attempt_0001/bag_trial_930012_20260924_174747_615/bag_trial_930012_20260924_174747_615_0.mcap",
+      "nas_path": "/home/nas/chmin/aic_archive_20260925/space_relocation_sc_yaw_extremes_930012/bag_trial_930012_20260924_174747_615_0.mcap",
+      "sha256": "c33fbe63b7c79e4f0b6c8b3583357e5744874008690cf35950a048725e8f7ea7",
+      "bytes": 3477511582,
+      "source_is_symlink": true,
+      "reason": "free scratch during active eight-scene replay; exact path preserved"
+    },
+    {
+      "source_path": "/var/tmp/chmin_aic_20260918_act/sc_yaw_extremes_20260924/eval_collection/collection_config/attempt_0001/bag_trial_930011_20260924_174537_200/bag_trial_930011_20260924_174537_200_0.mcap",
+      "nas_path": "/home/nas/chmin/aic_archive_20260925/space_relocation_sc_yaw_extremes_930011/bag_trial_930011_20260924_174537_200_0.mcap",
+      "sha256": "d36e501712ed377531a5fe6d209ce30b98be30370551893b1280c193e4ffae9f",
+      "bytes": 3169000831,
+      "source_is_symlink": true,
+      "reason": "additional scratch margin for complete early-DAGGER replay"
+    }
+  ]
+}

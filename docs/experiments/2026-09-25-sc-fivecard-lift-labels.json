@@ -1,0 +1,54 @@
+{
+  "schema": "aic_sc_connector_waypoint_labels/v1",
+  "labels": "/var/tmp/chmin_aic_20260918_act/sc_fivecard_lift_candidates_20260925/physical_waypoint_chunks.jsonl",
+  "training_label_only": true,
+  "port_edges": "/var/tmp/chmin_aic_20260918_act/sc_fivecard_lift_candidates_20260925/port_edges.json",
+  "tcp_tip_calibration": "configs/hierarchical_recovery/sc_tcp_tip_gazebo_tf_251.json",
+  "episode_tip_calibrations": "/var/tmp/chmin_aic_20260918_act/sc_fivecard_lift_candidates_20260925/physical_grasp_calibrations.json",
+  "port_opening_calibration": "configs/hierarchical_recovery/sc_port_opening_gazebo_tf_251.json",
+  "pose_quaternion_order": "xyzw",
+  "timing": {
+    "resample_mode": "causal_hold",
+    "step_s": 0.05,
+    "tolerance_s": 0.01,
+    "max_hold_s": 0.15,
+    "first_target_semantics": "teacher command recorded with anchor image; target held until next recorded command when resampling"
+  },
+  "counts_by_split": {
+    "train": 2287
+  },
+  "episodes": 3,
+  "train_scene_groups": 3,
+  "validation_scene_groups": 0,
+  "max_tcp_target_roundtrip_m": 2.0770370905276122e-16,
+  "max_tcp_target_roundtrip_deg": 7.738299040234999e-15,
+  "episode_reports": [
+    {
+      "episode_index": 1002001,
+      "scene_sha256": "9c67ec44e7eb8d7826444c229f4142431ffc87fc51cb9124c7a0ad067b793629",
+      "split": "train",
+      "frames": 843,
+      "valid_chunks": 833,
+      "invalid_timing_chunks": 7,
+      "missing_image_chunks": 0
+    },
+    {
+      "episode_index": 1002002,
+      "scene_sha256": "8761a56e1331de86bb995a6d1638d2aa390c8d02a29e8c8968de67cbb3993148",
+      "split": "train",
+      "frames": 870,
+      "valid_chunks": 859,
+      "invalid_timing_chunks": 8,
+      "missing_image_chunks": 0
+    },
+    {
+      "episode_index": 1002004,
+      "scene_sha256": "ef39ec87e477fc90f89f36e21a2cf9f2f4a78e4b062eb534b75d76d77b386b02",
+      "split": "train",
+      "frames": 610,
+      "valid_chunks": 595,
+      "invalid_timing_chunks": 12,
+      "missing_image_chunks": 0
+    }
+  ]
+}

@@ -1,0 +1,41 @@
+{
+  "schema": "sc_scored_mcap_archive/v1",
+  "verified_before_source_removal": true,
+  "files": [
+    {
+      "original_path": "/var/tmp/chmin_aic_20260918_act/sc_diversity_actor_early2mm_base_20260925/eval_collection/collection_config/attempt_0001/bag_trial_997001_20260925_051948_762/bag_trial_997001_20260925_051948_762_0.mcap",
+      "original_sha256": "4623a546ceec69cd1236be85237e154bbfa8e7355ac589f2fd71bcf30094cdd2",
+      "compressed": "/home/nas/chmin/aic_archive_20260925/bag_trial_997001_20260925_051948_762_0.mcap.zst",
+      "compressed_bytes": 63734730,
+      "restore_command": "zstd -dc '/home/nas/chmin/aic_archive_20260925/bag_trial_997001_20260925_051948_762_0.mcap.zst' > '/var/tmp/chmin_aic_20260918_act/sc_diversity_actor_early2mm_base_20260925/eval_collection/collection_config/attempt_0001/bag_trial_997001_20260925_051948_762/bag_trial_997001_20260925_051948_762_0.mcap'"
+    },
+    {
+      "original_path": "/var/tmp/chmin_aic_20260918_act/sc_diversity_actor_early2mm_base_20260925/eval_collection/collection_config/attempt_0001/bag_trial_997002_20260925_052105_848/bag_trial_997002_20260925_052105_848_0.mcap",
+      "original_sha256": "fb7b91ae3449b6d3fbda36108475cc304090a159d244cb6e6bda3c2f1fac4058",
+      "compressed": "/home/nas/chmin/aic_archive_20260925/bag_trial_997002_20260925_052105_848_0.mcap.zst",
+      "compressed_bytes": 103233130,
+      "restore_command": "zstd -dc '/home/nas/chmin/aic_archive_20260925/bag_trial_997002_20260925_052105_848_0.mcap.zst' > '/var/tmp/chmin_aic_20260918_act/sc_diversity_actor_early2mm_base_20260925/eval_collection/collection_config/attempt_0001/bag_trial_997002_20260925_052105_848/bag_trial_997002_20260925_052105_848_0.mcap'"
+    },
+    {
+      "original_path": "/var/tmp/chmin_aic_20260918_act/sc_diversity_actor_early2mm_base_20260925/eval_collection/collection_config/attempt_0001/bag_trial_997003_20260925_052326_695/bag_trial_997003_20260925_052326_695_0.mcap",
+      "original_sha256": "6ae3cc62bc510abed68baa31e4c2fccd4e885bdfc7eb04da1e9d792a5652b1bb",
+      "compressed": "/home/nas/chmin/aic_archive_20260925/bag_trial_997003_20260925_052326_695_0.mcap.zst",
+      "compressed_bytes": 102020563,
+      "restore_command": "zstd -dc '/home/nas/chmin/aic_archive_20260925/bag_trial_997003_20260925_052326_695_0.mcap.zst' > '/var/tmp/chmin_aic_20260918_act/sc_diversity_actor_early2mm_base_20260925/eval_collection/collection_config/attempt_0001/bag_trial_997003_20260925_052326_695/bag_trial_997003_20260925_052326_695_0.mcap'"
+    },
+    {
+      "original_path": "/var/tmp/chmin_aic_20260918_act/sc_diversity_actor_early2mm_base_20260925/eval_collection/collection_config/attempt_0001/bag_trial_997005_20260925_052542_770/bag_trial_997005_20260925_052542_770_0.mcap",
+      "original_sha256": "43f98c7074de8285dabf5de37ce5d5460c1d04987ad5cd5aa3839cefe6f4f9dc",
+      "compressed": "/home/nas/chmin/aic_archive_20260925/bag_trial_997005_20260925_052542_770_0.mcap.zst",
+      "compressed_bytes": 52426445,
+      "restore_command": "zstd -dc '/home/nas/chmin/aic_archive_20260925/bag_trial_997005_20260925_052542_770_0.mcap.zst' > '/var/tmp/chmin_aic_20260918_act/sc_diversity_actor_early2mm_base_20260925/eval_collection/collection_config/attempt_0001/bag_trial_997005_20260925_052542_770/bag_trial_997005_20260925_052542_770_0.mcap'"
+    },
+    {
+      "original_path": "/var/tmp/chmin_aic_20260918_act/sc_diversity_actor_early2mm_base_20260925/eval_collection/collection_config/attempt_0001/bag_trial_997006_20260925_052644_509/bag_trial_997006_20260925_052644_509_0.mcap",
+      "original_sha256": "273e877cbc19e86918c1e8753f20fc460eea3db062db8ffef5d7c197084db86d",
+      "compressed": "/home/nas/chmin/aic_archive_20260925/bag_trial_997006_20260925_052644_509_0.mcap.zst",
+      "compressed_bytes": 76353536,
+      "restore_command": "zstd -dc '/home/nas/chmin/aic_archive_20260925/bag_trial_997006_20260925_052644_509_0.mcap.zst' > '/var/tmp/chmin_aic_20260918_act/sc_diversity_actor_early2mm_base_20260925/eval_collection/collection_config/attempt_0001/bag_trial_997006_20260925_052644_509/bag_trial_997006_20260925_052644_509_0.mcap'"
+    }
+  ]
+}
