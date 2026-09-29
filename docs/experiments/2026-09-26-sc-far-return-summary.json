@@ -1,0 +1,133 @@
+{
+  "schema": "sc_far_return_sensitivity/v1",
+  "date": "2026-09-26",
+  "scene": "five SC NIC cards all at allowed leftmost rail position; selected port 0; fixed development seed 51500",
+  "privileged_teacher_only": true,
+  "final_scenes_opened": false,
+  "bc_or_rl_training": false,
+  "diagnostic_rows": [
+    {
+      "family": "low_cross_variations",
+      "variant": "behind_plus10",
+      "tier3": 75,
+      "score_message": "Cable insertion successful.",
+      "gap_mm": 16.855848763733274,
+      "peak_force_n": 21.854973921721466,
+      "video": "outputs/experiments/2026-09-26_sc_far_return/low_cross_variations/behind_plus10/all_views_20fps.mp4"
+    },
+    {
+      "family": "low_cross_variations",
+      "variant": "behind_minus10",
+      "tier3": 75,
+      "score_message": "Cable insertion successful.",
+      "gap_mm": 12.036919062149101,
+      "peak_force_n": 21.961545252069396,
+      "video": "outputs/experiments/2026-09-26_sc_far_return/low_cross_variations/behind_minus10/all_views_20fps.mp4"
+    },
+    {
+      "family": "low_cross_variations",
+      "variant": "lane_plus10",
+      "tier3": 75,
+      "score_message": "Cable insertion successful.",
+      "gap_mm": 15.028300684253278,
+      "peak_force_n": 21.71051809326544,
+      "video": "outputs/experiments/2026-09-26_sc_far_return/low_cross_variations/lane_plus10/all_views_20fps.mp4"
+    },
+    {
+      "family": "low_cross_variations",
+      "variant": "lane_minus10",
+      "tier3": 75,
+      "score_message": "Cable insertion successful.",
+      "gap_mm": 16.10057324035948,
+      "peak_force_n": 21.746355840631875,
+      "video": "outputs/experiments/2026-09-26_sc_far_return/low_cross_variations/lane_minus10/all_views_20fps.mp4"
+    },
+    {
+      "family": "low_cross_variations",
+      "variant": "forward_plus10",
+      "tier3": 75,
+      "score_message": "Cable insertion successful.",
+      "gap_mm": 13.618116381413895,
+      "peak_force_n": 21.67347955649137,
+      "video": "outputs/experiments/2026-09-26_sc_far_return/low_cross_variations/forward_plus10/all_views_20fps.mp4"
+    },
+    {
+      "family": "low_cross_variations",
+      "variant": "forward_minus10",
+      "tier3": 39.673811727488896,
+      "score_message": "Partial insertion detected with distance of 0.01m.",
+      "gap_mm": 14.857039746351566,
+      "peak_force_n": 23.404816006004527,
+      "video": "outputs/experiments/2026-09-26_sc_far_return/low_cross_variations/forward_minus10/all_views_20fps.mp4"
+    },
+    {
+      "family": "forward145_stage1",
+      "variant": "base145",
+      "tier3": 75,
+      "score_message": "Cable insertion successful.",
+      "gap_mm": 13.01984545248527,
+      "peak_force_n": 21.73059561509734,
+      "video": "outputs/experiments/2026-09-26_sc_far_return/forward145_stage1/base145/all_views_20fps.mp4"
+    },
+    {
+      "family": "forward145_stage1",
+      "variant": "forward135",
+      "tier3": 46.049270295971596,
+      "score_message": "Partial insertion detected with distance of 0.01m.",
+      "gap_mm": 13.612072000045181,
+      "peak_force_n": 21.74650617210245,
+      "video": "outputs/experiments/2026-09-26_sc_far_return/forward145_stage1/forward135/all_views_20fps.mp4"
+    },
+    {
+      "family": "forward145_stage1",
+      "variant": "forward155",
+      "tier3": 46.06838820461571,
+      "score_message": "Partial insertion detected with distance of 0.01m.",
+      "gap_mm": 14.743876988974257,
+      "peak_force_n": 21.848485541524283,
+      "video": "outputs/experiments/2026-09-26_sc_far_return/forward145_stage1/forward155/all_views_20fps.mp4"
+    },
+    {
+      "family": "low_cross_candidate",
+      "variant": ".",
+      "tier3": 75,
+      "score_message": "Cable insertion successful.",
+      "gap_mm": 16.50701567836649,
+      "peak_force_n": 22.369285163622738,
+      "video": "outputs/experiments/2026-09-26_sc_far_return/low_cross_candidate/all_views_20fps.mp4"
+    }
+  ],
+  "corrective_teacher_rows": [
+    {
+      "forward_mm": 115,
+      "tier3": 75,
+      "score_message": "Cable insertion successful.",
+      "gap_mm": 14.16744176515337,
+      "peak_force_n": 23.20657793959183,
+      "video": "outputs/experiments/2026-09-26_sc_far_return/collector_115_left/wrist_20fps.mp4",
+      "run_command": "outputs/experiments/2026-09-26_sc_far_return/collector_115_left/run.json"
+    },
+    {
+      "forward_mm": 135,
+      "tier3": 75,
+      "score_message": "Cable insertion successful.",
+      "gap_mm": 14.254866310384532,
+      "peak_force_n": 23.486439527481764,
+      "video": "outputs/experiments/2026-09-26_sc_far_return/collector_135_left/wrist_20fps.mp4",
+      "run_command": "outputs/experiments/2026-09-26_sc_far_return/collector_135_left/run.json"
+    },
+    {
+      "forward_mm": 145,
+      "tier3": 46.05128526128419,
+      "score_message": "Partial insertion detected with distance of 0.01m.",
+      "gap_mm": 12.60654315497574,
+      "peak_force_n": 21.71171719839277,
+      "video": "outputs/experiments/2026-09-26_sc_far_return/collector_145_left/wrist_20fps.mp4",
+      "run_command": "outputs/experiments/2026-09-26_sc_far_return/collector_145_left/run.json"
+    }
+  ],
+  "low_cross_full_count": 6,
+  "low_cross_test_count": 7,
+  "qualified_robust_route": false,
+  "gap_caveat": "Center of sampled cable links to simplified main PCB boxes omits cable radius, protrusions, named contacts, and over-card topology."
+}

@@ -1,0 +1,20 @@
+{
+  "schema": "sc_low_cross_collector_integrity/v1",
+  "date": "2026-09-26",
+  "episode": "/var/tmp/chmin_aic_20260918_act/sc_low_cross_collector_135_left_20260926/episodes/episode_0001_1790388834562872582",
+  "frames": 1117,
+  "sim_duration_s": 66.15,
+  "frames_sha256": "5a40703c664127a50e4f78e3fd702cb7630746d2f81f2422a4def822f9bca83b",
+  "time_strictly_increasing": true,
+  "command_index_nondecreasing": true,
+  "rgb_triplets_complete": true,
+  "max_target_component_error": 2.220446049250313e-16,
+  "student_active_rows": 0,
+  "perturbed_rows": 0,
+  "official_tier3": 75,
+  "minimum_sampled_cable_center_main_pcb_gap_mm": 14.254866310384532,
+  "peak_wrist_force_n": 23.486439527481764,
+  "video": "outputs/experiments/2026-09-26_sc_far_return/collector_135_left/wrist_20fps.mp4",
+  "bc_admitted": false,
+  "reason_not_admitted": "One diagnostic scene only; physical grasp, scene split/duplicate, full cable-card collider and route visual checks remain."
+}

@@ -1,0 +1,67 @@
+{
+  "schema": "sc_low_cross_raw_archive/v1",
+  "date": "2026-09-26",
+  "runs": [
+    {
+      "source": "/var/tmp/chmin_aic_20260918_act/sc_low_cross_left_20260926",
+      "archive": "/home/nas/chmin/aic_archive_20260926/sc_low_cross_left_20260926_raw",
+      "files_size_verified": 8293,
+      "mcap": [
+        {
+          "path": "results/bag_trial_000001_20260926_012803_251/bag_trial_000001_20260926_012803_251_0.mcap",
+          "sha256": "39e8067ef33d9a3ce4f7eb5d4f8566f172b49f53d9ad198fb4f3253bfcd06bf6",
+          "bytes": 259554937
+        }
+      ],
+      "frames_indexes": []
+    },
+    {
+      "source": "/var/tmp/chmin_aic_20260918_act/sc_low_cross_collector_115_left_20260926",
+      "archive": "/home/nas/chmin/aic_archive_20260926/sc_low_cross_collector_115_left_20260926_raw",
+      "files_size_verified": 3600,
+      "mcap": [
+        {
+          "path": "eval_collection/collection_config/attempt_0001/bag_trial_000001_20260926_022607_861/bag_trial_000001_20260926_022607_861_0.mcap",
+          "sha256": "2d327cd43eed8033eb437c45ba1d2f5a8cb5a91dfa6d8820a2d6a23a6a5f3273",
+          "bytes": 263519812
+        }
+      ],
+      "frames_indexes": [
+        "episodes/episode_0001_1790389568036558281/frames.jsonl",
+        "eval_collection/collection_config/attempt_0001/rollout/task_1790389568031094066/frames.jsonl"
+      ]
+    },
+    {
+      "source": "/var/tmp/chmin_aic_20260918_act/sc_low_cross_collector_135_left_20260926",
+      "archive": "/home/nas/chmin/aic_archive_20260926/sc_low_cross_collector_135_left_20260926_raw",
+      "files_size_verified": 3586,
+      "mcap": [
+        {
+          "path": "eval_collection/collection_config/attempt_0001/bag_trial_000001_20260926_021354_409/bag_trial_000001_20260926_021354_409_0.mcap",
+          "sha256": "37155d53146f96baf9d06843142d8d1c7c9ffe6ff311d31879b65bcfbd7b1aec",
+          "bytes": 265205769
+        }
+      ],
+      "frames_indexes": [
+        "episodes/episode_0001_1790388834562872582/frames.jsonl",
+        "eval_collection/collection_config/attempt_0001/rollout/task_1790388834555039442/frames.jsonl"
+      ]
+    },
+    {
+      "source": "/var/tmp/chmin_aic_20260918_act/sc_low_cross_collector_145_left_20260926",
+      "archive": "/home/nas/chmin/aic_archive_20260926/sc_low_cross_collector_145_left_20260926_raw",
+      "files_size_verified": 5784,
+      "mcap": [
+        {
+          "path": "eval_collection/collection_config/attempt_0001/bag_trial_000001_20260926_023014_219/bag_trial_000001_20260926_023014_219_0.mcap",
+          "sha256": "29d47659f7f9d472539fa838e3b38ee7b409888b21d6c3d06d36c12ff5cf82ee",
+          "bytes": 425998946
+        }
+      ],
+      "frames_indexes": [
+        "episodes/episode_0001_1790389814388577838/frames.jsonl",
+        "eval_collection/collection_config/attempt_0001/rollout/task_1790389814383249461/frames.jsonl"
+      ]
+    }
+  ]
+}

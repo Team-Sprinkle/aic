@@ -1,0 +1,1 @@
+I saved my previous response in [the SC lateral route and policy handoff answer](/data1/chmin/yj/ws_aic/src/aic/docs/answers/2026-09-25-sc-lateral-route-and-policy-handoff.md). From now on, I will save each final answer in `docs/answers/` and link to it. [This reply is saved there too.](/data1/chmin/yj/ws_aic/src/aic/docs/answers/2026-09-25-answer-archive-request.md)
