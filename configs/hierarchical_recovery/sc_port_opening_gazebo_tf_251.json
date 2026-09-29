@@ -1,0 +1,22 @@
+{
+  "schema": "aic_sc_port_opening_gazebo_tf/v1",
+  "source_bag": "/var/tmp/chmin_aic_20260918_act/sc_workspace/sc_collection/batch01/eval_collection/collection_config/attempt_0001/bag_trial_000003_20260918_123212_795",
+  "source_snapshot": "/var/tmp/chmin_aic_20260918_act/bag251_event_tf_aic_sc_fix.json",
+  "port_index": 0,
+  "base_frame": "task_board/sc_port_0/sc_port_base_link",
+  "opening_frame": "task_board/sc_port_0/sc_port_base_link_entrance",
+  "base_to_opening": {
+    "xyz_m": [
+      -4.045556500908987e-09,
+      5.684102050151907e-09,
+      -0.0156400242611463
+    ],
+    "quat_xyzw": [
+      0.0,
+      0.0,
+      2.6228759023533635e-17,
+      0.9999999269096824
+    ]
+  },
+  "training_label_only": true
+}

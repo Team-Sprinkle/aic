@@ -1,0 +1,33 @@
+{
+  "schema": "aic_sc_cable_endpoint_gazebo_tf/v1",
+  "source_bag": "/var/tmp/chmin_aic_20260918_act/sc_workspace/sc_collection/batch01/eval_collection/collection_config/attempt_0001/bag_trial_000003_20260918_123212_795",
+  "source_episode_index": 251,
+  "event_time_ns": 1789734802962564757,
+  "method": "inverse(sc_plug_link) @ cable_end_0/link_1 at first insertion event",
+  "plug_to_cable_end0": {
+    "xyz_m": [
+      -0.052000034634918535,
+      -4.9209442382069923e-08,
+      -1.1853622630675353e-07
+    ],
+    "quat_xyzw": [
+      -0.22796529221360864,
+      0.8216480996011026,
+      0.5223409473318439,
+      -0.009282279263882589
+    ]
+  },
+  "plug_to_link1": {
+    "xyz_m": [
+      -0.06709134019178076,
+      -0.018656379171915122,
+      -0.00044430809028389584
+    ],
+    "quat_xyzw": [
+      0.5394708199866444,
+      -0.4671477305249764,
+      0.023471852666176386,
+      0.7001380609427823
+    ]
+  }
+}

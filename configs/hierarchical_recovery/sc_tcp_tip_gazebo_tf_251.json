@@ -1,0 +1,21 @@
+{
+  "schema": "aic_sc_tcp_tip_calibration/v1",
+  "source_bag": "/var/tmp/chmin_aic_20260918_act/sc_workspace/sc_collection/batch01/eval_collection/collection_config/attempt_0001/bag_trial_000003_20260918_123212_795",
+  "source_snapshot": "/var/tmp/chmin_aic_20260918_act/bag251_event_tf_aic_sc_fix.json",
+  "event_time_ns": 1789734802962564757,
+  "method": "inverse(world->gripper/tcp) @ (world->cable_1/sc_tip_link)",
+  "tcp_to_sc_tip": {
+    "xyz_m": [
+      -0.00036603111300928526,
+      -0.013150359763326458,
+      0.016264533853799668
+    ],
+    "quat_xyzw": [
+      -0.15947239072796138,
+      0.1661271207267545,
+      -0.6946081526569573,
+      -0.681534922521976
+    ]
+  },
+  "training_label_only": true
+}

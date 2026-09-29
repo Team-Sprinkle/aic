@@ -1,0 +1,11 @@
+{
+  "schema": "sc_fixed_board_to_port_rotation/v1",
+  "source": "training TF geometry only; fixed CAD mount",
+  "training_trial_count": 30,
+  "board_to_port_xyzw": [
+    -0.7068241441361288,
+    0.7073891922034158,
+    -0.0002829342051555831,
+    0.0002827866034382228
+  ]
+}

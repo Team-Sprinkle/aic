@@ -1,0 +1,20 @@
+{
+  "schema": "aic_sc_tool_plug_gazebo_tf/v1",
+  "source_bag": "/var/tmp/chmin_aic_20260918_act/sc_workspace/sc_collection/batch01/eval_collection/collection_config/attempt_0001/bag_trial_000003_20260918_123212_795",
+  "source_episode_index": 251,
+  "event_time_ns": 1789734802962564757,
+  "method": "world TF chain: inverse(ati/tool_link) @ cable_1/sc_plug_link at first insertion event",
+  "tool_to_sc_plug": {
+    "xyz_m": [
+      -0.00030896726689047527,
+      -0.007929295063236363,
+      0.17785019424673854
+    ],
+    "quat_xyzw": [
+      0.6847452117848765,
+      -0.15626408564388297,
+      0.6913972792687934,
+      -0.16933792456291674
+    ]
+  }
+}

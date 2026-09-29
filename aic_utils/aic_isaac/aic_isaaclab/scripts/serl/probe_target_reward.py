@@ -4,13 +4,18 @@
 from __future__ import annotations
 
 import argparse
+import faulthandler
 import json
 import math
 import os
 import sys
+import traceback
 from pathlib import Path
 
 from isaaclab.app import AppLauncher
+
+if os.environ.get("AIC_ISAAC_DEBUG_STACK", "0") in {"1", "true", "True"}:
+    faulthandler.dump_traceback_later(20.0, repeat=True, file=sys.stderr)
 
 parser = argparse.ArgumentParser(description=__doc__)
 parser.add_argument("--task", default="AIC-Task-v0")
@@ -100,6 +105,11 @@ parser.add_argument("--near_gate_reset_joint_seed", type=float, nargs=6, default
 parser.add_argument("--near_gate_reset_interpolation_steps", type=int, default=0)
 parser.add_argument("--near_gate_reset_hold_steps", type=int, default=0)
 parser.add_argument(
+    "--near_gate_reset_park_scene",
+    action="store_true",
+    help="Diagnostic: park board/ports/cards during physical reset transport, then restore before probe steps.",
+)
+parser.add_argument(
     "--near_gate_reset_physical_interpolation",
     action=argparse.BooleanOptionalAction,
     default=False,
@@ -159,6 +169,14 @@ parser.add_argument(
     help="Step at which reinsertion reaches insert_offset; 0 uses --steps.",
 )
 parser.add_argument("--record_cameras", action="store_true")
+parser.add_argument("--debug_overview_camera", action="store_true", help="Add an external diagnostic RGB view; never an actor input.")
+parser.add_argument("--debug_named_contacts", action="store_true")
+parser.add_argument("--debug_rope_poses_every", type=int, default=0,
+                    help="Record all 20 rope body poses every N control steps for Gazebo shape audit.")
+parser.add_argument(
+    "--debug_rope_scene_link", type=int, action="append", default=[],
+    help="Add a one-body cable-link contact sensor against board, ports, and cards; repeat for multiple links.",
+)
 parser.add_argument("--video_dir", type=Path)
 parser.add_argument("--video_fps", type=float, default=20.0)
 parser.add_argument(
@@ -328,6 +346,8 @@ from pxr import UsdPhysics
 import isaaclab_tasks  # noqa: F401
 from isaaclab_tasks.utils import parse_env_cfg
 from isaaclab.utils import math as math_utils
+from isaaclab.sensors import ContactSensorCfg, TiledCameraCfg
+import isaaclab.sim as sim_utils
 
 import aic_task.tasks  # noqa: F401
 
@@ -603,8 +623,12 @@ def _target_orientation_offset() -> tuple[float, float, float, float] | None:
         return tuple(v / norm for v in values)
     if args_cli.task_family == "sfp_to_nic":
         return _quat_from_rpy(*SFP_PORT_RPY)
+    if args_cli.target_body == "sc_tip_link":
+        # The source SC success bags and the calibrated reversed Isaac asset
+        # put sc_tip_link directly in the live port-base orientation.
+        return None
     # The import already bakes the source +90-degree X rotation into the rigid
-    # root. Conjugating the source Y(pi) by that baked rotation leaves Z(pi).
+    # root for proxy bodies. Conjugating source Y(pi) leaves Z(pi).
     return _quat_from_rpy(0.0, 0.0, math.pi)
 
 
@@ -895,15 +919,16 @@ def _controller_target_offset_for_step(step: int) -> tuple[float, float, float]:
 
 
 class VideoRecorder:
-    def __init__(self, output_dir: Path, fps: float):
+    def __init__(self, output_dir: Path, fps: float, camera_names: tuple[str, ...] = CAMERA_NAMES):
         self.output_dir = output_dir
         self.fps = float(fps)
+        self.camera_names = camera_names
         self._writers: dict[str, object] = {}
         self._paths: dict[str, Path] = {}
 
     def add_scene(self, env) -> None:
         sensors = env.unwrapped.scene.sensors
-        for camera_name in CAMERA_NAMES:
+        for camera_name in self.camera_names:
             if camera_name not in sensors:
                 continue
             output = sensors[camera_name].data.output
@@ -1032,6 +1057,11 @@ def _cheatcode_tcp_action(
 
 
 def main() -> None:
+    if args_cli.controller == "joint_pose_replay":
+        configured_mode = os.environ.get("AIC_ISAAC_ARM_ACTION_MODE", "joint_position").strip().lower()
+        if configured_mode != "joint_position":
+            raise ValueError("joint_pose_replay requires AIC_ISAAC_ARM_ACTION_MODE=joint_position")
+        os.environ["AIC_ISAAC_ARM_ACTION_MODE"] = "joint_position"
     env_cfg = parse_env_cfg(
         args_cli.task,
         device=args_cli.device,
@@ -1046,6 +1076,93 @@ def main() -> None:
         env_cfg.scene.center_camera = None
         env_cfg.scene.left_camera = None
         env_cfg.scene.right_camera = None
+    if args_cli.debug_overview_camera:
+        if not args_cli.record_cameras:
+            raise ValueError("--debug_overview_camera requires --record_cameras")
+        overview_eye = (0.22, -0.39, 0.60)
+        overview_target = (0.20, -0.39, 0.05)
+        overview_rotation = math_utils.create_rotation_matrix_from_view(
+            torch.tensor([overview_eye]), torch.tensor([overview_target]), device="cpu"
+        )
+        overview_quaternion = tuple(float(v) for v in math_utils.quat_from_matrix(overview_rotation)[0])
+        env_cfg.scene.debug_overview_camera = TiledCameraCfg(
+            prim_path="{ENV_REGEX_NS}/diagnostic_overview_camera",
+            spawn=sim_utils.PinholeCameraCfg(
+                focal_length=22.48,
+                horizontal_aperture=35.0,
+                vertical_aperture=35.0,
+                clipping_range=(0.05, 20.0),
+            ),
+            height=512,
+            width=512,
+            data_types=["rgb"],
+            update_latest_camera_pose=True,
+            offset=TiledCameraCfg.OffsetCfg(
+                pos=overview_eye,
+                rot=overview_quaternion,
+                convention="opengl",
+            ),
+        )
+    if args_cli.debug_named_contacts:
+        scene_contact_filters = [
+            "{ENV_REGEX_NS}/task_board/base_visual",
+            "{ENV_REGEX_NS}/sc_port/sc_port_visual",
+            "{ENV_REGEX_NS}/sc_port_2/sc_port_visual",
+            *[f"{{ENV_REGEX_NS}}/nic_card{suffix}" for suffix in ("", "_1", "_2", "_3", "_4")],
+        ]
+        gripper_internal_filters = [
+            *[f"{{ENV_REGEX_NS}}/Robot/aic_unified_robot/{name}" for name in (
+                "wrist_3_link", "flange", "tool0", "ati_base_link", "ati_tool_link",
+                "gripper_tcp", "gripper_hande_finger_link_l", "gripper_hande_finger_link_r",
+                "center_camera_camera_link", "left_camera_camera_link", "right_camera_camera_link",
+            )],
+            "{ENV_REGEX_NS}/Robot/cable/sc_plug/sc_plug_link",
+            *[f"{{ENV_REGEX_NS}}/Robot/cable/Rope/Rope/link_{index}" for index in range(4)],
+        ]
+        for sensor_name, body_path in (
+            ("debug_gripper_base_contact", "aic_unified_robot/gripper_hande_base_link"),
+            ("debug_gripper_finger_l_contact", "aic_unified_robot/gripper_hande_finger_link_l"),
+            ("debug_gripper_finger_r_contact", "aic_unified_robot/gripper_hande_finger_link_r"),
+            ("debug_sc_plug_contact", "cable/sc_plug/sc_plug_link"),
+            ("debug_rope_link1_contact", "cable/Rope/Rope/link_1"),
+        ):
+            setattr(
+                env_cfg.scene,
+                sensor_name,
+                ContactSensorCfg(
+                    prim_path="{ENV_REGEX_NS}/Robot/" + body_path,
+                    update_period=0.0,
+                    history_length=2,
+                    debug_vis=False,
+                    filter_prim_paths_expr=scene_contact_filters + (
+                        gripper_internal_filters if sensor_name == "debug_gripper_base_contact" else []
+                    ),
+                ),
+            )
+        # A many-body sensor can report per-link net load, but IsaacLab cannot
+        # resolve many cable links against many scene bodies in one filtered
+        # sensor. Use this to find candidate links, then inspect those links
+        # with a separate one-to-many filtered contact sensor if needed.
+        env_cfg.scene.debug_rope_all_contact = ContactSensorCfg(
+            prim_path="{ENV_REGEX_NS}/Robot/cable/Rope/Rope/link_.*",
+            update_period=0.0,
+            history_length=2,
+            debug_vis=False,
+        )
+        for link_index in sorted(set(args_cli.debug_rope_scene_link)):
+            if not 0 <= link_index <= 20:
+                raise ValueError(f"Cable-link index must be in [0, 20], got {link_index}")
+            setattr(
+                env_cfg.scene,
+                f"debug_rope_link{link_index}_scene_contact",
+                ContactSensorCfg(
+                    prim_path=f"{{ENV_REGEX_NS}}/Robot/cable/Rope/Rope/link_{link_index}",
+                    update_period=0.0,
+                    history_length=2,
+                    debug_vis=False,
+                    filter_prim_paths_expr=scene_contact_filters,
+                ),
+            )
     env_cfg.actions.arm_action.scale = 1.0
     reset_params = env_cfg.events.reset_robot_tcp_to_episode_start.params
     reset_params["max_iterations"] = int(args_cli.near_gate_reset_max_iterations)
@@ -1055,6 +1172,7 @@ def main() -> None:
     reset_params["ik_joint_seed"] = args_cli.near_gate_reset_joint_seed
     reset_params["interpolation_steps"] = int(args_cli.near_gate_reset_interpolation_steps)
     reset_params["physical_interpolation_hold_steps"] = int(args_cli.near_gate_reset_hold_steps)
+    reset_params["park_scene_during_physical_interpolation"] = bool(args_cli.near_gate_reset_park_scene)
     reset_params["physical_interpolation"] = bool(args_cli.near_gate_reset_physical_interpolation)
     reset_params["wrap_solved_joints_to_initial"] = bool(args_cli.near_gate_reset_wrap_joints)
     reward_config = _configure_rewards(env_cfg)
@@ -1063,7 +1181,11 @@ def main() -> None:
     obs, _ = env.reset()
     del obs
     video_recorder = (
-        VideoRecorder(args_cli.video_dir or args_cli.output.parent / "isaac_camera_videos", args_cli.video_fps)
+        VideoRecorder(
+            args_cli.video_dir or args_cli.output.parent / "isaac_camera_videos",
+            args_cli.video_fps,
+            CAMERA_NAMES + (("debug_overview_camera",) if args_cli.debug_overview_camera else ()),
+        )
         if args_cli.record_cameras
         else None
     )
@@ -1073,12 +1195,43 @@ def main() -> None:
     unwrapped = env.unwrapped
     robot = unwrapped.scene["robot"]
     target = unwrapped.scene[reward_config["target_scene"]]
+    rope_pose_body_ids = {}
+    if args_cli.debug_rope_poses_every > 0:
+        for rope_index in range(1, 21):
+            body_ids, _ = robot.find_bodies(f"link_{rope_index}", preserve_order=True)
+            if len(body_ids) != 1:
+                raise RuntimeError(f"Expected one rigid rope body link_{rope_index}, got {body_ids}")
+            rope_pose_body_ids[f"link_{rope_index}"] = body_ids[0]
+    base_ids, _ = robot.find_bodies("base_link", preserve_order=True)
+    robot_base_position_world = (
+        [float(v) for v in robot.data.body_pos_w[0, base_ids[0]].detach().cpu().tolist()]
+        if base_ids else None
+    )
+    initial_robot_link_poses = {}
+    for link_name in (
+        "base_link", "ati_tool_link", "gripper_tcp", "gripper_hande_base_link",
+        "gripper_hande_finger_link_r", "sc_tip_link", "sc_plug_link", "link_1",
+    ):
+        link_ids, _ = robot.find_bodies(link_name, preserve_order=True)
+        if link_ids:
+            link_id = link_ids[0]
+            initial_robot_link_poses[link_name] = {
+                "position_world": [float(v) for v in robot.data.body_pos_w[0, link_id].detach().cpu().tolist()],
+                "orientation_wxyz": [float(v) for v in robot.data.body_quat_w[0, link_id].detach().cpu().tolist()],
+            }
     reset_report = dict(getattr(unwrapped, "_aic_tcp_reset_report_by_env", {}) or {})
     stage = omni.usd.get_context().get_stage()
+    scene_rigid_body_paths = (
+        [str(prim.GetPath()) for prim in stage.Traverse()
+         if str(prim.GetPath()).startswith("/World/envs/env_0/") and prim.HasAPI(UsdPhysics.RigidBodyAPI)]
+        if args_cli.debug_named_contacts else []
+    )
     collision_enabled_by_path = {}
     for prim in stage.Traverse():
         path = str(prim.GetPath())
-        if "/env_0/Robot/" not in path and "/env_0/task_board/" not in path:
+        if not any(marker in path for marker in (
+            "/env_0/Robot/", "/env_0/task_board/", "/env_0/sc_port/", "/env_0/sc_port_2/",
+        )):
             continue
         if prim.HasAPI(UsdPhysics.CollisionAPI):
             value = UsdPhysics.CollisionAPI(prim).GetCollisionEnabledAttr().Get()
@@ -1682,6 +1835,51 @@ def main() -> None:
         if video_recorder is not None:
             video_recorder.add_scene(env)
         row = metrics(step, reward)
+        if rope_pose_body_ids and step % args_cli.debug_rope_poses_every == 0:
+            row["debug_rope_pose_world"] = {
+                name: {
+                    "xyz_m": [float(v) for v in robot.data.body_pos_w[0, body_id].detach().cpu().tolist()],
+                    "quat_wxyz": [float(v) for v in robot.data.body_quat_w[0, body_id].detach().cpu().tolist()],
+                }
+                for name, body_id in rope_pose_body_ids.items()
+            }
+        if args_cli.debug_named_contacts:
+            for link_name in (
+                "gripper_hande_base_link", "gripper_hande_finger_link_r", "sc_plug_link", "link_1",
+            ):
+                link_ids, _ = robot.find_bodies(link_name, preserve_order=True)
+                if link_ids:
+                    row[link_name + "_position_world"] = [
+                        float(v) for v in robot.data.body_pos_w[0, link_ids[0]].detach().cpu().tolist()
+                    ]
+            for sensor_name in (
+                "debug_gripper_base_contact", "debug_gripper_finger_l_contact",
+                "debug_gripper_finger_r_contact", "debug_sc_plug_contact",
+                "debug_rope_link1_contact",
+            ):
+                sensor = unwrapped.scene[sensor_name]
+                row[sensor_name + "_force_n"] = float(
+                    torch.linalg.norm(sensor.data.net_forces_w[0]).detach().cpu()
+                )
+                matrix = sensor.data.force_matrix_w
+                if matrix is not None:
+                    row[sensor_name + "_by_scene_n"] = (
+                        torch.linalg.vector_norm(matrix[0], dim=-1).detach().cpu().tolist()
+                    )
+            rope_sensor = unwrapped.scene["debug_rope_all_contact"]
+            row["debug_rope_all_contact_by_link_n"] = (
+                torch.linalg.vector_norm(rope_sensor.data.net_forces_w[0], dim=-1)
+                .detach().cpu().tolist()
+            )
+            for link_index in sorted(set(args_cli.debug_rope_scene_link)):
+                sensor_name = f"debug_rope_link{link_index}_scene_contact"
+                sensor = unwrapped.scene[sensor_name]
+                matrix = sensor.data.force_matrix_w
+                if matrix is not None:
+                    row[sensor_name + "_by_scene_n"] = (
+                        torch.linalg.vector_norm(matrix[0], dim=-1)
+                        .detach().cpu().tolist()
+                    )
         row["controller"] = effective_controller
         row.update(diagnostics)
         rows.append(row)
@@ -1705,8 +1903,21 @@ def main() -> None:
     if video_recorder is not None:
         video_paths = video_recorder.close()
     summary = {
+        "simulator_contact_settings": {
+            "robot_self_collisions_enabled": bool(
+                env_cfg.scene.robot.spawn.articulation_props.enabled_self_collisions
+            ),
+            "robot_solver_position_iterations": int(
+                env_cfg.scene.robot.spawn.articulation_props.solver_position_iteration_count
+            ),
+            "robot_solver_velocity_iterations": int(
+                env_cfg.scene.robot.spawn.articulation_props.solver_velocity_iteration_count
+            ),
+        },
         "reward_config": reward_config,
         "near_gate_reset_report": reset_report,
+        "robot_base_position_world": robot_base_position_world,
+        "initial_robot_link_poses": initial_robot_link_poses,
         "initial_scene_asset_poses": initial_scene_asset_poses,
         "articulation_body_masses_kg": articulation_body_masses_kg,
         "arm_soft_joint_position_limits_rad": robot.data.soft_joint_pos_limits[0, arm_joint_indices]
@@ -1714,6 +1925,14 @@ def main() -> None:
         .cpu()
         .tolist(),
         "collision_enabled_by_path": collision_enabled_by_path,
+        "scene_rigid_body_paths": scene_rigid_body_paths,
+        "debug_contact_filter_paths": (
+            scene_contact_filters + gripper_internal_filters if args_cli.debug_named_contacts else []
+        ),
+        "debug_rope_link_names": (
+            list(unwrapped.scene["debug_rope_all_contact"].body_names)
+            if args_cli.debug_named_contacts else []
+        ),
         "preflight_settle_report": preflight_settle_report,
         "expert_bc": None
         if expert_prior is None
@@ -1743,6 +1962,8 @@ if __name__ == "__main__":
         main()
     except BaseException:
         status = 1
+        traceback.print_exc(file=sys.stderr)
+        sys.stderr.flush()
         raise
     finally:
         simulation_app.close()

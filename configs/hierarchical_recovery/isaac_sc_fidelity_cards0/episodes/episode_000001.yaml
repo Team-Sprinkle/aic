@@ -1,0 +1,299 @@
+episode_id: sc_fidelity_cards_0
+episode_index: 1
+task_description: Insert SC cable into SC port 0
+task_context:
+  task_family: sc_to_sc
+  target_port_index: 0
+  target_card_index: -1
+  target_card_valid: 0
+  nic_card_count: 0
+  sc_port_count: 2
+scene:
+  task_board:
+    position_world:
+    - 0.24031093894608788
+    - -0.4694411738216029
+    - 9.701315915530695e-09
+    yaw: 0.0
+  parts:
+    sc_port:
+      offset_from_board:
+      - 0.0067
+      - -0.0362
+      - 0.0165
+      position_world:
+      - 0.2470109389460879
+      - -0.5056411738216029
+      - 0.016500009701315932
+      pose_range: {}
+      snap_step: {}
+    sc_port_2:
+      offset_from_board:
+      - 0.0076
+      - -0.0783
+      - 0.0165
+      position_world:
+      - 0.24791093894608787
+      - -0.5477411738216029
+      - 0.016500009701315932
+      pose_range: {}
+      snap_step: {}
+    nic_card:
+      offset_from_board:
+      - 5.0
+      - 5.0
+      - -2.0
+      position_world:
+      - 5.240310938946088
+      - 4.530558826178397
+      - -1.999999990298684
+      pose_range: {}
+      snap_step: {}
+    nic_card_1:
+      offset_from_board:
+      - 5.0
+      - 5.0
+      - -2.0
+      position_world:
+      - 5.240310938946088
+      - 4.530558826178397
+      - -1.999999990298684
+      pose_range: {}
+      snap_step: {}
+    nic_card_2:
+      offset_from_board:
+      - 5.0
+      - 5.0
+      - -2.0
+      position_world:
+      - 5.240310938946088
+      - 4.530558826178397
+      - -1.999999990298684
+      pose_range: {}
+      snap_step: {}
+    nic_card_3:
+      offset_from_board:
+      - 5.0
+      - 5.0
+      - -2.0
+      position_world:
+      - 5.240310938946088
+      - 4.530558826178397
+      - -1.999999990298684
+      pose_range: {}
+      snap_step: {}
+    nic_card_4:
+      offset_from_board:
+      - 5.0
+      - 5.0
+      - -2.0
+      position_world:
+      - 5.240310938946088
+      - 4.530558826178397
+      - -1.999999990298684
+      pose_range: {}
+      snap_step: {}
+  target:
+    scene_name: sc_port
+    target_reward_body: sc_tip_link
+    target_position_offset:
+    - 0.0
+    - 0.0
+    - 0.002
+    body_position_offset:
+    - 0.0
+    - 0.0
+    - 0.0
+    end_effector_tip_body: sc_tip_link
+    end_effector_tip_body_position_offset:
+    - 0.0
+    - 0.0
+    - 0.0
+    target_pose_world:
+      position:
+      - 0.24699993894608788
+      - -0.5056411738216029
+      - 0.014500009701315932
+      orientation_wxyz:
+      - 0.000281
+      - 0.707388
+      - 0.706825
+      - 0.000281
+    entrance_pose_world:
+      position:
+      - 0.24699993894608788
+      - -0.5056411738216029
+      - 0.030140009701315917
+      orientation_wxyz:
+      - 0.000281
+      - 0.707388
+      - 0.706825
+      - 0.000281
+    body_start_orientation_wxyz:
+    - 0.000281
+    - 0.707388
+    - 0.706825
+    - 0.000281
+    body_orientation_offset_wxyz: null
+    seated_depth_m: 0.01564
+    insertion_axis_world:
+    - 0.0
+    - 0.0
+    - -1.0
+  start_near_gate:
+    axial_distance_m: 0.006
+    lateral_distance_m: 0.001
+    lateral_direction_world:
+    - 0.0
+    - 1.0
+    - 0.0
+    reset_mode: body_start_position_world
+    reset_body_name: sc_tip_link
+    body_start_position_world:
+    - 0.24699993894608788
+    - -0.5046411738216029
+    - 0.03614000970131592
+    body_start_orientation_wxyz:
+    - 0.000281
+    - 0.707388
+    - 0.706825
+    - 0.000281
+    reference_reward_body_name: sc_tip_link
+    reference_reward_body_position_offset:
+    - 0.0
+    - 0.0
+    - 0.0
+    reference_tip_center_position_world:
+    - 0.24699993894608788
+    - -0.5046411738216029
+    - 0.03614000970131592
+    reference_reward_body_start_position_world:
+    - 0.24699993894608788
+    - -0.5046411738216029
+    - 0.03614000970131592
+    reference_reward_body_start_orientation_wxyz:
+    - 0.000281
+    - 0.707388
+    - 0.706825
+    - 0.000281
+    reset_body_offset_from_reference_world:
+    - 0.0
+    - 0.0
+    - 0.0
+    reset_body_orientation_wxyz:
+    - 0.000281
+    - 0.707388
+    - 0.706825
+    - 0.000281
+    reference_body_position:
+    - 0.168239
+    - -0.35892
+    - 0.27249
+    tcp_start_position_world:
+    - 0.168239
+    - -0.35892
+    - 0.27249
+    tcp_start_orientation_world:
+    - 0.000281
+    - 0.707388
+    - 0.706825
+    - 0.000281
+    reference_tcp_position:
+    - 0.168239
+    - -0.35892
+    - 0.27249
+    target_gate_position:
+    - 0.168239
+    - -0.35992
+    - 0.26649
+    target_gate_axis_world:
+    - 0.0
+    - 0.0
+    - -1.0
+    target_gate_source: entrance_pose_world
+    achieved_distance: 0.006083
+    achieved_axial_distance_m: 0.006
+    achieved_lateral_distance_m: 0.001
+    axes: xyz
+    min_clearance_m: 0.004
+  stop_near_gate: null
+isaac_randomization:
+  board_scene_name: task_board
+  board_default_pos:
+  - 0.24031093894608788
+  - -0.4694411738216029
+  - 9.701315915530695e-09
+  board_range:
+    x:
+    - 0.0
+    - 0.0
+    y:
+    - 0.0
+    - 0.0
+    z:
+    - 0.0
+    - 0.0
+    yaw:
+    - 0.0
+    - 0.0
+  parts:
+  - scene_name: sc_port
+    offset:
+    - 0.0067
+    - -0.0362
+    - 0.0165
+    pose_range: {}
+    present: true
+    snap_step: {}
+  - scene_name: sc_port_2
+    offset:
+    - 0.0076
+    - -0.0783
+    - 0.0165
+    pose_range: {}
+    present: true
+    snap_step: {}
+  - scene_name: nic_card
+    offset:
+    - 5.0
+    - 5.0
+    - -2.0
+    pose_range: {}
+    snap_step: {}
+    present: false
+  - scene_name: nic_card_1
+    offset:
+    - 5.0
+    - 5.0
+    - -2.0
+    pose_range: {}
+    present: false
+    snap_step: {}
+  - scene_name: nic_card_2
+    offset:
+    - 5.0
+    - 5.0
+    - -2.0
+    pose_range: {}
+    present: false
+    snap_step: {}
+  - scene_name: nic_card_3
+    offset:
+    - 5.0
+    - 5.0
+    - -2.0
+    pose_range: {}
+    present: false
+    snap_step: {}
+  - scene_name: nic_card_4
+    offset:
+    - 5.0
+    - 5.0
+    - -2.0
+    pose_range: {}
+    present: false
+    snap_step: {}
+source_request:
+  path: /var/tmp/chmin_aic_20260920_isaac_world_rl/sc_snag_20260923/requests/sc_nic0_source_contract_current.yaml
+  name: sc_nic0_source_contract_current
+  local_episode_index: 1

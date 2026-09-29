@@ -1,0 +1,70 @@
+{
+  "schema": "sfp_port_opening_scene_calibration/v1",
+  "training_label_only": true,
+  "world_to_base": {
+    "xyz_m": [
+      -0.2,
+      0.2,
+      1.14
+    ],
+    "quat_xyzw": [
+      0.0,
+      0.0,
+      0.9999999560952156,
+      -0.0002963267905598908
+    ]
+  },
+  "board_to_nic_mount": {
+    "x_nominal_m": -0.08142,
+    "x_plus_rail_translation": true,
+    "y_rail0_m": -0.1745,
+    "y_step_per_rail_m": 0.04,
+    "z_m": 0.012,
+    "rpy_from_rail_pose": true
+  },
+  "nic_mount_to_port_opening": {
+    "0": {
+      "xyz_m": [
+        0.010950014048673296,
+        -0.012286150770102174,
+        0.16727232931934222
+      ],
+      "quat_xyzw": [
+        0.9999800211822647,
+        -7.80441566562913e-08,
+        4.6006158371879104e-09,
+        0.006321173649816297
+      ],
+      "sample_position_spread_mm": 3.889445978766365e-05,
+      "sample_orientation_spread_deg": 1.308926347227852e-06
+    },
+    "1": {
+      "xyz_m": [
+        -0.012249989647583212,
+        -0.012286140949136753,
+        0.1672723296265124
+      ],
+      "quat_xyzw": [
+        0.9999800211822647,
+        -7.80441566562913e-08,
+        4.6006158371879104e-09,
+        0.006321173649816297
+      ],
+      "sample_position_spread_mm": 1.7570457069992673e-05,
+      "sample_orientation_spread_deg": 1.308926347227852e-06
+    }
+  },
+  "source_bags": [
+    {
+      "tf_extract": "/var/tmp/chmin_aic_20260918_act/sfp_port_tf_sample_20260924.json",
+      "sha256": "549046d8f90f3883f168477fb1a380bdb8565b88b522b67b814f9fa9f1006335"
+    },
+    {
+      "tf_extract": "/var/tmp/chmin_aic_20260918_act/sfp_port_tf_second_sample_20260924.json",
+      "sha256": "7f69a4e5af027decb20bae5c9829419c21166595b949740257c604063e826161"
+    }
+  ],
+  "checked_scene_world_port_position_error_mm": 0.004969318590758159,
+  "checked_scene_world_port_orientation_error_deg": 0.00013467163739997929,
+  "runtime_geometry_allowed": false
+}

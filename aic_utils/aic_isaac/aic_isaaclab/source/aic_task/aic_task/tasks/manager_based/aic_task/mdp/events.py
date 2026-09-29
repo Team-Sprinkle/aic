@@ -125,6 +125,17 @@ def _load_episode_configs_from_env() -> list[dict]:
         data = yaml.safe_load(path.read_text(encoding="utf-8")) or {}
         if not isinstance(data, dict):
             raise ValueError(f"Isaac episode config must be a mapping: {path}")
+        scene_board = ((data.get("scene") or {}).get("task_board") or {}).get("position_world")
+        random_board = (data.get("isaac_randomization") or {}).get("board_default_pos")
+        if scene_board is not None and random_board is not None:
+            if len(scene_board) != 3 or len(random_board) != 3 or any(
+                abs(float(a) - float(b)) > 1.0e-6 for a, b in zip(scene_board, random_board)
+            ):
+                raise ValueError(
+                    f"{path}: scene.task_board.position_world differs from "
+                    "isaac_randomization.board_default_pos; scene reset would silently "
+                    "use the latter while target labels use the former"
+                )
         episodes.append(data)
     if not episodes:
         raise ValueError(f"No episode_*.yaml files found in {episodes_dir}")
@@ -402,6 +413,7 @@ def reset_robot_tcp_to_episode_start(
     interpolation_steps: int = 0,
     physical_interpolation: bool = False,
     physical_interpolation_hold_steps: int = 0,
+    park_scene_during_physical_interpolation: bool = False,
     wrap_solved_joints_to_initial: bool = False,
     sync_action_term_after_reset: bool = True,
 ) -> None:
@@ -585,7 +597,10 @@ def reset_robot_tcp_to_episode_start(
         )
     )
 
-    for _ in range(max(1, int(max_iterations))):
+    reset_trace = os.environ.get("AIC_ISAAC_SC_RESET_TRACE", "0") in {"1", "true", "True"}
+    if reset_trace:
+        print(f"[aic reset trace] ik_start body={active_body_name} iterations={max_iterations}", flush=True)
+    for iteration in range(max(1, int(max_iterations))):
         current_pos = robot.data.body_pos_w[active_env_ids, body_id].to(dtype=torch.float32)
         current_quat = robot.data.body_quat_w[active_env_ids, body_id].to(dtype=torch.float32)
         if target_quat is None:
@@ -623,6 +638,8 @@ def reset_robot_tcp_to_episode_start(
         if hasattr(env, "sim"):
             env.sim.forward()
         robot.update(0.0)
+        if reset_trace and (iteration + 1) % 20 == 0:
+            print(f"[aic reset trace] ik_iteration={iteration + 1}", flush=True)
 
     if wrap_solved_joints_to_initial:
         initial_arm_q = initial_full_q[:, joint_ids]
@@ -633,11 +650,31 @@ def reset_robot_tcp_to_episode_start(
             lo = limits[active_env_ids][:, joint_ids, 0]
             hi = limits[active_env_ids][:, joint_ids, 1]
             q = torch.max(torch.min(q, hi), lo)
+    if reset_trace:
+        print(f"[aic reset trace] ik_done interpolation_steps={interpolation_steps}", flush=True)
 
     full_q = robot.data.joint_pos[active_env_ids].clone()
     full_q[:, joint_ids] = q
     full_qd = torch.zeros_like(full_q)
     settle_steps = max(0, int(interpolation_steps))
+    parked_scene: list[tuple[object, torch.Tensor]] = []
+    if park_scene_during_physical_interpolation and physical_interpolation and settle_steps > 0:
+        for scene_name in (
+            "task_board", "sc_port", "sc_port_2", "nic_card", "nic_card_1",
+            "nic_card_2", "nic_card_3", "nic_card_4",
+        ):
+            try:
+                asset = env.scene[scene_name]
+            except KeyError:
+                continue
+            original_pose = torch.cat([asset.data.root_pos_w, asset.data.root_quat_w], dim=-1).clone()
+            parked_pose = original_pose.clone()
+            parked_pose[active_env_ids, 0] += 2.0
+            asset.write_root_pose_to_sim(parked_pose[active_env_ids], env_ids=active_env_ids)
+            parked_scene.append((asset, original_pose))
+        env.sim.forward()
+        if reset_trace:
+            print(f"[aic reset trace] parked_scene_objects={len(parked_scene)}", flush=True)
     if settle_steps > 0 and hasattr(env, "sim"):
         # Preserve the cable's articulated shape by moving the arm to the IK
         # solution over physics steps.  A direct arm teleport leaves the
@@ -680,18 +717,29 @@ def reset_robot_tcp_to_episode_start(
             robot.write_data_to_sim()
             env.sim.step(render=False)
             robot.update(float(env.sim.get_physics_dt()))
+            if reset_trace and step_index % 100 == 0:
+                print(f"[aic reset trace] interpolation_step={step_index}", flush=True)
         if physical_interpolation:
-            for _ in range(max(0, int(physical_interpolation_hold_steps))):
+            for hold_index in range(max(0, int(physical_interpolation_hold_steps))):
                 robot.set_joint_position_target(q, joint_ids=joint_ids, env_ids=active_env_ids)
                 robot.write_data_to_sim()
                 env.sim.step(render=False)
                 robot.update(float(env.sim.get_physics_dt()))
+                if reset_trace and (hold_index + 1) % 100 == 0:
+                    print(f"[aic reset trace] hold_step={hold_index + 1}", flush=True)
     else:
         robot.write_joint_state_to_sim(full_q, full_qd, env_ids=active_env_ids)
         robot.set_joint_position_target(q, joint_ids=joint_ids, env_ids=active_env_ids)
         if hasattr(env, "sim"):
             env.sim.forward()
         robot.update(0.0)
+    if parked_scene:
+        for asset, original_pose in parked_scene:
+            asset.write_root_pose_to_sim(original_pose[active_env_ids], env_ids=active_env_ids)
+        env.sim.forward()
+        robot.update(0.0)
+        if reset_trace:
+            print("[aic reset trace] scene_restored", flush=True)
     if sync_action_term_after_reset:
         action_manager = getattr(env, "action_manager", None)
         if action_manager is not None:
@@ -746,6 +794,7 @@ def reset_robot_tcp_to_episode_start(
             "interpolation_steps": settle_steps,
             "physical_interpolation": bool(physical_interpolation),
             "physical_interpolation_hold_steps": int(physical_interpolation_hold_steps),
+            "parked_scene_during_physical_interpolation": bool(parked_scene),
             "wrapped_solved_joints_to_initial": bool(wrap_solved_joints_to_initial),
             "position_tolerance_m": float(position_tolerance),
             "orientation_tolerance_rad": float(orientation_tolerance),

@@ -56,6 +56,10 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
                         help="Optional ACT simulation duration from center-camera timestamps; max-runtime-sec remains a wall watchdog.")
     parser.add_argument("--start-delay-sec", type=float, default=0.0)
     parser.add_argument("--control-hz", type=float, default=20.0)
+    parser.add_argument("--shared-startup-hold-sim-sec", type=float, default=0.0,
+                        help="Diagnostic observation-only TCP hold at start of shared BC rollout; zero disables it.")
+    parser.add_argument("--shared-replan-every-command", action="store_true",
+                        help="Diagnostic: issue only the first shared-actor target, then reobserve and replan.")
     parser.add_argument("--control-clock", choices=["wall", "simulation"], default="wall",
                         help="TorchScript ACT command cadence; choose according to the collection clock.")
     parser.add_argument("--image-channel-order", choices=["rgb", "bgr"], default=None,
@@ -77,11 +81,49 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
                         help="Enable privileged geometry only for a CheatCode expert diagnostic.")
     parser.add_argument("--corrective-data-dir", type=Path,
                         help="Output for the privileged CollectCorrectiveCheatCode training-data pilot.")
+    parser.add_argument("--corrective-native-image-every-n-frames", type=int, default=0,
+                        help="For SC collection, also save one native-resolution camera triplet every N recorded frames; 0 disables it.")
+    parser.add_argument("--corrective-sc-preroute-lift-m", type=float, default=0.,
+                        help="Privileged SC teacher route probe: lift the observed TCP before stock transport; zero disables it.")
+    parser.add_argument("--corrective-sc-bypass-side", choices=("off", "left", "right"), default="off",
+                        help="Privileged SC teacher collection: route beside the card row before insertion.")
+    parser.add_argument("--corrective-sc-bypass-lane-margin-m", type=float, default=.085,
+                        help="Lateral distance from outer card-center x to the privileged bypass lane.")
+    parser.add_argument("--corrective-sc-bypass-route", choices=("legacy", "clear_return", "low_cross_return"), default="legacy",
+                        help="SC teacher waypoint pattern; low_cross_return lowers behind the row before the lateral crossing.")
+    parser.add_argument("--corrective-sc-bypass-forward-extra-m", type=float, default=0.,
+                        help="Additional beyond-last-card travel for the privileged SC teacher route.")
+    parser.add_argument("--corrective-sc-bypass-behind-extra-m", type=float, default=0.,
+                        help="Additional behind-first-card travel for the privileged SC teacher route.")
+    parser.add_argument("--corrective-sc-near-bias-limit-m", type=float,
+                        help="Privileged SC teacher seating probe: tighter near-port XY integrator cap; omitted preserves the collector default.")
     parser.add_argument("--corrective-perturbation-scale", type=float, default=1.,
                         help="Scale expert execution perturbations; zero explicitly records clean nominal demonstrations.")
+    parser.add_argument("--corrective-perturbation-start-sec", type=float, default=4.)
+    parser.add_argument("--corrective-perturbation-end-sec", type=float, default=20.)
+    parser.add_argument("--corrective-perturbation-pulse-sec", type=float, default=.6)
+    parser.add_argument("--corrective-perturbation-xy-std-m", type=float, default=.004)
+    parser.add_argument("--corrective-perturbation-xy-clip-m", type=float, default=.008)
     parser.add_argument("--corrective-execution-frame", choices=["gripper/tcp", "base_link"], default="gripper/tcp")
     parser.add_argument("--corrective-student-probability", type=float, default=0.,
                         help="Optional probability of bounded ACT segments during privileged correction collection.")
+    parser.add_argument("--corrective-student-kind", choices=["act", "shared_port_tcp"], default="act")
+    parser.add_argument("--corrective-student-checkpoint", type=str,
+                        help="Shared port-TCP student checkpoint for privileged correction collection only.")
+    parser.add_argument("--corrective-student-position-clip-m", type=float, default=.03)
+    parser.add_argument("--corrective-student-rotation-clip-rad", type=float, default=.08)
+    parser.add_argument("--corrective-student-action-cap-m", type=float, default=None,
+                        help="Diagnostic shared-student body translation cap, separate from the teacher cap")
+    parser.add_argument("--corrective-unbounded-student-takeover", action="store_true",
+                        help="Privileged diagnostic only: after the teacher prefix execute the student proposal without teacher-centered clipping")
+    parser.add_argument("--corrective-student-episodes", type=str, default="",
+                        help="Comma-separated one-based episode indices eligible for student intervention")
+    parser.add_argument("--corrective-student-start-sec", type=float, default=3.,
+                        help="First nominal teacher second eligible for bounded student collection")
+    parser.add_argument("--corrective-student-end-sec", type=float, default=35.,
+                        help="Last nominal teacher second eligible for bounded student collection")
+    parser.add_argument("--corrective-student-cycle-sec", type=float, default=4.)
+    parser.add_argument("--corrective-student-window-sec", type=float, default=2.5)
     parser.add_argument("--connect-scoring-world-frames", action=argparse.BooleanOptionalAction, default=True,
                         help="Publish the fixed world-to-aic_world identity needed by trajectory scoring; does not relay object poses.")
     parser.add_argument(
@@ -127,12 +169,23 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         help="Engine configuration at a host or container path under one of the declared mounts.",
     )
     args = parser.parse_args(argv)
+    if (args.corrective_student_probability > 0 and
+            args.corrective_student_kind == "shared_port_tcp" and
+            not args.corrective_student_checkpoint):
+        parser.error("--corrective-student-checkpoint is required for a shared_port_tcp student")
     if (args.artifact_host_root is None) != (args.artifact_container_root is None):
         parser.error("--artifact-host-root and --artifact-container-root must be supplied together")
     if args.eval_attempts < 1:
         parser.error("--eval-attempts must be at least 1")
     if args.translation_deadband < 0 or args.rotation_deadband < 0:
         parser.error("Command deadbands must be nonnegative")
+    if args.shared_startup_hold_sim_sec < 0:
+        parser.error("--shared-startup-hold-sim-sec must be nonnegative")
+    if args.corrective_student_action_cap_m is not None and args.corrective_student_action_cap_m <= 0:
+        parser.error("--corrective-student-action-cap-m must be positive")
+    if args.corrective_unbounded_student_takeover and not (
+            args.diagnostic_ground_truth and args.corrective_student_kind == 'shared_port_tcp'):
+        parser.error("Unbounded student takeover requires privileged diagnostic collection with a shared student")
     if args.temporal_ensemble_coeff is not None:
         import math
         if (not math.isfinite(args.temporal_ensemble_coeff) or args.temporal_ensemble_coeff < 0
@@ -181,11 +234,23 @@ def prepare_args(args: argparse.Namespace) -> None:
         raise ValueError("Corrective collection requires explicit privileged geometry and a data directory")
     if not 0 <= args.corrective_perturbation_scale <= 1:
         raise ValueError("Expert perturbation scale must be in [0, 1]")
+    if not 0 <= args.corrective_sc_preroute_lift_m <= .12:
+        raise ValueError("SC pre-route lift must be in [0, .12] m")
+    if args.corrective_sc_near_bias_limit_m is not None and not 0 <= args.corrective_sc_near_bias_limit_m <= .045:
+        raise ValueError("SC near-port bias limit must be in [0, .045] m")
+    if not (0 <= args.corrective_perturbation_start_sec < args.corrective_perturbation_end_sec <= 180 and
+            0 < args.corrective_perturbation_pulse_sec <= 3 and
+            0 <= args.corrective_perturbation_xy_std_m <= args.corrective_perturbation_xy_clip_m <= .012):
+        raise ValueError("Invalid bounded expert perturbation schedule")
     if not 0 <= args.corrective_student_probability <= 1:
         raise ValueError("Student correction probability must be in [0, 1]")
-    if args.corrective_student_probability and (not corrective or args.act_torchscript is None
-                                               or args.corrective_execution_frame != "base_link"):
-        raise ValueError("Student corrections require the privileged collector, an ACT export and base_link execution")
+    if args.corrective_student_probability and (
+            not corrective or args.corrective_execution_frame != "base_link" or
+            (args.corrective_student_kind == "act" and args.act_torchscript is None) or
+            (args.corrective_student_kind == "shared_port_tcp" and
+             (not args.corrective_student_checkpoint or
+              not Path(args.corrective_student_checkpoint).is_file()))):
+        raise ValueError("Student corrections require the privileged collector, a valid student checkpoint, and base_link execution")
     if corrective:
         expected_mode = "absolute_pose" if args.corrective_execution_frame == "base_link" else "delta_pose"
         if args.command_mode != expected_mode or args.command_frame != args.corrective_execution_frame:
@@ -626,6 +691,14 @@ def evaluate_checkpoint_once(
     export AIC_CHECKOUT_PYTHONPATH={shlex.quote(str(args.workspace_container) + '/aic_model:' + str(args.workspace_container) + '/aic_example_policies')}
     export AIC_POLICY_RECORD_DIR={shlex.quote(str(eval_container) + '/rollout' if getattr(args, 'record_rollout', False) else '')}
     export AIC_ACT_POLICY_PATH={shlex.quote(str(checkpoint_container))}
+    export AIC_SHARED_PORT_TCP_CHECKPOINT={shlex.quote(str(checkpoint_container))}
+    export AIC_SHARED_PORT_TCP_DEVICE={shlex.quote(str(args.policy_device))}
+    export AIC_SHARED_PORT_TCP_MAX_RUNTIME_SEC={args.max_runtime_sec}
+    export AIC_SHARED_PORT_TCP_CONTROL_HZ={args.control_hz}
+    export AIC_SHARED_PORT_TCP_STARTUP_HOLD_SIM_SEC={args.shared_startup_hold_sim_sec}
+    export AIC_SHARED_PORT_TCP_REPLAN_EVERY_COMMAND={'1' if args.shared_replan_every_command else '0'}
+    export AIC_SHARED_PORT_TCP_MAX_TRANSLATION_DELTA={args.max_translation_delta}
+    export AIC_SHARED_PORT_TCP_MAX_ROTATION_DELTA={args.max_rotation_delta}
     export AIC_ACT_TORCHSCRIPT={shlex.quote(host_to_container(args.act_torchscript, args) if args.act_torchscript else "")}
     export AIC_ACT_NORMALIZER_PATH={shlex.quote(host_to_container(args.normalizer_path, args) if args.act_torchscript else "")}
     export AIC_ACT_DEVICE={shlex.quote(str(args.policy_device))}
@@ -636,10 +709,34 @@ def evaluate_checkpoint_once(
     export AIC_ACT_CONTROL_CLOCK={args.control_clock}
     export AIC_ACT_IMAGE_CHANNEL_ORDER={args.image_channel_order}
     export AIC_CORRECTIVE_DATA_DIR={shlex.quote(host_to_container(args.corrective_data_dir, args)) if args.corrective_data_dir else "''"}
+    export AIC_CORRECTIVE_NATIVE_IMAGE_EVERY_N_FRAMES={args.corrective_native_image_every_n_frames}
+    export AIC_CORRECTIVE_SC_PREROUTE_LIFT_M={args.corrective_sc_preroute_lift_m}
+    export AIC_CORRECTIVE_SC_BYPASS_SIDE={args.corrective_sc_bypass_side}
+    export AIC_CORRECTIVE_SC_BYPASS_LANE_MARGIN_M={args.corrective_sc_bypass_lane_margin_m}
+    export AIC_CORRECTIVE_SC_BYPASS_ROUTE={args.corrective_sc_bypass_route}
+    export AIC_CORRECTIVE_SC_BYPASS_FORWARD_EXTRA_M={args.corrective_sc_bypass_forward_extra_m}
+    export AIC_CORRECTIVE_SC_BYPASS_BEHIND_EXTRA_M={args.corrective_sc_bypass_behind_extra_m}
+    {f'export AIC_CORRECTIVE_SC_NEAR_BIAS_LIMIT_M={args.corrective_sc_near_bias_limit_m}' if args.corrective_sc_near_bias_limit_m is not None else 'unset AIC_CORRECTIVE_SC_NEAR_BIAS_LIMIT_M'}
     export AIC_ACT_N_ACTION_STEPS={args.n_action_steps}
     export AIC_CORRECTIVE_PERTURBATION_SCALE={args.corrective_perturbation_scale}
+    export AIC_CORRECTIVE_PERTURBATION_START_SEC={args.corrective_perturbation_start_sec}
+    export AIC_CORRECTIVE_PERTURBATION_END_SEC={args.corrective_perturbation_end_sec}
+    export AIC_CORRECTIVE_PERTURBATION_PULSE_SEC={args.corrective_perturbation_pulse_sec}
+    export AIC_CORRECTIVE_PERTURBATION_XY_STD_M={args.corrective_perturbation_xy_std_m}
+    export AIC_CORRECTIVE_PERTURBATION_XY_CLIP_M={args.corrective_perturbation_xy_clip_m}
     export AIC_CORRECTIVE_EXECUTION_FRAME={shlex.quote(args.corrective_execution_frame)}
     export AIC_CORRECTIVE_STUDENT_PROBABILITY={args.corrective_student_probability}
+    export AIC_CORRECTIVE_STUDENT_KIND={shlex.quote(args.corrective_student_kind)}
+    export AIC_CORRECTIVE_STUDENT_CHECKPOINT={shlex.quote(host_to_container(args.corrective_student_checkpoint, args) if args.corrective_student_checkpoint else '')}
+    export AIC_CORRECTIVE_STUDENT_POSITION_CLIP_M={args.corrective_student_position_clip_m}
+    export AIC_CORRECTIVE_STUDENT_ROTATION_CLIP_RAD={args.corrective_student_rotation_clip_rad}
+    export AIC_CORRECTIVE_STUDENT_ACTION_CAP_M={'' if args.corrective_student_action_cap_m is None else args.corrective_student_action_cap_m}
+    export AIC_CORRECTIVE_STUDENT_UNBOUNDED_TAKEOVER={'1' if args.corrective_unbounded_student_takeover else '0'}
+    export AIC_CORRECTIVE_STUDENT_EPISODES={shlex.quote(args.corrective_student_episodes)}
+    export AIC_CORRECTIVE_STUDENT_START_SEC={args.corrective_student_start_sec}
+    export AIC_CORRECTIVE_STUDENT_END_SEC={args.corrective_student_end_sec}
+    export AIC_CORRECTIVE_STUDENT_CYCLE_SEC={args.corrective_student_cycle_sec}
+    export AIC_CORRECTIVE_STUDENT_WINDOW_SEC={args.corrective_student_window_sec}
     export AIC_ACT_TRANSLATION_LIMIT_MODE={args.translation_limit_mode}
     export AIC_ACT_DELTA_POSE_REFERENCE={args.delta_pose_reference}
     export AIC_ACT_TEMPORAL_ENSEMBLE_COEFF={shlex.quote('' if args.temporal_ensemble_coeff is None else str(args.temporal_ensemble_coeff))}

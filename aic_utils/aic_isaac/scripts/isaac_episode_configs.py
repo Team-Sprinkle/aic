@@ -46,24 +46,23 @@ SFP_PORT_CAGE_DEPTH_M = 0.04872
 SFP_PORT_ENTRANCE_LOCAL = (0.0, 0.0, -0.0458)
 SFP_PORT_INSERTION_AXIS_LOCAL = (0.0, 0.0, 1.0)
 SFP_TIP_LOCAL = (0.0, -0.02365, 0.0)
-# Source SC geometry, expressed in the imported rigid-root frame.  The source
-# port base is at y=-2 mm and its entrance is 15.64 mm outward from that base.
-# The official Gazebo task declares success on sustained contact with a solid
-# box centered at source y=-3.4 mm; that box center is not a reachable plug-tip
-# target.  An isolated plug/port collision probe places first stable contact at
-# root-local z=-4.65 mm, 8.99 mm past the entrance.  Keep this empirical contact
-# pose explicit until a Gazebo terminal pose can refine it.
-SC_PORT_TARGET_LOCAL = (0.0, 0.0, -0.00465)
+# The scored Gazebo SC episodes place the tip near sc_port_base_link, about
+# 15.64 mm past sc_port_base_link_entrance. The imported Isaac rigid-root
+# axes are those of that base link after the visual conversion, so +2 mm in
+# its local Z reaches the source base-link position. This depth was also
+# reached in a normal-collision Isaac probe after aligning the port SDF
+# colliders with the Gazebo model frame (2026-09-24 SC fidelity record).
+SC_PORT_TARGET_LOCAL = (0.0, 0.0, 0.002)
 SC_PORT_ENTRANCE_LOCAL = (0.0, 0.0, -0.01364)
-SC_PORT_SEATED_DEPTH_M = 0.00899
+SC_PORT_SEATED_DEPTH_M = 0.01564
 SC_INSERTION_AXIS_WORLD = (0.0, 0.0, -1.0)
 SC_TIP_LOCAL = (0.01165, 0.0, 0.0)
 SC_TIP_RPY = (-1.5708, 0.0, -1.5708)
-# Effective rigid-body quaternion reported by Isaac for the fixed SC-port USD
-# after its asset-root conversion and configured spawn rotation.
-# Effective sc_port_base orientation after the Gazebo-compatible Isaac spawn
-# rotation.  The tiny w/z terms reflect the source model's 1.57 rad values.
-SC_PORT_ORIENTATION_WXYZ = (0.000282727, -0.706824414, 0.707389147, -0.000282727)
+# Live sc_port rigid-root orientation after USD conversion and Isaac spawn.
+# The previous value had its X component reversed, placing the near-port SC
+# target almost 180 degrees from the plug orientation in successful Gazebo
+# episodes.  The measured value also agrees with the live Isaac port body.
+SC_PORT_ORIENTATION_WXYZ = (0.000281482, 0.707388223, 0.706825316, 0.000281436)
 
 
 class _NoAliasDumper(yaml.SafeDumper):

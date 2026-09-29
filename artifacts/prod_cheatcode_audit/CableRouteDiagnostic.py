@@ -69,7 +69,7 @@ class CableRouteDiagnostic(CheatCode):
         card_min_y, card_max_y = float(cards[:, 1].min()), float(cards[:, 1].max())
         if variant == "across_cards":
             lane_x = float(np.median(cards[:, 0]))
-        elif variant == "outside_left":
+        elif variant in {"outside_left", "outside_left_behind_first", "outside_left_far_return", "outside_left_clear_return", "outside_left_low_cross_return"}:
             lane_x = float(cards[:, 0].min() - 0.08)
         else:
             raise ValueError(f"Unknown diagnostic route variant {variant}")
@@ -77,18 +77,66 @@ class CableRouteDiagnostic(CheatCode):
         low_offset = float(os.environ.get("AIC_CABLE_ROUTE_LOW_OFFSET_M", "0.105"))
         low_z = float(cards[:, 2].max()) + low_offset
         port_xyz = np.array([port.translation.x, port.translation.y, port.translation.z], dtype=float)
-        waypoints = [
-            ("lift", np.array([start[0], start[1], high_z]), 2.0),
-            ("return_behind_cards", np.array([lane_x, card_min_y - 0.035, high_z]), 4.5),
-            ("lower_along_lane", np.array([lane_x, card_min_y - 0.035, low_z]), 4.0),
-            ("traverse_card_row", np.array([lane_x, card_max_y + 0.045, low_z]), 8.0),
-            ("lift_after_row", np.array([lane_x, card_max_y + 0.045, high_z]), 3.0),
-            ("above_port", np.array([port_xyz[0], port_xyz[1], port_xyz[2] + 0.20]), 4.0),
-        ]
+        if variant in {"outside_left_behind_first", "outside_left_far_return", "outside_left_clear_return", "outside_left_low_cross_return"}:
+            if float(np.min(np.abs(start[0] - cards[:, 0]))) < .055:
+                raise RuntimeError("Start too close to card x corridor for behind-first route")
+            if variant in {"outside_left_far_return", "outside_left_clear_return", "outside_left_low_cross_return"}:
+                behind_extra = float(os.environ.get("AIC_CABLE_ROUTE_BEHIND_EXTRA_M", "0"))
+                lane_extra = float(os.environ.get("AIC_CABLE_ROUTE_LANE_EXTRA_M", "0"))
+                forward_extra = float(os.environ.get("AIC_CABLE_ROUTE_FORWARD_EXTRA_M", "0"))
+                if any(abs(value) > .03 for value in (behind_extra, lane_extra, forward_extra)):
+                    raise ValueError("Route perturbations must be at most 30 mm")
+                long_clearance = variant in {"outside_left_clear_return", "outside_left_low_cross_return"}
+                behind_base = .125 if long_clearance else .060
+                forward_base = .125 if long_clearance else .105
+                behind_y = card_min_y - behind_base - behind_extra
+                beyond_y = card_max_y + forward_base + forward_extra
+                lane_x -= .010 + lane_extra
+                waypoints = [
+                    ("clear_start_side", np.array([start[0], behind_y, high_z]), 3.0),
+                ]
+                if variant == "outside_left_low_cross_return":
+                    waypoints += [
+                        ("lower_on_start_side_behind_row", np.array([start[0], behind_y, low_z]), 3.0),
+                        ("shift_behind_row_low", np.array([lane_x, behind_y, low_z]), 3.5),
+                    ]
+                else:
+                    waypoints += [
+                        ("shift_behind_row", np.array([lane_x, behind_y, high_z]), 3.5),
+                        ("lower_outside_lane", np.array([lane_x, behind_y, low_z]), 3.0),
+                    ]
+                waypoints += [
+                    ("traverse_beyond_row", np.array([lane_x, beyond_y, low_z]), 9.5),
+                    ("sweep_after_row", np.array([port_xyz[0], beyond_y, low_z]), 3.5),
+                    ("return_toward_port", np.array([port_xyz[0], port_xyz[1], low_z]), 2.5),
+                    ("above_port", np.array([port_xyz[0], port_xyz[1], port_xyz[2] + .20]), 3.5),
+                ]
+            else:
+                behind_y, beyond_y = card_min_y - .045, card_max_y + .055
+                waypoints = [
+                    ("clear_start_side", np.array([start[0], behind_y, high_z]), 3.0),
+                    ("shift_behind_row", np.array([lane_x, behind_y, high_z]), 3.5),
+                    ("lower_outside_lane", np.array([lane_x, behind_y, low_z]), 3.0),
+                    ("traverse_outside_row", np.array([lane_x, beyond_y, low_z]), 8.0),
+                    ("sweep_after_row", np.array([port_xyz[0], beyond_y, low_z]), 3.5),
+                    ("above_port", np.array([port_xyz[0], port_xyz[1], port_xyz[2] + .20]), 3.5),
+                ]
+        else:
+            waypoints = [
+                ("lift", np.array([start[0], start[1], high_z]), 2.0),
+                ("return_behind_cards", np.array([lane_x, card_min_y - 0.035, high_z]), 4.5),
+                ("lower_along_lane", np.array([lane_x, card_min_y - 0.035, low_z]), 4.0),
+                ("traverse_card_row", np.array([lane_x, card_max_y + 0.045, low_z]), 8.0),
+                ("lift_after_row", np.array([lane_x, card_max_y + 0.045, high_z]), 3.0),
+                ("above_port", np.array([port_xyz[0], port_xyz[1], port_xyz[2] + 0.20]), 4.0),
+            ]
         plan = {"schema": "aic_cable_route_diagnostic/v1", "variant": variant,
                 "start_tcp_base_m": start.tolist(), "port_link_base_m": port_xyz.tolist(),
                 "nic_card_centers_base_m": cards.tolist(), "lane_x_m": lane_x,
                 "low_offset_m": low_offset,
+                "behind_extra_m": float(os.environ.get("AIC_CABLE_ROUTE_BEHIND_EXTRA_M", "0")),
+                "lane_extra_m": float(os.environ.get("AIC_CABLE_ROUTE_LANE_EXTRA_M", "0")),
+                "forward_extra_m": float(os.environ.get("AIC_CABLE_ROUTE_FORWARD_EXTRA_M", "0")),
                 "waypoints": [{"name": name, "tcp_base_m": xyz.tolist(), "duration_s": sec}
                               for name, xyz, sec in waypoints]}
         Path("/audit/route_plan.json").write_text(json.dumps(plan, indent=2) + "\n")

@@ -13,6 +13,7 @@ asset references. This also avoids copying a large asset tree.
 """
 
 import argparse
+import json
 import math
 import shutil
 from pathlib import Path
@@ -39,6 +40,20 @@ parser.add_argument(
     action=argparse.BooleanOptionalAction,
     default=False,
     help="Apply the reversed Gazebo cable spawn/endpoint transform relative to the prepared normal grasp.",
+)
+parser.add_argument(
+    "--gazebo-tool-sc-calibration",
+    type=Path,
+    help="JSON with measured tool_to_sc_plug xyz_m and quat_xyzw from a scored Gazebo SC bag.",
+)
+parser.add_argument(
+    "--gazebo-cable-end0-calibration",
+    type=Path,
+    help=(
+        "Diagnostic near-port cable seed: JSON with plug_to_cable_end0 pose "
+        "measured in a scored Gazebo SC episode. This preserves the imported "
+        "rope shape and does not by itself validate all cable-link positions."
+    ),
 )
 parser.add_argument(
     "--sc-grasp-extension-m",
@@ -76,6 +91,33 @@ parser.add_argument(
     help=(
         "For reversed_topology, reproduce the official Gazebo model's cable/gripper collision exceptions: "
         "remove endpoint-0/connection-0 collision and shorten/shift the first cable-link collider."
+    ),
+)
+parser.add_argument(
+    "--filter-grasp-internal-collisions",
+    action=argparse.BooleanOptionalAction,
+    default=False,
+    help=(
+        "Diagnostic: filter only gripper-to-grasped-SC/first-cable-body pairs. "
+        "Card, board, port and distal cable collisions remain enabled."
+    ),
+)
+parser.add_argument(
+    "--filter-fixed-gripper-ati-base-pair",
+    action="store_true",
+    help=(
+        "Filter the measured >5 kN overlap between gripper_hande_base_link and "
+        "its fixed ati_base_link neighbor. All scene and other robot collisions remain enabled."
+    ),
+)
+parser.add_argument(
+    "--weld-sc-to-tool-link",
+    action=argparse.BooleanOptionalAction,
+    default=False,
+    help=(
+        "Diagnostic only: attach the SC plug directly to ati_tool_link as in Gazebo. "
+        "The prepared USD finger is rigidly fixed to that tool assembly, and direct tool attachment "
+        "has not passed a physical Isaac startup check."
     ),
 )
 AppLauncher.add_app_launcher_args(parser)
@@ -155,7 +197,25 @@ def _reversed_topology() -> None:
     link20_to_lc = _joint_frame((0.02225, 0.0, 0.0), -1.5707963267948966)
 
     desired_sc_world = old_lc_world
-    if args.use_source_reversed_grasp:
+    if args.gazebo_tool_sc_calibration is not None:
+        if args.use_source_reversed_grasp:
+            raise ValueError("Choose either Gazebo TF calibration or approximate source grasp")
+        calibration = json.loads(args.gazebo_tool_sc_calibration.read_text(encoding="utf-8"))
+        grasp = calibration["tool_to_sc_plug"]
+        xyz = [float(v) for v in grasp["xyz_m"]]
+        xyzw = [float(v) for v in grasp["quat_xyzw"]]
+        if len(xyz) != 3 or len(xyzw) != 4:
+            raise ValueError("Gazebo tool-to-SC calibration must provide XYZ and XYZW quaternion")
+        tool_prim = stage.GetPrimAtPath("/World/aic_unified_robot/ati_tool_link")
+        if not tool_prim.IsValid():
+            raise RuntimeError("Prepared USD has no ati_tool_link for Gazebo grasp calibration")
+        tool_world = UsdGeom.Xformable(tool_prim).ComputeLocalToWorldTransform(time)
+        tool_to_sc = Gf.Matrix4d(1.0)
+        tool_to_sc.SetRotate(Gf.Rotation(Gf.Quatd(xyzw[3], Gf.Vec3d(*xyzw[:3]))))
+        tool_to_sc.SetTranslateOnly(Gf.Vec3d(*xyz))
+        desired_sc_world = tool_to_sc * tool_world
+        print(f"gazebo_tool_sc_calibration={args.gazebo_tool_sc_calibration}", flush=True)
+    elif args.use_source_reversed_grasp:
         # Difference between the mean source Gazebo grasps:
         #   normal:   cable spawn * normal connection_0 * LC(-41 mm, +90 deg yaw)
         #   reversed: cable spawn * reversed connection_0 * SC(-52 mm, 180 deg yaw)
@@ -180,7 +240,21 @@ def _reversed_topology() -> None:
         )
         grasp_adjustment.SetTranslateOnly(Gf.Vec3d(float(args.sc_grasp_extension_m), 0.0, 0.0))
         desired_sc_world = grasp_adjustment * old_lc_world
-    desired_link0_world = link0_to_sc.GetInverse() * desired_sc_world
+    if args.gazebo_cable_end0_calibration is not None:
+        calibration = json.loads(args.gazebo_cable_end0_calibration.read_text(encoding="utf-8"))
+        end0 = calibration["plug_to_cable_end0"]
+        xyz = [float(v) for v in end0["xyz_m"]]
+        xyzw = [float(v) for v in end0["quat_xyzw"]]
+        if len(xyz) != 3 or len(xyzw) != 4:
+            raise ValueError("Gazebo cable endpoint calibration must provide XYZ and XYZW quaternion")
+        end0_in_plug = Gf.Matrix4d(1.0)
+        end0_in_plug.SetRotate(Gf.Rotation(Gf.Quatd(xyzw[3], Gf.Vec3d(*xyzw[:3]))))
+        end0_in_plug.SetTranslateOnly(Gf.Vec3d(*xyz))
+        desired_link0_world = end0_in_plug * desired_sc_world
+        link0_to_sc = desired_sc_world * desired_link0_world.GetInverse()
+        print(f"gazebo_cable_end0_calibration={args.gazebo_cable_end0_calibration}", flush=True)
+    else:
+        desired_link0_world = link0_to_sc.GetInverse() * desired_sc_world
     desired_rope_world = link0_local.GetInverse() * desired_link0_world
     desired_link20_world = link20_local * desired_rope_world
     desired_lc_world = link20_to_lc * desired_link20_world
@@ -193,8 +267,8 @@ def _reversed_topology() -> None:
     fixed1 = UsdPhysics.Joint(stage.GetPrimAtPath(base + "/Rope/fixedJoint2"))
     fixed0.GetBody1Rel().SetTargets([Sdf.Path(base + "/sc_plug/sc_plug_link")])
     fixed1.GetBody1Rel().SetTargets([Sdf.Path(base + "/lc_plug/lc_plug_link")])
-    fixed0.GetLocalPos0Attr().Set(Gf.Vec3f(0.015539, -0.000748, -0.001346))
-    _set_quaternion(fixed0.GetLocalRot0Attr(), Gf.Quatd(1.0, Gf.Vec3d(0.0)))
+    fixed0.GetLocalPos0Attr().Set(Gf.Vec3f(*link0_to_sc.ExtractTranslation()))
+    _set_quaternion(fixed0.GetLocalRot0Attr(), link0_to_sc.ExtractRotationQuat())
     fixed1.GetLocalPos0Attr().Set(Gf.Vec3f(0.02225, 0.0, 0.0))
     _set_quaternion(
         fixed1.GetLocalRot0Attr(),
@@ -220,6 +294,70 @@ def _reversed_topology() -> None:
     gripper_local1 = gripper_local0 * gripper_body0_world * sc_body_world.GetInverse()
     gripper_joint.GetLocalPos1Attr().Set(Gf.Vec3f(*gripper_local1.ExtractTranslation()))
     _set_quaternion(gripper_joint.GetLocalRot1Attr(), gripper_local1.ExtractRotationQuat())
+
+    if args.weld_sc_to_tool_link:
+        # The imported normal asset welds the connector to the right finger.
+        # Gazebo's cable plugin welds it to ati/tool_link instead.  Re-express
+        # the same world joint frame in the tool body's coordinates so this
+        # correction does not teleport the plug or pre-load the joint at spawn.
+        tool_path = Sdf.Path("/World/aic_unified_robot/ati_tool_link")
+        tool_prim = stage.GetPrimAtPath(tool_path)
+        if not tool_prim.IsValid() or not tool_prim.HasAPI(UsdPhysics.RigidBodyAPI):
+            raise RuntimeError(f"Gazebo tool weld body is missing or non-rigid: {tool_path}")
+        tool_world = UsdGeom.Xformable(tool_prim).ComputeLocalToWorldTransform(time)
+        joint_world = gripper_local0 * gripper_body0_world
+        tool_local0 = joint_world * tool_world.GetInverse()
+        gripper_joint.GetBody0Rel().SetTargets([tool_path])
+        gripper_joint.GetLocalPos0Attr().Set(Gf.Vec3f(*tool_local0.ExtractTranslation()))
+        _set_quaternion(gripper_joint.GetLocalRot0Attr(), tool_local0.ExtractRotationQuat())
+        print(f"source_reversed_gripper_weld_body0={tool_path}", flush=True)
+
+    if args.gazebo_cable_end0_calibration is not None:
+        # The prepared normal-cable USD places its first rope body about 47 mm
+        # from the endpoint, while the scored reversed Gazebo cable has link 1
+        # about 24 mm from that endpoint. Translate the downstream rope bodies
+        # as one assembly, then re-express only the first ball-joint anchor.
+        # All downstream joint frames and the LC fixed joint retain zero
+        # residual because both of their bodies receive the same translation.
+        first_link = calibration["plug_to_link1"]
+        target_plug_local = Gf.Vec3d(*[float(v) for v in first_link["xyz_m"]])
+        current_link1_world = UsdGeom.Xformable(link1 := stage.GetPrimAtPath(base + "/Rope/Rope/link_1")).ComputeLocalToWorldTransform(time)
+        target_link1_pos = desired_sc_world.Transform(target_plug_local)
+        shift_world = target_link1_pos - current_link1_world.ExtractTranslation()
+        first_joint = None
+        for prim in stage.Traverse():
+            if not prim.IsA(UsdPhysics.Joint):
+                continue
+            joint = UsdPhysics.Joint(prim)
+            body0 = joint.GetBody0Rel().GetTargets()
+            body1 = joint.GetBody1Rel().GetTargets()
+            if body0 == [link0.GetPath()] and body1 == [link1.GetPath()]:
+                first_joint = joint
+                break
+        if first_joint is None:
+            raise RuntimeError("Could not find the cable endpoint-to-link1 ball joint")
+        joint_local0 = Gf.Matrix4d(1.0)
+        joint_local0.SetRotate(Gf.Rotation(first_joint.GetLocalRot0Attr().Get()))
+        joint_local0.SetTranslateOnly(Gf.Vec3d(*first_joint.GetLocalPos0Attr().Get()))
+        joint_world = joint_local0 * UsdGeom.Xformable(link0).ComputeLocalToWorldTransform(time)
+        shift = Gf.Matrix4d(1.0)
+        shift.SetTranslate(shift_world)
+        for index in range(1, 21):
+            body = stage.GetPrimAtPath(base + f"/Rope/Rope/link_{index}")
+            old_world = UsdGeom.Xformable(body).ComputeLocalToWorldTransform(time)
+            parent_world = UsdGeom.Xformable(body.GetParent()).ComputeLocalToWorldTransform(time)
+            _replace_local_transform(body, old_world * shift * parent_world.GetInverse())
+        old_lc_world = UsdGeom.Xformable(lc_parent).ComputeLocalToWorldTransform(time)
+        lc_parent_world = UsdGeom.Xformable(lc_parent.GetParent()).ComputeLocalToWorldTransform(time)
+        _replace_local_transform(lc_parent, old_lc_world * shift * lc_parent_world.GetInverse())
+        new_link1_world = UsdGeom.Xformable(link1).ComputeLocalToWorldTransform(time)
+        local1 = joint_world * new_link1_world.GetInverse()
+        first_joint.GetLocalPos1Attr().Set(Gf.Vec3f(*local1.ExtractTranslation()))
+        _set_quaternion(first_joint.GetLocalRot1Attr(), local1.ExtractRotationQuat())
+        print(
+            f"gazebo_link1_position_calibration_shift_world_m={tuple(float(v) for v in shift_world)}",
+            flush=True,
+        )
 
 
 def _aligned_topology() -> None:
@@ -474,6 +612,46 @@ def _apply_source_reversed_collision_contract() -> None:
     )
 
 
+def _filter_grasp_internal_collisions() -> None:
+    if args.mode != "reversed_topology" or not args.filter_grasp_internal_collisions:
+        return
+    gripper_bodies = (
+        "/World/aic_unified_robot/gripper_hande_base_link",
+        "/World/aic_unified_robot/gripper_hande_finger_link_l",
+        "/World/aic_unified_robot/gripper_hande_finger_link_r",
+    )
+    held_bodies = (
+        base + "/sc_plug/sc_plug_link",
+        base + "/Rope/Rope/link_0",
+        base + "/Rope/Rope/link_1",
+    )
+    for gripper_path in gripper_bodies:
+        prim = stage.GetPrimAtPath(gripper_path)
+        if not prim.IsValid() or not prim.HasAPI(UsdPhysics.RigidBodyAPI):
+            raise RuntimeError(f"Missing rigid gripper body for grasp filter: {gripper_path}")
+        pairs = UsdPhysics.FilteredPairsAPI.Apply(prim).CreateFilteredPairsRel()
+        for held_path in held_bodies:
+            held = stage.GetPrimAtPath(held_path)
+            if not held.IsValid() or not held.HasAPI(UsdPhysics.RigidBodyAPI):
+                raise RuntimeError(f"Missing held rigid body for grasp filter: {held_path}")
+            pairs.AddTarget(Sdf.Path(held_path))
+    print(f"filtered_grasp_pairs={len(gripper_bodies) * len(held_bodies)}", flush=True)
+
+
+def _filter_fixed_gripper_ati_base_pair() -> None:
+    if not args.filter_fixed_gripper_ati_base_pair:
+        return
+    gripper_path = "/World/aic_unified_robot/gripper_hande_base_link"
+    ati_path = "/World/aic_unified_robot/ati_base_link"
+    for path in (gripper_path, ati_path):
+        prim = stage.GetPrimAtPath(path)
+        if not prim.IsValid() or not prim.HasAPI(UsdPhysics.RigidBodyAPI):
+            raise RuntimeError(f"Missing rigid body for fixed-neighbor filter: {path}")
+    pairs = UsdPhysics.FilteredPairsAPI.Apply(stage.GetPrimAtPath(gripper_path)).CreateFilteredPairsRel()
+    pairs.AddTarget(Sdf.Path(ati_path))
+    print(f"filtered_fixed_neighbor_pair={gripper_path},{ati_path}", flush=True)
+
+
 if args.mode == "aligned_topology":
     _aligned_topology()
     layer.Save()
@@ -484,6 +662,8 @@ if args.mode == "aligned_topology":
 if args.mode == "reversed_topology":
     _reversed_topology()
     _apply_source_reversed_collision_contract()
+    _filter_grasp_internal_collisions()
+    _filter_fixed_gripper_ati_base_pair()
     _apply_arm_joint_limits()
     _apply_requested_deinstancing()
     collision_paths = _apply_requested_collision_disables()
