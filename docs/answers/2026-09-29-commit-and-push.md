@@ -1,11 +1,12 @@
-Committed and pushed `feat/hybrid-train` to `origin` in six focused commits:
+Committed and pushed `feat/hybrid-train` to `origin` in six focused commits.
+The subjects were later rewritten for clarity; the current commit hashes are:
 
-1. `d7fe8bf` — SC recovery, perception, and policy tooling.
-2. `96befe0` — September 24 mechanics and supervised audits.
-3. `27001e5` — September 25 policy and route diagnostics.
-4. `bd7708f` — SC far-return route and pose handoff.
-5. `88124b5` — Project status and storage cleanup records.
-6. A separate commit archives this response.
+1. `197bae1` — Add SC target-keypoint locator, shared BC tools, and hierarchical recovery prototype.
+2. `b165318` — Record SC pose-label audits and shared-policy tests on September 24.
+3. `7d8ffcb` — Record SC BC comparisons, teacher routes, and recovery failures on September 25.
+4. `7bb5d4a` — Record five-card cable-clearance tests and propose visibility-gated two-actor handoff.
+5. `d97bdb9` — Update project status, recovery limits, and output storage map.
+6. `e639cd7` — Archive the September 29 commit summary.
 
 The recovery unit tests passed (4 tests), changed Python files compiled, and the staged diffs passed Git's whitespace check. No new videos, model checkpoints, or raw trajectories were committed.
 

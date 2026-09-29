@@ -35,6 +35,21 @@ not substitutes for the selected one. Visibility and accuracy confidence
 are different: a target can appear in frame yet still have an inaccurate
 pose estimate.
 
+Keep three concepts separate in the proposed handoff. **Visible fraction** is
+the approximate fraction of the selected aperture's pixels that can be seen
+in one camera; a half-occluded opening can have fraction 0.5. **Identifiable
+visibility** is a per-camera yes/no decision: can that image support a
+selected-port estimate? A half-occluded opening may still be identifiable.
+**Pose confidence** is the calibrated probability that the fused pose error
+falls within the specified translation and orientation tolerances. It can be
+high for a partly visible opening when its remaining edges and the other
+cameras constrain the pose well; it can be low for a fully visible but
+ambiguous opening. For three cameras, retain three visibility values (and
+optionally three fractions), plus the number of supporting views. An
+"any-camera-visible" flag can be true when only one camera sees the port,
+but must not be called 100% visibility across cameras. The fused confidence
+must account for single-view ambiguity and disagreement between views.
+
 The selected port still has a physical pose when it is offscreen. Simulator
 geometry can compute that ground truth during label generation, but a
 single offscreen image cannot determine a precise pose from visible evidence.
