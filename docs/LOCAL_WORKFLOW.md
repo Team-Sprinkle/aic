@@ -35,6 +35,37 @@ nvidia-smi
 this machine reported context `default` while connecting to a rootless daemon.
 If the provisioned user daemon is stopped, use `systemctl --user start docker`.
 
+### When a Codex session cannot reach the working rootless daemon
+
+The project can run without sudo from a **host-access session**, but a managed
+Codex sandbox can hide host devices and block Unix socket connections even
+when the socket exists and is owned by the current user. On October 1, 2026,
+the workspace-write session reported `uid=1008(chmin)` and an existing
+`/run/user/1008/docker.sock` owned by `chmin`, yet a direct socket connect
+returned `Operation not permitted`, `docker info` returned permission denied,
+and `/dev/nvidia*` was absent. Those symptoms identify a **session permission
+boundary**, not evidence that rootless Docker or the GPU driver stopped.
+
+Check from the session:
+
+```bash
+id
+ls -l /run/user/$(id -u)/docker.sock
+docker info --format '{{json .SecurityOptions}}'
+ls /dev/nvidia* 2>/dev/null
+```
+
+For Codex CLI, use `/permissions` to select a profile that grants the required
+host access; the desktop app has a permissions control beneath the composer.
+If an organization policy or the selected execution environment does not
+expose the host socket and GPU devices, run the task from a local host-access
+Codex session connected to this checkout. Then rerun the checks above before
+starting a rootless container. Changing `DOCKER_HOST`, Docker context, socket
+mode bits, or restarting the daemon cannot repair a sandbox's `EPERM` denial.
+Do not use sudo. [Official OpenAI sandbox guidance](https://learn.chatgpt.com/codex/sandboxing)
+describes the permissions control and the distinction between workspace and
+full access.
+
 On this host, the checkout is `/data1/chmin/yj/ws_aic/src/aic`.
 `/home/chmin/yj/ws_aic/src/aic` resolves to it, but
 `~/code/ws_aic/src/aic` is a **different checkout**. Use the current checkout path

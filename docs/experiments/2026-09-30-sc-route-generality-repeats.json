@@ -1,0 +1,85 @@
+{
+  "schema": "aic_sc_route_generality_repeat/v1",
+  "cases": [
+    {
+      "scene": "five-card SC port 0",
+      "raw_dir": "/var/tmp/chmin_aic_20260918_act/moveit_sc_port0_low18_diagonal_repeat_20260930",
+      "route_only": true,
+      "score_total": 20.070085934608876,
+      "tier3": 3.792442116720439,
+      "scored_contacts": "No contact detected.",
+      "scored_insertion_force": "No excessive force detected",
+      "route_replay_audit": {
+        "schema": "aic_moveit_route_replay_audit/v1",
+        "joint_command_count": 499,
+        "pose_command_count": 0,
+        "last_command_vs_plan_joint_max_abs_rad": 0.0,
+        "measured_vs_plan_final_joint_max_abs_rad": 0.004837229762737705,
+        "measured_vs_plan_final_tcp_mm": 5.030751293955912,
+        "measured_final_tcp_base_m": [
+          -0.49478719952018085,
+          0.399153502042221,
+          0.2013610160013632
+        ],
+        "planned_final_tcp_base_m": [
+          -0.4958189811790867,
+          0.39996754335796797,
+          0.20621706603469703
+        ],
+        "trajectory_waypoints": 233
+      },
+      "config_sha256": "b1087e7a008bf322428c682233e389f0d91669b97d13e9c09b48b256512f8b2b",
+      "plan_sha256": "f65b4cba39f0416c7f5c175ae5b4b10bec4ac464568dcdebaf5d72dd5bc02067",
+      "scored_mcap": {
+        "path": "/var/tmp/chmin_aic_20260918_act/moveit_sc_port0_low18_diagonal_repeat_20260930/results/bag_trial_000001_20260930_015922_364/bag_trial_000001_20260930_015922_364_0.mcap",
+        "bytes": 98638090,
+        "sha256": "03be89fc9ecc5ac7deb0c7968b893d080aa5a68a72e26cea47cdbd3670751003"
+      },
+      "video": {
+        "path": "outputs/experiments/2026-09-30_moveit_tilt_before_return/port0_route_repeat_video/all_views_20fps.mp4",
+        "sha256": "17c746dbc75eee2e330c29a1033d5ef66f1d9bf4c319b558b7f70ee6020ceccc"
+      }
+    },
+    {
+      "scene": "shifted three-card SC port 0",
+      "raw_dir": "/var/tmp/chmin_aic_20260918_act/moveit_sc_threecard_mixed_low18_repeat_20260930",
+      "route_only": true,
+      "score_total": 19.960853982068237,
+      "tier3": 3.713354576303297,
+      "scored_contacts": "No contact detected.",
+      "scored_insertion_force": "No excessive force detected",
+      "route_replay_audit": {
+        "schema": "aic_moveit_route_replay_audit/v1",
+        "joint_command_count": 500,
+        "pose_command_count": 0,
+        "last_command_vs_plan_joint_max_abs_rad": 0.0,
+        "measured_vs_plan_final_joint_max_abs_rad": 0.0048378120749972275,
+        "measured_vs_plan_final_tcp_mm": 5.051705452576625,
+        "measured_final_tcp_base_m": [
+          -0.49572534011282243,
+          0.39920281217508025,
+          0.20178239974878168
+        ],
+        "planned_final_tcp_base_m": [
+          -0.49677036233066,
+          0.40001498572304534,
+          0.2066576464781077
+        ],
+        "trajectory_waypoints": 234
+      },
+      "config_sha256": "e7e3851a42f203135a31a87b054e6a6d1d61f19d2258c7317bbe186b4a3191ee",
+      "plan_sha256": "8ee3fd6122eac373fe154612270d628c11d5159263557fa39b8eed26c34e2f8f",
+      "scored_mcap": {
+        "path": "/var/tmp/chmin_aic_20260918_act/moveit_sc_threecard_mixed_low18_repeat_20260930/results/bag_trial_000001_20260930_015642_237/bag_trial_000001_20260930_015642_237_0.mcap",
+        "bytes": 98730070,
+        "sha256": "a3087765058c81ee860c86ddc68253e64ff9a1c53905ea35bfd4b5a7ac59f3b4"
+      },
+      "video": {
+        "path": "outputs/experiments/2026-09-30_moveit_tilt_before_return/threecard_route_repeat_video/all_views_20fps.mp4",
+        "sha256": "64a52f8adda0ff293b4d1ff2c312d19913d50e11c8a709af823063b1f57794e4"
+      }
+    }
+  ],
+  "final_scenes_opened": false,
+  "one_gpu": 4
+}

@@ -498,7 +498,10 @@ def test_moveit_py_backend_requires_successful_moveit_plan():
     strategy = _strategy()
     candidate = generate_approach_candidates(snapshot, strategy, count=1)[0]
     fake_moveit = FakeMoveItPy()
-    backend = MoveItPyPlanningBackend(moveit_py=fake_moveit)
+    backend = MoveItPyPlanningBackend(
+        config=MoveItPyBackendConfig(require_verified_scene=False, require_recorded_start=False),
+        moveit_py=fake_moveit,
+    )
     original_fk = moveit_py_backend._tcp_pose_from_joint_point
     moveit_py_backend._tcp_pose_from_joint_point = lambda _robot_model, **_kwargs: (
         TCPPose([0.1, 0.2, 0.3], [0.0, 0.0, 0.0, 1.0]),
@@ -524,7 +527,7 @@ def test_moveit_py_backend_can_plan_legacy_three_stage_sequence():
     candidate = generate_approach_candidates(snapshot, strategy, count=1)[0]
     fake_moveit = FakeMoveItPy()
     backend = MoveItPyPlanningBackend(
-        config=MoveItPyBackendConfig(approach_segment_mode="three_stage"),
+        config=MoveItPyBackendConfig(approach_segment_mode="three_stage", require_verified_scene=False, require_recorded_start=False),
         moveit_py=fake_moveit,
     )
     original_fk = moveit_py_backend._tcp_pose_from_joint_point
@@ -553,7 +556,7 @@ def test_moveit_py_backend_uses_explicit_sc_to_sc_bypass_subgoals():
     candidate = generate_approach_candidates(snapshot, strategy, count=1)[0]
     fake_moveit = FakeMoveItPy()
     backend = MoveItPyPlanningBackend(
-        config=MoveItPyBackendConfig(approach_segment_mode="three_stage"),
+        config=MoveItPyBackendConfig(approach_segment_mode="three_stage", require_verified_scene=False, require_recorded_start=False),
         moveit_py=fake_moveit,
     )
     original_fk = moveit_py_backend._tcp_pose_from_joint_point
@@ -993,6 +996,37 @@ def test_collision_scene_extracts_rigid_objects_from_engine_config(tmp_path):
 
     assert [obj.role for obj in objects] == ["task_board", "nic_card"]
     assert objects[1].metadata["rail"] == "nic_rail_0"
+
+
+def test_moveit_default_rejects_approximate_planning_scene():
+    snapshot = _sc_snapshot_with_nics()
+    candidate = generate_approach_candidates(snapshot, _strategy(), count=1)[0]
+    result = MoveItPyPlanningBackend(moveit_py=FakeMoveItPy()).plan_free_space_approach(
+        snapshot, _strategy(), candidate,
+    )
+    assert result.reason == "moveit_py_exception"
+    assert "Gazebo assets" in result.details["message"]
+
+
+def test_gazebo_asset_scene_uses_actual_card_collisions():
+    from shutil import which
+    from aic_teacher_official.expert_generator.collision_scene import object_geometries_from_gazebo_assets
+
+    if which("xacro") is None:
+        pytest.skip("xacro is needed to expand the Gazebo task board")
+    repo_root = Path(__file__).resolve().parents[2]
+    config = {"trials": {"trial_000001": {"scene": {"task_board": {
+        "pose": {"x": 0.17399, "y": -0.15262, "z": 1.14, "yaw": 3.00334},
+        "nic_rail_0": {"entity_present": True, "entity_pose": {"translation": -0.0215}},
+        "sc_rail_0": {"entity_present": True, "entity_pose": {"translation": -0.05257}},
+    }}}}}
+    objects = object_geometries_from_gazebo_assets(config, repo_root=repo_root)
+    cards = [obj for obj in objects if obj.role == "nic_card"]
+    assert len(cards) == 39  # all NIC mount, PCB, connector and port collision shapes
+    assert any(obj.shape == "cylinder" for obj in cards)
+    assert any(obj.pose.position[2] > 1.25 for obj in cards)
+    assert all(obj.pose.frame_id == "world" for obj in objects)
+    assert all(obj.metadata["source"] == "gazebo_assets" for obj in objects)
 
 
 def test_replay_runner_builds_official_recording_command(tmp_path):

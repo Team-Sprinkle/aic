@@ -1,5 +1,111 @@
 # Current experiment status
 
+**October 1 temporal transport continuation:** The supervised plan is now explicit: one shared SFP/SC transport actor, then a separate task-conditioned selected-port perception model, then a separate port-relative insertion actor and a stable two-actor handoff. Hierarchical backtracking and RL are later matched/gated experiments. The first transport-label audit passed for 104 SC episodes and 268 SFP episodes; all six SC Low Lateral Bypass stages are present in order and the 83/21 SC split remains sealed by scene/reset. The SFP split is 236/32 but heavily targets card 0/port 1. The one-GPU frozen-vision history/no-history comparison and direct-state repair finished; none passed the 20 mm full-held-out subgoal gate (best 39.50 mm), so no new autonomous rollout was started. History reduced false teacher-frame handoff signals from 43 to 7, but the switch is not deployable. Step 5 remains open. [Plan, audit, commands, and limits](experiments/2026-10-01-temporal-three-model-continuation.md).
+
+**October 1 final bounded SC transport BC result:** Four frozen supervised actors (clean, old mixed-route warm start, motion-safe cleanup, causal elapsed time) ran on the same two non-final Gazebo development layouts at both 20 and 60 mm action caps. **0/16 inserted and 0/16 reached a stable 10 mm handoff**. Best final handoff error was 75.4 mm; best transient error 27.9 mm, followed by drift. The 60 mm cap did not fix the mismatch despite 35.8% of SC training targets exceeding 20 mm in at least one component; it worsened final error in five of eight matched pairs. Complete inference p95 stayed at or below 182.6 ms. Videos and traces show route choice/progress errors without a sustained cable snag in reviewed examples. Stop routine single-frame full-target BC; the bounded route-progress/subgoal follow-up is reported above. Step 5, local handoff, RL, and final scenes stay gated. [Full record and next gate](experiments/2026-10-01-sc-llb-cleaned-bc.md#final-bounded-supervised-result-and-step-5-decision), [machine cap comparison](../outputs/experiments/2026-10-01_sc_llb_cleaned_bc/cap_comparison.json).
+
+**October 1 earlier 20 mm cap comparison:** Three cleaned-data arms plus the causal elapsed-time ablation failed both fixed development layouts at a 20 mm per-component cap. This first matched test exposed route drift, but a cap audit found that the prior accepted transport experiment used 60 mm. Both caps were subsequently tested as summarized above. [20 mm comparison JSON](../outputs/experiments/2026-10-01_sc_llb_cleaned_bc/autonomous_comparison_cap20.json).
+
+**October 1 dataset gate passed:** All 104 officially full-inserted SC Low Lateral Bypass bags were decoded. The grouped 83/21 preferred motion-safe derivative has 69,681 cleaned transport chunks (19,570 quiet nearly stationary hold anchors removed from 89,251 raw) and 26,455 unchanged local chunks. Its independent audit passed exact recorded target preservation, untouched validation, complete episode boundaries, both named holds in all 83 training episodes, no removed excess-force or measured-motion rows, and no reset-group leakage. The original scored source remains unchanged. The three initial matched BC arms have finished and failed the autonomous gate as summarized above. [Experiment record](experiments/2026-10-01-sc-llb-cleaned-bc.md), [machine audit](../outputs/trajectory_datasets/sc_llb_cleaned_v3/materialized/audit_motion_safe_v2.json).
+
+**October 1 access and cleanup history:** An earlier workspace-write Codex session blocked the rootless socket with `EPERM` and hid NVIDIA devices; this was a [session access issue](LOCAL_WORKFLOW.md#when-a-codex-session-cannot-reach-the-working-rootless-daemon), resolved by switching the session profile. Extraction, chunk filtering, and the independent audit have since completed; current status is above.
+
+**September 30 SC Low Lateral Bypass collection:** Completed after **200/200 attempted settings**, with **104 official full insertions** and **198 valid scored replay bags**. The pilot passed 17/30; varied robot starts were checked against scored bags. Only full insertions with a bag and action trace are linked in `outputs/trajectory_datasets/sc_llb_score_verified/`. No BC training or final-scene evaluation was started. [Evidence](experiments/2026-09-30-sc-llb-collection.md).
+
+**September 30 latest:** teacher transport gate accepted. Two same-world Cartesian SC teachers fully inserted, providing v9 with 1,751 transport and 503 local chunks, plus the verified SFP source. The balanced-port BC retry finished 1,500 updates and failed both autonomous development starts: final planned-standoff errors 103 and 603 mm versus 76 and 74 mm for the prior masked actor; neither reached handoff or inserted. A bounded trace/video audit found early wrong-route commands without sustained cable snag. Stop routine feed-forward BC. A checkpoint-provenance audit found that this run reused the full action head from an older mixed-SC-route model and had only two new SC episodes; it was not a clean test of the new Low Lateral Bypass route. Audit clean route data and initialization before deciding on a route-subgoal model. No new training was started for this audit. True visibility, autonomous two-actor insertion and RL remain gated; reserved final scenes stay sealed. [Evidence and exact artifacts](experiments/2026-09-30-transport-to-two-actor-continuation.md).
+
+**September 30 continuation:** transport gate accepted. Four changed-card-layout MoveIt replays reached handoff/standoff; one fully inserted, one failed local insertion and is excluded from expert BC, two were transport-only validation. Four full-success SC teacher episodes now provide 3,001 transport and 1,000 local training chunks, with 1,751 held-out transport chunks. True-visibility recorder checks caught invalid auxiliary depth during tilt; labels are being repaired before training. Autonomous two-actor insertion and RL remain pending. [Execution record](experiments/2026-09-30-transport-to-two-actor-continuation.md).
+
+**September 30 user-approved transport continuation.** The transport gate is **passed**: the near-port misalignment is acceptable for transport supervision. Prefer fully inserted route-valid demonstrations; omit failed insertion segments. The [continuation](experiments/2026-09-30-transport-to-two-actor-continuation.md) advances to bounded changed-layout checks, command-derived transport/local data admission, task-conditioned perception, and two-actor BC/handoff. Autonomous insertion and RL gates remain unpassed.
+
+**September 30, oracle force diagnosis.** Frozen older-route replay reproduced a plug/selected-SC-port catch, not evidence of a transport cable snag: wrist baseline delta 4.217 N and sampled peak normal point force 8.828 N. Actual retreat was only 0.00623 mm despite 24 mm commanded. Gazebo 8.3.0 contact reporting repeats impulse as XYZ and reverses depth sign; reporting is corrected using upstream #890, preserving raw data and physics. The newer tilt-before-return route passed **2/2** oracle insertion repeats, with sampled peak plug/port point forces below 0.8 N; final counts are in the [oracle record](experiments/2026-09-30-force-oracle.md) and [summary](experiments/2026-09-30-force-oracle-results.json). Sensor-frame and commanded-versus-measured trace labels are repaired. This is privileged fixed-scene diagnosis; step 4/5 remain open and final scenes sealed.
+
+**September 30, SC tilt-before-return pilot.** An explicit MoveIt subgoal now
+tilts the plug beyond the card row **before** returning toward SC port 1.
+Scored sim-time tracking measured 1.59 mm TCP translation but 8.78 mm plug-tip
+motion during tilt, confirming why pivot location matters. With updated
+privileged teacher alignment and guarded insertion settings, the latest fixed
+five-card port-1 route inserted in **2/2** exact repeats; an earlier setting
+also inserted once. A matched older route with the same new handoff settings
+inserted in **1/2**; the small, plan-level comparison does not establish that
+tilt timing caused the improvement. Other targeted attempts stalled at a
+near-opening contact or failed tracking gates. The allowed criterion is
+continued progress despite brief cable/card touch, not zero touch. This is
+**teacher-only fixed-start progress**, not autonomous BC/RL success. Step 3's
+fixed-scene route gate passes, while step 4 new-start generality and step 5
+robust insertion data stay open; final scenes remain sealed. Saved five-card
+port-0 and shifted three-card port-0 route-only plans each reached standoff
+again with about 5 mm TCP endpoint error and no scored off-limit contact or
+excess force. They did not attempt insertion and repeat saved resets, so Step 4
+remains open. See the
+[full record and video](experiments/2026-09-30-sc-tilt-before-return.md),
+[machine results](experiments/2026-09-30-sc-tilt-before-return-results.json),
+and [verified archive](experiments/2026-09-30-sc-tilt-before-return-archive.json).
+
+**September 29, low-cross MoveIt continuation.** After measuring a 1.331 m
+NIC-card top, the revised privileged MoveIt route moved away, left, and down
+together. The measured plug tip passed below the card tops before the beside-row
+traverse. Scored route-only Gazebo runs reached standoff on five-card SC port 0,
+five-card SC port 1, and a shifted three-card port-0 layout, with no Cartesian
+fallback or observed sustained snag. Cable touching a card is acceptable under
+the user's clarified progress criterion; no zero-contact claim is made. A
+privileged port-0 insertion teacher succeeded once and failed at near-opening
+contact on an exact repeat (**1/2**). Port-1 prealignment improved the handoff
+from a 122 mm axial abort to 3.9 mm from the opening, but contact still stopped
+insertion. Two later teacher-control tests with a lateral servo and a larger
+preinsert bias limit both stopped at the initial alignment gate, so they do
+not establish an insertion repair. This is promising route progress, **not a reliable autonomous full
+insertion**. Step 3 passes only the revised snag/progress gate on tested starts;
+step 4 generality and step 5 full-insertion data remain open. Perception labels,
+two-actor BC, RL, and final evaluation remain gated. See the
+[continuation, measurements, commands, and videos](experiments/2026-09-29-moveit-low-cross-continuation.md)
+and [machine results](experiments/2026-09-29-moveit-low-cross-results.json).
+
+**September 29, MoveIt fixed-scene route gate.** An actual MoveIt 2 planning
+scene now contains 240 rigid shapes from the Gazebo board, five NIC cards, and
+fixtures. Model origins and yaw agree with scored Gazebo TF within 0.00013 mm
+and 0.000016°. Three rootless Gazebo runs executed the saved joint plans with
+zero Cartesian fallback and reached the same pre-insertion standoff. The
+sparse plan, 20 mm wider outside lane, and ordered farther return all had a
+negative cable-to-NIC surface-clearance proxy near card 4 late in the route;
+the videos do not prove that the full cable stays beside the cards. Scored
+off-limit contact was absent, but no named cable/card contact trace was
+available. **The fixed-scene rigid-planning gate passed; cable route quality
+did not under its original zero-clearance criterion.** The low-cross continuation
+above supersedes this earlier route decision. None of these three original
+route-only runs attempted insertion or entered BC.
+The [report and videos](experiments/2026-09-29-moveit-sc-route-pilot.md),
+[machine summary](experiments/2026-09-29-moveit-sc-pilot-results.json), and
+[verified raw archive](experiments/2026-09-29-moveit-sc-pilot-archive.json)
+preserve the failed attempts and repairs. The independent
+[perception-label audit](experiments/2026-09-29-perception-label-readiness.json)
+found 1,485 native SC frames in 21 scene groups, but only projected in-frame
+flags, no actual occlusion/identifiability labels, wrong-port negatives, or
+SFP rows in that source. Two-family visibility-gate training therefore remains
+closed. Generality, BC, handoff, RL, and reserved final evaluation remain
+closed; the next bounded repair is the low-cross continuation's near-opening
+port-1 alignment diagnosis, while preserving the original contact caveat.
+
+**September 29, targeted SC ±20 mm route comparison.** The exact
+five-card, SC port-0 low-cross partial insertion was repeated with its
+scene and policy bytes unchanged. It is not deterministic: the archived
+run plus six repeats gave **4/7 full insertions**. Holding its short
+forward traverse fixed, moving the outside lane 20 mm farther left gave
+**4/5 full insertions** and a larger median sampled cable-center gap
+(19.24 versus 16.15 mm in new runs), but one lane run still stopped at
+about 3.2 mm beyond the port entrance with about 0.55 mm lateral offset
+and no insertion event. Farther-behind and combined variants each inserted
+in 2/2; moving forward 20 mm from the failed setting inserted in 1/2.
+These small fixed-scene privileged teacher counts do not prove reliability
+or a clean cable path; wide videos still show the cable near card tops.
+The [full comparison](experiments/2026-09-29-sc-low-cross-2cm-rescue.md),
+[machine summary](experiments/2026-09-29-sc-low-cross-2cm-rescue.json),
+and [review videos](../outputs/experiments/2026-09-29_sc_low_cross_2cm_rescue/)
+preserve successes and failures. Raw MCAPs are hash-verified on NAS.
+At that point no MoveIt trajectory had been executed; no actor was trained,
+step 5 remains open,
+and final scenes remain sealed.
+
 **September 26, storage cleanup.** `/data1` filled. Old May smoke artifacts
 and non-selected sweep checkpoints were removed; sweep configs and metrics
 were verified on NAS first. The older May 27/28 policy-run trees passed
@@ -1545,3 +1651,8 @@ Preserve actor-only evaluation for the June experiment lineage. Any privileged
 guide or action override belongs to a separately labeled diagnostic experiment.
 Report metrics for the same timestep/episode together: independent best depth,
 lateral error, and orientation values cannot establish insertion.
+
+
+### September 30 continuation: deployment input audit
+
+The transport gate is accepted; full insertion remains a separate gate. SC dataset v5 fixes canonical TCP quaternions and the raw ROS joint-prefix order: all 4,752 transport rows exactly match the live state assembler. Earlier v3 BC is retained as an invalid-input diagnostic. Corrected rootless GPU7 BC is bounded at 1,500 updates; auxiliary depth visibility remains rejected. See [the continuation record](experiments/2026-09-30-transport-to-two-actor-continuation.md). Autonomous handoff and RL have not passed.

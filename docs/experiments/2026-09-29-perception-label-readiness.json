@@ -1,0 +1,416 @@
+{
+  "schema": "aic_perception_label_readiness/v1",
+  "source": "/var/tmp/chmin_aic_20260918_act/sc_native_expanded_20260924/pose_labels_all_scored.jsonl",
+  "task_family": "sc_to_sc_only",
+  "rows": 1485,
+  "scene_counts": {
+    "train": 14,
+    "validation": 7
+  },
+  "episode_counts": {
+    "train": 15,
+    "validation": 7
+  },
+  "scene_overlap": [],
+  "by_split_port_phase": [
+    {
+      "split": "train",
+      "port": 0,
+      "phase": "far",
+      "frames": 491
+    },
+    {
+      "split": "train",
+      "port": 0,
+      "phase": "near",
+      "frames": 279
+    },
+    {
+      "split": "train",
+      "port": 1,
+      "phase": "far",
+      "frames": 128
+    },
+    {
+      "split": "train",
+      "port": 1,
+      "phase": "near",
+      "frames": 84
+    },
+    {
+      "split": "validation",
+      "port": 0,
+      "phase": "far",
+      "frames": 242
+    },
+    {
+      "split": "validation",
+      "port": 0,
+      "phase": "near",
+      "frames": 208
+    },
+    {
+      "split": "validation",
+      "port": 1,
+      "phase": "far",
+      "frames": 30
+    },
+    {
+      "split": "validation",
+      "port": 1,
+      "phase": "near",
+      "frames": 23
+    }
+  ],
+  "per_camera": {
+    "center": [
+      {
+        "split": "train",
+        "port": 0,
+        "phase": "far",
+        "metric": "frames",
+        "count": 491
+      },
+      {
+        "split": "train",
+        "port": 0,
+        "phase": "far",
+        "metric": "in_frame",
+        "count": 444
+      },
+      {
+        "split": "train",
+        "port": 0,
+        "phase": "near",
+        "metric": "frames",
+        "count": 279
+      },
+      {
+        "split": "train",
+        "port": 0,
+        "phase": "near",
+        "metric": "in_frame",
+        "count": 279
+      },
+      {
+        "split": "train",
+        "port": 1,
+        "phase": "far",
+        "metric": "frames",
+        "count": 128
+      },
+      {
+        "split": "train",
+        "port": 1,
+        "phase": "far",
+        "metric": "in_frame",
+        "count": 108
+      },
+      {
+        "split": "train",
+        "port": 1,
+        "phase": "near",
+        "metric": "frames",
+        "count": 84
+      },
+      {
+        "split": "train",
+        "port": 1,
+        "phase": "near",
+        "metric": "in_frame",
+        "count": 84
+      },
+      {
+        "split": "validation",
+        "port": 0,
+        "phase": "far",
+        "metric": "frames",
+        "count": 242
+      },
+      {
+        "split": "validation",
+        "port": 0,
+        "phase": "far",
+        "metric": "in_frame",
+        "count": 217
+      },
+      {
+        "split": "validation",
+        "port": 0,
+        "phase": "near",
+        "metric": "frames",
+        "count": 208
+      },
+      {
+        "split": "validation",
+        "port": 0,
+        "phase": "near",
+        "metric": "in_frame",
+        "count": 208
+      },
+      {
+        "split": "validation",
+        "port": 1,
+        "phase": "far",
+        "metric": "frames",
+        "count": 30
+      },
+      {
+        "split": "validation",
+        "port": 1,
+        "phase": "far",
+        "metric": "in_frame",
+        "count": 25
+      },
+      {
+        "split": "validation",
+        "port": 1,
+        "phase": "near",
+        "metric": "frames",
+        "count": 23
+      },
+      {
+        "split": "validation",
+        "port": 1,
+        "phase": "near",
+        "metric": "in_frame",
+        "count": 23
+      }
+    ],
+    "left": [
+      {
+        "split": "train",
+        "port": 0,
+        "phase": "far",
+        "metric": "frames",
+        "count": 491
+      },
+      {
+        "split": "train",
+        "port": 0,
+        "phase": "far",
+        "metric": "in_frame",
+        "count": 486
+      },
+      {
+        "split": "train",
+        "port": 0,
+        "phase": "near",
+        "metric": "frames",
+        "count": 279
+      },
+      {
+        "split": "train",
+        "port": 0,
+        "phase": "near",
+        "metric": "in_frame",
+        "count": 279
+      },
+      {
+        "split": "train",
+        "port": 1,
+        "phase": "far",
+        "metric": "frames",
+        "count": 128
+      },
+      {
+        "split": "train",
+        "port": 1,
+        "phase": "far",
+        "metric": "in_frame",
+        "count": 128
+      },
+      {
+        "split": "train",
+        "port": 1,
+        "phase": "near",
+        "metric": "frames",
+        "count": 84
+      },
+      {
+        "split": "train",
+        "port": 1,
+        "phase": "near",
+        "metric": "in_frame",
+        "count": 84
+      },
+      {
+        "split": "validation",
+        "port": 0,
+        "phase": "far",
+        "metric": "frames",
+        "count": 242
+      },
+      {
+        "split": "validation",
+        "port": 0,
+        "phase": "far",
+        "metric": "in_frame",
+        "count": 242
+      },
+      {
+        "split": "validation",
+        "port": 0,
+        "phase": "near",
+        "metric": "frames",
+        "count": 208
+      },
+      {
+        "split": "validation",
+        "port": 0,
+        "phase": "near",
+        "metric": "in_frame",
+        "count": 208
+      },
+      {
+        "split": "validation",
+        "port": 1,
+        "phase": "far",
+        "metric": "frames",
+        "count": 30
+      },
+      {
+        "split": "validation",
+        "port": 1,
+        "phase": "far",
+        "metric": "in_frame",
+        "count": 30
+      },
+      {
+        "split": "validation",
+        "port": 1,
+        "phase": "near",
+        "metric": "frames",
+        "count": 23
+      },
+      {
+        "split": "validation",
+        "port": 1,
+        "phase": "near",
+        "metric": "in_frame",
+        "count": 23
+      }
+    ],
+    "right": [
+      {
+        "split": "train",
+        "port": 0,
+        "phase": "far",
+        "metric": "frames",
+        "count": 491
+      },
+      {
+        "split": "train",
+        "port": 0,
+        "phase": "far",
+        "metric": "in_frame",
+        "count": 485
+      },
+      {
+        "split": "train",
+        "port": 0,
+        "phase": "near",
+        "metric": "frames",
+        "count": 279
+      },
+      {
+        "split": "train",
+        "port": 0,
+        "phase": "near",
+        "metric": "in_frame",
+        "count": 279
+      },
+      {
+        "split": "train",
+        "port": 1,
+        "phase": "far",
+        "metric": "frames",
+        "count": 128
+      },
+      {
+        "split": "train",
+        "port": 1,
+        "phase": "far",
+        "metric": "in_frame",
+        "count": 120
+      },
+      {
+        "split": "train",
+        "port": 1,
+        "phase": "near",
+        "metric": "frames",
+        "count": 84
+      },
+      {
+        "split": "train",
+        "port": 1,
+        "phase": "near",
+        "metric": "in_frame",
+        "count": 84
+      },
+      {
+        "split": "validation",
+        "port": 0,
+        "phase": "far",
+        "metric": "frames",
+        "count": 242
+      },
+      {
+        "split": "validation",
+        "port": 0,
+        "phase": "far",
+        "metric": "in_frame",
+        "count": 242
+      },
+      {
+        "split": "validation",
+        "port": 0,
+        "phase": "near",
+        "metric": "frames",
+        "count": 208
+      },
+      {
+        "split": "validation",
+        "port": 0,
+        "phase": "near",
+        "metric": "in_frame",
+        "count": 208
+      },
+      {
+        "split": "validation",
+        "port": 1,
+        "phase": "far",
+        "metric": "frames",
+        "count": 30
+      },
+      {
+        "split": "validation",
+        "port": 1,
+        "phase": "far",
+        "metric": "in_frame",
+        "count": 27
+      },
+      {
+        "split": "validation",
+        "port": 1,
+        "phase": "near",
+        "metric": "frames",
+        "count": 23
+      },
+      {
+        "split": "validation",
+        "port": 1,
+        "phase": "near",
+        "metric": "in_frame",
+        "count": 23
+      }
+    ]
+  },
+  "missing_native_image_count": 0,
+  "missing_native_image_examples": [],
+  "true_identifiable_visibility_label_rows": 0,
+  "occlusion_tested": false,
+  "wrong_port_negative_labels": false,
+  "sfp_to_nic_rows": 0,
+  "gate": "Not ready for the two-family calibrated visibility handoff"
+}

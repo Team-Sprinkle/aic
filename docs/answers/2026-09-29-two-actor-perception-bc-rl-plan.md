@@ -1,0 +1,24 @@
+# Perception, two-actor BC, recovery, and RL plan
+
+Yes, the overall plan makes sense. I would change the **warm starts and recovery training details** before treating it as an execution plan.
+
+1. **Perception:** adapt the existing SFP perception weights to Gazebo and train on both SFP-to-NIC and SC-to-SC scenes. Add labels for whether the *selected* port is actually identifiable in each camera, rather than merely projected inside the image. Calibrate a separate score for “is the fused pose accurate enough for local control?” on held-out scenes. Failed trajectories can supply perception images even when their actions are unsuitable for BC. [Current handoff design](../POSE_VISIBILITY_HANDOFF.md).
+
+2. **SC teacher routes:** use motion planning to produce candidate arm routes around the cards, then accept trajectories only after Gazebo verifies the cable path, force, and full insertion. MoveIt’s collision checks address the robot and modeled obstacles; Gazebo must check what happens to the flexible cable. The existing MoveIt backend also needs its planning-scene obstacles connected before its plans can be trusted.
+
+3. **Transport BC with backtracking:** yes, enable the same observable force-and-stall supervisor during teacher collection and deployment. Give every logged action an owner:
+   - **Supervisor retreat:** exclude its action from the actor’s BC loss.
+   - **Teacher transport or post-retreat choice:** train the actor on this action.
+   - **Failure:** retain the transition for diagnosis and later RL; do not label its action as a successful BC target.
+
+   Split action chunks at ownership changes so a four-command label never mixes retreat and teacher commands. Give the actor the recovery mode, retry count, and route history it will also receive at deployment. Otherwise, after a retreat it may simply repeat the blocked route. **BC can start without backtracking**, but BC will not learn a useful *post-backtrack choice* until successful examples of those choices exist. The current [hierarchical recovery design](../HIERARCHICAL_RECOVERY.md) calls for this separation; its route-level supervisor is still a prototype.
+
+4. **Local insertion actor:** I would reuse the **SFP PoseInsert/RPDP checkpoint** for this actor because it already predicts complete port-frame trajectories. I would also reuse Gazebo-trained perception features where compatible, add the task and selected-port code, and fine-tune on successful SFP and new SC near-port segments. Starting its *action head* from the transport actor is less suitable: transport predicts TCP-body targets, while local insertion predicts port-frame targets. The transport actor can warm-start from the existing full-start body-target BC model. Neither needs to start its visual representation from scratch. The selected SFP checkpoint’s strong result was **near-port 8 mm seating in Isaac**, so full-depth Gazebo insertion remains a new training and evaluation requirement. [RPDP record](../experiments/2026-09-22-rpdp-dppo.md).
+
+5. **Isaac BC and RL:** after checking that Isaac reproduces the relevant routes, contacts, cameras, and action timing, I would do a short **Isaac BC adaptation** if Gazebo-trained behavior degrades there. Then warm-start an off-policy actor-critic from BC and seed replay with demonstrations and failures. SERL’s RLPD-style approach is designed to use prior data alongside online experience. [SERL paper](https://arxiv.org/abs/2401.16013). Rewards should recognize **full insertion**, alignment and safe progress, while penalizing damaging force, repeated blockage, and wasted retries. Retreat itself must not become an easy way to earn reward. During RL, log the *executed* supervisor action and ownership; actor updates apply only when the actor owns the decision.
+
+6. **Gazebo RL:** use it as a limited sim-to-sim adaptation after Isaac shows a real gain. The [current Gazebo SERL runner](../../aic_utils/gazebo_rl/gazebo_rl/serl_train.py) requires a **one-step direct visual actor**, so it cannot directly fine-tune the proposed two-actor, four-command system. That interface, replay ownership, and supervisor behavior need adapting and testing first. Its slow simulation makes a bounded diagnostic more appropriate than assuming a long RL run will fix BC.
+
+7. **Handoff:** agreed. Use per-camera identification, calibrated fused-pose confidence, predicted distance, and several consistent observations to enter local mode. Use hysteresis when leaving it. A single visible camera can qualify only if its error is calibrated tightly enough; brief gripper occlusion during insertion may justify carrying the last pose for a validated short interval. No ground-truth port pose enters this decision.
+
+The main gate is a **full-start, autonomous Gazebo BC comparison on new development scenes** before broad RL. That will tell us whether the new SC routes, perception, two actors, and hard-coded recovery actually work together.

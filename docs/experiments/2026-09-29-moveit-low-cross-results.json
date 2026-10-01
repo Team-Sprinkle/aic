@@ -1,0 +1,527 @@
+{
+  "schema": "aic_moveit_low_cross_pilot/v1",
+  "date": "2026-09-29",
+  "teacher_only": true,
+  "final_scenes_opened": false,
+  "cases": [
+    {
+      "case": "five_port0_route",
+      "audit_dir": "/var/tmp/chmin_aic_20260918_act/moveit_sc_low18_diagonal_20260929",
+      "scored": true,
+      "video": "outputs/experiments/2026-09-29_moveit_gazebo_pilot/low18_diagonal_video/all_views_20fps.mp4",
+      "tier3_score": 3.7915689783227338,
+      "tier3_message": "No insertion detected. Final plug port distance: 0.17m.",
+      "total_score": 39.055273358459196,
+      "scoring_sha256": "93c4727fb8c9e53ec0ab2bbf7fcc2faf78f332268b02c764bf18b654ae2601ef",
+      "trajectory_sha256": "f65b4cba39f0416c7f5c175ae5b4b10bec4ac464568dcdebaf5d72dd5bc02067",
+      "card_top_m": 1.3309999999999997,
+      "first_tip_below_top_s": 11.101574353,
+      "min_tip_minus_top_mm": -36.18732341317488,
+      "sampled_tip_minus_top_mm": {
+        "0": 110.94245699443594,
+        "5": 59.129566538089094,
+        "10": 15.91417471580514,
+        "15": -28.024101902943688,
+        "20": -26.143824544079486,
+        "25": -34.47393286089251,
+        "30": -32.08305073657147,
+        "35": -5.7643853692226354,
+        "38": -5.874898720815702
+      }
+    },
+    {
+      "case": "five_port0_insert_initial",
+      "audit_dir": "/var/tmp/chmin_aic_20260918_act/moveit_sc_low18_diagonal_insert_20260929",
+      "scored": true,
+      "video": "outputs/experiments/2026-09-29_moveit_gazebo_pilot/low18_diagonal_insert_video/all_views_20fps.mp4",
+      "tier3_score": 0,
+      "tier3_message": "Task not completed.",
+      "total_score": 1,
+      "scoring_sha256": "7233d7fb296ce2ae9133fabe412d2ee91a252d99a5020e38ce14725f26c5c4de",
+      "trajectory_sha256": "6be1193e9bb00c76c26d44340752bed64966bcc3e2946db43e33bc52d692323b",
+      "card_top_m": 1.3309999999999997,
+      "first_tip_below_top_s": 11.965924004000001,
+      "min_tip_minus_top_mm": -35.9413800634838,
+      "sampled_tip_minus_top_mm": {
+        "0": 110.94388721643878,
+        "5": 61.392275689932774,
+        "10": 23.53140806551157,
+        "15": -31.616469214581056,
+        "20": -24.316937414067485,
+        "25": -30.795236988558017,
+        "30": -32.12060831665742,
+        "35": -32.30204463148101,
+        "40": -9.706760503606304
+      },
+      "key_events": [
+        {
+          "event": "tracking_gate_checked",
+          "time_s": 31.6,
+          "z_offset_m": null,
+          "lateral_error_m": 0.0011344347613487427,
+          "force_delta_n": 4.434919285889146,
+          "passed": false,
+          "source": null
+        }
+      ]
+    },
+    {
+      "case": "five_port0_insert_success",
+      "audit_dir": "/var/tmp/chmin_aic_20260918_act/moveit_sc_low18_diagonal_insert_gate6_force2_20260929",
+      "scored": true,
+      "video": "outputs/experiments/2026-09-29_moveit_gazebo_pilot/low18_diagonal_insert_success_video/all_views_20fps.mp4",
+      "tier3_score": 75,
+      "tier3_message": "Cable insertion successful.",
+      "total_score": 173.13230059513148,
+      "scoring_sha256": "1ac9500034837d526b054bbdfbcdb4fde53cfcd39154dd35d9b55c5df8c54910",
+      "trajectory_sha256": "6be1193e9bb00c76c26d44340752bed64966bcc3e2946db43e33bc52d692323b",
+      "card_top_m": 1.3309999999999997,
+      "first_tip_below_top_s": 12.559227637000001,
+      "min_tip_minus_top_mm": -176.4294257630943,
+      "sampled_tip_minus_top_mm": {
+        "0": 110.9430508926903,
+        "5": 68.4199060794548,
+        "10": 31.41555565968823,
+        "15": -30.908248775737725,
+        "20": -24.740708452837712,
+        "25": -29.251736668294505,
+        "30": -33.62848526650875,
+        "35": -31.971117207157064,
+        "40": -9.048135059181561
+      },
+      "key_events": [
+        {
+          "event": "tracking_gate_checked",
+          "time_s": 28.6,
+          "z_offset_m": null,
+          "lateral_error_m": 0.0017330448483299226,
+          "force_delta_n": 3.8893433491498572,
+          "passed": true,
+          "source": null
+        },
+        {
+          "event": "tracking_gate_checked",
+          "time_s": 30.650000000000002,
+          "z_offset_m": null,
+          "lateral_error_m": 0.002189509949936835,
+          "force_delta_n": 0.4984338515287968,
+          "passed": true,
+          "source": null
+        },
+        {
+          "event": "tracking_gate_checked",
+          "time_s": 34.6,
+          "z_offset_m": null,
+          "lateral_error_m": 0.001216651006487188,
+          "force_delta_n": 0.48577710764564047,
+          "passed": true,
+          "source": null
+        },
+        {
+          "event": "guarded_insert_started",
+          "time_s": 34.6,
+          "z_offset_m": null,
+          "lateral_error_m": null,
+          "force_delta_n": null,
+          "passed": null,
+          "source": null
+        },
+        {
+          "event": "guarded_insert_success",
+          "time_s": 42.554,
+          "z_offset_m": null,
+          "lateral_error_m": null,
+          "force_delta_n": null,
+          "passed": null,
+          "source": null
+        }
+      ]
+    },
+    {
+      "case": "five_port0_insert_repeat",
+      "audit_dir": "/var/tmp/chmin_aic_20260918_act/moveit_sc_low18_diagonal_insert_gate6_force2_repeat1_20260929",
+      "scored": true,
+      "video": null,
+      "tier3_score": 0,
+      "tier3_message": "Task not completed.",
+      "total_score": 1,
+      "scoring_sha256": "7233d7fb296ce2ae9133fabe412d2ee91a252d99a5020e38ce14725f26c5c4de",
+      "trajectory_sha256": "6be1193e9bb00c76c26d44340752bed64966bcc3e2946db43e33bc52d692323b",
+      "key_events": [
+        {
+          "event": "tracking_gate_checked",
+          "time_s": 30.492,
+          "z_offset_m": null,
+          "lateral_error_m": 0.0012998012075361668,
+          "force_delta_n": 4.3544398733035745,
+          "passed": true,
+          "source": null
+        },
+        {
+          "event": "tracking_gate_checked",
+          "time_s": 33.434000000000005,
+          "z_offset_m": null,
+          "lateral_error_m": 0.0016845492007748568,
+          "force_delta_n": 0.5165877090790597,
+          "passed": true,
+          "source": null
+        },
+        {
+          "event": "tracking_gate_checked",
+          "time_s": 37.150000000000006,
+          "z_offset_m": null,
+          "lateral_error_m": 0.0021548019012104006,
+          "force_delta_n": 0.275454225638656,
+          "passed": true,
+          "source": null
+        },
+        {
+          "event": "guarded_insert_started",
+          "time_s": 37.150000000000006,
+          "z_offset_m": null,
+          "lateral_error_m": null,
+          "force_delta_n": null,
+          "passed": null,
+          "source": null
+        },
+        {
+          "event": "contact_detected",
+          "time_s": 40.884,
+          "z_offset_m": 0.006481979745884398,
+          "lateral_error_m": null,
+          "force_delta_n": 2.297671948875987,
+          "passed": null,
+          "source": "after_settle"
+        }
+      ]
+    },
+    {
+      "case": "five_port1_route",
+      "audit_dir": "/var/tmp/chmin_aic_20260918_act/moveit_sc_port1_low18_diagonal_20260929",
+      "scored": true,
+      "video": "outputs/experiments/2026-09-29_moveit_gazebo_pilot/port1_low18_video/all_views_20fps.mp4",
+      "tier3_score": 6.83241853858846,
+      "tier3_message": "No insertion detected. Final plug port distance: 0.17m.",
+      "total_score": 46.40015534861938,
+      "scoring_sha256": "2f5c019a6d5c3285e6ee1ad45584d073628102274d08106a766eec28b06d8d2a",
+      "trajectory_sha256": "3424ac70726f09d53a10e975600b9cc9a0666fc0c2685f6f329e15f95cc5b1b2",
+      "card_top_m": 1.3309999999999997,
+      "first_tip_below_top_s": 8.235460551000001,
+      "min_tip_minus_top_mm": -35.979782875928066,
+      "sampled_tip_minus_top_mm": {
+        "0": 111.12496385962056,
+        "5": 38.021654894524474,
+        "10": -28.459678009730816,
+        "15": -20.74756066386496,
+        "20": -24.382854000881693,
+        "25": -34.299524547246165,
+        "30": -33.07416979773215,
+        "35": -5.118161540607291,
+        "38": -5.325104331023178
+      }
+    },
+    {
+      "case": "five_port1_insert_initial",
+      "audit_dir": "/var/tmp/chmin_aic_20260918_act/moveit_sc_port1_low18_diagonal_insert_20260929",
+      "scored": true,
+      "video": "outputs/experiments/2026-09-29_moveit_gazebo_pilot/port1_low18_insert_failed_video/all_views_20fps.mp4",
+      "tier3_score": 0,
+      "tier3_message": "Task not completed.",
+      "total_score": 1,
+      "scoring_sha256": "3328c0327ae9f3a358f402cfdaa1fef178500b4714464383ff8a1afc75fe0757",
+      "trajectory_sha256": "69ee7e4cc053f15159553de684a9d0321de4125b742cd5335853e2171caf1e18",
+      "key_events": [
+        {
+          "event": "tracking_gate_checked",
+          "time_s": 32.214,
+          "z_offset_m": null,
+          "lateral_error_m": 0.013161066694017037,
+          "force_delta_n": 4.715968527532731,
+          "passed": false,
+          "source": null
+        }
+      ]
+    },
+    {
+      "case": "five_port1_prealign_route",
+      "audit_dir": "/var/tmp/chmin_aic_20260918_act/moveit_sc_port1_low18_prealign_after_row_20260929",
+      "scored": true,
+      "video": null,
+      "tier3_score": 7.424959596094957,
+      "tier3_message": "No insertion detected. Final plug port distance: 0.17m.",
+      "total_score": 47.6254026624874,
+      "scoring_sha256": "e28b23035410e26ab88f1e2da4fe3083ca10afa23833faf531c9a8d13f1516fc",
+      "trajectory_sha256": "b3a1974258209591b97de8be296d64d04e4f2195bbf509bd33a912a8f96708ce"
+    },
+    {
+      "case": "five_port1_prealign_insert",
+      "audit_dir": "/var/tmp/chmin_aic_20260918_act/moveit_sc_port1_low18_prealign_after_row_insert_20260929",
+      "scored": true,
+      "video": null,
+      "tier3_score": 0,
+      "tier3_message": "Task not completed.",
+      "total_score": 1,
+      "scoring_sha256": "3328c0327ae9f3a358f402cfdaa1fef178500b4714464383ff8a1afc75fe0757",
+      "trajectory_sha256": "2c51e28b271ed1b01503304ea516403dda351e89bf0ee5d8d8a7ff7bcaab872d",
+      "key_events": [
+        {
+          "event": "tracking_gate_checked",
+          "time_s": 31.040000000000003,
+          "z_offset_m": null,
+          "lateral_error_m": 0.0026239348362574627,
+          "force_delta_n": 0.5406685746895399,
+          "passed": false,
+          "source": null
+        },
+        {
+          "event": "tracking_gate_checked",
+          "time_s": 35.492000000000004,
+          "z_offset_m": null,
+          "lateral_error_m": 0.0021828056049147666,
+          "force_delta_n": 0.41990104546883134,
+          "passed": true,
+          "source": null
+        },
+        {
+          "event": "tracking_gate_checked",
+          "time_s": 39.082,
+          "z_offset_m": null,
+          "lateral_error_m": 0.002136492898452997,
+          "force_delta_n": 0.6564065876540223,
+          "passed": true,
+          "source": null
+        },
+        {
+          "event": "tracking_gate_checked",
+          "time_s": 44.06,
+          "z_offset_m": null,
+          "lateral_error_m": 0.0011873969859410353,
+          "force_delta_n": 0.8337391537670996,
+          "passed": true,
+          "source": null
+        },
+        {
+          "event": "guarded_insert_started",
+          "time_s": 44.074000000000005,
+          "z_offset_m": null,
+          "lateral_error_m": null,
+          "force_delta_n": null,
+          "passed": null,
+          "source": null
+        },
+        {
+          "event": "contact_detected",
+          "time_s": 48.146,
+          "z_offset_m": 0.003911702472762048,
+          "lateral_error_m": null,
+          "force_delta_n": 4.114741204694563,
+          "passed": null,
+          "source": "after_command"
+        }
+      ]
+    },
+    {
+      "case": "five_port1_recovery_gate5",
+      "audit_dir": "/var/tmp/chmin_aic_20260918_act/moveit_sc_port1_low18_prealign_recovery_gate5_20260929",
+      "scored": true,
+      "video": null,
+      "tier3_score": 0,
+      "tier3_message": "Task not completed.",
+      "total_score": 1,
+      "scoring_sha256": "3328c0327ae9f3a358f402cfdaa1fef178500b4714464383ff8a1afc75fe0757",
+      "trajectory_sha256": "2c51e28b271ed1b01503304ea516403dda351e89bf0ee5d8d8a7ff7bcaab872d",
+      "key_events": [
+        {
+          "event": "tracking_gate_checked",
+          "time_s": 32.104,
+          "z_offset_m": null,
+          "lateral_error_m": 0.005047805086490684,
+          "force_delta_n": 1.1613022787159335,
+          "passed": false,
+          "source": null
+        },
+        {
+          "event": "contact_detected",
+          "time_s": 32.106,
+          "z_offset_m": 0.03,
+          "lateral_error_m": null,
+          "force_delta_n": 1.1613022787159335,
+          "passed": null,
+          "source": "initial_preinsert_tracking_gate"
+        },
+        {
+          "event": "recovery_force_release_failed",
+          "time_s": 37.97,
+          "z_offset_m": null,
+          "lateral_error_m": null,
+          "force_delta_n": null,
+          "passed": null,
+          "source": null
+        }
+      ]
+    },
+    {
+      "case": "five_port1_recovery_gate6",
+      "audit_dir": "/var/tmp/chmin_aic_20260918_act/moveit_sc_port1_low18_prealign_recovery_gate6_20260929",
+      "scored": true,
+      "video": null,
+      "tier3_score": 0,
+      "tier3_message": "Task not completed.",
+      "total_score": 1,
+      "scoring_sha256": "3328c0327ae9f3a358f402cfdaa1fef178500b4714464383ff8a1afc75fe0757",
+      "trajectory_sha256": "2c51e28b271ed1b01503304ea516403dda351e89bf0ee5d8d8a7ff7bcaab872d",
+      "key_events": [
+        {
+          "event": "tracking_gate_checked",
+          "time_s": 32.058,
+          "z_offset_m": null,
+          "lateral_error_m": 0.007083660499567422,
+          "force_delta_n": 0.36966887671726306,
+          "passed": false,
+          "source": null
+        },
+        {
+          "event": "tracking_gate_checked",
+          "time_s": 36.378,
+          "z_offset_m": null,
+          "lateral_error_m": 0.005933298333744271,
+          "force_delta_n": 0.39436778752575047,
+          "passed": true,
+          "source": null
+        },
+        {
+          "event": "tracking_gate_checked",
+          "time_s": 40.586000000000006,
+          "z_offset_m": null,
+          "lateral_error_m": 0.003368747271720977,
+          "force_delta_n": 0.9972921660266071,
+          "passed": false,
+          "source": null
+        },
+        {
+          "event": "tracking_gate_checked",
+          "time_s": 45.286,
+          "z_offset_m": null,
+          "lateral_error_m": 0.0021240730547752436,
+          "force_delta_n": 0.7127630115329768,
+          "passed": true,
+          "source": null
+        },
+        {
+          "event": "guarded_insert_started",
+          "time_s": 45.290000000000006,
+          "z_offset_m": null,
+          "lateral_error_m": null,
+          "force_delta_n": null,
+          "passed": null,
+          "source": null
+        },
+        {
+          "event": "contact_detected",
+          "time_s": 45.35,
+          "z_offset_m": 0.02999907306344303,
+          "lateral_error_m": null,
+          "force_delta_n": 0.3542706378449402,
+          "passed": null,
+          "source": "planned_recovery_intervention"
+        },
+        {
+          "event": "recovery_force_release_failed",
+          "time_s": 50.67400000000001,
+          "z_offset_m": null,
+          "lateral_error_m": null,
+          "force_delta_n": null,
+          "passed": null,
+          "source": null
+        }
+      ]
+    },
+    {
+      "case": "three_mixed_route",
+      "audit_dir": "/var/tmp/chmin_aic_20260918_act/moveit_sc_threecard_mixed_low18_retry1_20260929",
+      "scored": true,
+      "video": "outputs/experiments/2026-09-29_moveit_gazebo_pilot/threecard_mixed_low18_video/all_views_20fps.mp4",
+      "tier3_score": 3.7013343734232986,
+      "tier3_message": "No insertion detected. Final plug port distance: 0.17m.",
+      "total_score": 38.85722041231078,
+      "scoring_sha256": "174ad92e5ebbe4cc42748a26e84c3a2bf5e7a61768b12160e567e4c2918fd258",
+      "trajectory_sha256": "8ee3fd6122eac373fe154612270d628c11d5159263557fa39b8eed26c34e2f8f",
+      "card_top_m": 1.3309999999999997,
+      "first_tip_below_top_s": 11.720818876000001,
+      "min_tip_minus_top_mm": -35.34236240821187,
+      "sampled_tip_minus_top_mm": {
+        "0": 110.94246173252986,
+        "5": 63.46712062415549,
+        "10": 22.84905539994142,
+        "15": -31.47842659073108,
+        "20": -25.270491707847675,
+        "25": -35.28668053557804,
+        "30": -30.80132872385888,
+        "35": -16.446617437273268,
+        "40": -5.248338117083806
+      }
+    },
+    {
+      "case": "five_port1_guarded_lateral_servo",
+      "audit_dir": "/var/tmp/chmin_aic_20260918_act/moveit_sc_port1_low18_prealign_guarded_lateral_servo_20260929",
+      "scored": true,
+      "video": null,
+      "tier3_score": 0,
+      "tier3_message": "Task not completed.",
+      "total_score": 1,
+      "scoring_sha256": "3328c0327ae9f3a358f402cfdaa1fef178500b4714464383ff8a1afc75fe0757",
+      "trajectory_sha256": "2c51e28b271ed1b01503304ea516403dda351e89bf0ee5d8d8a7ff7bcaab872d",
+      "key_events": [
+        {
+          "event": "tracking_gate_checked",
+          "time_s": 31.060000000000002,
+          "z_offset_m": null,
+          "lateral_error_m": 0.003831438606511708,
+          "force_delta_n": 0.7188623248215028,
+          "passed": false,
+          "source": null
+        },
+        {
+          "event": "tracking_gate_checked",
+          "time_s": 36.332,
+          "z_offset_m": null,
+          "lateral_error_m": 0.0028559895201261914,
+          "force_delta_n": 0.3390045624699007,
+          "passed": false,
+          "source": null
+        }
+      ]
+    },
+    {
+      "case": "five_port1_guarded_servo_bias16",
+      "audit_dir": "/var/tmp/chmin_aic_20260918_act/moveit_sc_port1_low18_prealign_servo_bias16_20260929",
+      "scored": true,
+      "video": null,
+      "tier3_score": 0,
+      "tier3_message": "Task not completed.",
+      "total_score": 1,
+      "scoring_sha256": "3328c0327ae9f3a358f402cfdaa1fef178500b4714464383ff8a1afc75fe0757",
+      "trajectory_sha256": "2c51e28b271ed1b01503304ea516403dda351e89bf0ee5d8d8a7ff7bcaab872d",
+      "key_events": [
+        {
+          "event": "tracking_gate_checked",
+          "time_s": 32.146,
+          "z_offset_m": null,
+          "lateral_error_m": 0.015824788390712902,
+          "force_delta_n": 0.4913719443979099,
+          "passed": false,
+          "source": null
+        },
+        {
+          "event": "tracking_gate_checked",
+          "time_s": 37.396,
+          "z_offset_m": null,
+          "lateral_error_m": 0.005863957862095301,
+          "force_delta_n": 0.8447255368397125,
+          "passed": false,
+          "source": null
+        }
+      ]
+    }
+  ]
+}

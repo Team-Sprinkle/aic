@@ -1,5 +1,11 @@
 # World-model follow-up: visual fidelity, dynamics, and control
 
+**September 30 latest:** teacher transport gate accepted. Two same-world Cartesian SC teachers fully inserted, providing v9 with 1,751 transport and 503 local chunks, plus the verified SFP source. The balanced-port BC retry finished 1,500 updates and failed both autonomous development starts: final planned-standoff errors 103 and 603 mm versus 76 and 74 mm for the prior masked actor; neither reached handoff or inserted. A bounded trace/video audit found early wrong-route commands without sustained cable snag. Stop routine feed-forward BC. A checkpoint-provenance audit found that this run reused the full action head from an older mixed-SC-route model and had only two new SC episodes; it was not a clean test of the new Low Lateral Bypass route. Audit clean route data and initialization before deciding on a route-subgoal model. No new training was started for this audit. True visibility, autonomous two-actor insertion and RL remain gated; reserved final scenes stay sealed. [Evidence and exact artifacts](experiments/2026-09-30-transport-to-two-actor-continuation.md).
+
+**September 30 continuation:** transport gate accepted. Four changed-card-layout MoveIt replays reached handoff/standoff; one fully inserted, one failed local insertion and is excluded from expert BC, two were transport-only validation. Four full-success SC teacher episodes now provide 3,001 transport and 1,000 local training chunks, with 1,751 held-out transport chunks. True-visibility recorder checks caught invalid auxiliary depth during tilt; labels are being repaired before training. Autonomous two-actor insertion and RL remain pending. [Execution record](experiments/2026-09-30-transport-to-two-actor-continuation.md).
+
+**September 30 continuation update:** world-model and training branches remain parked. The [oracle SC force diagnosis](experiments/2026-09-30-force-oracle.md) reproduced plug/port catching; the exact earlier 3.5 N event lacked complete contact logs. New reporting distinguishes sensor-frame wrist delta, corrected normal point forces, and commanded versus measured retreat. Explicit tilt-before-return validation continues without disabling collisions. Step 4 generalization and Step 5 teacher admission remain open.
+
 **Current branch, September 24:** world dynamics remains parked. The approved
 work is [hierarchical measured-pose recovery](HIERARCHICAL_RECOVERY.md) with an
 [ordered SC BC, recovery, and SERL plan](experiments/2026-09-24-hierarchical-recovery-continuation.md).
@@ -631,3 +637,8 @@ sheets, pose-error report, simulator videos, official scores, and real ROS
 latency. Keep the existing under-300 ms inference requirement. The pilot's
 reward and imagination heads should remain disabled until post-event labels
 and held-out dynamics fidelity support them.
+
+
+### September 30 continuation: deployment input audit
+
+The transport gate is accepted; full insertion remains a separate gate. SC dataset v5 fixes canonical TCP quaternions and the raw ROS joint-prefix order: all 4,752 transport rows exactly match the live state assembler. Earlier v3 BC is retained as an invalid-input diagnostic. Corrected rootless GPU7 BC is bounded at 1,500 updates; auxiliary depth visibility remains rejected. See [the continuation record](experiments/2026-09-30-transport-to-two-actor-continuation.md). Autonomous handoff and RL have not passed.

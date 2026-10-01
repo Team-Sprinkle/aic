@@ -1,0 +1,261 @@
+{
+  "schema": "aic_moveit_sc_pilot_summary/v1",
+  "fixed_scene": "five NIC cards, all-left, SC port 0, seed 51500",
+  "rootless_docker": true,
+  "gazebo_gpu": 3,
+  "teacher_only": true,
+  "insertion_handoff_enabled": false,
+  "route_quality_gate": "failed_or_indeterminate_cable_clearance",
+  "bc_admitted": false,
+  "final_scenes_opened": false,
+  "runs": [
+    {
+      "label": "sparse_baseline",
+      "run_dir": "/var/tmp/chmin_aic_20260918_act/moveit_sc_corridor_baseline_20260929",
+      "config_sha256": "b1087e7a008bf322428c682233e389f0d91669b97d13e9c09b48b256512f8b2b",
+      "world_sha256": "5d8d66c95a6e1fd11493c7d0515d438277d554eb9ecb313302f13fd5e6fd58fd",
+      "bridge_sha256": "014d7e064f791835a988b835d8cd50b33e11f65d4617e532b68ab9abea8ec323",
+      "plan_sha256": "ce3b25a03142edd681ae5e49472427ddc629c579cb06c612f3d7ae7c52b7d18b",
+      "trajectory_sha256": "734da960e446dfd42f5d79cb7ccd24da5892cb82bf54ed51063633d439b462d4",
+      "scored": true,
+      "score": {
+        "total": 19.68344867359652,
+        "tier3": {
+          "score": 3.467546485521872,
+          "message": "No insertion detected. Final plug port distance: 0.17m."
+        },
+        "contact": {
+          "score": 0,
+          "message": "No contact detected."
+        }
+      },
+      "scoring_sha256": "14dfd20460ad60bf5458cf29054bfaaa7438fad7d7c15ace02df2361ce634236",
+      "route_replay_audit": {
+        "schema": "aic_moveit_route_replay_audit/v1",
+        "joint_command_count": 520,
+        "pose_command_count": 0,
+        "last_command_vs_plan_joint_max_abs_rad": 0.0,
+        "measured_vs_plan_final_joint_max_abs_rad": 0.0040957502262208845,
+        "measured_vs_plan_final_tcp_mm": 4.263492263578721,
+        "measured_final_tcp_base_m": [
+          -0.4951656227467323,
+          0.39951567118393627,
+          0.2034831273915426
+        ],
+        "planned_final_tcp_base_m": [
+          -0.4959007564226966,
+          0.40035474963767953,
+          0.20759808694280463
+        ],
+        "trajectory_waypoints": 244
+      },
+      "route_replay_audit_sha256": "43c54657acf0d81c35cf78491f50070d83c6bb2516c144bca726776cac1b222d",
+      "exact_cable_clearance": {
+        "schema": "aic_exact_nic_cable_clearance/v1",
+        "sample_count": 730,
+        "max_sample_gap_s": 0.09094381499999926,
+        "board_world_position_error_mm": 5.8505164966780656e-05,
+        "cable_radius_mm": 2.0,
+        "collision_shape_count": 195,
+        "worst": {
+          "time_s": 35.779586494,
+          "lower_bound_clearance_mm": -5.0,
+          "sampled_surface_clearance_mm": -2.0,
+          "cable_link": 2,
+          "nic_collision": "trial_000001_nic_card_mount_4_nic_card_mount_link_v1015085006_collider_box.001",
+          "nic_shape": "box"
+        },
+        "coverage_limit": "Conservative along each sampled link segment, but unobserved between TF samples; only NIC collision shapes, not all fixtures or plug geometry."
+      },
+      "exact_cable_clearance_sha256": "a77a2fd7a2a893067229f22195a2d131a3a632af86c35b57f084f1e4e3af2b6f",
+      "port_trace": {
+        "insertion_event_count": 0,
+        "final_entrance_distance_mm": 157.9045386721927
+      },
+      "port_trace_sha256": "f753de73c839df76b5d57004946d23c7e4c29b12061f49187364a02cd55420d6",
+      "scored_mcap": [
+        {
+          "path": "/var/tmp/chmin_aic_20260918_act/moveit_sc_corridor_baseline_20260929/results/bag_trial_000001_20260929_181051_767/bag_trial_000001_20260929_181051_767_0.mcap",
+          "bytes": 102671485,
+          "sha256": "739f08ee50615c93009b76084e059ed57a1e3032a8fef4ecf8a682f85f261181"
+        }
+      ],
+      "review_video": {
+        "path": "outputs/experiments/2026-09-29_moveit_gazebo_pilot/baseline_video/all_views_20fps.mp4",
+        "bytes": 4689022,
+        "sha256": "70dcb8dedbb79d48f8f08ce6df6a8043be08e381651ca87fe8c1ae22aa9f8ee8"
+      }
+    },
+    {
+      "label": "sparse_lane_plus20",
+      "run_dir": "/var/tmp/chmin_aic_20260918_act/moveit_sc_corridor_lane20_20260929",
+      "config_sha256": "b1087e7a008bf322428c682233e389f0d91669b97d13e9c09b48b256512f8b2b",
+      "world_sha256": "5d8d66c95a6e1fd11493c7d0515d438277d554eb9ecb313302f13fd5e6fd58fd",
+      "bridge_sha256": "014d7e064f791835a988b835d8cd50b33e11f65d4617e532b68ab9abea8ec323",
+      "plan_sha256": "2db6a69f6d980c65d55e7e7c22eecff77fbb197b9f4f77b59bc8bc2ad2d794b8",
+      "trajectory_sha256": "60208dee5ad4000cc65c268e60df97a455218fe9310914de320b80fb5b7b233c",
+      "scored": true,
+      "score": {
+        "total": 19.537996751923703,
+        "tier3": {
+          "score": 3.6050986911502254,
+          "message": "No insertion detected. Final plug port distance: 0.17m."
+        },
+        "contact": {
+          "score": 0,
+          "message": "No contact detected."
+        }
+      },
+      "scoring_sha256": "04aa0c0066e167421f2beff9a82af09e0a0a254e120db3eb5a22b8bbaa36477d",
+      "route_replay_audit": {
+        "schema": "aic_moveit_route_replay_audit/v1",
+        "joint_command_count": 529,
+        "pose_command_count": 0,
+        "last_command_vs_plan_joint_max_abs_rad": 0.0,
+        "measured_vs_plan_final_joint_max_abs_rad": 0.004102558791301725,
+        "measured_vs_plan_final_tcp_mm": 4.257054078764532,
+        "measured_final_tcp_base_m": [
+          -0.4949374541995325,
+          0.3979818951634977,
+          0.20270299615780923
+        ],
+        "planned_final_tcp_base_m": [
+          -0.4956648288061614,
+          0.398830857576638,
+          0.2068106351916378
+        ],
+        "trajectory_waypoints": 248
+      },
+      "route_replay_audit_sha256": "6a1e29a057aa1895faed9e4211367ac141ab0331e1419ccceb9c31f86c71584e",
+      "exact_cable_clearance": {
+        "schema": "aic_exact_nic_cable_clearance/v1",
+        "sample_count": 748,
+        "max_sample_gap_s": 0.09447616099999934,
+        "board_world_position_error_mm": 5.8505164966780656e-05,
+        "cable_radius_mm": 2.0,
+        "collision_shape_count": 195,
+        "worst": {
+          "time_s": 37.513640391,
+          "lower_bound_clearance_mm": -5.0,
+          "sampled_surface_clearance_mm": -2.0,
+          "cable_link": 2,
+          "nic_collision": "trial_000001_nic_card_mount_4_nic_card_mount_link_v1015085006_collider_box.001",
+          "nic_shape": "box"
+        },
+        "coverage_limit": "Conservative along each sampled link segment, but unobserved between TF samples; only NIC collision shapes, not all fixtures or plug geometry."
+      },
+      "exact_cable_clearance_sha256": "4de662f7a66fcfaf392bf4d81d731aa2c6624f2b314c4b3e155edbec4777862d",
+      "port_trace": {
+        "insertion_event_count": 0,
+        "final_entrance_distance_mm": 156.88760452578626
+      },
+      "port_trace_sha256": "8c43cc271bfbc728e205fe0da131a7208faed2b95b22fbe24cb1fe5a596ff51e",
+      "scored_mcap": [
+        {
+          "path": "/var/tmp/chmin_aic_20260918_act/moveit_sc_corridor_lane20_20260929/results/bag_trial_000001_20260929_181405_055/bag_trial_000001_20260929_181405_055_0.mcap",
+          "bytes": 104376779,
+          "sha256": "e4f9cbc06cd7e9f932260cd4018ea7197bdb7f12bc04add7a21537d5dec19c87"
+        }
+      ],
+      "review_video": {
+        "path": "outputs/experiments/2026-09-29_moveit_gazebo_pilot/lane20_video/all_views_20fps.mp4",
+        "bytes": 4605484,
+        "sha256": "452cf2af56adb133d25311e84189f3426085fdd281237b541172de14f030c7e7"
+      }
+    },
+    {
+      "label": "strict_return_interrupted",
+      "run_dir": "/var/tmp/chmin_aic_20260918_act/moveit_sc_corridor_strict_return_20260929",
+      "config_sha256": "b1087e7a008bf322428c682233e389f0d91669b97d13e9c09b48b256512f8b2b",
+      "world_sha256": "5d8d66c95a6e1fd11493c7d0515d438277d554eb9ecb313302f13fd5e6fd58fd",
+      "bridge_sha256": "014d7e064f791835a988b835d8cd50b33e11f65d4617e532b68ab9abea8ec323",
+      "plan_sha256": "6ff6b89cdd364f7214a402d17bc6ed85a56656f4fac13866e3d61fa8609f87e6",
+      "trajectory_sha256": "453360f0b435e4dcdab5da1ba1d9c8b98b4df1185b14408cb95d8ea6048fbd0f",
+      "scored": false
+    },
+    {
+      "label": "strict_return_retry1",
+      "run_dir": "/var/tmp/chmin_aic_20260918_act/moveit_sc_corridor_strict_return_retry1_20260929",
+      "config_sha256": "b1087e7a008bf322428c682233e389f0d91669b97d13e9c09b48b256512f8b2b",
+      "world_sha256": "5d8d66c95a6e1fd11493c7d0515d438277d554eb9ecb313302f13fd5e6fd58fd",
+      "bridge_sha256": "014d7e064f791835a988b835d8cd50b33e11f65d4617e532b68ab9abea8ec323",
+      "plan_sha256": "6ff6b89cdd364f7214a402d17bc6ed85a56656f4fac13866e3d61fa8609f87e6",
+      "trajectory_sha256": "453360f0b435e4dcdab5da1ba1d9c8b98b4df1185b14408cb95d8ea6048fbd0f",
+      "scored": true,
+      "score": {
+        "total": 18.763496162259223,
+        "tier3": {
+          "score": 3.576101757127323,
+          "message": "No insertion detected. Final plug port distance: 0.17m."
+        },
+        "contact": {
+          "score": 0,
+          "message": "No contact detected."
+        }
+      },
+      "scoring_sha256": "e3f9d3a59fad5b051528927d30a1dd0075a82f1d6d40ace35c3e3227ef47e91f",
+      "route_replay_audit": {
+        "schema": "aic_moveit_route_replay_audit/v1",
+        "joint_command_count": 558,
+        "pose_command_count": 0,
+        "last_command_vs_plan_joint_max_abs_rad": 0.0,
+        "measured_vs_plan_final_joint_max_abs_rad": 0.003957066594281411,
+        "measured_vs_plan_final_tcp_mm": 4.163844824496403,
+        "measured_final_tcp_base_m": [
+          -0.4952637997135343,
+          0.3998079789478491,
+          0.20293046296528683
+        ],
+        "planned_final_tcp_base_m": [
+          -0.49618939653915656,
+          0.4004256038347417,
+          0.20694287043935702
+        ],
+        "trajectory_waypoints": 265
+      },
+      "route_replay_audit_sha256": "97c6e73ea543391e92252425f689876331a40e3a017ea4cf6251891cb6f02267",
+      "exact_cable_clearance": {
+        "schema": "aic_exact_nic_cable_clearance/v1",
+        "sample_count": 747,
+        "max_sample_gap_s": 0.08921444399999956,
+        "board_world_position_error_mm": 5.8505164966780656e-05,
+        "cable_radius_mm": 2.0,
+        "collision_shape_count": 195,
+        "worst": {
+          "time_s": 39.673883868000004,
+          "lower_bound_clearance_mm": -5.0,
+          "sampled_surface_clearance_mm": -2.0,
+          "cable_link": 2,
+          "nic_collision": "trial_000001_nic_card_mount_4_nic_card_link_plane001_collider_box.006",
+          "nic_shape": "box"
+        },
+        "coverage_limit": "Conservative along each sampled link segment, but unobserved between TF samples; only NIC collision shapes, not all fixtures or plug geometry."
+      },
+      "exact_cable_clearance_sha256": "3e5fb388fc21c79f32baca90250684f9bea103cb77912beba2b55ca20ce964b8",
+      "port_trace": {
+        "insertion_event_count": 0,
+        "final_entrance_distance_mm": 157.10963271836013
+      },
+      "port_trace_sha256": "21da325049932bfea747792196c76bd024d65f853739f81cbe696f28e075d08d",
+      "scored_mcap": [
+        {
+          "path": "/var/tmp/chmin_aic_20260918_act/moveit_sc_corridor_strict_return_retry1_20260929/results/bag_trial_000001_20260929_182012_351/bag_trial_000001_20260929_182012_351_0.mcap",
+          "bytes": 108744653,
+          "sha256": "bc5596e1973da8ddfa9d039c44ab12162c84b560e4a3378437f2374f6562cbca"
+        }
+      ],
+      "review_video": {
+        "path": "outputs/experiments/2026-09-29_moveit_gazebo_pilot/strict_return_video/all_views_20fps.mp4",
+        "bytes": 4815857,
+        "sha256": "357bc6b2389924b6b0359185967f3299b44d91526f65126c92096e635299b0fb"
+      }
+    }
+  ],
+  "code_sha256": {
+    "aic_teacher_official/aic_teacher_official/expert_generator/collision_scene.py": "c18bc11ab664b7c9428b37357f5e49c6df12ae10d79ab91345f9b3fee72afde2",
+    "aic_teacher_official/aic_teacher_official/expert_generator/moveit_py_backend.py": "3ec870e017cef018010f3b4b5e838431e2e9870175e7660d7de997488df3b3b2",
+    "scripts/plan_moveit_sc_fixed_route.py": "8f883528146f46c46f5ce94bf7b354877224dd5b6ae5acace21e2da8e327953d",
+    "scripts/run_moveit_sc_route_pilot.sh": "880452a9738678f98814196db5b6332c500f62ef6289b34ef4c529c71732743f",
+    "scripts/analyze_cable_clearance_exact.py": "2607bee9350525e0f98d222be5413b9c6ce1bdf0619f5e81b06d38c01937e7bd"
+  }
+}

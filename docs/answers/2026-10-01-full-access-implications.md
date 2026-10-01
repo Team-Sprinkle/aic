@@ -1,0 +1,9 @@
+# What Full access would change for this AIC session
+
+Switching Codex to **Full access does not itself start a container, training run, or delete files**. It changes what subsequent shell commands are allowed to reach. It should let this session connect to the already provisioned **rootless Docker socket** and see the host's NVIDIA devices, assuming the host-access environment exposes them. We would verify both before running anything. The change does not give a reason to use sudo.
+
+The tradeoff is that the agent could then affect files outside this repository and any containers managed by `chmin`'s rootless Docker daemon. That includes the other Codex session's jobs if both sessions use the same Unix account and daemon. Mistakes such as reusing a container name, ROS domain, GPU, or output directory become possible. Full access also removes the session's filesystem and network sandbox boundaries, as described in [official OpenAI sandbox guidance](https://learn.chatgpt.com/codex/sandboxing).
+
+For this project, the concrete precautions are to inspect `docker ps`, active GPU processes, and free disk before restarting; use a unique container name and output directory; keep any active episode-recording job untouched; stay within the agreed GPU cap; and retain the original 104 scored episodes. The prepared bag-extraction runner uses `--net=none`, writes a separate derived dataset, and checks Docker before creating outputs. Training and Gazebo evaluation would require a fresh resource check and separate containers after extraction succeeds.
+
+If the UI offers a narrower profile that explicitly permits the rootless socket and GPU devices, that would also work. With this session's current **workspace-write plus no approval prompts** policy, it cannot request a one-command exception while continuing automatically. Full access is a practical way to resume, provided the shared-server checks above are followed.

@@ -1,0 +1,688 @@
+{
+  "schema": "aic_moveit_low_cross_archive/v1",
+  "archive_root": "/home/nas/chmin/aic_archive_20260929/moveit_low_cross_raw",
+  "excluded": "Captured source frames and volatile logs are excluded; scored MCAP and exact inputs retained. Review videos remain under outputs.",
+  "cases": [
+    {
+      "case": "five_port0_route",
+      "source": "/var/tmp/chmin_aic_20260918_act/moveit_sc_low18_diagonal_20260929",
+      "archive": "/home/nas/chmin/aic_archive_20260929/moveit_low_cross_raw/moveit_sc_low18_diagonal_20260929",
+      "verified_files": [
+        {
+          "path": "eval_config.yaml",
+          "bytes": 4640,
+          "sha256": "b1087e7a008bf322428c682233e389f0d91669b97d13e9c09b48b256512f8b2b"
+        },
+        {
+          "path": "world_audit.sdf",
+          "bytes": 7536,
+          "sha256": "5d8d66c95a6e1fd11493c7d0515d438277d554eb9ecb313302f13fd5e6fd58fd"
+        },
+        {
+          "path": "bridge_audit.yaml",
+          "bytes": 3429,
+          "sha256": "014d7e064f791835a988b835d8cd50b33e11f65d4617e532b68ab9abea8ec323"
+        },
+        {
+          "path": "moveit_joint_trajectory.json",
+          "bytes": 303051,
+          "sha256": "f65b4cba39f0416c7f5c175ae5b4b10bec4ac464568dcdebaf5d72dd5bc02067"
+        },
+        {
+          "path": "plan_summary.json",
+          "bytes": 593440,
+          "sha256": "97b86655b00ee35fa3c4a2a7ce080a9332cf689dd0f3781f9bdf5d00e8cd30a0"
+        },
+        {
+          "path": "height_measurement.json",
+          "bytes": 5673,
+          "sha256": "6f0adb9cb7b5c10d655bce6d21e3b87c6483d83a9c49eebeb1e98d9b18ebfc88"
+        },
+        {
+          "path": "results/scoring.yaml",
+          "bytes": 857,
+          "sha256": "93c4727fb8c9e53ec0ab2bbf7fcc2faf78f332268b02c764bf18b654ae2601ef"
+        },
+        {
+          "path": "results/bag_trial_000001_20260929_213832_746/metadata.yaml",
+          "bytes": 2255,
+          "sha256": "d8a7d3e298bb00e3e027298dfc8af71fa86236804bc4722627ecfbffbaec5d58"
+        },
+        {
+          "path": "results/bag_trial_000001_20260929_213832_746/bag_trial_000001_20260929_213832_746_0.mcap",
+          "bytes": 98667671,
+          "sha256": "0651b1b77058ede949f472000202c1e2a0e344c94ed14c383e459131be004c27"
+        }
+      ]
+    },
+    {
+      "case": "five_port0_insert_initial",
+      "source": "/var/tmp/chmin_aic_20260918_act/moveit_sc_low18_diagonal_insert_20260929",
+      "archive": "/home/nas/chmin/aic_archive_20260929/moveit_low_cross_raw/moveit_sc_low18_diagonal_insert_20260929",
+      "verified_files": [
+        {
+          "path": "eval_config.yaml",
+          "bytes": 4640,
+          "sha256": "b1087e7a008bf322428c682233e389f0d91669b97d13e9c09b48b256512f8b2b"
+        },
+        {
+          "path": "world_audit.sdf",
+          "bytes": 7536,
+          "sha256": "5d8d66c95a6e1fd11493c7d0515d438277d554eb9ecb313302f13fd5e6fd58fd"
+        },
+        {
+          "path": "bridge_audit.yaml",
+          "bytes": 3429,
+          "sha256": "014d7e064f791835a988b835d8cd50b33e11f65d4617e532b68ab9abea8ec323"
+        },
+        {
+          "path": "moveit_joint_trajectory.json",
+          "bytes": 304406,
+          "sha256": "6be1193e9bb00c76c26d44340752bed64966bcc3e2946db43e33bc52d692323b"
+        },
+        {
+          "path": "plan_summary.json",
+          "bytes": 593603,
+          "sha256": "7e3bd4f720187b352be6310761588a121ca012a7bebc3a04b5cf4e40598f6fe4"
+        },
+        {
+          "path": "runtime_trace.jsonl",
+          "bytes": 2482,
+          "sha256": "47d1f19f2ff4bf8a5cb58736f90f943db0502440b2f6ba1a370dc2edfccb4af8"
+        },
+        {
+          "path": "height_measurement.json",
+          "bytes": 5658,
+          "sha256": "b2b88b060e7ef65ebde535734d7beb2d56d9f8c4d3e922f9ada43841a1f04c4f"
+        },
+        {
+          "path": "results/scoring.yaml",
+          "bytes": 605,
+          "sha256": "7233d7fb296ce2ae9133fabe412d2ee91a252d99a5020e38ce14725f26c5c4de"
+        },
+        {
+          "path": "results/bag_trial_000001_20260929_214248_398/metadata.yaml",
+          "bytes": 2510,
+          "sha256": "dd87761f0c8b19e862fc06402588d31cd9a050c673277312e42329d1581c7c3a"
+        },
+        {
+          "path": "results/bag_trial_000001_20260929_214248_398/bag_trial_000001_20260929_214248_398_0.mcap",
+          "bytes": 108671897,
+          "sha256": "b6459c0beaa5ab895cbc4800594b976516f4ee6e29483ee1d46e53c81e22ca56"
+        }
+      ]
+    },
+    {
+      "case": "five_port0_insert_success",
+      "source": "/var/tmp/chmin_aic_20260918_act/moveit_sc_low18_diagonal_insert_gate6_force2_20260929",
+      "archive": "/home/nas/chmin/aic_archive_20260929/moveit_low_cross_raw/moveit_sc_low18_diagonal_insert_gate6_force2_20260929",
+      "verified_files": [
+        {
+          "path": "eval_config.yaml",
+          "bytes": 4640,
+          "sha256": "b1087e7a008bf322428c682233e389f0d91669b97d13e9c09b48b256512f8b2b"
+        },
+        {
+          "path": "world_audit.sdf",
+          "bytes": 7536,
+          "sha256": "5d8d66c95a6e1fd11493c7d0515d438277d554eb9ecb313302f13fd5e6fd58fd"
+        },
+        {
+          "path": "bridge_audit.yaml",
+          "bytes": 3429,
+          "sha256": "014d7e064f791835a988b835d8cd50b33e11f65d4617e532b68ab9abea8ec323"
+        },
+        {
+          "path": "moveit_joint_trajectory.json",
+          "bytes": 304406,
+          "sha256": "6be1193e9bb00c76c26d44340752bed64966bcc3e2946db43e33bc52d692323b"
+        },
+        {
+          "path": "plan_summary.json",
+          "bytes": 593603,
+          "sha256": "7e3bd4f720187b352be6310761588a121ca012a7bebc3a04b5cf4e40598f6fe4"
+        },
+        {
+          "path": "runtime_trace.jsonl",
+          "bytes": 37915,
+          "sha256": "8712200573d943436aea5d5299946d92dceee664e883e81583cd97ece1e61735"
+        },
+        {
+          "path": "height_measurement.json",
+          "bytes": 5650,
+          "sha256": "2898e5168e50f801e0a7c44558c1e834a16188fe46e8f0bb70f482b101e99c8d"
+        },
+        {
+          "path": "results/scoring.yaml",
+          "bytes": 811,
+          "sha256": "1ac9500034837d526b054bbdfbcdb4fde53cfcd39154dd35d9b55c5df8c54910"
+        },
+        {
+          "path": "results/bag_trial_000001_20260929_214852_838/metadata.yaml",
+          "bytes": 2740,
+          "sha256": "1bdffbbda3abe2688d3ab8b8e87bbe3054414094d7f89568701bcd387a865edf"
+        },
+        {
+          "path": "results/bag_trial_000001_20260929_214852_838/bag_trial_000001_20260929_214852_838_0.mcap",
+          "bytes": 150161095,
+          "sha256": "268155a45857fa32ed18c29f7ffffcd4a63b58fb0c43caf7059959e7add94ea5"
+        }
+      ]
+    },
+    {
+      "case": "five_port0_insert_repeat",
+      "source": "/var/tmp/chmin_aic_20260918_act/moveit_sc_low18_diagonal_insert_gate6_force2_repeat1_20260929",
+      "archive": "/home/nas/chmin/aic_archive_20260929/moveit_low_cross_raw/moveit_sc_low18_diagonal_insert_gate6_force2_repeat1_20260929",
+      "verified_files": [
+        {
+          "path": "eval_config.yaml",
+          "bytes": 4640,
+          "sha256": "b1087e7a008bf322428c682233e389f0d91669b97d13e9c09b48b256512f8b2b"
+        },
+        {
+          "path": "world_audit.sdf",
+          "bytes": 7536,
+          "sha256": "5d8d66c95a6e1fd11493c7d0515d438277d554eb9ecb313302f13fd5e6fd58fd"
+        },
+        {
+          "path": "bridge_audit.yaml",
+          "bytes": 3429,
+          "sha256": "014d7e064f791835a988b835d8cd50b33e11f65d4617e532b68ab9abea8ec323"
+        },
+        {
+          "path": "moveit_joint_trajectory.json",
+          "bytes": 304406,
+          "sha256": "6be1193e9bb00c76c26d44340752bed64966bcc3e2946db43e33bc52d692323b"
+        },
+        {
+          "path": "plan_summary.json",
+          "bytes": 593603,
+          "sha256": "7e3bd4f720187b352be6310761588a121ca012a7bebc3a04b5cf4e40598f6fe4"
+        },
+        {
+          "path": "runtime_trace.jsonl",
+          "bytes": 126506,
+          "sha256": "78196eb8e2bec993c0d458b42b88188d2528e627beda555f0228013049e51fac"
+        },
+        {
+          "path": "results/scoring.yaml",
+          "bytes": 605,
+          "sha256": "7233d7fb296ce2ae9133fabe412d2ee91a252d99a5020e38ce14725f26c5c4de"
+        },
+        {
+          "path": "results/bag_trial_000001_20260929_215111_195/metadata.yaml",
+          "bytes": 2511,
+          "sha256": "3e7ef50685657a5e38b57ce6bff1c3bfa4ff0e645b3ee36c5ce9d06b56a583d5"
+        },
+        {
+          "path": "results/bag_trial_000001_20260929_215111_195/bag_trial_000001_20260929_215111_195_0.mcap",
+          "bytes": 148225401,
+          "sha256": "447e41e1e555e0c036010c99d62421cd97eddde024f35e4a4a360e4957a55920"
+        }
+      ]
+    },
+    {
+      "case": "five_port1_route",
+      "source": "/var/tmp/chmin_aic_20260918_act/moveit_sc_port1_low18_diagonal_20260929",
+      "archive": "/home/nas/chmin/aic_archive_20260929/moveit_low_cross_raw/moveit_sc_port1_low18_diagonal_20260929",
+      "verified_files": [
+        {
+          "path": "eval_config.yaml",
+          "bytes": 5130,
+          "sha256": "6d2c66cd2f9b441ad40d84cbd15e6cd44fe1d6bb1a4a3f912f79487e5dcbf841"
+        },
+        {
+          "path": "world_audit.sdf",
+          "bytes": 7536,
+          "sha256": "5d8d66c95a6e1fd11493c7d0515d438277d554eb9ecb313302f13fd5e6fd58fd"
+        },
+        {
+          "path": "bridge_audit.yaml",
+          "bytes": 3429,
+          "sha256": "014d7e064f791835a988b835d8cd50b33e11f65d4617e532b68ab9abea8ec323"
+        },
+        {
+          "path": "moveit_joint_trajectory.json",
+          "bytes": 308511,
+          "sha256": "3424ac70726f09d53a10e975600b9cc9a0666fc0c2685f6f329e15f95cc5b1b2"
+        },
+        {
+          "path": "plan_summary.json",
+          "bytes": 629349,
+          "sha256": "e084b489c05ae8c578ac7720ec7010e8b559d968c3b716077d764b78eb67cc88"
+        },
+        {
+          "path": "height_measurement.json",
+          "bytes": 5851,
+          "sha256": "09c5a009d706c049c3f06b5b22320bbd5eb4e9c05591fdb8786ee616f7c51faf"
+        },
+        {
+          "path": "results/scoring.yaml",
+          "bytes": 859,
+          "sha256": "2f5c019a6d5c3285e6ee1ad45584d073628102274d08106a766eec28b06d8d2a"
+        },
+        {
+          "path": "results/bag_trial_1002003_20260929_215722_156/metadata.yaml",
+          "bytes": 2257,
+          "sha256": "800ca959425a8ce7aed7e3cd0b438584d1428d6432e6b135907b749a037505bf"
+        },
+        {
+          "path": "results/bag_trial_1002003_20260929_215722_156/bag_trial_1002003_20260929_215722_156_0.mcap",
+          "bytes": 100865466,
+          "sha256": "a0fd92afd3a5eae97c49a215e99329730e411e48df290bb3f0b607085b60048d"
+        }
+      ]
+    },
+    {
+      "case": "five_port1_insert_initial",
+      "source": "/var/tmp/chmin_aic_20260918_act/moveit_sc_port1_low18_diagonal_insert_20260929",
+      "archive": "/home/nas/chmin/aic_archive_20260929/moveit_low_cross_raw/moveit_sc_port1_low18_diagonal_insert_20260929",
+      "verified_files": [
+        {
+          "path": "eval_config.yaml",
+          "bytes": 5130,
+          "sha256": "6d2c66cd2f9b441ad40d84cbd15e6cd44fe1d6bb1a4a3f912f79487e5dcbf841"
+        },
+        {
+          "path": "world_audit.sdf",
+          "bytes": 7536,
+          "sha256": "5d8d66c95a6e1fd11493c7d0515d438277d554eb9ecb313302f13fd5e6fd58fd"
+        },
+        {
+          "path": "bridge_audit.yaml",
+          "bytes": 3429,
+          "sha256": "014d7e064f791835a988b835d8cd50b33e11f65d4617e532b68ab9abea8ec323"
+        },
+        {
+          "path": "moveit_joint_trajectory.json",
+          "bytes": 309869,
+          "sha256": "69ee7e4cc053f15159553de684a9d0321de4125b742cd5335853e2171caf1e18"
+        },
+        {
+          "path": "plan_summary.json",
+          "bytes": 629512,
+          "sha256": "48630b4de0453438d6786a2003b5aea5da1e7a7b7e36c6e0a6514a06a4a142d3"
+        },
+        {
+          "path": "runtime_trace.jsonl",
+          "bytes": 2476,
+          "sha256": "782cdbd298a241e67be76220a5aeae82a780fa5f6283e5b6b7245a9ffda3640a"
+        },
+        {
+          "path": "results/scoring.yaml",
+          "bytes": 606,
+          "sha256": "3328c0327ae9f3a358f402cfdaa1fef178500b4714464383ff8a1afc75fe0757"
+        },
+        {
+          "path": "results/bag_trial_1002003_20260929_220511_095/metadata.yaml",
+          "bytes": 2512,
+          "sha256": "b65b3fefec0e5330c07f58603ff2e98a9a3b3ffb989e21ccd6435d36910672fe"
+        },
+        {
+          "path": "results/bag_trial_1002003_20260929_220511_095/bag_trial_1002003_20260929_220511_095_0.mcap",
+          "bytes": 113274891,
+          "sha256": "dea47d51d18b61aa723508963beb3583bd5c16ea9baf6afb72a68af161f67efc"
+        }
+      ]
+    },
+    {
+      "case": "five_port1_prealign_route",
+      "source": "/var/tmp/chmin_aic_20260918_act/moveit_sc_port1_low18_prealign_after_row_20260929",
+      "archive": "/home/nas/chmin/aic_archive_20260929/moveit_low_cross_raw/moveit_sc_port1_low18_prealign_after_row_20260929",
+      "verified_files": [
+        {
+          "path": "eval_config.yaml",
+          "bytes": 5130,
+          "sha256": "6d2c66cd2f9b441ad40d84cbd15e6cd44fe1d6bb1a4a3f912f79487e5dcbf841"
+        },
+        {
+          "path": "world_audit.sdf",
+          "bytes": 7536,
+          "sha256": "5d8d66c95a6e1fd11493c7d0515d438277d554eb9ecb313302f13fd5e6fd58fd"
+        },
+        {
+          "path": "bridge_audit.yaml",
+          "bytes": 3429,
+          "sha256": "014d7e064f791835a988b835d8cd50b33e11f65d4617e532b68ab9abea8ec323"
+        },
+        {
+          "path": "moveit_joint_trajectory.json",
+          "bytes": 306819,
+          "sha256": "b3a1974258209591b97de8be296d64d04e4f2195bbf509bd33a912a8f96708ce"
+        },
+        {
+          "path": "plan_summary.json",
+          "bytes": 627572,
+          "sha256": "527deff09c1dad67552a11fbf8ab3c985372df2c3bf9c463e747857dc8f77ec7"
+        },
+        {
+          "path": "results/scoring.yaml",
+          "bytes": 859,
+          "sha256": "e28b23035410e26ab88f1e2da4fe3083ca10afa23833faf531c9a8d13f1516fc"
+        },
+        {
+          "path": "results/bag_trial_1002003_20260929_220909_534/metadata.yaml",
+          "bytes": 2257,
+          "sha256": "02acad9caf45ab89bcd55ccc606ef611d19485ad4ac725ca72902080526a4173"
+        },
+        {
+          "path": "results/bag_trial_1002003_20260929_220909_534/bag_trial_1002003_20260929_220909_534_0.mcap",
+          "bytes": 99118062,
+          "sha256": "23f2205707a80b785e219af0f1cbfad289b6880922cad4612026522ea9ff1435"
+        }
+      ]
+    },
+    {
+      "case": "five_port1_prealign_insert",
+      "source": "/var/tmp/chmin_aic_20260918_act/moveit_sc_port1_low18_prealign_after_row_insert_20260929",
+      "archive": "/home/nas/chmin/aic_archive_20260929/moveit_low_cross_raw/moveit_sc_port1_low18_prealign_after_row_insert_20260929",
+      "verified_files": [
+        {
+          "path": "eval_config.yaml",
+          "bytes": 5130,
+          "sha256": "6d2c66cd2f9b441ad40d84cbd15e6cd44fe1d6bb1a4a3f912f79487e5dcbf841"
+        },
+        {
+          "path": "world_audit.sdf",
+          "bytes": 7536,
+          "sha256": "5d8d66c95a6e1fd11493c7d0515d438277d554eb9ecb313302f13fd5e6fd58fd"
+        },
+        {
+          "path": "bridge_audit.yaml",
+          "bytes": 3429,
+          "sha256": "014d7e064f791835a988b835d8cd50b33e11f65d4617e532b68ab9abea8ec323"
+        },
+        {
+          "path": "moveit_joint_trajectory.json",
+          "bytes": 308176,
+          "sha256": "2c51e28b271ed1b01503304ea516403dda351e89bf0ee5d8d8a7ff7bcaab872d"
+        },
+        {
+          "path": "plan_summary.json",
+          "bytes": 627741,
+          "sha256": "4d2c27e310fa55d871553289acc89af09a921ff70168006d6e65a1efa0c1d531"
+        },
+        {
+          "path": "runtime_trace.jsonl",
+          "bytes": 182847,
+          "sha256": "f8f8a72a09fe5d98b6ea1c87b8898711b9fc9f266112c209c209a3a3998c015e"
+        },
+        {
+          "path": "results/scoring.yaml",
+          "bytes": 606,
+          "sha256": "3328c0327ae9f3a358f402cfdaa1fef178500b4714464383ff8a1afc75fe0757"
+        },
+        {
+          "path": "results/bag_trial_1002003_20260929_221100_486/metadata.yaml",
+          "bytes": 2515,
+          "sha256": "05da5916fa4490ebd1cddfdb70f38903c61c7ac34eb85947f21edb76eb0a652f"
+        },
+        {
+          "path": "results/bag_trial_1002003_20260929_221100_486/bag_trial_1002003_20260929_221100_486_0.mcap",
+          "bytes": 177450281,
+          "sha256": "f1999e1a12b00d8b695d2b02d64928102c34010ef0e45c10ee0b03fd3ef6eaa6"
+        }
+      ]
+    },
+    {
+      "case": "five_port1_recovery_gate5",
+      "source": "/var/tmp/chmin_aic_20260918_act/moveit_sc_port1_low18_prealign_recovery_gate5_20260929",
+      "archive": "/home/nas/chmin/aic_archive_20260929/moveit_low_cross_raw/moveit_sc_port1_low18_prealign_recovery_gate5_20260929",
+      "verified_files": [
+        {
+          "path": "eval_config.yaml",
+          "bytes": 5130,
+          "sha256": "6d2c66cd2f9b441ad40d84cbd15e6cd44fe1d6bb1a4a3f912f79487e5dcbf841"
+        },
+        {
+          "path": "world_audit.sdf",
+          "bytes": 7536,
+          "sha256": "5d8d66c95a6e1fd11493c7d0515d438277d554eb9ecb313302f13fd5e6fd58fd"
+        },
+        {
+          "path": "bridge_audit.yaml",
+          "bytes": 3429,
+          "sha256": "014d7e064f791835a988b835d8cd50b33e11f65d4617e532b68ab9abea8ec323"
+        },
+        {
+          "path": "moveit_joint_trajectory.json",
+          "bytes": 308176,
+          "sha256": "2c51e28b271ed1b01503304ea516403dda351e89bf0ee5d8d8a7ff7bcaab872d"
+        },
+        {
+          "path": "plan_summary.json",
+          "bytes": 627741,
+          "sha256": "4d2c27e310fa55d871553289acc89af09a921ff70168006d6e65a1efa0c1d531"
+        },
+        {
+          "path": "runtime_trace.jsonl",
+          "bytes": 133473,
+          "sha256": "cdf897309adb52b9d22f306294924ca164f1c9203c6fd7169a89ad51c405230a"
+        },
+        {
+          "path": "results/scoring.yaml",
+          "bytes": 606,
+          "sha256": "3328c0327ae9f3a358f402cfdaa1fef178500b4714464383ff8a1afc75fe0757"
+        },
+        {
+          "path": "results/bag_trial_1002003_20260929_221702_189/metadata.yaml",
+          "bytes": 2513,
+          "sha256": "d34f97466a93e36197d2007ca5d8b344ef9e20e7df7392ea0409a726e31c77d6"
+        },
+        {
+          "path": "results/bag_trial_1002003_20260929_221702_189/bag_trial_1002003_20260929_221702_189_0.mcap",
+          "bytes": 134107118,
+          "sha256": "76e70d223ae2ebb8ded991b867a1a7c9c9540410449a2d4533f5d2667963de14"
+        }
+      ]
+    },
+    {
+      "case": "five_port1_recovery_gate6",
+      "source": "/var/tmp/chmin_aic_20260918_act/moveit_sc_port1_low18_prealign_recovery_gate6_20260929",
+      "archive": "/home/nas/chmin/aic_archive_20260929/moveit_low_cross_raw/moveit_sc_port1_low18_prealign_recovery_gate6_20260929",
+      "verified_files": [
+        {
+          "path": "eval_config.yaml",
+          "bytes": 5130,
+          "sha256": "6d2c66cd2f9b441ad40d84cbd15e6cd44fe1d6bb1a4a3f912f79487e5dcbf841"
+        },
+        {
+          "path": "world_audit.sdf",
+          "bytes": 7536,
+          "sha256": "5d8d66c95a6e1fd11493c7d0515d438277d554eb9ecb313302f13fd5e6fd58fd"
+        },
+        {
+          "path": "bridge_audit.yaml",
+          "bytes": 3429,
+          "sha256": "014d7e064f791835a988b835d8cd50b33e11f65d4617e532b68ab9abea8ec323"
+        },
+        {
+          "path": "moveit_joint_trajectory.json",
+          "bytes": 308176,
+          "sha256": "2c51e28b271ed1b01503304ea516403dda351e89bf0ee5d8d8a7ff7bcaab872d"
+        },
+        {
+          "path": "plan_summary.json",
+          "bytes": 627741,
+          "sha256": "4d2c27e310fa55d871553289acc89af09a921ff70168006d6e65a1efa0c1d531"
+        },
+        {
+          "path": "runtime_trace.jsonl",
+          "bytes": 276944,
+          "sha256": "798a59b71e7c35c0d290214974e12ef8e96c95e01e2e8b5576cc99b4d00804c4"
+        },
+        {
+          "path": "results/scoring.yaml",
+          "bytes": 606,
+          "sha256": "3328c0327ae9f3a358f402cfdaa1fef178500b4714464383ff8a1afc75fe0757"
+        },
+        {
+          "path": "results/bag_trial_1002003_20260929_221853_700/metadata.yaml",
+          "bytes": 2515,
+          "sha256": "01a1e53fe29bc94c3e6766612044bf1517a1ead63eb88607f5db249b470a26b4"
+        },
+        {
+          "path": "results/bag_trial_1002003_20260929_221853_700/bag_trial_1002003_20260929_221853_700_0.mcap",
+          "bytes": 182087373,
+          "sha256": "fb5260bec5cd912ab008ded90bef80aeca570013fb3de7c92f06f96892d582bb"
+        }
+      ]
+    },
+    {
+      "case": "three_mixed_route",
+      "source": "/var/tmp/chmin_aic_20260918_act/moveit_sc_threecard_mixed_low18_retry1_20260929",
+      "archive": "/home/nas/chmin/aic_archive_20260929/moveit_low_cross_raw/moveit_sc_threecard_mixed_low18_retry1_20260929",
+      "verified_files": [
+        {
+          "path": "eval_config.yaml",
+          "bytes": 4320,
+          "sha256": "e7e3851a42f203135a31a87b054e6a6d1d61f19d2258c7317bbe186b4a3191ee"
+        },
+        {
+          "path": "world_audit.sdf",
+          "bytes": 7536,
+          "sha256": "5d8d66c95a6e1fd11493c7d0515d438277d554eb9ecb313302f13fd5e6fd58fd"
+        },
+        {
+          "path": "bridge_audit.yaml",
+          "bytes": 3429,
+          "sha256": "014d7e064f791835a988b835d8cd50b33e11f65d4617e532b68ab9abea8ec323"
+        },
+        {
+          "path": "moveit_joint_trajectory.json",
+          "bytes": 304193,
+          "sha256": "8ee3fd6122eac373fe154612270d628c11d5159263557fa39b8eed26c34e2f8f"
+        },
+        {
+          "path": "plan_summary.json",
+          "bytes": 505956,
+          "sha256": "dfb6e16e93cbf062898021c49c52e5bbecf15d2a6f88a879e0525749497a7192"
+        },
+        {
+          "path": "height_measurement.json",
+          "bytes": 5667,
+          "sha256": "6d665a6c1d04d6705d6eea61d695a47dca2daf90a09413f77586ed46afad8758"
+        },
+        {
+          "path": "results/scoring.yaml",
+          "bytes": 857,
+          "sha256": "174ad92e5ebbe4cc42748a26e84c3a2bf5e7a61768b12160e567e4c2918fd258"
+        },
+        {
+          "path": "results/bag_trial_000001_20260929_220133_336/metadata.yaml",
+          "bytes": 2255,
+          "sha256": "955ec123ff2625e42cb1c73f14c831186975f9efd7603476cd86a02ea4831173"
+        },
+        {
+          "path": "results/bag_trial_000001_20260929_220133_336/bag_trial_000001_20260929_220133_336_0.mcap",
+          "bytes": 98791815,
+          "sha256": "a8a4b773b9c77c4cd9ab6556310d62de4b092ec78e547aa4e308b4b867fea93c"
+        }
+      ]
+    },
+    {
+      "case": "five_port1_guarded_lateral_servo",
+      "source": "/var/tmp/chmin_aic_20260918_act/moveit_sc_port1_low18_prealign_guarded_lateral_servo_20260929",
+      "archive": "/home/nas/chmin/aic_archive_20260929/moveit_low_cross_raw/moveit_sc_port1_low18_prealign_guarded_lateral_servo_20260929",
+      "verified_files": [
+        {
+          "path": "eval_config.yaml",
+          "bytes": 5130,
+          "sha256": "6d2c66cd2f9b441ad40d84cbd15e6cd44fe1d6bb1a4a3f912f79487e5dcbf841"
+        },
+        {
+          "path": "world_audit.sdf",
+          "bytes": 7536,
+          "sha256": "5d8d66c95a6e1fd11493c7d0515d438277d554eb9ecb313302f13fd5e6fd58fd"
+        },
+        {
+          "path": "bridge_audit.yaml",
+          "bytes": 3429,
+          "sha256": "014d7e064f791835a988b835d8cd50b33e11f65d4617e532b68ab9abea8ec323"
+        },
+        {
+          "path": "moveit_joint_trajectory.json",
+          "bytes": 308176,
+          "sha256": "2c51e28b271ed1b01503304ea516403dda351e89bf0ee5d8d8a7ff7bcaab872d"
+        },
+        {
+          "path": "plan_summary.json",
+          "bytes": 627741,
+          "sha256": "4d2c27e310fa55d871553289acc89af09a921ff70168006d6e65a1efa0c1d531"
+        },
+        {
+          "path": "runtime_trace.jsonl",
+          "bytes": 4968,
+          "sha256": "2032b0ba45d59181a61fdb21fcf8cf8576a91b1c09684c84f21d964861c346c7"
+        },
+        {
+          "path": "results/scoring.yaml",
+          "bytes": 606,
+          "sha256": "3328c0327ae9f3a358f402cfdaa1fef178500b4714464383ff8a1afc75fe0757"
+        },
+        {
+          "path": "results/bag_trial_1002003_20260929_222637_640/metadata.yaml",
+          "bytes": 2513,
+          "sha256": "a3f34cf1d1be6c95996ef3b397a53a05e2779f56560be36560d7d50ca9bdb599"
+        },
+        {
+          "path": "results/bag_trial_1002003_20260929_222637_640/bag_trial_1002003_20260929_222637_640_0.mcap",
+          "bytes": 130105568,
+          "sha256": "e452c8ce886bef32baa6eabb53d586bc22895972ddd44394cb9f0ed103a915ce"
+        }
+      ]
+    },
+    {
+      "case": "five_port1_guarded_servo_bias16",
+      "source": "/var/tmp/chmin_aic_20260918_act/moveit_sc_port1_low18_prealign_servo_bias16_20260929",
+      "archive": "/home/nas/chmin/aic_archive_20260929/moveit_low_cross_raw/moveit_sc_port1_low18_prealign_servo_bias16_20260929",
+      "verified_files": [
+        {
+          "path": "eval_config.yaml",
+          "bytes": 5130,
+          "sha256": "6d2c66cd2f9b441ad40d84cbd15e6cd44fe1d6bb1a4a3f912f79487e5dcbf841"
+        },
+        {
+          "path": "world_audit.sdf",
+          "bytes": 7536,
+          "sha256": "5d8d66c95a6e1fd11493c7d0515d438277d554eb9ecb313302f13fd5e6fd58fd"
+        },
+        {
+          "path": "bridge_audit.yaml",
+          "bytes": 3429,
+          "sha256": "014d7e064f791835a988b835d8cd50b33e11f65d4617e532b68ab9abea8ec323"
+        },
+        {
+          "path": "moveit_joint_trajectory.json",
+          "bytes": 308176,
+          "sha256": "2c51e28b271ed1b01503304ea516403dda351e89bf0ee5d8d8a7ff7bcaab872d"
+        },
+        {
+          "path": "plan_summary.json",
+          "bytes": 627741,
+          "sha256": "4d2c27e310fa55d871553289acc89af09a921ff70168006d6e65a1efa0c1d531"
+        },
+        {
+          "path": "runtime_trace.jsonl",
+          "bytes": 4961,
+          "sha256": "6e1e8ca39c752af8309461cebd13aecd7265e95246dc65f80c7fe94490475119"
+        },
+        {
+          "path": "results/scoring.yaml",
+          "bytes": 606,
+          "sha256": "3328c0327ae9f3a358f402cfdaa1fef178500b4714464383ff8a1afc75fe0757"
+        },
+        {
+          "path": "results/bag_trial_1002003_20260929_222854_665/metadata.yaml",
+          "bytes": 2513,
+          "sha256": "f67e9547f857ab80e89608fa819b667e72afa9f4b8b3279c6d0f278920d192aa"
+        },
+        {
+          "path": "results/bag_trial_1002003_20260929_222854_665/bag_trial_1002003_20260929_222854_665_0.mcap",
+          "bytes": 130673948,
+          "sha256": "6b2cd233142fb98b3db1a5142eaccd16f6801fbd78719c01e4633e16c5ac9f27"
+        }
+      ]
+    }
+  ]
+}

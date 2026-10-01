@@ -77,6 +77,12 @@ add_library(OffLimitContactsPlugin
   src/OffLimitContactsPlugin.cc
 )
 
+# Opt-in oracle instrumentation; never loaded by the production world.
+add_library(OracleContactsPlugin SHARED src/OracleContactsPlugin.cc)
+target_link_libraries(OracleContactsPlugin PRIVATE
+  gz-sim${GZ_SIM_VER}::gz-sim${GZ_SIM_VER})
+install(TARGETS OracleContactsPlugin DESTINATION lib/${PROJECT_NAME})
+
 target_link_libraries(OffLimitContactsPlugin PRIVATE
   gz-sim${GZ_SIM_VER}::gz-sim${GZ_SIM_VER})
 

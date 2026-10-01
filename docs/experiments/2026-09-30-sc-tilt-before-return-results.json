@@ -1,0 +1,788 @@
+{
+  "schema": "aic_moveit_tilt_before_return/v1",
+  "scene": "five NIC cards, SC port 1, fixed development reset 1002003",
+  "teacher_privileged_geometry": true,
+  "actor_autonomous": false,
+  "gpu": 4,
+  "reserved_final_scenes_opened": false,
+  "route_quality_gate": "passed_on_fixed_scene_under_progress_not_zero_touch_criterion",
+  "repeatable_full_insertion_gate": "open_due_to_earlier_near_port_failures_and_missing_new_starts",
+  "runs": [
+    {
+      "run": "moveit_sc_port1_old_tilt_matched_new_gates_20260930",
+      "explicit_tilt_before_return": false,
+      "raw_dir": "/var/tmp/chmin_aic_20260918_act/moveit_sc_port1_old_tilt_matched_new_gates_20260930",
+      "scored": true,
+      "score_total": 83.0347448107445,
+      "tier3": 75,
+      "tier3_message": "Cable insertion successful.",
+      "scored_contact_message": "No contact detected.",
+      "scored_force_message": "No excessive force detected",
+      "trace_event_count": 181,
+      "final_trace_event": "guarded_insert_success",
+      "contact_event_count": 0,
+      "recovery_event_count": 0,
+      "tracking_gates": [
+        {
+          "passed": true,
+          "lateral_mm": 11.715756141196996,
+          "speed_mm_s": 7.8935114499353185,
+          "force_delta_n": 0.34469816431938566
+        },
+        {
+          "passed": true,
+          "lateral_mm": 2.092545544762659,
+          "speed_mm_s": 3.8059285407627703,
+          "force_delta_n": 0.533097403305176
+        },
+        {
+          "passed": true,
+          "lateral_mm": 1.825377844318242,
+          "speed_mm_s": 7.983179040497485,
+          "force_delta_n": 0.13360805873155046
+        }
+      ],
+      "files_sha256": {
+        "eval_config.yaml": "6d2c66cd2f9b441ad40d84cbd15e6cd44fe1d6bb1a4a3f912f79487e5dcbf841",
+        "plan_summary.json": "4d2c27e310fa55d871553289acc89af09a921ff70168006d6e65a1efa0c1d531",
+        "moveit_joint_trajectory.json": "2c51e28b271ed1b01503304ea516403dda351e89bf0ee5d8d8a7ff7bcaab872d",
+        "inputs_sha256.txt": "dda9a20d168c99146ed82e0e9bb3eb43fb401a30eaf872f8a24ea5c829a85cf4",
+        "runtime_trace.jsonl": "f0b6bbbb178aa668f7cf04df3f6baaccae0601834d8658d5bfd39d484bc31745",
+        "results/scoring.yaml": "918fe8cfcd481be44b7b24b5679b6007b886fb35f8c24075df5a8ab4e464dc8d"
+      },
+      "scored_mcap": [
+        {
+          "path": "/var/tmp/chmin_aic_20260918_act/moveit_sc_port1_old_tilt_matched_new_gates_20260930/results/bag_trial_1002003_20260930_014823_191/bag_trial_1002003_20260930_014823_191_0.mcap",
+          "bytes": 234623454,
+          "sha256": "5c58c75d9f7361e037c1d9bb40412a90ac48e13e6c62f4d1c2dec33b2bc50eea"
+        }
+      ],
+      "review_video": null
+    },
+    {
+      "run": "moveit_sc_port1_old_tilt_matched_new_gates_repeat1_20260930",
+      "explicit_tilt_before_return": false,
+      "raw_dir": "/var/tmp/chmin_aic_20260918_act/moveit_sc_port1_old_tilt_matched_new_gates_repeat1_20260930",
+      "scored": true,
+      "score_total": 1,
+      "tier3": 0,
+      "tier3_message": "Task not completed.",
+      "scored_contact_message": "No contact detected.",
+      "scored_force_message": "No excessive force detected",
+      "trace_event_count": 120,
+      "final_trace_event": "recovery_force_release_failed",
+      "contact_event_count": 1,
+      "recovery_event_count": 15,
+      "tracking_gates": [
+        {
+          "passed": true,
+          "lateral_mm": 9.481658500238483,
+          "speed_mm_s": 7.85104114988445,
+          "force_delta_n": 0.6283563136421887
+        },
+        {
+          "passed": true,
+          "lateral_mm": 2.111726918512207,
+          "speed_mm_s": 6.11622232921839,
+          "force_delta_n": 0.3857130089605636
+        },
+        {
+          "passed": true,
+          "lateral_mm": 2.1232266630157484,
+          "speed_mm_s": 6.727220910797361,
+          "force_delta_n": 0.29705350836511873
+        }
+      ],
+      "files_sha256": {
+        "eval_config.yaml": "6d2c66cd2f9b441ad40d84cbd15e6cd44fe1d6bb1a4a3f912f79487e5dcbf841",
+        "plan_summary.json": "4d2c27e310fa55d871553289acc89af09a921ff70168006d6e65a1efa0c1d531",
+        "moveit_joint_trajectory.json": "2c51e28b271ed1b01503304ea516403dda351e89bf0ee5d8d8a7ff7bcaab872d",
+        "inputs_sha256.txt": "dca134c7a351cab2b7c7852a211acb80394fe4a8a84a4b71368cbbf76280dc2f",
+        "runtime_trace.jsonl": "574a5ab98f7c6b3cbff91bc9ab16f65b83d4940468fc0f4ae1ffab6604d5cf08",
+        "results/scoring.yaml": "3328c0327ae9f3a358f402cfdaa1fef178500b4714464383ff8a1afc75fe0757"
+      },
+      "scored_mcap": [
+        {
+          "path": "/var/tmp/chmin_aic_20260918_act/moveit_sc_port1_old_tilt_matched_new_gates_repeat1_20260930/results/bag_trial_1002003_20260930_015106_471/bag_trial_1002003_20260930_015106_471_0.mcap",
+          "bytes": 177288032,
+          "sha256": "dd045727a6755d1d5a21a39667310c91dea61db0a95b972797050e30865597d4"
+        }
+      ],
+      "review_video": {
+        "path": "outputs/experiments/2026-09-30_moveit_tilt_before_return/port1_old_tilt_matched_failure_video/all_views_20fps.mp4",
+        "bytes": 7228784,
+        "sha256": "ef14523ffa544297e917fd588c94ee2e9fbeabb1403c61d9e290faf3d2d24bf2"
+      }
+    },
+    {
+      "run": "moveit_sc_port1_tilt_before_return_insert_20260930",
+      "explicit_tilt_before_return": true,
+      "raw_dir": "/var/tmp/chmin_aic_20260918_act/moveit_sc_port1_tilt_before_return_insert_20260930",
+      "scored": true,
+      "score_total": 1,
+      "tier3": 0,
+      "tier3_message": "Task not completed.",
+      "scored_contact_message": "No contact detected.",
+      "scored_force_message": "No excessive force detected",
+      "trace_event_count": 9,
+      "final_trace_event": "nominal_rejected_tracking_gate",
+      "contact_event_count": 0,
+      "recovery_event_count": 0,
+      "tracking_gates": [
+        {
+          "passed": false,
+          "lateral_mm": 10.02431587760729,
+          "speed_mm_s": 6.430861000813126,
+          "force_delta_n": 0.7998122194076243
+        },
+        {
+          "passed": false,
+          "lateral_mm": 3.075078901828211,
+          "speed_mm_s": 5.398749891465303,
+          "force_delta_n": 0.48651825756985556
+        }
+      ],
+      "files_sha256": {
+        "eval_config.yaml": "6d2c66cd2f9b441ad40d84cbd15e6cd44fe1d6bb1a4a3f912f79487e5dcbf841",
+        "plan_summary.json": "8a6efb1bb9fd667efaf76ff0c042e4e3d875400cbe684942b0b89f6c473e0e48",
+        "moveit_joint_trajectory.json": "ec0f2cb65fc7ac4cb1c63df78ca23ab31a476ed105eef9ca0e9f1a909b59913e",
+        "inputs_sha256.txt": "bc966231f45d95d8f238af50b82faec93689df0a5cd3ee763a41260e1963996c",
+        "runtime_trace.jsonl": "73dcd0dca516905497f0d2aa23a322bf5d6e3e61e8e4c054d182c4cb27438b20",
+        "results/scoring.yaml": "3328c0327ae9f3a358f402cfdaa1fef178500b4714464383ff8a1afc75fe0757"
+      },
+      "scored_mcap": [
+        {
+          "path": "/var/tmp/chmin_aic_20260918_act/moveit_sc_port1_tilt_before_return_insert_20260930/results/bag_trial_1002003_20260930_003728_116/bag_trial_1002003_20260930_003728_116_0.mcap",
+          "bytes": 158239883,
+          "sha256": "4760695896870af6ffb640a3063db3b4adfb611cb7d71fd03e8d6e79447fc0d4"
+        }
+      ],
+      "review_video": null
+    },
+    {
+      "run": "moveit_sc_port1_tilt_hold_gate12_align12_servo_insert_20260930",
+      "explicit_tilt_before_return": true,
+      "raw_dir": "/var/tmp/chmin_aic_20260918_act/moveit_sc_port1_tilt_hold_gate12_align12_servo_insert_20260930",
+      "scored": true,
+      "score_total": 0,
+      "tier3": 0,
+      "tier3_message": "Task execution failed",
+      "scored_contact_message": null,
+      "scored_force_message": null,
+      "trace_event_count": 0,
+      "final_trace_event": null,
+      "contact_event_count": 0,
+      "recovery_event_count": 0,
+      "tracking_gates": [],
+      "files_sha256": {
+        "eval_config.yaml": "6d2c66cd2f9b441ad40d84cbd15e6cd44fe1d6bb1a4a3f912f79487e5dcbf841",
+        "plan_summary.json": "8d2ccd3cd6099ede61d22a0215cf4621330d82bc3b6911f9cd4458508cc0a95d",
+        "moveit_joint_trajectory.json": "e1979e28f2944c36aee2f6e9e8e8082cd376a96dac3c0584dc284d0d25960eee",
+        "inputs_sha256.txt": "a7a155e40ddef735f5593f8e04f9022c7852c5837cb1b640d2059384efa8be9e",
+        "runtime_trace.jsonl": null,
+        "results/scoring.yaml": "beeb95ebd23250ef53e279d790fa428a4caa45f2973ced497c2e65067de520ab"
+      },
+      "scored_mcap": [],
+      "review_video": null
+    },
+    {
+      "run": "moveit_sc_port1_tilt_hold_gate12_align12_servo_insert_repeat1_20260930",
+      "explicit_tilt_before_return": true,
+      "raw_dir": "/var/tmp/chmin_aic_20260918_act/moveit_sc_port1_tilt_hold_gate12_align12_servo_insert_repeat1_20260930",
+      "scored": true,
+      "score_total": 1,
+      "tier3": 0,
+      "tier3_message": "Task not completed.",
+      "scored_contact_message": "No contact detected.",
+      "scored_force_message": "No excessive force detected",
+      "trace_event_count": 14,
+      "final_trace_event": "recovery_preinsert_micro_align_gate_realign_completed",
+      "contact_event_count": 0,
+      "recovery_event_count": 2,
+      "tracking_gates": [
+        {
+          "passed": true,
+          "lateral_mm": 11.893325216685465,
+          "speed_mm_s": 5.875138283458532,
+          "force_delta_n": 0.555051110210529
+        },
+        {
+          "passed": false,
+          "lateral_mm": 0.7551533655029963,
+          "speed_mm_s": 6.831047868246505,
+          "force_delta_n": 0.91164493804933
+        },
+        {
+          "passed": false,
+          "lateral_mm": 0.06406185985042702,
+          "speed_mm_s": 6.847506295462014,
+          "force_delta_n": 0.7622471267409594
+        }
+      ],
+      "files_sha256": {
+        "eval_config.yaml": "6d2c66cd2f9b441ad40d84cbd15e6cd44fe1d6bb1a4a3f912f79487e5dcbf841",
+        "plan_summary.json": "8d2ccd3cd6099ede61d22a0215cf4621330d82bc3b6911f9cd4458508cc0a95d",
+        "moveit_joint_trajectory.json": "e1979e28f2944c36aee2f6e9e8e8082cd376a96dac3c0584dc284d0d25960eee",
+        "inputs_sha256.txt": "1c44a1f15a0d96738fc4ad83385133745b19507eccaf3e8cafa86f2e1e911d4c",
+        "runtime_trace.jsonl": "06d1aafc457c662ed94f2fee68000d5163f8bb53b2e3ddd68b1ac3572444a2b0",
+        "results/scoring.yaml": "3328c0327ae9f3a358f402cfdaa1fef178500b4714464383ff8a1afc75fe0757"
+      },
+      "scored_mcap": [
+        {
+          "path": "/var/tmp/chmin_aic_20260918_act/moveit_sc_port1_tilt_hold_gate12_align12_servo_insert_repeat1_20260930/results/bag_trial_1002003_20260930_011442_280/bag_trial_1002003_20260930_011442_280_0.mcap",
+          "bytes": 223368256,
+          "sha256": "76449a376bf8349b152f2fc395ba568d38184861aa7e78f4f8e413288716f1b5"
+        }
+      ],
+      "review_video": null
+    },
+    {
+      "run": "moveit_sc_port1_tilt_hold_gate12_align12_servo_insert_retry1_20260930",
+      "explicit_tilt_before_return": true,
+      "raw_dir": "/var/tmp/chmin_aic_20260918_act/moveit_sc_port1_tilt_hold_gate12_align12_servo_insert_retry1_20260930",
+      "scored": true,
+      "score_total": 83.16251913364059,
+      "tier3": 75,
+      "tier3_message": "Cable insertion successful.",
+      "scored_contact_message": "No contact detected.",
+      "scored_force_message": "No excessive force detected",
+      "trace_event_count": 230,
+      "final_trace_event": "guarded_insert_success",
+      "contact_event_count": 0,
+      "recovery_event_count": 0,
+      "tracking_gates": [
+        {
+          "passed": true,
+          "lateral_mm": 9.137339419769932,
+          "speed_mm_s": 5.956759488998105,
+          "force_delta_n": 0.40643337081403336
+        },
+        {
+          "passed": true,
+          "lateral_mm": 1.2571206278134002,
+          "speed_mm_s": 5.450282271680893,
+          "force_delta_n": 0.8683552082097049
+        },
+        {
+          "passed": true,
+          "lateral_mm": 2.005848448615348,
+          "speed_mm_s": 5.606096070344128,
+          "force_delta_n": 0.4186800171971149
+        }
+      ],
+      "files_sha256": {
+        "eval_config.yaml": "6d2c66cd2f9b441ad40d84cbd15e6cd44fe1d6bb1a4a3f912f79487e5dcbf841",
+        "plan_summary.json": "8d2ccd3cd6099ede61d22a0215cf4621330d82bc3b6911f9cd4458508cc0a95d",
+        "moveit_joint_trajectory.json": "e1979e28f2944c36aee2f6e9e8e8082cd376a96dac3c0584dc284d0d25960eee",
+        "inputs_sha256.txt": "1282310826687a7f6cd32d331c72f03fe82e76d4e44afc60b25ee09fa05adb16",
+        "runtime_trace.jsonl": "a78e0d9a92916a0a0d83d3d99cda50678e7c24b6c9b3f22abcf72e3ddd7020f9",
+        "results/scoring.yaml": "0b17bf8650466120a1695b30f1e5a7026724c181cb2f1606dab1bf08b1801125"
+      },
+      "scored_mcap": [
+        {
+          "path": "/var/tmp/chmin_aic_20260918_act/moveit_sc_port1_tilt_hold_gate12_align12_servo_insert_retry1_20260930/results/bag_trial_1002003_20260930_011055_691/bag_trial_1002003_20260930_011055_691_0.mcap",
+          "bytes": 374365886,
+          "sha256": "d76e9a7ad0ff7789539b5f085deb116b41b5def97412457406efc48f84cf98d9"
+        }
+      ],
+      "review_video": {
+        "path": "outputs/experiments/2026-09-30_moveit_tilt_before_return/port1_tilt_hold_success_video/all_views_20fps.mp4",
+        "bytes": 9965493,
+        "sha256": "6bd94305b992e36721cce5843c90a7bc715016dfb8f7c435e14f7a224f417a9b"
+      }
+    },
+    {
+      "run": "moveit_sc_port1_tilt_hold_gate12_align12_speed8_force2_servo_insert_20260930",
+      "explicit_tilt_before_return": true,
+      "raw_dir": "/var/tmp/chmin_aic_20260918_act/moveit_sc_port1_tilt_hold_gate12_align12_speed8_force2_servo_insert_20260930",
+      "scored": true,
+      "score_total": 1,
+      "tier3": 0,
+      "tier3_message": "Task not completed.",
+      "scored_contact_message": "No contact detected.",
+      "scored_force_message": "No excessive force detected",
+      "trace_event_count": 58,
+      "final_trace_event": "sc_guarded_insert_z_gate_recovery_requested",
+      "contact_event_count": 0,
+      "recovery_event_count": 1,
+      "tracking_gates": [
+        {
+          "passed": true,
+          "lateral_mm": 11.896128040243209,
+          "speed_mm_s": 7.5475901235499006,
+          "force_delta_n": 0.4352824323608635
+        },
+        {
+          "passed": true,
+          "lateral_mm": 2.0795372260864684,
+          "speed_mm_s": 5.569998773083019,
+          "force_delta_n": 0.3593856279237945
+        },
+        {
+          "passed": true,
+          "lateral_mm": 1.954932276059472,
+          "speed_mm_s": 7.585802021989443,
+          "force_delta_n": 0.8910841922978964
+        }
+      ],
+      "files_sha256": {
+        "eval_config.yaml": "6d2c66cd2f9b441ad40d84cbd15e6cd44fe1d6bb1a4a3f912f79487e5dcbf841",
+        "plan_summary.json": "8d2ccd3cd6099ede61d22a0215cf4621330d82bc3b6911f9cd4458508cc0a95d",
+        "moveit_joint_trajectory.json": "e1979e28f2944c36aee2f6e9e8e8082cd376a96dac3c0584dc284d0d25960eee",
+        "inputs_sha256.txt": "bb0733cde4f2cb5d7084d191f3d13b649f65beada85f59801760ef71b88af3d7",
+        "runtime_trace.jsonl": "a934c147ccc7706a39959a01aceeea1b760df640b26a73a4222418905b6f3252",
+        "results/scoring.yaml": "3328c0327ae9f3a358f402cfdaa1fef178500b4714464383ff8a1afc75fe0757"
+      },
+      "scored_mcap": [
+        {
+          "path": "/var/tmp/chmin_aic_20260918_act/moveit_sc_port1_tilt_hold_gate12_align12_speed8_force2_servo_insert_20260930/results/bag_trial_1002003_20260930_012104_976/bag_trial_1002003_20260930_012104_976_0.mcap",
+          "bytes": 223929584,
+          "sha256": "cbb4cc9f8a3fed89396ddd792acaeee650eb10832c95421061948e39305014b6"
+        }
+      ],
+      "review_video": null
+    },
+    {
+      "run": "moveit_sc_port1_tilt_hold_gate12_align12_speed8_force2_zhold15_lip35_servo_insert_20260930",
+      "explicit_tilt_before_return": true,
+      "raw_dir": "/var/tmp/chmin_aic_20260918_act/moveit_sc_port1_tilt_hold_gate12_align12_speed8_force2_zhold15_lip35_servo_insert_20260930",
+      "scored": true,
+      "score_total": 1,
+      "tier3": 0,
+      "tier3_message": "Task not completed.",
+      "scored_contact_message": "No contact detected.",
+      "scored_force_message": "No excessive force detected",
+      "trace_event_count": 215,
+      "final_trace_event": "contact_detected",
+      "contact_event_count": 1,
+      "recovery_event_count": 0,
+      "tracking_gates": [
+        {
+          "passed": true,
+          "lateral_mm": 9.517090489190176,
+          "speed_mm_s": 7.9016753224696386,
+          "force_delta_n": 0.19192476338865022
+        },
+        {
+          "passed": true,
+          "lateral_mm": 2.186164228832455,
+          "speed_mm_s": 7.002365464419743,
+          "force_delta_n": 0.36317568432540415
+        },
+        {
+          "passed": true,
+          "lateral_mm": 1.9425562293647423,
+          "speed_mm_s": 5.989090881543343,
+          "force_delta_n": 0.41792357479546144
+        }
+      ],
+      "files_sha256": {
+        "eval_config.yaml": "6d2c66cd2f9b441ad40d84cbd15e6cd44fe1d6bb1a4a3f912f79487e5dcbf841",
+        "plan_summary.json": "8d2ccd3cd6099ede61d22a0215cf4621330d82bc3b6911f9cd4458508cc0a95d",
+        "moveit_joint_trajectory.json": "e1979e28f2944c36aee2f6e9e8e8082cd376a96dac3c0584dc284d0d25960eee",
+        "inputs_sha256.txt": "31b88a03da6f2c71e541da4c452392f4b4298fb940909eee5ab8a73e2103bc39",
+        "runtime_trace.jsonl": "6634215e9ed537a51c4783fc66b7babd4e0d9444a5647d17463b21a3fdd3ffa1",
+        "results/scoring.yaml": "3328c0327ae9f3a358f402cfdaa1fef178500b4714464383ff8a1afc75fe0757"
+      },
+      "scored_mcap": [
+        {
+          "path": "/var/tmp/chmin_aic_20260918_act/moveit_sc_port1_tilt_hold_gate12_align12_speed8_force2_zhold15_lip35_servo_insert_20260930/results/bag_trial_1002003_20260930_012949_569/bag_trial_1002003_20260930_012949_569_0.mcap",
+          "bytes": 259960804,
+          "sha256": "b9e586c18cf59b2fb7830446c2dd441fc13a90f697be4aa99ab228d6aab4ca7b"
+        }
+      ],
+      "review_video": null
+    },
+    {
+      "run": "moveit_sc_port1_tilt_hold_gate12_align12_speed8_force2_zhold15_recovery_servo_insert_20260930",
+      "explicit_tilt_before_return": true,
+      "raw_dir": "/var/tmp/chmin_aic_20260918_act/moveit_sc_port1_tilt_hold_gate12_align12_speed8_force2_zhold15_recovery_servo_insert_20260930",
+      "scored": true,
+      "score_total": 1,
+      "tier3": 0,
+      "tier3_message": "Task not completed.",
+      "scored_contact_message": "No contact detected.",
+      "scored_force_message": "No excessive force detected",
+      "trace_event_count": 180,
+      "final_trace_event": "recovery_force_release_failed",
+      "contact_event_count": 1,
+      "recovery_event_count": 14,
+      "tracking_gates": [
+        {
+          "passed": true,
+          "lateral_mm": 11.844152264264896,
+          "speed_mm_s": 7.650148590768718,
+          "force_delta_n": 0.3775572394508555
+        },
+        {
+          "passed": true,
+          "lateral_mm": 2.0615361914012684,
+          "speed_mm_s": 7.195948693693486,
+          "force_delta_n": 0.8586950914567953
+        },
+        {
+          "passed": true,
+          "lateral_mm": 2.1969420738944017,
+          "speed_mm_s": 6.341235051958156,
+          "force_delta_n": 0.6614524709610076
+        }
+      ],
+      "files_sha256": {
+        "eval_config.yaml": "6d2c66cd2f9b441ad40d84cbd15e6cd44fe1d6bb1a4a3f912f79487e5dcbf841",
+        "plan_summary.json": "8d2ccd3cd6099ede61d22a0215cf4621330d82bc3b6911f9cd4458508cc0a95d",
+        "moveit_joint_trajectory.json": "e1979e28f2944c36aee2f6e9e8e8082cd376a96dac3c0584dc284d0d25960eee",
+        "inputs_sha256.txt": "76542937d2807e3b38337db2c517fa7fc592d7a13855c0420799c08cc98a915e",
+        "runtime_trace.jsonl": "e7e56f296261da48a5631911b16cbccf7b10ac67ea6632f6f27be892d06d7bcb",
+        "results/scoring.yaml": "3328c0327ae9f3a358f402cfdaa1fef178500b4714464383ff8a1afc75fe0757"
+      },
+      "scored_mcap": [
+        {
+          "path": "/var/tmp/chmin_aic_20260918_act/moveit_sc_port1_tilt_hold_gate12_align12_speed8_force2_zhold15_recovery_servo_insert_20260930/results/bag_trial_1002003_20260930_013321_511/bag_trial_1002003_20260930_013321_511_0.mcap",
+          "bytes": 259042440,
+          "sha256": "9c8d7f54abad529921a3038dd146a6bcf591bfd1256da4e9adfa301cdf1d7c43"
+        }
+      ],
+      "review_video": null
+    },
+    {
+      "run": "moveit_sc_port1_tilt_hold_gate12_align12_speed8_force2_zhold15_servo_insert_20260930",
+      "explicit_tilt_before_return": true,
+      "raw_dir": "/var/tmp/chmin_aic_20260918_act/moveit_sc_port1_tilt_hold_gate12_align12_speed8_force2_zhold15_servo_insert_20260930",
+      "scored": true,
+      "score_total": 1,
+      "tier3": 0,
+      "tier3_message": "Task not completed.",
+      "scored_contact_message": "No contact detected.",
+      "scored_force_message": "No excessive force detected",
+      "trace_event_count": 148,
+      "final_trace_event": "contact_detected",
+      "contact_event_count": 1,
+      "recovery_event_count": 0,
+      "tracking_gates": [
+        {
+          "passed": true,
+          "lateral_mm": 11.387362989733633,
+          "speed_mm_s": 7.399291524929064,
+          "force_delta_n": 0.49206877947450617
+        },
+        {
+          "passed": true,
+          "lateral_mm": 2.023466831016598,
+          "speed_mm_s": 6.21907017224255,
+          "force_delta_n": 0.2880469747423832
+        },
+        {
+          "passed": true,
+          "lateral_mm": 2.1334212976021174,
+          "speed_mm_s": 6.7179064815944205,
+          "force_delta_n": 0.3128652028022165
+        }
+      ],
+      "files_sha256": {
+        "eval_config.yaml": "6d2c66cd2f9b441ad40d84cbd15e6cd44fe1d6bb1a4a3f912f79487e5dcbf841",
+        "plan_summary.json": "8d2ccd3cd6099ede61d22a0215cf4621330d82bc3b6911f9cd4458508cc0a95d",
+        "moveit_joint_trajectory.json": "e1979e28f2944c36aee2f6e9e8e8082cd376a96dac3c0584dc284d0d25960eee",
+        "inputs_sha256.txt": "9dca6a927e2074d907f068cc0cdf7a584c837ba071037e9fb77af0e3b3878036",
+        "runtime_trace.jsonl": "1ef22887ba72ac13f3fe2f605e7e10599351ec863e4c5c3aa87b80ea4331378e",
+        "results/scoring.yaml": "3328c0327ae9f3a358f402cfdaa1fef178500b4714464383ff8a1afc75fe0757"
+      },
+      "scored_mcap": [
+        {
+          "path": "/var/tmp/chmin_aic_20260918_act/moveit_sc_port1_tilt_hold_gate12_align12_speed8_force2_zhold15_servo_insert_20260930/results/bag_trial_1002003_20260930_012400_604/bag_trial_1002003_20260930_012400_604_0.mcap",
+          "bytes": 264389848,
+          "sha256": "ec8d2e46565cc1dfe7dd202ca813f5e83c8a1ba0624cf47b21626973333562fa"
+        }
+      ],
+      "review_video": null
+    },
+    {
+      "run": "moveit_sc_port1_tilt_hold_gate12_align12_speed8_servo_insert_20260930",
+      "explicit_tilt_before_return": true,
+      "raw_dir": "/var/tmp/chmin_aic_20260918_act/moveit_sc_port1_tilt_hold_gate12_align12_speed8_servo_insert_20260930",
+      "scored": true,
+      "score_total": 1,
+      "tier3": 0,
+      "tier3_message": "Task not completed.",
+      "scored_contact_message": "No contact detected.",
+      "scored_force_message": "No excessive force detected",
+      "trace_event_count": 8,
+      "final_trace_event": "nominal_precontact_port_align_force_abort",
+      "contact_event_count": 0,
+      "recovery_event_count": 0,
+      "tracking_gates": [
+        {
+          "passed": true,
+          "lateral_mm": 11.474714745006667,
+          "speed_mm_s": 7.985747685063609,
+          "force_delta_n": 0.7991227130040327
+        }
+      ],
+      "files_sha256": {
+        "eval_config.yaml": "6d2c66cd2f9b441ad40d84cbd15e6cd44fe1d6bb1a4a3f912f79487e5dcbf841",
+        "plan_summary.json": "8d2ccd3cd6099ede61d22a0215cf4621330d82bc3b6911f9cd4458508cc0a95d",
+        "moveit_joint_trajectory.json": "e1979e28f2944c36aee2f6e9e8e8082cd376a96dac3c0584dc284d0d25960eee",
+        "inputs_sha256.txt": "15184c885caae7289551abc8a4666c36568ffd9a93078dfd6161ac485794c11a",
+        "runtime_trace.jsonl": "073dd0be76cb38fcedceda63eaa21a585a4f9945490361c94848f0aeb4cac55c",
+        "results/scoring.yaml": "3328c0327ae9f3a358f402cfdaa1fef178500b4714464383ff8a1afc75fe0757"
+      },
+      "scored_mcap": [
+        {
+          "path": "/var/tmp/chmin_aic_20260918_act/moveit_sc_port1_tilt_hold_gate12_align12_speed8_servo_insert_20260930/results/bag_trial_1002003_20260930_011743_564/bag_trial_1002003_20260930_011743_564_0.mcap",
+          "bytes": 181093234,
+          "sha256": "e2546d16c3af62eb1e484a1edfeb3f46509848bb3f7db73ddb9b41f638cee489"
+        }
+      ],
+      "review_video": null
+    },
+    {
+      "run": "moveit_sc_port1_tilt_hold_gate5_insert_20260930",
+      "explicit_tilt_before_return": true,
+      "raw_dir": "/var/tmp/chmin_aic_20260918_act/moveit_sc_port1_tilt_hold_gate5_insert_20260930",
+      "scored": true,
+      "score_total": 1,
+      "tier3": 0,
+      "tier3_message": "Task not completed.",
+      "scored_contact_message": "No contact detected.",
+      "scored_force_message": "No excessive force detected",
+      "trace_event_count": 64,
+      "final_trace_event": "contact_detected",
+      "contact_event_count": 1,
+      "recovery_event_count": 0,
+      "tracking_gates": [
+        {
+          "passed": true,
+          "lateral_mm": 4.976913557745711,
+          "speed_mm_s": 5.774552967042638,
+          "force_delta_n": 0.2837180371053591
+        },
+        {
+          "passed": true,
+          "lateral_mm": 2.1109723338802207,
+          "speed_mm_s": 5.126073361450541,
+          "force_delta_n": 0.5908440938856939
+        },
+        {
+          "passed": true,
+          "lateral_mm": 0.6573759788380037,
+          "speed_mm_s": 5.346630443568508,
+          "force_delta_n": 0.5093632117215696
+        }
+      ],
+      "files_sha256": {
+        "eval_config.yaml": "6d2c66cd2f9b441ad40d84cbd15e6cd44fe1d6bb1a4a3f912f79487e5dcbf841",
+        "plan_summary.json": "8d2ccd3cd6099ede61d22a0215cf4621330d82bc3b6911f9cd4458508cc0a95d",
+        "moveit_joint_trajectory.json": "e1979e28f2944c36aee2f6e9e8e8082cd376a96dac3c0584dc284d0d25960eee",
+        "inputs_sha256.txt": "aa2d203a5f28838c8887b73470784f9c200a5eabf60ca5f439b281ee6e2058ee",
+        "runtime_trace.jsonl": "7eb9b0c8e69b989baba5643d8284fed90768770c28cc0e8cafdb0b2d1c79ff56",
+        "results/scoring.yaml": "3328c0327ae9f3a358f402cfdaa1fef178500b4714464383ff8a1afc75fe0757"
+      },
+      "scored_mcap": [
+        {
+          "path": "/var/tmp/chmin_aic_20260918_act/moveit_sc_port1_tilt_hold_gate5_insert_20260930/results/bag_trial_1002003_20260930_005005_885/bag_trial_1002003_20260930_005005_885_0.mcap",
+          "bytes": 231711698,
+          "sha256": "bfff6a207704283bc5fd3df2dc17a40d638c787d8c6ede161c7089587ee8d654"
+        }
+      ],
+      "review_video": null
+    },
+    {
+      "run": "moveit_sc_port1_tilt_hold_gate5_servo_insert_20260930",
+      "explicit_tilt_before_return": true,
+      "raw_dir": "/var/tmp/chmin_aic_20260918_act/moveit_sc_port1_tilt_hold_gate5_servo_insert_20260930",
+      "scored": true,
+      "score_total": 1,
+      "tier3": 0,
+      "tier3_message": "Task not completed.",
+      "scored_contact_message": "No contact detected.",
+      "scored_force_message": "No excessive force detected",
+      "trace_event_count": 9,
+      "final_trace_event": "nominal_rejected_tracking_gate",
+      "contact_event_count": 0,
+      "recovery_event_count": 0,
+      "tracking_gates": [
+        {
+          "passed": false,
+          "lateral_mm": 10.239709453478241,
+          "speed_mm_s": 6.059661720697776,
+          "force_delta_n": 0.3749817415994561
+        },
+        {
+          "passed": false,
+          "lateral_mm": 4.368501123150771,
+          "speed_mm_s": 4.661242214449385,
+          "force_delta_n": 0.13615296092674437
+        }
+      ],
+      "files_sha256": {
+        "eval_config.yaml": "6d2c66cd2f9b441ad40d84cbd15e6cd44fe1d6bb1a4a3f912f79487e5dcbf841",
+        "plan_summary.json": "8d2ccd3cd6099ede61d22a0215cf4621330d82bc3b6911f9cd4458508cc0a95d",
+        "moveit_joint_trajectory.json": "e1979e28f2944c36aee2f6e9e8e8082cd376a96dac3c0584dc284d0d25960eee",
+        "inputs_sha256.txt": "29a35e12cfc7c93b81863ff87de3553709c6da690296763d529f38b39edc024e",
+        "runtime_trace.jsonl": "224bf569573232d821d50208c26168ec2d4bfe55d150e0b851c2ff509dc16667",
+        "results/scoring.yaml": "3328c0327ae9f3a358f402cfdaa1fef178500b4714464383ff8a1afc75fe0757"
+      },
+      "scored_mcap": [
+        {
+          "path": "/var/tmp/chmin_aic_20260918_act/moveit_sc_port1_tilt_hold_gate5_servo_insert_20260930/results/bag_trial_1002003_20260930_005254_419/bag_trial_1002003_20260930_005254_419_0.mcap",
+          "bytes": 209227822,
+          "sha256": "147e6125dc90b2a637a9c80191bf215b40de96b8cd49af68c1b473c56470e6e9"
+        }
+      ],
+      "review_video": null
+    },
+    {
+      "run": "moveit_sc_port1_tilt_hold_insert_20260930",
+      "explicit_tilt_before_return": true,
+      "raw_dir": "/var/tmp/chmin_aic_20260918_act/moveit_sc_port1_tilt_hold_insert_20260930",
+      "scored": true,
+      "score_total": 1,
+      "tier3": 0,
+      "tier3_message": "Task not completed.",
+      "scored_contact_message": "No contact detected.",
+      "scored_force_message": "No excessive force detected",
+      "trace_event_count": 9,
+      "final_trace_event": "nominal_rejected_tracking_gate",
+      "contact_event_count": 0,
+      "recovery_event_count": 0,
+      "tracking_gates": [
+        {
+          "passed": false,
+          "lateral_mm": 4.635253149006787,
+          "speed_mm_s": 3.4196521496091763,
+          "force_delta_n": 0.2574731516526328
+        },
+        {
+          "passed": false,
+          "lateral_mm": 3.8842190603104436,
+          "speed_mm_s": 2.6821057636742,
+          "force_delta_n": 0.3458341963069413
+        }
+      ],
+      "files_sha256": {
+        "eval_config.yaml": "6d2c66cd2f9b441ad40d84cbd15e6cd44fe1d6bb1a4a3f912f79487e5dcbf841",
+        "plan_summary.json": "8d2ccd3cd6099ede61d22a0215cf4621330d82bc3b6911f9cd4458508cc0a95d",
+        "moveit_joint_trajectory.json": "e1979e28f2944c36aee2f6e9e8e8082cd376a96dac3c0584dc284d0d25960eee",
+        "inputs_sha256.txt": "6b639df0f83c9f6b79556954f5885fc9b5c85f8bf98bed99fcad551dd26ffdf5",
+        "runtime_trace.jsonl": "9b5da7d5dcf06aeb041cd9b16b3b667d1959cf7babae5dc1584c988d4ff448c7",
+        "results/scoring.yaml": "3328c0327ae9f3a358f402cfdaa1fef178500b4714464383ff8a1afc75fe0757"
+      },
+      "scored_mcap": [
+        {
+          "path": "/var/tmp/chmin_aic_20260918_act/moveit_sc_port1_tilt_hold_insert_20260930/results/bag_trial_1002003_20260930_004406_698/bag_trial_1002003_20260930_004406_698_0.mcap",
+          "bytes": 209215776,
+          "sha256": "993ce89be6ed1bb6f05c8096bfed48b3073edcfd1bd871d85876980fb0ce8699"
+        }
+      ],
+      "review_video": null
+    },
+    {
+      "run": "moveit_sc_port1_tilt_hold_large_backoff_recovery_20260930",
+      "explicit_tilt_before_return": true,
+      "raw_dir": "/var/tmp/chmin_aic_20260918_act/moveit_sc_port1_tilt_hold_large_backoff_recovery_20260930",
+      "scored": true,
+      "score_total": 83.06866471466947,
+      "tier3": 75,
+      "tier3_message": "Cable insertion successful.",
+      "scored_contact_message": "No contact detected.",
+      "scored_force_message": "No excessive force detected",
+      "trace_event_count": 269,
+      "final_trace_event": "guarded_insert_success",
+      "contact_event_count": 0,
+      "recovery_event_count": 0,
+      "tracking_gates": [
+        {
+          "passed": true,
+          "lateral_mm": 8.763791851320825,
+          "speed_mm_s": 7.237242834055329,
+          "force_delta_n": 0.2522064166178104
+        },
+        {
+          "passed": true,
+          "lateral_mm": 2.1196980471486864,
+          "speed_mm_s": 6.8908135958996315,
+          "force_delta_n": 0.15282398136773007
+        },
+        {
+          "passed": true,
+          "lateral_mm": 2.1284866765243184,
+          "speed_mm_s": 3.790844087035944,
+          "force_delta_n": 0.7217935332351739
+        }
+      ],
+      "files_sha256": {
+        "eval_config.yaml": "6d2c66cd2f9b441ad40d84cbd15e6cd44fe1d6bb1a4a3f912f79487e5dcbf841",
+        "plan_summary.json": "8d2ccd3cd6099ede61d22a0215cf4621330d82bc3b6911f9cd4458508cc0a95d",
+        "moveit_joint_trajectory.json": "e1979e28f2944c36aee2f6e9e8e8082cd376a96dac3c0584dc284d0d25960eee",
+        "inputs_sha256.txt": "937294a15024a1d8d3966ce72dc017439cd5b4c0b59c16416a04aa1ec252faab",
+        "runtime_trace.jsonl": "465398a2992e2bfae4e1da2cabaa4166ebc0c8ddf8fba76f2df01662f15da0a3",
+        "results/scoring.yaml": "a52c428da81d7b3efe67dd53a02a255716b2be99d723a7625f40eb2b920963aa"
+      },
+      "scored_mcap": [
+        {
+          "path": "/var/tmp/chmin_aic_20260918_act/moveit_sc_port1_tilt_hold_large_backoff_recovery_20260930/results/bag_trial_1002003_20260930_013831_415/bag_trial_1002003_20260930_013831_415_0.mcap",
+          "bytes": 405191217,
+          "sha256": "253489b2a3f1326f797eed15dd9815cfc0316bbd43fb1165caf7e43f7e890d0c"
+        }
+      ],
+      "review_video": null
+    },
+    {
+      "run": "moveit_sc_port1_tilt_hold_large_backoff_recovery_repeat1_20260930",
+      "explicit_tilt_before_return": true,
+      "raw_dir": "/var/tmp/chmin_aic_20260918_act/moveit_sc_port1_tilt_hold_large_backoff_recovery_repeat1_20260930",
+      "scored": true,
+      "score_total": 82.99980745821557,
+      "tier3": 75,
+      "tier3_message": "Cable insertion successful.",
+      "scored_contact_message": "No contact detected.",
+      "scored_force_message": "No excessive force detected",
+      "trace_event_count": 207,
+      "final_trace_event": "guarded_insert_success",
+      "contact_event_count": 0,
+      "recovery_event_count": 0,
+      "tracking_gates": [
+        {
+          "passed": true,
+          "lateral_mm": 11.815214694760822,
+          "speed_mm_s": 7.875105936402368,
+          "force_delta_n": 0.41503578347545017
+        },
+        {
+          "passed": true,
+          "lateral_mm": 2.182900744233242,
+          "speed_mm_s": 4.8405636145720585,
+          "force_delta_n": 0.503326825929579
+        },
+        {
+          "passed": true,
+          "lateral_mm": 2.0036291455434756,
+          "speed_mm_s": 7.420740788794965,
+          "force_delta_n": 0.24316398683612278
+        }
+      ],
+      "files_sha256": {
+        "eval_config.yaml": "6d2c66cd2f9b441ad40d84cbd15e6cd44fe1d6bb1a4a3f912f79487e5dcbf841",
+        "plan_summary.json": "8d2ccd3cd6099ede61d22a0215cf4621330d82bc3b6911f9cd4458508cc0a95d",
+        "moveit_joint_trajectory.json": "e1979e28f2944c36aee2f6e9e8e8082cd376a96dac3c0584dc284d0d25960eee",
+        "inputs_sha256.txt": "66a94b1121ededd376fea0662a4997d81ac1b9b14a0c80ab67bf4b6e2b3dfd31",
+        "runtime_trace.jsonl": "0da4b565ee0899fc1924eadde8440ca2318010eddd6911066102c4c1ad0e0d0a",
+        "results/scoring.yaml": "a07de09af8e6af68a780bd5c904ca16a19dd727c9c68080ed40a850e5d8dac53"
+      },
+      "scored_mcap": [
+        {
+          "path": "/var/tmp/chmin_aic_20260918_act/moveit_sc_port1_tilt_hold_large_backoff_recovery_repeat1_20260930/results/bag_trial_1002003_20260930_014310_537/bag_trial_1002003_20260930_014310_537_0.mcap",
+          "bytes": 347081864,
+          "sha256": "45deef809b2af139093350156244a65f9eda0fcb0b61bb956137bb2548e2e968"
+        }
+      ],
+      "review_video": null
+    }
+  ],
+  "code_sha256": {
+    "scripts/plan_moveit_sc_fixed_route.py": "d56610ddf964e8c666858d69b0fd4a4875cd85ac9cfcf7e733f0e78b9306945e",
+    "scripts/hold_moveit_route_segments.py": "fdf83c15196cc6b1514af87b5274b6cf54a243a8a4dcfd24aff183e07f63cf0b",
+    "scripts/analyze_moveit_tilt_bag.py": "f852f50b1ac92a86a24887e205d811383d38406dd0a6380a2e24428aee0fc480",
+    "scripts/run_moveit_sc_route_pilot.sh": "746dbd3416115f7e81c528465a46241dbe75af09820f998dae20c7a067561006",
+    "aic_teacher_official/aic_teacher_official/OfficialTeacherReplay.py": "77a2864bf75151bfe87c0d0c4be7b697f2c04bc6706a1d4bcc375319b9648a0d"
+  }
+}

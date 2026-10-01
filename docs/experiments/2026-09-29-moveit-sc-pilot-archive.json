@@ -1,0 +1,26 @@
+{
+  "schema": "aic_moveit_sc_pilot_archive/v1",
+  "archive_root": "/home/nas/chmin/aic_archive_20260929/moveit_sc_pilot_raw",
+  "verified": [
+    {
+      "run": "moveit_sc_corridor_baseline_20260929",
+      "scene_plan_trajectory_sha256_verified": true,
+      "scored_mcap_sha256_verified": 1
+    },
+    {
+      "run": "moveit_sc_corridor_lane20_20260929",
+      "scene_plan_trajectory_sha256_verified": true,
+      "scored_mcap_sha256_verified": 1
+    },
+    {
+      "run": "moveit_sc_corridor_strict_return_20260929",
+      "scene_plan_trajectory_sha256_verified": true,
+      "scored_mcap_sha256_verified": 0
+    },
+    {
+      "run": "moveit_sc_corridor_strict_return_retry1_20260929",
+      "scene_plan_trajectory_sha256_verified": true,
+      "scored_mcap_sha256_verified": 1
+    }
+  ]
+}

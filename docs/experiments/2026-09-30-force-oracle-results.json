@@ -1,0 +1,107 @@
+{
+  "schema": "aic_force_oracle/v1",
+  "date": "2026-09-30",
+  "gpu": 7,
+  "official_image": "ghcr.io/intrinsic-dev/aic/aic_eval@sha256:9aa2ffdbb946d38edde1bac7b5f02a44cfbea26e3b04a9c74e09f14c97472923",
+  "official_upstream": "e914548",
+  "physics_engine": "Bullet Featherstone 8.3.0",
+  "reporting_correction_commit": "f34d6e388a841aa5eddc276acd01413940841ed5",
+  "physics_step_s": 0.002,
+  "contact_sample_hz": 100,
+  "camera_hz": 20,
+  "privileged_teacher": true,
+  "collision_changes": false,
+  "final_scenes_opened": false,
+  "training_started": false,
+  "runs": [
+    {
+      "name": "old_oracle_r1",
+      "root": "/data1/chmin/yj/ws_aic/src/aic/outputs/experiments/2026-09-30_force_oracle/old_oracle_r1",
+      "total_score": 87.25225865832611,
+      "tier3": 75,
+      "full_insertion": true,
+      "peak_sampled_plug_port_point_normal_force_n": 1.36526208370924,
+      "contacts_detected": [],
+      "artifact_sha256": {
+        "results/scoring.yaml": "b7aa43c44f2f3ad0d38a1d614d352acdf486cede880842181512ebdfbd20d774",
+        "runtime_trace.jsonl": "d52ee3cf134b9a2114727171380d59cccca191ff62c268c63e47901befcf6c9e",
+        "oracle_contacts.jsonl": "16769893ae8691f47e751ec4fbc931843edaa2d0c8e66ab6b4d7242562a3f2b7",
+        "contact_force_summary.json": "e52def973a2d9d0e28ac9ad5cb16f2654af82fc4756c42143b16b1e8a63092fd",
+        "inputs_sha256.txt": "945f123ea69cd6cf53f87ece9357ad76a904e62e5e64db4af397042003dc35b7",
+        "oracle_cameras.json": "2d15fae2b53613538b8dad25fba1e911b1d1800e555e05d77734ea259d8e2c3b"
+      }
+    },
+    {
+      "name": "old_oracle_r2",
+      "root": "/data1/chmin/yj/ws_aic/src/aic/outputs/experiments/2026-09-30_force_oracle/old_oracle_r2",
+      "total_score": 1,
+      "tier3": 0,
+      "full_insertion": false,
+      "peak_sampled_plug_port_point_normal_force_n": 8.827517740428448,
+      "contacts_detected": [
+        {
+          "time_sec": 45.624,
+          "force_delta_n": 4.217302142170955,
+          "z_offset": 0.007747554455086642
+        }
+      ],
+      "artifact_sha256": {
+        "results/scoring.yaml": "3328c0327ae9f3a358f402cfdaa1fef178500b4714464383ff8a1afc75fe0757",
+        "runtime_trace.jsonl": "f876a36880ab0eb2f98eb27cea4bd725843fd77eef139b0d72e2407e8691fcc5",
+        "oracle_contacts.jsonl": "03af79e1fb91bf6cfdef937ad337d197a067587891b535c2b641a4a323eb3d27",
+        "contact_force_summary.json": "5840ef9ae4e3273afd9e312b555ca1493ae401f71ace673246cddd79adbd09f3",
+        "inputs_sha256.txt": "2ef5c93275002f8581bcb71fdaa614b5056fb43d3ea05b31407950616f621295",
+        "oracle_cameras.json": "2d15fae2b53613538b8dad25fba1e911b1d1800e555e05d77734ea259d8e2c3b",
+        "oracle_video/port_contacts_20fps.mp4": "c1ca4e44d28ed206ed45bd900f5b255a78fe26c906e8118fb224ac93033250de",
+        "force_and_motion.png": "364e1a09e642dbd8333ccf1334f1cbba6e5a15539b36f71819630a56f45edc54"
+      }
+    },
+    {
+      "name": "new_oracle_r1",
+      "root": "/data1/chmin/yj/ws_aic/src/aic/outputs/experiments/2026-09-30_force_oracle/new_oracle_r1",
+      "total_score": 82.97138589512787,
+      "tier3": 75,
+      "full_insertion": true,
+      "peak_sampled_plug_port_point_normal_force_n": 0.7898110779933631,
+      "contacts_detected": [],
+      "artifact_sha256": {
+        "results/scoring.yaml": "6a17fa4f0e77dc3b7edff0894b3d2606affb57ab81cce0c7f06721297444dbd5",
+        "runtime_trace.jsonl": "c0c7726f05056e4cf3c07d0f2d5526e4e1830af2c750144a7ecc5c4906541003",
+        "oracle_contacts.jsonl": "b8bcfc7fee07257e2964a495edbeeb6e9d34f19155c6a7ab46177e19654ba021",
+        "contact_force_summary.json": "5199efca6772df741f2610132216ecbf8d333c90d337c3bf9612f1135e50bbe3",
+        "inputs_sha256.txt": "bcf58793d5acf60011067351eaccd280774c00e6b77784aaceff361b5cc44a04",
+        "oracle_cameras.json": "2d15fae2b53613538b8dad25fba1e911b1d1800e555e05d77734ea259d8e2c3b",
+        "oracle_video/port_contacts_20fps.mp4": "ed174e3c07fcff155d46c2529a8aacb8467c146bafe0e3eff7222f0abe84d56d",
+        "force_and_motion.png": "da20c915cfe9a23e3635f47c58d87b63a9dbe90f0a2c665f89930cb536997906"
+      }
+    },
+    {
+      "name": "new_oracle_r2",
+      "root": "/data1/chmin/yj/ws_aic/src/aic/outputs/experiments/2026-09-30_force_oracle/new_oracle_r2",
+      "total_score": 83.07473745061048,
+      "tier3": 75,
+      "full_insertion": true,
+      "peak_sampled_plug_port_point_normal_force_n": 0.7543523097410798,
+      "contacts_detected": [],
+      "artifact_sha256": {
+        "results/scoring.yaml": "5123a97d93f9c5cc875d68eba72f0d698074bf2478a8b8193acb3c56c9a50e1a",
+        "runtime_trace.jsonl": "4c969133e9610363e5a2da222df2254df0686236cff15a390685d649c1c8dd22",
+        "oracle_contacts.jsonl": "fb825bf6db999cf54e4dbbd1509bddb7bc9207e0ffce600aa374b019276d08c7",
+        "contact_force_summary.json": "33856f857a038967c130f2eacfcc5d0628ff230de8f3d0c0a920b23fde5862c2",
+        "inputs_sha256.txt": "f1ba44b933fbfeb0090a659d01413f31bf4130b866f539b7fd6bc000895e943e",
+        "oracle_cameras.json": "2d15fae2b53613538b8dad25fba1e911b1d1800e555e05d77734ea259d8e2c3b",
+        "oracle_video/port_contacts_20fps.mp4": "525bb17aced175e72294bb25fdb37c7bc1beede4b31fb3d4097ad08efccb137e",
+        "force_and_motion.png": "7282e8011d80f80fd2076903945b157dde8a34c33d1171a5711ddfa7abaeccb0"
+      }
+    }
+  ],
+  "decision": "Use explicit tilt-before-return; fixed-scene diagnosis passes, generality and Step 5 remain open. Historic 3.495N exact pair cannot be proven retroactively.",
+  "checks": [
+    "standalone C++ plugin compiled in pinned official image",
+    "sensor-frame regression passed in ROS runtime",
+    "shell/Python syntax checks passed",
+    "failure close markers and force/motion plot visually inspected",
+    "Successful terminal close view inspected; video windows exclude post-reset frames using scored bag wall-time bounds"
+  ],
+  "archive_root": "/home/nas/chmin/aic_archive_20260930/force_oracle"
+}

@@ -240,3 +240,9 @@ MCAP SHA-256 hashes, and frames indexes were verified. Source files have
 not been removed. Saved output paths remain under
 `outputs/experiments/2026-09-26_sc_far_return/` (NAS-backed symlink because
 `/data1` is nearly full).
+
+The [September 29 fixed-scene follow-up](2026-09-29-sc-low-cross-2cm-rescue.md)
+retested the one failed `forward_minus10` setting and varied route margins
+by 20 mm. The identical route also succeeded on repeats, while the best
+tested outside-lane margin still had a partial insertion. The follow-up
+therefore treats the route change as a candidate, not a reliable rescue.

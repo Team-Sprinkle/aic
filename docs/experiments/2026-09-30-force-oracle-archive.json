@@ -1,0 +1,126 @@
+{
+  "archive_root": "/home/nas/chmin/aic_archive_20260930/force_oracle",
+  "verified_files": [
+    {
+      "path": "/home/nas/chmin/aic_archive_20260930/force_oracle/old_oracle_r1/results/scoring.yaml",
+      "sha256": "b7aa43c44f2f3ad0d38a1d614d352acdf486cede880842181512ebdfbd20d774"
+    },
+    {
+      "path": "/home/nas/chmin/aic_archive_20260930/force_oracle/old_oracle_r1/runtime_trace.jsonl",
+      "sha256": "d52ee3cf134b9a2114727171380d59cccca191ff62c268c63e47901befcf6c9e"
+    },
+    {
+      "path": "/home/nas/chmin/aic_archive_20260930/force_oracle/old_oracle_r1/oracle_contacts.jsonl",
+      "sha256": "16769893ae8691f47e751ec4fbc931843edaa2d0c8e66ab6b4d7242562a3f2b7"
+    },
+    {
+      "path": "/home/nas/chmin/aic_archive_20260930/force_oracle/old_oracle_r1/contact_force_summary.json",
+      "sha256": "e52def973a2d9d0e28ac9ad5cb16f2654af82fc4756c42143b16b1e8a63092fd"
+    },
+    {
+      "path": "/home/nas/chmin/aic_archive_20260930/force_oracle/old_oracle_r1/inputs_sha256.txt",
+      "sha256": "945f123ea69cd6cf53f87ece9357ad76a904e62e5e64db4af397042003dc35b7"
+    },
+    {
+      "path": "/home/nas/chmin/aic_archive_20260930/force_oracle/old_oracle_r1/oracle_cameras.json",
+      "sha256": "2d15fae2b53613538b8dad25fba1e911b1d1800e555e05d77734ea259d8e2c3b"
+    },
+    {
+      "path": "/home/nas/chmin/aic_archive_20260930/force_oracle/old_oracle_r2/results/scoring.yaml",
+      "sha256": "3328c0327ae9f3a358f402cfdaa1fef178500b4714464383ff8a1afc75fe0757"
+    },
+    {
+      "path": "/home/nas/chmin/aic_archive_20260930/force_oracle/old_oracle_r2/runtime_trace.jsonl",
+      "sha256": "f876a36880ab0eb2f98eb27cea4bd725843fd77eef139b0d72e2407e8691fcc5"
+    },
+    {
+      "path": "/home/nas/chmin/aic_archive_20260930/force_oracle/old_oracle_r2/oracle_contacts.jsonl",
+      "sha256": "03af79e1fb91bf6cfdef937ad337d197a067587891b535c2b641a4a323eb3d27"
+    },
+    {
+      "path": "/home/nas/chmin/aic_archive_20260930/force_oracle/old_oracle_r2/contact_force_summary.json",
+      "sha256": "5840ef9ae4e3273afd9e312b555ca1493ae401f71ace673246cddd79adbd09f3"
+    },
+    {
+      "path": "/home/nas/chmin/aic_archive_20260930/force_oracle/old_oracle_r2/inputs_sha256.txt",
+      "sha256": "2ef5c93275002f8581bcb71fdaa614b5056fb43d3ea05b31407950616f621295"
+    },
+    {
+      "path": "/home/nas/chmin/aic_archive_20260930/force_oracle/old_oracle_r2/oracle_cameras.json",
+      "sha256": "2d15fae2b53613538b8dad25fba1e911b1d1800e555e05d77734ea259d8e2c3b"
+    },
+    {
+      "path": "/home/nas/chmin/aic_archive_20260930/force_oracle/old_oracle_r2/oracle_video/port_contacts_20fps.mp4",
+      "sha256": "c1ca4e44d28ed206ed45bd900f5b255a78fe26c906e8118fb224ac93033250de"
+    },
+    {
+      "path": "/home/nas/chmin/aic_archive_20260930/force_oracle/old_oracle_r2/force_and_motion.png",
+      "sha256": "364e1a09e642dbd8333ccf1334f1cbba6e5a15539b36f71819630a56f45edc54"
+    },
+    {
+      "path": "/home/nas/chmin/aic_archive_20260930/force_oracle/new_oracle_r1/results/scoring.yaml",
+      "sha256": "6a17fa4f0e77dc3b7edff0894b3d2606affb57ab81cce0c7f06721297444dbd5"
+    },
+    {
+      "path": "/home/nas/chmin/aic_archive_20260930/force_oracle/new_oracle_r1/runtime_trace.jsonl",
+      "sha256": "c0c7726f05056e4cf3c07d0f2d5526e4e1830af2c750144a7ecc5c4906541003"
+    },
+    {
+      "path": "/home/nas/chmin/aic_archive_20260930/force_oracle/new_oracle_r1/oracle_contacts.jsonl",
+      "sha256": "b8bcfc7fee07257e2964a495edbeeb6e9d34f19155c6a7ab46177e19654ba021"
+    },
+    {
+      "path": "/home/nas/chmin/aic_archive_20260930/force_oracle/new_oracle_r1/contact_force_summary.json",
+      "sha256": "5199efca6772df741f2610132216ecbf8d333c90d337c3bf9612f1135e50bbe3"
+    },
+    {
+      "path": "/home/nas/chmin/aic_archive_20260930/force_oracle/new_oracle_r1/inputs_sha256.txt",
+      "sha256": "bcf58793d5acf60011067351eaccd280774c00e6b77784aaceff361b5cc44a04"
+    },
+    {
+      "path": "/home/nas/chmin/aic_archive_20260930/force_oracle/new_oracle_r1/oracle_cameras.json",
+      "sha256": "2d15fae2b53613538b8dad25fba1e911b1d1800e555e05d77734ea259d8e2c3b"
+    },
+    {
+      "path": "/home/nas/chmin/aic_archive_20260930/force_oracle/new_oracle_r1/oracle_video/port_contacts_20fps.mp4",
+      "sha256": "ed174e3c07fcff155d46c2529a8aacb8467c146bafe0e3eff7222f0abe84d56d"
+    },
+    {
+      "path": "/home/nas/chmin/aic_archive_20260930/force_oracle/new_oracle_r1/force_and_motion.png",
+      "sha256": "da20c915cfe9a23e3635f47c58d87b63a9dbe90f0a2c665f89930cb536997906"
+    },
+    {
+      "path": "/home/nas/chmin/aic_archive_20260930/force_oracle/new_oracle_r2/results/scoring.yaml",
+      "sha256": "5123a97d93f9c5cc875d68eba72f0d698074bf2478a8b8193acb3c56c9a50e1a"
+    },
+    {
+      "path": "/home/nas/chmin/aic_archive_20260930/force_oracle/new_oracle_r2/runtime_trace.jsonl",
+      "sha256": "4c969133e9610363e5a2da222df2254df0686236cff15a390685d649c1c8dd22"
+    },
+    {
+      "path": "/home/nas/chmin/aic_archive_20260930/force_oracle/new_oracle_r2/oracle_contacts.jsonl",
+      "sha256": "fb825bf6db999cf54e4dbbd1509bddb7bc9207e0ffce600aa374b019276d08c7"
+    },
+    {
+      "path": "/home/nas/chmin/aic_archive_20260930/force_oracle/new_oracle_r2/contact_force_summary.json",
+      "sha256": "33856f857a038967c130f2eacfcc5d0628ff230de8f3d0c0a920b23fde5862c2"
+    },
+    {
+      "path": "/home/nas/chmin/aic_archive_20260930/force_oracle/new_oracle_r2/inputs_sha256.txt",
+      "sha256": "f1ba44b933fbfeb0090a659d01413f31bf4130b866f539b7fd6bc000895e943e"
+    },
+    {
+      "path": "/home/nas/chmin/aic_archive_20260930/force_oracle/new_oracle_r2/oracle_cameras.json",
+      "sha256": "2d15fae2b53613538b8dad25fba1e911b1d1800e555e05d77734ea259d8e2c3b"
+    },
+    {
+      "path": "/home/nas/chmin/aic_archive_20260930/force_oracle/new_oracle_r2/oracle_video/port_contacts_20fps.mp4",
+      "sha256": "525bb17aced175e72294bb25fdb37c7bc1beede4b31fb3d4097ad08efccb137e"
+    },
+    {
+      "path": "/home/nas/chmin/aic_archive_20260930/force_oracle/new_oracle_r2/force_and_motion.png",
+      "sha256": "7282e8011d80f80fd2076903945b157dde8a34c33d1171a5711ddfa7abaeccb0"
+    }
+  ],
+  "excluded": "source JPEG frames; local originals retained"
+}

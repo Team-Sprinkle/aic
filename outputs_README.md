@@ -1,5 +1,81 @@
 # Outputs Directory Guide
 
+**October 1 temporal transport:** `outputs/experiments/2026-10-01_temporal_transport/label_audit.json` contains the 104-SC/268-SFP stage, split, task, command-frame, and camera-timing audit; `transition_montage.jpg` is the inspected two-case transition montage. `frozen_features/` is the observation-only cached feature derivative for the bounded temporal/no-history comparison. Three completed supervised head checkpoints, per-run manifests/logs, `full_heldout_comparison.json` and `.png`, `tilt_return_boundary.json`, `full_heldout_handoff_check.json`, `commands.json`, and `decision.json` are under the same experiment root. No temporal Gazebo rollout passed the offline gate. [Experiment record](docs/experiments/2026-10-01-temporal-three-model-continuation.md). Plans and true geometry are offline labels, never deployable inputs.
+
+**October 1 cleaned SC BC artifacts:** `outputs/trajectory_datasets/sc_llb_cleaned_v3/manifest.json` is the immutable 104-success selection and grouped 83/21 split. `materialized/streams/` contains scored-bag command/camera extractions; `raw_chunks/` contains full command-derived TCP-body transport and selected-port-frame local labels. `bc_chunks_motion_safe_v2/` is the preferred audited derivative, with `audit_motion_safe_v2.json`; `bc_chunks/` and `audit.json` preserve the earlier less conservative hold-cleanup ablation. The original source is `outputs/trajectory_datasets/sc_llb_score_verified/`. `bc_chunks_unfiltered_wrist_gravity_diagnostic/` preserves a rejected no-op filter run that mistook the tool's roughly 20 N gravity load for contact. Four supervised transport checkpoints, logs, and manifests are under `outputs/experiments/2026-10-01_sc_llb_cleaned_bc/`. The same root holds `offline_comparison.json`, `autonomous_comparison_cap20.json`, `autonomous_comparison_cap60.json`, `cap_comparison.json`, `teacher_target_cap_v3.json`, and `autonomous_transport/` for 16 scored bags, exact scene snapshots, action traces, images, measured-path plots, and selected 20 fps five-view videos. [Results and next gate](docs/experiments/2026-10-01-sc-llb-cleaned-bc.md#final-bounded-supervised-result-and-step-5-decision).
+
+**September 30 latest:** teacher transport gate accepted. Two same-world Cartesian SC teachers fully inserted, providing v9 with 1,751 transport and 503 local chunks, plus the verified SFP source. The balanced-port BC retry finished 1,500 updates and failed both autonomous development starts: final planned-standoff errors 103 and 603 mm versus 76 and 74 mm for the prior masked actor; neither reached handoff or inserted. A bounded trace/video audit found early wrong-route commands without sustained cable snag. Stop routine feed-forward BC. A checkpoint-provenance audit found that this run reused the full action head from an older mixed-SC-route model and had only two new SC episodes; it was not a clean test of the new Low Lateral Bypass route. Audit clean route data and initialization before deciding on a route-subgoal model. No new training was started for this audit. True visibility, autonomous two-actor insertion and RL remain gated; reserved final scenes stay sealed. [Evidence and exact artifacts](docs/experiments/2026-09-30-transport-to-two-actor-continuation.md).
+
+## September 30: accepted transport and two-actor continuation
+
+**Latest v9 paired-port controlled comparison:** `outputs/experiments/2026-09-30_transport_continuation/transport_bc_paired_ports/` contains the 1,500-update checkpoint, history, training source snapshots and hashes. `autonomous_transport/paired_ports_port0_two/` and `paired_ports_port1_three/` contain each frozen full-start development test: official score, raw bag, exact launch snapshot, observation/proposal/executed-action/terminal trace, posthoc standoff analysis, first-divergence and task-code audits, and 20 fps `video/all_views_20fps.mp4` plus separate side/overhead videos. Both failed autonomous handoff and insertion. `matched_comparison.json` holds all ten candidate rollouts on the same two starts; `paired_port_bounded_diagnosis.json` records the single trace/video diagnosis. The v9 dataset is `outputs/trajectory_datasets/transport_local_verified/2026-09-30_v9_paired_ports/`. Final scenes remain sealed. [Result and next gate](docs/experiments/2026-09-30-transport-to-two-actor-continuation.md#paired-port-bc-result-and-bounded-failure-diagnosis).
+
+`outputs/experiments/2026-09-30_transport_continuation/`: exact four-layout scene manifest, MoveIt plans, scored bags, original three-camera RGB plus overhead/side diagnostic views, measured route/handoff audits, and 20 fps five-view videos under `runs/CASE/video/`. Successful `port0_four_shiftplus` is full insertion; `port1_five_shiftminus` is a preserved local insertion failure. The other two layouts are route-only validation.
+
+`outputs/trajectory_datasets/transport_local_verified/2026-09-30_v3/`: command-derived full-success SC training and explicitly separate held-out route-only transport rows. Four train episodes, 3,001 transport and 1,000 local chunks; two held-out episodes, 1,751 transport chunks. All files remain outside Git. **Do not use the interrupted `2026-09-30` output or the superseded v2.**
+
+`visibility_runs/`, `visibility_labels/`, and `visibility_mask_validation/` under the experiment root preserve the label-only RGBD recorder, rejected blank/self-view frames, original-versus-auxiliary image alignment checks, and label overlays. These are not learned-model predictions or certified identifiable-visibility labels. [Decisions and commands](docs/experiments/2026-09-30-transport-to-two-actor-continuation.md).
+
+## September 30: named contact and close-view force audit
+
+`outputs/experiments/2026-09-30_force_oracle/` preserves frozen old-route success/failure controls and new tilt-before-return repeats. The [report](docs/experiments/2026-09-30-force-oracle.md) and [machine manifest](docs/experiments/2026-09-30-force-oracle-results.json) distinguish raw wrist delta from corrected Gazebo point forces. See `old_oracle_r2/oracle_video/port_contacts_20fps.mp4` and `old_oracle_r2/force_and_motion.png` for contact markers and the failed measured withdrawal. Raw contact JSONL, MCAP, trace, score, 20 Hz frames, camera calibration, reporting-fix source metadata and summaries are retained. These are privileged audit artifacts, excluded from Git. Compact raw evidence and videos are backed up under `/home/nas/chmin/aic_archive_20260930/force_oracle/`; source JPEG frames remain local.
+
+The [September 30 tilt-before-return pilot](docs/experiments/2026-09-30-sc-tilt-before-return.md)
+has an explicit beyond-row tilt, measured TCP/plug-tip motion, and a matched
+older-route control. The [five-view 20 fps full-insertion video](outputs/experiments/2026-09-30_moveit_tilt_before_return/port1_tilt_hold_success_video/all_views_20fps.mp4)
+shows one privileged teacher success. The [machine summary](docs/experiments/2026-09-30-sc-tilt-before-return-results.json)
+maps all successes and failures to exact raw runs. The matched
+[older-route near-opening failure video](outputs/experiments/2026-09-30_moveit_tilt_before_return/port1_old_tilt_matched_failure_video/all_views_20fps.mp4)
+is saved in the same five-view format. Compact traces and scored
+MCAPs are under `/home/nas/chmin/aic_archive_20260930/moveit_tilt_before_return_raw/`;
+the [archive manifest](docs/experiments/2026-09-30-sc-tilt-before-return-archive.json)
+records hash verification. Separate [five-card port-0](outputs/experiments/2026-09-30_moveit_tilt_before_return/port0_route_repeat_video/all_views_20fps.mp4)
+and [shifted three-card](outputs/experiments/2026-09-30_moveit_tilt_before_return/threecard_route_repeat_video/all_views_20fps.mp4)
+route-only repeat videos and their [machine results](docs/experiments/2026-09-30-sc-route-generality-repeats.json)
+are also saved. These are not autonomous policy rollouts.
+
+The [September 29 lowered MoveIt route continuation](docs/experiments/2026-09-29-moveit-low-cross-continuation.md)
+maps route-only five-card ports 0/1 and shifted three-card videos, measured
+card-top/plug-tip heights, and privileged insertion handoff failures. The
+[port-0 full insertion video](outputs/experiments/2026-09-29_moveit_gazebo_pilot/low18_diagonal_insert_success_video/all_views_20fps.mp4)
+has all five synchronized views at 20 fps. The
+[machine results](docs/experiments/2026-09-29-moveit-low-cross-results.json)
+map exact raw runs under `/var/tmp/chmin_aic_20260918_act/`. These are teacher
+diagnostics, not autonomous policy rollouts. The original three-route record
+below used a stricter clearance criterion and is preserved as a baseline.
+The [verified NAS archive](docs/experiments/2026-09-29-moveit-low-cross-archive.json)
+preserves scored MCAPs and exact inputs for 13 completed low-cross runs.
+
+The September 29 MoveIt/Gazebo fixed-scene pilot saved three
+[five-view 20 fps review videos](outputs/experiments/2026-09-29_moveit_gazebo_pilot/)
+under `baseline_video/`, `lane20_video/`, and `strict_return_video/`.
+The [experiment report](docs/experiments/2026-09-29-moveit-sc-route-pilot.md)
+and [machine summary](docs/experiments/2026-09-29-moveit-sc-pilot-results.json)
+map plans, executed joint traces, cable-clearance analyses, score files,
+videos, code hashes, and the interrupted strict-return attempt. Raw scored
+bags and source plans remain in
+`/var/tmp/chmin_aic_20260918_act/moveit_sc_corridor_*_20260929/`; the
+[verified archive](docs/experiments/2026-09-29-moveit-sc-pilot-archive.json)
+is under `/home/nas/chmin/aic_archive_20260929/moveit_sc_pilot_raw/`.
+These are route-only privileged teachers that reached standoff but failed
+the cable-route-quality gate; none is a full insertion or BC-admitted episode.
+
+The September 29 fixed-scene SC ±20 mm route diagnostic has three
+[20 fps five-view review videos](outputs/experiments/2026-09-29_sc_low_cross_2cm_rescue/):
+an unchanged-route partial, an outside-lane +20 mm partial, and an
+outside-lane +20 mm full insertion. The adjacent `review_manifest.json`
+maps each score, route plan, cable plot, port trace, contact sheets, and
+video hash. The [experiment report](docs/experiments/2026-09-29-sc-low-cross-2cm-rescue.md)
+and [all-run JSON](docs/experiments/2026-09-29-sc-low-cross-2cm-rescue.json)
+cover 17 new privileged teacher rollouts plus the archived failure.
+Raw source runs are under
+`/var/tmp/chmin_aic_20260918_act/sc_low_cross_2cm_rescue_20260929/`;
+the NAS copy is
+`/home/nas/chmin/aic_archive_20260929/sc_low_cross_2cm_rescue_raw/`.
+The [archive manifest](docs/experiments/2026-09-29-sc-low-cross-2cm-archive.json)
+records verified hashes for all 17 scored MCAPs and compact result files.
+These are not autonomous policy videos or BC-admitted episodes.
+
 The [September 26 storage cleanup](docs/experiments/2026-09-26-output-space-cleanup.md)
 records which old smoke/sweep artifacts were removed, which May policy-run
 trees were backed up to NAS, and which expert/source data are protected.
@@ -27,7 +103,7 @@ The fixed wide run and port-0 pilot are scored teacher successes; the
 port-1 wider-lane failure is preserved. Raw MCAPs are hash-verified on NAS
 through archive manifests linked in the experiment index.
 
-Reviewed: 2026-09-25. Start with the [documentation index](docs/README.md) and
+Reviewed: 2026-09-30. Start with the [documentation index](docs/README.md) and
 [experiment ledger](docs/EXPERIMENTS.md) for the meaning and status of saved runs.
 
 ## Current storage map
@@ -711,3 +787,24 @@ Within generated dataset roots, the usual files/folders are:
 | `train/isaac_aic_lowdim_ppo/` | Low-dimensional PPO training output for the Isaac online RL AIC task. |
 
 These training folders currently contain run directories under `aic_task/`.
+
+
+### September 30 continuation: deployment input audit
+
+The transport gate is accepted; full insertion remains a separate gate. SC dataset v5 fixes canonical TCP quaternions and the raw ROS joint-prefix order: all 4,752 transport rows exactly match the live state assembler. Earlier v3 BC is retained as an invalid-input diagnostic. Corrected rootless GPU7 BC is bounded at 1,500 updates; auxiliary depth visibility remains rejected. See [the continuation record](docs/experiments/2026-09-30-transport-to-two-actor-continuation.md). Autonomous handoff and RL have not passed.
+
+
+### September 30 completed transport-policy comparisons
+
+Under `outputs/experiments/2026-09-30_transport_continuation/`:
+
+- `matched_comparison.json`: four autonomous failures; teacher transport remains accepted.
+- `transport_bc_cartesian_matched/`: control-interface-matched BC, 1,500 updates.
+- `transport_bc_rotation_scaled/`: same data/architecture, explicit rotation units, best update 1,000; source snapshots and hashes included.
+- `autonomous_transport/cartesian_best_port{0_two,1_three}/`: frozen first comparison, bags/RGB/terminal traces and metrics.
+- `autonomous_transport/rotation_scaled_port{0_two,1_three}/video/all_views_20fps.mp4`: recorded revised-policy failures; Ubuntu-compatible H.264. Side and overhead videos/contact sheets accompany them.
+- `cartesian_matched_teachers/port0_four/video/transport_only_20fps.mp4`: reviewed transport-only prefix, excluding failed insertion; full failure retained separately.
+- `cartesian_matched_teachers/port1_five/video/all_views_20fps.mp4`: fully inserted privileged teacher.
+- `teacher_target_magnitude_audit.json`, `state_normalization_diagnostic.json`, `initial_control_reuse.json`: posthoc diagnostics, not training-success evidence.
+
+Dataset `outputs/trajectory_datasets/transport_local_verified/2026-09-30_v8_cartesian/` contains 1,678 transport training chunks and 1,738 held-out diagnostic chunks; only 268 successful local chunks from this matched pair. Original successful local data remains separate. Do not call the failed-insertion prefix a full-success expert episode.

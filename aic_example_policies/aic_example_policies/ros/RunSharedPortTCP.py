@@ -9,6 +9,7 @@ control returns. This initial runner has no recovery supervisor or RL update.
 from __future__ import annotations
 
 import os
+import json
 import sys
 import time
 from pathlib import Path
@@ -26,6 +27,7 @@ REPO_ROOT = Path(__file__).resolve().parents[3]
 sys.path.insert(0, str(REPO_ROOT / 'scripts'))
 sys.path.insert(0, str(REPO_ROOT / 'aic_utils' / 'lerobot_robot_aic'))
 from train_shared_port_tcp_bc import SharedPortTCPActor  # noqa: E402
+from shared_bc_camera_preprocessing import transport_rgb_tensor  # noqa: E402
 from shared_port_tcp_geometry import (inferred_base_port, body_delta_from_target,
                                       matrix_from_xyz_xyzw, matrix_from_pose9)  # noqa: E402
 from lerobot_robot_aic.runtime_features import AICRuntimeFeatureAssembler  # noqa: E402
@@ -49,6 +51,7 @@ class RunSharedPortTCP(Policy):
                  'pose_mean', 'pose_std', 'target_mean', 'target_std')}
         self.include_elapsed = bool(checkpoint.get('include_elapsed', False))
         self.target_frame = checkpoint.get('target_frame', 'port')
+        self.native_jpeg_quality_by_family = checkpoint.get('native_jpeg_quality_by_family', {})
         if self.target_frame not in ('port', 'body'):
             raise ValueError(f'Unsupported shared actor target frame: {self.target_frame}')
         self.time_coordinate = checkpoint.get('time_coordinate', 'sim_elapsed')
@@ -58,9 +61,25 @@ class RunSharedPortTCP(Policy):
                                        use_time=self.include_elapsed,
                                        condition_on_pose=self.target_frame == 'port')
         self.actor.load_state_dict(state, strict=True)
+        masked=checkpoint.get('masked_state_indices',[])
+        if any(not isinstance(i,int) or not 0<=i<32 for i in masked):
+            raise ValueError('Invalid checkpoint state input mask')
+        self.actor.masked_state_indices=masked
         self.actor.to(self.device).eval()
         self.assembler = AICRuntimeFeatureAssembler(32, fps=20.)
         self.control_hz = float(os.environ.get('AIC_SHARED_PORT_TCP_CONTROL_HZ', '20'))
+        self.control_clock = os.environ.get('AIC_SHARED_PORT_TCP_CONTROL_CLOCK', 'wall')
+        if self.control_clock not in ('wall', 'simulation'):
+            raise ValueError('Unknown shared actor control clock')
+        self.max_simulation_sec = float(os.environ.get('AIC_SHARED_PORT_TCP_MAX_SIMULATION_SEC', '70'))
+        self.trace_path = os.environ.get('AIC_SHARED_PORT_TCP_TRACE', '')
+        self.cartesian_stiffness = json.loads(os.environ.get(
+            'AIC_SHARED_PORT_TCP_CARTESIAN_STIFFNESS', '[90,90,90,50,50,50]'))
+        self.cartesian_damping = json.loads(os.environ.get(
+            'AIC_SHARED_PORT_TCP_CARTESIAN_DAMPING', '[50,50,50,20,20,20]'))
+        if any(len(v)!=6 or not all(np.isfinite(x) and x>0 for x in v)
+               for v in (self.cartesian_stiffness,self.cartesian_damping)):
+            raise ValueError('Invalid Cartesian gain vector')
         self.max_runtime_sec = float(os.environ.get('AIC_SHARED_PORT_TCP_MAX_RUNTIME_SEC', '90'))
         self.max_translation = float(os.environ.get('AIC_SHARED_PORT_TCP_MAX_TRANSLATION_DELTA', '.02'))
         self.max_rotation = float(os.environ.get('AIC_SHARED_PORT_TCP_MAX_ROTATION_DELTA', '.2'))
@@ -95,7 +114,7 @@ class RunSharedPortTCP(Policy):
         raise ValueError('Unknown AIC target module')
 
     @staticmethod
-    def camera_tensor(message):
+    def camera_tensor(message, native_jpeg_quality=None):
         enc = message.encoding.lower()
         channels = {'rgb8': 3, 'bgr8': 3, 'rgba8': 4, 'bgra8': 4}.get(enc)
         if channels is None:
@@ -104,6 +123,8 @@ class RunSharedPortTCP(Policy):
         rgb = raw[:, :message.width*channels].reshape(message.height, message.width, channels)[..., :3]
         if enc.startswith('bgr'):
             rgb = rgb[..., ::-1]
+        if native_jpeg_quality is not None:
+            return transport_rgb_tensor(rgb, native_jpeg_quality=native_jpeg_quality)
         # Match supervised Samples: collector saves 288x256 RGB as quality-95
         # JPEG, then PIL resizes that decoded image to 224x224 with BILINEAR.
         # Direct native->224 INTER_AREA changed target predictions by millimeters.
@@ -121,7 +142,9 @@ class RunSharedPortTCP(Policy):
 
     def predict_chunk(self, observation, task_vector, *, decision_time_s=None):
         inference_start = time.perf_counter()
-        images = torch.stack([self.camera_tensor(getattr(observation, name + '_image'))
+        family = 'sfp' if task_vector[0] == 1 else 'sc'
+        native_quality = self.native_jpeg_quality_by_family.get(family)
+        images = torch.stack([self.camera_tensor(getattr(observation, name + '_image'), native_quality)
                               for name in ('center', 'left', 'right')])[None].to(self.device)
         state = self.assembler.assemble_ros(observation)
         if state.shape != (32,):
@@ -206,19 +229,51 @@ class RunSharedPortTCP(Policy):
         start = time.monotonic()
         issued = 0
         period = 1 / self.control_hz
+        first_control_sim = None
+        next_decision_sim = None
         while time.monotonic() - start < self.max_runtime_sec:
             observed = get_observation()
             if observed is None:
                 time.sleep(period)
                 continue
+            decision_sim = self._control_sim_time(observed)
+            if first_control_sim is None:
+                first_control_sim = decision_sim
+            if self.control_clock == 'simulation':
+                if decision_sim - first_control_sim >= self.max_simulation_sec:
+                    break
+                if next_decision_sim is not None and decision_sim < next_decision_sim:
+                    time.sleep(.002)
+                    continue
             targets, estimated_pose, anchor_state = self.predict_chunk(
                 observed, task_vector, decision_time_s=issued / self.control_hz)
+            self._trace(event='proposal', sim_time=decision_sim, state=anchor_state.tolist(),
+                        targets=targets.tolist(), task_vector=task_vector,
+                        masked_state_indices=self.actor.masked_state_indices,
+                        image_sim_ns={name:getattr(observed,name+'_image').header.stamp.sec*1000000000+
+                                      getattr(observed,name+'_image').header.stamp.nanosec
+                                      for name in ('center','left','right')},
+                        inference_ms=self._inference_latency_ms[-1], geometry_input=False)
             anchor = self._target_anchor(anchor_state[:7], estimated_pose)
             for index, target in enumerate(targets[:1] if self.replan_every_command else targets):
                 if time.monotonic() - start >= self.max_runtime_sec:
                     break
                 tick = time.monotonic()
-                if index == 0:
+                scheduled_sim = decision_sim + index * period
+                if self.control_clock == 'simulation':
+                    current = get_observation()
+                    while (current is not None and self._control_sim_time(current) < scheduled_sim
+                           and time.monotonic() - start < self.max_runtime_sec):
+                        time.sleep(.002)
+                        current = get_observation()
+                    if current is None:
+                        break
+                    if index > 0 and self._control_sim_time(current) > scheduled_sim + period:
+                        self._trace(event='stale_chunk_member_dropped', index=index,
+                                    sim_time=self._control_sim_time(current), scheduled_sim=scheduled_sim)
+                        continue
+                    state = self.assembler.assemble_ros(current)
+                elif index == 0:
                     state = anchor_state
                 else:
                     current = get_observation()
@@ -232,6 +287,8 @@ class RunSharedPortTCP(Policy):
                 force_norm = float(np.linalg.norm(state[26:29]))
                 if force_norm > self.diagnostic_force_stop_n:
                     self.get_logger().error(f'Shared BC diagnostic force stop: {force_norm:.1f} N')
+                    self._trace(event='terminal_before_return', reason='force_stop',
+                                state=state.tolist(), force_norm_n=force_norm)
                     self._report_latency()
                     return False
                 translation, rotation = clamp_delta_pose_components(
@@ -245,13 +302,36 @@ class RunSharedPortTCP(Policy):
                                                Rotation.from_matrix(absolute[:3, :3]).as_quat())
                 if hasattr(self._parent_node, '_target_mode'):
                     self._parent_node._target_mode = TargetMode.MODE_CARTESIAN
-                self.set_pose_target(move_robot=move_robot, pose=pose, frame_id='base_link')
+                self.set_pose_target(move_robot=move_robot, pose=pose, frame_id='base_link',
+                                     stiffness=self.cartesian_stiffness,damping=self.cartesian_damping)
+                self._trace(event='command', sim_time=(self._control_sim_time(current)
+                            if self.control_clock == 'simulation' else decision_sim),
+                            scheduled_sim=scheduled_sim, chunk_index=index,
+                            state=state.tolist(), delta=np.r_[translation,rotation].tolist(),
+                            absolute_tcp_target=absolute.tolist())
                 issued += 1
                 if issued % max(1, round(self.control_hz)) == 0:
                     send_feedback(f'in progress; shared port TCP commands={issued}')
-                time.sleep(max(0., period - (time.monotonic() - tick)))
+                if self.control_clock == 'wall':
+                    time.sleep(max(0., period - (time.monotonic() - tick)))
+            next_decision_sim = decision_sim + (period if self.replan_every_command else len(targets)*period)
+        terminal = get_observation()
+        if terminal is not None:
+            self._trace(event='terminal_before_return', reason='bounded_runtime',
+                        sim_time=self._control_sim_time(terminal),
+                        state=self.assembler.assemble_ros(terminal).tolist())
         self._report_latency()
         return True
+
+    @staticmethod
+    def _control_sim_time(observation):
+        stamp = observation.controller_state.header.stamp
+        return float(stamp.sec) + float(stamp.nanosec)*1e-9
+
+    def _trace(self, **record):
+        if self.trace_path:
+            with open(self.trace_path, 'a') as handle:
+                handle.write(json.dumps(record)+'\n')
 
     def _report_latency(self):
         if self._inference_latency_ms:

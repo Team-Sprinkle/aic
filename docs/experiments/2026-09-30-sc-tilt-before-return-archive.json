@@ -1,0 +1,38 @@
+{
+  "schema": "aic_moveit_tilt_archive/v1",
+  "archive_root": "/home/nas/chmin/aic_archive_20260930/moveit_tilt_before_return_raw",
+  "plans_archive": "/home/nas/chmin/aic_archive_20260930/moveit_tilt_before_return_plans",
+  "run_count": 16,
+  "checked_file_count": 110,
+  "missing": [],
+  "bad_hash": [],
+  "source_summary": "docs/experiments/2026-09-30-sc-tilt-before-return-results.json",
+  "route_only_repeats": [
+    {
+      "path": "/home/nas/chmin/aic_archive_20260930/moveit_tilt_before_return_raw/moveit_sc_port0_low18_diagonal_repeat_20260930/eval_config.yaml",
+      "verified": true
+    },
+    {
+      "path": "/home/nas/chmin/aic_archive_20260930/moveit_tilt_before_return_raw/moveit_sc_port0_low18_diagonal_repeat_20260930/moveit_joint_trajectory.json",
+      "verified": true
+    },
+    {
+      "path": "/home/nas/chmin/aic_archive_20260930/moveit_tilt_before_return_raw/moveit_sc_port0_low18_diagonal_repeat_20260930/results/bag_trial_000001_20260930_015922_364/bag_trial_000001_20260930_015922_364_0.mcap",
+      "verified": true
+    },
+    {
+      "path": "/home/nas/chmin/aic_archive_20260930/moveit_tilt_before_return_raw/moveit_sc_threecard_mixed_low18_repeat_20260930/eval_config.yaml",
+      "verified": true
+    },
+    {
+      "path": "/home/nas/chmin/aic_archive_20260930/moveit_tilt_before_return_raw/moveit_sc_threecard_mixed_low18_repeat_20260930/moveit_joint_trajectory.json",
+      "verified": true
+    },
+    {
+      "path": "/home/nas/chmin/aic_archive_20260930/moveit_tilt_before_return_raw/moveit_sc_threecard_mixed_low18_repeat_20260930/results/bag_trial_000001_20260930_015642_237/bag_trial_000001_20260930_015642_237_0.mcap",
+      "verified": true
+    }
+  ],
+  "run_count_including_route_repeats": 18,
+  "all_verified": true
+}

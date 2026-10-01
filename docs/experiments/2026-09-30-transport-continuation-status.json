@@ -1,0 +1,934 @@
+{
+  "schema": "aic_two_actor_continuation/v1",
+  "transport_gate": "passed_by_user_acceptance_and_measured_route_evidence",
+  "full_insertion_required_for_transport": false,
+  "prefer_full_success_episodes": true,
+  "failed_insertion_bc": "exclude",
+  "transport_prefix_fallback": "only_if_success_data_insufficient; explicit_segment_admission",
+  "current_step": "step4_visibility_and_step5_supervised_autonomous_insertion_open; feed_forward_transport_BC_branch_stopped",
+  "autonomous_insertion_gate": "failed_0_of_10_candidate_rollouts_on_two_reused_development_starts; two_actor_pipeline_not_validated",
+  "rl_gate": "pending_supervised_autonomous_insertion; not_started",
+  "final_scenes_sealed": true,
+  "bounded_layout_checks": 4,
+  "fully_inserted_new_layout_runs": 1,
+  "failed_local_insertion_runs_excluded": 1,
+  "route_only_heldout_runs": 2,
+  "transport_dataset_train_episodes": 2,
+  "transport_train_chunks": 1751,
+  "local_train_chunks": 503,
+  "transport_validation_chunks": 1738,
+  "trained_new_actor": true,
+  "visibility_labels_certified": false,
+  "depth_renderer_repair": "nine targeted diagnostic variants; final auxiliary world-camera mask still rejects84 frames; no certification",
+  "transport_bc": {
+    "state": "completed1500; offline improved; autonomous gate failed",
+    "device": "rootless GPU7",
+    "updates_limit": 1500,
+    "wall_budget_training_minutes": 90,
+    "run": "outputs/experiments/2026-09-30_transport_continuation/transport_bc_adapterfix",
+    "previous_runs": [
+      {
+        "run": "transport_bc",
+        "state": "completed1500; SC input contract invalid; preserve diagnostic",
+        "device": "host GPU0"
+      },
+      {
+        "run": "transport_bc_statefix",
+        "state": "failed DataLoader shared memory; preserved; retry uses4GB shm",
+        "device": "rootless GPU7"
+      }
+    ],
+    "best_update": 1500,
+    "stop_reason": "update_budget",
+    "training_minutes": 3.3153
+  },
+  "sfp_reset_audit": {
+    "episodes": 268,
+    "physical_groups": 265,
+    "train_validation_overlap": 0
+  },
+  "transport_dataset": "outputs/trajectory_datasets/transport_local_verified/2026-09-30_v9_paired_ports",
+  "runtime_state_contract_audit": "v6: all4752 rows adapter-converted; actual308 live joint observations matched exactly; v5 audit incomplete",
+  "autonomous_transport_comparison_v5": {
+    "selected_final_standoff_mm": 458.619,
+    "initial_final_standoff_mm": 266.839,
+    "tier3_both": 0,
+    "gate": "failed; raw-topic/adapter mismatch confirmed"
+  },
+  "autonomous_transport_comparison_v6": {
+    "results": [
+      {
+        "case": "adapterfix_best_port0_two",
+        "schema": "aic_clean_transport_autonomous/v1",
+        "commands": 1189,
+        "proposals": 309,
+        "simulation_duration_s": 69.69999999999999,
+        "final_planned_standoff_error_mm": 379.341989249297,
+        "min_planned_standoff_error_mm": 127.73852764260019,
+        "final_standoff_orientation_error_deg": 23.91004096773595,
+        "measured_tcp_total_path_mm": 1498.3366272913331,
+        "final_tcp_base_m": [
+          -0.7607031464576721,
+          0.13491515815258026,
+          0.26822754740715027
+        ],
+        "planned_standoff_base_m": [
+          -0.49573207188855367,
+          0.3994768894996235,
+          0.20741829847283622
+        ],
+        "raw_wrist_force_max_n": 22.065465244297414,
+        "raw_wrist_force_p95_n": 21.56129943064605,
+        "inference_ms": {
+          "p50": 117.4961959477514,
+          "p95": 161.8157308548689,
+          "p99": 180.9810477029534
+        },
+        "inference_max_ms": 493.2638229802251,
+        "inference_includes_cold_start": true,
+        "dropped_stale_members": 47,
+        "terminal_retained": true,
+        "official_tier3": {
+          "score": 0,
+          "message": "No insertion detected. Final plug port distance: 0.44m."
+        },
+        "official_total": -23,
+        "geometry_live_input": false,
+        "teacher_or_planner_live": false,
+        "final_scene_opened": false,
+        "standoff_gate_distance_mm": 10.0,
+        "standoff_distance_gate": false,
+        "note": "Standoff error is post-run plan comparison, not perception error or full insertion. Force is raw wrist wrench including gravity."
+      },
+      {
+        "case": "adapterfix_initial_port0_two",
+        "schema": "aic_clean_transport_autonomous/v1",
+        "commands": 1170,
+        "proposals": 307,
+        "simulation_duration_s": 69.60199999999999,
+        "final_planned_standoff_error_mm": 223.86132159972732,
+        "min_planned_standoff_error_mm": 70.51002856246136,
+        "final_standoff_orientation_error_deg": 6.092488363877208,
+        "measured_tcp_total_path_mm": 692.990870638305,
+        "final_tcp_base_m": [
+          -0.4357568621635437,
+          0.5260102152824402,
+          0.03275810554623604
+        ],
+        "planned_standoff_base_m": [
+          -0.49573207188855367,
+          0.3994768894996235,
+          0.20741829847283622
+        ],
+        "raw_wrist_force_max_n": 27.460661879466087,
+        "raw_wrist_force_p95_n": 21.640382044148772,
+        "inference_ms": {
+          "p50": 118.83142706938088,
+          "p95": 159.3342624371871,
+          "p99": 193.22837971616536
+        },
+        "inference_max_ms": 516.2904039025307,
+        "inference_includes_cold_start": true,
+        "dropped_stale_members": 58,
+        "terminal_retained": true,
+        "official_tier3": {
+          "score": 7.266987379797247,
+          "message": "No insertion detected. Final plug port distance: 0.15m."
+        },
+        "official_total": 17.678560890975284,
+        "geometry_live_input": false,
+        "teacher_or_planner_live": false,
+        "final_scene_opened": false,
+        "standoff_gate_distance_mm": 10.0,
+        "standoff_distance_gate": false,
+        "note": "Standoff error is post-run plan comparison, not perception error or full insertion. Force is raw wrist wrench including gravity."
+      },
+      {
+        "case": "adapterfix_best_port1_three",
+        "schema": "aic_clean_transport_autonomous/v1",
+        "commands": 1202,
+        "proposals": 308,
+        "simulation_duration_s": 69.796,
+        "final_planned_standoff_error_mm": 389.88400987085066,
+        "min_planned_standoff_error_mm": 209.10292204275467,
+        "final_standoff_orientation_error_deg": 14.496045071280252,
+        "measured_tcp_total_path_mm": 1505.2857275687334,
+        "final_tcp_base_m": [
+          -0.7789406776428223,
+          0.2948332726955414,
+          0.1617184281349182
+        ],
+        "planned_standoff_base_m": [
+          -0.4590436102510273,
+          0.5131695839215792,
+          0.2064918870956653
+        ],
+        "raw_wrist_force_max_n": 21.624525311493745,
+        "raw_wrist_force_p95_n": 21.235319457903216,
+        "inference_ms": {
+          "p50": 107.1619811700657,
+          "p95": 141.1352427443489,
+          "p99": 155.56174525059762
+        },
+        "inference_max_ms": 528.00318505615,
+        "inference_includes_cold_start": true,
+        "dropped_stale_members": 30,
+        "terminal_retained": true,
+        "official_tier3": {
+          "score": 0,
+          "message": "No insertion detected. Final plug port distance: 0.41m."
+        },
+        "official_total": -23,
+        "geometry_live_input": false,
+        "teacher_or_planner_live": false,
+        "final_scene_opened": false,
+        "standoff_gate_distance_mm": 10.0,
+        "standoff_distance_gate": false,
+        "note": "Standoff error is post-run plan comparison, not perception error or full insertion. Force is raw wrist wrench including gravity."
+      },
+      {
+        "case": "adapterfix_initial_port1_three",
+        "schema": "aic_clean_transport_autonomous/v1",
+        "commands": 1211,
+        "proposals": 312,
+        "simulation_duration_s": 69.65,
+        "final_planned_standoff_error_mm": 211.55927227570592,
+        "min_planned_standoff_error_mm": 208.13101503527164,
+        "final_standoff_orientation_error_deg": 18.617498070947015,
+        "measured_tcp_total_path_mm": 211.63340454510129,
+        "final_tcp_base_m": [
+          -0.4139113426208496,
+          0.30691465735435486,
+          0.19310124218463898
+        ],
+        "planned_standoff_base_m": [
+          -0.4590436102510273,
+          0.5131695839215792,
+          0.2064918870956653
+        ],
+        "raw_wrist_force_max_n": 28.444851128883876,
+        "raw_wrist_force_p95_n": 20.696554277498812,
+        "inference_ms": {
+          "p50": 109.91188546177,
+          "p95": 155.15571009600535,
+          "p99": 178.58952132519318
+        },
+        "inference_max_ms": 487.8799330908805,
+        "inference_includes_cold_start": true,
+        "dropped_stale_members": 37,
+        "terminal_retained": true,
+        "official_tier3": {
+          "score": 0,
+          "message": "No insertion detected. Final plug port distance: 0.26m."
+        },
+        "official_total": 1,
+        "geometry_live_input": false,
+        "teacher_or_planner_live": false,
+        "final_scene_opened": false,
+        "standoff_gate_distance_mm": 10.0,
+        "standoff_distance_gate": false,
+        "note": "Standoff error is post-run plan comparison, not perception error or full insertion. Force is raw wrist wrench including gravity."
+      }
+    ],
+    "passed": false
+  },
+  "control_matched_training": {
+    "full_success_sc_episodes": 1,
+    "reviewed_transport_only_prefixes": 1,
+    "train_transport_chunks": 1678,
+    "validation_transport_chunks": 1738,
+    "local_chunks_from_full_success_only": 268,
+    "failed_insertion_chunks_admitted": 0,
+    "full_success_expert_count_not_inflated_by_prefix": true
+  },
+  "transport_bc_cartesian": {
+    "state": "completed; matched autonomous comparison failed both starts",
+    "device": "rootless GPU7",
+    "updates_limit": 1500,
+    "wall_budget_minutes": 90,
+    "run": "outputs/experiments/2026-09-30_transport_continuation/transport_bc_cartesian_matched",
+    "best_update": 1500,
+    "stop_reason": "update_budget",
+    "autonomous": [
+      {
+        "schema": "aic_clean_transport_autonomous/v1",
+        "commands": 1192,
+        "proposals": 301,
+        "simulation_duration_s": 69.69999999999999,
+        "final_planned_standoff_error_mm": 836.9268571206791,
+        "min_planned_standoff_error_mm": 213.3738580687252,
+        "final_standoff_orientation_error_deg": 59.756064660757694,
+        "measured_tcp_total_path_mm": 1744.2522773701178,
+        "final_tcp_base_m": [
+          -0.14526042342185974,
+          -0.34854352474212646,
+          0.07295028120279312
+        ],
+        "planned_standoff_base_m": [
+          -0.49573207188855367,
+          0.3994768894996235,
+          0.20741829847283622
+        ],
+        "raw_wrist_force_max_n": 22.389548899099044,
+        "raw_wrist_force_p95_n": 21.859771779444657,
+        "inference_ms": {
+          "p50": 102.98615507781506,
+          "p95": 149.2341160774231,
+          "p99": 161.09842900186777
+        },
+        "inference_max_ms": 442.59209698066115,
+        "inference_includes_cold_start": true,
+        "dropped_stale_members": 12,
+        "terminal_retained": true,
+        "official_tier3": {
+          "score": 0,
+          "message": "No insertion detected. Final plug port distance: 0.84m."
+        },
+        "official_total": -23,
+        "geometry_live_input": false,
+        "teacher_or_planner_live": false,
+        "final_scene_opened": false,
+        "standoff_gate_distance_mm": 10.0,
+        "standoff_distance_gate": false,
+        "note": "Standoff error is post-run plan comparison, not perception error or full insertion. Force is raw wrist wrench including gravity."
+      },
+      {
+        "schema": "aic_clean_transport_autonomous/v1",
+        "commands": 1197,
+        "proposals": 302,
+        "simulation_duration_s": 69.64999999999999,
+        "final_planned_standoff_error_mm": 142.30112216469155,
+        "min_planned_standoff_error_mm": 117.20537309049732,
+        "final_standoff_orientation_error_deg": 16.61313985574506,
+        "measured_tcp_total_path_mm": 342.58907633072516,
+        "final_tcp_base_m": [
+          -0.4128177762031555,
+          0.37924930453300476,
+          0.19314496219158173
+        ],
+        "planned_standoff_base_m": [
+          -0.4590436102510273,
+          0.5131695839215792,
+          0.2064918870956653
+        ],
+        "raw_wrist_force_max_n": 27.243528658572608,
+        "raw_wrist_force_p95_n": 21.857655490404387,
+        "inference_ms": {
+          "p50": 101.21088288724422,
+          "p95": 140.93781965784726,
+          "p99": 168.38987626368183
+        },
+        "inference_max_ms": 491.07522307895124,
+        "inference_includes_cold_start": true,
+        "dropped_stale_members": 11,
+        "terminal_retained": true,
+        "official_tier3": {
+          "score": 2.3741744201988055,
+          "message": "No insertion detected. Final plug port distance: 0.21m."
+        },
+        "official_total": 14.728675202618213,
+        "geometry_live_input": false,
+        "teacher_or_planner_live": false,
+        "final_scene_opened": false,
+        "standoff_gate_distance_mm": 10.0,
+        "standoff_distance_gate": false,
+        "note": "Standoff error is post-run plan comparison, not perception error or full insertion. Force is raw wrist wrench including gravity."
+      }
+    ]
+  },
+  "control_gain_ablation": {
+    "hold90_final_mm": 5.781,
+    "hold800_final_mm": 0.529,
+    "frozen_actor_gain800_final_standoff_mm": 653.096,
+    "promoted": false
+  },
+  "rotation_unit_repair": {
+    "state": "completed; both autonomous starts failed; not promoted",
+    "run": "outputs/experiments/2026-09-30_transport_continuation/transport_bc_rotation_scaled",
+    "rotation_scale_deg": 1,
+    "updates_limit": 1500,
+    "training_wall_minutes": 90,
+    "live_budget": "two existing development starts, 70 simulation seconds each",
+    "continue_if": "both reach accepted transport prealignment envelope without sustained blockage; offline improvement alone insufficient",
+    "stop_if": "both fail; stop routine BC loop and retain supervised policy gate open",
+    "best_update": 1000,
+    "stop_reason": "update_budget",
+    "validation": {
+      "sfp": {
+        "first_target_mm": {
+          "count": 1024,
+          "median": 0.858676940202713,
+          "p95": 6.108977675437925
+        },
+        "last_target_mm": {
+          "count": 1024,
+          "median": 1.0546269416809082,
+          "p95": 6.820984768867491
+        },
+        "orientation_deg": {
+          "count": 1024,
+          "median": 0.03956468030810356,
+          "p95": 0.5144843101501456
+        }
+      },
+      "sc": {
+        "first_target_mm": {
+          "count": 512,
+          "median": 1.4044932126998901,
+          "p95": 2.9638307929039
+        },
+        "last_target_mm": {
+          "count": 512,
+          "median": 1.4686536192893982,
+          "p95": 3.871703565120697
+        },
+        "orientation_deg": {
+          "count": 512,
+          "median": 0.05595290660858154,
+          "p95": 0.1312212347984314
+        }
+      }
+    },
+    "autonomous": [
+      {
+        "run": "rotation_scaled_port0_two",
+        "schema": "aic_clean_transport_autonomous/v1",
+        "commands": 1212,
+        "proposals": 306,
+        "simulation_duration_s": 69.75,
+        "final_planned_standoff_error_mm": 416.0390427488313,
+        "min_planned_standoff_error_mm": 263.9130096289507,
+        "final_standoff_orientation_error_deg": 11.125076304501377,
+        "measured_tcp_total_path_mm": 527.8380149576585,
+        "final_tcp_base_m": [
+          -0.24963632225990295,
+          0.12136668711900711,
+          0.019854756072163582
+        ],
+        "planned_standoff_base_m": [
+          -0.49573207188855367,
+          0.3994768894996235,
+          0.20741829847283622
+        ],
+        "raw_wrist_force_max_n": 21.226062400596504,
+        "raw_wrist_force_p95_n": 20.744493002218494,
+        "inference_ms": {
+          "p50": 116.61291343625635,
+          "p95": 135.07267780369148,
+          "p99": 157.67889035632825
+        },
+        "inference_max_ms": 524.0495121106505,
+        "inference_includes_cold_start": true,
+        "dropped_stale_members": 12,
+        "terminal_retained": true,
+        "official_tier3": {
+          "score": 0,
+          "message": "No insertion detected. Final plug port distance: 0.37m."
+        },
+        "official_total": 1,
+        "geometry_live_input": false,
+        "teacher_or_planner_live": false,
+        "final_scene_opened": false,
+        "standoff_gate_distance_mm": 10.0,
+        "standoff_distance_gate": false,
+        "note": "Standoff error is post-run plan comparison, not perception error or full insertion. Force is raw wrist wrench including gravity.",
+        "transport_envelope": {
+          "lateral_error_mm": 371.24602529615805,
+          "axial_error_mm": 187.78944004700637,
+          "orientation_error_deg": 11.125076304501377,
+          "lateral_threshold_mm": 12,
+          "axial_threshold_mm": 20,
+          "orientation_threshold_deg": 3,
+          "geometry_only_pass": false,
+          "note": "Posthoc teacher prealignment envelope; not an insertion gate. Route/blockage review is additionally required."
+        }
+      },
+      {
+        "run": "rotation_scaled_port1_three",
+        "schema": "aic_clean_transport_autonomous/v1",
+        "commands": 1232,
+        "proposals": 315,
+        "simulation_duration_s": 69.748,
+        "final_planned_standoff_error_mm": 355.90900083314096,
+        "min_planned_standoff_error_mm": 307.5113983903319,
+        "final_standoff_orientation_error_deg": 8.686811201383858,
+        "measured_tcp_total_path_mm": 486.5149486937618,
+        "final_tcp_base_m": [
+          -0.20200195908546448,
+          0.3531040549278259,
+          0.01946292445063591
+        ],
+        "planned_standoff_base_m": [
+          -0.4590436102510273,
+          0.5131695839215792,
+          0.2064918870956653
+        ],
+        "raw_wrist_force_max_n": 22.688957796887937,
+        "raw_wrist_force_p95_n": 20.67512721935351,
+        "inference_ms": {
+          "p50": 108.95747994072735,
+          "p95": 134.9296809406951,
+          "p99": 166.6409681364894
+        },
+        "inference_max_ms": 498.60788811929524,
+        "inference_includes_cold_start": true,
+        "dropped_stale_members": 28,
+        "terminal_retained": true,
+        "official_tier3": {
+          "score": 0,
+          "message": "No insertion detected. Final plug port distance: 0.30m."
+        },
+        "official_total": 1,
+        "geometry_live_input": false,
+        "teacher_or_planner_live": false,
+        "final_scene_opened": false,
+        "standoff_gate_distance_mm": 10.0,
+        "standoff_distance_gate": false,
+        "note": "Standoff error is post-run plan comparison, not perception error or full insertion. Force is raw wrist wrench including gravity.",
+        "transport_envelope": {
+          "lateral_error_mm": 302.66672850648627,
+          "axial_error_mm": 187.25402086263904,
+          "orientation_error_deg": 8.686811201383858,
+          "lateral_threshold_mm": 12,
+          "axial_threshold_mm": 20,
+          "orientation_threshold_deg": 3,
+          "geometry_only_pass": false,
+          "note": "Posthoc teacher prealignment envelope; not an insertion gate. Route/blockage review is additionally required."
+        }
+      }
+    ]
+  },
+  "historical_joint_teacher_dataset": {
+    "transport_dataset_train_episodes": 4,
+    "transport_train_chunks": 3001,
+    "local_train_chunks": 1000,
+    "transport_validation_chunks": 1751
+  },
+  "active_dataset": "outputs/trajectory_datasets/transport_local_verified/2026-09-30_v8_cartesian",
+  "routine_bc_branch_stopped": true,
+  "next_diagnostic": "First-command input/provenance audit on existing reset images, <=10 minutes CPU inference/trace review; no new collection or retraining. Reject speculation absent concrete input/label fault.",
+  "clipping_diagnostic": {
+    "teacher_clip20": {
+      "schema": "aic_recorded_teacher_clip_diagnostic/v1",
+      "privileged_recorded_route": true,
+      "autonomous": false,
+      "cap_mm": 20.0,
+      "commands": 462,
+      "clipped_fraction": 0.9242424242424242,
+      "final_recorded_target_distance_mm": 97.54984610871927,
+      "final_orientation_error_deg": 30.06734231082928,
+      "raw_wrist_force_max_n": 39.37436061068012,
+      "terminal_observation_retained": false,
+      "final_scenes_opened": false,
+      "endpoint_sample": "last recorded pre-abort command; terminal missing; never post-reset geometry",
+      "note": "Recorded target distance, not insertion or perception error. Raw wrench includes gravity. Video/route review additionally required.",
+      "measured_TCP_step_mm_p95": 3.35090275438224,
+      "measured_TCP_step_mm_max": 5.0560914970954975,
+      "command_interval_s_p95": 0.10000000000000142
+    },
+    "teacher_clip60": {
+      "schema": "aic_recorded_teacher_clip_diagnostic/v1",
+      "privileged_recorded_route": true,
+      "autonomous": false,
+      "cap_mm": 60.0,
+      "commands": 952,
+      "clipped_fraction": 0.0,
+      "final_recorded_target_distance_mm": 11.431919187959895,
+      "final_orientation_error_deg": 0.01023444769353473,
+      "raw_wrist_force_max_n": 21.673274822685123,
+      "terminal_observation_retained": true,
+      "final_scenes_opened": false,
+      "endpoint_sample": "terminal pre-reset",
+      "note": "Recorded target distance, not insertion or perception error. Raw wrench includes gravity. Video/route review additionally required.",
+      "measured_TCP_step_mm_p95": 3.4523633465485797,
+      "measured_TCP_step_mm_max": 7.0403096789273025,
+      "command_interval_s_p95": 0.09800000000000031
+    }
+  },
+  "frozen_cap_repair": {
+    "state": "complete; 0/2 transport/handoff; not promoted",
+    "rollouts_limit": 2,
+    "cap_m": 0.06,
+    "updates": 0,
+    "run_prefix": "autonomous_transport/rotation_scaled_cap60_",
+    "stop_if": "both fail autonomous route; no clipping-only promotion",
+    "autonomous": [
+      {
+        "run": "rotation_scaled_cap60_port0_two",
+        "schema": "aic_clean_transport_autonomous/v1",
+        "commands": 1221,
+        "proposals": 309,
+        "simulation_duration_s": 69.7,
+        "final_planned_standoff_error_mm": 443.1952678627956,
+        "min_planned_standoff_error_mm": 263.898191095232,
+        "final_standoff_orientation_error_deg": 6.075104489531905,
+        "measured_tcp_total_path_mm": 528.942766662745,
+        "final_tcp_base_m": [
+          -0.12299862504005432,
+          0.24986879527568817,
+          0.020043697208166122
+        ],
+        "planned_standoff_base_m": [
+          -0.49573207188855367,
+          0.3994768894996235,
+          0.20741829847283622
+        ],
+        "raw_wrist_force_max_n": 21.268677157223234,
+        "raw_wrist_force_p95_n": 20.782610272149384,
+        "inference_ms": {
+          "p50": 110.260427929461,
+          "p95": 132.83198894932866,
+          "p99": 153.4197487123312
+        },
+        "inference_max_ms": 611.2168331164867,
+        "inference_includes_cold_start": true,
+        "dropped_stale_members": 15,
+        "terminal_retained": true,
+        "official_tier3": {
+          "score": 0,
+          "message": "No insertion detected. Final plug port distance: 0.40m."
+        },
+        "official_total": -11,
+        "geometry_live_input": false,
+        "teacher_or_planner_live": false,
+        "final_scene_opened": false,
+        "standoff_gate_distance_mm": 10.0,
+        "standoff_distance_gate": false,
+        "note": "Standoff error is post-run plan comparison, not perception error or full insertion. Force is raw wrist wrench including gravity.",
+        "transport_envelope": {
+          "lateral_error_mm": 401.49198915526557,
+          "axial_error_mm": 187.6865154989114,
+          "orientation_error_deg": 6.075104489531905,
+          "lateral_threshold_mm": 12,
+          "axial_threshold_mm": 20,
+          "orientation_threshold_deg": 3,
+          "geometry_only_pass": false,
+          "note": "Posthoc teacher prealignment envelope; not an insertion gate. Route/blockage review is additionally required."
+        }
+      },
+      {
+        "run": "rotation_scaled_cap60_port1_three",
+        "schema": "aic_clean_transport_autonomous/v1",
+        "commands": 1220,
+        "proposals": 309,
+        "simulation_duration_s": 69.64999999999999,
+        "final_planned_standoff_error_mm": 382.19427374582233,
+        "min_planned_standoff_error_mm": 345.0464913517391,
+        "final_standoff_orientation_error_deg": 7.961230330570715,
+        "measured_tcp_total_path_mm": 503.17388782138903,
+        "final_tcp_base_m": [
+          -0.17443665862083435,
+          0.33993151783943176,
+          0.019248947501182556
+        ],
+        "planned_standoff_base_m": [
+          -0.4590436102510273,
+          0.5131695839215792,
+          0.2064918870956653
+        ],
+        "raw_wrist_force_max_n": 21.272113644257978,
+        "raw_wrist_force_p95_n": 20.677684068470914,
+        "inference_ms": {
+          "p50": 114.57553319633007,
+          "p95": 161.57265156507492,
+          "p99": 219.24679906107502
+        },
+        "inference_max_ms": 515.9933092072606,
+        "inference_includes_cold_start": true,
+        "dropped_stale_members": 16,
+        "terminal_retained": true,
+        "official_tier3": {
+          "score": 0,
+          "message": "No insertion detected. Final plug port distance: 0.34m."
+        },
+        "official_total": 1,
+        "geometry_live_input": false,
+        "teacher_or_planner_live": false,
+        "final_scene_opened": false,
+        "standoff_gate_distance_mm": 10.0,
+        "standoff_distance_gate": false,
+        "note": "Standoff error is post-run plan comparison, not perception error or full insertion. Force is raw wrist wrench including gravity.",
+        "transport_envelope": {
+          "lateral_error_mm": 333.04560251718334,
+          "axial_error_mm": 187.49157188541272,
+          "orientation_error_deg": 7.961230330570715,
+          "lateral_threshold_mm": 12,
+          "axial_threshold_mm": 20,
+          "orientation_threshold_deg": 3,
+          "geometry_only_pass": false,
+          "note": "Posthoc teacher prealignment envelope; not an insertion gate. Route/blockage review is additionally required."
+        }
+      }
+    ]
+  },
+  "total_current_candidate_rollouts": 10,
+  "current_candidate_transport_successes": 0,
+  "initial_input_audit": "completed; single-sample controller-error shortcut identified; computational substitution not autonomous evidence",
+  "controller_error_mask_repair": {
+    "state": "completed; 0/2 gate, large closed-loop improvement but not promoted",
+    "masked_normalized_state_indices": [
+      13,
+      14,
+      15,
+      16,
+      17,
+      18
+    ],
+    "updates_limit": 1500,
+    "minutes_limit": 90,
+    "new_episodes": 0,
+    "development_rollouts_limit": 2,
+    "runtime_cap_m": 0.06,
+    "continue_if": "autonomous route/handoff envelope passes; offline error alone insufficient",
+    "stop_if": "both fail; stop this shortcut repair",
+    "best_update": 1500,
+    "stop_reason": "update_budget",
+    "first_live": {
+      "schema": "aic_clean_transport_autonomous/v1",
+      "commands": 1227,
+      "proposals": 309,
+      "simulation_duration_s": 69.69999999999999,
+      "final_planned_standoff_error_mm": 75.95011758624425,
+      "min_planned_standoff_error_mm": 68.99100407352395,
+      "final_standoff_orientation_error_deg": 5.320215914520543,
+      "measured_tcp_total_path_mm": 780.6275901787345,
+      "final_tcp_base_m": [
+        -0.5073066353797913,
+        0.4614863395690918,
+        0.16511844098567963
+      ],
+      "planned_standoff_base_m": [
+        -0.49573207188855367,
+        0.3994768894996235,
+        0.20741829847283622
+      ],
+      "raw_wrist_force_max_n": 21.817577459849343,
+      "raw_wrist_force_p95_n": 21.242399921641237,
+      "inference_ms": {
+        "p50": 117.7855278365314,
+        "p95": 133.1828119698912,
+        "p99": 152.56408472545465
+      },
+      "inference_max_ms": 562.0134859345853,
+      "inference_includes_cold_start": true,
+      "dropped_stale_members": 9,
+      "terminal_retained": true,
+      "official_tier3": {
+        "score": 6.973193119266464,
+        "message": "No insertion detected. Final plug port distance: 0.15m."
+      },
+      "official_total": 17.201099280434487,
+      "geometry_live_input": false,
+      "teacher_or_planner_live": false,
+      "final_scene_opened": false,
+      "standoff_gate_distance_mm": 10.0,
+      "standoff_distance_gate": false,
+      "note": "Standoff error is post-run plan comparison, not perception error or full insertion. Force is raw wrist wrench including gravity.",
+      "transport_envelope": {
+        "lateral_error_mm": 63.09123170187617,
+        "axial_error_mm": 42.28376572284573,
+        "orientation_error_deg": 5.320215914520543,
+        "lateral_threshold_mm": 12,
+        "axial_threshold_mm": 20,
+        "orientation_threshold_deg": 3,
+        "geometry_only_pass": false,
+        "note": "Posthoc teacher prealignment envelope; not an insertion gate. Route/blockage review is additionally required."
+      }
+    },
+    "second_live": {
+      "schema": "aic_clean_transport_autonomous/v1",
+      "commands": 1233,
+      "proposals": 311,
+      "simulation_duration_s": 69.85,
+      "final_planned_standoff_error_mm": 73.69319888712283,
+      "min_planned_standoff_error_mm": 22.643806095052508,
+      "final_standoff_orientation_error_deg": 10.88009034281026,
+      "measured_tcp_total_path_mm": 888.9390516775835,
+      "final_tcp_base_m": [
+        -0.4710415303707123,
+        0.44049757719039917,
+        0.20884069800376892
+      ],
+      "planned_standoff_base_m": [
+        -0.4590436102510273,
+        0.5131695839215792,
+        0.2064918870956653
+      ],
+      "raw_wrist_force_max_n": 22.66694436282931,
+      "raw_wrist_force_p95_n": 21.47074475928186,
+      "inference_ms": {
+        "p50": 116.97291908785701,
+        "p95": 137.48729648068547,
+        "p99": 152.42322541307655
+      },
+      "inference_max_ms": 515.4830790124834,
+      "inference_includes_cold_start": true,
+      "dropped_stale_members": 11,
+      "terminal_retained": true,
+      "official_tier3": {
+        "score": 5.045777753563117,
+        "message": "No insertion detected. Final plug port distance: 0.19m."
+      },
+      "official_total": 14.869655396081132,
+      "geometry_live_input": false,
+      "teacher_or_planner_live": false,
+      "final_scene_opened": false,
+      "standoff_gate_distance_mm": 10.0,
+      "standoff_distance_gate": false,
+      "note": "Standoff error is post-run plan comparison, not perception error or full insertion. Force is raw wrist wrench including gravity.",
+      "transport_envelope": {
+        "lateral_error_mm": 73.65578600798358,
+        "axial_error_mm": 2.347924565050544,
+        "orientation_error_deg": 10.88009034281026,
+        "lateral_threshold_mm": 12,
+        "axial_threshold_mm": 20,
+        "orientation_threshold_deg": 3,
+        "geometry_only_pass": false,
+        "note": "Posthoc teacher prealignment envelope; not an insertion gate. Route/blockage review is additionally required."
+      }
+    }
+  },
+  "paired_port_contrast": {
+    "state": "teacher Tier3 75; v9 balanced BC completed1500; both development rollouts failed; branch stopped",
+    "scene": "outputs/experiments/2026-09-30_transport_continuation/scenes/port0_five_paired",
+    "same_world_as": "port1_five_shiftminus",
+    "planned_collection_episodes": 1,
+    "train_if": "prefix scored and video reviewed; no failed insertion labels",
+    "train_updates_cap": 1500,
+    "autonomous_dev_starts": 2,
+    "final_scenes_opened": false,
+    "official_tier3": 75,
+    "official_total": 82.69896616674653,
+    "transport_train_chunks": 1751,
+    "local_train_chunks": 503,
+    "dataset": "outputs/trajectory_datasets/transport_local_verified/2026-09-30_v9_paired_ports",
+    "failed_insertion_prefix_excluded": true,
+    "disqualified_joint_attempt_preserved": true,
+    "training_run": "outputs/experiments/2026-09-30_transport_continuation/transport_bc_paired_ports",
+    "best_update": 1000,
+    "training_stop_reason": "update_budget_not_saturation",
+    "autonomous_results": [
+      {
+        "schema": "aic_clean_transport_autonomous/v1",
+        "commands": 1228,
+        "proposals": 309,
+        "simulation_duration_s": 69.5,
+        "final_planned_standoff_error_mm": 102.95767238071477,
+        "min_planned_standoff_error_mm": 90.92348488094136,
+        "final_standoff_orientation_error_deg": 15.76239795551858,
+        "measured_tcp_total_path_mm": 360.7049298516204,
+        "final_tcp_base_m": [
+          -0.5116473436355591,
+          0.3108261823654175,
+          0.1575380563735962
+        ],
+        "planned_standoff_base_m": [
+          -0.49573207188855367,
+          0.3994768894996235,
+          0.20741829847283622
+        ],
+        "raw_wrist_force_max_n": 21.7757107527199,
+        "raw_wrist_force_p95_n": 20.773372672703225,
+        "inference_ms": {
+          "p50": 119.7250101249665,
+          "p95": 140.46472744084892,
+          "p99": 158.53505929932004
+        },
+        "inference_max_ms": 596.1999350693077,
+        "inference_includes_cold_start": true,
+        "dropped_stale_members": 8,
+        "terminal_retained": true,
+        "official_tier3": {
+          "score": 6.956421106408915,
+          "message": "No insertion detected. Final plug port distance: 0.15m."
+        },
+        "official_total": -4.712620690297551,
+        "geometry_live_input": false,
+        "teacher_or_planner_live": false,
+        "final_scene_opened": false,
+        "standoff_gate_distance_mm": 10.0,
+        "standoff_distance_gate": false,
+        "note": "Standoff error is post-run plan comparison, not perception error or full insertion. Force is raw wrist wrench including gravity.",
+        "transport_envelope": {
+          "lateral_error_mm": 90.06951771140922,
+          "axial_error_mm": 49.877492732581636,
+          "orientation_error_deg": 15.76239795551858,
+          "lateral_threshold_mm": 12,
+          "axial_threshold_mm": 20,
+          "orientation_threshold_deg": 3,
+          "geometry_only_pass": false,
+          "note": "Posthoc teacher prealignment envelope; not an insertion gate. Route/blockage review is additionally required."
+        }
+      },
+      {
+        "schema": "aic_clean_transport_autonomous/v1",
+        "commands": 1227,
+        "proposals": 315,
+        "simulation_duration_s": 69.75,
+        "final_planned_standoff_error_mm": 602.5332552357977,
+        "min_planned_standoff_error_mm": 348.0132670265559,
+        "final_standoff_orientation_error_deg": 33.03734467532273,
+        "measured_tcp_total_path_mm": 506.2585153298398,
+        "final_tcp_base_m": [
+          -0.6630823612213135,
+          -0.021544668823480606,
+          0.01809024251997471
+        ],
+        "planned_standoff_base_m": [
+          -0.4590436102510273,
+          0.5131695839215792,
+          0.2064918870956653
+        ],
+        "raw_wrist_force_max_n": 21.21177551972456,
+        "raw_wrist_force_p95_n": 20.733302053810423,
+        "inference_ms": {
+          "p50": 108.94422512501478,
+          "p95": 127.98843972850591,
+          "p99": 135.08438645396384
+        },
+        "inference_max_ms": 519.3549569230527,
+        "inference_includes_cold_start": true,
+        "dropped_stale_members": 33,
+        "terminal_retained": true,
+        "official_tier3": {
+          "score": 0,
+          "message": "No insertion detected. Final plug port distance: 0.56m."
+        },
+        "official_total": 1,
+        "geometry_live_input": false,
+        "teacher_or_planner_live": false,
+        "final_scene_opened": false,
+        "standoff_gate_distance_mm": 10.0,
+        "standoff_distance_gate": false,
+        "note": "Standoff error is post-run plan comparison, not perception error or full insertion. Force is raw wrist wrench including gravity.",
+        "transport_envelope": {
+          "lateral_error_mm": 572.3487083645671,
+          "axial_error_mm": 188.31696603986205,
+          "orientation_error_deg": 33.03734467532273,
+          "lateral_threshold_mm": 12,
+          "axial_threshold_mm": 20,
+          "orientation_threshold_deg": 3,
+          "geometry_only_pass": false,
+          "note": "Posthoc teacher prealignment envelope; not an insertion gate. Route/blockage review is additionally required."
+        }
+      }
+    ],
+    "bounded_diagnosis": "outputs/experiments/2026-09-30_transport_continuation/paired_port_bounded_diagnosis.json",
+    "stopping_rule_met": true,
+    "next_revision": "first audit provenance and train-data coverage; clean policy/action initialization without mixed old SC checkpoint; no training authorized in this response",
+    "warm_start_provenance": "full model including action head from shared_body_target_bc_batch3_20260925/best.pt, trained on mixed older SC sources; not clean LLB initialization",
+    "train_episodes_by_family": {
+      "sfp": 236,
+      "sc": 2
+    },
+    "validation_episodes_by_family": {
+      "sfp": 32,
+      "sc": 2
+    },
+    "autonomous_test_task_families": [
+      "sc_to_sc"
+    ],
+    "sfp_autonomous_evaluation": "not_run",
+    "new_sc_route_name": "Low Lateral Bypass (LLB)"
+  }
+}

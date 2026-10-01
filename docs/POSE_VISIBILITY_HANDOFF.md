@@ -1,8 +1,24 @@
 # Target-conditioned perception and two-actor handoff
 
-Status: proposed supervised architecture, September 26, 2026. It has not
+**October 1 supervised sequence:** The complete system has three models: (1) a shared temporal transport actor that can route with the target offscreen, (2) a task-conditioned selected-port pose/visibility/confidence estimator, and (3) a separate port-relative insertion actor. There are two actors, transport and insertion. Their action heads use different frames and are trained separately. The selected-target perception model is trained only after transport passes its stable near-port gate; handoff then requires a calibrated stable observation window, hysteresis, and command continuity. Hierarchical backtracking is excluded from this baseline, and RL is gated on autonomous full-depth Gazebo insertion. [Current sequence and transport audit](experiments/2026-10-01-temporal-three-model-continuation.md).
+
+**October 1 gate update:** The 104 verified SC Low Lateral Bypass successes now have an audited, episode-grouped cleaned derivative. Four supervised transport actors were compared on the same two non-final Gazebo layouts at 20 and 60 mm action caps: **0/16 full insertions and 0/16 stable 10 mm handoffs**. Offline teacher-frame fit did not translate into correct autonomous route progress. A bounded elapsed-time test and action-cap correction failed the gate. That temporal route-stage/subgoal candidate and its no-history control were trained; stage accuracy exceeded 90% in the primary arm, but full-held-out subgoal translation p95 was 41.51 mm against a 20 mm gate, so no temporal live rollout followed. [Temporal result](experiments/2026-10-01-temporal-three-model-continuation.md#completed-targeted-repair-and-full-held-out-check). Target visibility calibration, local pose-conditioned handoff, RL, and final scenes remain gated. [Commands, videos, metrics, and decision](experiments/2026-10-01-sc-llb-cleaned-bc.md#final-bounded-supervised-result-and-step-5-decision).
+
+**September 30 latest:** teacher transport gate accepted. Two same-world Cartesian SC teachers fully inserted, providing v9 with 1,751 transport and 503 local chunks, plus the verified SFP source. The balanced-port BC retry finished 1,500 updates and failed both autonomous development starts: final planned-standoff errors 103 and 603 mm versus 76 and 74 mm for the prior masked actor; neither reached handoff or inserted. A bounded trace/video audit found early wrong-route commands without sustained cable snag. Stop routine feed-forward BC. A checkpoint-provenance audit found that this run reused the full action head from an older mixed-SC-route model and had only two new SC episodes; it was not a clean test of the new Low Lateral Bypass route. Audit clean route data and initialization before deciding on a route-subgoal model. No new training was started for this audit. True visibility, autonomous two-actor insertion and RL remain gated; reserved final scenes stay sealed. [Evidence and exact artifacts](experiments/2026-09-30-transport-to-two-actor-continuation.md).
+
+**September 30 continuation:** transport gate accepted. Four changed-card-layout MoveIt replays reached handoff/standoff; one fully inserted, one failed local insertion and is excluded from expert BC, two were transport-only validation. Four full-success SC teacher episodes now provide 3,001 transport and 1,000 local training chunks, with 1,751 held-out transport chunks. True-visibility recorder checks caught invalid auxiliary depth during tilt; labels are being repaired before training. Autonomous two-actor insertion and RL remain pending. [Execution record](experiments/2026-09-30-transport-to-two-actor-continuation.md).
+
+**September 30:** [Oracle contact diagnosis](experiments/2026-09-30-force-oracle.md) confirms fixed-scene teacher progress with the explicit tilt-before-return route (2/2 instrumented insertions). These trials use privileged teacher geometry and do not validate learned perception, visibility switching, or an autonomous actor. New-start generality and teacher admission remain open.
+
+Status: proposed supervised architecture, September 29, 2026. It has not
 passed a full-start Gazebo evaluation. The earlier local Isaac SFP-to-NIC
 PoseInsert result does not establish this handoff or SC-to-SC performance.
+The [September 29 label-readiness audit](experiments/2026-09-29-perception-label-readiness.json)
+found 1,485 native SC frames in 21 scene groups with complete image paths and
+separate train/validation scenes. This source labels only whether the selected
+opening projects inside each camera. It cannot train identifiable visibility
+or calibrated acceptance under occlusion; it also has no SFP rows or explicit
+wrong-port negatives. The proposed two-family training gate remains closed.
 
 ## What each part does
 
@@ -161,3 +177,8 @@ probabilities and alignment confidence to reject false poses;
 [Ambiguity-Aware Multi-Object Pose Optimization](https://arxiv.org/abs/2211.00960)
 addresses pose ambiguity under occlusion. They motivate confidence checks;
 their reported task accuracy is not an AIC insertion result.
+
+
+### September 30 continuation: deployment input audit
+
+The transport gate is accepted; full insertion remains a separate gate. SC dataset v5 fixes canonical TCP quaternions and the raw ROS joint-prefix order: all 4,752 transport rows exactly match the live state assembler. Earlier v3 BC is retained as an invalid-input diagnostic. Corrected rootless GPU7 BC is bounded at 1,500 updates; auxiliary depth visibility remains rejected. See [the continuation record](experiments/2026-09-30-transport-to-two-actor-continuation.md). Autonomous handoff and RL have not passed.

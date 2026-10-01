@@ -1,12 +1,26 @@
 # Working on the hybrid training branch
 
+**October 1 supervised sequence:** One shared temporal transport actor first, then a task-conditioned selected-port perception model, then a separate port-relative insertion actor with a stable observation-only handoff. The bounded frozen-feature temporal/no-history comparison and one direct-state repair finished below the offline subgoal gate; no new autonomous rollout, insertion, or RL result is claimed. [Plan and audit](experiments/2026-10-01-temporal-three-model-continuation.md).
+
+**October 1 latest:** The 104 successful SC Low Lateral Bypass teacher episodes have an independently audited motion-safe BC derivative: 83 train/21 validation, 69,681 transport and 26,455 local chunks. Four supervised transport checkpoints completed a two-scene, two-action-cap Gazebo comparison: **0/16 insertions and 0/16 stable handoffs within 10 mm**. The later test above explicitly predicted route progress and subgoals and failed its offline gate; local handoff, RL, and final scenes remain gated. [Dataset, rollouts, and next test](experiments/2026-10-01-sc-llb-cleaned-bc.md), [status](STATUS.md).
+
+**September 30 latest:** teacher transport gate accepted. Two same-world Cartesian SC teachers fully inserted, providing v9 with 1,751 transport and 503 local chunks, plus the verified SFP source. The balanced-port BC retry finished 1,500 updates and failed both autonomous development starts: final planned-standoff errors 103 and 603 mm versus 76 and 74 mm for the prior masked actor; neither reached handoff or inserted. A bounded trace/video audit found early wrong-route commands without sustained cable snag. Stop routine feed-forward BC. A checkpoint-provenance audit found that this run reused the full action head from an older mixed-SC-route model and had only two new SC episodes; it was not a clean test of the new Low Lateral Bypass route. Audit clean route data and initialization before deciding on a route-subgoal model. No new training was started for this audit. True visibility, autonomous two-actor insertion and RL remain gated; reserved final scenes stay sealed. [Evidence and exact artifacts](experiments/2026-09-30-transport-to-two-actor-continuation.md).
+
+**September 30 continuation:** transport gate accepted. Four changed-card-layout MoveIt replays reached handoff/standoff; one fully inserted, one failed local insertion and is excluded from expert BC, two were transport-only validation. Four full-success SC teacher episodes now provide 3,001 transport and 1,000 local training chunks, with 1,751 held-out transport chunks. True-visibility recorder checks caught invalid auxiliary depth during tilt; labels are being repaired before training. Autonomous two-actor insertion and RL remain pending. [Execution record](experiments/2026-09-30-transport-to-two-actor-continuation.md).
+
+**September 30 force audit:** start with the [oracle diagnosis](experiments/2026-09-30-force-oracle.md): close-view contact markers, wrist-versus-contact force distinction, measured retreat failure, upstream Gazebo reporting bug, and unchanged-collision route validation.
+
 Start here when returning to this repository. These pages describe the local
 `feat/hybrid-train` work; the original toolkit guide remains in the
 [repository README](../README.md).
 
 | Question | Maintained page |
 | --- | --- |
+| Is there a concise project overview with results and visual examples? | [Robotic cable insertion project writeup](robotic_cable_insertion_project.md) |
 | What works, what is unresolved, and what should we do next? | [Current status](STATUS.md) |
+| Did moving the SC wrist tilt before the return help? | [Five-card port-1 MoveIt pilot, measured plug-tip swing, matched control, and video](experiments/2026-09-30-sc-tilt-before-return.md) |
+| Did lowering the MoveIt SC route avoid a sustained snag and permit insertion? | [Low-cross continuation, measured heights, both ports, insertion success/failures, and videos](experiments/2026-09-29-moveit-low-cross-continuation.md) |
+| What did the original higher MoveIt corridor show? | [Fixed-scene baseline pilot and its original clearance gate](experiments/2026-09-29-moveit-sc-route-pilot.md) |
 | Did the farther SC cable route clear the cards and survive ±1 cm changes? | [Five-card route sensitivity, videos, and stopped gate](experiments/2026-09-26-sc-far-return-route-sensitivity.md) |
 | How would selected-port visibility, confidence, and the two actors be trained and switched? | [Task-conditioned perception and actor handoff](POSE_VISIBILITY_HANDOFF.md) |
 | Where is the current ACT run? | [All-eligible, task-conditioned ACT](experiments/2026-09-18-act-all-verified.md) |

@@ -7,6 +7,7 @@ case "$variant" in stock|across_cards|outside_left|outside_left_behind_first|out
 repo="$(realpath "$(dirname "$0")/..")"
 image=ghcr.io/intrinsic-dev/aic/aic_eval@sha256:9aa2ffdbb946d38edde1bac7b5f02a44cfbea26e3b04a9c74e09f14c97472923
 name="aic_recovery_diagnostic_${variant}_20260924"
+gpu="${AIC_AUDIT_GPU:-1}"
 test -f "$audit_dir/eval_config.yaml"
 if [[ "${AIC_AUDIT_SMOOTH_CAPTURE:-0}" == 1 ]]; then
   cp "$repo/artifacts/prod_cheatcode_audit/capture_smooth_wide.py" "$audit_dir/capture_observations.py"
@@ -25,9 +26,9 @@ if docker inspect "$name" >/dev/null 2>&1; then
 fi
 cleanup() { docker stop "$name" >/dev/null 2>&1 || true; docker rm "$name" >/dev/null 2>&1 || true; }
 trap cleanup EXIT
-docker run -d --name "$name" --gpus 'device=1' --net=host \
+docker run -d --name "$name" --gpus "device=$gpu" --net=host \
   --entrypoint /bin/bash \
-  -e NVIDIA_VISIBLE_DEVICES=1 -e NVIDIA_DRIVER_CAPABILITIES=all \
+  -e "NVIDIA_VISIBLE_DEVICES=$gpu" -e NVIDIA_DRIVER_CAPABILITIES=all \
   -e NVIDIA_CONTAINER_CLI_NO_CGROUPS=true -e ROS_DOMAIN_ID=86 \
   -e AIC_RESULTS_DIR=/audit/results -v "$audit_dir:/audit" \
   "$image" -lc 'sleep infinity' > "$audit_dir/container.id"

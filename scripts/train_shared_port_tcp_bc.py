@@ -157,6 +157,9 @@ class SharedPortTCPActor(nn.Module):
         self.use_time = use_time
         self.use_tip = use_tip
         self.condition_on_pose = condition_on_pose
+        # Optional checkpoint-declared ablation. Does not alter state_dict or
+        # raw observation logging; zero means the training normalizer mean.
+        self.masked_state_indices = []
         for key, value in stats.items():
             self.register_buffer(key, torch.as_tensor(value, dtype=torch.float32))
         backbone = resnet18(weights=ResNet18_Weights.IMAGENET1K_V1 if pretrained else None)
@@ -193,6 +196,9 @@ class SharedPortTCPActor(nn.Module):
         views = self.backbone(x).reshape(n, 3, 512) + self.view_embedding[None]
         views, _ = self.view_attention(views, views, views, need_weights=False)
         state = (state - self.state_mean) / self.state_std
+        if self.masked_state_indices:
+            state=state.clone()
+            state[:,self.masked_state_indices]=0
         context = self.context(torch.cat((views.mean(1), state, task), -1))
         if self.use_time:
             if elapsed is None:

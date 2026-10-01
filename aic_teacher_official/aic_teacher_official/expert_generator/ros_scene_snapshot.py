@@ -6,7 +6,7 @@ from pathlib import Path
 from typing import Any
 
 from aic_teacher_official.debug_recorder import validate_image, write_json
-from aic_teacher_official.expert_generator.collision_scene import object_geometries_from_engine_config
+from aic_teacher_official.expert_generator.collision_scene import object_geometries_from_gazebo_assets
 from aic_teacher_official.expert_generator.scene_snapshot import SceneSnapshot, SerializablePose
 
 
@@ -58,7 +58,9 @@ class LiveSceneSnapshotProvider:
         unavailable: dict[str, str] = {}
         if self.engine_config is not None:
             try:
-                collision_objects = object_geometries_from_engine_config(self.engine_config)
+                collision_objects = object_geometries_from_gazebo_assets(
+                    self.engine_config, repo_root=Path(__file__).resolve().parents[3],
+                )
             except Exception as ex:
                 unavailable["collision_objects"] = f"{type(ex).__name__}: {ex}"
         else:

@@ -1,5 +1,11 @@
 # Direct visual policy
 
+## September 30 transport continuation
+
+**Current matched data:** v9 has two fully inserted Cartesian SC episodes (one per port in the exact same five-card world): 1,751 transport and 503 local training chunks. The older failed-insertion transport prefix remains archived in v8 and is excluded from v9. The paired teacher scored 75 at Tier 3. The equal-port shared transport BC run completed 1,500 updates, but failed on both autonomous development starts (103/603 mm planned-standoff error, 0/2 insertion). This is not an autonomous insertion result.
+The teacher transport gate is accepted. The current two-actor continuation is documented in [the execution record](experiments/2026-09-30-transport-to-two-actor-continuation.md). This does not mark autonomous full insertion as successful. Control-matched SC dataset v8 has one fully inserted source and one reviewed transport-only prefix; failed insertion actions are excluded. Existing 268 SFP episodes retain their physical-reset split. The original successful SC local data remains separate. Ten learned candidate rollouts across the same two held-out starts failed; the controller-error mask improved v8 behavior but v9 paired-port training regressed. Routine feed-forward transport BC is stopped pending a bounded route-subgoal/progress diagnosis. No new RL or final-scene evaluation is started. Historical model results below refer to their own checkpoints and evaluation gates.
+
+
 Implemented 2026-09-17 from the
 [June 17 architecture notes](https://github.com/yoonjung0705/tutorials/blob/master/python/libraries/tutorial_aic.md#617-2026-hybrid-train-branch-model-training-especially-for-isaac).
 See the [model checks](experiments/2026-09-17-direct-visual-policy.md) for measured

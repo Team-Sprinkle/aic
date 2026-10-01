@@ -1,0 +1,19 @@
+# Cleaning pauses in the SC teacher episodes before BC
+
+Yes. We can make a **derived BC dataset** that reduces redundant pauses while preserving all 104 original score-verified episodes, their bags, commands, scores, and videos unchanged.
+
+## What is happening in the example
+
+I inspected the plan and runtime trace for the successful `llb_0009` video. The route generator deliberately inserted an **8-second endpoint hold after `sweep_after_row`** and a **5-second hold after `tilt_clear_of_cards`**. Those repeats are marked `replay_modifier: endpoint_joint_hold` in `plans/llb_0009_insert/moveit_joint_trajectory.json`. The wait before tilting in the video is consistent with the first of these; the second occurs after the tilt. They were execution safeguards, not new route choices that BC needs to repeat for 8 or 5 seconds.
+
+The local insertion trace is different. It starts guarded insertion at simulation time 54.85 seconds and reports success at 92.45 seconds. The guard initially held the downward offset **three times** while measured plug-tip lateral error fell from about **1.90 to 1.49 mm**. It then logged 47 speed-gate advance events and repeated force checks, mostly around 1–1.5 N. Thus the apparent insertion stalls include cautious control and contact response; they should not all be erased as useless idle time. This trace alone does not prove which individual video frames had zero measured motion.
+
+## Safe preprocessing for the next BC dataset
+
+1. **Tag exact scripted holds from the plan.** Exclude BC anchors whose command and future 200 ms action chunk lie entirely inside an `endpoint_joint_hold` interval. Keep a short observation window on each side so the actor sees the approach and transition. Never splice a chunk across the removed interval or invent a faster physical action.
+2. **Join commands to measured TCP/plug motion and force.** At a fixed decision window, distinguish a harmless repeated target with negligible motion from a command that tried to move but was blocked. Keep the latter as a contact/recovery diagnostic. Do not train a successful-motion label from a blocked command.
+3. **Reduce repetition during guarded insertion.** Keep the onset of alignment, lateral corrections, force changes, first axial motion, meaningful axial progress, and final success. Subsample long runs of nearly identical observations and commands, or cap their sampling weight. Set the near-port motion threshold from the measured sensor noise and 0.5 mm insertion corridor; a coarse threshold could erase the corrections we need.
+4. **Preserve causal action labels and timing.** Each retained image/state must pair with the target command actually recorded at that instant. The transport actor uses full TCP-body targets; the local actor uses full selected-port-frame targets. Build each 200 ms chunk only from contiguous source commands. Retain phase boundaries and whole-episode/reset train-validation grouping.
+5. **Audit the derived set before training.** Report retained seconds/chunks by transport, alignment, insertion, contact, and selected port; inspect a few command-versus-motion plots and replay videos for each category. Compare a baseline dataset with the raw samples against the cleaned dataset under the same model, episodes, update budget, and held-out development starts. The useful outcome is improved autonomous insertion, not just a shorter training file.
+
+The existing `scripts/materialize_moveit_bc_segments.py` already produces command-derived 200 ms chunks and rejects chunks spanning transport/local ownership or long command holds. It **does not yet remove** the known 8-second and 5-second holds or balance the prolonged guarded-insertion samples. Those are appropriate additions to a new, versioned preprocessing pass before BC. The curated 104-episode source manifest should remain immutable.

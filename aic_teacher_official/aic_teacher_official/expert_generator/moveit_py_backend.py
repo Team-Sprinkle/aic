@@ -16,7 +16,7 @@ from aic_teacher_official.expert_generator.moveit_planner import (
     PlannedApproach,
     PlanningFailure,
 )
-from aic_teacher_official.expert_generator.scene_snapshot import SceneSnapshot
+from aic_teacher_official.expert_generator.scene_snapshot import ObjectGeometry, SceneSnapshot
 from aic_teacher_official.expert_generator.vlm_strategy import VLMStrategy
 from aic_teacher_official.trajectory import PhaseLabel, SourceLabel, TCPPose, TrajectoryWaypoint
 
@@ -35,6 +35,9 @@ class MoveItPyBackendConfig:
     max_velocity_scaling_factor: float = 0.1
     max_acceleration_scaling_factor: float = 0.1
     approach_segment_mode: str = "direct_pre_insert"
+    require_verified_scene: bool = True
+    require_recorded_start: bool = True
+    use_sim_time: bool = True
 
 
 class MoveItPyPlanningBackend:
@@ -56,8 +59,19 @@ class MoveItPyPlanningBackend:
     ) -> PlannedApproach | PlanningFailure:
         try:
             moveit_py = self._moveit_py or self._create_moveit_py()
+            scene_count = _apply_verified_scene(
+                moveit_py, scene_snapshot.collision_objects,
+                required=self.config.require_verified_scene,
+            )
             planning_component = moveit_py.get_planning_component(self.config.planning_group)
-            planning_component.set_start_state_to_current_state()
+            recorded_start = _recorded_start_state(
+                moveit_py, scene_snapshot.joint_state, self.config.planning_group,
+                required=self.config.require_recorded_start,
+            )
+            if recorded_start is None:
+                planning_component.set_start_state_to_current_state()
+            else:
+                _set_planning_start_state(planning_component, recorded_start)
             all_waypoints: list[TrajectoryWaypoint] = []
             segment_summaries: list[dict[str, Any]] = []
             cumulative_time = 0.0
@@ -115,13 +129,15 @@ class MoveItPyPlanningBackend:
             return PlannedApproach(
                 candidate_name=candidate_pose.name,
                 waypoints=all_waypoints,
-                planning_scene_objects=[],
+                planning_scene_objects=list(scene_snapshot.collision_objects),
                 metadata={
                     "backend": "moveit_py",
                     "planning_group": self.config.planning_group,
                     "end_effector_link": self.config.end_effector_link,
                     "candidate": candidate_pose.name,
                     "replay_space": "joint_position",
+                    "collision_objects_applied": scene_count,
+                    "recorded_start_used": recorded_start is not None,
                     "segments": segment_summaries,
                 },
             )
@@ -187,7 +203,7 @@ class MoveItPyPlanningBackend:
             "robot_description_kinematics": _load_yaml(config_dir / "kinematics.yaml"),
             "robot_description_planning": _load_yaml(config_dir / "joint_limits.yaml"),
             "ompl": ompl_config,
-            "use_sim_time": True,
+            "use_sim_time": self.config.use_sim_time,
         }
         params.update(_load_yaml(config_dir / "moveit_controllers.yaml"))
         params.update(moveit_cpp_config)
@@ -220,6 +236,75 @@ def _pose_stamped_from_serializable(pose: Any) -> Any:
     msg.pose.orientation.z = float(pose.orientation_xyzw[2])
     msg.pose.orientation.w = float(pose.orientation_xyzw[3])
     return msg
+
+
+def _apply_verified_scene(moveit_py: Any, objects: list[ObjectGeometry], *, required: bool) -> int:
+    if not required:
+        return 0
+    if not objects or any(obj.metadata.get("source") != "gazebo_assets" for obj in objects):
+        raise ValueError("MoveIt requires nonempty collision objects expanded from the Gazebo assets")
+    if len({obj.name for obj in objects}) != len(objects):
+        raise ValueError("MoveIt collision object IDs are not unique")
+    monitor = moveit_py.get_planning_scene_monitor()
+    with monitor.read_write() as scene:
+        for obj in objects:
+            scene.apply_collision_object(_collision_object_message(obj))
+        scene.current_state.update()
+    with monitor.read_only() as scene:
+        registered = {item.id for item in scene.planning_scene_message.world.collision_objects}
+    missing = {obj.name for obj in objects} - registered
+    if missing:
+        raise RuntimeError(f"MoveIt planning scene missing {len(missing)} collision objects")
+    return len(objects)
+
+
+def _collision_object_message(obj: ObjectGeometry) -> Any:
+    from geometry_msgs.msg import Pose
+    from moveit_msgs.msg import CollisionObject
+    from shape_msgs.msg import SolidPrimitive
+
+    if obj.pose.frame_id != "world":
+        raise ValueError(f"Expected Gazebo world frame for {obj.name}; got {obj.pose.frame_id}")
+    primitive = SolidPrimitive()
+    if obj.shape == "box" and len(obj.dimensions) == 3:
+        primitive.type = SolidPrimitive.BOX
+    elif obj.shape == "cylinder" and len(obj.dimensions) == 2:
+        primitive.type = SolidPrimitive.CYLINDER
+    else:
+        raise ValueError(f"Unsupported MoveIt collision shape {obj.shape}: {obj.name}")
+    primitive.dimensions = list(obj.dimensions)
+    pose = Pose()
+    pose.position.x, pose.position.y, pose.position.z = obj.pose.position
+    pose.orientation.x, pose.orientation.y, pose.orientation.z, pose.orientation.w = obj.pose.orientation_xyzw
+    message = CollisionObject()
+    message.header.frame_id = obj.pose.frame_id
+    message.id = obj.name
+    message.operation = CollisionObject.ADD
+    message.primitives = [primitive]
+    message.primitive_poses = [pose]
+    return message
+
+
+def _recorded_start_state(
+    moveit_py: Any, joint_state: dict[str, list[float]] | None, group: str, *, required: bool,
+) -> Any | None:
+    if not required:
+        return None
+    if not joint_state:
+        raise ValueError("Recorded Gazebo joint state is required for MoveIt start")
+    names = list(joint_state.get("name", []))
+    positions = list(joint_state.get("position", []))
+    by_name = dict(zip(names, positions, strict=True))
+    arm_names = ["shoulder_pan_joint", "shoulder_lift_joint", "elbow_joint",
+                 "wrist_1_joint", "wrist_2_joint", "wrist_3_joint"]
+    if any(name not in by_name for name in arm_names):
+        raise ValueError("Recorded Gazebo joint state lacks one or more UR5e joints")
+    from moveit.core.robot_state import RobotState
+
+    state = RobotState(moveit_py.get_robot_model())
+    state.set_joint_group_active_positions(group, np.asarray([by_name[name] for name in arm_names], dtype=np.float64))
+    state.update()
+    return state
 
 
 def _phase_from_route_subgoal(value: str) -> PhaseLabel:

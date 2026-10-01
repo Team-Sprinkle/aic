@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import csv
+import os
 from pathlib import Path
 import time
 
@@ -26,7 +27,8 @@ class Capture(Node):
         self.writer.writerow(("camera", "wall_ns", "sim_ns", "file"))
         self.last_sim_ns = {}
         self._audit_subscriptions = []
-        for name in ("left", "center", "right", "overhead", "side"):
+        extra = tuple(filter(None, os.environ.get('AIC_AUDIT_EXTRA_CAMERAS', '').split(',')))
+        for name in ("left", "center", "right", "overhead", "side") + extra:
             topic = f"/{name}_camera/image" if name in {"left", "center", "right"} else f"/audit/{name}/image"
             self._audit_subscriptions.append(self.create_subscription(
                 Image, topic, lambda msg, camera=name: self.save(camera, msg),
