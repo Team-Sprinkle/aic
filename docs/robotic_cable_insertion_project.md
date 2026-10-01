@@ -24,9 +24,11 @@ I first trained ACT and a Dreamer v4-style policy on Gazebo demonstrations. ACT 
 
 For the near-port task, I used the camera-based pose estimator from section 2 as a **frozen input** to a PoseInsert-inspired policy, alongside camera images, force, and robot state. Both the diffusion model and a simpler direct-prediction model learned the connector's desired **position and orientation** after each of the next four 50 ms movements, relative to the port. A fixed measurement of how the robot grips the connector lets the controller turn those predictions into gripper movements.
 
-The direct prediction seated **6/6** connectors on six development starts. These are autonomous **8 mm local seating** tests that start near the port, without an expert guide or hard-coded retreat upon collision.
+The direct-prediction pipeline seated **6/6** connectors on six development starts. Each rollout first used a simulator-based correction to restore the plug tip near its requested start pose; this temporarily overrode policy commands. After that startup step, the frozen BC policy controlled the connector without the force-triggered backtracking controller from section 4. These are **8 mm local seating** results from near-port starts, not policy-only results from the first frame.
 
-![Autonomous local connector seating by the selected trajectory policy](images/cable_insertion/local_policy_seating.gif)
+![Near-port local seating after the startup tip-restoration step](images/cable_insertion/local_policy_seating.gif)
+
+*The left wrist-camera GIF shows one successful local seat. Its visible early backoff occurs during a rollout with the startup tip-restoration override enabled; the recorded policy takes over after the override releases. This is not the collision-recovery backtracking experiment in section 4.*
 
 The world-model branch supplied a useful diagnostic: its supervised visual policy achieved **one full insertion in four development scenes** and reached a 25 mm opening envelope in **17/20** frozen scenes, versus **12/20** for ACT. Neither model fully inserted in the frozen 20-scene test. The preview is a **10× time-lapse of a one-frame-per-second recording** from the successful world model development scene, not a high-rate control video.
 
@@ -39,3 +41,5 @@ I also tested a way to recover when the robot pushes but the connector stops mov
 For this experiment, I started a probabilistic four-waypoint policy from the supervised controller and trained it with SAC-style reinforcement learning. The final RL policy matched, but did not improve on, its starting policy in a metrics-only eight-start test (**3/8** local seats each). In a separate recording-enabled run on eight near-port starts, the same RL policy seated **3/8 with recovery enabled** versus **1/8 without it**.
 
 ![Recovery-enabled RL rollout that reaches a local seat](images/cable_insertion/recovery_enabled_local_seating.gif)
+
+*The cable movement in the scene is due to scene startup*
