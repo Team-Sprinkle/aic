@@ -6,6 +6,7 @@ Start here when returning to this repository. These pages describe the local
 
 | Question | Maintained page |
 | --- | --- |
+| Is there a concise project overview with results and visual examples? | [Robotic cable insertion project writeup](robotic_cable_insertion_project.md) |
 | What works, what is unresolved, and what should we do next? | [Current status](STATUS.md) |
 | Did the farther SC cable route clear the cards and survive ±1 cm changes? | [Five-card route sensitivity, videos, and stopped gate](experiments/2026-09-26-sc-far-return-route-sensitivity.md) |
 | How would selected-port visibility, confidence, and the two actors be trained and switched? | [Task-conditioned perception and actor handoff](POSE_VISIBILITY_HANDOFF.md) |
