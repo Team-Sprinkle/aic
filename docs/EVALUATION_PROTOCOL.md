@@ -1,5 +1,9 @@
 # Development settings versus post-release qualification settings
 
+## October 19 diagnostic exception
+
+The user explicitly authorized inspecting videos from the already published `eval_config.yaml` and iterating on its failures. The October 19 SFP and SC repairs therefore use that **exposed, post-release configuration for diagnosis and selection**. This overrides the earlier no-tuning instruction below for this work. Its score measures a repaired known configuration; it is **not** an unseen generalization or a historically valid competition submission. Preserve all intermediate failed variants, and keep the separate reserved internal final scenes sealed. Broad reliability still requires independently generated development starts and a newly sealed test after the design is frozen.
+
 ## Current rule — October 16, 2026
 
 **Develop transport rules, models and thresholds using the pre-release public sample and task specification. Do not use the subsequently released leaderboard scenes, or derivatives of them, to design the solution.** This supersedes earlier recommendations to work backwards from the released exact qualification configuration.

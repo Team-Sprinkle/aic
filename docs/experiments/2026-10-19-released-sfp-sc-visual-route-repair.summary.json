@@ -1,0 +1,28 @@
+{
+  "schema": "released_sfp_sc_visual_route_repair/v1",
+  "date_utc": "2026-10-19",
+  "scope": "exposed post-release eval_config.yaml diagnostic, not unseen generalization",
+  "reserved_internal_final_opened": false,
+  "model_weights_changed": false,
+  "bc_or_rl_actions_used": false,
+  "baseline_score_range_300": [98.6188, 98.7490],
+  "baseline_insertions_per_three_trials": 1,
+  "sfp_only_repair": {
+    "score_300": 191.66125313810733,
+    "insertions": 2,
+    "artifact_root": "/home/nas/chmin/aic_archives/2026-10-19_sc_sfp_released_repair_cycle5_fresh_envelope"
+  },
+  "selected_replays": {
+    "scores_300": [272.70194162902476, 275.43557636542783, 273.14393810501326, 276.2642274268743],
+    "physical_insertions": 12,
+    "rounds": 12,
+    "artifact_roots": [
+      "/home/nas/chmin/aic_archives/2026-10-19_sc_sfp_released_repair_cycle8_sc_marker",
+      "/home/nas/chmin/aic_archives/2026-10-19_sc_sfp_released_repair_cycle9_sc_marker_repeat3"
+    ]
+  },
+  "sample_derived_sc_marker_full_insertion": {"insertions": 2, "episodes": 4},
+  "maximum_transport_active_decision_p95_ms_across_12_rounds": 299.4,
+  "video": "/home/nas/chmin/aic_archives/2026-10-19_sc_sfp_released_repair_cycle8_sc_marker/repeat_1/rollout/five_cameras_10fps_grid.mp4",
+  "decision": "Released configuration repaired; broad SC insertion and five-card marker acquisition remain open"
+}
