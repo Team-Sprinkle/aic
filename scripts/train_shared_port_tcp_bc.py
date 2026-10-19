@@ -152,14 +152,28 @@ class Samples(Dataset):
 
 class SharedPortTCPActor(nn.Module):
     def __init__(self, stats, *, pretrained=True, use_time=False, use_tip=False,
-                 condition_on_pose=True):
+                 condition_on_pose=True,separate_family_orientation_head=False,
+                 separate_family_action_head=False,use_local_history=False,decoder_kind="transformer"):
         super().__init__()
+        self.decoder_kind=decoder_kind
+        self.coordinate_heads_fp32=False
+        if decoder_kind not in ("transformer","mlp"):raise ValueError("Unknown local sequence decoder")
         self.use_time = use_time
         self.use_tip = use_tip
         self.condition_on_pose = condition_on_pose
+        self.separate_family_orientation_head=separate_family_orientation_head
+        self.separate_family_action_head=separate_family_action_head
+        self.use_local_history=use_local_history
+        if separate_family_orientation_head and separate_family_action_head:
+            raise ValueError('Choose one family-specific action head form')
         # Optional checkpoint-declared ablation. Does not alter state_dict or
         # raw observation logging; zero means the training normalizer mean.
         self.masked_state_indices = []
+        self.mask_history_command_feedback = False
+        self.masked_tip_indices = []
+        self.tip_input_mode = 'none'
+        self.sc_action_reference = 'tcp'
+        self.constant_body_tip = None
         for key, value in stats.items():
             self.register_buffer(key, torch.as_tensor(value, dtype=torch.float32))
         backbone = resnet18(weights=ResNet18_Weights.IMAGENET1K_V1 if pretrained else None)
@@ -169,6 +183,11 @@ class SharedPortTCPActor(nn.Module):
         self.view_attention = nn.MultiheadAttention(512, 8, batch_first=True)
         self.context = nn.Sequential(nn.LayerNorm(512 + 32 + 10),
                                      nn.Linear(554, 256), nn.SiLU(), nn.Linear(256, 256))
+        if use_local_history:
+            self.history_context=nn.Sequential(nn.LayerNorm(4*42),nn.Linear(4*42,256),
+                                               nn.SiLU(),nn.Linear(256,256))
+            nn.init.zeros_(self.history_context[-1].weight)
+            nn.init.zeros_(self.history_context[-1].bias)
         if use_time:
             self.time_context = nn.Sequential(nn.Linear(1, 64), nn.SiLU(), nn.Linear(64, 256))
             nn.init.zeros_(self.time_context[-1].weight)
@@ -185,9 +204,31 @@ class SharedPortTCPActor(nn.Module):
                                            activation='gelu', batch_first=True, norm_first=True)
         self.transformer = nn.TransformerEncoder(layer, 2)
         self.action_head = nn.Sequential(nn.LayerNorm(256), nn.Linear(256, 9))
+        if decoder_kind=="mlp":
+            self.sequence_head=nn.Sequential(nn.Linear(256,512),nn.SiLU(),nn.Linear(512,36))
+        if separate_family_action_head:
+            self.sc_action_head=nn.Sequential(nn.LayerNorm(256),nn.Linear(256,9))
+            self.sfp_action_head=nn.Sequential(nn.LayerNorm(256),nn.Linear(256,9))
+        if separate_family_orientation_head:
+            self.sc_orientation_head=nn.Sequential(nn.LayerNorm(256),nn.Linear(256,6))
+            self.sfp_orientation_head=nn.Sequential(nn.LayerNorm(256),nn.Linear(256,6))
+
+    def initialize_family_orientation_heads_from_shared(self):
+        if not self.separate_family_orientation_head:return
+        with torch.no_grad():
+            for head in (self.sc_orientation_head,self.sfp_orientation_head):
+                head[0].load_state_dict(self.action_head[0].state_dict())
+                head[1].weight.copy_(self.action_head[1].weight[3:9])
+                head[1].bias.copy_(self.action_head[1].bias[3:9])
+
+    def initialize_family_action_heads_from_shared(self):
+        if not self.separate_family_action_head:return
+        with torch.no_grad():
+            for head in (self.sc_action_head,self.sfp_action_head):
+                head.load_state_dict(self.action_head.state_dict())
 
     def forward(self, images, state, task, elapsed=None, external_pose=None,
-                external_mask=None, physical_tip=None, tip_mask=None):
+                external_mask=None, physical_tip=None, tip_mask=None,local_history=None):
         n = images.shape[0]
         x = images.float().reshape(n * 3, 3, 224, 224) / 255
         mean = x.new_tensor((.485, .456, .406))[None, :, None, None]
@@ -195,11 +236,33 @@ class SharedPortTCPActor(nn.Module):
         x = (x - mean) / std
         views = self.backbone(x).reshape(n, 3, 512) + self.view_embedding[None]
         views, _ = self.view_attention(views, views, views, need_weights=False)
+        if getattr(self,'control_path_fp32',False):
+            # Images can use mixed precision. Keep submillimetre proprio/pose
+            # conditioning and the tiny four-token action decoder in FP32.
+            with torch.autocast(device_type=views.device.type,enabled=False):
+                return self._control_forward(views.float(),state.float(),task.float(),elapsed,
+                    external_pose,external_mask,physical_tip,tip_mask,local_history)
+        return self._control_forward(views,state,task,elapsed,external_pose,
+            external_mask,physical_tip,tip_mask,local_history)
+
+    def _control_forward(self,views,state,task,elapsed,external_pose,
+                         external_mask,physical_tip,tip_mask,local_history):
+        n=state.shape[0]
         state = (state - self.state_mean) / self.state_std
         if self.masked_state_indices:
             state=state.clone()
             state[:,self.masked_state_indices]=0
         context = self.context(torch.cat((views.mean(1), state, task), -1))
+        if self.use_local_history:
+            if local_history is None or local_history.shape!=(n,4,42):
+                raise ValueError('Four causal 42D local-history samples required')
+            prior_state=(local_history[...,:32]-self.state_mean)/self.state_std
+            if self.mask_history_command_feedback and self.masked_state_indices:
+                prior_state=prior_state.clone()
+                prior_state[...,self.masked_state_indices]=0
+            prior_pose=(local_history[...,32:41]-self.pose_mean)/self.pose_std
+            age=local_history[...,41:42].clamp(0,getattr(self,"history_max_age_s",2.))
+            context=context+self.history_context(torch.cat((prior_state,prior_pose,age),-1).flatten(1))
         if self.use_time:
             if elapsed is None:
                 raise ValueError('Elapsed simulation time is required for this checkpoint')
@@ -208,6 +271,9 @@ class SharedPortTCPActor(nn.Module):
             if physical_tip is None or tip_mask is None or tip_mask.shape != (n,):
                 raise ValueError('Physical plug-tip pose requires an explicit mask per row')
             tip = (physical_tip - self.tip_mean) / self.tip_std
+            if self.masked_tip_indices:
+                tip=tip.clone()
+                tip[:,self.masked_tip_indices]=0
             tip = torch.cat((tip, tip_mask[:, None].to(tip.dtype)), -1)
             context = context + self.tip_context(tip) * tip_mask[:, None]
         predicted_pose_normalized = self.pose_head(context)
@@ -221,8 +287,29 @@ class SharedPortTCPActor(nn.Module):
         if not self.condition_on_pose:
             condition_pose = torch.zeros_like(condition_pose)
         condition = self.pose_context(torch.cat((context, condition_pose), -1))
+        if self.decoder_kind=="mlp":
+            if self.separate_family_action_head or self.separate_family_orientation_head:
+                raise ValueError("Sequence MLP has one shared full-target head")
+            with torch.autocast(device_type=condition.device.type,enabled=False):
+                targets=self.sequence_head(condition.float()).reshape(n,4,9)
+            targets=targets*self.target_std+self.target_mean
+            return targets,predicted_pose_normalized*self.pose_std+self.pose_mean
         tokens = self.waypoint_tokens + condition[:, None]
-        targets = self.action_head(self.transformer(tokens)) * self.target_std + self.target_mean
+        decoded=self.transformer(tokens)
+        if self.coordinate_heads_fp32:
+            with torch.autocast(device_type=decoded.device.type,enabled=False):
+                targets=self.action_head(decoded.float())
+        else:targets=self.action_head(decoded)
+        if self.separate_family_action_head:
+            sc=self.sc_action_head(decoded)
+            sfp=self.sfp_action_head(decoded)
+            targets=torch.where(task[:,1,None,None]>.5,sc,sfp)
+        if self.separate_family_orientation_head:
+            sc=self.sc_orientation_head(decoded)
+            sfp=self.sfp_orientation_head(decoded)
+            orientation=torch.where(task[:,1,None,None]>.5,sc,sfp)
+            targets=torch.cat((targets[...,:3],orientation),dim=-1)
+        targets=targets*self.target_std+self.target_mean
         predicted_pose = predicted_pose_normalized * self.pose_std + self.pose_mean
         return targets, predicted_pose
 

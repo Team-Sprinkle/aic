@@ -26,6 +26,9 @@ class Capture(Node):
         self.writer = csv.writer(self.csv_file)
         self.writer.writerow(("camera", "wall_ns", "sim_ns", "file"))
         self.last_sim_ns = {}
+        rate=float(os.environ.get('AIC_AUDIT_CAPTURE_HZ','0'))
+        self.min_period_ns=int(1e9/rate) if rate>0 else 0
+        self.last_saved_sim_ns={}
         self._audit_subscriptions = []
         extra = tuple(filter(None, os.environ.get('AIC_AUDIT_EXTRA_CAMERAS', '').split(',')))
         for name in ("left", "center", "right", "overhead", "side") + extra:
@@ -39,6 +42,9 @@ class Capture(Node):
         if sim_ns <= self.last_sim_ns.get(camera, -1):
             return
         self.last_sim_ns[camera] = sim_ns
+        if sim_ns-self.last_saved_sim_ns.get(camera,-10**18)<self.min_period_ns:
+            return
+        self.last_saved_sim_ns[camera]=sim_ns
         wall_ns = time.time_ns()
         image = self.bridge.imgmsg_to_cv2(msg, desired_encoding="bgr8")
         filename = f"{wall_ns}_{sim_ns}_{camera}.jpg"

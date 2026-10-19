@@ -1,0 +1,50 @@
+{
+  "schema": "sfp_slot_feature_port_cue_decision/v1",
+  "date": "2026-10-07",
+  "candidate_set": {
+    "episodes": 10,
+    "early_named_correct": 3,
+    "early_set_contains_requested_within_20mm": 4,
+    "artifact": "outputs/experiments/2026-10-07_sfp_candidate_set_ceiling_v1/summary.json"
+  },
+  "slot_pixel_head": {
+    "train_groups": 70,
+    "development_groups": 10,
+    "updates_completed": 2000,
+    "selected_step": 1500,
+    "early_correct_episodes": 1,
+    "accepted_wrong": 0,
+    "accepted_rows": 1,
+    "gate_passed": false,
+    "artifact": "outputs/experiments/2026-10-07_sfp_slot_feature_port_cue_v3/summary.json"
+  },
+  "shared_3d_head": {
+    "train_groups": 70,
+    "development_groups": 10,
+    "updates_completed": 2000,
+    "selected_step": 1250,
+    "early_correct_episodes": 10,
+    "accepted_wrong": 5,
+    "accepted_3d_p95_mm": 39.75235541091606,
+    "uncertainty_20mm_precision": 0.48739495798319327,
+    "gate_passed": false,
+    "artifact": "outputs/experiments/2026-10-07_sfp_slot_feature_port_3d_v1/summary.json"
+  },
+  "privileged_transport_diagnostic": {
+    "train_groups": 50,
+    "development_groups": 10,
+    "updates_completed": 1000,
+    "zero_cue_early_p95_mm": 1.9052110791206358,
+    "true_cue_early_p95_mm": 1.8502121806144713,
+    "fractional_improvement": 0.02886761425487283,
+    "gate_passed": false,
+    "privileged_geometry_input": true,
+    "deployable": false,
+    "artifact": "outputs/experiments/2026-10-07_sfp_oracle_transport_cue_v2/summary.json"
+  },
+  "independent_public_observation_review_completed": false,
+  "autonomous_live_test_started": false,
+  "final_scenes_opened": false,
+  "handoff_enabled": false,
+  "decision": "Stop this representation branch. Obtain independent complete-public-observation review before a temporally maintained board-origin/slot-order model or earlier inspection posture. Test transport on off-route autonomous states only after identity gate."
+}

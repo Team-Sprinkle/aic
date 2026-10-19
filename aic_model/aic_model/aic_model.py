@@ -17,6 +17,7 @@
 
 import importlib
 import inspect
+import os
 import numpy as np
 import rclpy
 import threading
@@ -79,9 +80,9 @@ class AicModel(LifecycleNode):
             raise LookupError(expected_policy_class_name)
 
         self._tf_buffer = Buffer()
-        self._tf_listener = TransformListener(
-            buffer=self._tf_buffer, node=self, spin_thread=True
-        )
+        self._tf_listener = None
+        if os.environ.get("AIC_DELAY_TF_LISTENER", "0") != "1":
+            self.enable_tf_listener()
 
         self.cancel_service = self.create_service(
             Empty, "cancel_task", self.cancel_task_callback
@@ -114,6 +115,13 @@ class AicModel(LifecycleNode):
         self._change_target_mode_client = self.create_client(
             ChangeTargetMode, "/aic_controller/change_target_mode"
         )
+
+    def enable_tf_listener(self):
+        """Start privileged TF reception only when a diagnostic teacher needs it."""
+        if self._tf_listener is None:
+            self._tf_listener = TransformListener(
+                buffer=self._tf_buffer, node=self, spin_thread=True
+            )
 
     def on_configure(self, state: LifecycleState) -> TransitionCallbackReturn:
         self.get_logger().info(f"on_configure({state})")

@@ -1,0 +1,54 @@
+{
+  "schema": "sfp_slot_conditioned_crop_decision/v1",
+  "date": "2026-10-06",
+  "status": "handoff_gate_failed",
+  "crop_coverage_projected_at_least_two_views_early": {
+    "development_groups": "10/10",
+    "additional_nonfinal_groups": "10/10",
+    "crop_size_native_px": 480
+  },
+  "training": {
+    "train_reset_groups": 70,
+    "train_frames": 3690,
+    "expanded_present_requests": 21262,
+    "development_reset_groups": 10,
+    "development_recorded_requests": 119,
+    "updates_completed": 2000,
+    "selected_update": 1800,
+    "gpu_count": 1,
+    "checkpoint": "/home/nas/chmin/aic_archives/2026-10-06_sfp_slot_crop_fit_v1/best.pt"
+  },
+  "additional_nonfinal_matched_comparison": {
+    "reset_groups": 10,
+    "frames": 581,
+    "old_checkpoint": {
+      "accepted_frames": 38,
+      "wrong_accepted": 1,
+      "accepted_3d_p95_mm": 4.4579996540215605,
+      "early_groups": 6
+    },
+    "new_checkpoint": {
+      "accepted_frames": 62,
+      "wrong_accepted": 0,
+      "accepted_3d_p95_mm": 1.796783178345618,
+      "early_groups": 6
+    }
+  },
+  "predeclared_promotion_gate": {
+    "wrong_accepted_max": 0,
+    "early_groups_min": 9,
+    "accepted_3d_p95_mm_max": 20,
+    "passed": false,
+    "failed_reason": "early_groups_6_of_10"
+  },
+  "failure_diagnosis": "confident_per_camera_neighbor_port_choices_break_three_view_reprojection_consistency",
+  "automatic_handoff_enabled": false,
+  "rl_enabled": false,
+  "final_scenes_opened": false,
+  "artifacts": {
+    "training": "/home/nas/chmin/aic_archives/2026-10-06_sfp_slot_crop_fit_v1",
+    "old_matched": "/home/nas/chmin/aic_archives/2026-10-06_sfp_slot_crop_independent_old_checkpoint_v1",
+    "new_matched": "/home/nas/chmin/aic_archives/2026-10-06_sfp_slot_crop_independent_new_checkpoint_v1",
+    "original_image_overlays": "/home/nas/chmin/aic_archives/2026-10-06_sfp_slot_crop_failure_views_v1"
+  }
+}

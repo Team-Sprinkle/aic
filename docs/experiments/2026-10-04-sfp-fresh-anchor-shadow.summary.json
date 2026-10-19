@@ -1,0 +1,51 @@
+{
+  "schema": "sfp_fresh_anchor_shadow_decision/v1",
+  "plan": "/home/nas/chmin/aic_archives/2026-10-04_sfp_fresh_anchor_shadow_v1/plan.json",
+  "planned_nonfinal_resets": 10,
+  "completed_scored_resets": 10,
+  "teacher_full_insertions": 9,
+  "teacher_partial_insertions": 1,
+  "teacher_partial_case": "card2_port1",
+  "synchronized_triplets_at_0_5s": 581,
+  "crop_proposals": 346,
+  "requested_port_inside_all_three_crops_label_only": 335,
+  "episodes_with_true_port_inside_crop_by_3s_label_only": 10,
+  "frozen_union_early_acquisitions": 7,
+  "frozen_union_accepted_wrong_ports": 46,
+  "frozen_union_cross_model_conflicts_over_10mm": 25,
+  "frozen_models_accepted_wrong_ports": {
+    "allport": 27,
+    "structured": 8,
+    "selected": 0,
+    "crop": 11
+  },
+  "frozen_models_early_acquisitions": {
+    "allport": 3,
+    "structured": 5,
+    "selected": 3,
+    "crop": 4
+  },
+  "frozen_models_accepted_3d_p95_mm": {
+    "allport": 48.53409016154593,
+    "structured": 51.404586894125615,
+    "selected": 2.6274114518612874,
+    "crop": 22.86915392556119
+  },
+  "bounded_observation_only_repair": {
+    "accepted_wrong": 0,
+    "early_acquisitions": 5,
+    "accepted_3d_p95_mm": 2.8702122635287846,
+    "same_scene_exploratory_only": true,
+    "promoted": false
+  },
+  "offline_four_model_image_stage_p95_ms": 190.7937500393018,
+  "complete_live_latency_measured": false,
+  "gate_passed": false,
+  "gate_status": "failed: wrong-port acceptance and early coverage; full live latency not run",
+  "blocker": "coherent neighbor-port and neighbor-card swaps across camera views",
+  "rootless_quota_after_increase": "193/1024",
+  "models_changed": false,
+  "actor_or_rl_trained": false,
+  "final_scenes_opened": false,
+  "artifact_root": "/home/nas/chmin/aic_archives/2026-10-04_sfp_fresh_anchor_shadow_v1"
+}

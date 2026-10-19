@@ -1,0 +1,60 @@
+{
+  "schema": "aic_sfp_sparse_camera_continuation/v1",
+  "date_utc": "2026-10-05",
+  "pilot_gate": {"required_full_insertions": 3, "pilot_cases": 4, "observed_full_insertions": 2, "passed": false, "full_expansion_run": false},
+  "pilot_cases": {
+    "cards1_slot0_port0": {"official_tier3": 75.0, "full_insertion": true},
+    "cards1_slot4_port1": {"official_tier3": 75.0, "full_insertion": true},
+    "cards2_slot1_port0": {"official_tier3": 38.27666117717564, "full_insertion": false},
+    "cards2_slot4_port1": {"official_tier3": 25.0, "full_insertion": false}
+  },
+  "same_scene_original_target_controls": {
+    "cards2_slot1_original_card0_port1": {"official_tier3": 75.0, "full_insertion": true},
+    "cards2_slot4_original_card0_port1": {"official_tier3": 75.0, "full_insertion": true}
+  },
+  "included_successful_episodes": 4,
+  "excluded_failed_pilot_episodes": 2,
+  "new_projection_triplets": 2030,
+  "new_strict_triplets": 2026,
+  "new_request_rows": 20260,
+  "v3_train_triplets": 3690,
+  "v3_train_reset_groups": 70,
+  "v3_total_triplets_all_roles": 4500,
+  "v3_total_request_rows_all_roles": 45000,
+  "sparse_scene_request_presence_mismatches": 0,
+  "sampled_rgb_triplets_decoded": 120,
+  "true_visibility_labels": 0,
+  "safe_pause_labels": 0,
+  "native_rgb_blind_identity_review": {
+    "cases": 4,
+    "requested_slot_uncertain": 4,
+    "posthoc_physically_present": 2,
+    "posthoc_physically_absent": 2,
+    "pre_score_annotations": "/home/nas/chmin/aic_archives/2026-10-05_sfp_camera_check_dataset_v2/native_blind_aliases_20261005/blind_annotations_before_scoring.json",
+    "scored_annotations": "/home/nas/chmin/aic_archives/2026-10-05_sfp_camera_check_dataset_v2/native_blind_aliases_20261005/scored_annotations.json",
+    "full_166_item_review_completed": false,
+    "independent_second_reviewer": false
+  },
+  "prior_wide_view_gate": {"requested_numbered_face_identified": 0, "scenes": 4, "motion_aborts": 1, "record": "docs/experiments/2026-10-04-sfp-wide-observation-gate.md"},
+  "next_distinct_experiment": {
+    "hypothesis": "A learned board rail origin and occupied-slot map can resolve numbered card identity from existing native RGB better than direct requested-port crops.",
+    "training_source": "Existing train-only native RGB; simulator CAD/scene geometry for labels only",
+    "evaluation_split": "Complete saved nonfinal development reset groups; final scenes sealed",
+    "max_updates": 2000,
+    "max_gpus": 1,
+    "gate": "At least 8/10 exact occupancy maps, at least two correctly mapped sparse scenes, zero confident empty-slot assignments, and improved early requested-port acquisition without accepted wrong ports",
+    "failure_action": "Stop fitting the same wrist view and design a distinct observation cue or pose"
+  },
+  "camera_check_model_trained": false,
+  "autonomous_handoff_enabled": false,
+  "final_scenes_opened": false,
+  "artifacts": {
+    "pilot_progress": "/home/nas/chmin/aic_archives/2026-10-05_sfp_sparse_camera_train_v1/progress.json",
+    "control_progress": "/home/nas/chmin/aic_archives/2026-10-05_sfp_sparse_camera_controls_v1/progress.json",
+    "success_selection": "/home/nas/chmin/aic_archives/2026-10-05_sfp_sparse_camera_success_selection_v1/collection_manifest.json",
+    "v3_summary": "/home/nas/chmin/aic_archives/2026-10-05_sfp_camera_check_dataset_v3/summary.json",
+    "v3_audit": "/home/nas/chmin/aic_archives/2026-10-05_sfp_camera_check_dataset_v3/structural_audit.json",
+    "sparse_scene_audit": "/home/nas/chmin/aic_archives/2026-10-05_sfp_camera_check_dataset_v3/sparse_scene_independent_audit.json"
+  },
+  "decision": "Preserve v3 as a candidate geometry/request dataset. Do not train visual identity, visibility or pause heads from projected geometry. Stop routine same-view labeling and collection; the next distinct diagnostic is an observation-only fixed rail-origin and occupied-slot reference check on existing RGB."
+}

@@ -1,0 +1,15 @@
+# Should we train from scratch?
+
+**Not as the first full experiment.** I would keep the working visual/perception weights and test whether the actor's old-policy initialization is preventing it from using the predicted pose. A full actor restart would remove that bias, but it would also discard transport behavior learned from many demonstrations while the relevant actor-visited corrective data remain sparse.
+
+The present pose-conditioned actor starts from a previous actor checkpoint. Its new three-dimensional pose projection starts at zero, so initially the model makes exactly its old kind of prediction. Training also includes a weight-1 loss that keeps actions close to the old actor on ordinary SFP observations. Corrective SFP rows receive only 5% of optimizer samples, and checkpoint selection excludes corrective validation rows. These choices make the comparison controlled and protect existing behavior, but they also make it easy to ignore the new input. The matched runs ended at the 2,000-update cap; they do not prove a longer run would fail, although simply running longer would be a poor diagnostic.
+
+## Recommended order
+
+1. **Small pose-use diagnostic:** On a grouped set of actor-visited states with valid predicted poses and causally joined corrective full-action targets, check whether the current architecture can fit the training labels and respond to a changed requested pose. Compare true, zero and request-shuffled pose. If it cannot even fit this small set, inspect gradients and sampling before any broad training.
+2. **Matched partial restart:** Keep the frozen image/perception encoder. Compare (a) the current warm-start actor, (b) the same actor with its temporal/action head reset, and optionally (c) a fully new temporal/action actor. Use identical demonstration data, episode split and update budget. Make accepted corrective rows visible often enough, select checkpoints against grouped corrective validation as well as ordinary transport, and measure whether the action actually changes with pose. Do not use simulator pose as deployable input.
+3. **Full actor-from-scratch run only if warranted:** Do this if the partial restart clearly learns pose-dependent corrections without losing normal SFP/SC transport and there is enough route and recovery coverage to train a new actor. A scratch run should be a matched ablation, not assumed to be the solution.
+
+The next meaningful gate is not merely lower imitation loss: require a substantial held-out late-correction improvement, clear sensitivity to the *correct* predicted pose, no material ordinary-task regression, then safe arrivals on new nonfinal autonomous starts. Keep the final split sealed. This also tests whether the issue is initialization, the training objective, or missing corrective labels.
+
+Related details: [training-method diagnosis](2026-10-08-could-training-method-explain-ignored-pose.md) and [experiment record](../experiments/2026-10-07-sfp-early-branch-support.md#route-feedback-ablation-result-the-pose-is-visible-but-this-actor-ignores-it).

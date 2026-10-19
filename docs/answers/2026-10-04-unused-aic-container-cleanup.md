@@ -1,0 +1,9 @@
+# Unused AIC container cleanup — October 4, 2026
+
+I removed **25 stopped September AIC experiment containers** created for this project. Before removal, I checked that each was stopped, inspected its creation date and mounts, and reviewed the three large writable layers for unmounted checkpoints, bags, videos and output files. The writable layers were mainly simulator caches and logs; recorded experiment data is on bind-mounted host paths. Docker reported about **11.76 GB** of writable-layer data across the 25 containers before removal. This is a sum of reported layer sizes, not a measured change in free disk space.
+
+I left the active `aic_isaac_world_policy_20260920` container running. I also preserved `isaac-lab-base`, `aic_eval`, `aic_dev` and two old `hello-world` containers because their ownership or unmounted state was less certain.
+
+The kernel key count was **199/200 before and after** the bulk removal. Removing stopped Docker containers did not measurably free those keyrings. A minimal new `docker run --rm` now starts and exits successfully, so a single sequential Gazebo container can be attempted. This is a fragile one-slot opening, not a durable fix for the kernel quota. The host administrator can raise `kernel.keys.maxkeys` and `kernel.keys.maxbytes` for durable headroom; see the [quota explanation](2026-10-04-rootless-docker-key-quota.md).
+
+The [tracked cleanup summary](../experiments/2026-10-04-rootless-container-cleanup.summary.json) lists every removed name. Full IDs, mounts and sizes are in [the small-container audit](/data1/chmin/yj/ws_aic/src/aic/outputs/experiments/2026-10-04_rootless_key_quota_cleanup/removed_small_containers.json) and [the large-container audit](/data1/chmin/yj/ws_aic/src/aic/outputs/experiments/2026-10-04_rootless_key_quota_cleanup/removed_large_containers.json).

@@ -1,0 +1,34 @@
+{
+  "stage": "full_connector_BC_diagnostic",
+  "orientation": {
+    "sc": {
+      "p95_deg": 0.8918725,
+      "episodes": 21,
+      "frames": 252,
+      "position_mode": "retain RGB landmark translation",
+      "translation_p95_mm": 0.2257385
+    },
+    "sfp": {
+      "p95_deg": 0.4924372,
+      "episodes": 47,
+      "frames": 803,
+      "public_acquisition_p95_deg": 0.4302484,
+      "public_acquisition_episodes": 39
+    }
+  },
+  "actor_insertion_improvement_established": false,
+  "previous_comparison": {
+    "rollouts": 14,
+    "full_insertions": 0,
+    "development_configurations": 2
+  },
+  "SFP_backtracking_disabled_in_comparison": true,
+  "teacher_phase_subset_episodes": 35,
+  "full_pose_actor_rows": 60671,
+  "source_episodes_with_action_anchors": 499,
+  "source_lock_episodes": 500,
+  "BC_stop_rule": "min10k;60 stale validations;50k/6h cap; no automatic promotion",
+  "new_RL": false,
+  "final_scenes_opened": false,
+  "artifacts": "/home/nas/chmin/aic_archives/2026-10-17_connector_orientation_and_sfp_oscillation_v1"
+}

@@ -1,6 +1,13 @@
 #!/usr/bin/env bash
 # Rootless official-Gazebo replay of an actual MoveIt joint trajectory.
 set -euo pipefail
+lock_gpu=${AIC_MOVEIT_PILOT_GPU:-3}
+[[ "$lock_gpu" =~ ^[0-7]$ ]] || exit 2
+case ",${AIC_PROJECT_GPU_LOCKS_HELD:-}," in
+ *",$lock_gpu,"*) ;;
+ *) export AIC_PROJECT_GPU_LOCKS_HELD="${AIC_PROJECT_GPU_LOCKS_HELD:+$AIC_PROJECT_GPU_LOCKS_HELD,}$lock_gpu"
+    exec flock -w 3600 "/var/tmp/chmin_aic_gpu${lock_gpu}.lock" bash "$0" "$@" ;;
+esac
 
 repo="${AIC_MOVEIT_PILOT_REPO:-$(realpath "$(dirname "$0")/..")}"
 if [[ "${AIC_MOVEIT_PILOT_LAUNCH_SNAPSHOT:-0}" != 1 ]]; then
@@ -40,6 +47,7 @@ sc_recovery_backoff_sec="${AIC_MOVEIT_PILOT_SC_RECOVERY_BACKOFF_SEC:-0.80}"
 sc_recovery_required_measured="${AIC_MOVEIT_PILOT_SC_RECOVERY_REQUIRED_MEASURED_M:-0.008}"
 oracle_contacts="${AIC_MOVEIT_PILOT_ORACLE_CONTACTS:-false}"
 visibility_labels="${AIC_MOVEIT_PILOT_VISIBILITY_LABELS:-false}"
+local_actor_checkpoint="${AIC_MOVEIT_PILOT_LOCAL_ACTOR_CHECKPOINT:-}"
 name="aic_moveit_sc_pilot_$(basename "$audit_dir")"
 image=ghcr.io/intrinsic-dev/aic/aic_eval@sha256:9aa2ffdbb946d38edde1bac7b5f02a44cfbea26e3b04a9c74e09f14c97472923
 export DOCKER_HOST="${DOCKER_HOST:-unix:///run/user/1008/docker.sock}"
@@ -58,11 +66,19 @@ assert all(w['diagnostics']['planner']=='moveit_py' for w in t['waypoints'])
 PY
 mkdir -p "$audit_dir"
 cp "$0" "$audit_dir/launcher_snapshot.sh"
+mkdir -p "$audit_dir/teacher_sources"
+cp "$repo/aic_teacher_official/aic_teacher_official/OfficialTeacherReplay.py" \
+   "$repo/aic_teacher_official/aic_teacher_official/WideApproachTeacherReplay.py" \
+   "$repo/aic_teacher_official/aic_teacher_official/wide_approach_geometry.py" \
+   "$audit_dir/teacher_sources/"
+sha256sum "$audit_dir"/teacher_sources/*.py > "$audit_dir/teacher_sources_sha256.txt"
 "$repo/.pixi/envs/default/bin/python" - "$audit_dir" "$replay_action_mode" <<'PY'
 import json,sys
 from pathlib import Path
 Path(sys.argv[1],'teacher_interface_manifest.json').write_text(json.dumps(dict(
- transport_action_mode=sys.argv[2],teacher=True,actor=False,geometry_labels_only=True,
+ transport_action_mode=sys.argv[2],teacher=True,actor=False,
+ privileged_geometry_used_by_teacher=True,autonomous_actor_geometry_input=False,
+ supervisor_reset_commands_excluded_from_BC=True,
  cartesian_stiffness=[90,90,90,50,50,50],cartesian_damping=[50,50,50,20,20,20]),indent=2)+'\n')
 PY
 cp "$scene_dir"/{eval_config.yaml,world_audit.sdf,bridge_audit.yaml} "$audit_dir/"
@@ -90,10 +106,12 @@ sha256sum "$audit_dir"/{eval_config.yaml,world_audit.sdf,bridge_audit.yaml,movei
 if docker inspect "$name" >/dev/null 2>&1; then echo "Container already exists: $name" >&2; exit 1; fi
 cleanup() { docker stop "$name" >/dev/null 2>&1 || true; docker rm "$name" >/dev/null 2>&1 || true; }
 trap cleanup EXIT
-docker run -d --name "$name" --gpus "device=$gpu" --net=host --entrypoint /bin/bash \
+docker run -d --name "$name" --gpus "device=$gpu" --network bridge --entrypoint /bin/bash \
+  -e GZ_PARTITION="$name" \
   -e "NVIDIA_VISIBLE_DEVICES=$gpu" -e NVIDIA_DRIVER_CAPABILITIES=all \
   -e NVIDIA_CONTAINER_CLI_NO_CGROUPS=true -e ROS_DOMAIN_ID=87 \
-  -e AIC_RESULTS_DIR=/audit/results -v "$audit_dir:/audit" -v "$repo:/repo:ro" \
+  -e AIC_RESULTS_DIR=/audit/results -e "AIC_AUDIT_REPO_HOST=$repo" \
+  -v "$audit_dir:/audit" -v "$repo:/repo:ro" -v "$repo:$repo:ro" \
   "$image" -lc 'sleep infinity' > "$audit_dir/container.id"
 docker exec -d "$name" bash -lc '
   export ROS_DOMAIN_ID=87
@@ -139,10 +157,57 @@ if [[ "$visibility_labels" == true ]]; then
     python3 /repo/scripts/capture_visibility_rgbd.py > /audit/visibility_capture.log 2>&1
   '
 fi
-docker exec -d "$name" bash -lc '
+local_actor_env=()
+teacher_policy=${AIC_MOVEIT_PILOT_TEACHER_POLICY:-aic_teacher_official.OfficialTeacherReplay}
+case "$teacher_policy" in
+ aic_teacher_official.OfficialTeacherReplay|aic_teacher_official.WideApproachTeacherReplay) ;;
+ *) echo "Unsupported teacher policy" >&2; exit 2 ;;
+esac
+local_actor_env+=(-e "AIC_PILOT_TEACHER_POLICY=$teacher_policy")
+if [[ -n "${AIC_MOVEIT_PILOT_WIDE_APPROACH_JSON:-}" ]]; then
+ local_actor_env+=(-e "AIC_OFFICIAL_TEACHER_WIDE_APPROACH_JSON=$AIC_MOVEIT_PILOT_WIDE_APPROACH_JSON")
+fi
+if [[ -n "$local_actor_checkpoint" ]]; then
+  local_actor_env+=(
+    -e "AIC_OFFICIAL_TEACHER_LOCAL_ACTOR_CHECKPOINT=$local_actor_checkpoint"
+    -e "AIC_OFFICIAL_TEACHER_LOCAL_ACTOR_PREPARE=${AIC_MOVEIT_PILOT_LOCAL_ACTOR_PREPARE:-false}"
+    -e "AIC_OFFICIAL_TEACHER_LOCAL_ACTOR_NEAR_GATE_PREFIX=${AIC_MOVEIT_PILOT_LOCAL_NEAR_GATE_PREFIX:-false}"
+    -e "AIC_OFFICIAL_TEACHER_LOCAL_ACTOR_RECORDED_PREFIX=${AIC_MOVEIT_PILOT_LOCAL_RECORDED_PREFIX:-}"
+    -e "AIC_OFFICIAL_TEACHER_LOCAL_ACTOR_RECORDED_EPISODE=${AIC_MOVEIT_PILOT_LOCAL_RECORDED_EPISODE:-llb_0001}"
+    -e "AIC_OFFICIAL_TEACHER_LOCAL_ACTOR_RECORDED_STOP_TIP_AXIAL_M=${AIC_MOVEIT_PILOT_LOCAL_RECORDED_STOP_TIP_AXIAL_M:--0.03}"
+    -e "AIC_LOCAL_LOCATOR_CHECKPOINT=${AIC_MOVEIT_PILOT_LOCAL_LOCATOR_CHECKPOINT:?}"
+    -e "AIC_LOCAL_ORIENTATION_CHECKPOINT=${AIC_MOVEIT_PILOT_LOCAL_ORIENTATION_CHECKPOINT:?}"
+    -e "AIC_LOCAL_SFP_ORIENTATION_CHECKPOINT=${AIC_MOVEIT_PILOT_LOCAL_SFP_ORIENTATION_CHECKPOINT:-}"
+    -e "AIC_LOCAL_SFP_ORIENTATION_CHECKPOINT_2=${AIC_MOVEIT_PILOT_LOCAL_SFP_ORIENTATION_CHECKPOINT_2:-}"
+    -e "AIC_LOCAL_SFP_COARSE_CHECKPOINT=${AIC_MOVEIT_PILOT_LOCAL_SFP_COARSE_CHECKPOINT:-}"
+    -e "AIC_LOCAL_SFP_BROAD_CHECKPOINT=${AIC_MOVEIT_PILOT_LOCAL_SFP_BROAD_CHECKPOINT:-}"
+    -e "AIC_LOCAL_SFP_FINE_CHECKPOINT=${AIC_MOVEIT_PILOT_LOCAL_SFP_FINE_CHECKPOINT:-}"
+    -e "AIC_LOCAL_CAMERA_CALIBRATION=${AIC_MOVEIT_PILOT_LOCAL_CAMERA_CALIBRATION:?}"
+    -e "AIC_LOCAL_SC_REFINER_CHECKPOINT=${AIC_MOVEIT_PILOT_LOCAL_SC_REFINER_CHECKPOINT:-}"
+    -e "AIC_LOCAL_SFP_REFINER_CHECKPOINT=${AIC_MOVEIT_PILOT_LOCAL_SFP_REFINER_CHECKPOINT:-}"
+    -e "AIC_LOCAL_SC_ORIENTATION_PRIOR=${AIC_MOVEIT_PILOT_LOCAL_SC_ORIENTATION_PRIOR:-}"
+    -e "AIC_LOCAL_SC_ORIENTATION_MAX_DEG=${AIC_MOVEIT_PILOT_LOCAL_SC_ORIENTATION_MAX_DEG:-5}"
+    -e "AIC_LOCAL_FAST_LOCKED_SC_PREPROCESS=${AIC_MOVEIT_PILOT_LOCAL_FAST_LOCKED_SC_PREPROCESS:-false}"
+    -e "AIC_LOCAL_ACTOR_DEVICE=${AIC_MOVEIT_PILOT_LOCAL_ACTOR_DEVICE:-cuda:0}"
+    -e AIC_SHARED_PORT_TCP_DEVICE=cuda:0
+    -e AIC_SHARED_PORT_TCP_CONTROL_CLOCK=simulation
+    -e AIC_SHARED_PORT_TCP_MAX_RUNTIME_SEC=180
+    -e AIC_SHARED_PORT_TCP_MAX_SIMULATION_SEC=90
+    -e AIC_SHARED_PORT_TCP_TRACE=/audit/local_actor_trace.jsonl
+  )
+fi
+docker exec -d "${local_actor_env[@]}" "$name" bash -lc '
   source /ws_aic/install/setup.bash
   export RMW_IMPLEMENTATION=rmw_zenoh_cpp ROS_DOMAIN_ID=87
-  export PYTHONPATH=/repo/aic_model:/repo/aic_teacher_official:/repo/aic_example_policies:$PYTHONPATH
+  if test -n "${AIC_OFFICIAL_TEACHER_LOCAL_ACTOR_CHECKPOINT:-}"; then
+    export LD_LIBRARY_PATH="$AIC_AUDIT_REPO_HOST/.pixi/envs/default/lib:${LD_LIBRARY_PATH:-}"
+    export LD_PRELOAD="$AIC_AUDIT_REPO_HOST/.pixi/envs/default/lib/libjpeg.so.8:$AIC_AUDIT_REPO_HOST/.pixi/envs/default/lib/libpng16.so.16"
+    export PYTHONPATH="/repo/aic_model:/repo/aic_teacher_official:/repo/aic_example_policies:/repo/scripts:/repo/aic_utils/lerobot_robot_aic:$AIC_AUDIT_REPO_HOST/scripts/pythonpath_bootstrap:$AIC_AUDIT_REPO_HOST/.pixi/envs/default/lib/python3.12/site-packages:${PYTHONPATH:-}"
+    ros_executable="$AIC_AUDIT_REPO_HOST/.pixi/envs/default/bin/ros2"
+  else
+    export PYTHONPATH=/repo/aic_model:/repo/aic_teacher_official:/repo/aic_example_policies:$PYTHONPATH
+    ros_executable=ros2
+  fi
   export AIC_OFFICIAL_TEACHER_TRAJECTORY=/audit/moveit_joint_trajectory.json
   export AIC_OFFICIAL_TEACHER_ACTION_MODE='"$replay_action_mode"'
   export AIC_OFFICIAL_TEACHER_ONLINE_CHEATCODE_INSERTION='"$online_insertion"'
@@ -169,8 +234,8 @@ docker exec -d "$name" bash -lc '
   export AIC_OFFICIAL_TEACHER_SC_RECOVERY_REQUIRED_MEASURED_BACKOFF_M='"$sc_recovery_required_measured"'
   export AIC_OFFICIAL_TEACHER_RUNTIME_TRACE=/audit/runtime_trace.jsonl
   export AIC_OFFICIAL_TEACHER_FINAL_HOLD_SEC=2
-  ros2 run aic_model aic_model --ros-args -p use_sim_time:=true \
-    -p policy:=aic_teacher_official.OfficialTeacherReplay > /audit/policy.log 2>&1
+  "$ros_executable" run aic_model aic_model --ros-args -p use_sim_time:=true \
+    -p "policy:=$AIC_PILOT_TEACHER_POLICY" > /audit/policy.log 2>&1
 '
 deadline=$((SECONDS + ${AIC_MOVEIT_PILOT_DEADLINE_SEC:-900}))
 while ! test -f "$audit_dir/engine.exit" && (( SECONDS < deadline )); do

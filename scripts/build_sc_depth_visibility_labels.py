@@ -17,8 +17,12 @@ from scipy.spatial.transform import Rotation
 ROOT=Path(__file__).resolve().parents[1]
 
 
-def host(s):
-    return str(ROOT/Path(s).relative_to('/repo')) if s.startswith('/repo/') else s
+def host(s,audit=None):
+    if s.startswith('/repo/'):
+        return str(ROOT/Path(s).relative_to('/repo'))
+    if audit is not None and s.startswith('/audit/'):
+        return str(audit/Path(s).relative_to('/audit'))
+    return s
 
 
 def transform(d):
@@ -38,7 +42,8 @@ def main():
     p=argparse.ArgumentParser(description=__doc__)
     p.add_argument('stream',type=Path);p.add_argument('--split',choices=('train','validation'),required=True)
     p.add_argument('--output',type=Path,required=True)
-    a=p.parse_args();r=json.loads(a.stream.read_text());audit=Path(host(r['audit']))
+    a=p.parse_args();r=json.loads(a.stream.read_text())
+    audit=a.stream.parent if r['audit']=='/audit' else Path(host(r['audit']))
     pairs=[json.loads(l) for l in (audit/'visibility_pairs.jsonl').open()]
     pairs=[v for v in pairs if r['scored_wall_bounds_ns'][0]<=v['wall_ns']<=r['scored_wall_bounds_ns'][1]]
     a.output.mkdir(parents=True,exist_ok=True)
@@ -87,7 +92,7 @@ def main():
             # Check colocated RGB against the unchanged ordinary camera stream.
             ct,original=select(r['cameras'][cam],t)
             if t-ct<=50000000:
-                rgb=cv2.imread(str(rgb_path));main=cv2.imread(host(original))
+                rgb=cv2.imread(str(rgb_path));main=cv2.imread(host(original,audit))
                 assert rgb.shape==main.shape==(h,w,3)
                 mae=float(np.mean(np.abs(rgb.astype(float)-main.astype(float))))
                 region_mae=None
@@ -110,7 +115,7 @@ def main():
                     rejected['selected_region_invalid_depth_not_invisible_label']+=1
                     continue
                 # The actor is trained on the ordinary RGB sensor, not the auxiliary rendering.
-                rgb_path=Path(host(original))
+                rgb_path=Path(host(original,audit))
             else:
                 rejected['no_synchronized_original_rgb']+=1
                 continue

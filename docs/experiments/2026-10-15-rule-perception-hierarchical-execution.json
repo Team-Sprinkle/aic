@@ -1,0 +1,244 @@
+{
+  "schema": "aic_rule_perception_hierarchical_execution/v1",
+  "status": "active",
+  "artifact_root": "/home/nas/chmin/aic_archives/2026-10-15_rule_perception_hierarchical_v1",
+  "approved_insertion_axial_range_mm": [
+    0,
+    150
+  ],
+  "refiner_retraining_required_families": [
+    "sc",
+    "sfp"
+  ],
+  "large_retreat": "rule_transport_reacquisition_and_fresh_perception",
+  "max_project_gpus": 4,
+  "legacy_gpu": 0,
+  "final_scenes_opened": false,
+  "stages": [
+    {
+      "name": "audit",
+      "status": "passed",
+      "gate": "Native provenance, camera-time poses, complete physical reset split and visual label QA passed; visibility remains uncertified."
+    },
+    {
+      "name": "rule_transport",
+      "status": "SC_functional_gate_passed_latency_diagnosis_SFP_repair",
+      "substage": "FrozenSCbaseline36/41stopped; native5SC7/7functional/6of7active-latency. SFP3/6live, bounded20reset repair active."
+    },
+    {
+      "name": "refiner_and_coarse",
+      "status": "full_refiners_and_pilot_coarse_gates_passed",
+      "substage": "SCfrozen7/7functional; SFPtargetednative+projectiongate10/10correct; broadSC60queued."
+    },
+    {
+      "name": "insertion_150mm_BC",
+      "status": "full_causal_data_preparing_BC_queued",
+      "substage": "Allwidesourcegatespass. Matched30kupdatefresh/visualwarmfitsqueuedafterenvelopeaudit; noactorweightsyet."
+    },
+    {
+      "name": "hierarchical_comparison",
+      "status": "pending"
+    },
+    {
+      "name": "recovery_RL_Gazebo",
+      "status": "pending"
+    }
+  ],
+  "next_action": "Finish full causal source/frame/cache materialization and envelope gate; run matched fresh versus visual-warm BC onGPU5, broadSC60on3/4, then autonomous actor and recovery tests. No newRL before BC gates.",
+  "audit_v1_native_episodes": {
+    "sc_train": 83,
+    "sc_validation": 21,
+    "sfp_train": 162,
+    "sfp_validation": 27
+  },
+  "expanded_sfp_source_episodes": 272,
+  "artifacts": {
+    "execution_record": "docs/experiments/2026-10-15-rule-perception-hierarchical-execution.md",
+    "native_audit_v1": "/home/nas/chmin/aic_archives/2026-10-15_rule_perception_hierarchical_v1/native_corpus_audit_v1/summary.json",
+    "expanded_SFP_labels": "/home/nas/chmin/aic_archives/2026-10-15_rule_perception_hierarchical_v1/sfp_extended_native_projections_v2/rows.jsonl",
+    "native_audit_v2_log": "/home/nas/chmin/aic_archives/2026-10-15_rule_perception_hierarchical_v1/native_corpus_audit_v2.log",
+    "final_native_corpus": "/home/nas/chmin/aic_archives/2026-10-15_rule_perception_hierarchical_v1/refiner_corpus_final_v3/summary.json",
+    "refiner_command": "/home/nas/chmin/aic_archives/2026-10-15_rule_perception_hierarchical_v1/refiner_training_command.json",
+    "refiner_log": "/home/nas/chmin/aic_archives/2026-10-15_rule_perception_hierarchical_v1/joint_refiner_training_restart_v2.log",
+    "orientation_control": "/home/nas/chmin/aic_archives/2026-10-15_rule_perception_hierarchical_v1/requested_orientation_full_v1/summary.json",
+    "coarse_replay_v2": "/home/nas/chmin/aic_archives/2026-10-15_rule_perception_hierarchical_v1/sc_association_frozen_acquisition_replay_v2/summary.json",
+    "coarse_replay_failed_v3": "/home/nas/chmin/aic_archives/2026-10-15_rule_perception_hierarchical_v1/sc_association_frozen_acquisition_replay_v3/summary.json",
+    "teacher_source_audit": "/home/nas/chmin/aic_archives/2026-10-15_rule_perception_hierarchical_v1/insertion_teacher_source_audit_v1/summary.json",
+    "wide_teacher_pilot": "/home/nas/chmin/aic_archives/2026-10-15_rule_perception_hierarchical_v1/wide_approach_pilot_plan_v4.json",
+    "refiner_continuation": "/home/nas/chmin/aic_archives/2026-10-15_rule_perception_hierarchical_v1/joint_refiner_full_v2_continue",
+    "SFP_native_comparison": "/home/nas/chmin/aic_archives/2026-10-15_rule_perception_hierarchical_v1/SFP_strong_coarse_native_refiner_matched_v1/summary.json",
+    "SFP_raw_geometry_audit": "/home/nas/chmin/aic_archives/2026-10-15_rule_perception_hierarchical_v1/SFP_raw_terminal_audit_all_v2/summary.json",
+    "fresh_SC_pilot": "/home/nas/chmin/aic_archives/2026-10-15_rule_perception_hierarchical_v1/fresh_SC_native_perception_pilot_plan_v2.json",
+    "native_pose_SFP": "/home/nas/chmin/aic_archives/2026-10-15_rule_perception_hierarchical_v1/SFP_strong_coarse_native_pose_matched_v2/summary.json",
+    "source_admission": "/home/nas/chmin/aic_archives/2026-10-15_rule_perception_hierarchical_v1/insertion_source_admission_v1/summary.json",
+    "orientation_public_control": "/home/nas/chmin/aic_archives/2026-10-15_rule_perception_hierarchical_v1/requested_orientation_public_only_v2/summary.json",
+    "SC_frozen_compare": "/home/nas/chmin/aic_archives/2026-10-15_rule_perception_hierarchical_v1/fresh_SC_native_perception_pilot_summary_v2.json",
+    "SC_failed_legacy_veto_repair": "/home/nas/chmin/aic_archives/2026-10-15_rule_perception_hierarchical_v1/SC_legacy_veto_repair_summary_v1.json",
+    "SC_new_locator_plan": "/home/nas/chmin/aic_archives/2026-10-15_rule_perception_hierarchical_v1/SC_requested_history_locator_plan_v1.json",
+    "BC_command_derivative": "/home/nas/chmin/aic_archives/2026-10-15_rule_perception_hierarchical_v1/command_derivative_full_v3_precompletion_unique",
+    "wide30_plan": "/home/nas/chmin/aic_archives/2026-10-15_rule_perception_hierarchical_v1/wide30_gate_plan_v2.json",
+    "wide_teacher_video": "/home/nas/chmin/aic_archives/2026-10-15_rule_perception_hierarchical_v1/wide_approach_pilots/wide_sc_pilot_02_event_v5/five_cameras_20fps_grid_active.mp4",
+    "SC_rail_domain_audit": "/home/nas/chmin/aic_archives/2026-10-15_rule_perception_hierarchical_v1/SC_rail_translation_domain_audit_v1.json",
+    "SC_rail_plan": "/home/nas/chmin/aic_archives/2026-10-15_rule_perception_hierarchical_v1/SC_rail_perception_bank_v1/plan.json",
+    "SC_rail_cache": "/home/nas/chmin/aic_archives/2026-10-15_rule_perception_hierarchical_v1/SC_rail_context_cache_v1",
+    "SFP_rule_six": "/home/nas/chmin/aic_archives/2026-10-15_rule_perception_hierarchical_v1/SFP_rule_fresh6_summary_v1.json",
+    "SFP_nominal_plane_pilot": "/home/nas/chmin/aic_archives/2026-10-15_rule_perception_hierarchical_v1/SFP_nominal_plane_summary_v1.json",
+    "completion_audit": "/home/nas/chmin/aic_archives/2026-10-15_rule_perception_hierarchical_v1/expert_completion_cutoffs_full_v1",
+    "wide_stable_offsets": "/home/nas/chmin/aic_archives/2026-10-15_rule_perception_hierarchical_v1/wide_stable_controller_v5_offsets_terminal_audit.json",
+    "SC_coarse_matched6": "/home/nas/chmin/aic_archives/2026-10-15_rule_perception_hierarchical_v1/SC_rail_locator_matched6_summary_v1.json",
+    "SC_accurate_refinement_diagnosis": "/home/nas/chmin/aic_archives/2026-10-15_rule_perception_hierarchical_v1/SC_refined_association_diagnosis_v2_available_history",
+    "SC_new_crop_checker": "/home/nas/chmin/aic_archives/2026-10-15_rule_perception_hierarchical_v1/SC_rail_crop_association_history_v1",
+    "SC_absent_full_pipeline": "/home/nas/chmin/aic_archives/2026-10-15_rule_perception_hierarchical_v1/SC_absent_full_pipeline_v1",
+    "SFP_two_view_component_rejected": "/home/nas/chmin/aic_archives/2026-10-15_rule_perception_hierarchical_v1/SFP_two_view_native_pose_matched_v1",
+    "SFP_causal_anchor_comparison": "/home/nas/chmin/aic_archives/2026-10-15_rule_perception_hierarchical_v1/SFP_causal_three_view_anchor_comparison_v1.json",
+    "SFP_guided_live": "/home/nas/chmin/aic_archives/2026-10-15_rule_perception_hierarchical_v1/SFP_guided_anchor_matched6_summary_v1.json",
+    "SFP_requested_locator_plan": "/home/nas/chmin/aic_archives/2026-10-15_rule_perception_hierarchical_v1/SFP_requested_locator_plan_v1.json",
+    "wide_owned_command_pilot": "/home/nas/chmin/aic_archives/2026-10-15_rule_perception_hierarchical_v1/wide_owned_command_pilot_v1",
+    "SC_crop_only_repair6": "/home/nas/chmin/aic_archives/2026-10-15_rule_perception_hierarchical_v1/SC_requested_crop_repair6_gate_v1.json",
+    "SC_crop_failure_diagnosis": "/home/nas/chmin/aic_archives/2026-10-15_rule_perception_hierarchical_v1/SC_requested_crop_repair6_remaining_failure_diagnosis_v1.json",
+    "SC_requested_semantics": "/home/nas/chmin/aic_archives/2026-10-15_rule_perception_hierarchical_v1/SC_requested_native_semantics_v1/summary.json",
+    "SFP_full_requested_cascade": "/home/nas/chmin/aic_archives/2026-10-15_rule_perception_hierarchical_v1/SFP_requested_native_cascade_comparison_v1/summary.json",
+    "SFP_requested_hard_negatives": "/home/nas/chmin/aic_archives/2026-10-15_rule_perception_hierarchical_v1/SFP_requested_absent_hardnegatives_v1/summary.json",
+    "SFP_approach_coverage": "/home/nas/chmin/aic_archives/2026-10-15_rule_perception_hierarchical_v1/SFP_150mm_approach_coverage_v1/summary.json",
+    "SFP_grasp_native_labels": "/home/nas/chmin/aic_archives/2026-10-15_rule_perception_hierarchical_v1/SFP_native_grasp_labels_v1",
+    "SFP_grasp_path_labels": "/home/nas/chmin/aic_archives/2026-10-15_rule_perception_hierarchical_v1/SFP_native_grasp_path_labels_v2",
+    "SC_native5_semantics": "/home/nas/chmin/aic_archives/2026-10-15_rule_perception_hierarchical_v1/SC_requested_native5_semantics_v1/summary.json",
+    "SC_margin64_rejected": "/home/nas/chmin/aic_archives/2026-10-15_rule_perception_hierarchical_v1/SC_crop_margin64_increment_v1/summary.json",
+    "SFP_requested_live_gate": "/home/nas/chmin/aic_archives/2026-10-15_rule_perception_hierarchical_v1/SFP_requested_rule_matched6_gate_v1.json",
+    "SFP_live_history_diagnosis": "/home/nas/chmin/aic_archives/2026-10-15_rule_perception_hierarchical_v1/SFP_requested_live_replay_v1/summary.json",
+    "SFP_coarse_gap_repair_plan": "/home/nas/chmin/aic_archives/2026-10-15_rule_perception_hierarchical_v1/SFP_acquisition_gap_plan_v1.json",
+    "SFP_native_grasp_crops": "/home/nas/chmin/aic_archives/2026-10-15_rule_perception_hierarchical_v1/SFP_native_grasp_crops_v2/summary.json",
+    "SFP_grasp_training_command": "/home/nas/chmin/aic_archives/2026-10-15_rule_perception_hierarchical_v1/SFP_native_grasp_training_command_v1.json",
+    "full_selected_controller_audit": "/home/nas/chmin/aic_archives/2026-10-15_rule_perception_hierarchical_v1/BC_full_controller_profiles_v1.json",
+    "SC_frozen_sources": "/home/nas/chmin/aic_archives/2026-10-15_rule_perception_hierarchical_v1/SC_fresh60_frozen_sources_v1/manifest.json",
+    "SC_native5_challenge7": "/home/nas/chmin/aic_archives/2026-10-15_rule_perception_hierarchical_v1/SC_native5_challenge7_strict_gate_v1.json",
+    "SFP_grasp_approved_scope": "/home/nas/chmin/aic_archives/2026-10-15_rule_perception_hierarchical_v1/SFP_free_approach_grasp_approval_v1.json",
+    "actor_ready_original_rows": "/home/nas/chmin/aic_archives/2026-10-15_rule_perception_hierarchical_v1/actor_rows_causal_grasp_original_v1/summary.json",
+    "actor_exact_native_cache": "/home/nas/chmin/aic_archives/2026-10-15_rule_perception_hierarchical_v1/actor_image_cache_original_v1/summary.json",
+    "SC_wide30_completed": "/home/nas/chmin/aic_archives/2026-10-15_rule_perception_hierarchical_v1/wide30_gate_summary_v2.json",
+    "SFP_wide_pilots": "/home/nas/chmin/aic_archives/2026-10-15_rule_perception_hierarchical_v1/SFP_wide_teacher_pilots_summary_v1.json",
+    "SFP_wide30": "/home/nas/chmin/aic_archives/2026-10-15_rule_perception_hierarchical_v1/SFP_wide30_plan_v1.json",
+    "SC_wide_val10": "/home/nas/chmin/aic_archives/2026-10-15_rule_perception_hierarchical_v1/SC_wide_validation10_plan_v1.json",
+    "SFP_wide_val10": "/home/nas/chmin/aic_archives/2026-10-15_rule_perception_hierarchical_v1/SFP_wide_validation10_plan_v1.json",
+    "teacher_command_cap_audit": "/home/nas/chmin/aic_archives/2026-10-15_rule_perception_hierarchical_v1/BC_recorded_target_command_caps_v1.json",
+    "SFP_gap_native_comparison": "/home/nas/chmin/aic_archives/2026-10-15_rule_perception_hierarchical_v1/SFP_gap_native_cascade_comparison_v1/summary.json",
+    "SFP_gap_absent": "/home/nas/chmin/aic_archives/2026-10-15_rule_perception_hierarchical_v1/SFP_gap_absent_hardnegatives_v1/summary.json",
+    "SFP_gap_failure": "/home/nas/chmin/aic_archives/2026-10-15_rule_perception_hierarchical_v1/SFP_gap_first_failure_diagnosis_v1/summary.json",
+    "SC_separate_gpu_latency": "/home/nas/chmin/aic_archives/2026-10-15_rule_perception_hierarchical_v1/SC_native5_separate_gpu_latency_gate_v1.json",
+    "native_repair_plan": "/home/nas/chmin/aic_archives/2026-10-15_rule_perception_hierarchical_v1/native_pose_acquisition_repair_plan_v1.json",
+    "native_repair_crop_QA": "/home/nas/chmin/aic_archives/2026-10-15_rule_perception_hierarchical_v1/native_acquisition_extension_v1/native_crop_QA.jpg",
+    "full_materialization_queue": "/home/nas/chmin/aic_archives/2026-10-15_rule_perception_hierarchical_v1/prepare_full_shared_insertion_v1.py",
+    "port_lock_posthoc_audit": "/home/nas/chmin/aic_archives/2026-10-15_rule_perception_hierarchical_v1/original_causal_port_lock_geometry_audit_v1.json",
+    "perception_bundle": "/home/nas/chmin/aic_archives/2026-10-15_rule_perception_hierarchical_v1/shared_perception_bundle_approved_v1.json",
+    "actor_numerical_preflight": "/home/nas/chmin/aic_archives/2026-10-15_rule_perception_hierarchical_v1/shared_actor_numerical_capacity_preflight_v1.json",
+    "SFP_handoff_pass": "/home/nas/chmin/aic_archives/2026-10-15_rule_perception_hierarchical_v1/native_repair_v2_projection95_SFP_live10_summary_v1.json"
+  },
+  "explicit_30mm_controller_in_new_deployment": false,
+  "insertion_training_axial_buffer_mm": 180,
+  "SFP_complete_native_recordings": 340,
+  "SC_expert_depth_lateral_pass": 100,
+  "SC_expert_full_depth": 104,
+  "training_corpus_rows": 72857,
+  "training_corpus_physical_resets": 422,
+  "training_episodes": {
+    "sc": 83,
+    "sfp": 459
+  },
+  "validation_episodes": {
+    "sc": 21,
+    "sfp": 70
+  },
+  "training_corpus_named_image_stream_ids": 633,
+  "training_corpus_source_episodes": 497,
+  "source_episode_split": {
+    "sc": {
+      "train": 83,
+      "validation": 21
+    },
+    "sfp": {
+      "train": 340,
+      "validation": 53
+    }
+  },
+  "training_episodes_label": "legacy named image-stream IDs; use source_episode_split for independent counts",
+  "qualified_BC_sources": 454,
+  "refiner_plateau": true,
+  "SFP_gap_current_fit_complete": true,
+  "SFP_gap_history_fit_complete": true,
+  "SFP_gap_native_comparison": {
+    "old_current_accepted": 913,
+    "gap_current_accepted": 917,
+    "gap_history_accepted": 827,
+    "triplets": 1120,
+    "wrong": 0
+  },
+  "SFP_gap_absent_queries": {
+    "cases": 14,
+    "accepted": 0
+  },
+  "new_shared_recovery_runtime": "implemented_imported_27_tests_pass_live_unvalidated",
+  "new_insertion_BC_trained": false,
+  "new_RL_trained": false,
+  "SFP_matched_acquisition10": {
+    "old": 5,
+    "coarse_gap_repair": 7,
+    "coarse_plus_residual3": 7,
+    "required": 9,
+    "wrong": 0,
+    "passed": false
+  },
+  "targeted_native_refiner_repair": "running_full_original_plus20_existing_gap_resets",
+  "original_port_lock_posthoc_audit": {
+    "episodes": 454,
+    "wrong": 0,
+    "heldout_SC_position_p95_mm": 0.2091,
+    "heldout_SFP_position_p95_mm": 0.3656
+  },
+  "SFP_acquisition_repair": {
+    "correct": 10,
+    "episodes": 10,
+    "wrong": 0,
+    "passed": true,
+    "maximum_opening_error_mm": 0.301896745,
+    "worst_episode_inference_p95_ms": 204.2346,
+    "projection_threshold": 0.95,
+    "reprojection_px": 2
+  },
+  "wide_teacher_qualified": {
+    "SC_train": 22,
+    "SC_train_attempts": 30,
+    "SC_val": 10,
+    "SC_val_attempts": 10,
+    "SFP_train": 25,
+    "SFP_train_attempts": 30,
+    "SFP_val": 10,
+    "SFP_val_attempts": 10
+  },
+  "selected_SC_refiner": "frozen_full_native_v2_sync",
+  "selected_SFP_refiner": "converged_acquisition_repair_v2",
+  "actor_parameter_count": 13725148,
+  "current_status_2026_10_16": {
+    "stage": "matched_shared_BC_running_corrected_live_perception_revalidation",
+    "actor_rows": 67039,
+    "usable_source_episodes": 500,
+    "physical_reset_groups": 377,
+    "matched_BC_plan": "/home/nas/chmin/aic_archives/2026-10-15_rule_perception_hierarchical_v1/matched_shared_insertion_BC_plan_v1.json",
+    "launcher_audit": "/home/nas/chmin/aic_archives/2026-10-15_rule_perception_hierarchical_v1/launcher_forwarding_audit_v1.json",
+    "corrected_perception": "/home/nas/chmin/aic_archives/2026-10-15_rule_perception_hierarchical_v1/corrected_intended_perception_live20_v2",
+    "queued_autonomous": "/home/nas/chmin/aic_archives/2026-10-15_rule_perception_hierarchical_v1/shared150mm_matched_autonomous_v1",
+    "new_RL_trained": false,
+    "full_insertion_promoted": false,
+    "final_scenes_opened": false,
+    "SC_native_rail_repair": {
+      "stop_reason": "validation_plateau",
+      "updates": 4000,
+      "best_update": 1250,
+      "old_failed_probe_fit": "0/9",
+      "candidate_probe_fit": "9/9",
+      "global_component_gate_passed": false,
+      "live_diagnostic": "/home/nas/chmin/aic_archives/2026-10-15_rule_perception_hierarchical_v1/SC_native_rail_repair_live20_v1",
+      "promoted": false
+    },
+    "conditional_BC_convergence": "/home/nas/chmin/aic_archives/2026-10-15_rule_perception_hierarchical_v1/continue_matched_BC_if_improving_v2.py"
+  }
+}

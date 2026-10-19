@@ -1,0 +1,39 @@
+{
+  "schema": "aic_sfp_later_state_causal_repair_summary/v1",
+  "date": "2026-10-07",
+  "status": "live_gate_failed_no_promotion",
+  "final_scenes_opened": false,
+  "privileged_geometry_actor_input": false,
+  "teacher_continuation": {
+    "train_reset_count": 6,
+    "official_full_insertions": 6,
+    "nonnegative_official_contact_scores": 6,
+    "artifact": "/home/nas/chmin/aic_archives/2026-10-07_sfp_later_takeover_gate_v1/summary_reconciled.json"
+  },
+  "correction_data": {
+    "total_chunks": 1383,
+    "train_episodes": 4,
+    "train_chunks": 930,
+    "withheld_episodes": 2,
+    "withheld_chunks": 453,
+    "coverage_note": "All six correction episodes target SFP port 1; parent checkpoint had previously seen ordinary teacher scenes for withheld correction resets."
+  },
+  "matched_fit": {
+    "updates_per_arm": 2000,
+    "corrected_sampling_mass_fraction": 0.1,
+    "withheld_correction_first_action_translation_p95_mm": {"control": 3.77, "corrected": 2.22},
+    "offline_gate_passed": true,
+    "artifact": "/home/nas/chmin/aic_archives/2026-10-07_sfp_later_correction_matched_v2/offline_gate_v2.json"
+  },
+  "fresh_autonomous_live": {
+    "development_starts": 3,
+    "safe_buffered_arrivals": {"control": 0, "corrected": 1},
+    "required_corrected_arrivals": 2,
+    "minimum_official_contact_score": {"control": -24, "corrected": -24},
+    "p95_actor_inference_ms": {"control": 118.2523, "corrected": 94.3340},
+    "gate_passed": false,
+    "artifact": "/home/nas/chmin/aic_archives/2026-10-07_sfp_later_correction_live_v1/summary.json"
+  },
+  "decision": "Stop later-state BC correction recipe. Keep pause/coarse shadow-only and insertion/RL disabled. Audit requested-card visual grounding and initial route branch before one bounded distinct goal-representation experiment.",
+  "record": "docs/experiments/2026-10-07-sfp-later-state-causal-repair.md"
+}

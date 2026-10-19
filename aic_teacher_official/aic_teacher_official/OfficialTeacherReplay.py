@@ -3269,6 +3269,47 @@ class OfficialTeacherReplay(Policy):
             )
         )
 
+    def _run_recorded_local_actor_prefix(self, move_robot: MoveRobotCallback) -> bool:
+        """Replay a scored successful local teacher prefix, then stop before insertion.
+
+        This is diagnostic start-state construction only. No recorded action or
+        target geometry is handed to the autonomous actor afterward.
+        """
+        path = Path(os.environ["AIC_OFFICIAL_TEACHER_LOCAL_ACTOR_RECORDED_PREFIX"])
+        episode = os.environ.get("AIC_OFFICIAL_TEACHER_LOCAL_ACTOR_RECORDED_EPISODE", "llb_0001")
+        stop_axial = float(os.environ.get("AIC_OFFICIAL_TEACHER_LOCAL_ACTOR_RECORDED_STOP_TIP_AXIAL_M", "-0.03"))
+        if not -.10 < stop_axial < -.01:
+            raise ValueError("Recorded local prefix stop must stay before the opening")
+        rows = [json.loads(line) for line in path.open()]
+        rows = [row for row in rows if row.get("episode_id") == episode and
+                row.get("official_tier3") == 75 and row.get("action_owner") == "teacher"]
+        rows.sort(key=lambda row: row["sim_time"])
+        prefix = [row for row in rows if row["observed_sc_tip_pose_opening_frame"][2] < stop_axial]
+        if not prefix or not rows or len(prefix) == len(rows):
+            self._trace_event("local_actor_recorded_prefix_rejected", reason="no_before_stop_rows",
+                              episode=episode)
+            return False
+        current = self._current_tcp_pose()
+        start_error = float(np.linalg.norm(np.asarray(prefix[0]["state"][:3]) -
+                                           self._pose_position_array(current)))
+        if start_error > .03:
+            self._trace_event("local_actor_recorded_prefix_rejected", reason="start_mismatch",
+                              start_error_m=start_error, episode=episode)
+            return False
+        self._trace_event("local_actor_recorded_prefix_started", privileged_teacher_only=True,
+                          episode=episode, source=str(path), start_error_m=start_error,
+                          source_rows=len(prefix), source_stop_tip_axial_m=stop_axial)
+        for row in prefix:
+            target = row["teacher_tcp_target_poses_base_frame"][0]
+            pose = self._make_pose(np.asarray(target[:3], dtype=float),
+                                   (target[6], target[3], target[4], target[5]))
+            self._send_absolute_target(move_robot, pose)
+            self.sleep_for(.05)
+        self._trace_event("local_actor_recorded_prefix_completed", privileged_teacher_only=True,
+                          episode=episode, source_rows=len(prefix),
+                          source_last_tip_axial_m=prefix[-1]["observed_sc_tip_pose_opening_frame"][2])
+        return True
+
     def _run_online_cheatcode_insertion(
         self,
         task: Task,
@@ -3326,7 +3367,7 @@ class OfficialTeacherReplay(Policy):
                     os.environ.get("AIC_OFFICIAL_TEACHER_TRACKING_GATE_MAX_LATERAL_ERROR_M", "0.0022"),
                 )
             )
-        elif "AIC_OFFICIAL_TEACHER_NOMINAL_INITIAL_TRACKING_GATE_MAX_LATERAL_ERROR_M" in os.environ:
+        elif os.environ.get("AIC_OFFICIAL_TEACHER_NOMINAL_INITIAL_TRACKING_GATE_MAX_LATERAL_ERROR_M") not in (None, ""):
             initial_gate_max_lateral_m = float(
                 os.environ["AIC_OFFICIAL_TEACHER_NOMINAL_INITIAL_TRACKING_GATE_MAX_LATERAL_ERROR_M"]
             )
@@ -5424,6 +5465,61 @@ class OfficialTeacherReplay(Policy):
                         return False
                 self.sleep_for(command_dt_sec)
                 continue
+            if phase == "final_insertion" and os.environ.get("AIC_OFFICIAL_TEACHER_LOCAL_ACTOR_CHECKPOINT"):
+                # Privileged replay ends here. Optionally complete the same
+                # teacher-only preinsert alignment used before stock final
+                # insertion. This tests the local actor from a matched near
+                # start without passing teacher TF to the actor.
+                if os.environ.get("AIC_OFFICIAL_TEACHER_LOCAL_ACTOR_RECORDED_PREFIX"):
+                    if not self._run_recorded_local_actor_prefix(move_robot):return False
+                elif os.environ.get("AIC_OFFICIAL_TEACHER_LOCAL_ACTOR_NEAR_GATE_PREFIX", "false").lower() == "true":
+                    original_stop = os.environ.get("AIC_OFFICIAL_TEACHER_STOP_AT_NEAR_GATE")
+                    os.environ["AIC_OFFICIAL_TEACHER_STOP_AT_NEAR_GATE"] = "true"
+                    self._trace_event("local_actor_teacher_near_gate_prefix_started",
+                                      privileged_teacher_only=True)
+                    try:
+                        reached = self._run_online_cheatcode_insertion(
+                            task, get_observation, move_robot, send_feedback)
+                    finally:
+                        if original_stop is None:
+                            os.environ.pop("AIC_OFFICIAL_TEACHER_STOP_AT_NEAR_GATE", None)
+                        else:
+                            os.environ["AIC_OFFICIAL_TEACHER_STOP_AT_NEAR_GATE"] = original_stop
+                    self._trace_event("local_actor_teacher_near_gate_prefix_completed",
+                                      privileged_teacher_only=True, reached=bool(reached))
+                    if not reached:return False
+                if os.environ.get("AIC_OFFICIAL_TEACHER_LOCAL_ACTOR_PREPARE", "false").lower() == "true":
+                    port_frame = f"task_board/{task.target_module_name}/{task.port_name}_link"
+                    if not self._wait_for_tf("base_link", port_frame):
+                        return False
+                    port_transform = self._parent_node._tf_buffer.lookup_transform(
+                        "base_link", port_frame, Time()).transform
+                    self._active_port_transform = port_transform
+                    self._trace_event("local_actor_teacher_alignment_started",
+                                      privileged_teacher_only=True)
+                    self._run_local_preinsert_align(
+                        task, port_transform, move_robot,
+                        duration_sec=float(os.environ.get(
+                            "AIC_OFFICIAL_TEACHER_LOCAL_ACTOR_PREPARE_SEC", "2.0")),
+                        dt=command_dt_sec,
+                        z_offset=float(os.environ.get(
+                            "AIC_OFFICIAL_TEACHER_SC_CHEATCODE_START_Z_OFFSET", "0.030")),
+                        preserve_current_z=True)
+                    self._trace_event("local_actor_teacher_alignment_completed",
+                                      privileged_teacher_only=True)
+                from aic_example_policies.ros.RunPredictedPortLocal import RunPredictedPortLocal
+                checkpoint = os.environ["AIC_OFFICIAL_TEACHER_LOCAL_ACTOR_CHECKPOINT"]
+                self._trace_event("autonomous_local_actor_handoff", checkpoint=checkpoint,
+                                  teacher_geometry_passed_to_actor=False)
+                local = RunPredictedPortLocal(self._parent_node, checkpoint_path=checkpoint)
+                local_result = local.insert_cable(task, get_observation, move_robot, send_feedback)
+                # The official insertion event is an evaluation terminal only;
+                # it never enters the actor's observations or action choice.
+                inserted = self._task_completed_in_simulation(task)
+                self._trace_event("autonomous_local_actor_terminal",
+                                  actor_return=bool(local_result),
+                                  scored_insertion_event=bool(inserted))
+                return bool(local_result or inserted)
             if self._online_cheatcode_final_insertion and phase == "final_insertion":
                 return self._run_online_cheatcode_insertion(
                     task,
@@ -5458,6 +5554,40 @@ class OfficialTeacherReplay(Policy):
                 self.get_logger().info("OfficialTeacherReplay observed insertion event.")
                 return True
             if self._replay.is_finished(elapsed):
+                if os.environ.get("AIC_OFFICIAL_TEACHER_LOCAL_ACTOR_CHECKPOINT"):
+                    # Some command clocks first observe the terminal replay
+                    # time after the no-motion final-insertion phase marker.
+                    # Handoff at that same recorded posture in that case.
+                    if os.environ.get("AIC_OFFICIAL_TEACHER_LOCAL_ACTOR_RECORDED_PREFIX"):
+                        if not self._run_recorded_local_actor_prefix(move_robot):return False
+                    elif os.environ.get("AIC_OFFICIAL_TEACHER_LOCAL_ACTOR_NEAR_GATE_PREFIX", "false").lower() == "true":
+                        original_stop = os.environ.get("AIC_OFFICIAL_TEACHER_STOP_AT_NEAR_GATE")
+                        os.environ["AIC_OFFICIAL_TEACHER_STOP_AT_NEAR_GATE"] = "true"
+                        self._trace_event("local_actor_teacher_near_gate_prefix_started",
+                                          privileged_teacher_only=True)
+                        try:
+                            reached = self._run_online_cheatcode_insertion(
+                                task, get_observation, move_robot, send_feedback)
+                        finally:
+                            if original_stop is None:
+                                os.environ.pop("AIC_OFFICIAL_TEACHER_STOP_AT_NEAR_GATE", None)
+                            else:
+                                os.environ["AIC_OFFICIAL_TEACHER_STOP_AT_NEAR_GATE"] = original_stop
+                        self._trace_event("local_actor_teacher_near_gate_prefix_completed",
+                                          privileged_teacher_only=True, reached=bool(reached))
+                        if not reached:return False
+                    from aic_example_policies.ros.RunPredictedPortLocal import RunPredictedPortLocal
+                    checkpoint = os.environ["AIC_OFFICIAL_TEACHER_LOCAL_ACTOR_CHECKPOINT"]
+                    self._trace_event("autonomous_local_actor_handoff_at_replay_end",
+                                      checkpoint=checkpoint,
+                                      teacher_geometry_passed_to_actor=False)
+                    local = RunPredictedPortLocal(self._parent_node, checkpoint_path=checkpoint)
+                    local_result = local.insert_cable(task, get_observation, move_robot, send_feedback)
+                    inserted = self._task_completed_in_simulation(task)
+                    self._trace_event("autonomous_local_actor_terminal",
+                                      actor_return=bool(local_result),
+                                      scored_insertion_event=bool(inserted))
+                    return bool(local_result or inserted)
                 hold_timeout = Duration(
                     seconds=float(
                         os.environ.get("AIC_OFFICIAL_TEACHER_FINAL_HOLD_SEC", "5.0")

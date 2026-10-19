@@ -1,0 +1,21 @@
+{
+  "schema": "aic_active_transport_dataset/v1",
+  "updated_utc": "2026-10-12",
+  "union": "/home/nas/chmin/aic_archives/2026-10-12_route_consistent_union_v4",
+  "manifest": "/home/nas/chmin/aic_archives/2026-10-12_route_consistent_union_v4/manifest.json",
+  "sfp_train_episodes": 533,
+  "sfp_development_episodes": 43,
+  "sc_train_episodes": 83,
+  "sc_development_episodes": 21,
+  "sc_route": "Low Lateral Bypass only",
+  "excluded_sc_sources": [
+    "/home/nas/chmin/aic_archives/2026-10-11_official_anchor_route_labels_v1/sc_transport_chunks.jsonl",
+    "/home/nas/chmin/aic_archives/2026-10-11_official_anchor_sc_exact_labels_v1/sc_transport_chunks.jsonl"
+  ],
+  "new_randomized_start_sfp_status": "40/40 valid first-trial starts across two bounded sets; 38 full insertions, 2 contact-free partials; 36 training and 4 grouped development episodes admitted as safe transport prefixes",
+  "training_ready_for_new_full_coverage_fit": false,
+  "route_consistent_retrain": "outputs/experiments/2026-10-12_route_consistent_diffusion_transport_v1",
+  "route_consistent_retrain_autonomous_gate_passed": false,
+  "route_consistent_retrain_promoted": false,
+  "final_scenes_opened": false
+}

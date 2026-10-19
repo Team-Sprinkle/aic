@@ -1,0 +1,60 @@
+{
+  "schema": "aic_handoff_only_decision/v1",
+  "date_utc": "2026-10-08",
+  "final_scenes_opened": false,
+  "insertion_actor_enabled": false,
+  "rl_enabled": false,
+  "automatic_handoff_promoted": false,
+  "sc_dual_port": {
+    "new_development_scene_groups": 4,
+    "accepted_requested_port": 4,
+    "scored_contact": 0,
+    "accepted_opening_error_mm_range": [0.092, 0.241],
+    "summary": "/home/nas/chmin/aic_archives/2026-10-08_handoff_only_new_sc_v1/dualport_four_summary.json"
+  },
+  "sc_independent_one_port_memory_comparison": {
+    "scene_groups": 2,
+    "runs": 4,
+    "flag_off_accepts": 1,
+    "flag_on_accepts": 1,
+    "accepts_using_history_orientation": 0,
+    "flag_off_no_inspection": 1,
+    "flag_on_no_inspection": 1,
+    "decision": "keep_history_orientation_off_by_default_unproven_live_benefit",
+    "summary": "/home/nas/chmin/aic_archives/2026-10-08_handoff_only_new_sc_v1/independent_four_summary.json"
+  },
+  "sc_fixed_native_replay_followup": {
+    "already_used_scene_groups": 1,
+    "fresh_inspections": 2,
+    "no_memory_accepts": 1,
+    "memory_accepts": 1,
+    "memory_only_accepts": 0,
+    "absent_port_accepts": 0,
+    "natural_insufficient_board_rails_reproduced": false,
+    "accepted_posthoc_opening_error_mm": 0.130,
+    "accepted_posthoc_true_tcp_posture_error_deg": 2.11,
+    "decision": "keep_memory_off_no_causal_benefit",
+    "artifact": "/home/nas/chmin/aic_archives/2026-10-08_handoff_only_new_sc_v1/native_replay_capture_llb0900/native_memory_replay.json"
+  },
+  "sc_synthetic_board_detector_dropout": {
+    "same_native_triplets": 2,
+    "baseline_accepts": 0,
+    "memory_accepts": 1,
+    "wrong_posture_rejected": true,
+    "absent_port_accepts": 0,
+    "natural_gazebo_failure": false,
+    "decision": "code_path_verified_no_live_promotion",
+    "artifact": "/home/nas/chmin/aic_archives/2026-10-08_handoff_only_new_sc_v1/native_replay_capture_llb0900/simulated_rail_dropout_replay.json"
+  },
+  "sfp_saved_route_shadow": {
+    "autonomous_routes": 6,
+    "routes_entering_true_stop_corridor": 1,
+    "true_buffer_samples_on_arriving_route": 2,
+    "orientation_aware_candidate_pauses_on_arriving_route": 2,
+    "false_candidate_pauses": 0,
+    "decision": "insufficient_arrival_coverage_for_automatic_stop",
+    "corrected_actor_artifact": "/home/nas/chmin/aic_archives/2026-10-08_handoff_only_sfp_anchor_orientation_v1.json",
+    "baseline_actor_artifact": "/home/nas/chmin/aic_archives/2026-10-08_handoff_only_sfp_anchor_orientation_baseline_v1.json"
+  },
+  "next_gate": "Improve autonomous requested-port transport arrival. Keep SC orientation memory off; revisit it only with a naturally occurring fixed native-RGB rail failure and a safe memory-only decision."
+}

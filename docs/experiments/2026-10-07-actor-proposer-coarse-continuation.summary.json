@@ -1,0 +1,70 @@
+{
+  "schema": "aic_actor_proposer_coarse_continuation_summary/v1",
+  "date_utc": "2026-10-07",
+  "task": "SFP requested-port transport, pause proposal, coarse native-image crop",
+  "paired_data": {
+    "first_round_full_insertions": 16,
+    "second_round_train_full_insertions": 20,
+    "second_round_development_full_insertions": 8,
+    "admitted_training_pairs": 34,
+    "admitted_development_pairs": 9,
+    "development_pair_episode_groups": 6
+  },
+  "trust_region_actor_offline": {
+    "same_image_request_sensitivity_ratio": 2.28,
+    "held_out_pair_median_error_mm": 1.23,
+    "held_out_pair_p95_error_mm": 4.01,
+    "old_sfp_first_action_p95_mm": 1.459,
+    "new_sfp_first_action_p95_mm": 1.678,
+    "sc_first_action_p95_mm": 2.079,
+    "offline_gate_passed": true
+  },
+  "fresh_live_gate": {
+    "archive": "/home/nas/chmin/aic_archives/2026-10-07_sfp_paired_actor_live_starts_mounted_v2",
+    "matched_nonfinal_starts": 3,
+    "control_safe_buffered_arrivals": 0,
+    "candidate_safe_buffered_arrivals": 0,
+    "candidate_p95_inference_ms": 102.96,
+    "candidate_worst_contact_score": -24,
+    "gate_passed": false,
+    "actor_promoted": false,
+    "runtime_privileged_geometry": false
+  },
+  "coarse_requested_port": {
+    "stress_groups": 18,
+    "early_correct_anchor_old": 15,
+    "early_correct_anchor_new": 18,
+    "accepted_wrong_port_count": 0,
+    "accepted_3d_p95_mm": 2.22,
+    "preloaded_image_model_path_p95_ms": 16.0,
+    "automatic_handoff_enabled": false
+  },
+  "pause_head": {
+    "teacher_timely": "27/27",
+    "saved_autonomous_timely": "2/3",
+    "saved_autonomous_false_first_proposals": 0,
+    "shadow_only": true,
+    "checkpoint_tied_to_older_actor_features": true
+  },
+  "diagnosis": {
+    "artifact": "/home/nas/chmin/aic_archives/2026-10-07_sfp_paired_actor_live_starts_mounted_v2/route_motion_diagnosis.json",
+    "candidate_nearest_teacher_path_median_error_8_to_12s_mm_by_card_count": {
+      "2": 18.3,
+      "3": 13.4,
+      "5": 21.6
+    },
+    "confirmed_three_card_contact": "left gripper finger against NIC card mount",
+    "other_stall_causes": "unresolved"
+  },
+  "next_experiment": {
+    "name": "bounded actor-visited route correction",
+    "maximum_training_reset_rollouts": 6,
+    "minimum_safe_full_insertion_teacher_continuations_before_fit": 4,
+    "maximum_matched_actor_updates_each": 2000,
+    "maximum_fresh_nonfinal_live_starts": 3,
+    "offline_stop": "greater than 10 percent first-action p95 regression on any grouped old SFP, new SFP or SC split",
+    "live_continue": "at least 2 of 3 safe buffered arrivals, no worse contact, actor p95 below 300 ms",
+    "reserved_final_scenes_opened": false
+  },
+  "record": "docs/experiments/2026-10-07-actor-proposer-coarse-continuation.md"
+}

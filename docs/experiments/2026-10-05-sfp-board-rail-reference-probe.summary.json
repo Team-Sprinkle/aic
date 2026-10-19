@@ -1,0 +1,32 @@
+{
+  "schema": "sfp_board_rail_reference_decision/v1",
+  "date": "2026-10-05",
+  "training": {
+    "gpu_count": 1,
+    "completed_updates": 2000,
+    "best_update_by_development_loss": 2000,
+    "stop_reason": "update_cap",
+    "train_reset_groups": 70,
+    "development_reset_groups": 10,
+    "autonomous_actor_diagnostic_reset_groups": 3
+  },
+  "development": {
+    "exact_occupancy_maps": 5,
+    "reset_groups": 10,
+    "confident_occupied_predictions_for_empty_slots": 3,
+    "endpoint_pixel_error_median": 11.989,
+    "endpoint_pixel_error_p90": 26.357
+  },
+  "autonomous_actor_diagnostic": {
+    "exact_occupancy_maps": 3,
+    "reset_groups": 3,
+    "confident_occupied_predictions_for_empty_slots": 0,
+    "endpoint_pixel_error_median": 17.465,
+    "endpoint_pixel_error_p90": 95.036
+  },
+  "predeclared_gate_passed": false,
+  "automatic_handoff_enabled": false,
+  "final_scenes_opened": false,
+  "artifact": "/home/nas/chmin/aic_archives/2026-10-05_sfp_board_reference_probe_v1",
+  "record": "docs/experiments/2026-10-05-sfp-board-rail-reference-probe.md"
+}

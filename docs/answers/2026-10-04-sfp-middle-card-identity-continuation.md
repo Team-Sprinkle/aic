@@ -1,0 +1,11 @@
+# SFP middle-card perception continuation
+
+I continued the agreed bounded repair. First, I inspected original-resolution camera crops from the six middle-card development episodes that the previous model missed. In five starts, the marked port face appears exposed in all three cameras. In the sixth, card 3/port 0 is offscreen initially and appears later. This is a provisional visual review: the marker showed me where the port was, so it does not prove a model can identify the card by itself.
+
+I then trained one structured detector for 2,000 updates on one GPU. It learns image locations for every present card/port internally and returns only the port named by the task code. True simulator coordinates were labels and post-run audit data; the model did not receive them at inference. The same 50 training and ten development resets were used, with complete resets kept separate.
+
+The selected checkpoint improved accepted observations from **51 to 66 out of 136** versus the previous selected-only model, with **zero accepted wrong ports** and **2.14 mm 3D position error at p95** among accepted estimates. It still acquired an anchor within three seconds in only **7/10 episodes**, below the planned **9/10** gate. Card 2/port 0 and card 3/port 0 never acquired an anchor. In those failures, different cameras repeatedly chose different neighboring cards, and the three-camera consistency rule correctly rejected the result. No transport actor, live Gazebo test, PoseInsert, or RL run followed.
+
+The next repair should identify the requested **rail slot** from the board view, then locate the card's shifted port within that slot. Empty rails make it unsafe to simply count visible cards. A safe move to obtain a clearer view is the fallback when the requested slot is genuinely out of sight. This needs fresh non-final grouped development starts and the same zero-wrong, coverage, position, and latency gates before actor continuation. Rootless Docker remains at its 200/200 session-key limit, so I did not start a new simulator container or disturb the old Isaac process.
+
+The [experiment record](../experiments/2026-10-04-sfp-middle-card-identity-repair.md) links the reviewed images, checkpoint, exact commands, per-camera failure audit, and full metrics. Main status, handoff, and artifact docs are updated.

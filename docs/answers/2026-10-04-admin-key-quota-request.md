@@ -1,0 +1,1 @@
+Hi — could you ask the server admin to raise the non-root Linux keyring limits to `kernel.keys.maxkeys=1024` and `kernel.keys.maxbytes=1048576` (and persist them)? Our rootless Docker user, UID 1008, is at 199/200 keys, so new Gazebo containers sometimes fail with “unable to create session key: disk quota exceeded.” This is a kernel key limit, not disk space. Thanks!

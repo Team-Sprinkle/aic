@@ -1,0 +1,44 @@
+{
+  "schema": "aic_sfp_selected_anchor_decision/v1",
+  "date": "2026-10-03",
+  "decision": "do_not_promote_insufficient_card_coverage",
+  "experiment": "docs/experiments/2026-10-03-sfp-selected-anchor.md",
+  "train_episode_groups": 50,
+  "development_episode_groups": 10,
+  "train_observations": 692,
+  "development_observations": 136,
+  "new_training_updates": 2000,
+  "gpus_for_new_fit": [2],
+  "selected_anchor": {
+    "accepted_observations": 51,
+    "acceptance_rate": 0.375,
+    "accepted_wrong_identity": 0,
+    "accepted_position_p95_mm": 2.6508113065488237,
+    "episode_with_any_anchor": 4,
+    "episode_with_anchor_within_3s": 4,
+    "middle_card_episodes_with_any_anchor": 0,
+    "middle_card_episode_count": 6
+  },
+  "frozen_multiport_comparison": {
+    "accepted_observations": 53,
+    "accepted_wrong_identity": 0,
+    "accepted_position_p95_mm": 4.690872233363771,
+    "episode_with_any_anchor": 8,
+    "episode_with_anchor_within_3s": 7
+  },
+  "frozen_candidate_row_diagnostic": {
+    "episode_with_any_anchor": 8,
+    "new_episode_rescued_by_same_port_line_fit": 0,
+    "training_only_constant_offset_card1_to_card2_p95_mm": 28.682582068723043,
+    "training_only_constant_offset_card1_to_card3_p95_mm": 38.48819671617477,
+    "decision": "fixed_row_spacing_insufficient_for_20mm_gate"
+  },
+  "constant_requested_port_mean_p95_mm": 69.71075344179579,
+  "predeclared_numeric_gate_passed": true,
+  "operational_coverage_passed": false,
+  "actor_continuation_started": false,
+  "autonomous_rollouts_started": false,
+  "final_scenes_opened": false,
+  "artifact_root": "/home/nas/chmin/aic_archives/2026-10-03_sfp_balanced_arrival_v1/balanced_bc/selected_anchor_native576_v1",
+  "label_manifest": "/var/tmp/chmin_aic_20260918_act/sfp_balanced_arrival_20261003/anchor_labels_v1"
+}

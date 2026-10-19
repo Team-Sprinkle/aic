@@ -1,0 +1,147 @@
+{
+  "schema": "aic_sc_orientation_and_identity_repair_decision/v1",
+  "date": "2026-10-03",
+  "decision": "do_not_promote_identity_or_handoff",
+  "known_p0_initial_no_stale_pause": {
+    "best_true_standoff_mm": 0.4522694918071146,
+    "inspections": 0
+  },
+  "known_p0_stale_pause_orientation_correction": {
+    "best_true_standoff_mm": 0.6550641836565898,
+    "inspections": [
+      {
+        "sim_time_s": 52.55,
+        "valid": false,
+        "reason": "requested_identity_not_in_all_views",
+        "nearest_proposal_true_standoff_error_mm": 1.6703054367738805,
+        "verification_ms": 152.19003474339843,
+        "identity_probability": [
+          0.18965421617031097,
+          0.6451352834701538,
+          0.9377037882804871
+        ]
+      },
+      {
+        "sim_time_s": 55.6,
+        "valid": false,
+        "reason": "requested_identity_not_in_all_views",
+        "nearest_proposal_true_standoff_error_mm": 0.6550641836565898,
+        "verification_ms": 98.22573093697429,
+        "identity_probability": [
+          0.0030013208743184805,
+          0.045305367559194565,
+          0.8475752472877502
+        ]
+      },
+      {
+        "sim_time_s": 57.85,
+        "valid": false,
+        "reason": "requested_identity_not_in_all_views",
+        "nearest_proposal_true_standoff_error_mm": 0.8626036474524391,
+        "verification_ms": 95.68355698138475,
+        "identity_probability": [
+          0.0037965020164847374,
+          0.051407650113105774,
+          0.8579844236373901
+        ]
+      }
+    ],
+    "orientation_target_events": 1
+  },
+  "new_reset_manifest": "/home/nas/chmin/aic_archives/2026-10-03_sc_orientation_repair_v1/development_new_p0_fivecard/manifest.json",
+  "new_reset_matched": {
+    "baseline_best_true_standoff_mm": 82.84021685665846,
+    "corrected_best_true_standoff_mm": 1.0369516630669735,
+    "baseline_inspections": [],
+    "corrected_inspections": [
+      {
+        "sim_time_s": 54.2,
+        "valid": false,
+        "reason": "wrong_tcp_posture",
+        "nearest_proposal_true_standoff_error_mm": 1.8196022965118135,
+        "verification_ms": 145.29055124148726,
+        "identity_probability": [
+          0.9954724907875061,
+          0.9977774024009705,
+          0.994962215423584
+        ]
+      },
+      {
+        "sim_time_s": 58.048,
+        "valid": false,
+        "reason": "requested_identity_not_in_all_views",
+        "nearest_proposal_true_standoff_error_mm": 1.9814289879543772,
+        "verification_ms": 91.89000073820353,
+        "identity_probability": [
+          0.4567556381225586,
+          0.36376312375068665,
+          0.9893529415130615
+        ]
+      },
+      {
+        "sim_time_s": 60.35,
+        "valid": false,
+        "reason": "requested_identity_not_in_all_views",
+        "nearest_proposal_true_standoff_error_mm": 2.5534825929970153,
+        "verification_ms": 100.53435619920492,
+        "identity_probability": [
+          0.5288368463516235,
+          0.3192203938961029,
+          0.9853954911231995
+        ]
+      }
+    ],
+    "same_scene_different_route_not_causal": true
+  },
+  "identity_without_tcp_orientation": {
+    "checkpoint": "/home/nas/chmin/aic_archives/2026-10-03_sc_orientation_repair_v1/identity_no_tcp_orientation_v1/spatial.pt",
+    "same_image_state_swap_known": "/home/nas/chmin/aic_archives/2026-10-03_sc_orientation_repair_v1/p0_known_stale_orientation/identity_state_swap_v2.json",
+    "saved_control_counts": {
+      "accepted_control": {
+        "accepted": 7,
+        "tested": 10
+      },
+      "same_image_wrong_request": {
+        "accepted": 0,
+        "tested": 10
+      },
+      "early_transport": {
+        "accepted": 0,
+        "tested": 10
+      },
+      "provisionally_hidden": {
+        "accepted": 0,
+        "tested": 20
+      }
+    },
+    "new_live_proxy_replay": "/home/nas/chmin/aic_archives/2026-10-03_sc_orientation_repair_v1/no_orientation_identity_new_live_replay_v1.json",
+    "not_deployed_due_to_absent_port_accepts": true,
+    "same_image_state_swap_new": "/home/nas/chmin/aic_archives/2026-10-03_sc_orientation_repair_v1/new_p0_orientation_correction/identity_state_swap_v2.json",
+    "four_prior_plus_new_projection_counts": {
+      "baseline": {
+        "triplets": 244,
+        "projected_all_triplets": 213,
+        "projected_all_recalled": 184,
+        "absent_all_three_accept": 0
+      },
+      "candidate": {
+        "triplets": 244,
+        "projected_all_triplets": 213,
+        "projected_all_recalled": 212,
+        "absent_all_three_accept": 11
+      }
+    },
+    "new_reset_only": {
+      "triplets": 100,
+      "candidate_absent_all_three_accept": 11,
+      "baseline_absent_all_three_accept": 0
+    }
+  },
+  "known_p0_review": "/home/nas/chmin/aic_archives/2026-10-03_sc_orientation_repair_v1/p0_known_stale_orientation/review/all_inspections.jpg",
+  "new_p0_review": "/home/nas/chmin/aic_archives/2026-10-03_sc_orientation_repair_v1/new_p0_orientation_correction/review/all_inspections.jpg",
+  "orientation_correction_observation_only": true,
+  "runtime_switch_default_off": true,
+  "insertion_actor_attached": false,
+  "rl_training": false,
+  "final_scenes_opened": false
+}

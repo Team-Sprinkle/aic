@@ -1,0 +1,26 @@
+{
+  "schema": "aic_development_sources_predeadline/v1",
+  "upstream_commit": "ced3678cadaa446911a7d14c11b6fd1399509f08",
+  "commit_date": "2026-05-11T16:18:01Z",
+  "qualification_deadline_local": "2026-05-15 23:59 America/Los_Angeles",
+  "official_eval_release_merged_utc": "2026-05-28T00:29:16Z",
+  "sources": {
+    "aic_engine/config/sample_config.yaml": {
+      "url": "https://raw.githubusercontent.com/intrinsic-dev/aic/ced3678cadaa446911a7d14c11b6fd1399509f08/aic_engine/config/sample_config.yaml",
+      "sha256": "21f6eb9ac0d71f7dddac3657c67c41b5fa212e5aaa1fd68528b08ec219585c8d"
+    },
+    "docs/qualification_phase.md": {
+      "url": "https://raw.githubusercontent.com/intrinsic-dev/aic/ced3678cadaa446911a7d14c11b6fd1399509f08/docs/qualification_phase.md",
+      "sha256": "f32634a7f33a79ba730c0890a8b86588eb6aaaf51ee505f0c939c6b67099135f"
+    },
+    "aic_bringup/launch/aic_gz_bringup.launch.py": {
+      "url": "https://raw.githubusercontent.com/intrinsic-dev/aic/ced3678cadaa446911a7d14c11b6fd1399509f08/aic_bringup/launch/aic_gz_bringup.launch.py",
+      "sha256": "17282c309025e8e25e233f1b32092c527e69e37642aca414669800b8d4e94905"
+    }
+  },
+  "local_sample_exactly_matches_pinned": true,
+  "allowed": "Pinned sample, predeadline task definitions/assets and declared ranges. Development variants must record independently chosen distributions and seeds.",
+  "excluded": "Post-release eval_config.yaml, its exact scene constants, and variants seeded from those scenes; observed post-release evaluation failures must not select route constants, data, or thresholds.",
+  "limitations": "Already viewed qualification scenes are exposed tests, not untouched holdouts. Existing model/data/prior eligibility requires provenance audit, not a blanket assumption of clean or contaminated.",
+  "training_started": false
+}

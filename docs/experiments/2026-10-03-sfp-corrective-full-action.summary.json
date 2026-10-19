@@ -1,0 +1,72 @@
+{
+  "schema": "aic_sfp_corrective_full_action_gate/2026-10-03",
+  "hypothesis": "post-actor-takeover full CheatCode targets repair autonomous early transport drift",
+  "diagnostic_teacher_development": {
+    "requests": 3,
+    "recovered_controller_buffer": 3,
+    "scored_contacts": 0,
+    "manifest": "/home/nas/chmin/aic_archives/2026-10-03_sfp_balanced_arrival_v1/balanced_bc/corrective_teacher_gate_3dev_v1/summary.json",
+    "autonomous_success_claim": false
+  },
+  "collection": {
+    "first_tranche_completed": 10,
+    "first_tranche_tf_accepted": 10,
+    "first_tranche_causally_admitted": 10,
+    "train_chunks": 2302,
+    "target_identities": 10,
+    "attempted_total": 20,
+    "tf_accepted_total": 11,
+    "unadmitted_successful_second_tranche": 1,
+    "second_tranche_no_launch_key_quota": 9,
+    "materialization_manifest": "/var/tmp/chmin_aic_20260918_act/sfp_balanced_arrival_20261003/corrective_train10_materialized_v2/manifest.json",
+    "actor_prefix_used_as_supervision": false
+  },
+  "training": {
+    "architecture": "same full-action temporal transformer; no delta head",
+    "initialized_from": "/home/nas/chmin/aic_archives/2026-10-03_sfp_balanced_arrival_v1/balanced_bc/ordinary_v1/best.pt",
+    "updates_completed": 3750,
+    "selected_update": 2500,
+    "stop_reason": "validation_plateau",
+    "sfp_teacher_first_action_p95_mm": 2.4701478362083433,
+    "sc_teacher_first_action_p95_mm": 2.2344620704650877,
+    "checkpoint": "/home/nas/chmin/aic_archives/2026-10-03_sfp_balanced_arrival_v1/balanced_bc/corrective_10ep_fullaction_v1/best.pt",
+    "corrective_sfp_sampler_fraction": 0.3,
+    "learning_rate": 5e-05
+  },
+  "autonomous": {
+    "runs": 3,
+    "buffered_visits": 0,
+    "scored_contacts": 2,
+    "closest_lateral_in_axial_band_mm": [
+      82.72484716522085,
+      12.171223808629085,
+      23.301131083349205
+    ],
+    "actor_inference_p95_ms_max": 103.17131709307431,
+    "score": "/home/nas/chmin/aic_archives/2026-10-03_sfp_balanced_arrival_v1/balanced_bc/corrective_10ep_autonomous_3dev_v1/posthoc_score.json"
+  },
+  "gate": "fail: 0/3 buffered, 2/3 contact; required >=2/3 buffered with no increased contact and p95<300ms",
+  "next": "stop corrective full-action branch; test explicit route-stage/subgoal supervision on existing teacher episodes under a new bounded gate",
+  "reserved_final_opened": false,
+  "poseinsert_promoted": false,
+  "rl_started": false,
+  "next_experiment": {
+    "name": "explicit route-stage/next-waypoint probe on existing teacher scenes",
+    "gpu_cap": 1,
+    "probe_update_cap": 2000,
+    "probe_wall_hours": 2,
+    "offline_gate": {
+      "early_stage_accuracy_min": 0.9,
+      "next_waypoint_translation_p95_mm_max": 20
+    },
+    "actor_continuation_cap_if_offline_passes": 3000,
+    "new_development_starts": 3,
+    "live_gate": {
+      "buffered_arrivals_min": "2/3",
+      "scored_contact": "no higher rate than frozen baseline",
+      "complete_inference_p95_ms_max": 300
+    },
+    "reserved_final_sealed": true,
+    "requires_rootless_key_quota_repair": true
+  }
+}

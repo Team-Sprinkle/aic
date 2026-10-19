@@ -1,0 +1,37 @@
+{
+  "schema": "sfp_local_card_pair_repair_decision/v1",
+  "date": "2026-10-06",
+  "status": "both_development_gates_failed",
+  "training_split": {"reset_groups": 70, "unique_card_frame_crops": 10631},
+  "development_split": {"reset_groups": 10, "recorded_requests": 119},
+  "local_pair_fit": {
+    "updates": 2000,
+    "best_step": 1800,
+    "guarded_accepted": 5,
+    "guarded_wrong": 0,
+    "guarded_early_groups": 2,
+    "guarded_accepted_3d_p95_mm": 0.585877527580218,
+    "selected_port_only_accepted": 36,
+    "selected_port_only_wrong": 0,
+    "selected_port_only_accepted_3d_p95_mm": 2.2328223241076905,
+    "rail_agree_rows": 115,
+    "pair_3d_rows": 27,
+    "artifact": "/home/nas/chmin/aic_archives/2026-10-06_sfp_local_card_pair_fit_v2"
+  },
+  "coordinate_prior": {
+    "train_views": 56074,
+    "development_views": 355,
+    "updates": 2000,
+    "best_step": 1600,
+    "development_median_px": 49.144927978515625,
+    "development_p95_px": 111.29621353149415,
+    "closer_to_requested_than_neighbor_fraction": 0.9295774647887324,
+    "gate_p95_px_max": 30,
+    "gate_identity_fraction_min": 0.95,
+    "artifact": "/home/nas/chmin/aic_archives/2026-10-06_sfp_rail_to_port_prior_v1"
+  },
+  "automatic_handoff_enabled": false,
+  "rl_enabled": false,
+  "final_scenes_opened": false,
+  "runtime_true_geometry_input": false
+}

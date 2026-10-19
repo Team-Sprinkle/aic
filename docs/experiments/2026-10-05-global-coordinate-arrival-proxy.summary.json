@@ -1,0 +1,41 @@
+{
+  "schema": "aic_global_coordinate_arrival_proxy_summary/v1",
+  "date": "2026-10-05",
+  "train_reset_groups": 66,
+  "nonfinal_teacher_reset_groups": 10,
+  "autonomous_runs": 3,
+  "nominal_target_error_mm": {
+    "train": [
+      34.06029154912094,
+      71.84175133923515,
+      121.58869116823497
+    ],
+    "dev": [
+      44.59292521237879,
+      62.53811745852655,
+      63.70354368546022
+    ],
+    "inspected_diagnostic": [
+      47.55329137549808,
+      55.67711776207725,
+      63.60503916269369
+    ]
+  },
+  "teacher_100mm_trigger_count": 10,
+  "teacher_100mm_valid_standoff_count": 9,
+  "autonomous_100mm_trigger_count": 2,
+  "autonomous_100mm_valid_standoff_count": 0,
+  "autonomous_100mm_lateral_mm": [
+    null,
+    31.01495386202576,
+    99.22962447524574
+  ],
+  "rootless_kernel_key_quota": "117/117; no new Gazebo launch",
+  "final_scenes_opened": false,
+  "selected_port_tf_used_online": false,
+  "decision": "nominal global coordinate can cue inspection; cannot replace visual identity or safely stop transport",
+  "artifacts": {
+    "teacher_replay": "/home/nas/chmin/aic_archives/2026-10-05_sfp_global_coordinate_proxy_v2/summary.json",
+    "autonomous_replay": "/home/nas/chmin/aic_archives/2026-10-05_sfp_global_coordinate_proxy_v2/autonomous_three.json"
+  }
+}

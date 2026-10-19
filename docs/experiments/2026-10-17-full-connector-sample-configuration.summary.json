@@ -1,0 +1,113 @@
+{
+  "schema": "full_connector_complete_sample_result/v1",
+  "artifacts": "/home/nas/chmin/aic_archives/2026-10-17_full_connector_sample_configuration_v2",
+  "score": 165.4180190270161,
+  "maximum": 300,
+  "trials": [
+    {
+      "trial": "trial_1",
+      "total": 48.63028096250021,
+      "tier3": 38.01858494989651,
+      "depth_mm": 0.06486269152616853,
+      "lateral_mm": 3.5011131096465626,
+      "orientation_error_deg": 0.33603490815850817,
+      "physical_full_insertion": false,
+      "near_handoff": true,
+      "actor_ran": true
+    },
+    {
+      "trial": "trial_2",
+      "total": 35.475923740340676,
+      "tier3": 24.984315265176612,
+      "depth_mm": 0.022825809591425772,
+      "lateral_mm": 2.4047961119496493,
+      "orientation_error_deg": 0.4146821090032097,
+      "physical_full_insertion": false,
+      "near_handoff": true,
+      "actor_ran": true
+    },
+    {
+      "trial": "trial_3",
+      "total": 81.31181432417523,
+      "tier3": 75,
+      "depth_mm": 1.96985060159054,
+      "lateral_mm": 1.4881173578491802,
+      "orientation_error_deg": 2.4330248966376335,
+      "physical_full_insertion": false,
+      "near_handoff": true,
+      "actor_ran": true
+    }
+  ],
+  "strict_insertions": 0,
+  "near_handoffs": 3,
+  "recovery": "none",
+  "RL": false,
+  "training": false,
+  "reserved_final_scenes_opened": false,
+  "geometry_runtime_input": false,
+  "post_reset_geometry_used": false,
+  "videos": [
+    {
+      "trial": 1,
+      "path": "/home/nas/chmin/aic_archives/2026-10-17_full_connector_sample_configuration_v2/per_trial/trial_1/five_cameras_20fps_grid.mp4",
+      "symlink": false,
+      "ffprobe": {
+        "programs": [],
+        "streams": [
+          {
+            "codec_name": "h264",
+            "width": 1920,
+            "height": 1080,
+            "pix_fmt": "yuv420p",
+            "r_frame_rate": "20/1"
+          }
+        ],
+        "format": {
+          "duration": "114.700000"
+        }
+      }
+    },
+    {
+      "trial": 2,
+      "path": "/home/nas/chmin/aic_archives/2026-10-17_full_connector_sample_configuration_v2/per_trial/trial_2/five_cameras_20fps_grid.mp4",
+      "symlink": false,
+      "ffprobe": {
+        "programs": [],
+        "streams": [
+          {
+            "codec_name": "h264",
+            "width": 1920,
+            "height": 1080,
+            "pix_fmt": "yuv420p",
+            "r_frame_rate": "20/1"
+          }
+        ],
+        "format": {
+          "duration": "115.100000"
+        }
+      }
+    },
+    {
+      "trial": 3,
+      "path": "/home/nas/chmin/aic_archives/2026-10-17_full_connector_sample_configuration_v2/per_trial/trial_3/five_cameras_20fps_grid.mp4",
+      "symlink": false,
+      "ffprobe": {
+        "programs": [],
+        "streams": [
+          {
+            "codec_name": "h264",
+            "width": 1920,
+            "height": 1080,
+            "pix_fmt": "yuv420p",
+            "r_frame_rate": "20/1"
+          }
+        ],
+        "format": {
+          "duration": "107.550000"
+        }
+      }
+    }
+  ],
+  "causal_audits_agree": true,
+  "analysis_complete": true
+}

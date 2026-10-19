@@ -1,0 +1,13 @@
+# Balanced SFP transport continuation
+
+I finished the balanced SFP transport experiment and its bounded failure diagnosis.
+
+- Collected **50 successful training** and **10 successful, disjoint development** CheatCode episodes covering all ten NIC card/port requests. The fresh scored commands produced **12,940 verified transport chunks**. The older agent replay action arrays were not used.
+- Trained two matched shared SFP/SC transport actors: ordinary previous-command history and a zeroed-history variant. Teacher-observation SFP first-action error was **3.13 mm p95** versus **9.27 mm p95**. This metric did not predict autonomous success.
+- Ran the frozen baseline and both new actors on the same three new development resets. **Every variant reached 0/3 safe requested-port arrival buffers**. Both new actors incurred scored contact on all three. All actor-only inference p95 times were below 105 ms, beneath the 300 ms limit.
+- Measured TCP paths departed by more than 10 mm from matched teacher paths within **3.7–4.2 simulation seconds**. A bounded longer training run plateaued at **2.42 mm** SFP teacher-action p95 and missed its predeclared 2 mm gate, so I did not add a live rollout for it.
+- A separate, explicitly privileged five-second teacher-prefix diagnostic improved one scene's arrival-band lateral offset from **92.24 mm** to **16.95 mm** and **28.65 mm** in two repeats, but neither reached the required 10 mm buffer. After takeover, the actor drifted away from the teacher path. These are diagnostic runs, not autonomous successes.
+
+**Decision:** No new checkpoint or handoff is promoted. PoseInsert, RL and the reserved final scenes remain untouched. The next bounded experiment is at most **three actor-state CheatCode takeovers** on development resets to test whether safe full-action corrective labels can be obtained. Only if at least two reach the buffer without scored contact should we collect at most 20 balanced corrective segments, train one ≤5,000-update supervised continuation, and retest the same three development starts. The continuation must reach at least 2/3 safe buffers, avoid extra contact and stay below 300 ms p95; otherwise change the route representation or consider a bounded RL diagnostic.
+
+Detailed commands, scores, traces and the measured-route plot are in [the experiment record](../experiments/2026-10-03-sfp-balanced-arrival-onpolicy-check.md) and [machine summary](../experiments/2026-10-03-sfp-balanced-bc-gate.summary.json). The nine-run [score file](/var/tmp/chmin_aic_20260918_act/sfp_balanced_arrival_20261003/balanced_development3x3_score_v1.json) and [route plot](/var/tmp/chmin_aic_20260918_act/sfp_balanced_arrival_20261003/development_route_diagnosis_v1/route_divergence.png) are saved separately.

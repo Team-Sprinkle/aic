@@ -1,0 +1,128 @@
+{
+  "schema": "sfp_wide_observation_gate/v1",
+  "final_scenes_opened": false,
+  "privileged_teacher_only": true,
+  "no_autonomous_insertion_test": true,
+  "no_model_training": true,
+  "episodes": [
+    {
+      "episode": "card1_port0",
+      "requested": "sfp_card_1_port_0",
+      "card_count": 4,
+      "baseline_card_faces_countable_cameras": 0,
+      "wide_card_faces_countable_cameras": 3,
+      "wide_requested_card_identifiable_cameras_by_blind_review": 0,
+      "wide_tcp_offset_mm": [
+        1.07,
+        76.21,
+        37.66
+      ],
+      "wide_contact_pairs": [
+        [
+          "cable_0",
+          "enclosure"
+        ]
+      ],
+      "returned_within_5mm": true,
+      "unsafe_abort_reason": null,
+      "peak_wrist_force_rise_n": 0.64,
+      "lowest_wrist_force_change_n": -1.64,
+      "official_teacher_tier3": 75
+    },
+    {
+      "episode": "card2_port0",
+      "requested": "sfp_card_2_port_0",
+      "card_count": 5,
+      "baseline_card_faces_countable_cameras": 3,
+      "wide_card_faces_countable_cameras": 3,
+      "wide_requested_card_identifiable_cameras_by_blind_review": 0,
+      "wide_tcp_offset_mm": [
+        1.26,
+        75.73,
+        36.06
+      ],
+      "wide_contact_pairs": [
+        [
+          "cable_0",
+          "enclosure"
+        ]
+      ],
+      "returned_within_5mm": true,
+      "unsafe_abort_reason": null,
+      "peak_wrist_force_rise_n": 0.7,
+      "lowest_wrist_force_change_n": -8.76,
+      "official_teacher_tier3": 75
+    },
+    {
+      "episode": "card3_port0",
+      "requested": "sfp_card_3_port_0",
+      "card_count": 5,
+      "baseline_card_faces_countable_cameras": 3,
+      "wide_card_faces_countable_cameras": 3,
+      "wide_requested_card_identifiable_cameras_by_blind_review": 0,
+      "wide_tcp_offset_mm": [
+        0.56,
+        75.79,
+        36.17
+      ],
+      "wide_contact_pairs": [
+        [
+          "cable_0",
+          "enclosure"
+        ],
+        [
+          "cable_0",
+          "task_board"
+        ]
+      ],
+      "returned_within_5mm": true,
+      "unsafe_abort_reason": null,
+      "peak_wrist_force_rise_n": 0.26,
+      "lowest_wrist_force_change_n": -7.61,
+      "official_teacher_tier3": 75
+    },
+    {
+      "episode": "card4_port1",
+      "requested": "sfp_card_4_port_1",
+      "card_count": 3,
+      "baseline_card_faces_countable_cameras": 3,
+      "wide_card_faces_countable_cameras": 3,
+      "wide_requested_card_identifiable_cameras_by_blind_review": 0,
+      "wide_tcp_offset_mm": [
+        0.35,
+        75.64,
+        34.69
+      ],
+      "wide_contact_pairs": [
+        [
+          "cable_0",
+          "enclosure"
+        ],
+        [
+          "cable_0",
+          "task_board"
+        ]
+      ],
+      "returned_within_5mm": false,
+      "unsafe_abort_reason": "wide_view: measured TCP offset differs by >5 mm",
+      "peak_wrist_force_rise_n": 0.05,
+      "lowest_wrist_force_change_n": -1.95,
+      "official_teacher_tier3": 0
+    }
+  ],
+  "posthoc_selected_projection_all_three": 8,
+  "posthoc_projected_rows": 8,
+  "safety_return_passed": 3,
+  "safety_return_attempted": 4,
+  "blind_certified_requested_identity_at_least_two_cameras": 0,
+  "predeclared_gate": "at least 3/4 scenes with requested numbered face identifiable in >=2 cameras, no safety event",
+  "gate_passed": false,
+  "decision": "Do not collect routine wide-view training data or promote handoff. A wider view shows more context, but raw RGB does not by itself certify task-code-to-physical-slot mapping, especially with empty slots. Diagnose explicit board-slot reference and selected-port visibility on existing frames; only then consider a new grouped fit.",
+  "artifacts": {
+    "archive_root": "/home/nas/chmin/aic_archives/2026-10-04_sfp_wide_observation_v1",
+    "raw_unmarked": "/home/nas/chmin/aic_archives/2026-10-04_sfp_wide_observation_v1/raw_views_v1",
+    "blind_visual_review": "/home/nas/chmin/aic_archives/2026-10-04_sfp_wide_observation_v1/raw_views_v1/visual_annotations_v1.json",
+    "posthoc_truth": "/home/nas/chmin/aic_archives/2026-10-04_sfp_wide_observation_v1/posthoc_truth_v1",
+    "first_pilot_failed": "/home/nas/chmin/aic_archives/2026-10-04_sfp_wide_observation_v1/card1_port0"
+  }
+}

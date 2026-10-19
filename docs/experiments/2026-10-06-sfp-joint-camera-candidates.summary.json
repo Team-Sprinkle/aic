@@ -1,0 +1,40 @@
+{
+  "schema": "sfp_joint_camera_candidate_decision/v1",
+  "date": "2026-10-06",
+  "status": "failed_new_nonfinal_gate",
+  "development": {
+    "groups": 10,
+    "joint_top5": {"accepted": 72, "wrong": 2, "early_groups": 10, "accepted_3d_p95_mm": 4.383077982017899},
+    "joint_top5_two_inspections_10mm": {"accepted": 59, "wrong": 0, "early_groups": 10, "accepted_3d_p95_mm": 3.2711019776420183}
+  },
+  "fresh_nonfinal": {
+    "scene_groups": 10,
+    "recorded_requests": 10,
+    "teacher_full_insertions": 10,
+    "synchronized_triplets": 528,
+    "retained_board_rows": 527,
+    "board_exact_occupancy_groups": 10,
+    "joint_top5": {"accepted": 171, "wrong": 12, "early_groups": 10, "accepted_3d_p95_mm": 42.44031894262665},
+    "joint_top5_two_inspections_10mm": {"accepted": 150, "wrong": 8, "early_groups": 10, "accepted_3d_p95_mm": 25.211925694621122},
+    "matched_singlepoint": {"accepted": 89, "wrong": 0, "early_groups": 10, "accepted_3d_p95_mm": 2.706699757258801}
+  },
+  "wrong_joint_identity_groups": {
+    "card1_port0": "card2_port0 for 2 accepted frames, about 53 mm error",
+    "card3_port1": "card4_port1 for 6 accepted frames, about 42 mm error"
+  },
+  "promotion_gate": {"wrong_max": 0, "early_groups_min": 9, "accepted_3d_p95_mm_max": 20, "passed": false},
+  "singlepoint_previous_additional10_early_groups": 6,
+  "joint_branch_stopped": true,
+  "automatic_handoff_enabled": false,
+  "transport_safe_buffered_arrivals_latest": "0/3",
+  "full_live_latency_measured": false,
+  "runtime_true_geometry_input": false,
+  "final_scenes_opened": false,
+  "artifacts": {
+    "fresh_plan": "/home/nas/chmin/aic_archives/2026-10-06_sfp_joint_candidate_fresh10_v1/plan.json",
+    "joint": "/home/nas/chmin/aic_archives/2026-10-06_sfp_joint_candidate_fresh10_joint_v1",
+    "persistence": "/home/nas/chmin/aic_archives/2026-10-06_sfp_joint_candidate_fresh10_persistence_v1",
+    "singlepoint": "/home/nas/chmin/aic_archives/2026-10-06_sfp_joint_candidate_fresh10_singlepoint_v1",
+    "failure_overlays": "/home/nas/chmin/aic_archives/2026-10-06_sfp_joint_candidate_fresh10_failure_overlays_v1"
+  }
+}

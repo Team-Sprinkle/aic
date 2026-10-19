@@ -1,0 +1,13 @@
+# Selected-port continuation, October 3
+
+I continued the transport-to-insertion handoff work on development scenes. **The automatic switch remains disabled.**
+
+- **SC:** The requested-port identity model accepted all 10 saved observations around a known wrong-route stop. The robot was about **6.7°** from the intended orientation, while its learned orientation probe reported only **0.1°** remaining. A simple fixed-orientation check caught that stop but also rejected **2 of 5 valid stops**, so I did not adopt it.
+- **SFP:** The earlier cascade sometimes selected a neighboring card's port. I trained a small verifier to ask whether the vision-proposed opening matches the requested card and port. Training only with offscreen distractors made it reject almost every correct proposal. Training with both correct visible targets and distractors **from the same reset groups** fixed the saved replay: **4/4 wrong proposals rejected, 69/69 correct proposals retained**.
+- **New held-out SFP resets:** The verifier rejected **105/105** offscreen distractor views, accepted **240/240** labeled visible-target points, and retained **21/21** correct proposals from the frozen cascade. The cascade produced no accepted wrong-port proposal on those two resets, so wrong-port rejection there remains untested. Its accepted poses had **0.219 mm lateral p95** but **5.78° orientation p95**, above the planned 3° handoff target.
+
+The SFP result is promising but not a safety or insertion result. The original 32-group validation still has **3/382** neighboring-port point false accepts, visibility under occlusion is not certified, and complete live inference latency has not been measured. I did not train an insertion actor or RL policy, and I kept the final scenes sealed.
+
+I saved the full [experiment record](../experiments/2026-10-03-selected-port-correspondence-continuation.md), [machine-readable decision](../../outputs/experiments/2026-10-02_two_family_perception/selected_port_correspondence_decision_20261003.json), commands, checkpoints, and per-frame replays. I also updated the main status, experiment ledger, handoff plan, project overview, and artifact map.
+
+**Next bounded gate:** With models and thresholds frozen, review existing non-final images by complete reset group for clear requested ports, wrong-card proposals, SC wrong posture, and gripper/cable occlusion. Require zero accepted unsafe proposals and at least 95% clear-arrival retention. If that passes, test a shadow pause/inspect/resume handoff and complete live p95 latency below 300 ms before connecting the insertion actor. Budget: at most one workday of review and one GPU-hour of replay; no routine new collection or retraining.

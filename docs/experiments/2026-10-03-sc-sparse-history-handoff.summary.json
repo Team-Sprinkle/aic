@@ -1,0 +1,69 @@
+{
+  "schema": "aic_sc_sparse_history_handoff_summary/v1",
+  "date": "2026-10-03",
+  "status": "shadow_diagnostic_only_gate_open",
+  "automatic_handoff_enabled": false,
+  "insertion_actor_attached": false,
+  "rl_enabled": false,
+  "reserved_final_scenes_opened": false,
+  "offline_one_port": {
+    "complete_development_routes": 7,
+    "projected_in_all_views_triplets": 367,
+    "single_frame_identity_accepts": 235,
+    "single_frame_or_causal_history_geometry_accepts": 363,
+    "physically_absent_request_all_view_single_frame_accepts": 0,
+    "physically_absent_request_triplets": 444,
+    "keyframe_spacing_mm": 20,
+    "keyframes_per_route_range": [4, 9],
+    "projection_is_not_reviewed_visibility": true,
+    "artifacts": [
+      "outputs/experiments/2026-10-03_sparse_history/identity_audit_v2.json",
+      "outputs/experiments/2026-10-03_sparse_history/identity_audit_correction_v4.json",
+      "outputs/experiments/2026-10-03_sparse_history/keyframe_20mm_v2.json"
+    ]
+  },
+  "additional_one_port_p1": {
+    "projected_triplets": 24,
+    "single_frame_or_history_accepts": 22,
+    "physically_absent_request_accepts": 0,
+    "absent_request_triplets": 39,
+    "two_missed_projected_frames_left_view_partly_occluded_by_gripper": true,
+    "artifact": "outputs/experiments/2026-10-03_sparse_history/independent_p1_track_20mm_v1.json"
+  },
+  "two_port_challenge": {
+    "complete_development_routes": 4,
+    "selected_near_standoff_paired_frames": 30,
+    "minimum_other_port_standoff_mm_at_selected_near_frames": 68.4,
+    "history_match_threshold_mm": 5,
+    "standoff_gate_mm": 15,
+    "artifact": "outputs/experiments/2026-10-03_sparse_history/twoport_selected_track_20mm_v1.json"
+  },
+  "offline_corrected_p0_pose": {
+    "true_standoff_at_most_mm": 15,
+    "samples_per_route": [52, 50],
+    "lateral_p95_mm": [0.102, 0.245],
+    "axial_p95_mm": [0.607, 0.398],
+    "artifact": "outputs/experiments/2026-10-03_sparse_history/pose_error_correction_groups_v3.json"
+  },
+  "live_same_reset_shadow": {
+    "baseline_closest_true_standoff_mm": 0.249,
+    "first_history_run_closest_true_standoff_mm": 48.250,
+    "first_history_run_route_diverged_before_history_started": true,
+    "bounded_repeat_closest_true_standoff_mm": 0.788,
+    "bounded_repeat_original_verifier_accepts": 0,
+    "bounded_repeat_posture_corrected_history_would_accept": 2,
+    "bounded_repeat_counterfactual_other_request_accepts": 0,
+    "bounded_repeat_inspections": 3,
+    "bounded_repeat_policy_plus_periodic_history_p95_ms": 196.25,
+    "bounded_repeat_fresh_verifier_inspection_ms": [90.96, 95.45, 100.37],
+    "complete_ros_to_first_insertion_command_latency_measured": false,
+    "artifact_root": "/home/nas/chmin/aic_archives/2026-10-03_sparse_history_v1/"
+  },
+  "promotion_gate_passed": false,
+  "remaining": [
+    "independent reviewed hard occlusion and wrong port history sequences",
+    "SFP selected port arrival and identity handoff",
+    "complete attached actor command latency below 300 ms",
+    "autonomous insertion from full development starts"
+  ]
+}

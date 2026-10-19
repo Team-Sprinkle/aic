@@ -1,0 +1,13 @@
+# SFP visual-identity continuation result
+
+I worked through the next bounded view test and stopped at its preset gates.
+
+At the reused nonfinal SFP card-1/port-0 scene, I tested a small wrist rotation intended to reveal the board edge without moving sideways across the card row. An offline camera projection said a **+10° local-x** rotation should keep the installed port centers in all three image bounds. That was only a field-of-view check; it could not prove that the board reference would be visible or the motion safe.
+
+The first two pilot attempts exposed bugs in the diagnostic command construction: one used a future teacher orientation as the rotation origin; the next accidentally accumulated 1° through 10° into 55°. Both hit the unchanged measured-pose abort gate without a force/contact event. I fixed the code, preserved both attempts, and reran the **same scene**. The corrected run reached +10° within **0.014°**, but the TCP drifted **6.38 mm** while holding, beyond the **5 mm** limit. It aborted before return or insertion. Wrist force did not rise, and the only oracle contact pair was cable/enclosure.
+
+I inspected the synchronized, unmarked baseline/tilted original RGB. The tilted left camera showed a little more board surface, but the row end and requested numbered card/port were still not identifiable in two cameras. So this view failed the visual gate as well as the measured-position gate. I did not run a second scene, gather a new training set, fit another identity model, or change handoff/insertion/RL.
+
+The [six-camera comparison image](</home/nas/chmin/aic_archives/2026-10-06_sfp_board_tilt_view_v1/card1_port0_v3/unmarked_baseline_vs_tilt.jpg>) shows baseline above and tilt below. The [pilot summary](</home/nas/chmin/aic_archives/2026-10-06_sfp_board_tilt_view_v1/card1_port0_v3/pilot_summary.json>) and [experiment record](../experiments/2026-10-06-sfp-board-tilt-view.md) contain the force, motion, contact, code and stopping decision. A [40-panel independent review packet](</home/nas/chmin/aic_archives/2026-10-06_sfp_requested_card_blind_review_v1/independent_review_packet.md>) is ready; a second independent reviewer was unavailable, so the formal identity review remains 11/40 rather than a claimed full-set score.
+
+**Next direction:** stop broad wrist-angle and row-translation sweeps. If we revisit visual identity, first specify a fixed board/slot feature that should become visible from a collision-feasible pose, and prove it on unmarked images in at least two cameras. The spatial transport actor remains gated by the older hard-scene target-identity result (3/10 early anchors); latest autonomous transport remains 0/3 safe arrivals. Final scenes stay sealed.

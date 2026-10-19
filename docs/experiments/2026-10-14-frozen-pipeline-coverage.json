@@ -1,0 +1,101 @@
+{
+  "schema": "aic_frozen_coverage_decision/v1",
+  "status": "complete_not_promoted",
+  "completed_rollouts": 140,
+  "distinct_development_configs": 120,
+  "cells": 28,
+  "episodes_per_cell": 5,
+  "groups": [
+    {
+      "domain": "alternate_public_board",
+      "family": "sc",
+      "arm": "near_approach",
+      "episodes": 10,
+      "visual_approved": 0,
+      "wrong_accepts": 0,
+      "actor_started": 0,
+      "full_insertions": 0,
+      "no_scored_harm": 10,
+      "terminal_reasons": {
+        "rule_acquisition_or_guarded_failure": 10
+      }
+    },
+    {
+      "domain": "alternate_public_board",
+      "family": "sfp",
+      "arm": "learned_transport_only",
+      "episodes": 10,
+      "visual_approved": null,
+      "wrong_accepts": null,
+      "actor_started": 0,
+      "full_insertions": null,
+      "no_scored_harm": 10,
+      "terminal_reasons": {
+        "bounded_runtime": 10
+      }
+    },
+    {
+      "domain": "primary",
+      "family": "sc",
+      "arm": "far_actor_control",
+      "episodes": 20,
+      "visual_approved": 7,
+      "wrong_accepts": 1,
+      "actor_started": 7,
+      "full_insertions": 0,
+      "no_scored_harm": 20,
+      "terminal_reasons": {
+        "rule_acquisition_or_guarded_failure": 12,
+        "bounded_runtime": 7,
+        "force_stop": 1
+      }
+    },
+    {
+      "domain": "primary",
+      "family": "sc",
+      "arm": "near_approach",
+      "episodes": 50,
+      "visual_approved": 23,
+      "wrong_accepts": 3,
+      "actor_started": 3,
+      "full_insertions": 0,
+      "no_scored_harm": 50,
+      "terminal_reasons": {
+        "rule_acquisition_or_guarded_failure": 27,
+        "no_progress": 20,
+        "bounded_runtime": 3
+      }
+    },
+    {
+      "domain": "primary",
+      "family": "sfp",
+      "arm": "learned_transport_only",
+      "episodes": 50,
+      "visual_approved": null,
+      "wrong_accepts": null,
+      "actor_started": 0,
+      "full_insertions": null,
+      "no_scored_harm": 39,
+      "terminal_reasons": {
+        "bounded_runtime": 49,
+        "force_stop": 1
+      }
+    }
+  ],
+  "matched_SC_extremes": {
+    "paired_configs": 20,
+    "near_approach_insertions": 0,
+    "far_control_insertions": 0,
+    "both_visual_approved": 7,
+    "note": "Same frozen scene/model and desired reset; realized physics/perception can vary. Control cells only1/5card extremes."
+  },
+  "training_started": false,
+  "policy_changes_during_evaluation": false,
+  "final_scenes_opened": false,
+  "RL_or_backtracking_used": false,
+  "SFP_full_pipeline": "not_integrated_not_evaluated",
+  "decision": "Do not promote. Repair requested-port identity and near-approach convergence on separate development scenes before more policy training. No repair or additional jobs started by this coverage request.",
+  "plan": "/home/nas/chmin/aic_archives/2026-10-14_frozen_pipeline_coverage_v1/plan.json",
+  "summary": "/home/nas/chmin/aic_archives/2026-10-14_frozen_pipeline_coverage_v1/summary.json",
+  "artifact_root": "/home/nas/chmin/aic_archives/2026-10-14_frozen_pipeline_coverage_v1"
+}

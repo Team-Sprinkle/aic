@@ -1,0 +1,46 @@
+{
+  "schema": "sfp_slot_pair_identity_decision/v1",
+  "date_utc": "2026-10-04",
+  "status": "failed_development_gate",
+  "fit": {
+    "artifact": "/home/nas/chmin/aic_archives/2026-10-04_sfp_slot_identity_v1/fit_v3",
+    "train_complete_reset_groups": 59,
+    "validation_complete_reset_groups": 10,
+    "validation_rows": 136,
+    "updates": 2000,
+    "gpu_count": 1,
+    "best_step": 400,
+    "accepted_rows": 1,
+    "early_anchor_episodes": 0,
+    "accepted_wrong": 0,
+    "matched_frozen_selected_only": {
+      "same_validation_rows": 136,
+      "same_reset_groups": 10,
+      "accepted_rows": 51,
+      "early_anchor_episodes": 4,
+      "accepted_wrong": 0
+    },
+    "port_position_p95_px": {
+      "port0": 126.71,
+      "port1": 116.6
+    }
+  },
+  "sparse_history_diagnostic": {
+    "artifact": "/home/nas/chmin/aic_archives/2026-10-04_sfp_slot_identity_v1/sparse_history_diagnostic_v1",
+    "structured_one_frame_early": 5,
+    "structured_one_frame_wrong_first": 1,
+    "structured_two_frames_early": 3,
+    "structured_two_frames_wrong_first": 1,
+    "structured_two_frames_10mm_motion_early": 3,
+    "structured_two_frames_10mm_motion_wrong_first": 0,
+    "episodes": 10,
+    "interpretation": "Sparse agreement sacrifices early coverage and does not generally reject stable wrong identity."
+  },
+  "independent_new_reset_evaluation_run": false,
+  "complete_live_latency_run": false,
+  "transport_handoff_run": false,
+  "poseinsert_run": false,
+  "rl_run": false,
+  "final_scenes_opened": false,
+  "next_bounded_hypothesis": "A collision-checked side-on view may disambiguate requested SFP card and port before insertion."
+}

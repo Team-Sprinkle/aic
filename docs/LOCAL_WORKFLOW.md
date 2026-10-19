@@ -1,5 +1,32 @@
 # Local testing and rootless operation
 
+## Cooperative GPU reservations (October 16)
+
+Rootless rollout launchers acquire `/var/tmp/chmin_aic_gpu<N>.lock` before domain locks. Two-device runs acquire numeric GPU order; do not interrupt an active owner. New host perception/BC scripts use the same reservation when `CUDA_VISIBLE_DEVICES` explicitly names host GPU indices. Always set that variable. CPU-only image caching needs no GPU. Keep total project allocation at four GPUs including legacy GPU0; it remains untouched. For a two-GPU latency diagnostic, use the lower selected GPU for Gazebo rendering and the higher for policy inference, and verify actual placement. Existing jobs started before these locks are allowed to finish before sharing their slots.
+
+
+## October 15: parallel Gazebo isolation
+
+The current launchers use a private Docker bridge network and a unique
+`GZ_PARTITION` for each container. Different `ROS_DOMAIN_ID` values alone did
+not isolate host-network containers: simultaneous runs collided on Zenoh TCP
+port 7447 and Gazebo world discovery. Symptoms included `Address already in
+use`, `Another world of the same name is running`, and stalled or unexpected
+simulation clocks. Such runs are infrastructure failures, not policy results.
+
+Keep these settings in `run_clean_transport_eval.sh` and
+`run_moveit_sc_route_pilot.sh`. For independent evaluator workers, set
+`AIC_TRANSPORT_EVAL_ROS_DOMAIN` explicitly (default 86); each domain also has
+its own host lock. Do not bypass the same-domain lock. Inspect supervisor
+processes as well as GPU memory before reusing a worker: extraction between
+queued rollouts can temporarily free its GPU. Check the four-GPU project
+ceiling, including legacy processes. Do not interrupt active jobs.
+
+The October 15 audit found no conflict warnings in the 454 admitted original
+expert sources or the frozen 12-run SC comparison. The later affected live
+locator pilot and sixth wide-teacher startup are preserved as invalid runs;
+do not generalize their infrastructure failure to earlier clean results.
+
 Updated 2026-09-19. Dedicated rootless containers ran official policy trials,
 Gazebo control probes and Isaac camera/terminal probes. The earlier
 [live validation](experiments/2026-09-17-live-validation.md) did not insert;
@@ -627,3 +654,9 @@ manifests have an expired absolute deadline after this experiment; do not reuse
 those queues for new runs. For independent parallel simulators, preserve both
 network isolation and distinct ROS domains/Gazebo partitions, as recorded in
 `container_versions.json` and the container isolation scripts.
+
+## October 16: effective Docker settings for the shared insertion pipeline
+
+Use `scripts/run_shared_recovery_eval.sh` for new requested-port/refiner and shared insertion tests. It extends the original launcher without modifying a frozen active comparison, forwards the newer family-specific native checkpoint, projection threshold, grasp approval and recovery settings, and writes `container_environment.json`. It verifies requested values before engine startup. The older launcher did not forward several new variables: a host command's environment alone is not proof of the settings used inside Docker. Preserve old results with their effective configuration; see `launcher_forwarding_audit_v1.json` in the October15 artifact root.
+
+The argument checkpoint remains the legacy compatible rule-class constructor dependency; the actual shared insertion actor is explicitly `AIC_OFFICIAL_TEACHER_LOCAL_ACTOR_CHECKPOINT`. Rule transport retains its240N/m translational profile; the shared wrapper overrides only insertion/supervisor commands to the audited90N/m profile. Both are full recorded target commands, with frame conversion outside the actor. Do not pass a plug-tip-action checkpoint to the legacy rule constructor, which rejects that coordinate contract.

@@ -1,0 +1,42 @@
+{
+  "schema": "aic_experiment_decision/v1",
+  "date": "2026-10-04",
+  "experiment": "sfp_observed_rail_crop",
+  "decision": "do_not_promote",
+  "train_episode_groups": 50,
+  "development_episode_groups": 10,
+  "final_scenes_opened": false,
+  "runtime_true_geometry_input": false,
+  "strict_5px": {
+    "train_proposals": 267,
+    "train_proposals_target_inside_all_views": 261,
+    "development_proposals": 59,
+    "development_proposals_target_inside_all_views": 59,
+    "crop_fit_updates": 1200,
+    "selected_update": 800,
+    "selected_development_accepted": 37,
+    "selected_development_accepted_wrong": 0,
+    "selected_development_accepted_3d_p95_mm": 2.7038306898341697
+  },
+  "source_12px_frozen_crop": {
+    "train_proposals": 435,
+    "train_proposals_target_inside_all_views": 423,
+    "development_proposals": 102,
+    "development_proposals_target_inside_all_views": 95,
+    "development_accepted": 59,
+    "development_accepted_wrong": 0,
+    "development_accepted_3d_p95_mm": 3.9788932276945133
+  },
+  "exploratory_four_model_union_same_development": {
+    "episodes_early_within_3s": 9,
+    "episodes_any_accept": 10,
+    "accepted_wrong": 0,
+    "accepted_pairs_more_than_10mm_apart": 0,
+    "independent_validation": false
+  },
+  "offline_four_model_jpeg_resize_crop_forward_p95_ms": 201.79163604043424,
+  "live_full_inference_p95_ms": null,
+  "runtime_note": "Rootless Docker initially failed at 200/200 keys. Later it reached 199/200; a minimal sequential container start now succeeds after 25 stopped AIC containers were removed, though those removals did not lower the observed key count.",
+  "next_gate": "ten new non-final complete SFP resets, one per request code; frozen models; zero accepted wrong ports; >=9/10 early; accepted 3D p95 <=20 mm; complete live p95 <300 ms",
+  "artifact_root": "/home/nas/chmin/aic_archives/2026-10-04_sfp_observed_rail_crop_source12_v1"
+}

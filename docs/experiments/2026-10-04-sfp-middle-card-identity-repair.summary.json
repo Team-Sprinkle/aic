@@ -1,0 +1,38 @@
+{
+  "schema": "aic_sfp_middle_card_identity_decision/v1",
+  "date": "2026-10-04",
+  "decision": "not_promoted_early_episode_coverage_failed",
+  "train_episode_groups": 50,
+  "development_episode_groups": 10,
+  "train_observations": 692,
+  "development_observations": 136,
+  "new_training_updates": 2000,
+  "selected_step": 1400,
+  "new_fit_gpus": [2],
+  "review": {
+    "middle_card_episodes": 6,
+    "first_marked_face_apparently_unobscured_all_three": 5,
+    "first_target_offscreen_all_three": 1,
+    "visibility_certified": false,
+    "artifact": "/home/nas/chmin/aic_archives/2026-10-04_sfp_middle_card_visibility_v2/review.json"
+  },
+  "selected_checkpoint": {
+    "accepted_observations": 66,
+    "accepted_wrong_identity": 0,
+    "accepted_3d_position_p95_mm": 2.142193137202754,
+    "episodes_with_any_anchor": 8,
+    "episodes_with_anchor_within_3s": 7,
+    "coverage_gate_passed": false,
+    "middle_card_never_acquired": ["card2_port0", "card3_port0"]
+  },
+  "comparison": {
+    "old_selected_only_early_episodes": 4,
+    "frozen_all_port_early_episodes": 7,
+    "new_structured_all_slot_early_episodes": 7
+  },
+  "actor_continuation_started": false,
+  "new_simulator_runs_started": false,
+  "final_scenes_opened": false,
+  "training_artifact_root": "/home/nas/chmin/aic_archives/2026-10-04_sfp_structured_slot_v1",
+  "record": "docs/experiments/2026-10-04-sfp-middle-card-identity-repair.md"
+}

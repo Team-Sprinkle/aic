@@ -1,0 +1,29 @@
+{
+  "schema": "sfp_rail_data_scale_visibility_decision/v1",
+  "train_group_counts": [20, 40, 70],
+  "train_crops": [7129, 9742, 16145],
+  "development_groups": 10,
+  "development_projected_inframe_endpoints": 557,
+  "best_steps": [1, 1, 1250],
+  "development_median_px": [11.85, 11.87, 9.92],
+  "development_p95_px": [34.58, 34.67, 32.17],
+  "early_accurate_temporal_board_references_out_of_10": [1, 0, 3],
+  "p95_improvement_20_to_70_fraction": 0.07,
+  "predeclared_consistent_20_percent_data_scale_gate_passed": false,
+  "absolute_pixel_gate_passed": false,
+  "temporal_board_gate_passed": false,
+  "visibility_review": {
+    "panels": 30,
+    "unique_scene_groups": 8,
+    "unique_visible": 0,
+    "ambiguous_or_occluded": 23,
+    "uncertain": 7,
+    "single_reviewer": true,
+    "independent_review": false,
+    "certified_visibility_labels": false
+  },
+  "decision": "Stop same-CAD-projected-endpoint collection and retraining; require an independently confirmed visually grounded numbered board origin or a safe view exposing one.",
+  "automatic_handoff_enabled": false,
+  "final_scenes_opened": false,
+  "artifacts": "outputs/experiments/2026-10-07_sfp_rail_data_scale_v1"
+}

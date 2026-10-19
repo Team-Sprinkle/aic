@@ -1,0 +1,70 @@
+{
+  "schema": "aic_transport_route_handoff_continuation/v1",
+  "date": "2026-10-05",
+  "final_scenes_opened": false,
+  "rl_started": false,
+  "automatic_handoff_enabled": false,
+  "active_isaac_job_interrupted": false,
+  "gpu_max_new_jobs_concurrent": 1,
+  "coverage": {
+    "sfp_train_episodes": 326,
+    "sfp_grouped_validation_episodes": 10,
+    "sc_train_episodes": 83,
+    "sc_grouped_validation_episodes": 21,
+    "new_sfp_full_insertions": 29,
+    "new_sfp_partial_insertions_excluded": 1,
+    "new_complete_tcp_body_action_chunks": 7584,
+    "paired_train_reset_groups_after_scene_rekey": 35,
+    "sfp_train_episodes_by_card_count_1_to_5": [144, 31, 57, 41, 53],
+    "sfp_train_card0_port1_episodes": 235,
+    "all_request_cardcount_combinations_covered": false
+  },
+  "matched_route_model": {
+    "action_only_sfp_first_target_p95_mm": 2.7167775511741636,
+    "route_conditioned_sfp_first_target_p95_mm": 3.435396122932433,
+    "action_only_sc_first_target_p95_mm": 2.239837884902954,
+    "route_conditioned_sc_first_target_p95_mm": 3.4178210139274596,
+    "route_branch_gate_passed": false
+  },
+  "expanded_action_only": {
+    "unrekeyed_sfp_first_target_p95_mm": 2.3335681200027465,
+    "rekeyed_sfp_first_target_p95_mm": 2.152993535995483,
+    "rekeyed_sc_first_target_p95_mm": 1.987458938360214,
+    "rekeyed_offline_action_gate_passed": true,
+    "rekeyed_autonomous_buffered_arrivals": "0/3",
+    "baseline_autonomous_buffered_arrivals": "0/3",
+    "rekeyed_autonomous_inference_p95_ms_by_scene": [100.63070061150938, 102.26034238003194, 98.87288794852793],
+    "autonomous_gate_passed": false,
+    "promoted": false
+  },
+  "handoff": {
+    "threshold": 0.95,
+    "consecutive_decisions": 3,
+    "region_margin_mm": 60,
+    "smaller_data_timely_episodes": "2/10",
+    "expanded_data_timely_episodes": "2/10",
+    "expanded_data_missed_episodes": "8/10",
+    "sc_label_window_samples_per_episode": "1-2",
+    "useful_for_deployment": false
+  },
+  "task_selected_final_map": {
+    "equal_request_allrow_p95_mm": 1.8970284461975098,
+    "equal_request_early_same_image_tencode_diameter_mm": 1.0041249362623437,
+    "early_oversampled_allrow_p95_mm": 2.070297122001648,
+    "early_oversampled_early_p95_mm": 1.8378429174423214,
+    "frozen_actor_early_p95_mm": 2.226349198818206,
+    "early_oversampled_early_same_image_tencode_diameter_mm": 1.166074783257493,
+    "gate_passed": false,
+    "live_evaluation_run": false
+  },
+  "decision": "Stop route-conditioned, handoff, and final-map branches; next bounded test needs observation-selected spatial target representation before more generic teacher collection or RL.",
+  "record": "docs/experiments/2026-10-05-transport-route-handoff-continuation.md",
+  "artifacts": {
+    "training_data": "/var/tmp/chmin_aic_20260918_act/sfp_paired_request_20261005/paired_coverage_merged_v2/",
+    "frozen_feature_cache": "/var/tmp/chmin_aic_20260918_act/sfp_paired_request_20261005/temporal_cache_v4/",
+    "action_only_checkpoint": "outputs/experiments/2026-10-05_transport_identity_audit/paired_coverage_actor_v2/best.pt",
+    "expanded_handoff_checkpoint": "outputs/experiments/2026-10-05_transport_identity_audit/sfp_frozen_handoff_v2/best.pt",
+    "matched_live_development": "/home/nas/chmin/aic_archives/2026-10-05_sfp_paired_development_actor_v1/",
+    "last_bounded_diagnostic": "outputs/experiments/2026-10-05_transport_identity_audit/task_gated_paired_early_v1/"
+  }
+}

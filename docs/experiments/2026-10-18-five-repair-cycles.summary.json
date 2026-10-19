@@ -1,0 +1,2380 @@
+{
+  "schema": "public_sample_repair_cycles/v1",
+  "target_score_exclusive": 290,
+  "target_reached": true,
+  "current_state": {
+    "stage": "target_reached",
+    "cycle": 18,
+    "result": {
+      "cycle": 18,
+      "policy": "RunVisualConnectorServoQuietContextV56",
+      "hypothesis": "Cycle17 toolkit290.089395 butSC15.499944mmstrictfail; jointacquisition exitedbefore3quietfarcontextimages so noexistingfar-nearfusion. Require3quietdistinctSCfarimagesbeforebinding; retainjointSFP3frameand1.5sdwell, allmodelweightsphysicalforceandtiminggates unchanged. ActualmethodtestSC4totalframeswhenfirstmoving, SFP3, legacy5; nooraclegeometryruntime.",
+      "score": 290.19254862628316,
+      "strict_insertions": 3,
+      "physical_all_passed": true,
+      "latencies": {
+        "transport": {
+          "calls": 44,
+          "p50_p95_p99_ms": [
+            31.08877269551158,
+            158.09508524835113,
+            323.2327817659825
+          ]
+        },
+        "fresh": {
+          "calls": 10,
+          "p50_p95_p99_ms": [
+            160.6802553869784,
+            220.44136461336166,
+            222.0181023562327
+          ]
+        },
+        "close": {
+          "calls": 5,
+          "p50_p95_p99_ms": [
+            109.8809139803052,
+            127.45509883388877,
+            128.2874052040279
+          ]
+        },
+        "servo": {
+          "calls": 256,
+          "p50_p95_p99_ms": [
+            6.449560401961207,
+            10.475399903953075,
+            11.66673325933516
+          ]
+        },
+        "stationary_scene_check": {
+          "calls": 3,
+          "p50_p95_p99_ms": [
+            90.45898308977485,
+            91.41506319865584,
+            91.50004809722304
+          ]
+        },
+        "far_context_preparation": {
+          "calls": 1,
+          "p50_p95_p99_ms": [
+            166.03944497182965,
+            166.03944497182965,
+            166.03944497182965
+          ]
+        }
+      },
+      "latency_gate_passed": true,
+      "target_reached": true,
+      "final_scenes_sealed": true,
+      "artifact_root": "/home/nas/chmin/aic_archives/2026-10-18_five_repair_cycles_v1/cycle_18"
+    },
+    "completed_cycles": 18,
+    "initial_requested_cycles": 5,
+    "target_continuation": true,
+    "final_scenes_sealed": true
+  },
+  "completed_cycles": 18,
+  "initial_requested_cycles": 5,
+  "episodes": 54,
+  "unique_public_sample_scenarios": 3,
+  "final_scenes_opened": false,
+  "RL": false,
+  "learned_actor_inference": false,
+  "runtime_inputs": "RGB, task code, public robot state; no true reset geometry",
+  "scope": "Repeated original public sample, not broad setting coverage or final certification",
+  "cycles": [
+    {
+      "cycle": 1,
+      "policy": "RunVisualConnectorServoOldPoseEfficientV39",
+      "hypothesis": "SC empty-row route passed transport/route choice on four frozen cases and insertion on both empty cases; evaluate this route plus preloading and faster approach while retaining original SFP estimator because new fits failed qualification. Occupied SC downstream seating remains open.",
+      "score": 262.6256531283613,
+      "strict_insertions": 3,
+      "physical_all_passed": true,
+      "latencies": {
+        "transport": {
+          "calls": 252,
+          "p50_p95_p99_ms": [
+            105.76398065313697,
+            333.23180251754815,
+            362.37698514480144
+          ]
+        },
+        "fresh": {
+          "calls": 9,
+          "p50_p95_p99_ms": [
+            210.4736128821969,
+            272.06556871533394,
+            286.14515140652657
+          ]
+        },
+        "close": {
+          "calls": 5,
+          "p50_p95_p99_ms": [
+            91.15364495664835,
+            238.47285816445944,
+            267.426752243191
+          ]
+        },
+        "servo": {
+          "calls": 497,
+          "p50_p95_p99_ms": [
+            6.635117810219526,
+            10.94564814120531,
+            66.08196346089257
+          ]
+        }
+      },
+      "latency_gate_passed": false,
+      "target_reached": false,
+      "final_scenes_sealed": true,
+      "artifact_root": "/home/nas/chmin/aic_archives/2026-10-18_five_repair_cycles_v1/cycle_1",
+      "trials": [
+        {
+          "trial": "trial_1",
+          "family": "sfp",
+          "task": {
+            "cable_type": "sfp_sc",
+            "cable_name": "cable_0",
+            "plug_type": "sfp",
+            "plug_name": "sfp_tip",
+            "port_type": "sfp",
+            "port_name": "sfp_port_0",
+            "target_module_name": "nic_card_mount_0",
+            "time_limit": 180
+          },
+          "score": 90.75405159483245,
+          "depth_mm": 46.77311440277365,
+          "lateral_mm": 0.36344697625757266,
+          "orientation_error_deg": 0.1503653464506069,
+          "official_tier3": 75,
+          "qualified": true,
+          "no_scored_harm": true,
+          "video": "/home/nas/chmin/aic_archives/2026-10-18_five_repair_cycles_v1/cycle_1/per_trial/trial_1/five_cameras_20fps_grid.mp4"
+        },
+        {
+          "trial": "trial_2",
+          "family": "sfp",
+          "task": {
+            "cable_type": "sfp_sc",
+            "cable_name": "cable_0",
+            "plug_type": "sfp",
+            "plug_name": "sfp_tip",
+            "port_type": "sfp",
+            "port_name": "sfp_port_0",
+            "target_module_name": "nic_card_mount_1",
+            "time_limit": 180
+          },
+          "score": 90.45481700280351,
+          "depth_mm": 46.75488562122723,
+          "lateral_mm": 0.22496450773601248,
+          "orientation_error_deg": 0.7084994051686436,
+          "official_tier3": 75,
+          "qualified": true,
+          "no_scored_harm": true,
+          "video": "/home/nas/chmin/aic_archives/2026-10-18_five_repair_cycles_v1/cycle_1/per_trial/trial_2/five_cameras_20fps_grid.mp4"
+        },
+        {
+          "trial": "trial_3",
+          "family": "sc",
+          "task": {
+            "cable_type": "sfp_sc",
+            "cable_name": "cable_1",
+            "plug_type": "sc",
+            "plug_name": "sc_tip",
+            "port_type": "sc",
+            "port_name": "sc_port_base",
+            "target_module_name": "sc_port_1",
+            "time_limit": 180
+          },
+          "score": 81.41678453072534,
+          "depth_mm": 15.534872561491737,
+          "lateral_mm": 0.12193716065614818,
+          "orientation_error_deg": 0.5760850330361897,
+          "official_tier3": 75,
+          "qualified": true,
+          "no_scored_harm": true,
+          "video": "/home/nas/chmin/aic_archives/2026-10-18_five_repair_cycles_v1/cycle_1/per_trial/trial_3/five_cameras_20fps_grid.mp4"
+        }
+      ]
+    },
+    {
+      "cycle": 2,
+      "policy": "RunVisualConnectorServoWindowV40",
+      "hypothesis": "Fix cycle1 failed shortcut and transport p95: stationary three-fresh-image route-choice window preserves initial view, then stops redundant moving classifier calls; original models, approach and insertion unchanged.",
+      "score": 183.76746046513864,
+      "strict_insertions": 2,
+      "physical_all_passed": false,
+      "latencies": {
+        "transport": {
+          "calls": 159,
+          "p50_p95_p99_ms": [
+            92.50674303621054,
+            154.3242176994681,
+            258.2056133169679
+          ]
+        },
+        "fresh": {
+          "calls": 9,
+          "p50_p95_p99_ms": [
+            212.68923301249743,
+            278.7240093573928,
+            306.9982801005244
+          ]
+        },
+        "close": {
+          "calls": 5,
+          "p50_p95_p99_ms": [
+            96.65499022230506,
+            280.8003508485853,
+            315.98652282729745
+          ]
+        },
+        "servo": {
+          "calls": 598,
+          "p50_p95_p99_ms": [
+            5.747063085436821,
+            21.582569670863204,
+            122.37747942563131
+          ]
+        },
+        "stationary_scene_check": {
+          "calls": 3,
+          "p50_p95_p99_ms": [
+            82.90502103045583,
+            97.35411703586578,
+            98.63848112523556
+          ]
+        }
+      },
+      "latency_gate_passed": true,
+      "target_reached": false,
+      "final_scenes_sealed": true,
+      "artifact_root": "/home/nas/chmin/aic_archives/2026-10-18_five_repair_cycles_v1/cycle_2",
+      "trials": [
+        {
+          "trial": "trial_1",
+          "family": "sfp",
+          "task": {
+            "cable_type": "sfp_sc",
+            "cable_name": "cable_0",
+            "plug_type": "sfp",
+            "plug_name": "sfp_tip",
+            "port_type": "sfp",
+            "port_name": "sfp_port_0",
+            "target_module_name": "nic_card_mount_0",
+            "time_limit": 180
+          },
+          "score": 1,
+          "depth_mm": 46.77220175127619,
+          "lateral_mm": 0.48409273746480813,
+          "orientation_error_deg": 0.1719681789807153,
+          "official_tier3": 0,
+          "qualified": false,
+          "no_scored_harm": true,
+          "video": "/home/nas/chmin/aic_archives/2026-10-18_five_repair_cycles_v1/cycle_2/per_trial/trial_1/five_cameras_20fps_grid.mp4"
+        },
+        {
+          "trial": "trial_2",
+          "family": "sfp",
+          "task": {
+            "cable_type": "sfp_sc",
+            "cable_name": "cable_0",
+            "plug_type": "sfp",
+            "plug_name": "sfp_tip",
+            "port_type": "sfp",
+            "port_name": "sfp_port_0",
+            "target_module_name": "nic_card_mount_1",
+            "time_limit": 180
+          },
+          "score": 90.41220694395959,
+          "depth_mm": 46.75335171578676,
+          "lateral_mm": 0.3356804373438915,
+          "orientation_error_deg": 0.4638849630853408,
+          "official_tier3": 75,
+          "qualified": true,
+          "no_scored_harm": true,
+          "video": "/home/nas/chmin/aic_archives/2026-10-18_five_repair_cycles_v1/cycle_2/per_trial/trial_2/five_cameras_20fps_grid.mp4"
+        },
+        {
+          "trial": "trial_3",
+          "family": "sc",
+          "task": {
+            "cable_type": "sfp_sc",
+            "cable_name": "cable_1",
+            "plug_type": "sc",
+            "plug_name": "sc_tip",
+            "port_type": "sc",
+            "port_name": "sc_port_base",
+            "target_module_name": "sc_port_1",
+            "time_limit": 180
+          },
+          "score": 92.35525352117904,
+          "depth_mm": 15.500499443854796,
+          "lateral_mm": 0.1604085197434153,
+          "orientation_error_deg": 0.6354641203526088,
+          "official_tier3": 75,
+          "qualified": true,
+          "no_scored_harm": true,
+          "video": "/home/nas/chmin/aic_archives/2026-10-18_five_repair_cycles_v1/cycle_2/per_trial/trial_3/five_cameras_20fps_grid.mp4"
+        }
+      ]
+    },
+    {
+      "cycle": 3,
+      "policy": "RunVisualConnectorServoStableApproachV41",
+      "hypothesis": "Cycle2 stationary visual route-choice cuts SC transport 41 to13s and passes latency, but SFP1 misses toolkit latch despite46.77mmdepth. Remove measured free-approach PI windup and10mmstand-offovershoot before near observation; retain allmodels, thresholds and seating dwell.",
+      "score": 182.8015458210347,
+      "strict_insertions": 2,
+      "physical_all_passed": false,
+      "latencies": {
+        "transport": {
+          "calls": 156,
+          "p50_p95_p99_ms": [
+            89.53180955722928,
+            166.6696936590597,
+            192.96689205802957
+          ]
+        },
+        "fresh": {
+          "calls": 9,
+          "p50_p95_p99_ms": [
+            226.11413896083832,
+            267.43320170789957,
+            271.60324040800333
+          ]
+        },
+        "close": {
+          "calls": 5,
+          "p50_p95_p99_ms": [
+            113.04097296670079,
+            315.4227446764707,
+            355.23761197924614
+          ]
+        },
+        "servo": {
+          "calls": 623,
+          "p50_p95_p99_ms": [
+            6.084329914301634,
+            12.885440932586786,
+            124.12564408034075
+          ]
+        },
+        "stationary_scene_check": {
+          "calls": 3,
+          "p50_p95_p99_ms": [
+            81.98836212977767,
+            88.3357850369066,
+            88.90000040642917
+          ]
+        }
+      },
+      "latency_gate_passed": false,
+      "target_reached": false,
+      "final_scenes_sealed": true,
+      "artifact_root": "/home/nas/chmin/aic_archives/2026-10-18_five_repair_cycles_v1/cycle_3",
+      "trials": [
+        {
+          "trial": "trial_1",
+          "family": "sfp",
+          "task": {
+            "cable_type": "sfp_sc",
+            "cable_name": "cable_0",
+            "plug_type": "sfp",
+            "plug_name": "sfp_tip",
+            "port_type": "sfp",
+            "port_name": "sfp_port_0",
+            "target_module_name": "nic_card_mount_0",
+            "time_limit": 180
+          },
+          "score": 90.58233248524942,
+          "depth_mm": 46.77009016684286,
+          "lateral_mm": 0.46963083664988486,
+          "orientation_error_deg": 0.1435987109787915,
+          "official_tier3": 75,
+          "qualified": true,
+          "no_scored_harm": true,
+          "video": "/home/nas/chmin/aic_archives/2026-10-18_five_repair_cycles_v1/cycle_3/per_trial/trial_1/five_cameras_20fps_grid.mp4"
+        },
+        {
+          "trial": "trial_2",
+          "family": "sfp",
+          "task": {
+            "cable_type": "sfp_sc",
+            "cable_name": "cable_0",
+            "plug_type": "sfp",
+            "plug_name": "sfp_tip",
+            "port_type": "sfp",
+            "port_name": "sfp_port_0",
+            "target_module_name": "nic_card_mount_1",
+            "time_limit": 180
+          },
+          "score": 91.21921333578527,
+          "depth_mm": 46.75388270978509,
+          "lateral_mm": 0.2168003735322684,
+          "orientation_error_deg": 0.42833425076851295,
+          "official_tier3": 75,
+          "qualified": true,
+          "no_scored_harm": true,
+          "video": "/home/nas/chmin/aic_archives/2026-10-18_five_repair_cycles_v1/cycle_3/per_trial/trial_2/five_cameras_20fps_grid.mp4"
+        },
+        {
+          "trial": "trial_3",
+          "family": "sc",
+          "task": {
+            "cable_type": "sfp_sc",
+            "cable_name": "cable_1",
+            "plug_type": "sc",
+            "plug_name": "sc_tip",
+            "port_type": "sc",
+            "port_name": "sc_port_base",
+            "target_module_name": "sc_port_1",
+            "time_limit": 180
+          },
+          "score": 1,
+          "depth_mm": 15.474872508295789,
+          "lateral_mm": 0.05792767303234528,
+          "orientation_error_deg": 0.6469850647891235,
+          "official_tier3": 0,
+          "qualified": false,
+          "no_scored_harm": true,
+          "video": "/home/nas/chmin/aic_archives/2026-10-18_five_repair_cycles_v1/cycle_3/per_trial/trial_3/five_cameras_20fps_grid.mp4"
+        }
+      ]
+    },
+    {
+      "cycle": 4,
+      "policy": "RunVisualConnectorServoSFPStableV42",
+      "hypothesis": "Prevent SFP near-seat lateral drift by matching proven SC baseXY500 while keeping axial90 and force guards. Encode identical saved far SC frames before approach instead of bundling them with first close-frame query; report preparation latency separately. Retain antiwindup, models and physical gates.",
+      "score": 274.87526881524263,
+      "strict_insertions": 2,
+      "physical_all_passed": false,
+      "latencies": {
+        "transport": {
+          "calls": 156,
+          "p50_p95_p99_ms": [
+            87.59573707357049,
+            157.50429907348007,
+            211.18390364572377
+          ]
+        },
+        "fresh": {
+          "calls": 9,
+          "p50_p95_p99_ms": [
+            212.27519260719419,
+            284.32004330679774,
+            311.8614129535854
+          ]
+        },
+        "close": {
+          "calls": 5,
+          "p50_p95_p99_ms": [
+            86.05602011084557,
+            92.79750632122159,
+            93.77742292359471
+          ]
+        },
+        "servo": {
+          "calls": 517,
+          "p50_p95_p99_ms": [
+            6.2757800333201885,
+            10.968903359025715,
+            122.91424615308631
+          ]
+        },
+        "stationary_scene_check": {
+          "calls": 3,
+          "p50_p95_p99_ms": [
+            75.71489503607154,
+            82.55099798552692,
+            83.15865158103406
+          ]
+        },
+        "far_context_preparation": {
+          "calls": 1,
+          "p50_p95_p99_ms": [
+            2.9976041987538338,
+            2.9976041987538338,
+            2.9976041987538338
+          ]
+        }
+      },
+      "latency_gate_passed": true,
+      "target_reached": false,
+      "final_scenes_sealed": true,
+      "artifact_root": "/home/nas/chmin/aic_archives/2026-10-18_five_repair_cycles_v1/cycle_4",
+      "trials": [
+        {
+          "trial": "trial_1",
+          "family": "sfp",
+          "task": {
+            "cable_type": "sfp_sc",
+            "cable_name": "cable_0",
+            "plug_type": "sfp",
+            "plug_name": "sfp_tip",
+            "port_type": "sfp",
+            "port_name": "sfp_port_0",
+            "target_module_name": "nic_card_mount_0",
+            "time_limit": 180
+          },
+          "score": 91.19410909324617,
+          "depth_mm": 46.7683162499839,
+          "lateral_mm": 0.0469721266016817,
+          "orientation_error_deg": 0.32972881807004195,
+          "official_tier3": 75,
+          "qualified": true,
+          "no_scored_harm": true,
+          "video": "/home/nas/chmin/aic_archives/2026-10-18_five_repair_cycles_v1/cycle_4/per_trial/trial_1/five_cameras_20fps_grid.mp4"
+        },
+        {
+          "trial": "trial_2",
+          "family": "sfp",
+          "task": {
+            "cable_type": "sfp_sc",
+            "cable_name": "cable_0",
+            "plug_type": "sfp",
+            "plug_name": "sfp_tip",
+            "port_type": "sfp",
+            "port_name": "sfp_port_0",
+            "target_module_name": "nic_card_mount_1",
+            "time_limit": 180
+          },
+          "score": 90.87999274739435,
+          "depth_mm": 46.74819288008014,
+          "lateral_mm": 0.032939038933989355,
+          "orientation_error_deg": 0.6249061227627679,
+          "official_tier3": 75,
+          "qualified": true,
+          "no_scored_harm": true,
+          "video": "/home/nas/chmin/aic_archives/2026-10-18_five_repair_cycles_v1/cycle_4/per_trial/trial_2/five_cameras_20fps_grid.mp4"
+        },
+        {
+          "trial": "trial_3",
+          "family": "sc",
+          "task": {
+            "cable_type": "sfp_sc",
+            "cable_name": "cable_1",
+            "plug_type": "sc",
+            "plug_name": "sc_tip",
+            "port_type": "sc",
+            "port_name": "sc_port_base",
+            "target_module_name": "sc_port_1",
+            "time_limit": 180
+          },
+          "score": 92.8011669746021,
+          "depth_mm": 15.484804037849264,
+          "lateral_mm": 0.10984866043622811,
+          "orientation_error_deg": 0.7525337769005053,
+          "official_tier3": 75,
+          "qualified": false,
+          "no_scored_harm": true,
+          "video": "/home/nas/chmin/aic_archives/2026-10-18_five_repair_cycles_v1/cycle_4/per_trial/trial_3/five_cameras_20fps_grid.mp4"
+        }
+      ]
+    },
+    {
+      "cycle": 5,
+      "policy": "RunVisualConnectorServoFastApproachV43",
+      "hypothesis": "Cycle4 scores274.88 but SC15.4848mm fails strict depth. Final bounded control/profile branch retains all pose models/gates and targets time/path losses: SFP acquisition120mm within existing100-185mm envelope, transport0.10m/s/0.5rad/s, approach40-80mm/s with antiwindup and SFP lateral500; SFP insertion24mm/s, SC remains12. Does not claim to repair SC perception bias.",
+      "score": 281.04618814181754,
+      "strict_insertions": 3,
+      "physical_all_passed": true,
+      "latencies": {
+        "transport": {
+          "calls": 122,
+          "p50_p95_p99_ms": [
+            67.96875479631126,
+            168.48872462287542,
+            266.1726463772348
+          ]
+        },
+        "fresh": {
+          "calls": 9,
+          "p50_p95_p99_ms": [
+            213.22757424786687,
+            247.49285941943526,
+            247.72083094343543
+          ]
+        },
+        "close": {
+          "calls": 5,
+          "p50_p95_p99_ms": [
+            84.73561378195882,
+            95.0176015496254,
+            95.19160032272339
+          ]
+        },
+        "servo": {
+          "calls": 342,
+          "p50_p95_p99_ms": [
+            5.879878299310803,
+            10.928218136541545,
+            118.871505395509
+          ]
+        },
+        "stationary_scene_check": {
+          "calls": 3,
+          "p50_p95_p99_ms": [
+            86.57002681866288,
+            90.35831345245242,
+            90.6950500421226
+          ]
+        },
+        "far_context_preparation": {
+          "calls": 1,
+          "p50_p95_p99_ms": [
+            233.42890199273825,
+            233.42890199273825,
+            233.42890199273825
+          ]
+        }
+      },
+      "latency_gate_passed": true,
+      "target_reached": false,
+      "final_scenes_sealed": true,
+      "artifact_root": "/home/nas/chmin/aic_archives/2026-10-18_five_repair_cycles_v1/cycle_5",
+      "trials": [
+        {
+          "trial": "trial_1",
+          "family": "sfp",
+          "task": {
+            "cable_type": "sfp_sc",
+            "cable_name": "cable_0",
+            "plug_type": "sfp",
+            "plug_name": "sfp_tip",
+            "port_type": "sfp",
+            "port_name": "sfp_port_0",
+            "target_module_name": "nic_card_mount_0",
+            "time_limit": 180
+          },
+          "score": 93.73503069862805,
+          "depth_mm": 46.77234344081785,
+          "lateral_mm": 0.11081173074702953,
+          "orientation_error_deg": 0.21725417726194624,
+          "official_tier3": 75,
+          "qualified": true,
+          "no_scored_harm": true,
+          "video": "/home/nas/chmin/aic_archives/2026-10-18_five_repair_cycles_v1/cycle_5/per_trial/trial_1/five_cameras_20fps_grid.mp4"
+        },
+        {
+          "trial": "trial_2",
+          "family": "sfp",
+          "task": {
+            "cable_type": "sfp_sc",
+            "cable_name": "cable_0",
+            "plug_type": "sfp",
+            "plug_name": "sfp_tip",
+            "port_type": "sfp",
+            "port_name": "sfp_port_0",
+            "target_module_name": "nic_card_mount_1",
+            "time_limit": 180
+          },
+          "score": 93.66773829894217,
+          "depth_mm": 46.745147160875746,
+          "lateral_mm": 0.09695366471675562,
+          "orientation_error_deg": 0.34283680844222714,
+          "official_tier3": 75,
+          "qualified": true,
+          "no_scored_harm": true,
+          "video": "/home/nas/chmin/aic_archives/2026-10-18_five_repair_cycles_v1/cycle_5/per_trial/trial_2/five_cameras_20fps_grid.mp4"
+        },
+        {
+          "trial": "trial_3",
+          "family": "sc",
+          "task": {
+            "cable_type": "sfp_sc",
+            "cable_name": "cable_1",
+            "plug_type": "sc",
+            "plug_name": "sc_tip",
+            "port_type": "sc",
+            "port_name": "sc_port_base",
+            "target_module_name": "sc_port_1",
+            "time_limit": 180
+          },
+          "score": 93.6434191442473,
+          "depth_mm": 15.519049446046418,
+          "lateral_mm": 0.05747159339776787,
+          "orientation_error_deg": 0.6662892056298263,
+          "official_tier3": 75,
+          "qualified": true,
+          "no_scored_harm": true,
+          "video": "/home/nas/chmin/aic_archives/2026-10-18_five_repair_cycles_v1/cycle_5/per_trial/trial_3/five_cameras_20fps_grid.mp4"
+        }
+      ]
+    },
+    {
+      "cycle": 6,
+      "policy": "RunVisualConnectorServoDirectSFPV44",
+      "hypothesis": "Five initial cycles finish281.05 with3strict insertions. Continue toward user score target by removing SFP legacy BC100mm minimum detour: explicit-controller acquisition80mm, declaredSFP70-185mm envelope, unchanged>=120mmTCP grasp validity, physical44mm/SC15.5mm and force gates. High-clearance transfer combines orientation; SC and model weights unchanged.",
+      "score": 284.2067707631503,
+      "strict_insertions": 3,
+      "physical_all_passed": true,
+      "latencies": {
+        "transport": {
+          "calls": 97,
+          "p50_p95_p99_ms": [
+            86.6539659909904,
+            155.68719385191795,
+            185.88294355198622
+          ]
+        },
+        "fresh": {
+          "calls": 9,
+          "p50_p95_p99_ms": [
+            180.6283639743924,
+            234.09715984016657,
+            234.2940977588296
+          ]
+        },
+        "close": {
+          "calls": 5,
+          "p50_p95_p99_ms": [
+            101.99419828131795,
+            108.7500867433846,
+            109.42359352484345
+          ]
+        },
+        "servo": {
+          "calls": 352,
+          "p50_p95_p99_ms": [
+            6.6016248892992735,
+            11.273005045950407,
+            137.20544314943254
+          ]
+        },
+        "stationary_scene_check": {
+          "calls": 3,
+          "p50_p95_p99_ms": [
+            77.3751731030643,
+            91.83295569382608,
+            93.11809192411602
+          ]
+        },
+        "far_context_preparation": {
+          "calls": 1,
+          "p50_p95_p99_ms": [
+            1.757331658154726,
+            1.757331658154726,
+            1.757331658154726
+          ]
+        }
+      },
+      "latency_gate_passed": true,
+      "target_reached": false,
+      "final_scenes_sealed": true,
+      "artifact_root": "/home/nas/chmin/aic_archives/2026-10-18_five_repair_cycles_v1/cycle_6",
+      "trials": [
+        {
+          "trial": "trial_1",
+          "family": "sfp",
+          "task": {
+            "cable_type": "sfp_sc",
+            "cable_name": "cable_0",
+            "plug_type": "sfp",
+            "plug_name": "sfp_tip",
+            "port_type": "sfp",
+            "port_name": "sfp_port_0",
+            "target_module_name": "nic_card_mount_0",
+            "time_limit": 180
+          },
+          "score": 95.37264936772249,
+          "depth_mm": 46.7662377299207,
+          "lateral_mm": 0.13907743853163893,
+          "orientation_error_deg": 0.21576685511471042,
+          "official_tier3": 75,
+          "qualified": true,
+          "no_scored_harm": true,
+          "video": "/home/nas/chmin/aic_archives/2026-10-18_five_repair_cycles_v1/cycle_6/per_trial/trial_1/five_cameras_20fps_grid.mp4"
+        },
+        {
+          "trial": "trial_2",
+          "family": "sfp",
+          "task": {
+            "cable_type": "sfp_sc",
+            "cable_name": "cable_0",
+            "plug_type": "sfp",
+            "plug_name": "sfp_tip",
+            "port_type": "sfp",
+            "port_name": "sfp_port_0",
+            "target_module_name": "nic_card_mount_1",
+            "time_limit": 180
+          },
+          "score": 95.64261370669155,
+          "depth_mm": 46.74818592856306,
+          "lateral_mm": 0.12694804763974613,
+          "orientation_error_deg": 0.40965168980566774,
+          "official_tier3": 75,
+          "qualified": true,
+          "no_scored_harm": true,
+          "video": "/home/nas/chmin/aic_archives/2026-10-18_five_repair_cycles_v1/cycle_6/per_trial/trial_2/five_cameras_20fps_grid.mp4"
+        },
+        {
+          "trial": "trial_3",
+          "family": "sc",
+          "task": {
+            "cable_type": "sfp_sc",
+            "cable_name": "cable_1",
+            "plug_type": "sc",
+            "plug_name": "sc_tip",
+            "port_type": "sc",
+            "port_name": "sc_port_base",
+            "target_module_name": "sc_port_1",
+            "time_limit": 180
+          },
+          "score": 93.19150768873628,
+          "depth_mm": 15.517478718768317,
+          "lateral_mm": 0.1264485602036423,
+          "orientation_error_deg": 0.6693564763988354,
+          "official_tier3": 75,
+          "qualified": true,
+          "no_scored_harm": true,
+          "video": "/home/nas/chmin/aic_archives/2026-10-18_five_repair_cycles_v1/cycle_6/per_trial/trial_3/five_cameras_20fps_grid.mp4"
+        }
+      ]
+    },
+    {
+      "cycle": 7,
+      "policy": "RunVisualConnectorServoAcquireInPlaceV45",
+      "hypothesis": "Same cycle7 controller hypothesis after isolated import-order startup repair. Fresh requested native visual acquisition in place if public region safe, otherwise oldroute after3s; retain APIhold, emptySC transfer/orient combine. Allmodels and physical gates unchanged. First attempt ran no episode and is preserved.",
+      "score": 283.7495999693647,
+      "strict_insertions": 3,
+      "physical_all_passed": true,
+      "latencies": {
+        "transport": {
+          "calls": 108,
+          "p50_p95_p99_ms": [
+            96.96004702709615,
+            168.3592603774741,
+            211.82753529399614
+          ]
+        },
+        "fresh": {
+          "calls": 9,
+          "p50_p95_p99_ms": [
+            234.494443051517,
+            290.33267041668296,
+            294.2475469969213
+          ]
+        },
+        "close": {
+          "calls": 5,
+          "p50_p95_p99_ms": [
+            93.48918776959181,
+            104.61211018264294,
+            105.82672208547592
+          ]
+        },
+        "servo": {
+          "calls": 321,
+          "p50_p95_p99_ms": [
+            6.688773166388273,
+            12.880807742476463,
+            127.36032158136372
+          ]
+        },
+        "stationary_scene_check": {
+          "calls": 8,
+          "p50_p95_p99_ms": [
+            84.66195617802441,
+            91.11155569553375,
+            92.5460584461689
+          ]
+        },
+        "far_context_preparation": {
+          "calls": 1,
+          "p50_p95_p99_ms": [
+            211.1388952471316,
+            211.1388952471316,
+            211.1388952471316
+          ]
+        }
+      },
+      "latency_gate_passed": true,
+      "target_reached": false,
+      "final_scenes_sealed": true,
+      "artifact_root": "/home/nas/chmin/aic_archives/2026-10-18_five_repair_cycles_v1/cycle_7_attempt2",
+      "trials": [
+        {
+          "trial": "trial_1",
+          "family": "sfp",
+          "task": {
+            "cable_type": "sfp_sc",
+            "cable_name": "cable_0",
+            "plug_type": "sfp",
+            "plug_name": "sfp_tip",
+            "port_type": "sfp",
+            "port_name": "sfp_port_0",
+            "target_module_name": "nic_card_mount_0",
+            "time_limit": 180
+          },
+          "score": 94.96541565360825,
+          "depth_mm": 46.772398510649296,
+          "lateral_mm": 0.17300283481133005,
+          "orientation_error_deg": 0.2610971418389807,
+          "official_tier3": 75,
+          "qualified": true,
+          "no_scored_harm": true,
+          "video": "/home/nas/chmin/aic_archives/2026-10-18_five_repair_cycles_v1/cycle_7_attempt2/per_trial/trial_1/five_cameras_20fps_grid.mp4"
+        },
+        {
+          "trial": "trial_2",
+          "family": "sfp",
+          "task": {
+            "cable_type": "sfp_sc",
+            "cable_name": "cable_0",
+            "plug_type": "sfp",
+            "plug_name": "sfp_tip",
+            "port_type": "sfp",
+            "port_name": "sfp_port_0",
+            "target_module_name": "nic_card_mount_1",
+            "time_limit": 180
+          },
+          "score": 94.83717374570928,
+          "depth_mm": 46.74788452853529,
+          "lateral_mm": 0.15686573766347042,
+          "orientation_error_deg": 0.4266529689231022,
+          "official_tier3": 75,
+          "qualified": true,
+          "no_scored_harm": true,
+          "video": "/home/nas/chmin/aic_archives/2026-10-18_five_repair_cycles_v1/cycle_7_attempt2/per_trial/trial_2/five_cameras_20fps_grid.mp4"
+        },
+        {
+          "trial": "trial_3",
+          "family": "sc",
+          "task": {
+            "cable_type": "sfp_sc",
+            "cable_name": "cable_1",
+            "plug_type": "sc",
+            "plug_name": "sc_tip",
+            "port_type": "sc",
+            "port_name": "sc_port_base",
+            "target_module_name": "sc_port_1",
+            "time_limit": 180
+          },
+          "score": 93.94701057004713,
+          "depth_mm": 15.52414600221436,
+          "lateral_mm": 0.10766925472264714,
+          "orientation_error_deg": 0.675830271744571,
+          "official_tier3": 75,
+          "qualified": true,
+          "no_scored_harm": true,
+          "video": "/home/nas/chmin/aic_archives/2026-10-18_five_repair_cycles_v1/cycle_7_attempt2/per_trial/trial_3/five_cameras_20fps_grid.mp4"
+        }
+      ]
+    },
+    {
+      "cycle": 8,
+      "policy": "RunVisualConnectorServoAcquireInPlaceV46",
+      "hypothesis": "Cycle7 achieves3strict but wastes initial SFP waits: first already has5fresh accepted views yet3s timeout preempts redundant1s hold; second has7invalid fits but waits3s anyway. Retain3fresh native confirmations + fresh downstream grasp lock, use250ms stationary transport hold; after3fresh invalid views switch to2-stage no-blind-descent transfer/orientation route. Keep same models, public region, force and physical gates.",
+      "score": 284.2791344621943,
+      "strict_insertions": 2,
+      "physical_all_passed": false,
+      "latencies": {
+        "transport": {
+          "calls": 65,
+          "p50_p95_p99_ms": [
+            84.13103595376015,
+            160.9012959524989,
+            268.7528826110064
+          ]
+        },
+        "fresh": {
+          "calls": 9,
+          "p50_p95_p99_ms": [
+            176.24158458784223,
+            213.64462934434414,
+            219.9715357273817
+          ]
+        },
+        "close": {
+          "calls": 5,
+          "p50_p95_p99_ms": [
+            82.96798914670944,
+            103.78401344642043,
+            105.67289477214217
+          ]
+        },
+        "servo": {
+          "calls": 307,
+          "p50_p95_p99_ms": [
+            6.301430985331535,
+            12.50158199109137,
+            136.72440689988434
+          ]
+        },
+        "stationary_scene_check": {
+          "calls": 4,
+          "p50_p95_p99_ms": [
+            81.6846985835582,
+            90.64867778215557,
+            91.89274583477527
+          ]
+        },
+        "far_context_preparation": {
+          "calls": 1,
+          "p50_p95_p99_ms": [
+            239.625733345747,
+            239.625733345747,
+            239.625733345747
+          ]
+        }
+      },
+      "latency_gate_passed": true,
+      "target_reached": false,
+      "final_scenes_sealed": true,
+      "artifact_root": "/home/nas/chmin/aic_archives/2026-10-18_five_repair_cycles_v1/cycle_8",
+      "trials": [
+        {
+          "trial": "trial_1",
+          "family": "sfp",
+          "task": {
+            "cable_type": "sfp_sc",
+            "cable_name": "cable_0",
+            "plug_type": "sfp",
+            "plug_name": "sfp_tip",
+            "port_type": "sfp",
+            "port_name": "sfp_port_0",
+            "target_module_name": "nic_card_mount_0",
+            "time_limit": 180
+          },
+          "score": 94.95222411363898,
+          "depth_mm": 46.771212723696415,
+          "lateral_mm": 0.14395181030574147,
+          "orientation_error_deg": 0.09611877911533244,
+          "official_tier3": 75,
+          "qualified": true,
+          "no_scored_harm": true,
+          "video": "/home/nas/chmin/aic_archives/2026-10-18_five_repair_cycles_v1/cycle_8/per_trial/trial_1/five_cameras_20fps_grid.mp4"
+        },
+        {
+          "trial": "trial_2",
+          "family": "sfp",
+          "task": {
+            "cable_type": "sfp_sc",
+            "cable_name": "cable_0",
+            "plug_type": "sfp",
+            "plug_name": "sfp_tip",
+            "port_type": "sfp",
+            "port_name": "sfp_port_0",
+            "target_module_name": "nic_card_mount_1",
+            "time_limit": 180
+          },
+          "score": 95.36749554172863,
+          "depth_mm": 46.750616681573405,
+          "lateral_mm": 0.14865885397191936,
+          "orientation_error_deg": 0.3804539315857798,
+          "official_tier3": 75,
+          "qualified": true,
+          "no_scored_harm": true,
+          "video": "/home/nas/chmin/aic_archives/2026-10-18_five_repair_cycles_v1/cycle_8/per_trial/trial_2/five_cameras_20fps_grid.mp4"
+        },
+        {
+          "trial": "trial_3",
+          "family": "sc",
+          "task": {
+            "cable_type": "sfp_sc",
+            "cable_name": "cable_1",
+            "plug_type": "sc",
+            "plug_name": "sc_tip",
+            "port_type": "sc",
+            "port_name": "sc_port_base",
+            "target_module_name": "sc_port_1",
+            "time_limit": 180
+          },
+          "score": 93.9594148068267,
+          "depth_mm": 15.498041118859835,
+          "lateral_mm": 0.08932433953331653,
+          "orientation_error_deg": 0.7410772953774001,
+          "official_tier3": 75,
+          "qualified": false,
+          "no_scored_harm": true,
+          "video": "/home/nas/chmin/aic_archives/2026-10-18_five_repair_cycles_v1/cycle_8/per_trial/trial_3/five_cameras_20fps_grid.mp4"
+        }
+      ]
+    },
+    {
+      "cycle": 9,
+      "policy": "RunVisualConnectorServoPersistentApproachV47",
+      "hypothesis": "Fix measured angular control bug: cycle8 SFP1 needs12.996s approach because goal resets1deg ahead of measuredR eachtick, correcting21deg at~2deg/s. Persistent reference seeded from last public API, bounded0.5rad/s,1rad/s2,5deg lead; same finalR, frozenposemodels and all force/physical gates. Cycle8 SC15.49804mm remains physicalfail, not rounded up.",
+      "score": 3,
+      "strict_insertions": 0,
+      "physical_all_passed": false,
+      "latencies": {
+        "transport": {
+          "calls": 61,
+          "p50_p95_p99_ms": [
+            97.94631414115429,
+            174.68261579051614,
+            275.3560263663528
+          ]
+        },
+        "fresh": {
+          "calls": 9,
+          "p50_p95_p99_ms": [
+            243.08037059381604,
+            279.3563511222601,
+            288.52751664817333
+          ]
+        },
+        "close": {
+          "calls": 0,
+          "p50_p95_p99_ms": null
+        },
+        "servo": {
+          "calls": 0,
+          "p50_p95_p99_ms": null
+        },
+        "stationary_scene_check": {
+          "calls": 5,
+          "p50_p95_p99_ms": [
+            76.979068107903,
+            96.76734553650022,
+            99.60835801437497
+          ]
+        },
+        "far_context_preparation": {
+          "calls": 1,
+          "p50_p95_p99_ms": [
+            177.0375669002533,
+            177.0375669002533,
+            177.0375669002533
+          ]
+        }
+      },
+      "latency_gate_passed": false,
+      "target_reached": false,
+      "final_scenes_sealed": true,
+      "artifact_root": "/home/nas/chmin/aic_archives/2026-10-18_five_repair_cycles_v1/cycle_9",
+      "trials": [
+        {
+          "trial": "trial_1",
+          "family": "sfp",
+          "task": {
+            "cable_type": "sfp_sc",
+            "cable_name": "cable_0",
+            "plug_type": "sfp",
+            "plug_name": "sfp_tip",
+            "port_type": "sfp",
+            "port_name": "sfp_port_0",
+            "target_module_name": "nic_card_mount_0",
+            "time_limit": 180
+          },
+          "score": 1,
+          "depth_mm": -82.31497166454926,
+          "lateral_mm": 11.87317894477101,
+          "orientation_error_deg": 21.45754776970533,
+          "official_tier3": 0,
+          "qualified": false,
+          "no_scored_harm": true,
+          "video": "/home/nas/chmin/aic_archives/2026-10-18_five_repair_cycles_v1/cycle_9/per_trial/trial_1/five_cameras_20fps_grid.mp4"
+        },
+        {
+          "trial": "trial_2",
+          "family": "sfp",
+          "task": {
+            "cable_type": "sfp_sc",
+            "cable_name": "cable_0",
+            "plug_type": "sfp",
+            "plug_name": "sfp_tip",
+            "port_type": "sfp",
+            "port_name": "sfp_port_0",
+            "target_module_name": "nic_card_mount_1",
+            "time_limit": 180
+          },
+          "score": 1,
+          "depth_mm": -78.43403342234213,
+          "lateral_mm": 1.2902936996783123,
+          "orientation_error_deg": 0.10238931466913827,
+          "official_tier3": 0,
+          "qualified": false,
+          "no_scored_harm": true,
+          "video": "/home/nas/chmin/aic_archives/2026-10-18_five_repair_cycles_v1/cycle_9/per_trial/trial_2/five_cameras_20fps_grid.mp4"
+        },
+        {
+          "trial": "trial_3",
+          "family": "sc",
+          "task": {
+            "cable_type": "sfp_sc",
+            "cable_name": "cable_1",
+            "plug_type": "sc",
+            "plug_name": "sc_tip",
+            "port_type": "sc",
+            "port_name": "sc_port_base",
+            "target_module_name": "sc_port_1",
+            "time_limit": 180
+          },
+          "score": 1,
+          "depth_mm": -152.54571340960152,
+          "lateral_mm": 3.147056093728218,
+          "orientation_error_deg": 3.3554541373279845,
+          "official_tier3": 0,
+          "qualified": false,
+          "no_scored_harm": true,
+          "video": "/home/nas/chmin/aic_archives/2026-10-18_five_repair_cycles_v1/cycle_9/per_trial/trial_3/five_cameras_20fps_grid.mp4"
+        }
+      ]
+    },
+    {
+      "cycle": 10,
+      "policy": "RunVisualConnectorServoPersistentApproachV48",
+      "hypothesis": "Repair cycle9 implementation fault: insertion governor_seed is not initialized until first approach command. Seed persistent angular planner first from exact public fresh-acquisition API reference, replacing any previous episode seed. Actual-method first-call/cross-reset contract passes. Preserve failed3/300 cycle9 and allvideos; same bounded0.5rad/s/1rad/s2/5deg-lead angular design, models and physical gates.",
+      "score": 3,
+      "strict_insertions": 0,
+      "physical_all_passed": false,
+      "latencies": {
+        "transport": {
+          "calls": 66,
+          "p50_p95_p99_ms": [
+            105.85425887256861,
+            162.60255046654493,
+            251.6019456554191
+          ]
+        },
+        "fresh": {
+          "calls": 9,
+          "p50_p95_p99_ms": [
+            231.37617483735085,
+            296.0108760744333,
+            298.2177007943392
+          ]
+        },
+        "close": {
+          "calls": 0,
+          "p50_p95_p99_ms": null
+        },
+        "servo": {
+          "calls": 0,
+          "p50_p95_p99_ms": null
+        },
+        "stationary_scene_check": {
+          "calls": 3,
+          "p50_p95_p99_ms": [
+            78.36250076070428,
+            93.42338056303561,
+            94.76212543435395
+          ]
+        },
+        "far_context_preparation": {
+          "calls": 1,
+          "p50_p95_p99_ms": [
+            244.51794428750873,
+            244.51794428750873,
+            244.51794428750873
+          ]
+        }
+      },
+      "latency_gate_passed": false,
+      "target_reached": false,
+      "final_scenes_sealed": true,
+      "artifact_root": "/home/nas/chmin/aic_archives/2026-10-18_five_repair_cycles_v1/cycle_10",
+      "trials": [
+        {
+          "trial": "trial_1",
+          "family": "sfp",
+          "task": {
+            "cable_type": "sfp_sc",
+            "cable_name": "cable_0",
+            "plug_type": "sfp",
+            "plug_name": "sfp_tip",
+            "port_type": "sfp",
+            "port_name": "sfp_port_0",
+            "target_module_name": "nic_card_mount_0",
+            "time_limit": 180
+          },
+          "score": 1,
+          "depth_mm": -81.0579223583669,
+          "lateral_mm": 12.23917890063762,
+          "orientation_error_deg": 21.45222178072675,
+          "official_tier3": 0,
+          "qualified": false,
+          "no_scored_harm": true,
+          "video": "/home/nas/chmin/aic_archives/2026-10-18_five_repair_cycles_v1/cycle_10/per_trial/trial_1/five_cameras_20fps_grid.mp4"
+        },
+        {
+          "trial": "trial_2",
+          "family": "sfp",
+          "task": {
+            "cable_type": "sfp_sc",
+            "cable_name": "cable_0",
+            "plug_type": "sfp",
+            "plug_name": "sfp_tip",
+            "port_type": "sfp",
+            "port_name": "sfp_port_0",
+            "target_module_name": "nic_card_mount_1",
+            "time_limit": 180
+          },
+          "score": 1,
+          "depth_mm": -79.41624061213021,
+          "lateral_mm": 1.4052641377779074,
+          "orientation_error_deg": 0.08935341625352151,
+          "official_tier3": 0,
+          "qualified": false,
+          "no_scored_harm": true,
+          "video": "/home/nas/chmin/aic_archives/2026-10-18_five_repair_cycles_v1/cycle_10/per_trial/trial_2/five_cameras_20fps_grid.mp4"
+        },
+        {
+          "trial": "trial_3",
+          "family": "sc",
+          "task": {
+            "cable_type": "sfp_sc",
+            "cable_name": "cable_1",
+            "plug_type": "sc",
+            "plug_name": "sc_tip",
+            "port_type": "sc",
+            "port_name": "sc_port_base",
+            "target_module_name": "sc_port_1",
+            "time_limit": 180
+          },
+          "score": 1,
+          "depth_mm": -152.48523625248345,
+          "lateral_mm": 3.138945308947867,
+          "orientation_error_deg": 3.262690008450917,
+          "official_tier3": 0,
+          "qualified": false,
+          "no_scored_harm": true,
+          "video": "/home/nas/chmin/aic_archives/2026-10-18_five_repair_cycles_v1/cycle_10/per_trial/trial_3/five_cameras_20fps_grid.mp4"
+        }
+      ]
+    },
+    {
+      "cycle": 11,
+      "policy": "RunVisualConnectorServoPersistentApproachV48",
+      "hypothesis": "Same persistent orientation design after cycle10 trace fault: cast NumPy comparison to Pythonbool beforeJSON. Actual real approach-loop + real V48 seed methods now execute5commands fromNone seed with everyfulltrace JSONroundtrip, beforelive deployment. Preserve both failed fullsamples3/300. Same models, scene, force and physical gates.",
+      "score": 286.1877857053626,
+      "strict_insertions": 3,
+      "physical_all_passed": true,
+      "latencies": {
+        "transport": {
+          "calls": 63,
+          "p50_p95_p99_ms": [
+            76.53895579278469,
+            139.72706627100706,
+            242.93496435508195
+          ]
+        },
+        "fresh": {
+          "calls": 9,
+          "p50_p95_p99_ms": [
+            228.2933327369392,
+            246.0460240021348,
+            246.551941819489
+          ]
+        },
+        "close": {
+          "calls": 5,
+          "p50_p95_p99_ms": [
+            79.8772620037198,
+            95.08072482421994,
+            98.08733331039548
+          ]
+        },
+        "servo": {
+          "calls": 336,
+          "p50_p95_p99_ms": [
+            6.532409926876426,
+            12.505635619163513,
+            112.10595658048973
+          ]
+        },
+        "stationary_scene_check": {
+          "calls": 3,
+          "p50_p95_p99_ms": [
+            86.15721622481942,
+            95.47148165293038,
+            96.29941635765135
+          ]
+        },
+        "far_context_preparation": {
+          "calls": 1,
+          "p50_p95_p99_ms": [
+            185.4463522322476,
+            185.4463522322476,
+            185.4463522322476
+          ]
+        }
+      },
+      "latency_gate_passed": true,
+      "target_reached": false,
+      "final_scenes_sealed": true,
+      "artifact_root": "/home/nas/chmin/aic_archives/2026-10-18_five_repair_cycles_v1/cycle_11",
+      "trials": [
+        {
+          "trial": "trial_1",
+          "family": "sfp",
+          "task": {
+            "cable_type": "sfp_sc",
+            "cable_name": "cable_0",
+            "plug_type": "sfp",
+            "plug_name": "sfp_tip",
+            "port_type": "sfp",
+            "port_name": "sfp_port_0",
+            "target_module_name": "nic_card_mount_0",
+            "time_limit": 180
+          },
+          "score": 96.41417602226329,
+          "depth_mm": 46.766689214537806,
+          "lateral_mm": 0.07809251756953076,
+          "orientation_error_deg": 0.16140817145564262,
+          "official_tier3": 75,
+          "qualified": true,
+          "no_scored_harm": true,
+          "video": "/home/nas/chmin/aic_archives/2026-10-18_five_repair_cycles_v1/cycle_11/per_trial/trial_1/five_cameras_20fps_grid.mp4"
+        },
+        {
+          "trial": "trial_2",
+          "family": "sfp",
+          "task": {
+            "cable_type": "sfp_sc",
+            "cable_name": "cable_0",
+            "plug_type": "sfp",
+            "plug_name": "sfp_tip",
+            "port_type": "sfp",
+            "port_name": "sfp_port_0",
+            "target_module_name": "nic_card_mount_1",
+            "time_limit": 180
+          },
+          "score": 95.65855650638395,
+          "depth_mm": 46.750332685860904,
+          "lateral_mm": 0.22071818869028845,
+          "orientation_error_deg": 0.3773693745855097,
+          "official_tier3": 75,
+          "qualified": true,
+          "no_scored_harm": true,
+          "video": "/home/nas/chmin/aic_archives/2026-10-18_five_repair_cycles_v1/cycle_11/per_trial/trial_2/five_cameras_20fps_grid.mp4"
+        },
+        {
+          "trial": "trial_3",
+          "family": "sc",
+          "task": {
+            "cable_type": "sfp_sc",
+            "cable_name": "cable_1",
+            "plug_type": "sc",
+            "plug_name": "sc_tip",
+            "port_type": "sc",
+            "port_name": "sc_port_base",
+            "target_module_name": "sc_port_1",
+            "time_limit": 180
+          },
+          "score": 94.11505317671536,
+          "depth_mm": 15.516981850207834,
+          "lateral_mm": 0.077363063341846,
+          "orientation_error_deg": 0.44625017264392125,
+          "official_tier3": 75,
+          "qualified": true,
+          "no_scored_harm": true,
+          "video": "/home/nas/chmin/aic_archives/2026-10-18_five_repair_cycles_v1/cycle_11/per_trial/trial_3/five_cameras_20fps_grid.mp4"
+        }
+      ]
+    },
+    {
+      "cycle": 12,
+      "policy": "RunVisualConnectorServoDirectEmptySCV49",
+      "hypothesis": "Cycle11 persistent approach functions,286.19 and3strict. Remaining SC transport7.4s uses axis-aligned clearance detour despite3fresh empty-row confirmations. Empty-only direct diagonal acquisition at120mm, nominalTCP>=140mm,0.12m/s/0.8rad/s; occupied or uncertain retain route/profile. Same SC12mm/s insertion, same pose models, native target checks, force limits and physical gates. Exact reset/profile contracts pass.",
+      "score": 287.0470134998158,
+      "strict_insertions": 3,
+      "physical_all_passed": true,
+      "latencies": {
+        "transport": {
+          "calls": 55,
+          "p50_p95_p99_ms": [
+            100.86736688390374,
+            168.34693732671437,
+            285.49958146177244
+          ]
+        },
+        "fresh": {
+          "calls": 9,
+          "p50_p95_p99_ms": [
+            223.65309996530414,
+            323.15230863168836,
+            324.36843948438764
+          ]
+        },
+        "close": {
+          "calls": 5,
+          "p50_p95_p99_ms": [
+            88.93225016072392,
+            124.14620975032449,
+            126.82984428480268
+          ]
+        },
+        "servo": {
+          "calls": 362,
+          "p50_p95_p99_ms": [
+            6.6758389584720135,
+            10.956276347860694,
+            38.09372475836408
+          ]
+        },
+        "stationary_scene_check": {
+          "calls": 3,
+          "p50_p95_p99_ms": [
+            90.84444399923086,
+            102.38243211060762,
+            103.40803105384111
+          ]
+        },
+        "far_context_preparation": {
+          "calls": 1,
+          "p50_p95_p99_ms": [
+            195.31219825148582,
+            195.31219825148582,
+            195.31219825148582
+          ]
+        }
+      },
+      "latency_gate_passed": false,
+      "target_reached": false,
+      "final_scenes_sealed": true,
+      "artifact_root": "/home/nas/chmin/aic_archives/2026-10-18_five_repair_cycles_v1/cycle_12",
+      "trials": [
+        {
+          "trial": "trial_1",
+          "family": "sfp",
+          "task": {
+            "cable_type": "sfp_sc",
+            "cable_name": "cable_0",
+            "plug_type": "sfp",
+            "plug_name": "sfp_tip",
+            "port_type": "sfp",
+            "port_name": "sfp_port_0",
+            "target_module_name": "nic_card_mount_0",
+            "time_limit": 180
+          },
+          "score": 95.90511822524769,
+          "depth_mm": 46.77146836735649,
+          "lateral_mm": 0.1179119418866161,
+          "orientation_error_deg": 0.09452322922349563,
+          "official_tier3": 75,
+          "qualified": true,
+          "no_scored_harm": true,
+          "video": "/home/nas/chmin/aic_archives/2026-10-18_five_repair_cycles_v1/cycle_12/per_trial/trial_1/five_cameras_20fps_grid.mp4"
+        },
+        {
+          "trial": "trial_2",
+          "family": "sfp",
+          "task": {
+            "cable_type": "sfp_sc",
+            "cable_name": "cable_0",
+            "plug_type": "sfp",
+            "plug_name": "sfp_tip",
+            "port_type": "sfp",
+            "port_name": "sfp_port_0",
+            "target_module_name": "nic_card_mount_1",
+            "time_limit": 180
+          },
+          "score": 95.76022518493852,
+          "depth_mm": 46.75388417801124,
+          "lateral_mm": 0.1675541442128619,
+          "orientation_error_deg": 0.24630706348937992,
+          "official_tier3": 75,
+          "qualified": true,
+          "no_scored_harm": true,
+          "video": "/home/nas/chmin/aic_archives/2026-10-18_five_repair_cycles_v1/cycle_12/per_trial/trial_2/five_cameras_20fps_grid.mp4"
+        },
+        {
+          "trial": "trial_3",
+          "family": "sc",
+          "task": {
+            "cable_type": "sfp_sc",
+            "cable_name": "cable_1",
+            "plug_type": "sc",
+            "plug_name": "sc_tip",
+            "port_type": "sc",
+            "port_name": "sc_port_base",
+            "target_module_name": "sc_port_1",
+            "time_limit": 180
+          },
+          "score": 95.38167008962961,
+          "depth_mm": 15.511068570712338,
+          "lateral_mm": 0.034248440617895344,
+          "orientation_error_deg": 0.4373529935568707,
+          "official_tier3": 75,
+          "qualified": true,
+          "no_scored_harm": true,
+          "video": "/home/nas/chmin/aic_archives/2026-10-18_five_repair_cycles_v1/cycle_12/per_trial/trial_3/five_cameras_20fps_grid.mp4"
+        }
+      ]
+    },
+    {
+      "cycle": 13,
+      "policy": "RunVisualConnectorServoPrewarmedFreeV51",
+      "hypothesis": "Cycle12 scores287.05,3strict,butfreshp95323ms. Preload both unchanged graspRmodels before sharedJPEG installation; actual frozen-model codec outputs bitexact, no newtraining. ForSFP/visuallyemptySC only, free approach uses base[500,500,240] rotational100, restoring old compliant insertion gains via public-reference holding-effort transfer at both seams. Source confirms base-frame wrench law; internal smoothing means static effort continuity is approximate dynamically. Actual seam/exception/JSON contracts pass; force/physical gates unchanged.",
+      "score": 287.135333785003,
+      "strict_insertions": 3,
+      "physical_all_passed": true,
+      "latencies": {
+        "transport": {
+          "calls": 60,
+          "p50_p95_p99_ms": [
+            87.87924447096884,
+            165.02960901707405,
+            293.0635076854371
+          ]
+        },
+        "fresh": {
+          "calls": 9,
+          "p50_p95_p99_ms": [
+            208.3243099041283,
+            295.62020376324654,
+            300.7883311808109
+          ]
+        },
+        "close": {
+          "calls": 5,
+          "p50_p95_p99_ms": [
+            97.13787632063031,
+            112.36125966534019,
+            113.71964735910296
+          ]
+        },
+        "servo": {
+          "calls": 380,
+          "p50_p95_p99_ms": [
+            6.749216932803392,
+            10.632552020251751,
+            13.884474528022086
+          ]
+        },
+        "stationary_scene_check": {
+          "calls": 3,
+          "p50_p95_p99_ms": [
+            85.78689070418477,
+            100.2637563738972,
+            101.55058887787163
+          ]
+        },
+        "far_context_preparation": {
+          "calls": 1,
+          "p50_p95_p99_ms": [
+            192.71740783005953,
+            192.71740783005953,
+            192.71740783005953
+          ]
+        }
+      },
+      "latency_gate_passed": true,
+      "target_reached": false,
+      "final_scenes_sealed": true,
+      "artifact_root": "/home/nas/chmin/aic_archives/2026-10-18_five_repair_cycles_v1/cycle_13",
+      "trials": [
+        {
+          "trial": "trial_1",
+          "family": "sfp",
+          "task": {
+            "cable_type": "sfp_sc",
+            "cable_name": "cable_0",
+            "plug_type": "sfp",
+            "plug_name": "sfp_tip",
+            "port_type": "sfp",
+            "port_name": "sfp_port_0",
+            "target_module_name": "nic_card_mount_0",
+            "time_limit": 180
+          },
+          "score": 96.6614173452983,
+          "depth_mm": 46.766802416775135,
+          "lateral_mm": 0.01806722264132615,
+          "orientation_error_deg": 0.11679967761033393,
+          "official_tier3": 75,
+          "qualified": true,
+          "no_scored_harm": true,
+          "video": "/home/nas/chmin/aic_archives/2026-10-18_five_repair_cycles_v1/cycle_13/per_trial/trial_1/five_cameras_20fps_grid.mp4"
+        },
+        {
+          "trial": "trial_2",
+          "family": "sfp",
+          "task": {
+            "cable_type": "sfp_sc",
+            "cable_name": "cable_0",
+            "plug_type": "sfp",
+            "plug_name": "sfp_tip",
+            "port_type": "sfp",
+            "port_name": "sfp_port_0",
+            "target_module_name": "nic_card_mount_1",
+            "time_limit": 180
+          },
+          "score": 95.31075848973337,
+          "depth_mm": 46.74254485671908,
+          "lateral_mm": 0.23008931958814144,
+          "orientation_error_deg": 0.5034119390541646,
+          "official_tier3": 75,
+          "qualified": true,
+          "no_scored_harm": true,
+          "video": "/home/nas/chmin/aic_archives/2026-10-18_five_repair_cycles_v1/cycle_13/per_trial/trial_2/five_cameras_20fps_grid.mp4"
+        },
+        {
+          "trial": "trial_3",
+          "family": "sc",
+          "task": {
+            "cable_type": "sfp_sc",
+            "cable_name": "cable_1",
+            "plug_type": "sc",
+            "plug_name": "sc_tip",
+            "port_type": "sc",
+            "port_name": "sc_port_base",
+            "target_module_name": "sc_port_1",
+            "time_limit": 180
+          },
+          "score": 95.16315794997135,
+          "depth_mm": 15.530981028650798,
+          "lateral_mm": 0.034093081759880337,
+          "orientation_error_deg": 0.43665381141737647,
+          "official_tier3": 75,
+          "qualified": true,
+          "no_scored_harm": true,
+          "video": "/home/nas/chmin/aic_archives/2026-10-18_five_repair_cycles_v1/cycle_13/per_trial/trial_3/five_cameras_20fps_grid.mp4"
+        }
+      ]
+    },
+    {
+      "cycle": 14,
+      "policy": "RunVisualConnectorServoResponsiveV52",
+      "hypothesis": "Cycle13 287.14 with3strict andtimingpass. Reduce remaining overhead: initial unloaded hold uses500translation tosettle before same20force samples/spread1N; one fresh invalid initial fit selects existing safe moving-view route, acceptance still3fresh fits. Parallelize independent JPEG86 cameras in fresh/acquisition grasp paths;12realcameraimages and actual frozenR/T outputs bitexact, CPUmedian34.7to15.4ms. Insertion gains/speed/dwell, models, physical/force gates unchanged.",
+      "score": 288.78660922939594,
+      "strict_insertions": 2,
+      "physical_all_passed": false,
+      "latencies": {
+        "transport": {
+          "calls": 45,
+          "p50_p95_p99_ms": [
+            78.67870526388288,
+            164.95646173134446,
+            293.27995523810426
+          ]
+        },
+        "fresh": {
+          "calls": 9,
+          "p50_p95_p99_ms": [
+            165.68229300901294,
+            204.5005006715655,
+            219.62971698492765
+          ]
+        },
+        "close": {
+          "calls": 5,
+          "p50_p95_p99_ms": [
+            96.86336666345596,
+            115.71285324171185,
+            118.21821147575974
+          ]
+        },
+        "servo": {
+          "calls": 355,
+          "p50_p95_p99_ms": [
+            6.052953656762838,
+            9.891383536159992,
+            11.569658070802674
+          ]
+        },
+        "stationary_scene_check": {
+          "calls": 3,
+          "p50_p95_p99_ms": [
+            80.80336824059486,
+            93.6172035522759,
+            94.75621113553643
+          ]
+        },
+        "far_context_preparation": {
+          "calls": 1,
+          "p50_p95_p99_ms": [
+            169.26943371072412,
+            169.26943371072412,
+            169.26943371072412
+          ]
+        }
+      },
+      "latency_gate_passed": true,
+      "target_reached": false,
+      "final_scenes_sealed": true,
+      "artifact_root": "/home/nas/chmin/aic_archives/2026-10-18_five_repair_cycles_v1/cycle_14",
+      "trials": [
+        {
+          "trial": "trial_1",
+          "family": "sfp",
+          "task": {
+            "cable_type": "sfp_sc",
+            "cable_name": "cable_0",
+            "plug_type": "sfp",
+            "plug_name": "sfp_tip",
+            "port_type": "sfp",
+            "port_name": "sfp_port_0",
+            "target_module_name": "nic_card_mount_0",
+            "time_limit": 180
+          },
+          "score": 96.73007110079683,
+          "depth_mm": 46.774573030231,
+          "lateral_mm": 0.13671505987338464,
+          "orientation_error_deg": 0.08599530708605406,
+          "official_tier3": 75,
+          "qualified": true,
+          "no_scored_harm": true,
+          "video": "/home/nas/chmin/aic_archives/2026-10-18_five_repair_cycles_v1/cycle_14/per_trial/trial_1/five_cameras_20fps_grid.mp4"
+        },
+        {
+          "trial": "trial_2",
+          "family": "sfp",
+          "task": {
+            "cable_type": "sfp_sc",
+            "cable_name": "cable_0",
+            "plug_type": "sfp",
+            "plug_name": "sfp_tip",
+            "port_type": "sfp",
+            "port_name": "sfp_port_0",
+            "target_module_name": "nic_card_mount_1",
+            "time_limit": 180
+          },
+          "score": 96.4201128478803,
+          "depth_mm": 46.74341548343719,
+          "lateral_mm": 0.20387638530417154,
+          "orientation_error_deg": 0.5343930912134812,
+          "official_tier3": 75,
+          "qualified": true,
+          "no_scored_harm": true,
+          "video": "/home/nas/chmin/aic_archives/2026-10-18_five_repair_cycles_v1/cycle_14/per_trial/trial_2/five_cameras_20fps_grid.mp4"
+        },
+        {
+          "trial": "trial_3",
+          "family": "sc",
+          "task": {
+            "cable_type": "sfp_sc",
+            "cable_name": "cable_1",
+            "plug_type": "sc",
+            "plug_name": "sc_tip",
+            "port_type": "sc",
+            "port_name": "sc_port_base",
+            "target_module_name": "sc_port_1",
+            "time_limit": 180
+          },
+          "score": 95.6364252807188,
+          "depth_mm": 15.491366569956542,
+          "lateral_mm": 0.2338553713152637,
+          "orientation_error_deg": 0.644975104081679,
+          "official_tier3": 75,
+          "qualified": false,
+          "no_scored_harm": true,
+          "video": "/home/nas/chmin/aic_archives/2026-10-18_five_repair_cycles_v1/cycle_14/per_trial/trial_3/five_cameras_20fps_grid.mp4"
+        }
+      ]
+    },
+    {
+      "cycle": 15,
+      "policy": "RunVisualConnectorServoUniqueForceV53",
+      "hypothesis": "Cycle14 scores288.79,timingpass,butSC15.4914mm strictfail. Reduce force-calibration skipped-observation delay: admit20distinct current-wrench observations once, same1Nspread/quiet limits, add>=0.9s quiet span; actual loop contract20samples/20commands/0.95s andno retare passes. EmptySC insertion reference24mm/s under25mm/s governor, occupiedSC12 unchanged. Same pose weights,2s seatinghold,force/harm/physical gates. Not claimed as vision-accuracy repair.",
+      "score": 288.2824282757243,
+      "strict_insertions": 3,
+      "physical_all_passed": true,
+      "latencies": {
+        "transport": {
+          "calls": 76,
+          "p50_p95_p99_ms": [
+            91.9668220449239,
+            165.53742554970086,
+            242.80100991018116
+          ]
+        },
+        "fresh": {
+          "calls": 9,
+          "p50_p95_p99_ms": [
+            173.0770030990243,
+            205.4072261787951,
+            205.84389561787248
+          ]
+        },
+        "close": {
+          "calls": 5,
+          "p50_p95_p99_ms": [
+            80.58291301131248,
+            102.39943889901042,
+            103.58535727486014
+          ]
+        },
+        "servo": {
+          "calls": 294,
+          "p50_p95_p99_ms": [
+            5.676970351487398,
+            9.556375630199906,
+            13.789802077226325
+          ]
+        },
+        "stationary_scene_check": {
+          "calls": 3,
+          "p50_p95_p99_ms": [
+            84.72670428454876,
+            88.75879743136466,
+            89.11720571108162
+          ]
+        },
+        "far_context_preparation": {
+          "calls": 1,
+          "p50_p95_p99_ms": [
+            170.1109712012112,
+            170.1109712012112,
+            170.1109712012112
+          ]
+        }
+      },
+      "latency_gate_passed": true,
+      "target_reached": false,
+      "final_scenes_sealed": true,
+      "artifact_root": "/home/nas/chmin/aic_archives/2026-10-18_five_repair_cycles_v1/cycle_15",
+      "trials": [
+        {
+          "trial": "trial_1",
+          "family": "sfp",
+          "task": {
+            "cable_type": "sfp_sc",
+            "cable_name": "cable_0",
+            "plug_type": "sfp",
+            "plug_name": "sfp_tip",
+            "port_type": "sfp",
+            "port_name": "sfp_port_0",
+            "target_module_name": "nic_card_mount_0",
+            "time_limit": 180
+          },
+          "score": 95.84536524748782,
+          "depth_mm": 46.769276942478676,
+          "lateral_mm": 0.20542364701010207,
+          "orientation_error_deg": 0.21492897942296074,
+          "official_tier3": 75,
+          "qualified": true,
+          "no_scored_harm": true,
+          "video": "/home/nas/chmin/aic_archives/2026-10-18_five_repair_cycles_v1/cycle_15/per_trial/trial_1/five_cameras_20fps_grid.mp4"
+        },
+        {
+          "trial": "trial_2",
+          "family": "sfp",
+          "task": {
+            "cable_type": "sfp_sc",
+            "cable_name": "cable_0",
+            "plug_type": "sfp",
+            "plug_name": "sfp_tip",
+            "port_type": "sfp",
+            "port_name": "sfp_port_0",
+            "target_module_name": "nic_card_mount_1",
+            "time_limit": 180
+          },
+          "score": 96.23370737731705,
+          "depth_mm": 46.74925464424867,
+          "lateral_mm": 0.24756078135714968,
+          "orientation_error_deg": 0.3367947918710349,
+          "official_tier3": 75,
+          "qualified": true,
+          "no_scored_harm": true,
+          "video": "/home/nas/chmin/aic_archives/2026-10-18_five_repair_cycles_v1/cycle_15/per_trial/trial_2/five_cameras_20fps_grid.mp4"
+        },
+        {
+          "trial": "trial_3",
+          "family": "sc",
+          "task": {
+            "cable_type": "sfp_sc",
+            "cable_name": "cable_1",
+            "plug_type": "sc",
+            "plug_name": "sc_tip",
+            "port_type": "sc",
+            "port_name": "sc_port_base",
+            "target_module_name": "sc_port_1",
+            "time_limit": 180
+          },
+          "score": 96.20335565091949,
+          "depth_mm": 15.51505646896061,
+          "lateral_mm": 0.11690942416456618,
+          "orientation_error_deg": 0.47193635845627496,
+          "official_tier3": 75,
+          "qualified": true,
+          "no_scored_harm": true,
+          "video": "/home/nas/chmin/aic_archives/2026-10-18_five_repair_cycles_v1/cycle_15/per_trial/trial_3/five_cameras_20fps_grid.mp4"
+        }
+      ]
+    },
+    {
+      "cycle": 16,
+      "policy": "RunVisualConnectorServoPacketTimeV54",
+      "hypothesis": "Cycle15 valid SFP1 native fits repeatedly rejected asfuture because images2-4ms newer than past controller header. Officialadapter intentionally pairs image withpaststate. Use latest delivered packet sensor time, require state/camera skew<=10ms and3distinct geometricallyconsistent quiet fits; stale packets are not negative evidence. Apply onlyinitial SFP admission andstationary empty-row consensus; control clock andnear-grasp/model logic unchanged. Contract rejects50ms state age andduplicates, noGT. Force/physical gates unchanged.",
+      "score": 289.1316761940009,
+      "strict_insertions": 3,
+      "physical_all_passed": true,
+      "latencies": {
+        "transport": {
+          "calls": 47,
+          "p50_p95_p99_ms": [
+            107.59187769144773,
+            196.56106480397276,
+            363.70351275429107
+          ]
+        },
+        "fresh": {
+          "calls": 9,
+          "p50_p95_p99_ms": [
+            164.73774006590247,
+            186.55392415821552,
+            189.69477765262127
+          ]
+        },
+        "close": {
+          "calls": 5,
+          "p50_p95_p99_ms": [
+            105.44092115014791,
+            118.29163944348693,
+            119.93361650034785
+          ]
+        },
+        "servo": {
+          "calls": 286,
+          "p50_p95_p99_ms": [
+            5.872975802049041,
+            10.691985604353249,
+            12.594904424622634
+          ]
+        },
+        "stationary_scene_check": {
+          "calls": 3,
+          "p50_p95_p99_ms": [
+            78.38885905221105,
+            110.17013993114233,
+            112.99514267593622
+          ]
+        },
+        "far_context_preparation": {
+          "calls": 1,
+          "p50_p95_p99_ms": [
+            212.29749638587236,
+            212.29749638587236,
+            212.29749638587236
+          ]
+        }
+      },
+      "latency_gate_passed": true,
+      "target_reached": false,
+      "final_scenes_sealed": true,
+      "artifact_root": "/home/nas/chmin/aic_archives/2026-10-18_five_repair_cycles_v1/cycle_16",
+      "trials": [
+        {
+          "trial": "trial_1",
+          "family": "sfp",
+          "task": {
+            "cable_type": "sfp_sc",
+            "cable_name": "cable_0",
+            "plug_type": "sfp",
+            "plug_name": "sfp_tip",
+            "port_type": "sfp",
+            "port_name": "sfp_port_0",
+            "target_module_name": "nic_card_mount_0",
+            "time_limit": 180
+          },
+          "score": 96.86526309399054,
+          "depth_mm": 46.77272355366516,
+          "lateral_mm": 0.05674468596355139,
+          "orientation_error_deg": 0.2593299866065555,
+          "official_tier3": 75,
+          "qualified": true,
+          "no_scored_harm": true,
+          "video": "/home/nas/chmin/aic_archives/2026-10-18_five_repair_cycles_v1/cycle_16/per_trial/trial_1/five_cameras_20fps_grid.mp4"
+        },
+        {
+          "trial": "trial_2",
+          "family": "sfp",
+          "task": {
+            "cable_type": "sfp_sc",
+            "cable_name": "cable_0",
+            "plug_type": "sfp",
+            "plug_name": "sfp_tip",
+            "port_type": "sfp",
+            "port_name": "sfp_port_0",
+            "target_module_name": "nic_card_mount_1",
+            "time_limit": 180
+          },
+          "score": 96.24565640774726,
+          "depth_mm": 46.75311982807898,
+          "lateral_mm": 0.13012815518235604,
+          "orientation_error_deg": 0.26143881304080674,
+          "official_tier3": 75,
+          "qualified": true,
+          "no_scored_harm": true,
+          "video": "/home/nas/chmin/aic_archives/2026-10-18_five_repair_cycles_v1/cycle_16/per_trial/trial_2/five_cameras_20fps_grid.mp4"
+        },
+        {
+          "trial": "trial_3",
+          "family": "sc",
+          "task": {
+            "cable_type": "sfp_sc",
+            "cable_name": "cable_1",
+            "plug_type": "sc",
+            "plug_name": "sc_tip",
+            "port_type": "sc",
+            "port_name": "sc_port_base",
+            "target_module_name": "sc_port_1",
+            "time_limit": 180
+          },
+          "score": 96.0207566922631,
+          "depth_mm": 15.505619344769386,
+          "lateral_mm": 0.13502127805260183,
+          "orientation_error_deg": 0.543346983919766,
+          "official_tier3": 75,
+          "qualified": true,
+          "no_scored_harm": true,
+          "video": "/home/nas/chmin/aic_archives/2026-10-18_five_repair_cycles_v1/cycle_16/per_trial/trial_3/five_cameras_20fps_grid.mp4"
+        }
+      ]
+    },
+    {
+      "cycle": 17,
+      "policy": "RunVisualConnectorServoJointAcquisitionV55",
+      "hypothesis": "Bounded overhead repair after289.131676 strict3/3: acquire G rotation andtranslation fromsame3nativefreshobservations insteadserial5; rotation andtranslation consensus thresholdsunchanged, far-contextselection recorded. Parallel bitexact JPEG86 fortransport. Seat1.5s vs2, aboveofficial1scontinuouscontactwith0.5smargin; physicaldepth/force/tier3gates unchanged. No newweights orscenes.",
+      "score": 290.08939472025605,
+      "strict_insertions": 2,
+      "physical_all_passed": false,
+      "latencies": {
+        "transport": {
+          "calls": 45,
+          "p50_p95_p99_ms": [
+            77.53623835742474,
+            132.17979185283184,
+            268.5360275581484
+          ]
+        },
+        "fresh": {
+          "calls": 9,
+          "p50_p95_p99_ms": [
+            176.51021527126431,
+            195.94574067741632,
+            204.11402974277735
+          ]
+        },
+        "close": {
+          "calls": 5,
+          "p50_p95_p99_ms": [
+            97.62395126745105,
+            138.56012746691704,
+            140.02302549779415
+          ]
+        },
+        "servo": {
+          "calls": 256,
+          "p50_p95_p99_ms": [
+            6.262621143832803,
+            10.257968213409185,
+            11.543495184741912
+          ]
+        },
+        "stationary_scene_check": {
+          "calls": 3,
+          "p50_p95_p99_ms": [
+            77.63945357874036,
+            89.58442625589669,
+            90.64620160497725
+          ]
+        },
+        "far_context_preparation": {
+          "calls": 1,
+          "p50_p95_p99_ms": [
+            0.5239709280431271,
+            0.5239709280431271,
+            0.5239709280431271
+          ]
+        }
+      },
+      "latency_gate_passed": true,
+      "target_reached": false,
+      "final_scenes_sealed": true,
+      "artifact_root": "/home/nas/chmin/aic_archives/2026-10-18_five_repair_cycles_v1/cycle_17",
+      "trials": [
+        {
+          "trial": "trial_1",
+          "family": "sfp",
+          "task": {
+            "cable_type": "sfp_sc",
+            "cable_name": "cable_0",
+            "plug_type": "sfp",
+            "plug_name": "sfp_tip",
+            "port_type": "sfp",
+            "port_name": "sfp_port_0",
+            "target_module_name": "nic_card_mount_0",
+            "time_limit": 180
+          },
+          "score": 97.1078685099468,
+          "depth_mm": 46.76783789779884,
+          "lateral_mm": 0.13965447885492457,
+          "orientation_error_deg": 0.11732373408468236,
+          "official_tier3": 75,
+          "qualified": true,
+          "no_scored_harm": true,
+          "video": "/home/nas/chmin/aic_archives/2026-10-18_five_repair_cycles_v1/cycle_17/per_trial/trial_1/five_cameras_20fps_grid.mp4"
+        },
+        {
+          "trial": "trial_2",
+          "family": "sfp",
+          "task": {
+            "cable_type": "sfp_sc",
+            "cable_name": "cable_0",
+            "plug_type": "sfp",
+            "plug_name": "sfp_tip",
+            "port_type": "sfp",
+            "port_name": "sfp_port_0",
+            "target_module_name": "nic_card_mount_1",
+            "time_limit": 180
+          },
+          "score": 96.60671367245709,
+          "depth_mm": 46.74677987432374,
+          "lateral_mm": 0.18122892826638856,
+          "orientation_error_deg": 0.4071038050918525,
+          "official_tier3": 75,
+          "qualified": true,
+          "no_scored_harm": true,
+          "video": "/home/nas/chmin/aic_archives/2026-10-18_five_repair_cycles_v1/cycle_17/per_trial/trial_2/five_cameras_20fps_grid.mp4"
+        },
+        {
+          "trial": "trial_3",
+          "family": "sc",
+          "task": {
+            "cable_type": "sfp_sc",
+            "cable_name": "cable_1",
+            "plug_type": "sc",
+            "plug_name": "sc_tip",
+            "port_type": "sc",
+            "port_name": "sc_port_base",
+            "target_module_name": "sc_port_1",
+            "time_limit": 180
+          },
+          "score": 96.37481253785216,
+          "depth_mm": 15.499943717335194,
+          "lateral_mm": 0.1143737679430359,
+          "orientation_error_deg": 0.7214601263744569,
+          "official_tier3": 75,
+          "qualified": false,
+          "no_scored_harm": true,
+          "video": "/home/nas/chmin/aic_archives/2026-10-18_five_repair_cycles_v1/cycle_17/per_trial/trial_3/five_cameras_20fps_grid.mp4"
+        }
+      ]
+    },
+    {
+      "cycle": 18,
+      "policy": "RunVisualConnectorServoQuietContextV56",
+      "hypothesis": "Cycle17 toolkit290.089395 butSC15.499944mmstrictfail; jointacquisition exitedbefore3quietfarcontextimages so noexistingfar-nearfusion. Require3quietdistinctSCfarimagesbeforebinding; retainjointSFP3frameand1.5sdwell, allmodelweightsphysicalforceandtiminggates unchanged. ActualmethodtestSC4totalframeswhenfirstmoving, SFP3, legacy5; nooraclegeometryruntime.",
+      "score": 290.19254862628316,
+      "strict_insertions": 3,
+      "physical_all_passed": true,
+      "latencies": {
+        "transport": {
+          "calls": 44,
+          "p50_p95_p99_ms": [
+            31.08877269551158,
+            158.09508524835113,
+            323.2327817659825
+          ]
+        },
+        "fresh": {
+          "calls": 10,
+          "p50_p95_p99_ms": [
+            160.6802553869784,
+            220.44136461336166,
+            222.0181023562327
+          ]
+        },
+        "close": {
+          "calls": 5,
+          "p50_p95_p99_ms": [
+            109.8809139803052,
+            127.45509883388877,
+            128.2874052040279
+          ]
+        },
+        "servo": {
+          "calls": 256,
+          "p50_p95_p99_ms": [
+            6.449560401961207,
+            10.475399903953075,
+            11.66673325933516
+          ]
+        },
+        "stationary_scene_check": {
+          "calls": 3,
+          "p50_p95_p99_ms": [
+            90.45898308977485,
+            91.41506319865584,
+            91.50004809722304
+          ]
+        },
+        "far_context_preparation": {
+          "calls": 1,
+          "p50_p95_p99_ms": [
+            166.03944497182965,
+            166.03944497182965,
+            166.03944497182965
+          ]
+        }
+      },
+      "latency_gate_passed": true,
+      "target_reached": true,
+      "final_scenes_sealed": true,
+      "artifact_root": "/home/nas/chmin/aic_archives/2026-10-18_five_repair_cycles_v1/cycle_18",
+      "trials": [
+        {
+          "trial": "trial_1",
+          "family": "sfp",
+          "task": {
+            "cable_type": "sfp_sc",
+            "cable_name": "cable_0",
+            "plug_type": "sfp",
+            "plug_name": "sfp_tip",
+            "port_type": "sfp",
+            "port_name": "sfp_port_0",
+            "target_module_name": "nic_card_mount_0",
+            "time_limit": 180
+          },
+          "score": 97.17968616002275,
+          "depth_mm": 46.775846384235656,
+          "lateral_mm": 0.10149524775453775,
+          "orientation_error_deg": 0.14122480136115143,
+          "official_tier3": 75,
+          "qualified": true,
+          "no_scored_harm": true,
+          "video": "/home/nas/chmin/aic_archives/2026-10-18_five_repair_cycles_v1/cycle_18/per_trial/trial_1/five_cameras_20fps_grid.mp4"
+        },
+        {
+          "trial": "trial_2",
+          "family": "sfp",
+          "task": {
+            "cable_type": "sfp_sc",
+            "cable_name": "cable_0",
+            "plug_type": "sfp",
+            "plug_name": "sfp_tip",
+            "port_type": "sfp",
+            "port_name": "sfp_port_0",
+            "target_module_name": "nic_card_mount_1",
+            "time_limit": 180
+          },
+          "score": 96.55595927746492,
+          "depth_mm": 46.748803587346785,
+          "lateral_mm": 0.12903779054033745,
+          "orientation_error_deg": 0.385019376334393,
+          "official_tier3": 75,
+          "qualified": true,
+          "no_scored_harm": true,
+          "video": "/home/nas/chmin/aic_archives/2026-10-18_five_repair_cycles_v1/cycle_18/per_trial/trial_2/five_cameras_20fps_grid.mp4"
+        },
+        {
+          "trial": "trial_3",
+          "family": "sc",
+          "task": {
+            "cable_type": "sfp_sc",
+            "cable_name": "cable_1",
+            "plug_type": "sc",
+            "plug_name": "sc_tip",
+            "port_type": "sc",
+            "port_name": "sc_port_base",
+            "target_module_name": "sc_port_1",
+            "time_limit": 180
+          },
+          "score": 96.45690318879551,
+          "depth_mm": 15.528747864767963,
+          "lateral_mm": 0.1612488686191846,
+          "orientation_error_deg": 0.42716208774683684,
+          "official_tier3": 75,
+          "qualified": true,
+          "no_scored_harm": true,
+          "video": "/home/nas/chmin/aic_archives/2026-10-18_five_repair_cycles_v1/cycle_18/per_trial/trial_3/five_cameras_20fps_grid.mp4"
+        }
+      ]
+    }
+  ],
+  "best_toolkit_score": 290.19254862628316,
+  "best_full_gate_score": 290.19254862628316
+}

@@ -1,4 +1,5 @@
 """Image access for ordinary and sharded verified ACT caches."""
+from bisect import bisect_right
 from pathlib import Path
 
 import numpy as np
@@ -39,8 +40,16 @@ class ShardedImages:
             end = stop
         if end != self.shape[0]:
             raise ValueError("Image shards do not cover every cache frame")
+        self.shard_stops = [stop for _, stop, _, _, _ in self.shards]
 
     def __getitem__(self, index):
+        if np.isscalar(index):
+            frame = int(index)
+            if frame < 0 or frame >= self.shape[0]:
+                raise IndexError("ACT cache frame index out of range")
+            start, _, source_start, array, swap = self.shards[bisect_right(self.shard_stops, frame)]
+            value = array[frame - start + source_start]
+            return value[..., ::-1] if swap else value
         if isinstance(index, slice):
             index = np.arange(self.shape[0])[index]
         scalar = np.isscalar(index)

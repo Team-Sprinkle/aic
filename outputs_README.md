@@ -1,4 +1,505 @@
+> **October 18 score target achieved:** **290.19/300**, all three public-sample insertions pass independent depth/lateral/orientation checks; all used-stage p95 inference is below300ms. The analyze/repair/evaluate loop stops after18 completed full samples. V56 preserves three quiet SCcontext frames while sharing initial grasp observations, and seats1.5s above the public1s requirement. Rule transport and explicit RGB/public-state insertion use unchanged perception weights; no learned BCactor or RLactions. Failures and unqualified fits are preserved. This is one selected public-sample pass, with small SCdepth margin and unresolved unusual-SFP-grasp coverage; final scenes stay sealed. Earlier sections are historical. [Results, commands and videos](docs/experiments/2026-10-18-five-repair-cycles.md).
+
+## October 18: gated close-up pose update and SC insertion result
+
+V34 passes **4/4 matched SC development cases** (zero/five obstacle cards, both ports), followed by a passing SC round in the unchanged public sample: **15.510 mm depth, 0.141 mm lateral error, 0.469° orientation**, toolkit completion, no harm. Five fresh agreeing images support one bounded plug-pose update at 25 mm; the port frame stays fixed. Tighter lateral centering and stronger lateral tracking are also needed. All used-stage p95 timings pass; these are explicit RGB/public-state control results, not BC or RL.
+
+The complete sample is **170.57/300, 2/3 strict** because SFP trial 2 has a 3.53° biased grasp estimate before contact. Its actual roll exceeds the original SFP training range; close-up predictions remain wrong. Repeats stop, and the next targeted repair is SFP orientation coverage rather than a stiffness-only change. No new training or collection is running. The SC model's original 1.026° qualification failure remains explicit; four successful development cases do not establish general reliability. Final scenes remain sealed.
+
+[Detailed evidence, commands, images and next repair](docs/experiments/2026-10-18-sc-explicit-controller-continuation.md).
+
+## October18 close-up SC insertion milestone
+
+`/home/nas/chmin/aic_archives/2026-10-18_SC_explicit_continuation_v1/` now includes the successful `V21_close_grasp_development/`, matched failed `V25_no_close_matched_ablation/`, and `sample_V21_experimental/` (**3/3strict,257.36/300**). Per-trial physical JSONs/videos are under `sample_V21_experimental/per_trial/`; repeated sample state is `V21_three_sample_state.json`. Models and original sources are preserved; no new training/collection is queued. [Record](docs/experiments/2026-10-18-sc-explicit-controller-continuation.md).
+
+## October18 explicit SCcontinuation
+
+`/home/nas/chmin/aic_archives/2026-10-18_SC_explicit_continuation_v1/` preserves fullsampleV17/repeat2scores, four freshSCcases, V18/V19/V20/V22failures,12near25mmperception holds,36-case acquisition curation, paired re-estimation/codec/solver audits, and completed plateau fits. `spacefilled_near_pose_dataset/` contains3,446 perception triplets across294 episodes (234 train/60 validation), including80 near training grasps and four unchanged near validation episodes. `spacefilled_near_fused_orientation_warm/` reaches1.026° near orientationp95 and is not qualified. `fine_feature_near_orientation/` is the one active architecture ablation; `final80_five_fresh_consensus/` preserves the held-out averaging diagnosis. These are explicit image controllers, not BC/RL successes. [Plan](docs/experiments/2026-10-18-sc-explicit-controller-continuation.md).
+
+> **October 18 insertion repair:** Commands, plateau-training histories, split manifests, controller-context/persistence audits and frozen control comparisons are under `/home/nas/chmin/aic_archives/2026-10-17_insertion_control_repair_v1/` and `2026-10-17_insertion_control_repair_v2/`. Bounded nominal-centred SC perception captures: `2026-10-17_sc_nominal_grasp_capture_v1/`. Original sample result stays **165.42/300, 0/3 strict insertion**. [Record](docs/experiments/2026-10-17-insertion-control-and-grasp-repair.md).
+
+> **October17 complete public sample:**165.42/300toolkit points,3/3near handoffs,0/3strict physical insertions; latest full-connector BC actor, recovery disabled. Results, scores, raw bags, per-trial videos and review images: `/home/nas/chmin/aic_archives/2026-10-17_full_connector_sample_configuration_v2/`. [Analysis and next repair order](docs/experiments/2026-10-17-full-connector-sample-configuration.md). Earlier running/queued blocks are historical; no newRL or final-scene access.
+
+> **Four-rollout insertion/jerk probe complete:** `/home/nas/chmin/aic_archives/2026-10-17_full_connector_live_probe_v1/` contains all4raw runs, independent scores, corrected pre-freeze motion analysis, grasp-angle audits and regular H.26420fps clips in `videos/`. Strict physical insertion1/4; no queued retrain. [Record](docs/experiments/2026-10-17-full-connector-insertion-jerk-probe.md).
+
+> **Orientation results and new BC diagnostic:** SC/SFP orientation models, prediction/GT overlays, teacher-phase and oscillation audits, and the full-SE(3) command derivative are under `/home/nas/chmin/aic_archives/2026-10-17_connector_orientation_and_sfp_oscillation_v1/`. See `continuation_state.json` for the one queued/running actor fit. [Results](docs/experiments/2026-10-17-connector-orientation-and-sfp-oscillation.md).
+
+> **October 17 orientation/oscillation artifacts:** `/home/nas/chmin/aic_archives/2026-10-17_connector_orientation_and_sfp_oscillation_v1/` holds full connector-pose training, immutable split manifests and SFP command/motion diagnosis. Prior 14-rollout comparison is complete with zero strict full insertions. [Record](docs/experiments/2026-10-17-connector-orientation-and-sfp-oscillation.md).
+
+<!-- history-horizon-live:start -->
+## Live history/chunk experiment
+
+- Stage: `frozen_near_port_live_comparison`. Completed training variants: **4/4**.
+- New trained-model live comparison: **14/14** complete; no insertion promotion inferred from training.
+- Runtime preserves measured transport history; accepted port pose stays fixed during the actor attempt. New acquisition uses fresh pose-window consensus.
+- Same60,671anchor samples for4/8/12step targets; recorded commands only. No newRL or reserved-final testing.
+- Artifacts: `/home/nas/chmin/aic_archives/2026-10-17_history_chunk_continuation_v1`.
+<!-- history-horizon-live:end -->
+
+> **October17 revised priority:** Transport now targets a visually/proprioceptively controlled **25mm stand-off**, superseding the earlier learned150mm-approach responsibility. The first SC pilot reaches24.20mm/0.547mm lateral, but the unchanged actor still fails full physical insertion. Audit confirms all four50ms insertion targets execute with zero insertion-stage stale drops; large replanning jumps, phase imbalance and unapproved plug-grasp orientation remain gaps. A separate four-run fresh/warm SC/SFP comparison is active on GPU5, recovery off to isolate the approach/actor; no new training or official tuning. [Audit and next decisions](docs/experiments/2026-10-17-near-handoff-and-insertion-continuity-audit.md).
+
+> **Full-rollout scope update:** One episode per scenario, **62 total**, supersedes the earlier 186-episode schedule. Separate complete sample/eval YAML tests remain three repetitions each. The current rollout finishes before the scheduler hands over; models, rules and scenes remain unchanged. See [evaluation record](docs/experiments/2026-10-16-full-pipeline-three-per-scenario.md).
+
+<!-- full-insertion-evaluation-live:start -->
+## Full insertion evaluation continuation
+
+- Stage: `scenario`. Artifacts: `/home/nas/chmin/aic_archives/2026-10-16_full_sample_insertion_evaluation_v1`.
+- Frozen rule transport → requested-port coarse/native refinement → shared 150 mm BC insertion actor.
+- Planned: 62 scenario rollouts (62 groups × one), plus three complete sample YAML runs and three complete released-evaluation YAML runs.
+- Hierarchical insertion recovery is rule-based; no new RL or training. Released evaluation is scoring only; reserved final scenes stay sealed.
+- Counts and scores: see `progress.json`, `results_by_scenario.json` and `configuration_scores.json` in the artifact folder.
+<!-- full-insertion-evaluation-live:end -->
+
+<!-- sample-transport-live:start -->
+## Live sample-derived transport results — 2026-10-16T20:25:57 UTC
+
+- Adaptive SC development: **7/7 qualified**, seven planned.
+- Unchanged SFP development: **22/22 qualified**.
+- Frozen transport/handoff evaluation: **121/130 qualified**,130planned. This is not insertion.
+- Rules/weights frozen: **True**. Stage: `frozen_transport_evaluation`.
+- Decision: `frozen_evaluation_complete_requires_review`. No new training or reserved-final testing.
+- Artifacts: `/home/nas/chmin/aic_archives/2026-10-16_sample_adaptive_transport_evaluation_v3`. Sample-derived and exposed official results stay separate; no evaluation tuning.
+<!-- sample-transport-live:end -->
+
+## Sample-derived conservative transport continuation — October16
+
+Artifacts: `/home/nas/chmin/aic_archives/2026-10-16_sample_transport_continuation_v1/` (coordinator and gated frozen evaluation), `/home/nas/chmin/aic_archives/2026-10-16_sample_conservative_development_v3/` (29-case sample-only development), and `/home/nas/chmin/aic_archives/2026-10-16_sample_conservative_transport_v1/default3_v1/` (3/3 initial sample handoffs). [Experiment record](docs/experiments/2026-10-16-sample-conservative-rule-transport.md). No insertion or model training. The initial SC video is `default3_v1/sample_trial_3/five_cameras_20fps_grid_active.mp4` under the pilot root.
+
+## October 16 development/test separation
+
+`2026-10-16_official_transport_recheck_v1` is retrospective evaluation-only; its exact and derived stress scenes are excluded from training, rule design and threshold selection. See its `development_use_restriction.json` and [evaluation protocol](docs/EVALUATION_PROTOCOL.md). The pre-deadline development reference is `configs/evaluation_protocol/qualification_public_predeadline/{sample_config.yaml,provenance.json}`. Existing checkpoints need lineage auditing before a clean-development claim.
+
 # Outputs Directory Guide
+
+<!-- automatic-live-progress:start -->
+## Latest recorded job state — 2026-10-16 07:24 UTC
+
+This block supersedes earlier running/queued wording. Acquisition counts are **not insertion counts**. Completed update budgets are not automatically convergence.
+
+- **BC fresh**: stop_reason=update_cap, updates_completed=30000, best_step=4600, stale_evaluations_at_end=254, summary_exists=True.
+- **BC visual warm**: stop_reason=update_cap, updates_completed=30000, best_step=23100, stale_evaluations_at_end=69, summary_exists=True.
+- **SC frozen acquisition new refiner effective**: completed=60, planned=60, qualified=44, wrong=0, harm=0, passed=False, episodes=60, wrong_accepts=0, summary_exists=True.
+- **corrected intended acquisition20**: completed=20, planned=20, passed=False, family_groups={'sc': {'episodes': 10, 'qualified': 9}, 'sfp': {'episodes': 10, 'qualified': 9}}, episodes=20, qualified=18, wrong_accepts=0, summary_exists=True.
+- **SC candidate acquisition20**: completed=20, planned=20, passed=True, family_groups={'sc': {'episodes': 20, 'qualified': 18}}, episodes=20, qualified=18, wrong_accepts=0, summary_exists=True.
+- **autonomous insertion comparison**: status=perception_gate_failed, summary_exists=True.
+- **conditional BC continuation**: extended=False, summary_exists=True.
+
+Full-system promotion, new RL and reserved-final testing remain pending. Exact commands, weights, metrics and preserved failures are under `/home/nas/chmin/aic_archives/2026-10-15_rule_perception_hierarchical_v1`.
+<!-- automatic-live-progress:end -->
+
+
+## October 15 rule/perception/hierarchical continuation
+
+Bulk data and checkpoints are on NAS: `/home/nas/chmin/aic_archives/2026-10-15_rule_perception_hierarchical_v1/`. `state.json` maps active artifacts; the [execution record](docs/experiments/2026-10-15-rule-perception-hierarchical-execution.md) distinguishes component results, live acquisition, privileged teachers and pending actor/RL work. Preserve both accepted and failed comparisons. Native grasp labels, command derivatives and new crops are separate copies; original experts are unchanged.
+
+
+## October 15 frozen coverage evaluation — complete
+
+Bulk root: `/home/nas/chmin/aic_archives/2026-10-14_frozen_pipeline_coverage_v1/`. All 140 planned rollouts completed; 28 groups have exactly five episodes. See [the full record](docs/experiments/2026-10-14-frozen-pipeline-coverage.md) for commands, exact model roles, failures and representative video paths. `plan.json` freezes 120 scenes; `summary.json`, `coverage_cells.csv`, `decision.json`, `approach_failure_diagnosis.json` and `final_frozen_hash_verification.json` are the authoritative outputs. `runs/` contains images, raw bags, physical tip curves, official scoring, videos and preserved invalid attempts. No full SC insertions passed; SFP was transport only and never visited its broad diagnostic approach region. No promotion, training, RL or final-scene access.
+
+
+## October 14 autonomous transport execution artifacts
+
+Bulk artifacts live onNAS: `/home/nas/chmin/aic_archives/2026-10-14_transport_handoff_execution_v1/`. Main index: [execution record](docs/experiments/2026-10-14-transport-handoff-execution.md) and its JSON ledger. Important entries:
+
+- `rule_tracked_fresh_arrival_metrics_v11.json`: sixfreshcorrectSCacquisitions, scoring-onlygeometry and per-scene latency.
+- `tracked_crop_fresh_scenes_v1/manifest.json`: exactdevelopment resetgroups, nofinalscenes.
+- `rule_common_llb_1405_v11_fresh/five_cameras_20fps_grid_active.mp4`: five-cardrail-limittransportvideo.
+- `local_integrated_warm_llb_1200_teacher_gains_v3/five_cameras_20fps_grid_active.mp4`: localBCpilot with recordedteachercontrollergains.
+- `cross_component_summary_v1.json`: preservedpre-timestamp-discoverycomponentresults; earliergraspprobe interpretation superseded bycorrectedlabels below.
+- `sc_grasp_observation_labels_v3/timestamp_audit.json`: verifiedcommand/observationclock repair; originaldata unchanged.
+- `sc_native_grasp_pose_v3_correct_time/` and `sc_grasp_keypoint_probe_v3_correct_time/`: correctlytimedmodels/checkpoints/predictions/metrics.
+- `physical_camera_tcp_provenance_v2.json`: diagnostic-onlyphysicalcamera/FK comparison, postterminalposes excluded.
+- `grasp_corrected_prediction_only_proof/`: network-onlymarkers/axes onheld-outframes; no truthmarkers.
+
+Officialinsertionevents andstrictphysicalinsertion areseparate. Do notlabel shallow75-scorepilots as physicallyfull insertion. Models/failedtrials/rawdata arearchived, not git assets.
+
+
+**October 14 active artifacts:** `/home/nas/chmin/aic_archives/2026-10-14_transport_handoff_execution_v1/` contains endpoint predictions and marked images, repaired timestamp targets/provenance, rigid corridor screens, oracle executor pairs/videos, fixed-update actor fits, and preserved failed rule pilots. Read `docs/experiments/2026-10-14-transport-handoff-execution.json` before resuming or duplicating jobs. No final scenes or RL promotion.
+
+**October 13 independent transport review:** CPU-only path plots, all-episode label audit, endpoint rescoring, source scripts and hashes are in `/home/nas/chmin/aic_archives/2026-10-13_transport_independent_review/`. This corrects interpretation of the older approach-band failures; no model was promoted. [Report and next plan](docs/experiments/2026-10-13-transport-independent-root-cause-review.md).
+
+**October 13 SC pause/context and intentional-fit comparison:**
+`outputs/experiments/2026-10-13_sc_pause_models_v1/` contains the
+[pause audit](outputs/experiments/2026-10-13_sc_pause_models_v1/pause_audit.json),
+[six-scene comparison](outputs/experiments/2026-10-13_sc_pause_models_v1/live_comparison_v2.json),
+and container-visible 100 ms, dense 70 s, and intentional-fit 50 ms checkpoints. Immutable
+100 ms labels/cache, complete training histories, 18 scored development
+rollouts, two extra training-scene rollouts, five-camera videos and trace
+analyses are under `/home/nas/chmin/aic_archives/2026-10-13_sc_*` and
+`/home/nas/chmin/aic_archives/2026-10-13_route_*100ms*`. The original scored
+teachers and previously cleaned derivative remain intact. All three new actors
+reached 0/6 approach bands and insertions. [Full record and exact paths](docs/experiments/2026-10-13-sc-pauses-context-and-overfit.md).
+
+**October 13 SC 12/6 autonomous reevaluation:**
+`outputs/experiments/2026-10-13_sc_horizon12_reeval_v1/` contains the
+[nine-run machine summary](outputs/experiments/2026-10-13_sc_horizon12_reeval_v1/summary.json),
+[axial route plot](outputs/experiments/2026-10-13_sc_horizon12_reeval_v1/axial_progress.png),
+and two saved-input previous-command ablations. The six new rootless Gazebo
+rollouts, scored bags, source scenes, controller traces and five-camera videos
+are under `/home/nas/chmin/aic_archives/2026-10-13_route_horizon12_execute6_sc_{repeat,newdev}_v1/`.
+They reached 0/6 approach bands and 0/6 insertions without scored contact.
+[Experiment record](docs/experiments/2026-10-13-sc-horizon12-reevaluation.md).
+
+**October 13 transport action-horizon comparison:**
+`outputs/experiments/2026-10-13_route_horizon_comparison_v1/` contains the
+container-visible selected 8/4 and 12/6 checkpoints, the [machine summary](outputs/experiments/2026-10-13_route_horizon_comparison_v1/summary.json),
+and [training curves](outputs/experiments/2026-10-13_route_horizon_comparison_v1/training_curves.png).
+The full 200/300 ms feature/label caches, five bounded training phases,
+complete scored bags and images for each 4/4, 8/4, and 12/6 live arm, and
+the two-scene faster-sampling diagnostic are under
+`/home/nas/chmin/aic_archives/2026-10-13_route_*`.
+All three matched autonomous arms reached 0/6 safe buffers and 0/6 insertions.
+[Experiment record](docs/experiments/2026-10-13-route-action-horizon.md).
+
+**October 12 teacher-generator and released-eval route diagnosis:**
+`/home/nas/chmin/aic_archives/2026-10-12_teacher_distribution_route_live_v1/`
+has six exact held-out SFP/SC teacher-scene autonomous rollouts, frozen
+`plan.json`, scene configs, bags, traces, frames, scores, and representative
+five-camera videos. The first JPEG-86-named SFP archive is an unchanged-policy
+repeat because its launcher omitted the Docker environment variable. It is at
+`/home/nas/chmin/aic_archives/2026-10-12_teacher_distribution_sfp_codec86_v1/`;
+the separate three-scene released qualification-family check is at
+`/home/nas/chmin/aic_archives/2026-10-12_official_sfp_codec86_check_v1/`.
+The local `outputs/experiments/2026-10-12_route_consistent_diffusion_transport_v1/`
+contains `teacher_distribution_analysis.json`,
+`teacher_distribution_codec86_analysis.json`, `official_codec86_analysis.json`
+(both unchanged-policy repeats despite their historical names),
+and `teacher_distribution_decision.json`. Teachers inserted 6/6; actor 0/6.
+No checkpoint was promoted. [Experiment record](docs/experiments/2026-10-12-teacher-distribution-transport-diagnosis.md).
+
+**October 12 transport feedback and inference-cadence follow-up:**
+`outputs/experiments/2026-10-12_route_consistent_diffusion_transport_v1/`
+also holds four `input_ablation_*.json` saved-input replays, `zero_prior_ft_v1/`
+and `lagged_prior_ft_v1/` bounded fine-tunes with their matched offline and
+frozen-frame reports, `sample4_teacher_pilot_analysis.json`, and
+`feedback_cadence_decision.json`. Complete true-codec and four-step Gazebo
+bags, frames, traces, and videos are under NAS roots
+`/home/nas/chmin/aic_archives/2026-10-12_teacher_route_true_codec_prewarm_v1/`,
+`.../2026-10-12_teacher_route_true_codec_no_prewarm_v1/`, and
+`.../2026-10-12_teacher_route_sample4_v1/`. The four-step SFP pilot reached
+the buffer but contacted a card; SC missed. Neither pilot inserted.
+[Full interpretation](docs/experiments/2026-10-12-route-feedback-and-inference-cadence.md).
+
+**Actual Gazebo MoveIt replay:**
+`/home/nas/chmin/aic_archives/2026-10-08_sfp_requested_corridor_v3_with_quat/gazebo_case5_live_replan_v1/`
+contains the exact nonfinal randomized scene, live-start MoveIt route,
+official scoring bag, measured waypoint/force trace,
+`gazebo_replay_summary.json`, and the [five-camera H.264 recording](</home/nas/chmin/aic_archives/2026-10-08_sfp_requested_corridor_v3_with_quat/gazebo_case5_live_replan_v1/video/all_views_20fps.mp4>).
+The separate `gazebo_case5_retreat_v1/` attempt aborted before executing
+the saved path because the start pose differed by 23.96 mm. The successful
+replay reached the buffered goal, with no insertion attempt. [Full result](docs/experiments/2026-10-08-sfp-requested-port-corridor-audit.md#requested-gazebo-replay-actual-robot-and-cable-motion).
+
+**October 8 requested-port SFP corridor audit:**
+`/home/nas/chmin/aic_archives/2026-10-08_sfp_requested_corridor_v3_with_quat/`
+contains six task-selected MoveIt corridor plans with full TCP/joint paths,
+scored actor-state provenance, `cable_proxy.json`, teacher measured-cable
+comparison, [`cable_proxy_comparison.png`](</home/nas/chmin/aic_archives/2026-10-08_sfp_requested_corridor_v3_with_quat/cable_proxy_comparison.png>),
+and `decision.json`. All six rigid plans succeeded, but only three cleared
+the conservative full-cable screen; the safe-route gate stayed open. No
+Gazebo replay, new checkpoint or autonomous video resulted.
+[Case 2 offline planned-path video, H.264](</home/nas/chmin/aic_archives/2026-10-08_sfp_requested_corridor_v3_with_quat/case2_retreat_offline_h264.mp4>)
+shows a frozen takeover camera image beside the animated planned TCP path;
+it does not show physical cable motion.
+[Full audit](docs/experiments/2026-10-08-sfp-requested-port-corridor-audit.md).
+
+**October 8 SFP actor-state MoveIt probe:**
+`/home/nas/chmin/aic_archives/2026-10-08_sfp_actor_state_moveit_six_v5_paths/`
+contains exact commands, six saved nonfinal actor-state rigid plans or
+no-target result, measured joint/TCP contracts, `shortcut_audit.json`, and
+the inspected [`measured_vs_moveit_paths.png`](</home/nas/chmin/aic_archives/2026-10-08_sfp_actor_state_moveit_six_v5_paths/measured_vs_moveit_paths.png>).
+Two development paths shortcut the measured expert detour. Earlier v1–v4
+archives preserve the 20 mm no-target, missing late raw bag, and partial
+teacher-case diagnoses. No Gazebo replay or actor training followed.
+[Full record](docs/experiments/2026-10-08-sfp-actor-state-moveit-feasibility.md).
+
+**October 8 actor-state waypoint-label feasibility:**
+`/home/nas/chmin/aic_archives/2026-10-08_sfp_actor_recovery_label_pilot_v1/`
+preserves the three immutable train-scene requests, exact command
+environments, scored teacher-takeover bags, streams, scores, labels,
+`summary.json`, `path_diagnosis.json`, `first_net10_audit.json`, and the inspected
+[`takeover_tcp_paths.png`](</home/nas/chmin/aic_archives/2026-10-08_sfp_actor_recovery_label_pilot_v1/takeover_tcp_paths.png>).
+Two teachers fully inserted but only one yielded a valid 20 mm-path
+waypoint, so the predeclared pilot gate failed. There is no new actor
+checkpoint or autonomous video. [Interpretation and next gate](docs/experiments/2026-10-08-sfp-actor-recovery-label-feasibility.md).
+
+**October 8 SFP short waypoint feasibility:**
+`outputs/experiments/2026-10-08_sfp_short_waypoint_feasibility_v1/`
+holds the ridge probe, frozen one-second labels, exact commands/logs, offline
+servo audit and six actor-boundary direction records. `arc20_labels/`
+preserves the separate 20 mm measured-path ablation and its episode manifest.
+Two matched 2,000-update one-GPU neural comparisons (teacher-only and
+15%-boundary sampling) are archived under
+`/home/nas/chmin/aic_archives/2026-10-08_sfp_short_waypoint_neural_matched_v1/`
+and `.../2026-10-08_sfp_arc20_neural_matched_v1/`, including commands,
+checkpoints, histories and grouped metrics. The live servo gate failed
+(0/6 actor-boundary directions), so there are **no new videos or autonomous
+rollouts**. [Record and next gate](docs/experiments/2026-10-08-sfp-short-route-waypoint-feasibility.md) ·
+[machine decision](docs/experiments/2026-10-08-sfp-short-route-waypoint-feasibility.decision.json).
+
+**October 8 SFP actor initialization diagnostic:**
+`outputs/experiments/2026-10-08_sfp_pose_actor_training_diagnostic_v1/`
+contains all-nine-episode causal joins, two 500-step capacity checks,
+the full-data matched score, exact run/score commands, logs and `decision.json`.
+The two 2,000-update warm and reset-head checkpoints, manifests, histories
+and commands are under NAS archive
+`/home/nas/chmin/aic_archives/2026-10-08_sfp_pose_partial_restart_matched_v1/`.
+No live run or full-scratch model followed the failed pose-use gate.
+[Interpretation](docs/experiments/2026-10-08-sfp-pose-actor-training-method.md).
+
+**October 7 selected-port route-feedback ablation:**
+`outputs/experiments/2026-10-07_sfp_route_branch_support_v1/` now also has
+the saved-actor selected-port shadow predictions, a
+[`predicted-versus-true original-image sheet`](outputs/experiments/2026-10-07_sfp_route_branch_support_v1/offroute_port_shadow_v1/first_accepted_prediction_vs_truth.jpg),
+the 100-prediction geometry audit, action-input-use checks and
+`route_feedback_decision.json`. The frozen 19,955-row native-image route
+offset cache is
+`/var/tmp/chmin_aic_20260918_act/sfp_paired_request_20261005/selected_port_route_values_v1/`.
+Matched zero-versus-predicted-pose actor checkpoints, command lines and
+failed offline gates are in NAS archives
+`2026-10-07_sfp_port_route_feedback_matched_v1/` and
+`2026-10-07_sfp_port_route_recovery_matched_v1/`. Neither was run live or
+promoted. [Experiment and decision](docs/experiments/2026-10-07-sfp-early-branch-support.md#route-feedback-ablation-result-the-pose-is-visible-but-this-actor-ignores-it).
+
+**October 7 current SFP transport continuation:**
+`outputs/experiments/2026-10-07_sfp_route_branch_support_v1/` contains
+early-route probes, strict context audits and `late15_decision.json`.
+`/home/nas/chmin/aic_archives/history_context_live_scenes_v1/` holds the
+independent three-scene 0/3-versus-0/3 autonomous comparison, official scores,
+videos, causal traces and port-approach plot. The six safe 15-second
+train-only takeovers are in `2026-10-07_sfp_late15_train_port{0,1}_v1/`;
+`2026-10-07_sfp_late15_matched_v1/` contains matched 2,000-update
+checkpoints, command lines, logs and the failed 3.5%-gain offline gate.
+The untouched next live plan is
+`/home/nas/chmin/aic_archives/history_context_late15_remaining_live_v1/`;
+its scenes were **not run**. The immutable merged labels and 55,206-row
+feature cache are under
+`/var/tmp/chmin_aic_20260918_act/sfp_paired_request_20261005/` with names
+`sfp_late15_context_merged_v1` and `temporal_cache_late15_v1`.
+[Full record](docs/experiments/2026-10-07-sfp-early-branch-support.md).
+
+**October 7 later-state SFP actor repair:**
+`/home/nas/chmin/aic_archives/2026-10-07_sfp_later_takeover_gate_v1/`
+contains six scored privileged full-insertion continuations after actor
+prefixes. `2026-10-07_sfp_later_correction_matched_v2/` contains matched
+2,000-update checkpoints, logs and the corrected offline gate. The fresh
+autonomous three-scene comparison is at
+`2026-10-07_sfp_later_correction_live_v1/`: exact plan, official/posthoc
+scores, traces, route plot `cards5_routes_xy.png`, four five-camera videos
+under `rollouts/`, and `summary.json`. Offline action accuracy improved but
+live transport missed its 2/3 gate (corrected 1/3, control 0/3); neither actor
+was promoted. [Full record](docs/experiments/2026-10-07-sfp-later-state-causal-repair.md)
+· [machine summary](docs/experiments/2026-10-07-sfp-later-state-causal-repair.summary.json).
+
+**October 7 stall-label comparison:**
+`/home/nas/chmin/aic_archives/2026-10-07_sfp_paired_actor_comparison_v1/`
+contains `data_quality_audit_v1.json`, `stall_filter_v1.json` and
+`stall_raw_examples.png`. The separate
+`/home/nas/chmin/aic_archives/2026-10-07_sfp_stall_clean_matched_cpu_v1/`
+has two CPU checkpoints, exact commands, train logs and grouped/pair/task
+scores. The filtered actor was not promoted. [Experiment record](docs/experiments/2026-10-07-sfp-stall-data-audit-and-cleaned-fit.md).
+
+**October 7 fresh actor gate:**
+`/home/nas/chmin/aic_archives/2026-10-07_sfp_paired_actor_live_starts_mounted_v2/`
+has the fixed three-scene matched plan, successful teacher references,
+baseline and candidate policy traces, frames/videos, official scores,
+`posthoc_score.json`, `route_motion_diagnosis.json`, and `summary.json`.
+Both policies reached 0/3 safe buffered arrivals. The control/candidate
+checkpoints, matched training commands and grouped offline scores are at
+`/home/nas/chmin/aic_archives/2026-10-07_sfp_paired_actor_comparison_v1/`.
+The initial invalid checkpoint-mount launch remains archived at
+`2026-10-07_sfp_paired_actor_live_starts_v1/` and is excluded from live
+claims. [Full record](docs/experiments/2026-10-07-actor-proposer-coarse-continuation.md).
+
+**October 7 actor/proposer/coarse continuation:**
+`/home/nas/chmin/aic_archives/2026-10-07_sfp_diverse_crop_fit_v1/` holds the
+selected dense-view requested-port crop checkpoint, training history and
+60-sample board-plus-crop latency. Its independent dense stress result is in
+`2026-10-07_sfp_diverse_crop_stress18_v1/`, and its older sparse regression
+score in `2026-10-07_sfp_diverse_crop_old_sparse10_v1/`. The card occupancy
+head is `outputs/experiments/2026-10-07_sfp_diverse_occupancy_head_v1/`.
+`outputs/experiments/2026-10-07_sfp_pause_mlp_hardneg_v1/` contains the
+frozen-action pause-head checkpoint and decision-by-decision saved-actor
+shadow replay. The first scored paired route archive is
+`/home/nas/chmin/aic_archives/2026-10-07_sfp_divergent_pairs_v1/`; the second
+bounded collection is `2026-10-07_sfp_divergent_pairs_round2_v1/`. Both are
+complete; 34 training and nine held-out matched first-action pairs passed
+admission. None is
+an automatically deployed actor/handoff. [Experiment record](docs/experiments/2026-10-07-actor-proposer-coarse-continuation.md).
+
+**October 7 SFP diverse transport and proposal head:**
+`outputs/experiments/2026-10-06_sfp_diverse_transport/` contains the matched
+old-data and diverse-data 3,000-update actor checkpoints, grouped split
+scores, same-image requested-code swaps, old/new frozen-action pause-head
+checkpoints, saved autonomous-route replay and `decision_summary.json`.
+`/var/tmp/chmin_aic_20260918_act/sfp_paired_request_20261005/` contains the
+two immutable causal admission stages, final merged labels, frozen 50,679-row
+three-view feature cache and broad pause-label cache. Raw teacher videos,
+scored bags, five partial runs, one genuine retry failure and the preserved
+Gazebo crash/rerun are under NAS archives
+`2026-10-06_sfp_diverse_teacher_v1/` and `2026-10-07_sfp_diverse_retry_v1/`.
+Neither actor nor pause head passed its autonomous promotion gate. [Full
+record](docs/experiments/2026-10-06-sfp-diverse-transport-and-proposal.md).
+
+**October 7 SFP visible board-origin audit:** `outputs/experiments/2026-10-07_sfp_outline_corner_review_v1/` contains collision-envelope corner image panels, native zooms, single-reviewer labels and failed contour proposals; `2026-10-07_sfp_visual_screw_projection_v1/` contains projections of actual board-mesh screws and comparison sheets; `2026-10-07_sfp_visual_screw_early_review_v1/` has 40 early channel panels and visibility assessments; `2026-10-07_sfp_one_screw_board_prior_v1/` has exact per-group oracle-screw/true-yaw/train-mean controls. These are read-only diagnostics, not runtime geometry or a trained detector. [Decision and commands](docs/experiments/2026-10-07-sfp-visible-board-origin-audit.md).
+
+**October 7 SFP rail data-size audit:** `outputs/experiments/2026-10-07_sfp_rail_data_scale_v1/` contains nested complete-group manifests (`train_groups_{20,40,70}.json`), matched `fit20/` and `fit40/` checkpoints/predictions/histories, unchanged `temporal20/` and `temporal40/` replays, a [learning-curve plot](outputs/experiments/2026-10-07_sfp_rail_data_scale_v1/learning_curve.png), and `visibility_review/` with 30 original-image panels, rubric and explicit single-reviewer labels. The 70-group checkpoint/replay remain in the adjacent earlier refiner folders. Large generated crop arrays were removed after training to recover space; the exact script/manifests regenerate them from archived original images. None is deployable. [Decision and commands](docs/experiments/2026-10-07-sfp-rail-data-scale-and-visibility.md).
+
+**October 7 SFP board-reference diagnostic:** `outputs/experiments/2026-10-07_sfp_temporal_board_reference_v1/` has frozen-RGB causal board fits; adjacent `_oracle0_v1/` and `_oracle3_v1/` are privileged pixel-projection controls; `2026-10-07_sfp_rail_train_bias_v1/` and `_temporal_board_reference_bias_v1/` preserve failed train-only static-bias results. `2026-10-07_sfp_rail_original_crop_refiner_v1/` contains 16,145 train crops, 570 development proposal crops, model checkpoint/history, corrected predictions, and [diagnostic crop sheet](outputs/experiments/2026-10-07_sfp_rail_original_crop_refiner_v1/development_diagnostic_crops.jpg); `2026-10-07_sfp_temporal_board_reference_refined_v1/` has the failed 3/10 early accurate replay. These are diagnostic artifacts, not deployable target/stop estimators. [Full record](docs/experiments/2026-10-07-sfp-temporal-board-reference.md).
+
+**October 7 structural SFP cue diagnostics:** `outputs/experiments/2026-10-07_sfp_candidate_set_ceiling_v1/` has the frozen all-port candidate-set upper bound; `2026-10-07_sfp_slot_feature_port_cue_v{1,2}/` preserve no-update loader failures and `v3/` the complete pixel-head checkpoint/history/predictions; `2026-10-07_sfp_slot_feature_port_3d_v1/` has the complete shared-3D head and calibration failures; `2026-10-07_sfp_oracle_transport_cue_v{1,2}/` preserve the unscaled and normalized matched privileged offline controls. None is a deployed model. [Experiment, commands and decision](docs/experiments/2026-10-07-sfp-slot-feature-port-cue.md).
+
+**October 7 SFP review and crop audit:** `/home/nas/chmin/aic_archives/2026-10-07_sfp_blind_review_followup_v1/` contains 30 disjoint unmarked RGB/history panels, five contact sheets, task and public TCP state by alias, a review form, and a sealed mapping for later scoring. No independent annotation exists yet. `/home/nas/chmin/aic_archives/2026-10-07_sfp_crop_feasibility_v1/` contains matched 320/480 px grouped-development JSON scores; 320 px missed its predeclared clean-crop gate (6/10 versus 9/10). These are diagnostic artifacts, not a trained model. [Protocol, commands and decision](docs/experiments/2026-10-07-sfp-observation-complete-review-and-tight-crop.md).
+
+**October 6 SFP tilt-view diagnostic:** `/home/nas/chmin/aic_archives/2026-10-06_sfp_board_tilt_view_v1/` preserves offline projection feasibility, the two aborted command-bug runs (`card1_port0/`, `_v2/`), and the corrected +10° pilot (`_v3/`) with original-RGB comparison, blind view annotation, oracle/force events, scored bag and machine summary. The corrected view failed measured-position and identity gates; none of these files is a deployable policy or expert training episode. The separate 40-panel review packet is at `/home/nas/chmin/aic_archives/2026-10-06_sfp_requested_card_blind_review_v1/independent_review_packet.md`. [Record](docs/experiments/2026-10-06-sfp-board-tilt-view.md).
+
+**October 6 visual identity gate:** `/home/nas/chmin/aic_archives/2026-10-06_sfp_requested_card_blind_review_v1/` has 40 unmarked original-RGB panels, manifests and 11 saved partial blind annotations; `sealed_mapping.json` is for post-review audit, not an inference input. `/home/nas/chmin/aic_archives/2026-10-06_sfp_opposite_wide_view_v1/card1_port0/` has the guarded opposite-side pilot, synchronized original camera images, unmarked baseline/view panel, blind annotation, contact/force events, score and machine summary. The view failed its identity gate and is diagnostic only. [Record](docs/experiments/2026-10-06-sfp-requested-card-identifiability.md).
+
+**October 6 requested-card repair artifacts:** `/home/nas/chmin/aic_archives/2026-10-06_sfp_local_card_pair_fit_v1/` preserves the stopped JSON-serialization smoke; `fit_v2/` holds the complete 2,000-update three-point checkpoint, development predictions and summary. `/home/nas/chmin/aic_archives/2026-10-06_sfp_rail_to_port_prior_v1/` holds the 2,000-update rail/TCP offset prior and held-out view predictions. Both failed their gates; neither is deployed. [Record](docs/experiments/2026-10-06-sfp-local-card-pair-repair.md).
+
+**October 6 joint-camera SFP follow-up:** `/home/nas/chmin/aic_archives/2026-10-06_sfp_joint_candidate_fresh10_v1/` holds ten frozen nonfinal reset configs and complete teacher camera/scoring captures. Companion `2026-10-06_sfp_joint_candidate_fresh10_*` directories hold 528 image/state triplets, 527 retained board rows, frozen RGB rail predictions, native crop proposals, joint and persistent scores, and a matched single-point score. `2026-10-06_sfp_joint_candidate_fresh10_failure_overlays_v1/` contains original-RGB wrong-card panels. Joint fusion failed its zero-wrong gate and is not deployed. [Record](docs/experiments/2026-10-06-sfp-joint-camera-candidates.md).
+
+**October 6 SFP requested-card crop experiment:** Frozen RGB rail predictions and exact train/development proposal manifests are under `/home/nas/chmin/aic_archives/2026-10-06_sfp_slot_local_train_predictions_v1/` and `2026-10-06_sfp_slot_crop_training_materialized_v1/`. The selected 2,000-update crop checkpoint/history is `2026-10-06_sfp_slot_crop_fit_v1/`; additional ten-scene matched old/new scores are `2026-10-06_sfp_slot_crop_independent_old_checkpoint_v1/` and `2026-10-06_sfp_slot_crop_independent_new_checkpoint_v1/`. Original-image failure overlays are `2026-10-06_sfp_slot_crop_failure_views_v1/`. The model did not clear early-coverage handoff; these are diagnostics, not a deployed policy. [Record](docs/experiments/2026-10-06-sfp-slot-conditioned-crop-feasibility.md).
+
+**October 5 SFP board-reference models:** `/home/nas/chmin/aic_archives/2026-10-05_sfp_board_reference_feasibility_v3/` holds the 70-train/10-development/3-actor native three-camera label manifest. `_sfp_board_reference_probe_v1/` is the failed pooled occupancy head (5/10 exact development maps); `_sfp_slot_local_probe_v1/` contains the improved checkpoint, predictions, annotated overlays and matched latency (10/10 development, 3/3 sparse actor maps). `_sfp_board_reference_independent10_labels_v1/` and the adjacent `_pooled_v1/` and `_slot_local_v1/` archives preserve the disjoint ten-scene comparison (5/10 versus 10/10). `_sfp_rail_candidate_3d_readonly_v1/` and `_diagnosis_v2/` preserve the failed requested-port consistency check. These are **perception diagnostics**, not a deployable handoff or expert action dataset. [Experiment and commands](docs/experiments/2026-10-05-sfp-slot-local-occupancy-ablation.md).
+
+**October 5 spatial transport prerequisite:** `outputs/experiments/2026-10-05_spatial_transport_prerequisite_v1/actor_labels/` contains 110 original-RGB triplet labels from three saved sparse-card autonomous actor routes, with simulator geometry reserved for scoring. `frozen_rgb_identity_v2/` contains frozen selected-port and structured-slot predictions plus the machine summary. Both identified the requested port early on 3/3 routes, but the harder ten-request identity gate remains failed and no actor training followed. See [experiment record](docs/experiments/2026-10-05-spatial-transport-prerequisite.md).
+
+**October 5 transport route/handoff continuation:** `outputs/experiments/2026-10-05_transport_identity_audit/` holds the matched action-only and route-conditioned actors (`route_handoff_*_v1/`), corrected expanded-data actor (`paired_coverage_actor_v2/`), two frozen stop heads (`sfp_frozen_handoff_v1/`, `_v2/`), and bounded failed task-selected head fits (`task_gated_full_coverage_v1/`, `task_gated_paired_early_v1/`). The canonical 326-train/10-validation SFP labels, unchanged 41,782-row image feature cache, and fitted region veto are under `/var/tmp/chmin_aic_20260918_act/sfp_paired_request_20261005/{paired_coverage_merged_v2,temporal_cache_v4,route_handoff_cache_v3}/`. NAS archives `/home/nas/chmin/aic_archives/2026-10-05_sfp_paired_coverage_v2/` and `_sfp_sparse_alternates_v1/` contain the new teacher plans/bags; `_sfp_sparse_paired_development_v1/` has four independent successful teachers; `_sfp_paired_development_actor_v1/` has six matched autonomous traces, videos and posthoc scores. The actor missed all three safe buffered arrival gates; no model here is deployed. [Experiment and machine summary](docs/experiments/2026-10-05-transport-route-handoff-continuation.md).
+
+**October 5 transport and identity audit:** `outputs/experiments/2026-10-05_transport_identity_audit/` holds three saved SFP actor/teacher RGB comparison sheets, a 111-row causal autonomous camera/state audit, frozen native crop results, corrected same-observation task-code swaps (`ordinary_task_sensitivity_v3.json`), a failed bounded task-gated head (`task_gated_transport_v1/`), and the verified six-scene train-only alternate-request plan (`paired_request_plan_v2/`). After correcting a quota-field parser bug, `paired_request_pilot_v1/` holds six scored alternate-request Gazebo runs, host-extracted streams, progress and measured buffered-arrival metrics: five fully inserted. `paired_success_train_v2/`, `paired_original_train_v1/` and `paired_merged_train_v3/` hold the paired full-action transport labels; `/var/tmp/chmin_aic_20260918_act/sfp_paired_request_20261005/temporal_cache_v2/` has their corrected feature cache. `task_gated_paired_v1/` holds the matched fit that failed its offline gate. The four final IK configurations were not opened. [Experiment record](docs/experiments/2026-10-05-transport-identity-task-code-audit.md) · [machine summary](docs/experiments/2026-10-05-transport-identity-task-code-audit.summary.json).
+
+
+**October 4 SFP side-view diagnostic:** `/home/nas/chmin/aic_archives/2026-10-04_sfp_side_view_v1/` preserves four final safety-guarded Gazebo teacher sweeps plus aborted safety pilots, original camera frames, scored streams, oracle contacts, 12 event-joined triplets, raw nine-panel grids, separate posthoc target-marker grids, frozen-model predictions and matched stage summary. Side views did not rescue the remaining hard requested-port case. [Methods, image names and decision](docs/experiments/2026-10-04-sfp-side-view-diagnostic.md), [machine summary](docs/experiments/2026-10-04-sfp-side-view-diagnostic.summary.json).
+
+**October 4 SFP slot/pair repair:** `/home/nas/chmin/aic_archives/2026-10-04_sfp_slot_identity_v1/` holds the frozen fresh-scene wrong-port list, grouped original-RGB label manifest, two preserved stopped starts, bounded `fit_v3` checkpoint and predictions, detailed pixel/flag diagnosis, and the read-only sparse-history decisions. The fit failed before independent new-scene evaluation. [Experiment, commands and decisions](docs/experiments/2026-10-04-sfp-slot-pair-identity.md), [machine summary](docs/experiments/2026-10-04-sfp-slot-pair-identity.summary.json).
+
+**October 4 fresh SFP shadow check:** `/home/nas/chmin/aic_archives/2026-10-04_sfp_fresh_anchor_shadow_v1/` holds the fixed ten-reset plan, ten scored Gazebo teacher bags and original camera images, host-extracted streams, 581-sample labels, all four frozen model predictions, candidate and crop proposals, failed OR-union audit, bounded structural diagnostic, offline latency and launch logs. The quota rose to 1024 and collection finished; requested-port identity accuracy now blocks handoff. [Experiment and exact commands](docs/experiments/2026-10-04-sfp-fresh-anchor-shadow.md), [machine summary](docs/experiments/2026-10-04-sfp-fresh-anchor-shadow.summary.json).
+
+**October 4 rootless container cleanup:** `outputs/experiments/2026-10-04_rootless_key_quota_cleanup/` holds the exact IDs, writable-layer sizes and mounts for 25 stopped September AIC containers removed after audit. [Tracked summary](docs/experiments/2026-10-04-rootless-container-cleanup.summary.json). The active Isaac container and older uncertain containers were preserved. Key usage stayed 199/200 immediately after removal; the limit was later raised to 1024 and the ten-scene SFP check completed sequentially.
+
+
+**October 4 SFP rail crop:** `/home/nas/chmin/aic_archives/2026-10-04_sfp_observed_rail_crop_v1/` and `_train_v1/` hold strict 5 px observation-selected proposal audits; `_source12_v1/` and `_train_source12_v1/` hold the fixed 12 px ablation and target-containment audits. `/home/nas/chmin/aic_archives/2026-10-04_sfp_observed_rail_crop_fit_v2/` holds the 1,200-update GPU-2 crop fit, selected update-800 checkpoint and prediction history; `fit_v1` preserves the failed pretraining image-boundary attempt. `_source12_v1/frozen_four_model_union.json` is a read-only matched ten-episode summary (9/10 early, 10/10 any, zero accepted wrong), not independent or live validation. [Record](docs/experiments/2026-10-04-sfp-observed-rail-crop.md).
+
+**October 4 SFP middle-card identity repair:** `/home/nas/chmin/aic_archives/2026-10-04_sfp_middle_card_visibility_v2/` has six three-camera first/middle/last original-RGB review sheets and a provisional review JSON; the incomplete first render remains in `_v1/`. `/home/nas/chmin/aic_archives/2026-10-04_sfp_structured_slot_v1/` has the 2,000-update all-slot checkpoint, every 200-update development prediction, selected `summary.json`, and exact wrong-neighbor audit. The selected model improved accepted observations but reached only 7/10 early episode anchors; no actor continuation exists. [Experiment](docs/experiments/2026-10-04-sfp-middle-card-identity-repair.md).
+
+**October 3 SFP selected-port anchor:** `/var/tmp/chmin_aic_20260918_act/sfp_balanced_arrival_20261003/anchor_labels_v1/` holds the 50/10 reset-grouped original-wide-RGB projection manifest. `/home/nas/chmin/aic_archives/2026-10-03_sfp_balanced_arrival_v1/balanced_bc/selected_anchor_native576_v1/` holds the 2,000-update task-conditioned checkpoint, history, every development prediction, frozen multiport comparison, and `coverage_audit.json`. Its accepted 3D position p95 was 2.65 mm, but it acquired an anchor in only 4/10 episodes, missing all middle-card requests; no actor continuation exists. [Experiment record](docs/experiments/2026-10-03-sfp-selected-anchor.md).
+
+**October 3 SFP route-stage/waypoint probe:** `/var/tmp/chmin_aic_20260918_act/sfp_balanced_arrival_20261003/route_stage_probe_cache_v2/` has the frozen 50-train/10-development stage and measured next-waypoint labels on original cached RGB features. `/home/nas/chmin/aic_archives/2026-10-03_sfp_balanced_arrival_v1/balanced_bc/route_stage_waypoint_probe_v1/` has the 2,000-update checkpoint, constant/state-only baselines, 638 held-out predictions, metric history and [error plot](/home/nas/chmin/aic_archives/2026-10-03_sfp_balanced_arrival_v1/balanced_bc/route_stage_waypoint_probe_v1/error_by_time_and_target_v2.png). The waypoint gate failed at 48.2 mm p95; no actor continuation exists for this probe. [Full record](docs/experiments/2026-10-03-sfp-route-stage-waypoint-probe.md).
+
+**October 3 bounded corrective SFP continuation:** `/home/nas/chmin/aic_archives/2026-10-03_sfp_balanced_arrival_v1/balanced_bc/` contains `corrective_teacher_gate_3dev_v1/` (privileged feasibility), `corrective_teacher_train20_v1/` (frozen cap, first ten audited successes, one unadmitted second-tranche success, nine Docker quota no-launches), `corrective_10ep_fullaction_v1/` (single supervised continuation), and `corrective_10ep_autonomous_3dev_v1/` (three unchanged development rollouts, scores and bounded route/direction diagnosis). `/var/tmp/chmin_aic_20260918_act/sfp_balanced_arrival_20261003/` contains `corrective_train10_materialized_v2/`, `corrective_train10_merged_v2/`, and `corrective_train10_cache_host_v2/`. The actor reached **0/3** buffered arrivals; no model was promoted. [Full experiment](docs/experiments/2026-10-03-sfp-balanced-arrival-onpolicy-check.md#october-3-bounded-corrective-full-action-continuation-failed-live-gate).
+
+**October 3 SFP cross-target pilot, balanced BC and failed autonomous gate:** `/home/nas/chmin/aic_archives/2026-10-03_sfp_balanced_arrival_v1/` holds ten matched CheatCode feasibility controls, three earlier frozen cross-target routes and videos, **50** successful balanced training bags, **ten** successful disjoint development bags, the two matched shared-BC checkpoints, an extended-training control, all nine new development rollout audits under `balanced_bc/development_3x3_v1/`, and two explicitly privileged five-second teacher-prefix diagnostics. `/var/tmp/chmin_aic_20260918_act/sfp_balanced_arrival_20261003/` holds verified merged TCP-body labels, the frozen 39,161-sample visual cache, nine-run posthoc scores, prefix scores and a measured-TCP route-divergence plot. The three tested autonomous actor variants each reached **0/3** safe requested-port buffered visits; no weights were promoted. [Detailed record](docs/experiments/2026-10-03-sfp-balanced-arrival-onpolicy-check.md). The previous agent replay action arrays were not used for BC.
+
+**October 3 SFP balanced-arrival diagnostics:** `/var/tmp/chmin_aic_20260918_act/sfp_balanced_arrival_20261003/` holds the 180-episode frozen RGB feature cache, episode-grouped arrival-head checkpoints and metrics, and exact autonomous trace replay. Small corrected provenance JSON is at `outputs/experiments/2026-10-03_sparse_history/sfp_arrival_probe_v1/older_agent_provenance_audit_v2.json`. [Experiment record](docs/experiments/2026-10-03-sfp-balanced-arrival-onpolicy-check.md).
+
+## October 3 sparse-history and SFP arrival diagnostics
+
+`outputs/experiments/2026-10-03_sparse_history/` contains frozen SC sparse-history replays, posthoc pose scores, and `sfp_arrival_probe_v1/` (three checkpoint ablations, episode-level event metrics, source hashes, and task-coverage audit). The SFP probe is diagnostic only; see [experiment record](docs/experiments/2026-10-03-sfp-arrival-probe-and-coverage.md).
+
+**October 3 sparse SC history diagnostic:** [Tracked summary](docs/experiments/2026-10-03-sc-sparse-history-handoff.summary.json) and [experiment record](docs/experiments/2026-10-03-sc-sparse-history-handoff.md) map the frozen-image identity audits, 10/20/30 mm keyframe comparisons, 3D pose scores, two-port correspondence checks, and an extra one-port p1 challenge in `outputs/experiments/2026-10-03_sparse_history/`. [NAS live archive](/home/nas/chmin/aic_archives/2026-10-03_sparse_history_v1/) holds the matched baseline, an uninspectable route, the successful shadow-history inspection repeat, ROS bags, RGB, exact launch snapshots and logs. The history check remains opt-in and never commanded insertion.
+
+**October 3 SC orientation/identity audit:** [NAS archive](/home/nas/chmin/aic_archives/2026-10-03_sc_orientation_repair_v1/) contains a newly frozen five-card reset, four live shadow runs, scored streams, command/measured/board orientation traces, RGB inspection panels, same-image quaternion/position swaps, an orientation-masked identity checkpoint and its failed absent-port comparison. All changes remain opt-in; no insertion actor ran. [Experiment record](docs/experiments/2026-10-03-sc-orientation-identity-repair.md), [machine summary](docs/experiments/2026-10-03-sc-orientation-identity-repair.summary.json).
+
+**October 3 SC crop-identity diagnostic:** [NAS archive](/home/nas/chmin/aic_archives/2026-10-03_sc_crop_identity_v1/) has the four newly frozen reset configs, scored Gazebo RGB/stream captures, projection-only labels, 160-pixel crop classifier checkpoint, 144-triplet independent comparison, saved control/hidden replays, and sampled review panels. The classifier failed selected-port recall and absent-port rejection and is **not deployed**. [Experiment record](docs/experiments/2026-10-03-sc-original-rgb-crop-identity.md), [machine summary](docs/experiments/2026-10-03-sc-original-rgb-crop-identity.summary.json).
+
+**October 3 live SC shadow handoff:** `/home/nas/chmin/aic_archives/2026-10-03_sc_shadow_handoff_v1/` holds the two same-scene integration pilots, four new scene-grouped development trials, matched direct-RGB latency replays, two bounded SFP arrival diagnostics, exact reset/launch manifests, camera frames, runtime traces, scored bags, predicted-opening overlays, 20 fps SC videos, and separate post-run TF scores. The [machine summary](docs/experiments/2026-10-03-live-sc-shadow-handoff.summary.json) indexes both four-run SC comparisons and the SFP false-stop test; the [experiment record](docs/experiments/2026-10-03-live-sc-shadow-handoff.md) gives commands and limits. All four SC starts reached a shadow **transport** handoff in both versions; no insertion occurred. Original JPEG first checks exceeded 300 ms; the matched faster verifier measured 176 ms p95 across six inspections. The SC-trained handoff head falsely paused the SFP diagnostic 162 mm from the target and remains disabled for SFP.
+
+**October 3 geometric handoff repair:** The [tracked machine summary](docs/experiments/2026-10-03-geometric-handoff-repair.summary.json) maps hashes and results. `/home/nas/chmin/aic_archives/2026-10-03_geometric_handoff_repair_v1/` holds per-frame SC board-rail/new-reset metrics, six-stop replay, offline pipeline timing, and every SFP constructed candidate decision with cross-view geometry. No checkpoint was trained; source checkpoint paths and exact reproduction commands are in the [experiment record](docs/experiments/2026-10-03-geometric-handoff-repair.md). Automatic handoff remains disabled.
+
+**October 3 native-crop handoff gate:** The [machine summary](outputs/experiments/2026-10-03_native_crop_handoff_gate/summary.json) records the failed Step 1–2 gate and hashes of selected checkpoints. The NAS archive `/home/nas/chmin/aic_archives/2026-10-03_native_crop_handoff_gate_v1/` holds the SC 160-pixel pooled and spatial crop fits, oracle-centering diagnostic, SFP 320-pixel pair-crop fit, matched frozen V5 scores, per-example predictions, reviewed montages, and `commands.sh`. Failed implementation attempts are retained. These checkpoints are **diagnostic only**; no new policy or full-rollout artifacts were produced. [Experiment record](docs/experiments/2026-10-03-native-crop-handoff-gate.md).
+
+**October 3 frozen handoff gate:** Local machine decisions are `outputs/experiments/2026-10-02_two_family_perception/selected_port_frozen_gate_20261003.json` and `selected_port_orientation_repair_decision_20261003.json`; the privileged pair-axis ceiling is `sc_oracle_pair_orientation_ceiling_20261003.json`. Frozen SC stop identity and prior orientation replays are under `/home/nas/chmin/aic_archives/2026-10-02_selected_port_handoff/sc_spatial_identity_probe_v2/`. SFP point-error images, corrected SC label streams, both one-port orientation checkpoints, synchronized new-reset evaluations and six-stop replays are under `/home/nas/chmin/aic_archives/2026-10-03_sfp_offscreen_request_v1/`. [Detailed artifact map and decision](docs/experiments/2026-10-03-frozen-handoff-gate-and-orientation-repair.md).
+
+**October 3 selected-port continuation:** Fixed SFP scene configs, six rootless Gazebo captures, native projection labels, five candidate-correspondence checkpoints, replay metrics, and new development cascade results are under `/home/nas/chmin/aic_archives/2026-10-03_sfp_offscreen_request_v1/`. The small local [machine decision](outputs/experiments/2026-10-02_two_family_perception/selected_port_correspondence_decision_20261003.json) indexes results; [experiment record](docs/experiments/2026-10-03-selected-port-correspondence-continuation.md) explains what passed and what remains gated. Frozen SC wrong-route identity replays are under `/home/nas/chmin/aic_archives/2026-10-02_selected_port_handoff/sc_spatial_identity_probe_v2/`.
+
+**October 3 spatial SC identity continuation:** NAS root
+`/home/nas/chmin/aic_archives/2026-10-02_selected_port_handoff/` now also has
+`sc_spatial_identity_v1/` (12 distinct one-port reset configs, scored Gazebo
+streams, three-camera native RGB and projection-only labels) and
+`sc_spatial_identity_probe_v2/` (matched pooled/spatial checkpoints,
+scene-grouped metrics, all-frame predictions, exact error images,
+`three_camera_summary_v1.json`, and component latency). The earlier v1 probe
+directory preserves an evaluation-indexing failure before metrics were made.
+The spatial head's fixed all-three-camera rule rejected 109/109 absent-port
+requests and retained 96/100 real requests projected into every view on four
+new development resets. This is not a deployable visibility/handoff result.
+[Details and commands](docs/experiments/2026-10-02-sc-absent-port-identity.md#spatial-selected-port-continuation-on-new-reset-groups).
+
+**October 2 selected-port identity gate:** The NAS root
+`/home/nas/chmin/aic_archives/2026-10-02_selected_port_handoff/` contains
+`sc_absent_request_identity_gate_v1.json` (machine comparison),
+`sc_absent_request_false_accept_gallery_v1.jpg` (visually checked wrong-port
+overlay), `sc_one_port_identity_v1/` (four targeted one-port Gazebo resets,
+exact scene configs, scored streams and RGB), `sc_presence_head_ablation_v2/`
+(failed last-layer repair), and `sc_selected_availability_probe_v2/` (failed
+image-only and image-plus-measured-TCP probes). These are diagnostic artifacts,
+not deployable checkpoints. The verifier accepted all 16 counterfactual
+absent-port requests; final scenes remain sealed. [Full artifact map and
+commands](docs/experiments/2026-10-02-sc-absent-port-identity.md).
+
+**October 2 transport-stop comparison:**
+`outputs/experiments/2026-10-02_two_family_perception/` contains
+`sc_stop_frozen_development_seven_v1.json` (seven complete same-path SC
+stop traces), its PNG plot, `sfp_stop_identity_feasibility_100frames_v1.json`
+(two SFP selected-port lock replays), and `sc_sfp_stop_decision_v1.json`
+(compact result and hashes). The serial same-controller SC live pair, scene
+snapshots, hashes, scores, traces, frames and five-view videos are on NAS at
+`/home/nas/chmin/aic_archives/2026-10-02_transport_stop_comparison/`.
+The visual stop remains development-only. [Full record](docs/experiments/2026-10-02-transport-stop-comparison.md).
+
+**October 2 stage-preserving SFP correction comparison:** NAS root
+`/home/nas/chmin/aic_archives/2026-10-02_two_family_perception/` contains
+`sfp_onpolicy_takeover20_fivecard_v1/` (12 complete scored attempts, ten
+teacher-assisted full insertions, five-camera videos),
+`sfp_dagger_teacher_chunks_v1.jsonl` (1,409 recorded post-takeover chunks),
+`sfp_dagger_pair_bc_v1/` (1,392 admitted RGB-frame BC rows), and matched
+`sfp_actor_dagger_control_v1/` / `sfp_actor_dagger_corrected_v1/` checkpoints
+and logs. The local experiment root contains `sfp_dagger_selection_v1/`,
+`sfp_v8_dagger_matched_first80_replay.json`, and
+`sfp_dagger_matched_decision.json`. The corrected actor failed the declared
+offline promotion gate; no autonomous result came from these checkpoints.
+[Details](docs/experiments/2026-10-02-two-family-perception-local-bc.md#bounded-on-policy-correction-comparison-declared-before-training).
+
+**October 2 actor-frame diagnostic:** The paired RGB frame relabel and two
+matched native-SFP BC runs are on NAS under
+`/home/nas/chmin/aic_archives/2026-10-02_two_family_perception/` as
+`sfp_native_pair_relabel_matched_v2/`, `sfp_actor_oldframe_matched_v1/`, and
+`sfp_actor_pair_matched_v1/`. The earlier `sfp_native_pair_relabel_matched_v1/`
+is invalid and was never used for training. The frozen pre-opening live
+audits are `sfp_actor39_preloaded_axialhold_pair85_lat2_v7/` and
+`sfp_actor39_pair85_lat2_lock1_v8/`, each with a five-camera 10 fps video.
+Local machine summaries and RGB-only action replay are in
+`outputs/experiments/2026-10-02_two_family_perception/`. See the
+[experiment record](docs/experiments/2026-10-02-two-family-perception-local-bc.md#october-2-immediate-lock-failure-and-matched-actor-frame-repair).
+
+**October 2 SFP selected-target and insertion continuation:** Under
+`outputs/experiments/2026-10-02_two_family_perception/`, the
+`sfp_native_confusion_scenes_v2/` manifest records ten collected training
+starts and unused planned development starts. New raw expert RGB/scored runs
+live on `/home/nas/chmin/aic_archives/2026-10-02_two_family_perception/sfp_native_confusion_v2/`.
+`sfp_native_confusion_labels_first10/` has 5,045 RGB projection rows;
+`joint_locator_confusion_first10_v1/` and
+`joint_locator_confusion_first10_low_lr_v2/` are rejected held-out target
+identification continuations. `sfp_native_teacher_local_first10_bodyconverted.jsonl`
+contains 1,914 causal recorded target chunks, and
+`sfp_native_cascade_bc_first10_bodyconverted/` contains 1,478 accepted actor
+rows. `sfp_native_cascade_bc_39_bodyconverted/` joins old and new grouped
+actor data. `live_sfp_v4_oracle_contact_diagnostic/` preserves the scored
+failure, five-camera video, and contact-pair trace. See the
+[experiment record](docs/experiments/2026-10-02-two-family-perception-local-bc.md#october-2-follow-up-new-sfp-starts-body-frame-targets-and-live-contacts).
+
+**October 2 native SFP and SC insertion artifacts:** `outputs/experiments/2026-10-02_two_family_perception/sfp_native_scene_selection_v1/` holds 29 scored full-success SFP expert replays and five-camera videos, including alternate targets. `sfp_native_projection_29_hostpaths/` holds grouped selected/alternate target labels; `sfp_native_cascade_bc_29_v4_ensemble/` holds 1,047 causal native insertion rows with recorded teacher targets and label-only pose-outlier filtering. `sfp_native_orientation_v2_highnative/` and `sfp_native_orientation_v3_runtime_matched/` preserve the orientation comparison; `sfp_native_cascade_benchmark_v3_allframes.json` preserves 722-frame RGB-only position, orientation, and lock metrics. `local_live_sc_llb0001_dagger_v2_guard2_v1/` contains the scored SC 0-insertion failure, posthoc plug-tip metrics, and five-camera video. Earlier `sfp_native_rgbd/` is a symlink to a checksum-matched NAS backup under `/home/nas/chmin/aic_archives/2026-10-02_two_family_perception/`, following the unusable depth-label pilot. [Interpretation and commands](docs/experiments/2026-10-02-two-family-perception-local-bc.md#october-2-continuation-complete-sfp-cascade-and-insertion-diagnosis).
+
+**October 2 live local actor diagnostics:** `outputs/experiments/2026-10-02_two_family_perception/local_live_sc_llb0001_warm_v6_threads/` holds the scored failure, actual plug-tip stream, per-command/perception trace, measured latency, and [five-camera video](outputs/experiments/2026-10-02_two_family_perception/local_live_sc_llb0001_warm_v6_threads/five_cameras_10fps.mp4). The matched `local_live_sc_llb0001_warm_v7_static_lock/` retains the RGB-only static-pose ablation. `local_actor_warm_continue_v2/` is the bounded supervised continuation. `sfp_native_rgbd/scene_23_serial_world_follower/` preserves a successful SFP CheatCode capture with unusable blank auxiliary depth/RGB supervision; `scene_23_mask1/` repeats that label-only capture with corrected scene visibility mask. [Interpretation](docs/experiments/2026-10-02-two-family-perception-local-bc.md#live-sc-near-port-diagnosis-and-targeted-continuation).
+
+**October 2 perception and local BC:** `outputs/experiments/2026-10-02_two_family_perception/` contains grouped three-camera projection labels; joint selected-port locator checkpoint and cached predictions; native SC crop refiner checkpoints and pixel/3D metrics; visual orientation checkpoint; SC RGBD visibility audit and four-scene pilot; selected-port pose cache; predicted-frame local BC rows and scratch/warm-start actor checkpoints. `local_live_sc_*` records preserve near-port integration diagnostics, including the failed concurrent-Gazebo attempt. The adjacent [experiment record](docs/experiments/2026-10-02-two-family-perception-local-bc.md) links three transport-only review videos and explains which metrics are offline, which labels are only projected in-frame, and why insertion is still open.
+
+**October 2 route/stop artifacts:** In `outputs/experiments/2026-10-01_transport_reliability/`, `live_sc_visual_standoff_llb_0009_v11_recent_stop/` contains the repaired-stop five-card rollout; `visual_transport_cap_comparison.json` and `visual_transport_cap_fourcard_comparison.json` contain the rejected 30 mm cap comparisons with full scored runs alongside them. `sc_base_waypoint_probe{,_w512}/` holds the failed offline waypoint checkpoints, commands, histories and grouped metrics. [Interpretation](docs/experiments/2026-10-01-transport-reliability-continuation.md).
+
+**October 1 transport reliability continuation:** `outputs/experiments/2026-10-01_transport_reliability/` contains grouped history/route-correction checkpoints and manifests, actor-view camera/pose audit labels, the explicit dual-port locator, training-only visual-standoff calibration, and all frozen autonomous development failures and passes. `visual_transport_development_comparison.json` maps every live run to terminal position/orientation, route p95, complete latency, dropped commands, raw force, and scored outcome. `live_sc_visual_standoff_llb_0122_v3_trigger80/five_cameras_10fps.mp4` shows the three-card handoff; `live_sc_visual_standoff_llb_0009_v7_fastresize/five_cameras_10fps.mp4` and `llb_0009_route_variability.png` show the wrong low five-card route; `live_sc_visual_standoff_llb_0009_v9_zfloor_repeat2/five_cameras_10fps.mp4` shows a guard-exercised transport pass. The runs are transport-only, not insertion successes; no reserved final scene was opened. [Experiment record](docs/experiments/2026-10-01-transport-reliability-continuation.md).
+
+**October 1 five-way transport follow-up:** `outputs/experiments/2026-10-01_transport_five_way/imagenet_features/` contains 55,142 frozen three-view ImageNet feature rows, causal timestamps, route labels, split metadata, and camera-age metadata. `no_history/`, `long_history/`, `route/`, `diffusion/`, `sfp_only*/`, and `sc_only*/` preserve trained checkpoints, manifests, update histories, and validation summaries; `diffusion_failed_shape/` preserves a repaired first validation attempt. `matched_heldout.json`, `diffusion_sampling.json`, and `latency_local.json` contain controlled comparison metrics. `live_sfp_*` and `live_sc_*` contain same-scene development score bags, terminal-before-reset traces, posthoc standoff metrics or plots, and five-camera 5 fps MP4s. `outputs/experiments/2026-10-01_sfp_transport_decisive/` preserves the older frozen checkpoint's SFP scene, score, distance metrics, contact sheet, and five-camera video. These are development tests only; geometry is posthoc, not actor input. [Experiment record](docs/experiments/2026-10-01-transport-five-way-comparison.md).
 
 **October 1 temporal transport:** `outputs/experiments/2026-10-01_temporal_transport/label_audit.json` contains the 104-SC/268-SFP stage, split, task, command-frame, and camera-timing audit; `transition_montage.jpg` is the inspected two-case transition montage. `frozen_features/` is the observation-only cached feature derivative for the bounded temporal/no-history comparison. Three completed supervised head checkpoints, per-run manifests/logs, `full_heldout_comparison.json` and `.png`, `tilt_return_boundary.json`, `full_heldout_handoff_check.json`, `commands.json`, and `decision.json` are under the same experiment root. No temporal Gazebo rollout passed the offline gate. [Experiment record](docs/experiments/2026-10-01-temporal-three-model-continuation.md). Plans and true geometry are offline labels, never deployable inputs.
 
@@ -808,3 +1309,76 @@ Under `outputs/experiments/2026-09-30_transport_continuation/`:
 - `teacher_target_magnitude_audit.json`, `state_normalization_diagnostic.json`, `initial_control_reuse.json`: posthoc diagnostics, not training-success evidence.
 
 Dataset `outputs/trajectory_datasets/transport_local_verified/2026-09-30_v8_cartesian/` contains 1,678 transport training chunks and 1,738 held-out diagnostic chunks; only 268 successful local chunks from this matched pair. Original successful local data remains separate. Do not call the failed-insertion prefix a full-success expert episode.
+
+
+### October 14 insertion continuation artifacts
+
+Bulk root: `/home/nas/chmin/aic_archives/2026-10-14_transport_handoff_execution_v1`.
+
+- `local_tip_actor_{constant_translation,translation}_v1`: completed matched 6,000-update feature-input fits, including best/last checkpoints. Treatment failed the offline gate; `tip_actor_pilot_not_started.json` records why no rollout was launched.
+- `local_sc_tip_target_dataset_v5`: preserved derivative with complete plug-tip targets and original TCP command labels.
+- `point_target_comparison_frozen_plan_v1.json`: matched action-reference hypothesis, hashes, budgets, primary decoded-command metric and conditional rollout gate.
+- `local_point_target_{tcp,tip}_v1`: comparison fits in progress on GPU 5.
+- `point_target_conversion_check.json`: numerical training/runtime conversion check, with SFP unchanged.
+
+These comparisons have not passed physical autonomous insertion. Reserved final scenes remain sealed.
+
+
+### Causal continuation repair (October 14)
+
+Under the same NAS execution root:
+
+- `local_causal_continuation_*`: immutable actor-prefix/teacher-continuation trials. Failed versions and shallow contact events are retained.
+- `causal_local_continuation_dataset_v3`: selected 1,765-row derivative; v4 is a byte-identical copy.
+- `causal_dataset_12_windows_review.{jpg,json}`: reviewed native-camera sample grid and exact row/provenance metadata.
+- `causal_local_matched_fit_frozen_plan_v1.json`: dataset/checkpoint/source hashes, two matched fit commands and frozen validation gate.
+- `local_causal_actor_{control,correction}_v1`: control completed, correction fit running; best/last snapshots are preserved.
+- `run_causal_actor_paired_pilot_v1.py`: waits for both fit summaries and launches the bounded comparison only if the correction arm passes.
+- `observation_to_command_age_audit_v1.json`: autonomous timing did not exceed the 200 ms action horizon. No QoS change was promoted.
+
+Video: `rule_then_oracle_tip_llb_1400_integral_rate2_v3/five_cameras_20fps_grid_active.mp4` is a **privileged controller diagnostic**, not a trained-policy success. `local_point_tip_llb_1400_pilot_v2/five_cameras_20fps_grid_active.mp4` is the failed, observation-only trained-policy rollout.
+
+### October14 decoder and causal-history diagnostics
+
+NAS execution root `/home/nas/chmin/aic_archives/2026-10-14_transport_handoff_execution_v1`: `local_conditional_decoder_{transformer,mlp}_v1/` retain6000-update fits; `conditional_decoder_pilot_not_started_v1.json` records failed gate. `local_history_frozen_plan_v1.json` stores commands and gates for the current sequential matched history fits; `local_history_{masked,causal}_v1/` retain selected/last checkpoints and metrics when complete. `local_pause_phase_audit_v1.json` and `local_causal_history_parity_v1.json` document holds and shared sampling checks. No new videos exist for offline-ineligible decoder models.
+
+### October14 observation-only approach and partial insertion
+
+NAS execution root: `local_history_comparison_summary_v1.json` and `local_history_pilot_not_started_v1.json` record failed6000-update masked/history gates. `observation_approach_frozen_plan_v1.json` freezes the separate component-ownership diagnostic. Its rollout is `observation_approach_llb_1400_v1/`, with `runtime_trace.jsonl`, raw bags, scored stream, oracle contacts, exact input hashes and **`five_cameras_20fps_grid_active.mp4`** (H.264/yuv420p,20fps). `observation_approach_terminal_metrics_v1.json` reports11.073mm depth,0.413mm lateral and0.938° orientation: partial insertion, not physical-gate success. `observation_approach_critical_review_v2.jpg` contains inspected five-view intervals; matchingJSON retains exact framepaths. Contact/event and latency reports use `observation_approach_contact_diagnosis_v1.json` and `observation_approach_latency_v1.json`. No current job remains active for these artifacts.
+
+### October 16 active full-data insertion continuation
+
+Under `/home/nas/chmin/aic_archives/2026-10-15_rule_perception_hierarchical_v1/`:
+
+- `shared_full_causal_grasp_actor_rows_v1/`:67,039 verified causal actor rows,500source episodes/377physical reset groups; originals unchanged.
+- `shared_full_actor_image_cache_v1/`: complete immutable native-preprocessing cache on NAS.
+- `shared_full_insertion_envelope_audit_v1.json` and `_wide_geometry.json`: passed wider approach and independent frame-label gates; failed strict attempts retained separately.
+- `matched_shared_insertion_BC_plan_v1.json`, `shared_insertion_fresh_full_v1/`, `shared_insertion_visual_warm_full_v1/`: matched full-target BC arms, fresh active/warm queued; summaries/checkpoints written as fitting completes.
+- `launcher_forwarding_audit_v1.json`: correction to earlier host-intended versus actual Docker settings. SFP live10 used0.90, not0.95; active SC broad60 uses the newer repair refiner. Original results preserved.
+- `corrected_intended_perception_live20_v2/`: controlled corrected-container revalidation; v1 startup failure retained.
+- `shared150mm_fresh_development_v1/`: frozen120-case development plan, scenes and physical-reset overlap audit; no final scenes.
+- `shared150mm_matched_autonomous_v1/`: automatic prerequisite wait, then matched full-depth BC/recovery evaluation with preserved metrics, commands, effective environments and selected20fpsvideos. Pending gates are not successful insertions.
+
+All large artifacts remain outside Git. See the execution record for qualification thresholds and limitations.
+
+- `SC_effective_refiner_failure_paired_replay_v1/`: bounded9-frame old/new native comparison on3failedSCsettings; both reject9/9. Recorded-image timing caveat retained.
+- `native_SC_rail_extension_v1/`: non-destructive native bank extension from29existingSCepisodes;4,526newcrops, QA montage/label/split audit. No newcollection.
+- `SC_native_rail_repair_plan_v1.json`, `native_pose_SC_rail_repair_v1*`: cooperative GPU4 targeted refiner fit and exact trainer snapshot; active evaluation checkpoints unchanged.
+- `shared_runtime_integration_pilot_v1/`, `shared_runtime_integration_SC_repeat_v2/`: **intermediate-model interface checks**, not completed-fit performance. First SC list-serialization failure retained; repaired SC/SFP actor commands, causal terminals and20fpsvideo saved.
+# October 16 official-setting transport recheck
+
+Artifact root: `/home/nas/chmin/aic_archives/2026-10-16_official_transport_recheck_v1` (bulk data remain on NAS). `plan.json` freezes 120 launches, upstream YAML/checkpoint/source hashes and exact-versus-stress scope. `current_job.json`, `progress.json`, `progress.md`, `runner.log` track execution; `summary.json` is written only after the matrix completes. `runs/CASE/` retains raw MCAP, native camera frames, runtime trace, effective container settings, scores and `transport_metrics.json`. This is rule transport and perception only, no insertion. [Protocol](docs/experiments/2026-10-16-official-transport-recheck.md).
+
+
+### October 18 queued recovery comparison
+
+`/home/nas/chmin/aic_archives/2026-10-17_insertion_control_repair_v1/post_repair_backoff_comparison_v1/`: `scheduler_state.json` tracks waiting/running/completion; later `runs/` retains12matched no/local/hierarchical-backoff BC rollouts and20fpsvideos, exact models/manifests/commands and independent pre-reset scores. Results are pending; this directory is not a promoted checkpoint or a newRL run.
+
+### October 18 complete-sample score → repair → rescore cycle
+
+`/home/nas/chmin/aic_archives/2026-10-18_three_trial_repair_cycle_v1/`: running scheduler states, frozen original three-trial sample `baseline/`, matched five-scene `dwell_repair_development/`, and independent `repaired/` rescore. Original/updated fullsample scores will be in`score_comparison.json`; all scenes remain predeadline public/development. No learned actor inference in the explicit-controller candidates. Do not rerun schedulers into existing roots.
+
+Bounded rejected SC perception alternatives under insertion-repairV1:`SC_edge_registration_diagnostic_v1/`, `SC_edge_registration_rotation_only_v2/`, `SC_frozen_landmark_ridge_v1/`. Each retains held-out metrics/predictions; none is an approved runtime estimator or an expert trajectory dataset.
+### October 19 transport-local-recovery artifacts
+
+`/home/nas/chmin/aic_archives/2026-10-19_transport_local_recovery_sc_settle_v4/` retains the selected five-card SC **transport-only** recovered-contact development trace, exact launch environment, original source snapshot, measured 8.4 mm retreat / 9.5 mm lateral event, post-hoc oracle contacts, inspected stills and five-camera 20 fps video. The prior `sc_contact_v1`, `sc_partial_lateral_v2`, and `sc_both_sides_v3` roots retain rejected/aborted variants. `/home/nas/chmin/aic_archives/2026-10-19_V56_transport_local_recovery_official_v1/` retains the exposed released three-round matched score (98.749703/300; 1/3 strict insertions), three trial videos, source delta, traces, commands, and manual still review. No recovery fired in that three-round run, and reserved final scenes remain sealed. [Experiment record](docs/experiments/2026-10-19-transport-local-recovery.md).

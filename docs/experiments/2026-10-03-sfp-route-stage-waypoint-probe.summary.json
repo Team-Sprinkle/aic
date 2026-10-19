@@ -1,0 +1,76 @@
+{
+  "schema": "aic_sfp_route_stage_waypoint_gate/2026-10-03",
+  "hypothesis": "an explicit observed route stage and next waypoint resolves early SFP transport drift",
+  "source": {
+    "train_episodes": 50,
+    "development_episodes": 10,
+    "cache_rows": 3828,
+    "stage_label": "frozen stock CheatCode 5.5s interpolation versus descent",
+    "waypoint_label": "measured teacher stage endpoint in current TCP body frame",
+    "teacher_command_history_input": false,
+    "simulator_geometry_actor_input": false,
+    "manifest": "/var/tmp/chmin_aic_20260918_act/sfp_balanced_arrival_20261003/route_stage_probe_cache_v2/manifest.json"
+  },
+  "budget": {
+    "gpus": 1,
+    "update_cap": 2000,
+    "wall_hours_cap": 2
+  },
+  "result": {
+    "selected_update": 2000,
+    "updates_completed": 2000,
+    "stage_accuracy": 0.987460815047022,
+    "waypoint_p95_mm": 48.19876482595993,
+    "waypoint_median_mm": 10.277030888285932,
+    "by_stage": {
+      "('stage', 0)": {
+        "rows": 268,
+        "stage_accuracy": 0.9738805970149254,
+        "waypoint_translation_mm_median": 13.286235984215377,
+        "waypoint_translation_mm_p95": 67.61718968053385
+      },
+      "('stage', 1)": {
+        "rows": 370,
+        "stage_accuracy": 0.9972972972972973,
+        "waypoint_translation_mm_median": 9.024785919307348,
+        "waypoint_translation_mm_p95": 19.804745610517553
+      }
+    },
+    "state_only_baseline": {
+      "rows": 638,
+      "stage_accuracy": 0.9858934169278997,
+      "waypoint_translation_mm_median": 15.451553682539057,
+      "waypoint_translation_mm_p95": 50.19908529364061
+    },
+    "constant_baseline": {
+      "rows": 638,
+      "stage_accuracy": 0.5799373040752351,
+      "waypoint_translation_mm_median": 53.84164569874339,
+      "waypoint_translation_mm_p95": 127.0360501165465
+    },
+    "offline_gate_passed": false,
+    "actor_continuation_started": false
+  },
+  "artifacts": {
+    "probe_summary": "/home/nas/chmin/aic_archives/2026-10-03_sfp_balanced_arrival_v1/balanced_bc/route_stage_waypoint_probe_v1/summary.json",
+    "checkpoint": "/home/nas/chmin/aic_archives/2026-10-03_sfp_balanced_arrival_v1/balanced_bc/route_stage_waypoint_probe_v1/best.pt",
+    "predictions": "/home/nas/chmin/aic_archives/2026-10-03_sfp_balanced_arrival_v1/balanced_bc/route_stage_waypoint_probe_v1/best_predictions.json",
+    "plot": "/home/nas/chmin/aic_archives/2026-10-03_sfp_balanced_arrival_v1/balanced_bc/route_stage_waypoint_probe_v1/error_by_time_and_target_v2.png"
+  },
+  "decision": "stop actor continuation; initial approach waypoint remains unreliable",
+  "next_proposal": "bounded task-conditioned spatial coarse target anchor from original-resolution views, grouped new development scenes; no simulator geometry at inference",
+  "final_scenes_opened": false,
+  "rl_started": false,
+  "next_bounded_proposal": {
+    "name": "task-conditioned selected-target spatial anchor from original-resolution wide views",
+    "source": "existing 50/10 teacher scenes plus new non-final development resets if needed",
+    "gpu_cap": 1,
+    "training_update_cap": 2000,
+    "correct_target_gate": "zero accepted wrong requested card/port on held-out complete resets",
+    "coarse_position_p95_mm_max": 20,
+    "actor_continuation": "only after both offline gates pass",
+    "autonomous_gate": "at least 2/3 safe buffered arrivals without increased contact and full p95 under 300 ms",
+    "simulator_geometry_use": "labels only; never deployable actor or crop selector",
+    "final_scenes_sealed": true
+  }
+}

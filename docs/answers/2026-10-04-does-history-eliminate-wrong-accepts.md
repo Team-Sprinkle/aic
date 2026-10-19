@@ -1,0 +1,9 @@
+# Does the history check eliminate wrong-port accepts?
+
+**Only in the ten reused development episodes we tested.** The frozen selected-only model accepted 101 observations with zero wrong-port accepts. When we allowed later predictions to match an anchor established by that model, acceptance rose to 153 observations, still with zero wrong-port accepts. However, both methods identified a requested port in only **5/10 episodes at any time**, and **3/10 within three seconds**. The tracker did not acquire any new episode.
+
+This does **not** mean wrong accepts are solved. The tracker inherits its initial identity from the selected-only model; an incorrect anchor on a new scene could be tracked consistently. The other frozen heads still made wrong accepts on these ten episodes: **27** all-port, **8** structured, and **11** native-crop accepted observations. Their unrestricted four-head union had **46** wrong-model accepts. The new anchor replay was offline on teacher camera paths, not a live autonomous handoff, and was evaluated on scenes already used for diagnosis. We have not established a wrong-accept rate on independent new scenes or measured complete live latency.
+
+So the accurate conclusion is: **the conservative anchored check avoided observed wrong accepts in this limited replay, at the cost of missing many requested ports.** Automatic insertion remains disabled. The next identity method must be frozen and tested on new episode-grouped development scenes, including wrong-card and wrong-port cases, before we can claim safety.
+
+Sources: [context and history audit](../experiments/2026-10-04-sfp-context-sufficiency-audit.md), [original four-head comparison](../experiments/2026-10-04-sfp-fresh-anchor-shadow.md), and `/home/nas/chmin/aic_archives/2026-10-04_sfp_fresh_anchor_shadow_v1/selected_anchor_tracking_audit_v1/summary.json`.

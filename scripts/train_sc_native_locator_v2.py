@@ -26,9 +26,15 @@ def main():
     p.add_argument('--output-dir',type=Path,required=True)
     p.add_argument('--pretrained-resnet',type=Path)
     p.add_argument('--checkpoint',type=Path)
+    p.add_argument('--initialize-checkpoint',type=Path,
+                   help='Initialize a new training run from a frozen locator; keep validation scene groups out of updates')
     p.add_argument('--updates',type=int,default=2200)
     p.add_argument('--batch-size',type=int,default=32)
     p.add_argument('--crop-size',type=int,default=224)
+    p.add_argument('--near-axial-threshold-m',type=float,default=.03,
+                   help='Checkpoint selection/near metrics axial range; .12 is a pre-insertion approach diagnostic')
+    p.add_argument('--near-tip-distance-m',type=float,
+                   help='Optional 3D plug-tip/opening range for transport-standoff checkpoint selection')
     p.add_argument('--crop-center-point', choices=('mean', 'tip', 'opening'), default='mean',
                    help='Choose a learned RGB point for the crop center; mean preserves the original paired crop.')
     p.add_argument('--seed',type=int,default=20260924)
@@ -51,7 +57,9 @@ def main():
     p.add_argument('--skip-crops', action='store_true',
                    help='Report global pixel predictions only; useful for low-resolution far-view diagnosis')
     args=p.parse_args()
-    if not args.checkpoint and not args.pretrained_resnet:
+    if args.checkpoint and args.initialize_checkpoint:
+        raise ValueError('Choose frozen evaluation or training initialization')
+    if not args.checkpoint and not args.initialize_checkpoint and not args.pretrained_resnet:
         raise ValueError('ImageNet weights are required for training')
     torch.set_num_threads(8);random.seed(args.seed);np.random.seed(args.seed);torch.manual_seed(args.seed)
     rows=[json.loads(line) for line in args.labels.open()]
@@ -60,7 +68,9 @@ def main():
     if train_scenes & val_scenes:raise ValueError('Scene leakage')
     x=[];y=[];mask=[];task=[];splits=[];near=[];keys=[]
     for index,row in enumerate(rows):
-        is_near=abs(row['observed_sc_tip_pose_opening_frame'][2])<.03
+        relative=np.asarray(row['observed_sc_tip_pose_opening_frame'][:3],dtype=float)
+        is_near=(np.linalg.norm(relative)<args.near_tip_distance_m if args.near_tip_distance_m
+                 else abs(relative[2])<args.near_axial_threshold_m)
         for cam in args.cameras:
             with Image.open(row['images'][cam]) as image:
                 rgb=image.convert('RGB')
@@ -103,16 +113,17 @@ def main():
         for row_index,cam in keys],dtype=torch.bool)
     weights=(torch.where(far[fit] & ~offscreen[fit] & (mask[fit,2]>0),args.far_boost,1.)
              *torch.where(offscreen[fit],args.offscreen_boost,1.)).float()
-    saved=torch.load(args.checkpoint,map_location='cpu',weights_only=False) if args.checkpoint else None
+    load_path=args.checkpoint or args.initialize_checkpoint
+    saved=torch.load(load_path,map_location='cpu',weights_only=False) if load_path else None
     use_offset=(bool(saved.get('offscreen_offset_head',False)) if saved is not None
                 else args.offscreen_offset_head)
-    model=PretrainedKeypointRefiner(args.pretrained_resnet if not args.checkpoint else None,
+    model=PretrainedKeypointRefiner(args.pretrained_resnet if saved is None else None,
                                    True,offscreen_opening_head=use_offset).to(device)
     best_step=0;history=[];step=0
-    if args.checkpoint:
+    if saved is not None:
         if saved['crop_size']!=args.crop_size:raise ValueError('Crop size mismatch')
         model.load_state_dict(saved['model'])
-    else:
+    if not args.checkpoint:
         if not len(fit):raise ValueError('No training rows')
         optimizer=torch.optim.AdamW(model.parameters(),lr=3e-4,weight_decay=1e-4)
         generator=torch.Generator().manual_seed(args.seed)
@@ -226,6 +237,9 @@ def main():
             'pixel_predictions':str(prediction_path),
             'cameras':args.cameras,'allow_lowres_images':args.allow_lowres_images,
             'frozen_checkpoint':str(args.checkpoint) if args.checkpoint else None,
+            'training_initialization':str(args.initialize_checkpoint) if args.initialize_checkpoint else None,
+            'near_axial_threshold_m':args.near_axial_threshold_m,
+            'near_tip_distance_m':args.near_tip_distance_m,
             'runtime_crop_selection':'task one-hot plus RGB only; no TF or projected labels',
             'crop_center_point':args.crop_center_point}
     (args.output_dir/'locator_metrics.json').write_text(json.dumps(report,indent=2)+'\n')

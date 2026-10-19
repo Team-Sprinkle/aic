@@ -1,0 +1,182 @@
+{
+  "schema": "aic_sc_shadow_oneport_stress_decision/v1",
+  "date": "2026-10-03",
+  "baseline_checkpoint_sha256": "f6b741379ca97b626acccbd12c81da38586087cbef84148bb11fb4b5ac7e04f7",
+  "near_boost_checkpoint_sha256": "c283ef81b34ef7320db902b4e945cfa53320670f62e85796e88cf22099b87b91",
+  "original_four_same_scene_live_accepts": 4,
+  "saved_jpeg_proxy_baseline_counts": {
+    "accepted_control": {
+      "accepted": 4,
+      "tested": 4
+    },
+    "same_image_wrong_request": {
+      "accepted": 0,
+      "tested": 4
+    },
+    "early_transport": {
+      "accepted": 0,
+      "tested": 4
+    },
+    "provisionally_hidden": {
+      "accepted": 0,
+      "tested": 20
+    }
+  },
+  "new_native_oneport": [
+    {
+      "audit": "/var/tmp/chmin_aic_20261003_shadow_handoff/native_absent_development_p0_a",
+      "scene_group_id": "12370acada9c3d526c325e755bc6778a3b3dd79c701ae10b794092f298604072",
+      "selected_port": 0,
+      "proposals": 312,
+      "closest": {
+        "sim_time_s": 61.7,
+        "true_standoff_error_mm": 0.9435413165960589,
+        "true_opening_distance_mm": 175.6725036651279,
+        "measured_force_norm_n": 20.705822855134247
+      },
+      "inspections": [
+        {
+          "sim_time_s": 60.444,
+          "valid": false,
+          "reason": "requested_identity_not_in_all_views",
+          "nearest_proposal_true_standoff_error_mm": 1.2710152881867867,
+          "verification_ms": 52.75993887335062,
+          "identity_probability": [
+            0.24711717665195465,
+            0.6760556101799011,
+            0.9189673662185669
+          ]
+        }
+      ],
+      "accepted": false,
+      "final_scenes_opened": false,
+      "geometry_posthoc_only": true
+    },
+    {
+      "audit": "/var/tmp/chmin_aic_20261003_shadow_handoff/native_absent_development_p1_a",
+      "scene_group_id": "7f7ffaa0d3cca948f878d45537c6b2c32c63187fc74c383bd40ee49f84fdaae7",
+      "selected_port": 1,
+      "proposals": 183,
+      "closest": {
+        "sim_time_s": 40.7,
+        "true_standoff_error_mm": 0.4196482998547579,
+        "true_opening_distance_mm": 176.5577529289877,
+        "measured_force_norm_n": 20.764196598707567
+      },
+      "inspections": [
+        {
+          "sim_time_s": 42.7,
+          "valid": true,
+          "reason": "clear_selected_port_and_safe_standoff",
+          "nearest_proposal_true_standoff_error_mm": 0.6111367901594265,
+          "verification_ms": 145.6997161731124,
+          "identity_probability": [
+            1.0,
+            1.0,
+            1.0
+          ]
+        }
+      ],
+      "accepted": true,
+      "final_scenes_opened": false,
+      "geometry_posthoc_only": true
+    },
+    {
+      "audit": "/var/tmp/chmin_aic_20261003_shadow_handoff/native_absent_development_p0_a_extended",
+      "scene_group_id": "12370acada9c3d526c325e755bc6778a3b3dd79c701ae10b794092f298604072",
+      "selected_port": 0,
+      "proposals": 444,
+      "closest": {
+        "sim_time_s": 44.85,
+        "true_standoff_error_mm": 0.852062347088294,
+        "true_opening_distance_mm": 176.02396766752017,
+        "measured_force_norm_n": 21.001632023087563
+      },
+      "inspections": [],
+      "accepted": false,
+      "final_scenes_opened": false,
+      "geometry_posthoc_only": true
+    }
+  ],
+  "near_boost_saved_replay_counts": {
+    "accepted_control": {
+      "accepted": 5,
+      "tested": 8
+    },
+    "same_image_wrong_request": {
+      "accepted": 0,
+      "tested": 8
+    },
+    "early_transport": {
+      "accepted": 0,
+      "tested": 8
+    },
+    "provisionally_hidden": {
+      "accepted": 0,
+      "tested": 20
+    }
+  },
+  "scale2_saved_replay_counts": {
+    "accepted_control": {
+      "accepted": 3,
+      "tested": 8
+    },
+    "same_image_wrong_request": {
+      "accepted": 0,
+      "tested": 8
+    },
+    "early_transport": {
+      "accepted": 0,
+      "tested": 8
+    },
+    "provisionally_hidden": {
+      "accepted": 0,
+      "tested": 20
+    }
+  },
+  "near_boost_grouped_oneport_real_allthree_projected": 100,
+  "near_boost_grouped_oneport_real_projected_total": 100,
+  "near_boost_grouped_oneport_absent_allthree": 0,
+  "near_boost_grouped_oneport_absent_total": 109,
+  "baseline_grouped_oneport_real_allthree_projected": 96,
+  "baseline_grouped_oneport_real_projected_total": 100,
+  "baseline_grouped_oneport_absent_allthree": 0,
+  "baseline_grouped_oneport_absent_total": 109,
+  "decision": {
+    "sc_oneport_clear_arrival_recall": "failed: one of two new live one-port groups accepted; matched port0 repeat never proposed a pause despite true TCP near standoff",
+    "safety": "zero false accepted in tested saved and live counterfactual cases; not certified reliability",
+    "near_boost": "rejected: p0 live miss persisted, center score fell 0.247 to 0.078",
+    "scale2": "rejected: only 3 of 5 previously accepted controls retained",
+    "insertion_actor": "not attached",
+    "complete_latency": "not measured; insertion gate blocked",
+    "sfp_stop": "still disabled; SC-only arrival head previously stopped 162 mm early",
+    "temporal_retry": "rejected: 0/2 port0 repeats accepted; fresh-frame retry alone had no pause, stale-target pause plus 24 fresh retries had 3 rejected inspections; no false absent accepts observed"
+  },
+  "final_scenes_opened": false,
+  "oracle_geometry_runtime": false,
+  "artifact_archive": "/home/nas/chmin/aic_archives/2026-10-03_sc_shadow_handoff_v2",
+  "temporal_followup": [
+    {
+      "audit": "/var/tmp/chmin_aic_20261003_shadow_handoff/native_p0_identity_retry",
+      "closest_true_standoff_mm": 0.6145363281397542,
+      "inspections": 0,
+      "accepted": false,
+      "identity_retry_frames": 0,
+      "absent_counterfactual_checks": 0,
+      "absent_counterfactual_accepted": 0,
+      "retry_reasons": {}
+    },
+    {
+      "audit": "/var/tmp/chmin_aic_20261003_shadow_handoff/native_p0_stale_pause_retry",
+      "closest_true_standoff_mm": 0.5423239089415635,
+      "inspections": 3,
+      "accepted": false,
+      "identity_retry_frames": 24,
+      "absent_counterfactual_checks": 3,
+      "absent_counterfactual_accepted": 0,
+      "retry_reasons": {
+        "requested_identity_not_in_all_views": 24
+      }
+    }
+  ]
+}

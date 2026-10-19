@@ -1,0 +1,13 @@
+# Can we continue using one container at a time?
+
+Yes. The kernel-key quota was raised while I checked it: UID 1008 went from a 200-key limit to a **1024-key limit**. I initially misread `/proc/key-users`: its `200/200` field counts instantiated keys, while the actual quota field was `200/1024`. I corrected the runner. With one Gazebo container at a time and host-side bag extraction, I finished all **ten frozen, non-final SFP scenes**. The active Isaac job was not interrupted. Afterward, the account used **193/1024** keys.
+
+The teacher fully inserted in **9/10** scenes; card 2/port 1 had a partial 0.04 m insertion. We kept that fixed scene in the perception check. From 581 synchronized three-camera observations, the observation-only crop proposal included the requested opening in all three cameras for 335/346 proposals and gave an early suitable crop in **10/10** scenes.
+
+The learned port estimates did **not** pass the safety gate on these fresh scenes. The old all-port head accepted 27 wrong-port observations; the structured head accepted 8; the native crop head accepted 11. The selected-only head accepted zero wrong ports but acquired an early anchor in only 3/10 scenes. The four-head union reached 7/10 early scenes but made **46 wrong accepted model predictions**. The mistakes are coherent swaps to a neighboring card or the other port on the same card, even when the requested port is inside the image crop.
+
+I checked one observation-only structural rule using the image-predicted same-card port pair to reject a crop result that lands more than 10 mm from its requested endpoint. On these **same scenes**, it removed wrong accepts but reached only **5/10** early anchors. Because the rule was developed after seeing these results, it is a diagnostic, not an independent validation or a deployable fix. The required 9/10 early coverage and zero wrong accepts are not achieved together. I did not start actor training, an insertion handoff, or RL; complete live latency was not measured because the accuracy gate had already failed.
+
+The next bounded experiment should target **requested-card and requested-port identity** in the wide images, especially distinguishing repeated neighboring faces, using the existing verified RGB and simulator labels for training only. Freeze its model and acceptance rule before testing on new non-final reset groups. Stop if any wrong port is accepted or fewer than 9/10 request codes acquire an anchor within 3 s. Keep final scenes sealed.
+
+[Full experiment, exact commands, scores, and artifacts](../experiments/2026-10-04-sfp-fresh-anchor-shadow.md). The archive is `/home/nas/chmin/aic_archives/2026-10-04_sfp_fresh_anchor_shadow_v1/`.

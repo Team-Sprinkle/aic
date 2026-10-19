@@ -1,0 +1,24 @@
+# Distance-sampled camera history design
+
+**Date:** October 4, 2026. **Scope:** read-only analysis of ten saved nonfinal SFP teacher recordings. This chooses a candidate representation, not a deployment threshold or training result. Final scenes stay sealed.
+
+Fixed 1.5/3/6-second history is unsuitable when transport stalls: it can repeat almost the same view and drop the earlier viewpoint that established the target. Test spatial history using **cumulative measured TCP travel along the route**, not elapsed time or straight-line displacement from the present pose. Compare 20, 30, 40, and 50 mm milestones with up to ten synchronized three-camera timepoints. Include the current triplet. On each 200 ms decision, retain the newest triplet as current, and add a persistent anchor only after the measured TCP has traveled another threshold from the last anchor. A stop does not evict old anchors. Reset the ring buffer at episode reset. The runtime algorithm must use measured TCP and images only; simulator port pixels are diagnostic labels used here after sampling.
+
+For each candidate report: episodes and anchor counts, measured route span held by ten slots, time span, image change between adjacent anchors, and posthoc requested-port pixel shift between anchors in each camera. Also compare 1.5/3/6-second selections by their actual traveled distance. The rough design preference is enough spatial resolution that a typical adjacent step does not move the selected opening by roughly a full 160 px crop, while ten slots cover a useful part of transport. No candidate can be promoted from teacher trajectories alone. A practical implementation should also save a frame after a substantial **rotation in place** or a contact/occlusion event; translation-only milestones would otherwise miss a large view change at zero TCP translation. Those event thresholds require their own measured audit.
+
+## Ten-recording audit and provisional choice
+
+Command: `.pixi/envs/default/bin/python scripts/audit_sfp_distance_history.py --labels /home/nas/chmin/aic_archives/2026-10-04_sfp_fresh_anchor_shadow_v1/labels_all_ten --output outputs/experiments/2026-10-04_sfp_distance_history_v2`. The [summary](../../outputs/experiments/2026-10-04_sfp_distance_history_v2/summary.json) and [pair records](../../outputs/experiments/2026-10-04_sfp_distance_history_v2/anchor_pairs.jsonl) cover 581 rows in ten saved nonfinal SFP teacher episodes. They do not establish autonomous accuracy. The source sampling is approximately every half second, so a threshold crossing is observed at the next saved row, not exactly at its requested distance. Original camera JPEGs were used for the image-change proxy.
+
+| Distance trigger | Median anchors/episode | Requested-port projected shift, p90 | Episodes whose full route fits in ten anchors |
+| --- | ---: | ---: | ---: |
+| 20 mm | 13.5 | 83 px | 0/10 |
+| 30 mm | 10 | 111 px | 6/10 |
+| 40 mm | 8.5 | 153 px | 10/10 |
+| 50 mm | 7.5 | 164 px | 10/10 |
+
+The shift is the largest per-camera movement of the **simulator-projected selected-port point** between saved anchors; it is a diagnostic proxy for how much of a scene change could be missed. It is not a measured port detection or a visibility label. At 40 mm, the p90 shift is nearly the 160 px contact crop width; 50 mm exceeds it. At 30 mm, twelve anchors fit the full route in 9/10 episodes (counts 9–13), while ten fit 6/10. A 30 mm trigger with **up to twelve** triplets is the provisional fixed setting. Cached embeddings, rather than re-encoding all twelve image triplets each decision, should limit inference cost, but complete p95 latency must be measured before deployment. If the runtime memory/latency budget only permits ten, use 30 mm with a protected earlier landmark and test what recent frames are lost; do not silently raise the trigger to 40 mm.
+
+The old fixed-second lags demonstrably vary with speed: for 1.5 seconds the p10/median/p90 measured travel was 0.52/13.92/40.35 mm; for 3 seconds it was 1.1/35.65/62.46 mm; for 6 seconds 1.86/61.79/115.27 mm. Fully 230/571 consecutive half-second rows moved <1 mm. Time can accompany an anchor as metadata, but should not decide when to overwrite one. When held still, keep the current live image and its recent feature updated without evicting the route anchors.
+
+**Remaining gate:** replay the new distance rule on autonomous SFP and SC camera streams, measuring target identity, valid crop coverage, entry/exit recall and worst-case memory/latency. These ten teacher recordings almost always place the projected target within all camera bounds, so they cannot establish whether a disappeared target is remembered and reidentified. Test that separately using real images and observed labels. The current proposal has not been wired into the deployed coarse model; the reserved final scenes remain sealed.

@@ -1,0 +1,30 @@
+{
+  "schema": "aic_sfp_stall_cleanup_matched_result/v1",
+  "date_utc": "2026-10-07",
+  "source_labels": "/var/tmp/chmin_aic_20260918_act/sfp_paired_request_20261005/sfp_divergent_merged_round2_v1/sfp_labels.jsonl",
+  "raw_audit": "/home/nas/chmin/aic_archives/2026-10-07_sfp_paired_actor_comparison_v1/data_quality_audit_v1.json",
+  "training_mask": "/home/nas/chmin/aic_archives/2026-10-07_sfp_paired_actor_comparison_v1/stall_filter_v1.json",
+  "legacy_train_episodes_with_sustained_high_command_low_motion": 68,
+  "new_diverse_train_episodes_with_sustained_high_command_low_motion": 1,
+  "excluded_train_cache_rows": 689,
+  "excluded_validation_rows": 0,
+  "excluded_paired_contrast_rows": 0,
+  "matched_fit": {
+    "artifact_root": "/home/nas/chmin/aic_archives/2026-10-07_sfp_stall_clean_matched_cpu_v1",
+    "device": "cpu",
+    "updates_each": 2000,
+    "baseline_selected_update": 1750,
+    "filtered_selected_update": 2000,
+    "old_sfp_action_p95_mm": [1.4926, 1.4977],
+    "new_sfp_action_p95_mm": [1.5690, 1.5830],
+    "sc_action_p95_mm": [2.1547, 2.1925],
+    "heldout_pair_median_error_mm": [1.1614, 1.1757],
+    "heldout_pair_p95_error_mm": [3.8096, 4.1716],
+    "same_image_request_diameter_mm": [1.5684, 1.5537]
+  },
+  "decision": "No positive offline signal; skip new live rollout and do not promote filtered checkpoint",
+  "earlier_live_safe_buffered_arrivals": "0/3",
+  "source_episodes_modified": false,
+  "reserved_final_scenes_opened": false,
+  "record": "docs/experiments/2026-10-07-sfp-stall-data-audit-and-cleaned-fit.md"
+}

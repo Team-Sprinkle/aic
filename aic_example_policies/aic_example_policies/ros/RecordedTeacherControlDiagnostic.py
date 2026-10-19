@@ -49,5 +49,6 @@ class RecordedTeacherControlDiagnostic(Policy):
         obs=get_observation()
         if obs is not None:
             with open(trace,'a') as f:f.write(json.dumps(dict(event='terminal_before_return',
+                sim_time=obs.controller_state.header.stamp.sec+obs.controller_state.header.stamp.nanosec*1e-9,
                 state=base_state_from_ros_observation(obs).tolist(),privileged_recorded_route=True))+'\n')
         return True

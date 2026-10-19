@@ -1,0 +1,11 @@
+# Five-card SFP cable-side route repair: result
+
+I tested the two predeclared route changes after the contact recorder showed a cable/NIC-card interference failure. Both used privileged MoveIt planning from the robot's measured actor takeover state. They were teacher-route diagnostics, not a newly trained actor or autonomous insertion.
+
+The **side-descent** route moved away from the card row and tried to descend while offset before moving back toward the requested port. It failed on its first two starts, so I stopped it: one reached the 85 mm buffer but had sustained high wrist force and 19.6 N sampled cable–NIC-card point force; the other stopped 22.4 mm from the buffer and had 46.9 N cable–NIC-card point force. [Side-descent failure video](</home/nas/chmin/aic_archives/2026-10-09_sfp_side_route_repair_v1/side_down_2/video/all_views_20fps.mp4>).
+
+The **high-side sweep** moved away from the cards while high, returned while high, then descended. It passed one of three starts under the preset arrival, wrist-force and cable-contact checks. One missed the 10 mm buffer threshold by 1.0 mm; another arrived within 3.6 mm but had sustained wrist-force change above 6 N. Its recorded cable–NIC-card contact remained small in that last run, so the wrench source is unresolved; cable tension is plausible from the video. [High-sweep failure video](</home/nas/chmin/aic_archives/2026-10-09_sfp_side_route_repair_v1/side_sweep_3/video/all_views_20fps.mp4>).
+
+Neither candidate met the required **2/3 safe buffered arrivals**. I did not train a route actor, connect the visual stop to insertion, or start RL. The next bounded direction is to make actor-state route labels from *measured successful SFP teacher continuations*, after controller settling, while preserving actor-prefix camera history and checking cable contact. The gate is at least 20 distinct training reset states, six held-out states and correct safe correction direction on at least 5/6 held-out states before any actor fit. Final scenes remain sealed.
+
+[Detailed experiment, exact commands and all per-run metrics](../experiments/2026-10-09-sfp-cable-side-route-repair.md) · [machine decision](</home/nas/chmin/aic_archives/2026-10-09_sfp_side_route_repair_v1/decision.json>).

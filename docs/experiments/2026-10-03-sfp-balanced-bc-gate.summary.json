@@ -1,0 +1,135 @@
+{
+  "schema": "aic_sfp_balanced_bc_gate/2026-10-03",
+  "teacher_collection": {
+    "train_success": 50,
+    "development_success": 10,
+    "new_train_transport_chunks": 12940,
+    "train_reset_groups_merged": 284,
+    "development_reset_groups": 10,
+    "reset_overlap": 0
+  },
+  "training": {
+    "ordinary_v1": {
+      "best_update": 3000,
+      "updates_completed": 3000,
+      "stop_reason": "update_cap",
+      "sfp_first_action_mm_p95": 3.1312378525733946,
+      "sc_first_action_mm_p95": 2.5425077795982363,
+      "summary": "/home/nas/chmin/aic_archives/2026-10-03_sfp_balanced_arrival_v1/balanced_bc/ordinary_v1/summary.json"
+    },
+    "zero_previous_v1": {
+      "best_update": 1750,
+      "updates_completed": 3000,
+      "stop_reason": "validation_plateau",
+      "sfp_first_action_mm_p95": 7.560742616653441,
+      "sc_first_action_mm_p95": 5.125666284561158,
+      "summary": "/home/nas/chmin/aic_archives/2026-10-03_sfp_balanced_arrival_v1/balanced_bc/zero_previous_v1/summary.json"
+    },
+    "ordinary_12k_v1": {
+      "best_update": 5000,
+      "updates_completed": 6250,
+      "stop_reason": "validation_plateau",
+      "sfp_first_action_mm_p95": 2.416594970226287,
+      "sc_first_action_mm_p95": 2.2539519190788266,
+      "summary": "/home/nas/chmin/aic_archives/2026-10-03_sfp_balanced_arrival_v1/balanced_bc/ordinary_12k_v1/summary.json"
+    }
+  },
+  "autonomous": {
+    "baseline": {
+      "runs": 3,
+      "buffered_visits": 0,
+      "scored_contacts": 1,
+      "actor_inference_p95_ms_max": 104.34648303780703,
+      "closest_lateral_in_axial_band_mm": [
+        25.870047676281544,
+        104.72005045463186,
+        120.83732301903112
+      ]
+    },
+    "ordinary": {
+      "runs": 3,
+      "buffered_visits": 0,
+      "scored_contacts": 3,
+      "actor_inference_p95_ms_max": 96.66412693914026,
+      "closest_lateral_in_axial_band_mm": [
+        80.72270956884283,
+        92.23786549825314,
+        57.0589160984427
+      ]
+    },
+    "zero_previous": {
+      "runs": 3,
+      "buffered_visits": 0,
+      "scored_contacts": 3,
+      "actor_inference_p95_ms_max": 99.14209344424307,
+      "closest_lateral_in_axial_band_mm": [
+        49.24552940908144,
+        26.22357716119222,
+        70.24484194577133
+      ]
+    }
+  },
+  "autonomous_gate": "fail: all variants 0/3 buffered; new variants scored contact 3/3",
+  "additional_twelve_k_offline_gate": "fail: 2.42mm exceeds predeclared 2mm SFP p95; no added live rollout",
+  "route_diagnosis": {
+    "first_gt_10mm_sim_s_range": [
+      3.7,
+      4.2
+    ],
+    "data": "/var/tmp/chmin_aic_20260918_act/sfp_balanced_arrival_20261003/development_route_diagnosis_v1/route_divergence.json",
+    "plot": "/var/tmp/chmin_aic_20260918_act/sfp_balanced_arrival_20261003/development_route_diagnosis_v1/route_divergence.png"
+  },
+  "artifacts": {
+    "score": "/var/tmp/chmin_aic_20260918_act/sfp_balanced_arrival_20261003/balanced_development3x3_score_v1.json",
+    "rollout_manifest": "/home/nas/chmin/aic_archives/2026-10-03_sfp_balanced_arrival_v1/balanced_bc/development_3x3_v1/progress.json",
+    "merged_labels": "/var/tmp/chmin_aic_20260918_act/sfp_balanced_arrival_20261003/balanced_merged_sfp_v1/manifest.json",
+    "feature_cache": "/var/tmp/chmin_aic_20260918_act/sfp_balanced_arrival_20261003/balanced_temporal_cache_v1/manifest.json"
+  },
+  "source_sha256": {
+    "score": "a5c219e0b55f08adf01ad37f3858ea90aa2252c740f142bc2bc0fe0aa6ecdf0a",
+    "rollout_manifest": "b4839e01e4f3201bc2d5af7004e7fd3dd7a62aba5c9e992ffc4996188ab6b13e",
+    "merged_labels": "37d729330450d44bc415e9e6e99b5a21fb6a645d90cbdb9fec3aca782695f4ff"
+  },
+  "old_agent_action_arrays_used": false,
+  "poseinsert_attached": false,
+  "rl_started": false,
+  "reserved_final_opened": false,
+  "promotion": false,
+  "teacher_prefix_diagnostic": {
+    "scene": "card2_port0_trial_000455",
+    "privileged": true,
+    "duration_s": 5,
+    "checkpoint": "ordinary_v1",
+    "from_reset_lateral_band_mm": 92.23786549825314,
+    "run1_lateral_band_mm": 16.95256899845014,
+    "run2_lateral_band_mm": 28.647661478237826,
+    "buffered_visits": [
+      false,
+      false
+    ],
+    "scored_contact": [
+      true,
+      false
+    ],
+    "takeover_error_mm": [
+      3.52,
+      1.9
+    ],
+    "teacher_distance_at_15_s_mm": [
+      20.87,
+      34.28
+    ],
+    "conclusion": "Improved start, continuing actor drift; no autonomous success",
+    "prefix": "/var/tmp/chmin_aic_20260918_act/sfp_balanced_arrival_20261003/card2p0_privileged_teacher_prefix_5s_v1.json",
+    "scores": [
+      "/var/tmp/chmin_aic_20260918_act/sfp_balanced_arrival_20261003/card2p0_teacher_prefix_score_v1.json",
+      "/var/tmp/chmin_aic_20260918_act/sfp_balanced_arrival_20261003/card2p0_teacher_prefix_repeat_score_v1.json"
+    ]
+  },
+  "next_repair": {
+    "stage1": "At most three actor-state ordinary-CheatCode corrective takeovers on development resets; pass if at least two safely reach buffered region without scored contact",
+    "stage2_if_stage1_passes": "At most 20 balanced training corrective segments, one shared full-action supervised continuation, at most 5000 updates; evaluate same three disjoint development starts",
+    "promotion": "at least 2/3 safe buffered visits, no increased contact, full actor inference p95 below 300ms",
+    "reserved_final_opened": false
+  }
+}

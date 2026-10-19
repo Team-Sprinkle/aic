@@ -1,0 +1,104 @@
+{
+  "stage": "four_rollout_diagnostic_complete",
+  "rollouts": 4,
+  "development_configurations": 2,
+  "repeats_per_configuration": 2,
+  "strict_physical_insertions": 1,
+  "official_tier3_75_count": 3,
+  "new_RL": false,
+  "recovery": "none",
+  "final_scenes_opened": false,
+  "training_started": false,
+  "more_rollouts_queued": false,
+  "artifacts": "/home/nas/chmin/aic_archives/2026-10-17_full_connector_live_probe_v1",
+  "results": [
+    {
+      "case": "evaluation_sc_n1_p0_r0_probe_repeat1",
+      "family": "sc",
+      "strict_full": false,
+      "terminal": {
+        "depth_mm": 1.9480835368421954,
+        "lateral_mm": 2.185750155365025,
+        "orientation_error_deg": 3.041473470759933,
+        "official_tier3": 75,
+        "no_scored_harm": true
+      }
+    },
+    {
+      "case": "evaluation_sfp_n1_p0_r0_c0_probe_repeat1",
+      "family": "sfp",
+      "strict_full": true,
+      "terminal": {
+        "depth_mm": 46.74917236876311,
+        "lateral_mm": 0.4790102946300933,
+        "orientation_error_deg": 0.4611045502639599,
+        "official_tier3": 75,
+        "no_scored_harm": true
+      }
+    },
+    {
+      "case": "evaluation_sc_n1_p0_r0_probe_repeat2",
+      "family": "sc",
+      "strict_full": false,
+      "terminal": {
+        "depth_mm": 1.9933925910222035,
+        "lateral_mm": 5.425041721658849,
+        "orientation_error_deg": 3.0583969650216654,
+        "official_tier3": 75,
+        "no_scored_harm": true
+      }
+    },
+    {
+      "case": "evaluation_sfp_n1_p0_r0_c0_probe_repeat2",
+      "family": "sfp",
+      "strict_full": false,
+      "terminal": {
+        "depth_mm": 37.43009771872477,
+        "lateral_mm": 0.25246059883263133,
+        "orientation_error_deg": 0.5299102727070701,
+        "official_tier3": 47.812638399705975,
+        "no_scored_harm": true
+      }
+    }
+  ],
+  "handoff_jumps": [
+    {
+      "case": "evaluation_sc_n1_p0_r0_probe_repeat1",
+      "family": "sc",
+      "last_controller_owner": "visual_transport_150_to25mm",
+      "translation_mm": 18.67968928341175,
+      "orientation_deg": 0.9631920303844663
+    },
+    {
+      "case": "evaluation_sfp_n1_p0_r0_c0_probe_repeat1",
+      "family": "sfp",
+      "last_controller_owner": "visual_transport_150_to25mm",
+      "translation_mm": 7.578511630759729,
+      "orientation_deg": 0.19704554740698568
+    },
+    {
+      "case": "evaluation_sc_n1_p0_r0_probe_repeat2",
+      "family": "sc",
+      "last_controller_owner": "visual_transport_150_to25mm",
+      "translation_mm": 13.573871698733889,
+      "orientation_deg": 0.9614708316917068
+    },
+    {
+      "case": "evaluation_sfp_n1_p0_r0_c0_probe_repeat2",
+      "family": "sfp",
+      "last_controller_owner": "visual_transport_150_to25mm",
+      "translation_mm": 4.152365022541606,
+      "orientation_deg": 0.20549089981415095
+    }
+  ],
+  "smoothness_note": "Use pre-freeze/time-window comparisons; shallow SC and successful SFP were frozen by CablePlugin.",
+  "SFP_first15s_boundary_jump_p95_mm": {
+    "previous": 15.43438349,
+    "new": [
+      4.37825716,
+      3.1622671
+    ]
+  },
+  "SC_jerk_improvement_established": false,
+  "next": "No experiment queued. Suggested repairs: command-reference handoff bridge, progress/force-aware forward execution, SC grasp-angle coverage; then revisit causal teacher/controller context if needed."
+}

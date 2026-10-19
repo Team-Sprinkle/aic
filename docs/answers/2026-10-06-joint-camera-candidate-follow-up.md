@@ -1,0 +1,17 @@
+# Joint camera candidate follow-up
+
+I tested the proposed three-camera candidate matching approach and updated the main project documents. **It did not pass the new-scene safety gate.** The earlier single-point detector remains the safer offline candidate; neither detector is connected to automatic handoff or insertion.
+
+The idea was to retain five likely opening points from each camera, then select the three-camera combination whose rays meet most consistently in 3D. On the existing ten development groups, it found a pose early in 10/10 groups but made two wrong-card accepts. Requiring two consecutive consistent inspections removed those errors on development: zero wrong, 10/10 early, 3.27 mm accepted 3D p95.
+
+I froze that rule and collected ten **new nonfinal** SFP reset groups, one for each requested card/port code. All ten ordinary CheatCode teacher controls fully inserted, yielding 528 synchronized three-camera samples and 527 retained evaluation rows. These teacher successes validate the camera captures; they are not autonomous policy successes.
+
+On the new scenes, the joint rule with two-inspection confirmation accepted **150 frames, including eight wrong-card frames**, at **25.21 mm** accepted 3D p95. It still found a candidate early in 10/10 groups. The errors were real neighbor-card switches: two card1/port0 predictions pointed to card2/port0, and six card3/port1 predictions pointed to card4/port1. The latter wrong point stayed stable for six half-second observations. Three-camera agreement and short-term stability therefore did not establish which numbered card was requested.
+
+For a matched comparison, the existing **single-point crop detector** on the same 527 images accepted **89 frames, zero wrong**, at **2.71 mm** accepted 3D p95 and 10/10 early groups. It is safer on this set. It had only 6/10 early groups on the earlier additional ten-scene check, however, so its availability is not yet reliable across scene sets. I stopped the joint-candidate branch and did not tune its thresholds on the fresh evaluation scenes.
+
+The [card1 wrong-card image](</home/nas/chmin/aic_archives/2026-10-06_sfp_joint_candidate_fresh10_failure_overlays_v1/card1_port0.jpg>) and [card3 wrong-card image](</home/nas/chmin/aic_archives/2026-10-06_sfp_joint_candidate_fresh10_failure_overlays_v1/card3_port1.jpg>) show the selected joint prediction in green, requested opening's posthoc projection in red, and mistaken neighboring opening's posthoc projection in magenta. Simulator projections were used only for scoring and overlays, not for the model or the matching rule.
+
+The next targeted repair is **explicit visual card identity**: supervise the requested card's board slot and its pair of ports together, and have the system abstain when it cannot tell neighboring cards apart. This needs an audit of ambiguous original RGB views and grouped task-balanced labels before a new fit. A future checkpoint must pass zero wrong-port accepts, at least 9/10 early groups, accepted position p95 ≤20 mm on new nonfinal resets, and complete live inference p95 <300 ms before handoff testing. Transport also has its own unresolved 0/3 safe buffered arrivals gate. Automatic handoff, insertion rollout and RL remain disabled; final scenes remain sealed.
+
+[Full experiment, commands and artifacts](../experiments/2026-10-06-sfp-joint-camera-candidates.md) · [machine decision](../experiments/2026-10-06-sfp-joint-camera-candidates.summary.json) · [current status](../STATUS.md) · [handoff plan](../SELECTED_PORT_HANDOFF_PLAN.md)

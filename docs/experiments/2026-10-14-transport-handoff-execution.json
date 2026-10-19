@@ -1,0 +1,623 @@
+{
+  "schema": "aic_autonomous_transport_handoff_execution/v1",
+  "updated_utc": "2026-10-14T15:44:19.627116+00:00",
+  "artifact_root": "/home/nas/chmin/aic_archives/2026-10-14_transport_handoff_execution_v1",
+  "final_scenes_opened": false,
+  "max_project_gpus": 4,
+  "active_gpu_choice": 3,
+  "preflight": {
+    "rootless_docker": true,
+    "data1_free_gb": 2.4,
+    "nas_free_tb": 3.3,
+    "existing_project_gpu0_pid": 468750,
+    "active_transport_jobs": 0,
+    "original_datasets_preserved": true,
+    "current_project_gpu_allocation": {
+      "0": "Legacy job untouched; no new experiment remains active"
+    }
+  },
+  "stages": {
+    "1": {
+      "status": "blocked",
+      "artifacts": [
+        "/home/nas/chmin/aic_archives/2026-10-14_transport_handoff_execution_v1/endpoint_contract_v1/summary.json"
+      ],
+      "next_action": "Acquisition and observation-only near approach are tested; autonomous insertion starting envelope is not certified because actor fails full-depth gate.",
+      "hypothesis": "Missing approach segment and absent stop supervision explain failure to reach the previous handoff gate.",
+      "budget": "2\u20134h offline initial",
+      "gate": "Label endpoint, visual acquisition and insertion starting envelope agree; unknown ranges explicitly tested or left unapproved.",
+      "outcome": "6/6 frozen teacher endpoints accepted by SC verifier; 0/6 alternate requests accepted; opening error 0.11\u20130.21 mm. Acquisition endpoint is viable. Remaining approach is separate downstream ownership, not demonstrated insertion envelope. A versioned precise static RGB pose contract now preserves 104 SC source episodes; downstream actor training is active, not yet validated.",
+      "insertion_envelope": "unknown at ~150mm tip distance; insertion disabled until tested",
+      "contract": "LLB transport stops/holds at visually approved acquisition pose; downstream local approach must be validated before insertion."
+    },
+    "2": {
+      "status": "passed",
+      "artifacts": [
+        "/home/nas/chmin/aic_archives/2026-10-14_transport_handoff_execution_v1/rule_template_screen.json",
+        "/home/nas/chmin/aic_archives/2026-10-14_transport_handoff_execution_v1/rigid_screen_results.json"
+      ],
+      "next_action": "Decompose training waypoint variation into board/rail/start effects; screen conservative corridor.",
+      "outcome": "Tighter common corridor passed six training-only rigid screens; selected runtime inputs are training template + public task + measured state + RGB. Rotated scope unsupported; no cable certification."
+    },
+    "3": {
+      "status": "passed",
+      "artifacts": [
+        "/home/nas/chmin/aic_archives/2026-10-14_transport_handoff_execution_v1/rule_development_progress_v5.json",
+        "/home/nas/chmin/aic_archives/2026-10-14_transport_handoff_execution_v1/rule_development_frozen_plan_v6_fresh.json",
+        "/home/nas/chmin/aic_archives/2026-10-14_transport_handoff_execution_v1/rule_fresh_arrival_metrics_v6.json"
+      ],
+      "next_action": "Broaden rotated-board/rail scope and connect local approach; do not call this insertion reliability.",
+      "outcome": "Rule v5 6/6 reused; identical controller v6 6/6 fresh grouped normal-yaw SC. Fresh posthoc opening error 0.166\u20130.311 mm, TCP posture 0.007\u20130.150 degrees, no scored contact. Insertion intentionally disabled."
+    },
+    "4": {
+      "status": "passed",
+      "artifacts": [
+        "/home/nas/chmin/aic_archives/2026-10-14_transport_handoff_execution_v1/repaired_targets_v1/manifest.json",
+        "/home/nas/chmin/aic_archives/2026-10-14_transport_handoff_execution_v1/timestamp_repair_audit.json"
+      ],
+      "next_action": "Repair timestamp-based future commands and independent terminal masks in versioned derivative.",
+      "outcome": "104 episodes audited, +1906 complete 12-slot chunks, all final-stage episodes have valid action labels, all 61 stop positives preserved independently.",
+      "remaining": "Training consumer must use per-slot masks and independent stop examples; raw observation history remains separate from sparse anchors."
+    },
+    "5": {
+      "status": "passed",
+      "artifacts": [
+        "/home/nas/chmin/aic_archives/2026-10-14_transport_handoff_execution_v1/executor_pair_summary.json"
+      ],
+      "next_action": "Score first replay and compare direct playback before completing remaining pairs.",
+      "budget": "3 recorded starts \u00d7 direct versus exact chunk = six initial runs",
+      "gate": "\u226410mm/3deg endpoint and no harmful blockage",
+      "current_run": "executor_chunk_llb0005_v1",
+      "first_pair": {
+        "boundary_direct_error_mm": 1.99,
+        "boundary_chunk_error_mm": 3.29,
+        "settled_direct_error_mm": 11.31,
+        "settled_chunk_error_mm": 12.79,
+        "settled_pair_difference_mm": 3.21,
+        "geometry_input": "oracle diagnostic only"
+      },
+      "outcome": "All six direct/chunk replays match original phase boundary: 1.99\u20134.05mm, 0.004\u20130.037deg, no scored contact. Final-target holds shift 11\u201318mm; stable acquisition remains a separate open gate."
+    },
+    "6": {
+      "status": "failed",
+      "artifacts": [
+        "/home/nas/chmin/aic_archives/2026-10-14_transport_handoff_execution_v1/matched_training_plan.json",
+        "/home/nas/chmin/aic_archives/2026-10-14_transport_handoff_execution_v1/fixed_update_comparison_plan.json",
+        "/home/nas/chmin/aic_archives/2026-10-14_transport_handoff_execution_v1/matched_actor_repaired_v1/summary.json",
+        "/home/nas/chmin/aic_archives/2026-10-14_transport_handoff_execution_v1/matched_actor_live_progress.json",
+        "/home/nas/chmin/aic_archives/2026-10-14_transport_handoff_execution_v1/matched_runtime_seed_metrics.json",
+        "/home/nas/chmin/aic_archives/2026-10-14_transport_handoff_execution_v1/bounded_failure_diagnosis.json"
+      ],
+      "next_action": "Bounded diagnosis completed: correct requested-port estimates existed on all six starts in each arm; terminal posture/standoff capture remains deficient. Test targeted observation-only docking or select rule branch after fresh gate.",
+      "hypothesis": "Timestamp repair + masked terminal actions improve final-return behavior; independent stop head captures valid acquisition instead of drifting away.",
+      "budget": "Initial 4 GPUh per arm, 20000-update caps; fixed-update repair of early-control-plateau confounding is in progress.",
+      "first_plateau_result": {
+        "repaired_updates": 14500,
+        "repaired_best_update": 12000,
+        "legacy_updates": 3000,
+        "legacy_best_update": 500,
+        "comparison_not_equal_updates": true,
+        "next": "Exactly 20000 updates in both new arms; no causal promotion from preliminary unequal-update fits."
+      },
+      "outcome": "Primary matched old/repaired action supervision: 1/6 stable handoff in both arms, no promotion. Separate frozen-actor visual docking repair passed 6/6 reused and 6/6 fresh normal-yaw SC; this is a controller branch, not primary training-gate success."
+    },
+    "7": {
+      "status": "failed",
+      "artifacts": [],
+      "next_action": "No blind extension: causal continuations, full point targets, corrective data, decoder/motion and robot-history repairs have not passed ordinary autonomous insertion."
+    },
+    "8": {
+      "status": "blocked",
+      "artifacts": [
+        "/home/nas/chmin/aic_archives/2026-10-14_transport_handoff_execution_v1/local_actor_original_frame_audit.json",
+        "/home/nas/chmin/aic_archives/2026-10-14_transport_handoff_execution_v1/local_locked_frame_dataset_v2/summary.json",
+        "/home/nas/chmin/aic_archives/2026-10-14_transport_handoff_execution_v1/local_locked_label_audit.json",
+        "/home/nas/chmin/aic_archives/2026-10-14_transport_handoff_execution_v1/locked_local_training_frozen_plan_v1.json",
+        "/home/nas/chmin/aic_archives/2026-10-14_transport_handoff_execution_v1/rotated_sc_frozen_perception_support.json",
+        "/home/nas/chmin/aic_archives/2026-10-14_transport_handoff_execution_v1/rule_development_progress_v7_broad.json",
+        "/home/nas/chmin/aic_archives/2026-10-14_transport_handoff_execution_v1/sc_tip_timestamp_audit.json",
+        "/home/nas/chmin/aic_archives/2026-10-14_transport_handoff_execution_v1/locked_local_diagnostic_plan_v1.json"
+      ],
+      "next_action": "Freeze hybrid partial insertion; isolate orientation versus lateral compensation before any new training. SFP/rotated/rail-min broadening remains unapproved.",
+      "hypothesis": "SC local actor must share the new precise acquisition pose-lock contract; old held-out TCP pose inputs had 2.12mm /2.88deg p95 error.",
+      "outcome": "SCnormal-yaw acquisition survives freshbothport/cardextremes and port1railmaxvia causalvisualcroptracking. Port0railmin identity androtatedroute/perception unsupported. LocalBCofficialevents75 do not satisfy strictphysicalinsertion; no RL."
+    },
+    "9": {
+      "status": "blocked",
+      "artifacts": [],
+      "next_action": "Disabled until ordinary autonomous supervised insertion passes; final scenes sealed."
+    }
+  },
+  "branches": {
+    "common_corridor": {
+      "status": "passed",
+      "rigid_screens_passed": 6,
+      "first_failure": "Maximal corner failed rigid planning",
+      "repair": "Persistent reference, corrected stage bookkeeping, kp240 tracking, strict 2s stationary visual approval.",
+      "support": "Normal-yaw SC only, fresh six not reliability estimate",
+      "last_runtime": "Fresh v6 evaluation; same frozen controller as v5"
+    },
+    "observed_template": {
+      "status": "blocked",
+      "outcome": "Normal-board common corridor passes; rotated-board and port0 rail-minimum lack approved visual acquisition. Do not broaden while downstream local insertion remains failed."
+    },
+    "template_library": {
+      "status": "not_applicable_with_evidence",
+      "outcome": "Common normal-board corridor works; rotated scene has unresolved visual support rather than demonstrated need for route topology selector."
+    },
+    "hybrid_prefix": {
+      "status": "passed",
+      "hypothesis": "Correct visual pose exists but learned final capture misses; bounded observation-only docking after learned proposal.",
+      "artifacts": [
+        "/home/nas/chmin/aic_archives/2026-10-14_transport_handoff_execution_v1/visual_docking_frozen_plan_v1.json",
+        "/home/nas/chmin/aic_archives/2026-10-14_transport_handoff_execution_v1/visual_docking_progress_v1.json",
+        "/home/nas/chmin/aic_archives/2026-10-14_transport_handoff_execution_v1/visual_docking_frozen_plan_v2.json",
+        "/home/nas/chmin/aic_archives/2026-10-14_transport_handoff_execution_v1/visual_docking_progress_v3_fresh.json"
+      ],
+      "budget": "Six reused diagnostic starts; same frozen actor and final gate; \u226480mm/10deg correction and 15sim-second budget per proposal.",
+      "outcome": "V2 frozen learned actor+bounded visual docking: 6/6 reused and 6/6 fresh normal-yaw SC, no reported contact; slower than rule, actor latency p95 >300ms on reused starts.",
+      "next_action": "Supported normal-board feasibility complete; no full insertion demonstrated."
+    },
+    "spatial_resnet_vs_dino": {
+      "status": "not_applicable_with_evidence",
+      "condition": "Correct requested-port poses existed on all six normal-yaw learned runs; final capture is the tested repair first. Rotated/SFP visual coverage is a separate measured gap.",
+      "outcome": "Current supported scenes have accurate RGB port/grasp translation. No measured backbone discrimination cause of local stall; do not launch an encoder comparison to hide the failed approach contract."
+    },
+    "motion_spaced_history": {
+      "status": "not_started",
+      "condition": "Raw SC history remains sparse; normal-yaw rule branch does not require learned history. Revisit only if learned docking or off-route capture remains deficient."
+    },
+    "progress_supervision": {
+      "status": "not_applicable_with_evidence",
+      "condition": "No established wrong-stage cause in bounded terminal diagnosis; do not infer an action-stage label fix from nearest-point error alone.",
+      "outcome": "Transport wrong-stage cause not established; local phase-dependent chunk defect now measured and addressed by explicit motion/decoder comparison plus causal robot-history test."
+    },
+    "buffered_executor": {
+      "status": "not_applicable_with_evidence",
+      "condition": "Oracle chunk frame gate passed, but neural inference latency was not emulated. Investigate only if timing explains a remaining capture failure.",
+      "outcome": "Autonomous observation-to-command ages58/94/116ms median/p95/max, below200ms chunk horizon. No demonstrated queue-related failure. Delayed354ms teacher sample excluded from derivative."
+    },
+    "causal_continuations": {
+      "status": "passed",
+      "outcome": "Bounded three-reset screen passed2/3 with recorded command-cap repair. Two v3 and earlier qualified port1v2 successes supply1184train/581validation rows. Matched corrective fit and autonomous test subsequently failed; no further collection.",
+      "artifact": "/home/nas/chmin/aic_archives/2026-10-14_transport_handoff_execution_v1/causal_local_continuation_dataset_v3/summary.json"
+    },
+    "capacity_optimization": {
+      "status": "not_applicable_with_evidence",
+      "condition": "Same 20k actor fits failed live; no demonstrated parameter underfitting cause. Precision of endpoint capture and interface labels are being tested first.",
+      "outcome": "Original matched20k transport fits did not improve acquisition. New matched6000 decoder/motion optimization failed gate for both architectures; no evidence justifies an additional blind capacity sweep."
+    },
+    "no_local_hierarchical_backoff": {
+      "status": "blocked",
+      "outcome": "Ordinary autonomous supervised insertion prerequisite failed. No new RL/backoff experiments under this execution."
+    },
+    "offline_online_serl": {
+      "status": "blocked",
+      "outcome": "Ordinary autonomous supervised insertion prerequisite failed. No new RL/backoff experiments under this execution."
+    },
+    "two_view_guidance": {
+      "status": "failed",
+      "hypothesis": "Two good requested-port views can reposition into a strict three-view acquisition window despite one bad coarse view.",
+      "budget": "Two reused rail-limit resets, no new model/data",
+      "gate": "2/2 strict three-view correct stationary arrivals, no harm",
+      "plan": "/home/nas/chmin/aic_archives/2026-10-14_transport_handoff_execution_v1/rule_development_frozen_plan_v8_two_view_guidance.json",
+      "outcome": "0/2 strict handoffs. Repositioning occurred. Rail0 ends at requested identity rejection; rail1 identity passes but coarse centres jump55\u201363px, invalid refinement. Not demonstrated cable blockage."
+    },
+    "local_feedback_repair": {
+      "status": "failed",
+      "hypothesis": "Teacher-command tracking error shortcut creates on-policy self-stall. Within-input replay intervention changes axial command by6\u20138mm.",
+      "budget": "One scratch ImageNet fit on unchanged full83SC/234SFP training episodes, 6000updates/4h, min3000 and20stale evaluations",
+      "gate": "Offline near lateral p95<=1mm and orientation<=2deg; only then live pilot; physical pass then sixfresh",
+      "plan": "/home/nas/chmin/aic_archives/2026-10-14_transport_handoff_execution_v1/local_feedback_repair_frozen_plan_v2.json",
+      "outcome": "Plateau3000updates, selected800; SCnear lateral p95=3.705mm and angle2.434deg. Fails offline conjunction; no live promotion."
+    },
+    "local_executor_gains": {
+      "status": "failed",
+      "hypothesis": "Local240translation stiffness differs from all successful teacher90 gains; transport240 staysfixed.",
+      "budget": "Two pilots after active guidance screen finishes",
+      "gate": "Requested event, lateral<=0.5mm, SCdepth>=14mm, no harm; reportorientationexplicitly",
+      "outcome": "Both gain90pilots official75, but physical depth2.14/2.02mm, lateral0.630/2.068mm; strict gate unmet. One pilot per arm not causal reliability evidence."
+    },
+    "tracked_visual_crop": {
+      "status": "passed",
+      "outcome": "V9 failed0/2; v10repaired old80mm gate preventing strict orientation correction after140mm reposition. Port1stress1/1, then6/6fresh grouped acquisitions; selected opening0.164\u20130.285mm, orientation0.006\u20131.368deg, no scored contact. Physical/insertion not promoted.",
+      "artifacts": [
+        "/home/nas/chmin/aic_archives/2026-10-14_transport_handoff_execution_v1/rule_tracked_fresh_arrival_metrics_v11.json",
+        "/home/nas/chmin/aic_archives/2026-10-14_transport_handoff_execution_v1/tracked_crop_fresh_scenes_v1/manifest.json"
+      ],
+      "scope": "Both ports,1/5cards, two port1railmax; knownport0railmin androtated failures unchanged",
+      "latency": "Visual acquisition p95=126\u2013162ms acrosssix; fullpredict-call p95=106\u2013120ms. Not whole integrated insertion pipeline profiling."
+    },
+    "native_grasp_3d": {
+      "status": "failed",
+      "outcome": "Direct3Dnative192/layer2adaptation/8x8spatial probe best200, plateau2200; translation1.268mm p95, orientation1.595deg, fails broadapproach0.4/1gate. Causal smoothing3/6frames doesnotresolve.",
+      "scope_gap": "Existing grasp probes deliberately selected tip axial<-30mm. Near-contact applicability untested; assess close-range nativeframes separately before claiming inability."
+    },
+    "camera_tcp_provenance": {
+      "status": "passed",
+      "budget": "One live unchanged gain90pilot; first bridge failed to preserve names/timestamps, so rawGZPoseVcapture in second pilot. Alloracleposes label-only and filteredbeforeterminal/reset.",
+      "artifacts": [
+        "/home/nas/chmin/aic_archives/2026-10-14_transport_handoff_execution_v1/tcp_camera_provenance_frozen_plan_v2.json"
+      ],
+      "next_action": "Compare realoptical andATI/gripperpose to controllerFK and fixedcalibration; then inspect near-onlygrasp coverage.",
+      "outcome": "One rawGZlabel-onlypilot preserves identity/stamps; physical FK and cameras match within0.0013mmp95local,0.17mmtransport; standardbridgecaptureinvalidmetadata preserved. Originalsplit/scenesunchanged."
+    },
+    "grasp_observation_timestamps": {
+      "status": "passed",
+      "outcome": "1248frames command-vscontroller timestamp gap p95=46ms; incorrecttime label shiftp95=1.931mm,max3.134mm. Correctedwithin-episodegrasptranslation p95=0.179mm. Poseprobespreviouslyfailed under these invalidcross-clocklabels; do notinferanaccuracyceiling.",
+      "artifact": "/home/nas/chmin/aic_archives/2026-10-14_transport_handoff_execution_v1/sc_grasp_observation_labels_v3/timestamp_audit.json"
+    },
+    "native_grasp_correct_time": {
+      "status": "failed",
+      "comparison": "Sameimages,83/21groups,native192architecture,seed,optimizer,budget; correctedobservation-timeTIPlabels. This is datarepair, not capacitysweep.",
+      "gate": "translationp95<=0.4mm/orientation<=1deg; ifpasses onlythenautonomoushandofflockandpersistencevalidation",
+      "artifact": "/home/nas/chmin/aic_archives/2026-10-14_transport_handoff_execution_v1/sc_native_grasp_pose_v3_correct_time",
+      "outcome": "Correctednative3Dhead0.565mm/1.299degp95, fails0.4mm/1deg. Corrected5keypointtriangulation0.245mm/1.376deg; translationpasses, orientationfails. Jointpixel-spaceSE3fitdoesnotimproveorientation(1.503deg)."
+    },
+    "grasp_camera_identity": {
+      "status": "failed",
+      "hypothesis": "SharedCNNorderedCADcornerdecoder lacks observedcameraidentity despite symmetricplugappearance. Supplyknown3-waycameraonehot, sameimages/labels/split/loss/seed/budget; <0.1%extraheadparameters.",
+      "gate": "0.4mm/1degheldoutconjunction; thenfrozenautonomoushandofflock/persistencevalidationbeforeactorconditioning",
+      "outcome": "6000updatecap, best5200; translation0.251mm/orientation1.349degp95. No clear improvement over correctedpixelmodel; not provenplateau."
+    },
+    "joint_grasp_geometry": {
+      "status": "failed",
+      "outcome": "Matched4000+4000 updatesperarm. Pixelcontrol0.244mm/1.346deg; jointgeometry0.226mm/1.160deg(selectedphase1globalbestangle1.148deg). Improvedorientationbut stillfails0.4mm/1degconjunction. Secondphaseplateau1600updates; no blindextension.",
+      "artifact": "/home/nas/chmin/aic_archives/2026-10-14_transport_handoff_execution_v1/sc_grasp_joint_geometry_v6_continuation/summary.json"
+    },
+    "guarded_board_yaw": {
+      "status": "passed",
+      "hypothesis": "Falseorientationagreement when allthreecameraHoughsearches saturate atsamepriorwindowedge.",
+      "evidence": "Failedorientationcase1405 oldboundaryweightfractions0.783/0.914/0.670; expanding4deg\u219212deg gives2goodindependentrails and removesclipping. Normal1400unchanged.",
+      "budget": "Two reusedcontrols, then6freshonlyif0.5mmopening/0.5degorientationposthoc/noharm gatespass. Finalcoarseidentity/geometric/stationarygatesunchanged.",
+      "artifact": "/home/nas/chmin/aic_archives/2026-10-14_transport_handoff_execution_v1/rule_development_progress_v12_guarded_yaw.json",
+      "outcome": "Clipped search fixed on matched controls; fresh normal-board screen5/6. Causal memory pilot usednohistory and therefore proves no memory benefit."
+    },
+    "grasp_translation_role": {
+      "status": "passed",
+      "role_revision": "Fullorientationprobe stillfailed; position-onlyestimator suppliesgripper-to-tiptranslation. Actorownsorientation. Thisisnotretroactivefullposepromotion.",
+      "heldout_p95_mm": 0.225819,
+      "autonomous_snapshots": {
+        "episodes": 6,
+        "samples": 18,
+        "position_p95_mm": 0.161947,
+        "max_mm": 0.162813,
+        "max_lock_spread_mm": 0.041511
+      },
+      "artifact": "/home/nas/chmin/aic_archives/2026-10-14_transport_handoff_execution_v1/autonomous_grasp_translation_audit_v1.json"
+    },
+    "tip_conditioned_bc": {
+      "status": "failed",
+      "same_architecture": true,
+      "control": "Same architecture, warm checkpoint, replay, episode split and 6000 updates. Control uses the training-episode mean grasp; treatment uses camera-estimated grasp translation. SFP has no tip input.",
+      "gate": "Held-outnear<=1mm/2deg then matchedfullstartpilots. Promotion5/6physical14mmdepth and<=0.5mmlateral; orientation/forceexplicit. No backoff/RL.",
+      "artifact": "/home/nas/chmin/aic_archives/2026-10-14_transport_handoff_execution_v1/matched_tip_actor_frozen_plan_v1.json",
+      "outcome": "Both arms completed 6000 updates. Camera-position treatment failed the predeclared 1 mm near-port action gate; no live pilot was started.",
+      "selected": {
+        "constant_translation": {
+          "near_lateral_p95_mm": 0.8222236782312393,
+          "orientation_p95_deg": 1.7202033400535583,
+          "best_step": 4600,
+          "stop_reason": "update_cap"
+        },
+        "translation": {
+          "near_lateral_p95_mm": 1.0837764143943787,
+          "orientation_p95_deg": 1.8931816220283508,
+          "best_step": 4800,
+          "stop_reason": "update_cap"
+        }
+      }
+    },
+    "causal_board_memory": {
+      "status": "not_applicable_with_evidence",
+      "hypothesis": "Staticboardorientationseenearlierdisappearsfromcurrentrailfeaturewindow; retain two coherentobservation-derivedestimates, currentidentity andthree-viewopeningstillrequired.",
+      "budget": "One reused1505diagnostic; max10posekeyframes20mm/3degspacing, stableframeconfirmation withoutfillinghistoryduringstall. Then newfreshgroupedscreenifpasses.",
+      "artifact": "/home/nas/chmin/aic_archives/2026-10-14_transport_handoff_execution_v1/rule_development_progress_v14_yaw_memory.json",
+      "outcome": "One reusedlivecase passed but used nohistory. FrozenfailedtraceJPEGproxy accepts22/22 with andwithoutmemory, so improvement cannotbe attributedtomemory. Retainedasconditionalfallback, notpromotedcausalbenefit."
+    },
+    "complete_point_targets": {
+      "status": "failed",
+      "offline_improvement": "1.010\u21920.629mm near decoded-command p95",
+      "live_outcome": "Eligible reused1400pilot stops130.478mm beforeopening; no fullinsertion."
+    },
+    "causal_data_fit": {
+      "status": "failed",
+      "outcome": "Matched6000update comparison improves continuation near0.900\u21920.420mm offline but both live pilots stopabout141mm beforeopening,0/1each.",
+      "physical_gate_passed": false
+    },
+    "conditional_decoder": {
+      "status": "failed",
+      "outcome": "Matched6000 transformer/MLP arms bothfail command/pose/motiongate; no livepilot.",
+      "artifact": "/home/nas/chmin/aic_archives/2026-10-14_transport_handoff_execution_v1/conditional_decoder_pilot_not_started_v1.json"
+    },
+    "local_robot_history": {
+      "status": "failed",
+      "outcome": "Both6000update arms selected100. Current/masked versus causal history: continuationcommandp95 5.362/6.147mm, falseadvancement1.0both; unchangedgatefailed. No historymodelrollout.",
+      "artifact": "/home/nas/chmin/aic_archives/2026-10-14_transport_handoff_execution_v1/local_history_frozen_plan_v1.json"
+    },
+    "observation_only_near_approach": {
+      "status": "failed",
+      "hypothesis": "Transfer the unlearned far approach to explicit RGB/proprio feedback, stopping30mm beforeopening; retain the frozen actor for insertion. This tests component starting-envelope ownership, not actor improvement.",
+      "budget": "One reused full-start diagnostic only if frozen history comparison fails. Fresh6screen only after physicalgate.",
+      "artifact": "/home/nas/chmin/aic_archives/2026-10-14_transport_handoff_execution_v1/observation_approach_frozen_plan_v1.json",
+      "approach_gate": "passed",
+      "physical_insertion_gate": "failed",
+      "outcome": "RGB/proprio approach reaches29.124mm true stand-off and0.148mm lateral. Unchanged actor reaches11.073mm depth/0.413mm lateral/0.938deg,official75,no scored penalties. Physical14mmgatefailed; no fresh screen.",
+      "metrics_artifact": "/home/nas/chmin/aic_archives/2026-10-14_transport_handoff_execution_v1/observation_approach_terminal_metrics_v1.json",
+      "video": "/home/nas/chmin/aic_archives/2026-10-14_transport_handoff_execution_v1/observation_approach_llb_1400_v1/five_cameras_20fps_grid_active.mp4"
+    }
+  },
+  "next_action": "Finish conditional decoder comparison, assess frozen pose/command/motion gates, then one eligible reused live pilot. If a gate fails, use traces to diagnose; no routine dataset expansion. Final scenes and RL remain gated.",
+  "completion_protocol": {
+    "status": "passed",
+    "discovery": "Both frozen local diagnostics emitted requested-port CablePlugin COMPLETED events; inherited False return suppressed engine end-time and hence official score. Simulator froze the gripper after the event. Original scores remain unchanged.",
+    "repair": "Bounded normal attempt acknowledges completion; guard failures remain False. No scoring topic or freeze signal enters policy. This is not a physical insertion assertion.",
+    "comparison": "/home/nas/chmin/aic_archives/2026-10-14_transport_handoff_execution_v1/locked_local_diagnostic_plan_protocol_v2.json",
+    "outcome": "Normal bounded attempts acknowledged in 2/2 pilots. Scratch official insertion75; warm partial13.386 without event. This fixes reporting only; varying acquisition state/dynamics prevent claiming a motion-performance effect. Physical insertion gate still open."
+  },
+  "grasp_probe": {
+    "status": "failed",
+    "split": "83 train / 21 held-out episodes, 1248 samples",
+    "crop_regression_translation_p95_mm": 1.451,
+    "crop_state_translation_p95_mm": 1.418,
+    "dense_keypoint_translation_p95_mm": 1.444,
+    "gate": "0.4 mm / 1 degree p95",
+    "next_action": "Do not condition policy on these insufficient predictions; assess frame timing and geometry before another fit.",
+    "ruled_out": "Visual plug to scoring tip fixed-joint drift: six raw-bag audits match CAD within approximately 0.0001 mm.",
+    "outcome": "Priorprobe failures preserved. Command-time TF incorrectlyjoined to observation-time TCP; matchedcorrect-label fit running.",
+    "label_contract_valid": false
+  },
+  "next_runnable_action": "Let matchedBCfits finish; scoreboardmemoryrepair andfrozenfreshyawcontrols. Preloadnewtip-awareactorpipeline, freezeoffline-selectedcheckpoints, then matchedconditionalfullstartpilots withvideos/physicalgeometry. NoGTinputs, noRL/finalscenes.",
+  "point_target_representation": {
+    "status": "passed",
+    "hypothesis": "An explicit complete plug-tip action reference uses grasp position in the command conversion instead of relying on an extra feature alone. Label variance reduction is modest (3\u20137%), not evidence of a successful policy.",
+    "gate": "Decoded recorded-command error p95 <=1 mm and TCP orientation <=2 degrees on held-out near-port rows before a paired reused one-reset pilot. Physical SC gate remains >=14 mm depth and <=0.5 mm lateral error.",
+    "label_geometry_is_model_input": false,
+    "sfP_reference_unchanged": true,
+    "original_dataset_preserved": true,
+    "final_scenes_opened": false,
+    "artifact": "/home/nas/chmin/aic_archives/2026-10-14_transport_handoff_execution_v1/point_target_comparison_frozen_plan_v1.json",
+    "conversion_check": "/home/nas/chmin/aic_archives/2026-10-14_transport_handoff_execution_v1/point_target_conversion_check.json",
+    "training_gpu": 5,
+    "live_gpu_planned": 6,
+    "head_initialization": "Same freshly reset output head in both arms; earlier representation reused; all normalizers from current training labels.",
+    "budget": "6000 updates per arm, maximum four GPU hours; capped matched experiment, not guaranteed convergence.",
+    "scope": "Offline treatment gate only. Paired live gate failed because control missed offline thresholds. Autonomous physical insertion remains open.",
+    "result": {
+      "tcp": {
+        "best_step": 4100,
+        "updates": 6000,
+        "stop_reason": "update_cap",
+        "stale_evaluations": 19,
+        "decoded_tcp_near_lateral_p95_mm": 1.009995937347412,
+        "orientation_p95_deg": 2.0723065733909607
+      },
+      "tip": {
+        "best_step": 4100,
+        "updates": 6000,
+        "stop_reason": "update_cap",
+        "stale_evaluations": 19,
+        "decoded_tcp_near_lateral_p95_mm": 0.6285010278224945,
+        "orientation_p95_deg": 1.7325018048286438
+      },
+      "schema": "aic_point_target_comparison_result/v1",
+      "paired_live_gate_passed": false,
+      "treatment_independent_offline_gate_passed": true,
+      "final_scenes_opened": false
+    },
+    "next_action": "Do not promote. Finish bounded causal teacher-continuation repairs; no fitting unless valid safe full-depth continuations pass their declared gate.",
+    "live_diagnostic": {
+      "status": "failed",
+      "episodes": 1,
+      "reused": true,
+      "official_tier3": 7.9460780164882685,
+      "terminal_true_tip_axial_mm": -130.47811161864865,
+      "terminal_lateral_mm": 7.999368456505446,
+      "terminal_orientation_deg": 3.2134846441456846,
+      "runtime_GT_input": false,
+      "artifact": "/home/nas/chmin/aic_archives/2026-10-14_transport_handoff_execution_v1/local_point_tip_llb_1400_pilot_v2/scored_tip_geometry.json"
+    }
+  },
+  "expert_geometry_same_clock_audit": {
+    "schema": "aic_sc_expert_same_clock_terminal_audit/v2",
+    "episodes": 104,
+    "scope": "Last admitted BC observation, not necessarily terminal event",
+    "depth_p10_p50_p90_mm": [
+      12.720597047344917,
+      15.188382677068013,
+      15.572241469601389
+    ],
+    "lateral_p10_p50_p90_mm": [
+      0.0972320658328408,
+      0.22287584062029314,
+      0.41742447102852076
+    ],
+    "label_change_p50_p95_mm": [
+      0.012946141408215307,
+      0.3060254862707072
+    ],
+    "both_14mm_depth_0_5mm_lateral": 77,
+    "true_geometry_scoring_only": true,
+    "original_preserved": true,
+    "final_scenes_opened": false,
+    "artifact": "/home/nas/chmin/aic_archives/2026-10-14_transport_handoff_execution_v1/sc_expert_same_clock_terminal_audit_v2.json"
+  },
+  "oracle_insertion_controller_diagnosis": {
+    "status": "passed",
+    "scope": "Privileged controller upper bound, not autonomous insertion",
+    "controls": [
+      {
+        "folder": "rule_then_oracle_tip_llb_1400_v1",
+        "privileged_geometry": true,
+        "autonomous_policy": false,
+        "last_tip_mm": [
+          7.037528780011016,
+          -3.919782061565402,
+          0.33260347959437886
+        ],
+        "lateral_mm": 8.055526223633889,
+        "orientation_deg": null,
+        "physical_gate_passed": false
+      },
+      {
+        "folder": "rule_then_oracle_tip_llb_1400_integral_v2",
+        "privileged_geometry": true,
+        "autonomous_policy": false,
+        "last_tip_mm": [
+          -0.015037213055457688,
+          0.02050721346580353,
+          13.328270925640592
+        ],
+        "lateral_mm": 0.025429580818551862,
+        "orientation_deg": null,
+        "physical_gate_passed": false
+      },
+      {
+        "folder": "rule_then_oracle_tip_llb_1400_integral_rate2_v3",
+        "privileged_geometry": true,
+        "autonomous_policy": false,
+        "last_tip_mm": [
+          -0.03534983281977544,
+          0.06242456541427632,
+          15.570683660672078
+        ],
+        "lateral_mm": 0.07173867191095286,
+        "orientation_deg": 0.011765998697078343,
+        "physical_gate_passed": true
+      }
+    ],
+    "artifact": "/home/nas/chmin/aic_archives/2026-10-14_transport_handoff_execution_v1/oracle_insertion_controller_comparison_v3.json"
+  },
+  "causal_local_teacher_continuations": {
+    "status": "passed",
+    "v1_result": "1/3 physical successes; failed 2/3 gate. Other two froze at 2.14 and 3.17 mm depth.",
+    "v2_result": "1/3 physical successes after shared-epoch teacher calibration, 12mm compensation and measured 0.1mm alignment gate; other two froze near 10.48 mm. Multiple fixes together, not isolated attribution.",
+    "v3_budget": "One paired llb_1400 reset changes only command-depth cap from 15.64 to TRAIN-median maximum 18.0996 mm. Keep physical 14mm/0.5mm gate.",
+    "original_frozen_model": "/home/nas/chmin/aic_archives/2026-10-14_transport_handoff_execution_v1/local_point_target_tip_v1/best.pt",
+    "training_started": true,
+    "autonomous_success_claim": false,
+    "geometry_is_teacher_label_only": true,
+    "scope": "Teacher-continuation feasibility and dataset qualification only, not autonomous insertion.",
+    "v3_result": "2/3 physical successes with the recorded-command depth cap. Port-1 failed shallow; preserved. This is not a reliability conclusion.",
+    "dataset": {
+      "path": "/home/nas/chmin/aic_archives/2026-10-14_transport_handoff_execution_v1/causal_local_continuation_dataset_v3",
+      "rows": 1765,
+      "train_episodes": 2,
+      "validation_episodes": 1,
+      "train_rows": 1184,
+      "validation_rows": 581,
+      "source_provenance": "Qualified port-0 one/five-card v3 successes and earlier qualified port-1 v2 success. Do not describe these as 3/3 from one controller version.",
+      "actor_prefix_excluded": true,
+      "post_success_excluded": true,
+      "complete_logged_observation_matched": true
+    }
+  },
+  "input_support_audit": {
+    "artifact": "/home/nas/chmin/aic_archives/2026-10-14_transport_handoff_execution_v1/local_actor_input_support_v1.json",
+    "outcome": "Simple marginal lateral-coverage explanation is unsupported: TRAIN approach median/p95/p99 lateral 6.62/14.50/17.41mm; live median/p95 7.17/9.17mm. This does not prove joint observation/action support. Port-position error 0.231mm, body-tip error 0.074/0.164/0.145mm on three frozen trace snapshots.",
+    "next_hypotheses": "Closed-loop action response, orientation/feedback observability and correlated command state; do not blindly add more episodes."
+  },
+  "causal_local_matched_bc": {
+    "status": "passed",
+    "artifact": "/home/nas/chmin/aic_archives/2026-10-14_transport_handoff_execution_v1/causal_local_matched_fit_frozen_plan_v1.json",
+    "control_updates": 6000,
+    "correction_updates_pending": false,
+    "training_gpu": 5,
+    "same_validation_groups": true,
+    "scope": "Offline eligibility only; live comparison running, no autonomous insertion claim.",
+    "results": {
+      "control": {
+        "best_step": 500,
+        "updates": 6000,
+        "stop_reason": "update_cap",
+        "stale_evaluations": 55,
+        "original_near_p95_mm": 0.811636283993721,
+        "continuation_near_p95_mm": 0.9004476070404053,
+        "continuation_allphase_command_p95_mm": 3.380229711532592,
+        "continuation_orientation_p95_deg": 1.0514463484287262
+      },
+      "correction": {
+        "best_step": 5600,
+        "updates": 6000,
+        "stop_reason": "update_cap",
+        "stale_evaluations": 4,
+        "original_near_p95_mm": 0.6860914528369904,
+        "continuation_near_p95_mm": 0.4204010143876076,
+        "continuation_allphase_command_p95_mm": 2.9056658744812007,
+        "continuation_orientation_p95_deg": 0.555317610502243
+      }
+    },
+    "next_action": "Finish paired reused control/correction rollouts. Score true pre-reset geometry, force and orientation; expand six fresh only if treatment physical pilot passes.",
+    "live_diagnostic": {
+      "status": "failed",
+      "reused_episode_count_per_arm": 1,
+      "results": {
+        "control": {
+          "official_tier3": 6.5310639152867696,
+          "terminal": {
+            "sim_time_s": 99.694,
+            "tip_opening_mm": [
+              8.533630708223772,
+              -5.5451096817694205,
+              -141.36069180892892
+            ],
+            "lateral_mm": 10.176988476322094,
+            "raw_link_frame_rotation_deg": 2.150109369045222,
+            "teacher_tip_orientation_error_deg": 2.1750496364017944
+          },
+          "physical_gate_passed": false,
+          "autonomous_actor_GT_input": false,
+          "artifact": "/home/nas/chmin/aic_archives/2026-10-14_transport_handoff_execution_v1/local_causal_actor_control_llb_1400_pilot_v1/scored_tip_geometry.json"
+        },
+        "correction": {
+          "official_tier3": 6.417961703605078,
+          "terminal": {
+            "sim_time_s": 101.956,
+            "tip_opening_mm": [
+              5.593759268031172,
+              -3.7725627367782337,
+              -141.72200473248503
+            ],
+            "lateral_mm": 6.747026926848026,
+            "raw_link_frame_rotation_deg": 1.219627725633379,
+            "teacher_tip_orientation_error_deg": 1.2299339596675278
+          },
+          "physical_gate_passed": false,
+          "autonomous_actor_GT_input": false,
+          "artifact": "/home/nas/chmin/aic_archives/2026-10-14_transport_handoff_execution_v1/local_causal_actor_correction_llb_1400_pilot_v1/scored_tip_geometry.json"
+        }
+      },
+      "outcome": "Offline corrective-data improvement did not improve full autonomous insertion; both stalled ~141mm before opening. Stop this collection/fit branch."
+    }
+  },
+  "timing_diagnosis": {
+    "status": "not_applicable_with_evidence",
+    "artifact": "/home/nas/chmin/aic_archives/2026-10-14_transport_handoff_execution_v1/observation_to_command_age_audit_v1.json",
+    "outcome": "Autonomous command/input age p95=94ms, maximum116ms, none>200ms horizon. Teacher has one354ms outlier; excluded from corrective anchors/horizons. No observation QoS repair promoted."
+  },
+  "conditional_decoder_comparison": {
+    "status": "running",
+    "hypothesis": "Current decoder predicts near-constant ~1mm axial chunk ramp and advances on all stationary teacher chunks. Compare direct conditional MLP sequence output with transformer; both receive explicit command-change supervision and FP32 coordinate heads.",
+    "artifact": "/home/nas/chmin/aic_archives/2026-10-14_transport_handoff_execution_v1/conditional_decoder_frozen_plan_v1.json",
+    "budget": "6000 updates per arm, maximum4GPUh each; no new collection",
+    "runtime_GT_input": false,
+    "full_target_contract_unchanged": true,
+    "residual_action_adapter": false
+  },
+  "current_experiment": {
+    "name": "Completed observation-only near-approach diagnostic",
+    "status": "failed",
+    "approach_subgate": "passed",
+    "physical_insertion_gate": "failed",
+    "next_action": "Bounded controlled near-insertion geometry intervention diagnosis; no routine collection/retraining or RL. Preserve current hybrid partial insertion as control."
+  },
+  "conditional_decoder_result": {
+    "status": "failed",
+    "transformer_gate_score": 5.0,
+    "mlp_gate_score": 2.336773236592611,
+    "live_rollout_started": false,
+    "reason": "Transformer false advancement1.0; MLP commandp957.010mm and motion errors fail unchangedgate"
+  },
+  "execution_outcome": "blocked_after_distinct_targeted_repairs",
+  "active_jobs_created_by_this_execution": []
+}

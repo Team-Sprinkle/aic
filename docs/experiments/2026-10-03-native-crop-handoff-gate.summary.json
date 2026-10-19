@@ -1,0 +1,74 @@
+{
+  "schema": "aic_20261003_native_crop_handoff_gate/v1",
+  "decision": "fail_stop_before_integrated_handoff",
+  "gates": {
+    "sc_near_orientation_p95_deg_max": 3.0,
+    "known_unsafe_accepted_max": 0,
+    "clear_stop_retention_min": 0.95,
+    "sfp_adjacent_false_accept_max": 0,
+    "complete_live_p95_ms_max": 300
+  },
+  "sc": {
+    "matched_baseline_p95_deg": 4.6241922872978405,
+    "pooled_crop_p95_deg": 3.700736787809598,
+    "spatial_crop_p95_deg": 3.946685695556747,
+    "oracle_center_p95_deg": 3.9666743592105282,
+    "oneport_development_examples": 98,
+    "oneport_development_groups": 4,
+    "pooled_crop_pass": false,
+    "spatial_repair_pass": false
+  },
+  "sfp": {
+    "source_rows": 870,
+    "train_groups": 19,
+    "selection_groups": 5,
+    "development_test_groups": 5,
+    "native_selection_triplet_tp": 66,
+    "native_selection_triplet_positive": 87,
+    "native_selection_triplet_fp": 1,
+    "native_test_triplet_tp": 147,
+    "native_test_triplet_positive": 159,
+    "native_test_triplet_fp": 1,
+    "sibling_gate_pass": false
+  },
+  "limitations": [
+    "SC crop development sampling contains 98 triplets, not the separate 149-triplet exact-timestamp set",
+    "SFP positives are projection-derived and do not certify visual identifiability",
+    "SFP candidate triplets are offline constructed, not full handoff proposals",
+    "Complete live p95 latency not measured because accuracy/identity gates failed",
+    "SFP native feature encoder checkpoint was selected on the five verifier-selection episodes; only the further five groups were unseen to that earlier selection"
+  ],
+  "next_steps_executed": [
+    1,
+    2
+  ],
+  "next_steps_gated": [
+    3,
+    4,
+    5
+  ],
+  "automatic_handoff_enabled": false,
+  "insertion_actor_attached": false,
+  "rl_started": false,
+  "final_scenes_opened": false,
+  "archive": "/home/nas/chmin/aic_archives/2026-10-03_native_crop_handoff_gate_v1",
+  "checkpoints": {
+    "sc_crop": {
+      "path": "/home/nas/chmin/aic_archives/2026-10-03_native_crop_handoff_gate_v1/chmin_aic_20261003_sc_native_crop_orientation_v3/best.pt",
+      "sha256": "8e4f0f1e91ec13c65387d48a51e20c4383f0c04560e8ca083d5ddd42ea4674be"
+    },
+    "sc_spatial": {
+      "path": "/home/nas/chmin/aic_archives/2026-10-03_native_crop_handoff_gate_v1/chmin_aic_20261003_sc_native_crop_orientation_spatial_v1/best.pt",
+      "sha256": "4a6ced17c59ff1ff0b5805d6d03337fe71523b7d32de16e6e18f6d35f1f67fd8"
+    },
+    "sfp_pair": {
+      "path": "/home/nas/chmin/aic_archives/2026-10-03_native_crop_handoff_gate_v1/chmin_aic_20261003_sfp_native_pair_match_v3/best.pt",
+      "sha256": "00b0458d1aab450d26e3f984f2a8c0bb29479eb460787683509690841a5ede4d"
+    }
+  },
+  "scripts": {
+    "scripts/run_sc_native_crop_orientation_ablation.py": "6a94daa28a3c997f616dc4288b85a475cf18f69017157629f0ec1677c007c719",
+    "scripts/diagnose_sc_crop_orientation_failure.py": "f7668d76c142a41792fcaaa66e5cd144c98a0b1a3f93db3ab60060f5a7b07a47",
+    "scripts/run_sfp_native_pair_crop_identity.py": "8769382936111f80133a3f980762122639c8a45377dee1700c95ee743904ae94"
+  }
+}

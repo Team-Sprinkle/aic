@@ -1,0 +1,120 @@
+{
+  "schema": "aic_sc_original_rgb_crop_identity_decision/v1",
+  "date": "2026-10-03",
+  "decision": "reject_crop_identity_keep_existing_handoff_disabled",
+  "frozen_new_development_scene_manifest": "/home/nas/chmin/aic_archives/2026-10-03_sc_crop_identity_v1/manifest.json",
+  "new_development_complete_resets": 4,
+  "fit_checkpoint": "/home/nas/chmin/aic_archives/2026-10-03_sc_crop_identity_v1/fit_v1/crop_identity.pt",
+  "fit_training_rows": 2952,
+  "new_development_projection_triplets": 144,
+  "new_development_counts": {
+    "baseline": {
+      "all": {
+        "triplets": 144,
+        "projected_all_triplets": 135,
+        "real_projected_all_recalled": 134,
+        "absent_all_three_false_accept": 0,
+        "absent_triplets": 144
+      },
+      "near_220mm": {
+        "triplets": 135,
+        "projected_all_triplets": 135,
+        "real_projected_all_recalled": 134,
+        "absent_all_three_false_accept": 0,
+        "absent_triplets": 135
+      },
+      "near_160mm": {
+        "triplets": 125,
+        "projected_all_triplets": 125,
+        "real_projected_all_recalled": 125,
+        "absent_all_three_false_accept": 0,
+        "absent_triplets": 125
+      }
+    },
+    "crop": {
+      "all": {
+        "triplets": 144,
+        "projected_all_triplets": 135,
+        "real_projected_all_recalled": 102,
+        "absent_all_three_false_accept": 25,
+        "absent_triplets": 144
+      },
+      "near_220mm": {
+        "triplets": 135,
+        "projected_all_triplets": 135,
+        "real_projected_all_recalled": 102,
+        "absent_all_three_false_accept": 25,
+        "absent_triplets": 135
+      },
+      "near_160mm": {
+        "triplets": 125,
+        "projected_all_triplets": 125,
+        "real_projected_all_recalled": 96,
+        "absent_all_three_false_accept": 21,
+        "absent_triplets": 125
+      }
+    }
+  },
+  "saved_live_proxy_controls": {
+    "accepted_control": {
+      "accepted": 4,
+      "tested": 4
+    },
+    "same_image_wrong_request": {
+      "accepted": 0,
+      "tested": 4
+    },
+    "early_transport": {
+      "accepted": 0,
+      "tested": 4
+    },
+    "provisionally_hidden": {
+      "accepted": 0,
+      "tested": 20
+    }
+  },
+  "saved_p0p1_proxy_controls": {
+    "accepted_control": {
+      "accepted": 1,
+      "tested": 2
+    },
+    "same_image_wrong_request": {
+      "accepted": 0,
+      "tested": 2
+    },
+    "early_transport": {
+      "accepted": 0,
+      "tested": 2
+    },
+    "provisionally_hidden": {
+      "accepted": 0,
+      "tested": 0
+    }
+  },
+  "known_port0_replay": {
+    "valid": false,
+    "reason": "wrong_tcp_posture",
+    "identity_probabilities": [
+      0.7460862994194031,
+      0.7542335391044617,
+      0.7474938035011292
+    ],
+    "posture_error_deg": 6.7097963600150505,
+    "standoff_error_mm": 1.288586882093863
+  },
+  "new_model_used_for_live_actions": false,
+  "insertion_actor_attached": false,
+  "full_live_latency_measured": false,
+  "final_scenes_opened": false,
+  "limitations": [
+    "projected-in-frame labels are not true visibility",
+    "saved live replay uses JPEG proxy, not fresh native RGB",
+    "manual review only sampled final frames"
+  ],
+  "artifacts": {
+    "four_reset_comparison": "/home/nas/chmin/aic_archives/2026-10-03_sc_crop_identity_v1/independent_four_reset_comparison_v1.json",
+    "p0_p1_replay": "/home/nas/chmin/aic_archives/2026-10-03_sc_crop_identity_v1/saved_p0p1_crop_replay_v1.json",
+    "controls_hidden_replay": "/home/nas/chmin/aic_archives/2026-10-03_sc_crop_identity_v1/saved_controls_hidden_crop_replay_v1.json",
+    "sampled_review_panels": "/home/nas/chmin/aic_archives/2026-10-03_sc_crop_identity_v1/manual_review_panels"
+  }
+}

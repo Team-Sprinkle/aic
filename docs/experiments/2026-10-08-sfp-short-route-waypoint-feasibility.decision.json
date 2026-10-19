@@ -1,0 +1,35 @@
+{
+  "schema": "aic_sfp_short_route_waypoint_decision/v1",
+  "date": "2026-10-08",
+  "decision": "offline_gate_failed_no_live_rollout",
+  "ordinary_teacher_one_second": {
+    "development_episodes": 41,
+    "ridge_visual_moving_error_p95_mm": 16.83,
+    "ridge_state_only_moving_error_p95_mm": 33.54,
+    "neural_teacher_only_moving_error_p95_mm": 12.82,
+    "neural_boundary15_moving_error_p95_mm": 13.51,
+    "waypoint_servo_future_direction_cosine_ge_0_7_fraction": 0.9760
+  },
+  "actor_boundary_one_second": {
+    "train_episodes": 16,
+    "development_episodes": 6,
+    "neural_teacher_only_error_p95_mm": 26.40,
+    "neural_boundary15_error_p95_mm": 17.86,
+    "waypoint_servo_future_direction_cosine_ge_0_7": "0/6",
+    "numeric_error_gate_passed_but_direction_gate_failed": true
+  },
+  "arc20_repair": {
+    "train_actor_boundary_episodes": 13,
+    "development_actor_boundary_episodes": 4,
+    "teacher_only_moving_error_p95_mm": 14.77,
+    "teacher_only_boundary_error_p95_mm": 28.98,
+    "boundary15_moving_error_p95_mm": 17.01,
+    "boundary15_boundary_error_p95_mm": 27.37,
+    "offline_gate_passed": false
+  },
+  "autonomous_rollouts_this_experiment": 0,
+  "independent_prior_safe_arrivals": "0/3 for both actors",
+  "final_scenes_opened": false,
+  "deployment_promoted": false,
+  "next_gate": "Causally verify at least 20 train and six episode-grouped development actor-state recovery labels; require at least five of six held-out safe direction agreements before another actor fit."
+}

@@ -1,0 +1,118 @@
+{
+  "schema": "aic_geometric_handoff_repair_20261003/v1",
+  "decision": "offline_component_gates_improve; integrated_handoff_still_disabled",
+  "sc": {
+    "near_triplets": 87,
+    "near_episodes": 4,
+    "frozen_head_p95_deg": 4.4342308012230545,
+    "board_rail_p95_deg": 0.05585421792089293,
+    "frozen_valid_stops_retained": 5,
+    "frozen_valid_stops_total": 5,
+    "frozen_false_stops_accepted": 0,
+    "offline_pipeline_p95_ms": 100.27476781979203,
+    "limitation": "offline in-frame and distance filters; complete live ROS latency and true identifiability unmeasured",
+    "four_reset_combined": {
+      "schema": "sc_board_lines_four_reset_combined/v1",
+      "source_sparse": "/var/tmp/chmin_aic_20261003_sc_board_lines_oneport_v2.json",
+      "source_exact": "/var/tmp/chmin_aic_20261003_sc_board_lines_oneport_exact_v2.json",
+      "episodes": [
+        "development_p0_a",
+        "development_p0_b",
+        "development_p1_a",
+        "development_p1_b"
+      ],
+      "near_triplets": 87,
+      "frozen_base_p95_deg": 4.4342308012230545,
+      "board_line_p95_deg": 0.05585421792089293,
+      "board_line_median_deg": 0.026598950205920444,
+      "history_initialized_rate": 1.0,
+      "per_episode": {
+        "development_p0_a": {
+          "near_triplets": 23,
+          "p95_deg": 0.02641704430264362
+        },
+        "development_p0_b": {
+          "near_triplets": 23,
+          "p95_deg": 0.05585421792089293
+        },
+        "development_p1_a": {
+          "near_triplets": 22,
+          "p95_deg": 0.053462532356628595
+        },
+        "development_p1_b": {
+          "near_triplets": 19,
+          "p95_deg": 0.057772526235532036
+        }
+      },
+      "offline_selection_uses_scored_inframe_and_distance": true,
+      "runtime_true_geometry": false,
+      "final_scenes_opened": false
+    }
+  },
+  "sfp": {
+    "fit": {
+      "episodes": 19,
+      "positive_triplets": 881,
+      "negative_triplets": 1229,
+      "baseline_tp": 881,
+      "baseline_fp": 0,
+      "crossview_tp": 877,
+      "crossview_fp": 0
+    },
+    "checkpoint_selection": {
+      "episodes": 5,
+      "positive_triplets": 87,
+      "negative_triplets": 423,
+      "baseline_tp": 66,
+      "baseline_fp": 1,
+      "crossview_tp": 85,
+      "crossview_fp": 0
+    },
+    "independent_development": {
+      "episodes": 5,
+      "positive_triplets": 159,
+      "negative_triplets": 366,
+      "baseline_tp": 147,
+      "baseline_fp": 1,
+      "crossview_tp": 159,
+      "crossview_fp": 0
+    },
+    "rule": "at least two native-crop identity votes >=0.5 and three-view reprojection <=25 px",
+    "limitation": "constructed candidate triplets with projection-derived labels; not certified visibility or full transport-to-insertion handoff"
+  },
+  "archive": "/home/nas/chmin/aic_archives/2026-10-03_geometric_handoff_repair_v1",
+  "artifacts": {
+    "sfp_crossview.json": {
+      "path": "/home/nas/chmin/aic_archives/2026-10-03_geometric_handoff_repair_v1/sfp_crossview.json",
+      "sha256": "4b20849fc8957aea252b3b21bb2ed81b9d6f5ca5bd8c56346dfcb2f66b7b7e4c"
+    },
+    "sc_board_oneport.json": {
+      "path": "/home/nas/chmin/aic_archives/2026-10-03_geometric_handoff_repair_v1/sc_board_oneport.json",
+      "sha256": "f17ff02d453a294e5ee5c78d85058a2d427b93be9f8a2bf955dfa3f1412a9304"
+    },
+    "sc_board_frozen_stops.json": {
+      "path": "/home/nas/chmin/aic_archives/2026-10-03_geometric_handoff_repair_v1/sc_board_frozen_stops.json",
+      "sha256": "65c77ba72b3aa009664c90ab8c7e94a349bc8442fc5e9aae3c5f6da337b4e658"
+    },
+    "sc_offline_latency.json": {
+      "path": "/home/nas/chmin/aic_archives/2026-10-03_geometric_handoff_repair_v1/sc_offline_latency.json",
+      "sha256": "e0ef60a2b92f1c8439c4f5386138c935dd9ad5fa23f68b2a9646462a202dd027"
+    },
+    "sc_board_oneport_exact.json": {
+      "path": "/home/nas/chmin/aic_archives/2026-10-03_geometric_handoff_repair_v1/sc_board_oneport_exact.json",
+      "sha256": "11ee117e730947100200036301d378e307a57a4755d862d3e4d0f079ab63618f"
+    },
+    "sc_board_four_reset_combined.json": {
+      "path": "/home/nas/chmin/aic_archives/2026-10-03_geometric_handoff_repair_v1/sc_board_four_reset_combined.json",
+      "sha256": "0e59dfc5a2735b09cf38276cffdc15a5584ecd6ef9341dae58893057d48583d1"
+    }
+  },
+  "code_sha256": {
+    "scripts/evaluate_sfp_crossview_handoff.py": "a33794fdc7a72dc069d300e121ee2287a6fefc3126ee7dbe75af57d927976c35",
+    "scripts/evaluate_sc_board_lines_oneport.py": "91c636bbf74f6142659ac317d3e6f016e5b414b6bb167e40216f649e9a95788b",
+    "scripts/replay_sc_board_lines_on_stops.py": "b2e009069f4ed8bf67b310ac5469b5783228c85e5f6fd8bcabb4d0b6bbecb9e4",
+    "scripts/benchmark_sc_board_oneport_pipeline.py": "ef9e24f970b62770da1ce48f27758c027b722613003d10df0e3f734554233d98"
+  },
+  "final_scenes_opened": false,
+  "actor_or_rl_training": false
+}

@@ -1,0 +1,15 @@
+# Why change from all-candidate to selected-port perception?
+
+**Yes, this differs from the current coarse locator.** Today its image network has a separate output slot for every possible port identity: two SC ports and ten SFP card/port combinations. It predicts an image point and an in-frame score for each slot, then the task code chooses one. The pipeline only refines and triangulates the **chosen** candidate into a precise 3D pose; it does **not** reliably estimate a 3D pose for every port. My earlier wording, “predicting all poses,” was inaccurate.
+
+I originally favored the all-candidate locator because it was a straightforward way to supervise every physically present opening in our images. It exposed neighboring ports as explicit alternatives, and one shared model could serve both task families. It also let us reuse the available image labels. That was a reasonable first diagnostic, and it produced useful near-port localization results.
+
+I now favor a **task-conditioned, selected-port-only output for the precise near-port stage** for three reasons:
+
+1. **Your deployment sequence narrows the problem.** If transport first brings the robot near the requested destination, the fine perception model need only answer “where is the requested opening here?” It need not maintain output slots for distant or unseen ports throughout the route.
+2. **The observed failure is target selection, not just pixel accuracy.** In a development SFP scene where the requested card-0 opening was absent, individual predictions passed geometric image checks but corresponded to a different physical port about 48 mm away. Reprojection agreement did not reveal the wrong identity. A selected-port model can be trained to answer “requested target unavailable” when a different port is visible.
+3. **Our present in-frame labels do not mean visible.** A port may project inside an image while a cable or card hides it. A precise handoff needs explicit identifiable-visibility and rejection supervision for the requested port. That supervision fits naturally with a selected-port question.
+
+This is a **design hypothesis, not an established accuracy win**. A selected-port model could still confuse neighboring openings. Its training must show the same scene with different task requests and include cases where the requested port is hidden but another is visible. We should compare it with the current all-candidate locator on the **same held-out near-target scenes**, measuring wrong-port acceptance, pose error when accepted, rejection of hidden targets, and full inference latency. We should keep the current locator as the baseline until that comparison demonstrates improvement.
+
+The practical change is small to state: **input = close-up RGB + measured robot pose + requested task identity; output = pose of that one requested opening, or “no reliable pose.”** It may internally detect other openings for context, but its final pose is for one selected target only. The transport arrival proposal and the final insertion actor remain separate parts of the pipeline.

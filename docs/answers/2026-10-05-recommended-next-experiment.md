@@ -1,0 +1,13 @@
+# Recommended next experiment — October 5, 2026
+
+I would keep the two-stage visual approach, but simplify the coarse stage's job. The robot's base-frame position can tell us when it has entered a **broad search area**. It should trigger a camera check, not stop the arm or supply the port pose. The saved autonomous replay showed why: a coordinate stop would have fired while the tool was 31 mm or 99 mm laterally misaligned.
+
+The immediate priority is **transport**, because none of three saved autonomous SFP rollouts reached the safe buffered handoff region. On new, nonfinal development starts, compare measured transport paths with successful teachers. Diagnose the *first* point where the actor diverges, then make one targeted change to route supervision or the actor input. Require safe buffered arrival on at least 9/10 new starts before spending more effort on insertion or RL. Preserve video, actual TCP path and posthoc port-relative geometry for each run.
+
+In parallel, repair coarse identity using the original camera images and distance-sampled history. Its output should be only: **which visible region, if any, contains the requested numbered port, and is it safe to pause for refinement?** It should be allowed to say “uncertain; keep moving or obtain another view.” Curate a small, independently reviewed set of visible, occluded, wrong-neighbor and empty-slot examples from existing training and autonomous traces. The current projected-point labels do not answer whether the requested port is truly identifiable. Use simulator geometry to label training examples, never as a runtime selector. Evaluate by complete reset group, with zero wrong accepted ports and at least 9/10 early safe acquisitions on new development starts.
+
+Only after **both** transport arrival and coarse identity pass should the selected-port refiner estimate the precise pose and the insertion actor take over. Measure the full pipeline's p95 inference time against 300 ms, then test autonomous insertion. Keep the four final IK configurations sealed and RL disabled until this supervised handoff works.
+
+The next concrete run is therefore a **bounded transport-divergence study plus reviewed identity-label audit**, using saved traces first. The rootless Docker key quota is currently 117/117, so new Gazebo runs need that quota raised or another authorized way to launch the same rootless simulator. I would not spend GPUs on another generic crop retraining while that missing slot-identity evidence remains unresolved.
+
+Evidence: [global-coordinate audit](../experiments/2026-10-05-global-coordinate-arrival-proxy.md), [coarse-model comparison](../experiments/2026-10-04-coarse-shared-history-execution.md), [current status](../STATUS.md).

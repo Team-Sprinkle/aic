@@ -26,7 +26,8 @@ def main():
     stats = {key: weights[key].numpy() for key in ('state_mean', 'state_std',
              'pose_mean', 'pose_std', 'target_mean', 'target_std')}
     model = SharedPortTCPActor(stats, pretrained=False,
-                               use_time=bool(checkpoint['include_elapsed']))
+                               use_time=bool(checkpoint['include_elapsed']),
+                               condition_on_pose=checkpoint.get('target_frame', 'port') == 'port')
     model.load_state_dict(weights, strict=True)
     device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
     model.to(device).eval()

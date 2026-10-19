@@ -1,0 +1,305 @@
+{
+  "schema": "aic_requested_port_history_crop_comparison/v1",
+  "date": "2026-10-04",
+  "decision": "failed_coarse_identity_and_coverage_gate",
+  "crop_size_px": 160,
+  "required_early_episodes_of_10": 9,
+  "required_wrong_accepted": 0,
+  "training_episodes_initial": 50,
+  "training_episodes_extra5": 60,
+  "development_episodes": 10,
+  "stress_episodes": 10,
+  "stress_previously_inspected": true,
+  "final_scenes_opened": false,
+  "autonomous_handoff_enabled": false,
+  "refiner_connected": false,
+  "variants": {
+    "pooled_history": {
+      "artifact_dir": "/home/nas/chmin/aic_archives/2026-10-04_sfp_requested_history_crop_v1",
+      "summary": {
+        "schema": "requested_history_crop_v1",
+        "best_step": 700,
+        "completed_updates": 1000,
+        "train_episodes": 50,
+        "development": {
+          "episodes": 10,
+          "rows": 136,
+          "proposals": 125,
+          "wrong_port_any_view_posthoc": 21,
+          "all_view_160px_crops_with_20px_margin": 82,
+          "all_view_crop_fraction": 0.656,
+          "early_episodes_3s": 8,
+          "any_episodes": 10
+        },
+        "previously_inspected_stress": {
+          "episodes": 10,
+          "rows": 581,
+          "proposals": 566,
+          "wrong_port_any_view_posthoc": 282,
+          "all_view_160px_crops_with_20px_margin": 187,
+          "all_view_crop_fraction": 0.3303886925795053,
+          "early_episodes_3s": 10,
+          "any_episodes": 10
+        },
+        "promotion": false,
+        "final_scenes_opened": false
+      },
+      "matched_geometry_stress": {
+        "history": {
+          "rows": 581,
+          "episodes": 10,
+          "accepted": 32,
+          "wrong_port_any_view_posthoc": 0,
+          "all_view_160px_crops_with_20px_margin": 32,
+          "all_view_crop_fraction": 1.0,
+          "early_episodes_3s": 1,
+          "any_episodes": 6
+        },
+        "current_only": {
+          "rows": 581,
+          "episodes": 10,
+          "accepted": 27,
+          "wrong_port_any_view_posthoc": 0,
+          "all_view_160px_crops_with_20px_margin": 27,
+          "all_view_crop_fraction": 1.0,
+          "early_episodes_3s": 1,
+          "any_episodes": 4
+        },
+        "frozen_selected_only": {
+          "rows": 581,
+          "episodes": 10,
+          "accepted": 101,
+          "wrong_port_any_view_posthoc": 0,
+          "all_view_160px_crops_with_20px_margin": 101,
+          "all_view_crop_fraction": 1.0,
+          "early_episodes_3s": 3,
+          "any_episodes": 5
+        }
+      }
+    },
+    "shared_3d": {
+      "artifact_dir": "/home/nas/chmin/aic_archives/2026-10-04_sfp_requested_history_3d_v2",
+      "summary": {
+        "schema": "requested_history_3d_v1",
+        "best_step": 1000,
+        "completed_updates": 1000,
+        "train_episodes": 50,
+        "development": {
+          "episodes": 10,
+          "rows": 136,
+          "accepted": 134,
+          "wrong_port_any_view_posthoc": 15,
+          "early_episodes_3s": 10,
+          "any_episodes": 10,
+          "all_view_160px_crops_with_20px_margin": 86,
+          "all_view_crop_fraction": 0.6417910447761194,
+          "accepted_3d_error_p50_mm": 14.833418387026747,
+          "accepted_3d_error_p95_mm": 33.42920403188092
+        },
+        "previously_inspected_stress": {
+          "episodes": 10,
+          "rows": 581,
+          "accepted": 573,
+          "wrong_port_any_view_posthoc": 313,
+          "early_episodes_3s": 10,
+          "any_episodes": 10,
+          "all_view_160px_crops_with_20px_margin": 219,
+          "all_view_crop_fraction": 0.38219895287958117,
+          "accepted_3d_error_p50_mm": 37.20625414738382,
+          "accepted_3d_error_p95_mm": 158.87505573438662
+        },
+        "promotion": false,
+        "final_scenes_opened": false
+      }
+    },
+    "spatial_history": {
+      "artifact_dir": "/home/nas/chmin/aic_archives/2026-10-04_sfp_requested_spatial_history_crop_v1",
+      "summary": {
+        "schema": "requested_history_crop_v1",
+        "best_step": 700,
+        "completed_updates": 1000,
+        "train_episodes": 50,
+        "development": {
+          "episodes": 10,
+          "rows": 136,
+          "proposals": 120,
+          "wrong_port_any_view_posthoc": 22,
+          "all_view_160px_crops_with_20px_margin": 82,
+          "all_view_crop_fraction": 0.6833333333333333,
+          "early_episodes_3s": 9,
+          "any_episodes": 10
+        },
+        "previously_inspected_stress": {
+          "episodes": 10,
+          "rows": 581,
+          "proposals": 565,
+          "wrong_port_any_view_posthoc": 370,
+          "all_view_160px_crops_with_20px_margin": 170,
+          "all_view_crop_fraction": 0.3008849557522124,
+          "early_episodes_3s": 10,
+          "any_episodes": 10
+        },
+        "promotion": false,
+        "final_scenes_opened": false
+      },
+      "matched_geometry_stress": {
+        "history": {
+          "rows": 581,
+          "episodes": 10,
+          "accepted": 26,
+          "wrong_port_any_view_posthoc": 0,
+          "all_view_160px_crops_with_20px_margin": 26,
+          "all_view_crop_fraction": 1.0,
+          "early_episodes_3s": 3,
+          "any_episodes": 5
+        },
+        "current_only": {
+          "rows": 581,
+          "episodes": 10,
+          "accepted": 24,
+          "wrong_port_any_view_posthoc": 0,
+          "all_view_160px_crops_with_20px_margin": 24,
+          "all_view_crop_fraction": 1.0,
+          "early_episodes_3s": 2,
+          "any_episodes": 4
+        },
+        "frozen_selected_only": {
+          "rows": 581,
+          "episodes": 10,
+          "accepted": 101,
+          "wrong_port_any_view_posthoc": 0,
+          "all_view_160px_crops_with_20px_margin": 101,
+          "all_view_crop_fraction": 1.0,
+          "early_episodes_3s": 3,
+          "any_episodes": 5
+        }
+      }
+    },
+    "spatial_history_extra5": {
+      "artifact_dir": "/home/nas/chmin/aic_archives/2026-10-04_sfp_requested_spatial_history_extra5_v1",
+      "summary": {
+        "schema": "requested_history_crop_v1",
+        "best_step": 1000,
+        "completed_updates": 1000,
+        "train_episodes": 60,
+        "development": {
+          "episodes": 10,
+          "rows": 136,
+          "proposals": 134,
+          "wrong_port_any_view_posthoc": 25,
+          "all_view_160px_crops_with_20px_margin": 96,
+          "all_view_crop_fraction": 0.7164179104477612,
+          "early_episodes_3s": 10,
+          "any_episodes": 10
+        },
+        "previously_inspected_stress": {
+          "episodes": 10,
+          "rows": 581,
+          "proposals": 577,
+          "wrong_port_any_view_posthoc": 227,
+          "all_view_160px_crops_with_20px_margin": 305,
+          "all_view_crop_fraction": 0.5285961871750433,
+          "early_episodes_3s": 10,
+          "any_episodes": 10
+        },
+        "promotion": false,
+        "final_scenes_opened": false
+      },
+      "matched_geometry_stress": {
+        "history": {
+          "rows": 581,
+          "episodes": 10,
+          "accepted": 37,
+          "wrong_port_any_view_posthoc": 0,
+          "all_view_160px_crops_with_20px_margin": 37,
+          "all_view_crop_fraction": 1.0,
+          "early_episodes_3s": 4,
+          "any_episodes": 7
+        },
+        "current_only": {
+          "rows": 581,
+          "episodes": 10,
+          "accepted": 37,
+          "wrong_port_any_view_posthoc": 0,
+          "all_view_160px_crops_with_20px_margin": 37,
+          "all_view_crop_fraction": 1.0,
+          "early_episodes_3s": 3,
+          "any_episodes": 6
+        },
+        "frozen_selected_only": {
+          "rows": 581,
+          "episodes": 10,
+          "accepted": 101,
+          "wrong_port_any_view_posthoc": 0,
+          "all_view_160px_crops_with_20px_margin": 101,
+          "all_view_crop_fraction": 1.0,
+          "early_episodes_3s": 3,
+          "any_episodes": 5
+        }
+      }
+    },
+    "spatial_history_xy_extra5": {
+      "artifact_dir": "/home/nas/chmin/aic_archives/2026-10-04_sfp_requested_spatial_history_xy_extra5_v1",
+      "summary": {
+        "schema": "requested_history_crop_v1",
+        "best_step": 700,
+        "completed_updates": 1000,
+        "train_episodes": 60,
+        "development": {
+          "episodes": 10,
+          "rows": 136,
+          "proposals": 128,
+          "wrong_port_any_view_posthoc": 25,
+          "all_view_160px_crops_with_20px_margin": 89,
+          "all_view_crop_fraction": 0.6953125,
+          "early_episodes_3s": 9,
+          "any_episodes": 10
+        },
+        "previously_inspected_stress": {
+          "episodes": 10,
+          "rows": 581,
+          "proposals": 572,
+          "wrong_port_any_view_posthoc": 173,
+          "all_view_160px_crops_with_20px_margin": 303,
+          "all_view_crop_fraction": 0.5297202797202797,
+          "early_episodes_3s": 10,
+          "any_episodes": 10
+        },
+        "promotion": false,
+        "final_scenes_opened": false
+      },
+      "matched_geometry_stress": {
+        "history": {
+          "rows": 581,
+          "episodes": 10,
+          "accepted": 23,
+          "wrong_port_any_view_posthoc": 0,
+          "all_view_160px_crops_with_20px_margin": 23,
+          "all_view_crop_fraction": 1.0,
+          "early_episodes_3s": 3,
+          "any_episodes": 5
+        },
+        "current_only": {
+          "rows": 581,
+          "episodes": 10,
+          "accepted": 28,
+          "wrong_port_any_view_posthoc": 0,
+          "all_view_160px_crops_with_20px_margin": 28,
+          "all_view_crop_fraction": 1.0,
+          "early_episodes_3s": 3,
+          "any_episodes": 5
+        },
+        "frozen_selected_only": {
+          "rows": 581,
+          "episodes": 10,
+          "accepted": 101,
+          "wrong_port_any_view_posthoc": 0,
+          "all_view_160px_crops_with_20px_margin": 101,
+          "all_view_crop_fraction": 1.0,
+          "early_episodes_3s": 3,
+          "any_episodes": 5
+        }
+      }
+    }
+  }
+}

@@ -21,7 +21,11 @@ def main():
                    help='Label-only self-view mask; ordinary RGB sees all original visuals')
     p.add_argument('--world-follower', action='store_true',
                    help='Keep original robot; use independent visual-only camera models')
+    p.add_argument('--primary-rgbd', action='store_true',
+                   help='Diagnostic: turn copied primary camera into RGBD at its own link')
     a = p.parse_args()
+    if a.primary_rgbd and a.world_follower:
+        p.error('Primary RGBD and world follower are separate ablations')
     macro_source = a.sources / 'basler_camera_macro.xacro'
     root_source = a.sources / 'ur_gz.urdf.xacro'
     ET.register_namespace('xacro', 'http://wiki.ros.org/xacro')
@@ -49,7 +53,10 @@ def main():
         extension=ET.SubElement(macro,'gazebo',{'reference':'${tf_prefix}camera_link'})
         visual=ET.SubElement(extension,'visual')
         ET.SubElement(visual,'visibility_flags').text='${4294967295 - '+bit+'}'
-    if not a.world_follower:
+    if a.primary_rgbd:
+        rgb.set('type','rgbd_camera')
+        rgb.find('topic').text='/${name}'
+    elif not a.world_follower:
         parent.append(aux)
     tree.write(a.audit / 'basler_visibility_macro.xacro', encoding='unicode', xml_declaration=True)
     root = root_source.read_text()
@@ -71,7 +78,10 @@ def main():
             ET.SubElement(sensor,'topic').text=f'/audit/visibility/{camera}_camera'
             ET.SubElement(sensor,'frame_id').text=f'{camera}_camera/sensor_link'
             cam=ET.SubElement(sensor,'camera')
-            ET.SubElement(cam,'visibility_mask').text='2'
+            # World-follower mode leaves the deployed robot description intact.
+            # Its ordinary scene visuals keep Gazebo's default bit 1; bit 2
+            # produced blank grey RGB/depth in the SFP pilot.
+            ET.SubElement(cam,'visibility_mask').text='1'
             ET.SubElement(cam,'optical_frame_id').text=f'{camera}_camera/optical'
             ET.SubElement(cam,'horizontal_fov').text='.8718'
             im=ET.SubElement(cam,'image')
@@ -81,8 +91,10 @@ def main():
         world_tree.write(world_path,encoding='unicode',xml_declaration=True)
     bridge = yaml.safe_load((a.audit / 'bridge_audit.yaml').read_text())
     for camera in ('center', 'left', 'right'):
-        for suffix in ('image', 'depth_image', 'camera_info'):
-            topic = f'/audit/visibility/{camera}_camera/{suffix}'
+        suffixes=('depth_image',) if a.primary_rgbd else ('image', 'depth_image', 'camera_info')
+        for suffix in suffixes:
+            topic = (f'/{camera}_camera/{suffix}' if a.primary_rgbd else
+                     f'/audit/visibility/{camera}_camera/{suffix}')
             info = suffix == 'camera_info'
             bridge.append(dict(ros_topic_name=topic, gz_topic_name=topic,
                                ros_type_name='sensor_msgs/msg/CameraInfo' if info else 'sensor_msgs/msg/Image',
@@ -95,6 +107,7 @@ def main():
                     auxiliary_near_clip_m=a.aux_near_m,
                     auxiliary_excludes_own_camera_visual=a.exclude_own_camera_visual,
                     auxiliary_world_follower=a.world_follower,
+                    primary_rgbd_diagnostic=a.primary_rgbd,
                     source_sha256={p.name:hashlib.sha256(p.read_bytes()).hexdigest() for p in (macro_source,root_source)},
                     reference='https://github.com/gazebosim/gz-sensors/blob/gz-sensors9/src/RgbdCameraSensor.cc')
     (a.audit / 'visibility_sensor_manifest.json').write_text(json.dumps(metadata, indent=2)+'\n')

@@ -34,37 +34,75 @@ from lerobot_robot_aic.runtime_features import AICRuntimeFeatureAssembler  # noq
 
 
 class RunSharedPortTCP(Policy):
+    supports_sc_tip_target_reference=False
+
+    @staticmethod
+    def _make_actor(checkpoint, stats, **kwargs):
+        return SharedPortTCPActor(stats, **kwargs)
     def __init__(self, parent_node, checkpoint_path=None):
         super().__init__(parent_node)
         checkpoint_path = Path(checkpoint_path or os.environ['AIC_SHARED_PORT_TCP_CHECKPOINT'])
         checkpoint = torch.load(checkpoint_path, map_location='cpu', weights_only=False)
+        # Old locked-port checkpoints retain their SC-only runtime contract.
+        self.trained_families=tuple(checkpoint.get('trained_families',('sc',)))
+        self.recorded_controller_contract=checkpoint.get('recorded_controller_contract')
         if (checkpoint.get('oracle_sc_near_pose_noise_mm') is not None or
                 checkpoint.get('oracle_sc_near_tip_noise_mm') is not None):
             raise ValueError('This diagnostic checkpoint requires an observation-only SC pose input that this runtime does not yet provide')
         if checkpoint.get('architecture') not in (
                 'shared_port_tcp_rgb_resnet18_pose_aux_transformer_v1',
-                'shared_port_tcp_rgb_resnet18_pose_aux_transformer_time_v2'):
+                'shared_port_tcp_rgb_resnet18_pose_aux_transformer_time_v2',
+                'shared_port_tcp_local_predicted_pose'):
             raise ValueError('Incompatible shared port-TCP checkpoint')
         self.device = torch.device(os.environ.get('AIC_SHARED_PORT_TCP_DEVICE', 'cuda:0'))
         state = checkpoint['model']
         stats = {key: state[key].numpy() for key in ('state_mean', 'state_std',
                  'pose_mean', 'pose_std', 'target_mean', 'target_std')}
+        self.include_tip=bool(checkpoint.get('include_tip',False))
+        self.tip_input_mode=checkpoint.get('tip_input_mode','none')
+        self.sc_action_reference=checkpoint.get('sc_action_reference','tcp')
+        if self.sc_action_reference not in ('tcp','plug_tip_translation_tcp_orientation','full_connector_pose'):
+            raise ValueError('Unsupported SC action reference')
+        if self.sc_action_reference!='tcp' and not self.supports_sc_tip_target_reference:
+            raise ValueError('This runtime cannot convert plug-tip targets; use the explicitly matched locked-port adapter')
+        if self.sc_action_reference!='tcp' and self.tip_input_mode not in ('translation','full_pose'):
+            raise ValueError('Point targets require camera-estimated body-tip conversion')
+        if self.include_tip:
+            if self.tip_input_mode not in ('disabled','constant_translation','translation','full_pose'):
+                raise ValueError('Unspecified predicted-tip runtime contract')
+            stats.update({key:state[key].numpy() for key in ('tip_mean','tip_std')})
         self.include_elapsed = bool(checkpoint.get('include_elapsed', False))
         self.target_frame = checkpoint.get('target_frame', 'port')
         self.native_jpeg_quality_by_family = checkpoint.get('native_jpeg_quality_by_family', {})
-        if self.target_frame not in ('port', 'body'):
+        if self.target_frame not in ('port', 'estimated_port', 'body'):
             raise ValueError(f'Unsupported shared actor target frame: {self.target_frame}')
         self.time_coordinate = checkpoint.get('time_coordinate', 'sim_elapsed')
         if self.time_coordinate not in ('sim_elapsed', 'nominal_decision'):
             raise ValueError(f'Unsupported shared-actor time coordinate: {self.time_coordinate}')
-        self.actor = SharedPortTCPActor(stats, pretrained=False,
+        self.actor = self._make_actor(checkpoint, stats, pretrained=False,
                                        use_time=self.include_elapsed,
-                                       condition_on_pose=self.target_frame == 'port')
+                                       use_tip=self.include_tip,
+                                       condition_on_pose=self.target_frame in ('port','estimated_port'),
+                                       separate_family_orientation_head=bool(
+                                           checkpoint.get('separate_family_orientation_head',False)),
+                                       separate_family_action_head=bool(
+                                           checkpoint.get('separate_family_action_head',False)),
+                                       use_local_history=bool(checkpoint.get('use_local_history',False)),
+                                       decoder_kind=checkpoint.get('decoder_kind','transformer'))
         self.actor.load_state_dict(state, strict=True)
         masked=checkpoint.get('masked_state_indices',[])
         if any(not isinstance(i,int) or not 0<=i<32 for i in masked):
             raise ValueError('Invalid checkpoint state input mask')
         self.actor.masked_state_indices=masked
+        self.actor.masked_tip_indices=checkpoint.get('masked_tip_indices',[])
+        self.actor.tip_input_mode=self.tip_input_mode
+        self.actor.mask_history_command_feedback=bool(checkpoint.get('mask_history_command_feedback',False))
+        self.actor.coordinate_heads_fp32=bool(checkpoint.get('coordinate_heads_fp32',False))
+        self.actor.control_path_fp32=bool(checkpoint.get('control_path_fp32',False))
+        self.constant_body_tip=checkpoint.get('constant_body_tip_mean')
+        self.history_offsets_s=checkpoint.get('history_offsets_s')
+        self.history_masked=bool(checkpoint.get('history_masked',False))
+        self.actor.history_max_age_s=max(self.history_offsets_s) if self.history_offsets_s else 2.
         self.actor.to(self.device).eval()
         self.assembler = AICRuntimeFeatureAssembler(32, fps=20.)
         self.control_hz = float(os.environ.get('AIC_SHARED_PORT_TCP_CONTROL_HZ', '20'))
@@ -84,6 +122,11 @@ class RunSharedPortTCP(Policy):
         self.max_translation = float(os.environ.get('AIC_SHARED_PORT_TCP_MAX_TRANSLATION_DELTA', '.02'))
         self.max_rotation = float(os.environ.get('AIC_SHARED_PORT_TCP_MAX_ROTATION_DELTA', '.2'))
         self.replan_every_command = os.environ.get('AIC_SHARED_PORT_TCP_REPLAN_EVERY_COMMAND', '0') == '1'
+        self.execute_steps = None
+        self._action_generation = 0
+        self.execute_complete_chunk = os.environ.get('AIC_SHARED_PORT_TCP_EXECUTE_COMPLETE_CHUNK','0')=='1'
+        if self.execute_complete_chunk and (self.control_clock!='simulation' or self.replan_every_command):
+            raise ValueError('Complete-chunk execution requires simulation clock and chunk control')
         self.diagnostic_force_stop_n = float(os.environ.get('AIC_SHARED_PORT_TCP_DIAGNOSTIC_FORCE_STOP_N', '40'))
         self.startup_hold_sim_sec = float(os.environ.get('AIC_SHARED_PORT_TCP_STARTUP_HOLD_SIM_SEC', '0'))
         if self.startup_hold_sim_sec < 0:
@@ -171,6 +214,7 @@ class RunSharedPortTCP(Policy):
 
     def reset_for_task(self, task):
         """Reset causal state for bounded teacher-collection interventions."""
+        self.clear_pending_actions()
         self.assembler.reset()
         self.first_sim_time = None
         self.last_elapsed_sim_sec = 0.
@@ -179,20 +223,35 @@ class RunSharedPortTCP(Policy):
         self._student_task_vector = self.task_vector(task)
 
     def clear_pending_actions(self):
-        # This actor predicts a fresh chunk on each observation, with no
-        # queued future command to leak across a teacher-controlled segment.
-        return None
+        # A chunk is retained by insert_cable's command loop. Ownership
+        # changes must invalidate that local chunk as well as cached plans.
+        self._action_generation += 1
 
     def _target_anchor(self, tcp_base, estimated_pose):
-        return (inferred_base_port(tcp_base, estimated_pose) if self.target_frame == 'port'
+        return (inferred_base_port(tcp_base, estimated_pose) if self.target_frame in ('port','estimated_port')
                 else matrix_from_xyz_xyzw(tcp_base))
 
     def _body_delta(self, tcp_base, anchor, target):
-        if self.target_frame == 'port':
+        if self.target_frame in ('port','estimated_port'):
             return body_delta_from_target(tcp_base, anchor, target)
         relative = np.linalg.inv(matrix_from_xyz_xyzw(tcp_base)) @ anchor @ matrix_from_pose9(target)
         return np.concatenate((relative[:3, 3],
                                Rotation.from_matrix(relative[:3, :3]).as_rotvec()))
+
+    def _should_stop_transport(self, task_vector):
+        """Observation-only optional handoff hook for transport-only diagnostics."""
+        return False
+
+    def _inspect_transport_handoff(self, observed, state, task_vector,
+                                   get_observation, move_robot, decision_sim):
+        """Return whether a proposed stop is accepted; subclasses may inspect."""
+        return True
+
+    def _cartesian_gains(self):
+        return self.cartesian_stiffness, self.cartesian_damping
+
+    def _bound_transport_target(self, absolute, task_vector, state):
+        return absolute
 
     def select_delta_action(self, observation, *, nominal_time_s=None):
         """Return an absolute base pose as xyz plus world rotvec.
@@ -220,17 +279,16 @@ class RunSharedPortTCP(Policy):
                                Rotation.from_matrix(absolute[:3, :3]).as_rotvec()))
 
     def insert_cable(self, task: Task, get_observation, move_robot, send_feedback, **kwargs) -> bool:
-        self.assembler.reset()
-        self.first_sim_time = None
-        self.last_elapsed_sim_sec = 0.
-        self.student_proposal_count = 0
-        self._inference_latency_ms.clear()
+        # Dispatch subclass reset as well: route stages and visual memories
+        # must never survive a new episode/action request.
+        self.reset_for_task(task)
         task_vector = self.task_vector(task)
         start = time.monotonic()
         issued = 0
         period = 1 / self.control_hz
         first_control_sim = None
         next_decision_sim = None
+        resume_after_rejection = False
         while time.monotonic() - start < self.max_runtime_sec:
             observed = get_observation()
             if observed is None:
@@ -245,6 +303,7 @@ class RunSharedPortTCP(Policy):
                 if next_decision_sim is not None and decision_sim < next_decision_sim:
                     time.sleep(.002)
                     continue
+            plan_generation = self._action_generation
             targets, estimated_pose, anchor_state = self.predict_chunk(
                 observed, task_vector, decision_time_s=issued / self.control_hz)
             self._trace(event='proposal', sim_time=decision_sim, state=anchor_state.tolist(),
@@ -254,12 +313,54 @@ class RunSharedPortTCP(Policy):
                                       getattr(observed,name+'_image').header.stamp.nanosec
                                       for name in ('center','left','right')},
                         inference_ms=self._inference_latency_ms[-1], geometry_input=False)
+            # A rejected inspection must permit a fresh motion chunk before
+            # another inspection. Otherwise a high proposal score can trap
+            # the policy in repeated holds without any corrective motion.
+            should_inspect = not resume_after_rejection and self._should_stop_transport(task_vector)
+            resume_after_rejection = False
+            if should_inspect:
+                self._handoff_terminal_snapshot = None
+                if not self._inspect_transport_handoff(observed, anchor_state,
+                        task_vector, get_observation, move_robot, decision_sim):
+                    # A shadow inspection commanded a hold and rejected the
+                    # handoff. Resume normal transport from a fresh clock tick.
+                    next_decision_sim = decision_sim + period
+                    resume_after_rejection = True
+                    if hasattr(self, 'stop_streak'):
+                        self.stop_streak = 0
+                    continue
+                # Inspectors can spend seconds holding before approval. Retain
+                # their accepted observation; never fetch geometry after reset
+                # or mislabel the earlier proposal as the terminal transition.
+                snapshot = getattr(self, '_handoff_terminal_snapshot', None)
+                terminal_state, terminal_sim = (snapshot[:2] if snapshot is not None
+                                                else (anchor_state, decision_sim))
+                self._trace(event='terminal_before_return', reason=getattr(self,'transport_terminal_reason','learned_transport_handoff'),
+                            state=terminal_state.tolist(), sim_time=terminal_sim,
+                            observation_source=('accepted_handoff_observation' if snapshot is not None
+                                                else 'current_decision_observation'),
+                            geometry_input=False)
+                self._report_latency()
+                return False
             anchor = self._target_anchor(anchor_state[:7], estimated_pose)
-            for index, target in enumerate(targets[:1] if self.replan_every_command else targets):
+            planned = targets[:1] if self.replan_every_command else targets[:self.execute_steps]
+            next_scheduled_sim=None
+            if self.execute_complete_chunk:
+                # Inference can take longer than the chunk. Start its first
+                # command at the fresh post-inference observation and space
+                # subsequent commands by measured simulation time.
+                fresh=get_observation()
+                if fresh is None:break
+                next_scheduled_sim=max(decision_sim,self._control_sim_time(fresh))
+            for index, target in enumerate(planned):
+                if plan_generation != self._action_generation:
+                    self._trace(event='chunk_cancelled_for_control_transfer',index=index)
+                    break
                 if time.monotonic() - start >= self.max_runtime_sec:
                     break
                 tick = time.monotonic()
-                scheduled_sim = decision_sim + index * period
+                scheduled_sim = (next_scheduled_sim if self.execute_complete_chunk
+                                 else decision_sim + index * period)
                 if self.control_clock == 'simulation':
                     current = get_observation()
                     while (current is not None and self._control_sim_time(current) < scheduled_sim
@@ -268,7 +369,8 @@ class RunSharedPortTCP(Policy):
                         current = get_observation()
                     if current is None:
                         break
-                    if index > 0 and self._control_sim_time(current) > scheduled_sim + period:
+                    if (not self.execute_complete_chunk and index > 0 and
+                            self._control_sim_time(current) > scheduled_sim + period):
                         self._trace(event='stale_chunk_member_dropped', index=index,
                                     sim_time=self._control_sim_time(current), scheduled_sim=scheduled_sim)
                         continue
@@ -280,6 +382,9 @@ class RunSharedPortTCP(Policy):
                     if current is None:
                         break
                     state = self.assembler.assemble_ros(current)
+                if plan_generation != self._action_generation:
+                    self._trace(event='chunk_cancelled_for_control_transfer',index=index)
+                    break
                 delta = (np.zeros(6) if self.last_elapsed_sim_sec < self.startup_hold_sim_sec
                          else self._body_delta(state[:7], anchor, target))
                 if not np.isfinite(delta).all():
@@ -287,8 +392,11 @@ class RunSharedPortTCP(Policy):
                 force_norm = float(np.linalg.norm(state[26:29]))
                 if force_norm > self.diagnostic_force_stop_n:
                     self.get_logger().error(f'Shared BC diagnostic force stop: {force_norm:.1f} N')
+                    retained_observation=(current if self.control_clock=='simulation' or index>0 else observed)
                     self._trace(event='terminal_before_return', reason='force_stop',
-                                state=state.tolist(), force_norm_n=force_norm)
+                                sim_time=self._control_sim_time(retained_observation),
+                                state=state.tolist(), force_norm_n=force_norm,
+                                observation_source='current_command_tick',post_reset_geometry_used=False)
                     self._report_latency()
                     return False
                 translation, rotation = clamp_delta_pose_components(
@@ -298,30 +406,44 @@ class RunSharedPortTCP(Policy):
                 body_target[:3, 3] = translation
                 body_target[:3, :3] = Rotation.from_rotvec(rotation).as_matrix()
                 absolute = matrix_from_xyz_xyzw(state[:7]) @ body_target
+                absolute = self._bound_transport_target(absolute, task_vector, state)
+                effective_body = np.linalg.inv(matrix_from_xyz_xyzw(state[:7])) @ absolute
+                effective_delta = np.r_[effective_body[:3, 3],
+                    Rotation.from_matrix(effective_body[:3, :3]).as_rotvec()]
                 pose = build_pose_from_vectors(absolute[:3, 3],
                                                Rotation.from_matrix(absolute[:3, :3]).as_quat())
                 if hasattr(self._parent_node, '_target_mode'):
                     self._parent_node._target_mode = TargetMode.MODE_CARTESIAN
+                stiffness,damping=self._cartesian_gains()
+                if plan_generation != self._action_generation:
+                    self._trace(event='chunk_cancelled_for_control_transfer',index=index)
+                    break
                 self.set_pose_target(move_robot=move_robot, pose=pose, frame_id='base_link',
-                                     stiffness=self.cartesian_stiffness,damping=self.cartesian_damping)
+                                     stiffness=stiffness,damping=damping)
                 self._trace(event='command', sim_time=(self._control_sim_time(current)
                             if self.control_clock == 'simulation' else decision_sim),
                             scheduled_sim=scheduled_sim, chunk_index=index,
-                            state=state.tolist(), delta=np.r_[translation,rotation].tolist(),
-                            absolute_tcp_target=absolute.tolist())
+                            state=state.tolist(), delta=effective_delta.tolist(),
+                            absolute_tcp_target=absolute.tolist(),
+                            stiffness=stiffness,damping=damping)
+                if self.execute_complete_chunk:
+                    next_scheduled_sim=self._control_sim_time(current)+period
                 issued += 1
                 if issued % max(1, round(self.control_hz)) == 0:
                     send_feedback(f'in progress; shared port TCP commands={issued}')
                 if self.control_clock == 'wall':
                     time.sleep(max(0., period - (time.monotonic() - tick)))
-            next_decision_sim = decision_sim + (period if self.replan_every_command else len(targets)*period)
+            next_decision_sim = (next_scheduled_sim if self.execute_complete_chunk
+                                 else decision_sim + len(planned)*period)
         terminal = get_observation()
         if terminal is not None:
             self._trace(event='terminal_before_return', reason='bounded_runtime',
                         sim_time=self._control_sim_time(terminal),
                         state=self.assembler.assemble_ros(terminal).tolist())
         self._report_latency()
-        return True
+        # This transport-only runner has no insertion detector. A time limit
+        # cannot be reported as a successful insert_cable action.
+        return False
 
     @staticmethod
     def _control_sim_time(observation):

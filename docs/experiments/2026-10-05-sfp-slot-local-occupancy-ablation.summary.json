@@ -1,0 +1,38 @@
+{
+  "schema": "sfp_slot_local_occupancy_decision/v1",
+  "date": "2026-10-05",
+  "train_reset_groups": 70,
+  "checkpoint_development_reset_groups": 10,
+  "sparse_autonomous_diagnostic_reset_groups": 3,
+  "extra_disjoint_nonfinal_reset_groups": 10,
+  "completed_updates": 2000,
+  "selected_update_by_development_loss": 1200,
+  "stop_reason": "update_cap",
+  "gpu_count": 1,
+  "pooled_head": {
+    "checkpoint_development_exact_maps": 5,
+    "checkpoint_development_groups": 10,
+    "extra_disjoint_exact_maps": 5,
+    "extra_disjoint_groups": 10
+  },
+  "slot_local_head": {
+    "checkpoint_development_exact_maps": 10,
+    "checkpoint_development_groups": 10,
+    "checkpoint_development_confident_false_occupied_rails": 0,
+    "sparse_autonomous_exact_maps": 3,
+    "sparse_autonomous_groups": 3,
+    "extra_disjoint_exact_maps": 10,
+    "extra_disjoint_groups": 10,
+    "extra_disjoint_confident_false_occupied_rails": 0,
+    "checkpoint_development_endpoint_p90_px": 25.682,
+    "standalone_three_camera_latency_p95_ms": 83.756
+  },
+  "auxiliary_occupancy_gate_passed": true,
+  "requested_port_correspondence_gate_passed": false,
+  "rail_3d_reference_groups": 2,
+  "rail_3d_candidate_early_correct_groups": 1,
+  "automatic_handoff_enabled": false,
+  "final_scenes_opened": false,
+  "checkpoint": "/home/nas/chmin/aic_archives/2026-10-05_sfp_slot_local_probe_v1/best.pt",
+  "record": "docs/experiments/2026-10-05-sfp-slot-local-occupancy-ablation.md"
+}

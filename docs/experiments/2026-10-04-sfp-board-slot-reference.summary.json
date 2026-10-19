@@ -1,0 +1,221 @@
+{
+  "schema": "sfp_board_slot_reference_audit/v1",
+  "source": "ten existing nonfinal fresh SFP teacher scene groups",
+  "frames_per_scene": {
+    "cameras": [
+      "center",
+      "right"
+    ],
+    "sim_seconds": 11
+  },
+  "blind_annotation_saved_before_truth_opened": true,
+  "scene_count": 10,
+  "exact_occupancy_maps": 4,
+  "abstentions": 6,
+  "confident_wrong": 0,
+  "full_card_scene_count": 5,
+  "full_card_exact": 4,
+  "sparse_scene_count": 5,
+  "sparse_exact": 0,
+  "predeclared_gate": {
+    "exact_occupancy_min": 8,
+    "confident_false_occupied_max": 0,
+    "sparse_exact_min": 2
+  },
+  "gate_passed": false,
+  "later_2s_6s_history_review_blind": false,
+  "training_started": false,
+  "new_rollout_started": false,
+  "final_scenes_opened": false,
+  "decision": "Do not train all-slot model or promote wide view. Test observation-only local target identity on actual autonomous transport pauses; teacher-centered images cannot establish transport success.",
+  "artifacts": {
+    "archive": "/home/nas/chmin/aic_archives/2026-10-04_sfp_board_slot_reference_v1",
+    "experiment_doc": "docs/experiments/2026-10-04-sfp-board-slot-reference.md"
+  },
+  "rows": [
+    {
+      "alias": "case_00",
+      "episode": "teacher_card2_port0",
+      "truth": [
+        1,
+        1,
+        1,
+        1,
+        1
+      ],
+      "prediction": [
+        1,
+        1,
+        1,
+        1,
+        1
+      ],
+      "exact": true,
+      "present": 5,
+      "visible_faces": "5",
+      "confidence": "high"
+    },
+    {
+      "alias": "case_01",
+      "episode": "teacher_card1_port1",
+      "truth": [
+        1,
+        1,
+        1,
+        0,
+        1
+      ],
+      "prediction": null,
+      "exact": null,
+      "present": 4,
+      "visible_faces": "at least 3; another is clipped",
+      "confidence": "uncertain"
+    },
+    {
+      "alias": "case_02",
+      "episode": "teacher_card4_port1",
+      "truth": [
+        0,
+        1,
+        1,
+        0,
+        1
+      ],
+      "prediction": null,
+      "exact": null,
+      "present": 3,
+      "visible_faces": "3",
+      "confidence": "uncertain"
+    },
+    {
+      "alias": "case_03",
+      "episode": "teacher_card3_port0",
+      "truth": [
+        1,
+        1,
+        1,
+        1,
+        1
+      ],
+      "prediction": [
+        1,
+        1,
+        1,
+        1,
+        1
+      ],
+      "exact": true,
+      "present": 5,
+      "visible_faces": "5",
+      "confidence": "high"
+    },
+    {
+      "alias": "case_04",
+      "episode": "teacher_card0_port0",
+      "truth": [
+        1,
+        1,
+        1,
+        1,
+        1
+      ],
+      "prediction": null,
+      "exact": null,
+      "present": 5,
+      "visible_faces": "at least 3",
+      "confidence": "uncertain"
+    },
+    {
+      "alias": "case_05",
+      "episode": "teacher_card0_port1",
+      "truth": [
+        1,
+        0,
+        1,
+        1,
+        1
+      ],
+      "prediction": null,
+      "exact": null,
+      "present": 4,
+      "visible_faces": "at least 2",
+      "confidence": "uncertain"
+    },
+    {
+      "alias": "case_06",
+      "episode": "teacher_card4_port0",
+      "truth": [
+        1,
+        1,
+        0,
+        1,
+        1
+      ],
+      "prediction": null,
+      "exact": null,
+      "present": 4,
+      "visible_faces": "4",
+      "confidence": "uncertain"
+    },
+    {
+      "alias": "case_07",
+      "episode": "teacher_card2_port1",
+      "truth": [
+        1,
+        1,
+        1,
+        1,
+        1
+      ],
+      "prediction": [
+        1,
+        1,
+        1,
+        1,
+        1
+      ],
+      "exact": true,
+      "present": 5,
+      "visible_faces": "5",
+      "confidence": "high"
+    },
+    {
+      "alias": "case_08",
+      "episode": "teacher_card1_port0",
+      "truth": [
+        0,
+        1,
+        1,
+        1,
+        1
+      ],
+      "prediction": null,
+      "exact": null,
+      "present": 4,
+      "visible_faces": "at least 3, possibly 4",
+      "confidence": "uncertain"
+    },
+    {
+      "alias": "case_09",
+      "episode": "teacher_card3_port1",
+      "truth": [
+        1,
+        1,
+        1,
+        1,
+        1
+      ],
+      "prediction": [
+        1,
+        1,
+        1,
+        1,
+        1
+      ],
+      "exact": true,
+      "present": 5,
+      "visible_faces": "5",
+      "confidence": "high"
+    }
+  ]
+}

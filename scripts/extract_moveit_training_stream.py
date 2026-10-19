@@ -6,40 +6,65 @@ import argparse,json,csv,bisect,hashlib
 from pathlib import Path
 from collections import defaultdict
 import yaml
-import rosbag2_py
+try:
+ import rosbag2_py
+except ImportError:
+ rosbag2_py=None
 from rclpy.serialization import deserialize_message
 from rosidl_runtime_py.utilities import get_message
 from rosidl_runtime_py.convert import message_to_ordereddict
 JOINTS=['shoulder_pan_joint','shoulder_lift_joint','elbow_joint','wrist_1_joint','wrist_2_joint','wrist_3_joint']
+def needed_transform(parent,child,task):
+ selected={task['cable_name'],f"{task['cable_name']}/{task['plug_name']}_link"}
+ return (child in ({'aic_world','tabletop','base_link','task_board','cable_1','cable_1/sc_tip_link'}|selected)
+         or any(k in parent+' '+child for k in ['sc_port','sfp_port','nic_card_mount'])
+         or any(k in parent+' '+child for k in ['camera/','cam_mount','ati/','gripper/','tool0']))
 def stamp(msg):return msg.header.stamp.sec*10**9+msg.header.stamp.nanosec
 def main():
  p=argparse.ArgumentParser();p.add_argument('audit',type=Path);p.add_argument('output',type=Path);a=p.parse_args()
  bags=list((a.audit/'results').glob('bag_trial*'));assert len(bags)==1,bags;bag=bags[0]
  cfg=yaml.safe_load((a.audit/'eval_config.yaml').read_text());assert len(cfg['trials'])==1
  trial_id,trial=next(iter(cfg['trials'].items()));score=yaml.safe_load((a.audit/'results/scoring.yaml').read_text());assert trial_id in score
+ task=next(iter(trial['tasks'].values()))
+ selected_geometry_frames={task['cable_name'],f"{task['cable_name']}/{task['plug_name']}_link"}
  meta=yaml.safe_load((bag/'metadata.yaml').read_text())['rosbag2_bagfile_information'];wall0=meta['starting_time']['nanoseconds_since_epoch'];wall1=wall0+meta['duration']['nanoseconds']
  streams=defaultdict(list);edges=defaultdict(list);commands=[]
- reader=rosbag2_py.SequentialReader();reader.open(rosbag2_py.StorageOptions(uri=str(bag),storage_id='mcap'),rosbag2_py.ConverterOptions('cdr','cdr'))
  wanted={'/joint_states','/aic_controller/controller_state','/fts_broadcaster/wrench','/aic_controller/joint_commands','/aic_controller/pose_commands','/tf','/tf_static','/scoring/tf'}
- types={r.name:get_message(r.type) for r in reader.get_all_topics_and_types() if r.name in wanted}
+ if rosbag2_py is not None:
+  reader=rosbag2_py.SequentialReader();reader.open(rosbag2_py.StorageOptions(uri=str(bag),storage_id='mcap'),rosbag2_py.ConverterOptions('cdr','cdr'))
+  types={r.name:get_message(r.type) for r in reader.get_all_topics_and_types() if r.name in wanted}
+  def messages():
+   while reader.has_next():yield reader.read_next()
+ else:
+  # Rootless Docker can reach the per-UID kernel key limit after a successful
+  # rollout. Read the same MCAP/C DR bytes with the host Python runtime, using
+  # the installed ROS interface packages for deserialization.
+  from mcap.reader import make_reader
+  raw_file=next(bag.glob('*.mcap')).open('rb')
+  reader=make_reader(raw_file)
+  summary=reader.get_summary()
+  types={c.topic:get_message(summary.schemas[c.schema_id].name)
+         for c in summary.channels.values() if c.topic in wanted}
+  def messages():
+   for schema,channel,message in reader.iter_messages(topics=list(wanted)):
+    yield channel.topic,message.data,message.log_time
  latest_controller_time=None;latest_controller_wall=None
- while reader.has_next():
-  topic,raw,wall=reader.read_next()
+ for topic,raw,wall in messages():
   if topic not in types:continue
   msg=deserialize_message(raw,types[topic])
   if topic in ['/tf','/tf_static','/scoring/tf']:
    for t in msg.transforms:
     parent=t.header.frame_id;child=t.child_frame_id
-    needed=(child in {'tabletop','base_link','task_board','cable_1','cable_1/sc_tip_link'}
-            or 'sc_port' in parent or 'sc_port' in child
-            or any(k in parent+' '+child for k in ['camera/','cam_mount','ati/','gripper/','tool0']))
+    needed=needed_transform(parent,child,task)
     if not needed:continue
     key=parent+'|'+child
     ts=0 if topic=='/tf_static' else t.header.stamp.sec*10**9+t.header.stamp.nanosec
     previous=edges[key][-1] if edges[key] else None
     if previous and ts-previous[0]<50000000:continue
     d=message_to_ordereddict(t.transform)
-    if previous and d==previous[1]:continue
+    # Keep selected plug/body timestamp heartbeats even while motion freezes.
+    # Otherwise a valid terminal observation can look stale after a hold.
+    if previous and d==previous[1] and child not in selected_geometry_frames:continue
     edges[key].append([ts,d])
    continue
   d=message_to_ordereddict(msg)

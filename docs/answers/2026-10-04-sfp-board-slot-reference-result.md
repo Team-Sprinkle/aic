@@ -1,0 +1,11 @@
+# SFP board-slot reference result — October 4, 2026
+
+I tested the saved camera images to see whether the board itself tells us which of its five numbered card slots are occupied. I anonymized ten nonfinal teacher scenes, reviewed the original center and right images **before** opening their simulator configurations, and marked uncertain cases as uncertain.
+
+The exact five-slot pattern was clear in **4/10** scenes. All four had five cards installed, so every slot was occupied. I abstained on the other six, including **all five scenes with empty slots**. I made no confident wrong assignments. The board edge or a card was often cut off, and an apparent gap did not reliably say which numbered slot was empty. Looking afterward at saved earlier frames did not reveal a dependable slot-zero reference in the sparse examples. The predeclared gate of at least 8/10 exact maps, including two sparse scenes, failed.
+
+This explains why “see all the cards, then count to the requested one” is unsafe. It does not prove a learned model could never recover slot identity. The teacher also used privileged target geometry to position its camera, so these frames cannot tell us whether the autonomous transport model reaches the requested card.
+
+I did not collect more data or train another model. The next useful bounded check is on **actual autonomous transport pauses**: determine whether observation-only images and robot history place the requested card near the tool and let a local verifier reject neighboring ports. If transport misses the requested neighborhood, that route must be repaired first. Automatic handoff and RL remain off; final scenes are sealed.
+
+The [experiment record](../experiments/2026-10-04-sfp-board-slot-reference.md) contains the protocol and commands. The [machine summary](../experiments/2026-10-04-sfp-board-slot-reference.summary.json) contains every scored scene. An example [sparse-row center image](/home/nas/chmin/aic_archives/2026-10-04_sfp_board_slot_reference_v1/case_02_center.jpg) and [right image](/home/nas/chmin/aic_archives/2026-10-04_sfp_board_slot_reference_v1/case_02_right.jpg) are saved with the blind annotations under `/home/nas/chmin/aic_archives/2026-10-04_sfp_board_slot_reference_v1/`.

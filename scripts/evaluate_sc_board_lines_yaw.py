@@ -49,8 +49,10 @@ def projected_axis_angle(yaw, midpoint, base_optical):
     return math.atan2(ray[1], ray[0]) % math.pi
 
 
-def camera_yaw(image_path, target_pixel, base_optical, prior):
-    image = cv2.imread(image_path)
+def camera_yaw(image_path, target_pixel, base_optical, prior,
+               search_span_rad=.07, max_prior_line_error_deg=5.):
+    image = (cv2.imread(str(image_path)) if isinstance(image_path, (str, Path))
+             else image_path)
     if image is None or image.shape[:2] != (HEIGHT, WIDTH):
         raise ValueError(f'Missing or wrong native RGB: {image_path}')
     edges = cv2.Canny(cv2.cvtColor(image, cv2.COLOR_BGR2GRAY), 50, 150)
@@ -59,7 +61,10 @@ def camera_yaw(image_path, target_pixel, base_optical, prior):
     if lines is None:
         return None
     target = np.asarray(target_pixel, dtype=float)
-    grid = np.linspace(prior - .07, prior + .07, 141)
+    if not 0<search_span_rad<=.35:
+        raise ValueError('Invalid bounded yaw search span')
+    grid = np.linspace(prior-search_span_rad,prior+search_span_rad,
+                       int(round(2*search_span_rad/.001))+1)
     base_directions = np.stack((np.cos(grid), np.sin(grid), np.zeros_like(grid)), axis=1)
     optical_directions = base_directions @ base_optical[:3, :3]
     z = optical_directions[:, 2]
@@ -74,7 +79,7 @@ def camera_yaw(image_path, target_pixel, base_optical, prior):
         observed = math.atan2(int(y2) - int(y1), int(x2) - int(x1)) % math.pi
         prior_ray = vanishing[len(grid) // 2] - midpoint
         prior_angle = math.atan2(prior_ray[1], prior_ray[0]) % math.pi
-        if math.degrees(circular_line_error(observed, prior_angle)) > 5:
+        if math.degrees(circular_line_error(observed, prior_angle)) > max_prior_line_error_deg:
             continue
         rays = vanishing - midpoint[None, :]
         angles = np.mod(np.arctan2(rays[:, 1], rays[:, 0]), math.pi)

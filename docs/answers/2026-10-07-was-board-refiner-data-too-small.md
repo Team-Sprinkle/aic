@@ -1,0 +1,13 @@
+# Could the board refiner have failed because it lacked training data?
+
+**Possibly in part, but the current evidence does not make data quantity the main explanation.** The refiner saw 16,145 labeled crops, yet these came from only **70 complete episode/reset groups**. Neighboring frames are highly correlated, so this is not equivalent to 16,145 independent scenes. More diverse views and resets could improve generalization.
+
+However, the best held-out pixel error remained **9.92 px median / 32.17 px p95**, far from the **3/8 px** target. From 1,250 to 2,000 updates, training loss fell from about **0.97 to 0.48**, while development median stayed near **10 px** and p95 fluctuated around **32–36 px**. That pattern is compatible with memorizing training appearances rather than learning a more reliable visual landmark. It does not prove that no larger dataset could help.
+
+The more fundamental concern is the **label definition**. The label is where a chosen CAD rail endpoint projects into the image, not a human-confirmed visible feature. In the [diagnostic crops](../../outputs/experiments/2026-10-07_sfp_rail_original_crop_refiner_v1/development_diagnostic_crops.jpg), some green label circles fall on plain edges or repeated card structures. The exact point may be hidden or visually indistinguishable from nearby points. Adding many images with the same ambiguous supervision would not necessarily teach the model which pixel is intended. The fact that **555/557** held-out projected labels lie inside the observation-selected crop rules out simple crop coverage as the dominant issue.
+
+The clean way to separate these explanations is to first mark **which board landmarks are actually visible and uniquely identifiable**, across complete reset groups. Then measure a grouped learning curve as the number of diverse groups increases, using only those certified labels and a new development split. If error steadily approaches the 3/8 px requirement, scaling data is justified. If it plateaus or the landmarks cannot be identified reliably by a human from the public camera views, we need a different landmark or a safe inspection view, not just more of the same frames. This visibility review has **not** yet been completed independently.
+
+The privileged control is informative but limited: giving the geometry routine true endpoint pixels with 3 px noise produced **10/10** early accurate board references. It shows the downstream geometry could work with sufficiently accurate pixels; it does not show that those pixels are recoverable from the current images.
+
+[Full experiment and per-step history](../experiments/2026-10-07-sfp-temporal-board-reference.md).

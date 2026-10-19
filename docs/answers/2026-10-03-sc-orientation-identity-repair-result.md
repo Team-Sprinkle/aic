@@ -1,0 +1,11 @@
+# SC orientation repair result
+
+I traced the known port-0 handoff failure and tested the guarded orientation correction. The robot was following its orientation command accurately, within about 0.3°, but that command pointed about **6.9° away** from the port orientation measured from the camera images.
+
+I added an optional rule that, while the robot is held near the port, rotates it toward a consistent image-derived board angle. It never treats a missing port identity as a valid handoff. In a live port-0 run the measured posture error fell from **6.73° to 0.13°, then 0.08°**. On a newly frozen five-card port-0 scene it fell from **8.93° to 0.03°, then 0.13°**. The corresponding true transport-standoff distances reached **0.66 mm** and **1.04 mm**. The force stayed below the existing gate. Neither run inserted or handed off.
+
+The remaining failure is in port identity. After the correct rotation, the current identity model often says the real port is absent. I held the camera images and TCP position fixed, changed only the TCP orientation input, and reproduced the confidence collapse. The model has learned to rely on tool orientation when deciding which port is visible.
+
+I trained one bounded replacement identity head without TCP orientation input. On saved images it accepted the corrected real-port views, but on the new reset it falsely accepted the physically absent port in **11/100** three-camera samples. The original head accepted that absent port in **0/100**. This replacement cannot be deployed safely. A matched baseline run on the new reset stayed 82.84 mm away while the correction run approached to 1.04 mm, so their different routes do not establish a causal transport improvement.
+
+Both experimental options remain off by default. Automatic insertion and RL remain gated, and final scenes stayed sealed. The next focused test should use **real before/after-rotation camera images with matching TCP poses**, preserving strong absent-port rejection, then evaluate on another complete-reset holdout. The same-image quaternion swap above is a diagnostic only: these wrist-mounted cameras would also move when the TCP rotates. Stop that branch if any absent-port all-view accept remains. The [full experiment record](../experiments/2026-10-03-sc-orientation-identity-repair.md) has the commands, traces, image panels and artifacts.

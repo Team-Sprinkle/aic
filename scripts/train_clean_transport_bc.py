@@ -30,7 +30,8 @@ def sha(p):
 class TransportSamples(Samples):
     def __getitem__(self,index):
         row=self.rows[index]
-        if row['family']=='sfp':return super().__getitem__(index)
+        if row['family']=='sfp' and row['images'] is None:
+            return super().__getitem__(index)
         views=[]
         for cam in ('center','left','right'):
             with Image.open(row['images'][cam]) as f:

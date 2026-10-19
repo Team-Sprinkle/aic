@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """Capture timestamp-matched native RGB/depth pairs for visibility supervision."""
 import json
+import os
 from pathlib import Path
 import time
 import cv2
@@ -23,7 +24,8 @@ class Capture(Node):
         self.intrinsics = {}
         self.subs = []
         for camera in self.pending:
-            root = f'/audit/visibility/{camera}_camera'
+            root = (f'/{camera}_camera' if os.environ.get('AIC_VISIBILITY_SOURCE_ROOT')=='primary'
+                    else f'/audit/visibility/{camera}_camera')
             for kind in ('image','depth_image'):
                 self.subs.append(self.create_subscription(Image,root+'/'+kind,
                     lambda msg,c=camera,k=kind:self.save(c,k,msg),qos_profile_sensor_data))

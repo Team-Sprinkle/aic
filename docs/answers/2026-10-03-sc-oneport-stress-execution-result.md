@@ -1,0 +1,15 @@
+# SC handoff continuation result
+
+I ran the agreed SC stress test and kept the insertion gate closed.
+
+The unchanged verifier accepted all four previously good saved pauses and rejected four swapped-port requests, four early transport frames, and 20 provisionally hidden-target examples. Those are encouraging small screens, but the saved camera frames are JPEGs and the hidden labels are provisional.
+
+On fresh native RGB from two held-out one-port development starts, it accepted the port-1 arrival and rejected the absent-port counterfactual. It **missed the real port-0 arrival**. Post-run geometry shows transport was physically within **0.94 mm** of the selected standoff, so this was a perception/handoff failure, not a failure to drive near the target. An extended repeat reached **0.85 mm** but made no pause proposal. The missed port-0 center view received only **0.247** identity probability against the fixed 0.5 threshold.
+
+I tested three targeted repairs. Extra near-port training examples made that center score worse (**0.078**). Feeding a larger full image to the frozen identity head rejected two of five previously accepted controls. A held-state retry plus a tightly bounded stale-target pause made three inspections and 24 fresh checks on another port-0 run but accepted none, although the TCP got within **0.54 mm**. The experimental switches remain off by default; the original checkpoint remains the reference. No known wrong/absent target was accepted in these tests, but the sample is too small to claim reliable safety.
+
+I also checked the SFP arrival data. The frozen feature cache contains **236 training and 32 validation SFP episodes**, yet its SFP rows have no handoff label. The current stop head was fitted on SC labels only. That accounts for the earlier opt-in SFP pause 162 mm from its selected port; SFP stopping remains disabled.
+
+**Next experiment:** train a request-conditioned original-RGB port-face representation with full-image context using existing fitting groups, including clear, hidden, neighboring-port, and physically absent requests. Fix new complete-reset development groups before fitting. Budget up to one workday of label review/preparation and two GPU-hours of fitting. Continue only if the known port-0 miss and new correct arrivals pass with at least 95% reviewed clear-arrival recall, zero known false accepted handoffs, and acceptable live latency. Then benchmark the frozen insertion actor attached without moving and measure complete inference p50/p95/p99 against 300 ms before attempting insertion. If this representation fails, keep insertion and RL paused and revisit the handoff design. The reserved final scenes remain sealed.
+
+The [experiment record](../experiments/2026-10-03-sc-shadow-oneport-stress.md), [machine summary](../experiments/2026-10-03-sc-shadow-oneport-stress.summary.json), and [archived traces](/home/nas/chmin/aic_archives/2026-10-03_sc_shadow_handoff_v2/) contain commands, model comparisons, native camera frames, reset identities, and post-run scores.

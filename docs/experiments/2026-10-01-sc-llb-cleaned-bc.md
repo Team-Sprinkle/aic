@@ -157,6 +157,10 @@ The 60 mm comparison is complete: eight additional observation-only rollouts, al
 
 The same-architecture clean versus warm-start test did **not** establish a clean-initialization advantage autonomously: warm start came closer transiently on the two 20 mm layouts, but neither inserted. Preserving more settling samples in the motion-safe derivative also did **not** improve autonomous insertion in this bounded test. Causal elapsed time helped one 60 mm layout's final position but failed the gate on both. This evidence supports stopping further routine single-frame full-target BC on this dataset. It does not show that the verified teacher route or local insertion supervision is invalid.
 
+### Follow-up code and frame audit
+
+The [October 1 audit](../answers/2026-10-01-transport-failure-code-and-frame-audit.md) found no sampled label-frame or logged runtime body-to-base conversion error and confirmed every live SC task vector matches its scene. The clean actor is deterministic ResNet18 plus a four-action-token Transformer Encoder, **not diffusion**; its transport action is a complete target in the observed TCP frame, and it does not consume the local pose estimator. On held-out teacher observations, swapping only the selected SC port code changed the first target by about 0.4–0.5 mm median, showing weak task sensitivity despite correct input wiring. No matched autonomous SFP rollout exists for this checkpoint. The timeout action-result bug and two diagnostic-script frame/conditioning errors were fixed without retraining or altering frozen results. Step 5 remains open.
+
 **Step 5 stays open.** The transport actor has not reliably brought the plug to the local actor's handoff region. Therefore local-actor promotion, visibility switching, Isaac/Gazebo RL, and reserved final evaluation do not proceed. Original 104 scored source episodes, both BC derivatives, all four checkpoints, 16 score/bag/trace artifacts, and all failures remain saved.
 
 ### Proposed explicit plan revision: route-progress and subgoal control

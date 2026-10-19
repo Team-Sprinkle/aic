@@ -1,0 +1,46 @@
+{
+  "schema": "sfp_visible_board_origin_decision/v1",
+  "development_groups": 10,
+  "final_scenes_opened": false,
+  "collision_outline": {
+    "review_panels": 30,
+    "exact_unique_visible": 0,
+    "offset_or_occluded": 17,
+    "uncertain": 13,
+    "contour_candidate_same_physical_corner_clear": 4,
+    "contour_candidate_uncertain": 7,
+    "contour_candidate_wrong_or_absent": 19,
+    "gate_passed": false
+  },
+  "visual_mesh_screws": {
+    "board_local_xyz_m": [[-0.145, -0.2075, 0.010], [0.145, -0.2075, 0.010]],
+    "median_old_collision_label_to_screw_px": 19.68,
+    "first_review_panels": 30,
+    "first_review_usable_single_reviewer": 21,
+    "first_review_uncertain": 4,
+    "first_review_occluded": 5,
+    "early_channel_review_panels": 40,
+    "early_channel_confident_visible": 19,
+    "early_channel_uncertain": 5,
+    "early_channel_occluded_or_indistinct": 15,
+    "early_channel_out_of_frame": 1,
+    "complete_two_camera_both_screws_groups": 0,
+    "two_screw_gate_passed": false
+  },
+  "one_screw_privileged_upper_bound": {
+    "true_screw_train_yaw": {"median_mm": 22.62, "p95_mm": 39.59, "within_10mm_groups": 0, "wrong_installed_opening_groups": 3},
+    "true_screw_true_yaw": {"median_mm": 15.02, "p95_mm": 22.18, "within_10mm_groups": 3, "wrong_installed_opening_groups": 2},
+    "mean_screw_train_yaw": {"median_mm": 37.53, "p95_mm": 63.83, "within_10mm_groups": 0, "wrong_installed_opening_groups": 5},
+    "gate_passed": false,
+    "deployable": false
+  },
+  "review_independent": false,
+  "decision": "Do not train board-corner or one-screw detector as a stand-alone SFP requested-port position shortcut; exact port perception and reviewed identity evidence remain necessary.",
+  "automatic_handoff_enabled": false,
+  "artifacts": [
+    "outputs/experiments/2026-10-07_sfp_outline_corner_review_v1",
+    "outputs/experiments/2026-10-07_sfp_visual_screw_projection_v1",
+    "outputs/experiments/2026-10-07_sfp_visual_screw_early_review_v1",
+    "outputs/experiments/2026-10-07_sfp_one_screw_board_prior_v1"
+  ]
+}

@@ -1,0 +1,11 @@
+# SFP selected-port anchor: bounded result
+
+I completed the agreed one-GPU, 2,000-update test using 50 successful SFP teacher episodes for training and ten different development episodes. The model read original wide camera images, the requested card/port code, camera identity, and measured TCP. True Gazebo port geometry supplied labels and post-run scores only.
+
+The model's estimates were accurate **when accepted**: 51/136 development observations passed the fixed three-camera check, with zero accepted wrong ports and 2.65 mm 3D position error at p95. But these 51 observations came from only **four of ten episodes**, all targeting the outer cards 0 or 4. It never acquired a usable anchor for the six episodes targeting middle cards 1–3. Its low error therefore cannot guide transport across the full task. I did not attach it to the transport actor or run autonomous rollouts.
+
+I compared it with the frozen older multiport locator on the same views. That model acquired an anchor in 8/10 episodes but still seldom resolved cards 2–3. A no-training card-row check did not rescue another episode. The cards' lateral rail positions vary enough that guessing a hidden middle card from average spacing already has 28.7–38.5 mm p95 error on training layouts, beyond our 20 mm coarse-anchor target.
+
+The likely issue is requested-card correspondence in crowded views. The current label says an opening **projects into** the image; it does not prove the opening is visible or identifiable. I inspected a card-2 start and saw several similar card faces. Occlusion may contribute, but I have not measured a certified occlusion rate. The next repair should first audit real identifiable visibility for middle cards, then test one explicit card-slot/port-face association model or a safe way to move to a clearer view. It should require early correct anchors across all cards, zero wrong-port accepts, and a fresh grouped development check before another actor continuation.
+
+The full record, exact commands, per-card results, checkpoint, predictions, and comparison artifacts are linked from [the experiment report](../experiments/2026-10-03-sfp-selected-anchor.md). Main status and handoff docs are updated. The reserved final scenes remain sealed; PoseInsert, RL, and world-model training remain parked.

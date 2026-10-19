@@ -1,0 +1,48 @@
+{
+  "schema": "aic_rootless_container_cleanup/v1",
+  "date": "2026-10-04",
+  "removed_count": 25,
+  "removed_names": [
+    "aic_transport_dataset_tools_20260930",
+    "aic_moveit_sc_pilot_moveit_sc_port1_low18_prealign_recovery_20260929",
+    "aic_shared_bc_gpu3",
+    "aic_sc_pose_gpu2",
+    "aic_ordinary_fresh_16_20260923",
+    "aic_targeted_failure_20260923",
+    "aic_followup_geometry_cpu",
+    "aic_world_bc_random_dev_20260918",
+    "aic_world_bc_pretrained_dev_20260918",
+    "aic_dreamer_native_bag_cpu_v2_20260918",
+    "aic_dreamer_native_bag_cpu_20260918",
+    "aic_dreamer60_eval_gpu23_20260918",
+    "aic_dreamer60_act60_eval_gpu4_20260918",
+    "aic_dreamer60_eval_gpu2_20260918",
+    "aic_sc_gpu0_port0_20260918",
+    "aic_sc_gpu0_port1_20260918",
+    "aic_act_all_eval_20260918",
+    "aic_act_all_sc_collect_20260918",
+    "aic_compare_validation_20260918",
+    "aic_collect_validation_20260918",
+    "aic_isaac_validation_20260917",
+    "aic_eval_validation_20260917",
+    "aic_sc_native_gpu2",
+    "aic_sc_fix_gpu1",
+    "aic_ordinary_broad_cheatcode_20260923"
+  ],
+  "writable_layer_bytes_reported_before_removal": 11760336896,
+  "key_quota_before_bulk_removal": "199/200",
+  "key_quota_after_bulk_removal": "199/200",
+  "minimal_sequential_docker_run_succeeded": true,
+  "active_isaac_container_preserved": "aic_isaac_world_policy_20260920",
+  "older_or_uncertain_containers_preserved": [
+    "isaac-lab-base",
+    "aic_eval",
+    "aic_dev",
+    "kind_moser",
+    "festive_curie"
+  ],
+  "full_audit_manifests": [
+    "outputs/experiments/2026-10-04_rootless_key_quota_cleanup/removed_small_containers.json",
+    "outputs/experiments/2026-10-04_rootless_key_quota_cleanup/removed_large_containers.json"
+  ]
+}

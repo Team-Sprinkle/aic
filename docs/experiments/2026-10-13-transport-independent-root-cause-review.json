@@ -1,0 +1,49 @@
+{
+  "schema": "aic_transport_independent_review/v1",
+  "date": "2026-10-13",
+  "scope": "analysis_only",
+  "training_started": false,
+  "simulation_started": false,
+  "gpu_inference_started": false,
+  "active_jobs_modified": false,
+  "final_scenes_opened": false,
+  "model_promoted": false,
+  "sc_episodes": 104,
+  "train_episodes": 83,
+  "validation_episodes": 21,
+  "transport_prefixes_entering_old_axial_band": 0,
+  "training_episodes_without_valid_final_stage": 29,
+  "cached_handoff_positive_rows": 61,
+  "valid12_handoff_positive_rows": 0,
+  "endpoint_comparison": {
+    "cadence900": {
+      "episodes": 3,
+      "closest_endpoint_mm_median": 11.501327562481372,
+      "visits_20mm_5deg": 3
+    },
+    "dense70": {
+      "episodes": 6,
+      "closest_endpoint_mm_median": 22.653652906022124,
+      "visits_20mm_5deg": 3
+    },
+    "fine70": {
+      "episodes": 6,
+      "closest_endpoint_mm_median": 13.153167655053883,
+      "visits_20mm_5deg": 5
+    },
+    "overfit_plateau": {
+      "episodes": 3,
+      "closest_endpoint_mm_median": 13.64727716091823,
+      "visits_20mm_5deg": 3
+    },
+    "overfit_stage2": {
+      "episodes": 6,
+      "closest_endpoint_mm_median": 15.633438092126267,
+      "visits_20mm_5deg": 4
+    }
+  },
+  "thresholds_posthoc_not_deployment_gates": true,
+  "next_priority": "validate transport/approach contract; repair terminal and timestamp supervision; execution parity before further training",
+  "artifacts": "/home/nas/chmin/aic_archives/2026-10-13_transport_independent_review",
+  "report": "experiments/2026-10-13-transport-independent-root-cause-review.md"
+}

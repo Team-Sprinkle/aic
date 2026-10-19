@@ -1,0 +1,38 @@
+{
+  "schema": "sfp_temporal_board_reference_decision/v1",
+  "date_utc": "2026-10-07",
+  "split": {"train_groups": 70, "development_groups": 10, "final_scenes_opened": false},
+  "frozen_rgb": {"early_accepted_groups": 5, "early_accurate_groups": 1, "endpoint_median_px": 12.0, "endpoint_p95_px": 34.7},
+  "privileged_projection_controls": {"zero_pixel_noise_early_accurate_groups": 10, "three_pixel_noise_early_accurate_groups": 10, "deployable": false},
+  "train_only_fixed_bias": {"early_accurate_groups": 0, "gate_passed": false},
+  "original_rgb_refiner": {
+    "train_labeled_crops": 16145,
+    "development_proposal_crops": 570,
+    "development_inframe_labels": 557,
+    "development_labels_inside_proposal_crop": 555,
+    "best_step": 1250,
+    "updates_completed": 2000,
+    "development_median_px": 9.92,
+    "development_p95_px": 32.17,
+    "pixel_gate_median_px": 3.0,
+    "pixel_gate_p95_px": 8.0,
+    "early_accepted_groups": 5,
+    "early_accurate_groups": 3,
+    "early_accurate_group_gate": 9,
+    "gate_passed": false,
+    "geometry_used_to_center_evaluation_crop": false,
+    "cad_projection_is_certified_visibility": false
+  },
+  "decision": "Stop projected-endpoint and board-reference branch before actor or handoff test; await independent public-observation review or a new genuinely visible board-origin cue.",
+  "transport_safe_arrival_groups": "0/3 in prior autonomous development test",
+  "automatic_handoff_enabled": false,
+  "paths": {
+    "frozen_temporal": "outputs/experiments/2026-10-07_sfp_temporal_board_reference_v1",
+    "privileged_zero_noise": "outputs/experiments/2026-10-07_sfp_temporal_board_reference_oracle0_v1",
+    "privileged_three_pixel_noise": "outputs/experiments/2026-10-07_sfp_temporal_board_reference_oracle3_v1",
+    "bias_fit": "outputs/experiments/2026-10-07_sfp_rail_train_bias_v1",
+    "refiner": "outputs/experiments/2026-10-07_sfp_rail_original_crop_refiner_v1",
+    "refined_temporal": "outputs/experiments/2026-10-07_sfp_temporal_board_reference_refined_v1",
+    "diagnostic_image": "outputs/experiments/2026-10-07_sfp_rail_original_crop_refiner_v1/development_diagnostic_crops.jpg"
+  }
+}
