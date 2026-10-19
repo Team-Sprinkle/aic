@@ -51,3 +51,33 @@ The exact run is preserved; choose a new output directory and ROS domain to repr
 ## Interpretation and next gate
 
 The result demonstrates that wrong sample-board geometry was the dominant cause of this SC transport failure, and that the SFP failure involved rejecting an otherwise useful visual pose. It does **not** establish that every card count, port and reset now inserts. Test frozen code on new independently generated board poses and card layouts. In particular, target the four/five-card marker acquisition gap and SC insertion stalls after a valid handoff. Do not tune the reserved internal final split.
+
+## Frozen repetition and public-sample video
+
+The user requested 20 additional replays of the same released configuration, then stopped the batch after **19 were scored**. Repeat 20 had begun but was stopped before scoring, so it is excluded. No controller settings or weights changed during the batch. [Machine summary](/home/nas/chmin/aic_archives/2026-10-19_sc_sfp_released_repair_twenty_frozen/summary_stopped.json) and all scored `repeat_*/score_summary.json` and traces are in `/home/nas/chmin/aic_archives/2026-10-19_sc_sfp_released_repair_twenty_frozen/`.
+
+| Measure | Result |
+| --- | ---: |
+| Best total, repeat 10 | **276.338304/300** |
+| Median total across 19 | **275.710201/300** |
+| Mean total, including failures | **256.282464/300** |
+| Complete runs with all three insertions | **15/19** |
+| Individual insertions | **53/57** |
+| SFP trial 1 / SFP trial 2 / SC trial 3 | **19/19, 17/19, 17/19** |
+
+Repeat 12 SFP 2 stopped before transport because the 20-second initial quiet-force-reference procedure did not establish a stable reference. Repeat 15 SFP 2 reached transport but its requested-port native refinement repeatedly exceeded the 64-pixel crop margin (up to about 96 pixels) or failed all-view projection; acquisition timed out. Repeat 16 SC stalled on the first sideways stage, **before** the marker could be used; the scorer recorded force harm. Repeat 17 SC completed that first stage but the marker was not found within six seconds. These are distinct limitations, not evidence that the marker-derived route is wrong after it acquires the board. The first four-run 12/12 streak therefore overestimated reliability. The best observed score is the maximum of a fixed repeated batch, not an optimization of its routes or scoring weights.
+
+For the user's video request, the unchanged repaired snapshot was replayed once on the **exact public predeadline `sample_config.yaml`** (`21f6eb9ac0d71f7dddac3657c67c41b5fa212e5aaa1fd68528b08ec219585c8d`). It scored **287.899393/300**, with all three physical insertions. This is a separate public sample, not the released qualification config. [Plan, score and manifest](/home/nas/chmin/aic_archives/2026-10-19_repaired_public_sample_video/summary.json) are under `/home/nas/chmin/aic_archives/2026-10-19_repaired_public_sample_video/`. The exact command was:
+
+```bash
+.pixi/envs/default/bin/python scripts/run_repaired_sample_video.py \
+  --output /home/nas/chmin/aic_archives/2026-10-19_repaired_public_sample_video \
+  --gpu 4 --domain 181
+```
+
+The H.264/yuv420p files were checked with `ffprobe` and example frames from each clip were visually inspected. Each has the overhead, side, center, left and right cameras at 1920×1080 and 20 fps:
+
+- [Complete 70.9 s sample run](/home/nas/chmin/aic_archives/2026-10-19_repaired_public_sample_video/rollout/five_cameras_20fps_grid.mp4)
+- [SFP trial 1, 17.35 s](/home/nas/chmin/aic_archives/2026-10-19_repaired_public_sample_video/rollout/sample_trial_1_five_cameras_20fps.mp4)
+- [SFP trial 2, 20.25 s](/home/nas/chmin/aic_archives/2026-10-19_repaired_public_sample_video/rollout/sample_trial_2_five_cameras_20fps.mp4)
+- [SC trial 3, 23.15 s](/home/nas/chmin/aic_archives/2026-10-19_repaired_public_sample_video/rollout/sample_trial_3_five_cameras_20fps.mp4)
