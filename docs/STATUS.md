@@ -12,7 +12,8 @@ Updated October 19, 2026. The demonstration milestone is complete: both SFP-to-N
 The released configuration was inspected and used for repair after publication. These are local results on exposed scenes; the separate internal reserved final scenes remain sealed. The repeat failures were initial force-reference timeout, SFP visual-acquisition timeout, early SC blockage and missing SC marker acquisition.
 
 - [Final videos, GIFs and provenance](media/final_evaluation/README.md)
-- [Short project writeup](robotic_cable_insertion_project.md)
+- [Project writeup with perception and recovery evidence](robotic_cable_insertion_project.md)
+- [Gazebo backtrack, sideways retry and insertion](media/recovery_demo/README.md)
 - [Experiments: what worked, what failed, and why](EXPERIMENTS.md)
 - [Technical completion notes and historical detail](answers/2026-10-19-final-project-completion-notes.md)
 - [One future-work plan](FUTURE_WORK.md) · [Rootless reproduction](WORKFLOW.md)
