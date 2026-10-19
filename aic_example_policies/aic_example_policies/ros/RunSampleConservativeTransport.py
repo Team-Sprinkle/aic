@@ -76,11 +76,37 @@ class RunSampleConservativeTransport(RunSharedPortTCP):
             start_local=np.linalg.inv(board)@np.r_[current[:3,3],1.]
             final_local=np.linalg.inv(board)@np.r_[final[:3,3],1.]
             behind=p['behind_board_y_m'];beyond=p['beyond_board_y_m'];outside=p['outside_board_x_m'];low=p['low_tcp_z_m']
-            self.stages=[('clear_start_side',point(start_local[0],behind,max(low+.05,current[2,3]-.03)),initial),
-                ('shift_behind_row_low',point(outside,behind,low),initial),
+            route=os.environ.get('AIC_SC_TRANSPORT_ROUTE','sc_old')
+            if route=='sc_old':
+                entry=[('clear_start_side',point(start_local[0],behind,max(low+.05,current[2,3]-.03)),initial),
+                    ('shift_behind_row_low',point(outside,behind,low),initial)]
+            elif route=='sc_skip_back':
+                # Move sideways from the actual start plane, with the same
+                # low corridor target. Do not first draw the cable backward
+                # between cards on starts that are already beside the row.
+                entry=[('shift_from_start_low',point(outside,start_local[1],low),initial)]
+            elif route=='sc_ascend':
+                # First lift at the initial horizontal location, then move
+                # backward at height. Descend while moving sideways only
+                # after reaching the behind-row plane.
+                raised=current[2,3]+.10
+                entry=[('ascend_before_back',point(start_local[0],start_local[1],raised),initial),
+                    ('clear_start_side_high',point(start_local[0],behind,raised),initial),
+                    ('shift_behind_row_low',point(outside,behind,low),initial)]
+            else:raise ValueError(f'Unknown SC transport route: {route}')
+            self._trace(event='sc_transport_route_selected',route=route,
+                start_board_local_m=start_local[:3].tolist(),geometry_input=False)
+            early_tilt=os.environ.get('AIC_SC_EARLY_TILT','0')=='1'
+            if early_tilt:
+                finish=[('tilt_outside_row',point(outside,beyond,low),final[:3,:3]),
+                    ('sweep_after_row',point(final_local[0],beyond,low),final[:3,:3])]
+            else:
+                finish=[('sweep_after_row',point(final_local[0],beyond,low),initial),
+                    ('tilt_clear_of_cards',point(final_local[0],beyond,low),final[:3,:3])]
+            self._trace(event='sc_transport_tilt_order_selected',early_tilt=early_tilt,geometry_input=False)
+            self.stages=entry+[
                 ('traverse_beyond_row',point(outside,beyond,low),initial),
-                ('sweep_after_row',point(final_local[0],beyond,low),initial),
-                ('tilt_clear_of_cards',point(final_local[0],beyond,low),final[:3,:3]),
+                *finish,
                 ('visual_acquisition',final[:3,3],final[:3,:3])]
         else:
             z=max(current[2,3],final[2,3]+.05)

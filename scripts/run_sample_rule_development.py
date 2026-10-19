@@ -19,14 +19,22 @@ def main():
     p.add_argument('--root',type=Path,required=True);p.add_argument('--output',type=Path,required=True)
     p.add_argument('--limit',type=int,default=0);p.add_argument('--gpu',default='5')
     p.add_argument('--case');p.add_argument('--spec',type=Path)
+    p.add_argument('--family',choices=['sc','sfp'])
+    p.add_argument('--policy',default='RunSampleConservativeTransport')
+    p.add_argument('--sc-route',choices=['sc_old','sc_skip_back','sc_ascend'],default='sc_old')
+    p.add_argument('--sc-early-tilt',action='store_true')
     a=p.parse_args();repo=Path.cwd();plan=json.loads((a.root/'plan.json').read_text())
     if a.output.exists():raise FileExistsError('Preserve earlier development version')
     a.output.mkdir(parents=True)
     files=[Path(__file__),repo/'aic_example_policies/aic_example_policies/ros/RunSampleConservativeTransport.py',a.spec or Path(plan['rule_spec'])]
+    if a.policy=='RunSampleTransportRecovery':
+        files.extend([repo/'aic_example_policies/aic_example_policies/ros/RunSampleTransportRecovery.py',
+                      repo/'scripts/transport_local_recovery.py',repo/'scripts/run_shared_recovery_eval.sh'])
     frozen={str(f):hashlib.sha256(f.read_bytes()).hexdigest() for f in files}
     (a.output/'source_hashes.json').write_text(json.dumps(frozen,indent=2)+'\n')
     for f in files: (a.output/f.name).write_bytes(f.read_bytes())
-    cases=[c for c in plan['cases'] if not a.case or c['case']==a.case]
+    cases=[c for c in plan['cases'] if (not a.case or c['case']==a.case)
+           and (not a.family or c['family']==a.family)]
     if a.limit:cases=cases[:a.limit]
     if not cases:raise ValueError('No requested sample cases')
     results=[]
@@ -34,9 +42,10 @@ def main():
         for f,h in frozen.items():
             if hashlib.sha256(Path(f).read_bytes()).hexdigest()!=h:raise ValueError('Development source changed during version: '+f)
         env=environment(repo,Path('/home/nas/chmin/aic_archives/2026-10-15_rule_perception_hierarchical_v1'),plan['bundle'],c,
-            policy='aic_example_policies.ros.RunSampleConservativeTransport',domain='91')
+            policy='aic_example_policies.ros.'+a.policy,domain='91')
         env.update(AIC_TRANSPORT_EVAL_GPU=a.gpu,AIC_TRANSPORT_EVAL_POLICY_GPU=a.gpu,
-            AIC_RULE_TRANSPORT_TEMPLATE=str(a.spec or Path(plan['rule_spec'])),AIC_TRANSPORT_EVAL_MAX_SIMULATION_SEC='150')
+            AIC_RULE_TRANSPORT_TEMPLATE=str(a.spec or Path(plan['rule_spec'])),AIC_TRANSPORT_EVAL_MAX_SIMULATION_SEC='150',
+            AIC_SC_TRANSPORT_ROUTE=a.sc_route,AIC_SC_EARLY_TILT='1' if a.sc_early_tilt else '0')
         run=a.output/c['case'];cmd=['bash',str(repo/'scripts/run_shared_recovery_eval.sh'),c['case'],
             str(repo/'outputs/experiments/2026-10-01_sc_llb_cleaned_bc/transport_imagenet_clean/best.pt'),str(run)]
         (a.output/'current_job.json').write_text(json.dumps(dict(case=c,run=str(run)),indent=2)+'\n')
