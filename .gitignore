@@ -23,6 +23,7 @@ outputs
 *.mp4
 # Selected final project demonstrations are intentionally versioned.
 !docs/media/final_evaluation/*.mp4
+!docs/media/recovery_demo/*.mp4
 *.bag
 *.db3
 *.mcap
