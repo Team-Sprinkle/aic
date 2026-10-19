@@ -1,0 +1,197 @@
+{
+  "date": "2026-10-19",
+  "reason": "Final project completion documentation consolidation",
+  "files": [
+    {
+      "original": "docs/STATUS.md",
+      "archive": "docs/answers/archive/2026-10-19-documentation/status_full_history.md",
+      "original_sha256": "8e5b3b8b5cf504047b621eecac36ce740ea5355ef3886b9f6e65299cf87f91f7"
+    },
+    {
+      "original": "docs/EXPERIMENTS.md",
+      "archive": "docs/answers/archive/2026-10-19-documentation/experiments_full_history.md",
+      "original_sha256": "c43cdc076a676da5e032fbead41f1bcd4ce564113a220e8237eecebed111d7be"
+    },
+    {
+      "original": "docs/robotic_cable_insertion_project.md",
+      "archive": "docs/answers/archive/2026-10-19-documentation/project_writeup_full_history.md",
+      "original_sha256": "2d091f55a40d3b125ccf10e0a4d523155609c770da38e74cdddee227505e630a"
+    },
+    {
+      "original": "docs/README.md",
+      "archive": "docs/answers/archive/2026-10-19-documentation/documentation_index_full_history.md",
+      "original_sha256": "f3cbfc54b1e79425e1bc580b5be4b7544a3dd37cab89cbfee246e1071b79d59c"
+    },
+    {
+      "original": "docs/DATASETS.md",
+      "archive": "docs/answers/archive/2026-10-19-documentation/datasets_full_history.md",
+      "original_sha256": "5ef338b04081570993705c23e150f73f74a846bb17a8c04222480a742664208b"
+    },
+    {
+      "original": "docs/LOCAL_WORKFLOW.md",
+      "archive": "docs/answers/archive/2026-10-19-documentation/local_workflow_full_history.md",
+      "original_sha256": "b2460d40359b4e8a3ad933817d8e5147907958cbe6af39be7709b9304bebb8e1"
+    },
+    {
+      "original": "docs/EVALUATION_PROTOCOL.md",
+      "archive": "docs/answers/archive/2026-10-19-documentation/evaluation_protocol_full_history.md",
+      "original_sha256": "fc1ab80a2ad334bb82e9dda42295c237e529aa649840449a76c09cd3d3b02d30"
+    },
+    {
+      "original": "README.md",
+      "archive": "docs/answers/archive/2026-10-19-documentation/root_readme_full_history.md",
+      "original_sha256": "4772f537320b8372a17249f495aabe5a5d0f1d9b032658a1cc5e468d090c4567"
+    },
+    {
+      "original": "docs/DIRECT_VISUAL_POLICY.md",
+      "archive": "obsolete/docs/2026-10-19-retired-plans/DIRECT_VISUAL_POLICY.md",
+      "original_sha256": "320ac5ddc88f020a64507e6cfdb553f6353dd90f557d5fe53d4a5802bebe6d97"
+    },
+    {
+      "original": "docs/HIERARCHICAL_RECOVERY.md",
+      "archive": "obsolete/docs/2026-10-19-retired-plans/HIERARCHICAL_RECOVERY.md",
+      "original_sha256": "35b79e39e1846186e012d49888cc2155be44caa6b6bc984d230487acda3c6ba5"
+    },
+    {
+      "original": "docs/POSE_VISIBILITY_HANDOFF.md",
+      "archive": "obsolete/docs/2026-10-19-retired-plans/POSE_VISIBILITY_HANDOFF.md",
+      "original_sha256": "c8642672fb7650db92facd3ced156bd1239355679a529490cab4692731111693"
+    },
+    {
+      "original": "docs/SC_CABLE_SNAG_RECOVERY_PLAN.md",
+      "archive": "obsolete/docs/2026-10-19-retired-plans/SC_CABLE_SNAG_RECOVERY_PLAN.md",
+      "original_sha256": "b4dfa2da97e5ea1271ee007cc1616a4ad8ea2ac170a0d00394953ae7ccc10404"
+    },
+    {
+      "original": "docs/SELECTED_PORT_HANDOFF_PLAN.md",
+      "archive": "obsolete/docs/2026-10-19-retired-plans/SELECTED_PORT_HANDOFF_PLAN.md",
+      "original_sha256": "1561ec38903291fec8085c328570808f400e841a0bbf29403a6d9b80ff28c036"
+    },
+    {
+      "original": "docs/SERL_PROBABILISTIC_ACTOR.md",
+      "archive": "obsolete/docs/2026-10-19-retired-plans/SERL_PROBABILISTIC_ACTOR.md",
+      "original_sha256": "715432e75d6a2e98b245a6c9b8eb4fc18228b59e4c8e1547dc2721834c8b10ca"
+    },
+    {
+      "original": "docs/SERL_RECOVERY_STRATEGY.md",
+      "archive": "obsolete/docs/2026-10-19-retired-plans/SERL_RECOVERY_STRATEGY.md",
+      "original_sha256": "11fabce853f7804218bd183ace3acdc076923b7be3bed57895ccc5e6515c1ea7"
+    },
+    {
+      "original": "docs/TRANSPORT_HANDOFF_IMPROVEMENT_PLAN.md",
+      "archive": "obsolete/docs/2026-10-19-retired-plans/TRANSPORT_HANDOFF_IMPROVEMENT_PLAN.md",
+      "original_sha256": "5c3572a11f22cf4c828f8d340cfdc11b1bc3c658d266af4b25be22cd7dda9cac"
+    },
+    {
+      "original": "docs/WORLD_MODEL_NEXT_STEPS.md",
+      "archive": "obsolete/docs/2026-10-19-retired-plans/WORLD_MODEL_NEXT_STEPS.md",
+      "original_sha256": "ba3583d91a1adfc4b8bd1d6101889a2d5b72e9aa1659d3aa93eb8b5d1ba0b747"
+    },
+    {
+      "original": "docs/act_serl_warmstart_pipeline.md",
+      "archive": "obsolete/docs/2026-10-19-retired-plans/act_serl_warmstart_pipeline.md",
+      "original_sha256": "d68e6c66d2d49b4ad64e8ebdaa73d0beb85b59cc1c7f5569aace450a3166d1a7"
+    },
+    {
+      "original": "docs/expert_matrix_template_fixes.md",
+      "archive": "obsolete/docs/2026-10-19-retired-plans/expert_matrix_template_fixes.md",
+      "original_sha256": "0ec44f820a16aa1c606229eedb1978462836f4690c13f41a4e810e14aeb7f954"
+    },
+    {
+      "original": "docs/expert_trajectory_generator.md",
+      "archive": "obsolete/docs/2026-10-19-retired-plans/expert_trajectory_generator.md",
+      "original_sha256": "7d3511581f588ec1412c966258de01bac8c7206efdad3483bad8f2e21e9af5ce"
+    },
+    {
+      "original": "docs/isaac_online_rl.md",
+      "archive": "obsolete/docs/2026-10-19-retired-plans/isaac_online_rl.md",
+      "original_sha256": "f8415dc82ed14ae73fe6b317dff51b802535b76de3891fb89681f9f797bbb27c"
+    },
+    {
+      "original": "docs/official_teacher_pipeline.md",
+      "archive": "obsolete/docs/2026-10-19-retired-plans/official_teacher_pipeline.md",
+      "original_sha256": "08e8ec091ea82632e2553d0b3dd6f3d023ac7e323e45c62559cb85469a46ee4e"
+    },
+    {
+      "original": "docs/offline_serl_pretrain.md",
+      "archive": "obsolete/docs/2026-10-19-retired-plans/offline_serl_pretrain.md",
+      "original_sha256": "f92d92a1696726a10dc0462ba2c26f2df43e3355fd2b6671900c698a16e70629"
+    },
+    {
+      "original": "outputs_README.md",
+      "archive": "docs/answers/archive/2026-10-19-documentation/outputs_artifact_map_full_history.md",
+      "original_sha256": "557e3a1ecdbca77b555b9356be83ba228da95834672725031e96b509624db3bf"
+    }
+  ],
+  "links_rewritten_in": [
+    "docs/answers/archive/2026-10-19-documentation/status_full_history.md",
+    "docs/answers/archive/2026-10-19-documentation/experiments_full_history.md",
+    "docs/answers/archive/2026-10-19-documentation/project_writeup_full_history.md",
+    "docs/answers/archive/2026-10-19-documentation/documentation_index_full_history.md",
+    "docs/answers/archive/2026-10-19-documentation/datasets_full_history.md",
+    "docs/answers/archive/2026-10-19-documentation/local_workflow_full_history.md",
+    "docs/answers/archive/2026-10-19-documentation/root_readme_full_history.md",
+    "obsolete/docs/2026-10-19-retired-plans/DIRECT_VISUAL_POLICY.md",
+    "obsolete/docs/2026-10-19-retired-plans/HIERARCHICAL_RECOVERY.md",
+    "obsolete/docs/2026-10-19-retired-plans/POSE_VISIBILITY_HANDOFF.md",
+    "obsolete/docs/2026-10-19-retired-plans/SC_CABLE_SNAG_RECOVERY_PLAN.md",
+    "obsolete/docs/2026-10-19-retired-plans/SELECTED_PORT_HANDOFF_PLAN.md",
+    "obsolete/docs/2026-10-19-retired-plans/SERL_PROBABILISTIC_ACTOR.md",
+    "obsolete/docs/2026-10-19-retired-plans/TRANSPORT_HANDOFF_IMPROVEMENT_PLAN.md",
+    "obsolete/docs/2026-10-19-retired-plans/WORLD_MODEL_NEXT_STEPS.md",
+    "obsolete/docs/2026-10-19-retired-plans/act_serl_warmstart_pipeline.md",
+    "obsolete/docs/2026-10-19-retired-plans/isaac_online_rl.md",
+    "aic_utils/aic_isaac/README.md",
+    "aic_utils/gazebo_rl/README.md",
+    "aic_utils/lerobot_robot_aic/README.md",
+    "docs/answers/2026-09-29-two-actor-perception-bc-rl-plan.md",
+    "docs/answers/2026-10-02-agreed-handoff-plan-and-doc-update.md",
+    "docs/answers/2026-10-02-how-transport-stops-during-deployment.md",
+    "docs/answers/2026-10-02-perception-after-transport-stop.md",
+    "docs/answers/2026-10-02-selected-port-handoff-independent-replication.md",
+    "docs/answers/2026-10-02-selected-port-verifier-continuation.md",
+    "docs/answers/2026-10-03-current-transport-camera-check-perception-poseinsert.md",
+    "docs/answers/2026-10-03-next-steps-after-geometric-handoff-repair.md",
+    "docs/answers/2026-10-03-next-steps-after-live-shadow-handoff.md",
+    "docs/answers/2026-10-03-planned-history-handoff-poseinsert-steps.md",
+    "docs/answers/2026-10-03-temporal-port-check-and-poseinsert-handoff.md",
+    "docs/answers/2026-10-04-are-refiner-and-verifier-working.md",
+    "docs/answers/2026-10-04-coarse-history-and-handoff-recap.md",
+    "docs/answers/2026-10-04-context-needed-by-each-model.md",
+    "docs/answers/2026-10-04-does-coarse-perception-need-improvement.md",
+    "docs/answers/2026-10-04-how-transport-stop-actually-works.md",
+    "docs/answers/2026-10-04-overall-model-picture-and-next-steps.md",
+    "docs/answers/2026-10-04-which-perception-stages-use-camera-history.md",
+    "docs/answers/2026-10-05-sfp-board-reference-probe-result.md",
+    "docs/answers/2026-10-05-sfp-slot-local-improvement-result.md",
+    "docs/answers/2026-10-06-joint-camera-candidate-follow-up.md",
+    "docs/answers/2026-10-06-sfp-slot-conditioned-port-improvement.md",
+    "docs/answers/2026-10-08-how-to-improve-handoff.md",
+    "docs/answers/2026-10-08-is-handoff-reliable-without-collisions.md",
+    "docs/answers/2026-10-08-why-sfp-moveit-instead-of-sc.md",
+    "docs/answers/2026-10-09-actor-coarse-refiner-wrap-up.md",
+    "docs/answers/2026-10-10-can-actor-and-coarse-improve.md",
+    "docs/answers/2026-10-14-autonomous-execution-outcome.md",
+    "docs/experiments/2026-09-17-act-verified-8h.md",
+    "docs/experiments/2026-09-17-direct-visual-policy.md",
+    "docs/experiments/2026-09-17-evaluation-curriculum-fixes.md",
+    "docs/experiments/2026-09-18-act-all-verified.md",
+    "docs/experiments/2026-09-18-dreamer-pilot.md",
+    "docs/experiments/2026-09-18-world-followup.md",
+    "docs/experiments/2026-09-22-serl-mixture-recovery.md",
+    "docs/experiments/2026-09-23-fixed-five-card-route-probe.md",
+    "docs/experiments/2026-09-23-ordinary-development-cable-audit.md",
+    "docs/experiments/2026-09-23-ranked-failure-scenarios.md",
+    "docs/experiments/2026-09-24-hierarchical-recovery-continuation.md",
+    "docs/experiments/2026-09-25-sc-lateral-bypass-and-policy-handoff.md",
+    "docs/experiments/2026-10-02-selected-port-handoff-execution.md",
+    "docs/experiments/2026-10-08-sfp-requested-port-corridor-audit.md",
+    "docs/experiments/2026-10-13-transport-independent-root-cause-review.md",
+    "docs/getting_started.md",
+    "obsolete/README.md",
+    "obsolete/docs/hybrid_model_architecture_review.md",
+    "obsolete/submission_handoff/selected_policy_summary.md",
+    "outputs_README.md"
+  ],
+  "archive_transformations": "Relative links adjusted after relocation; main-document fragments redirected to historical snapshots; active summaries rewritten separately."
+}

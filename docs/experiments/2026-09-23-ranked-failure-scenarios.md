@@ -180,7 +180,7 @@ make the outcome worse without proving that the cable wrapped around a card.
 - **Likelihood:** unresolved for learned or VLM/MoveIt routes through crowded
   SC scenes. The 19-scene stock-CheatCode sample did not establish one and
   cannot estimate its rate under another route.
-- **Reproducibility:** the older [SC NIC bypass note](../expert_matrix_template_fixes.md#sc-to-sc-nic-bypass-full-insertion-template)
+- **Reproducibility:** the older [SC NIC bypass note](../../obsolete/docs/2026-10-19-retired-plans/expert_matrix_template_fixes.md#sc-to-sc-nic-bypass-full-insertion-template)
   reports a five-card center-camera cable catch and a successful route change,
   but the failed raw trajectory/video is missing from the checked local and
   S3 clean archives. A saved three-card VLM/MoveIt score-1 trajectory was

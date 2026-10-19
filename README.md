@@ -1,80 +1,17 @@
-> **October 18 score target achieved:** **290.19/300**, all three public-sample insertions pass independent depth/lateral/orientation checks; all used-stage p95 inference is below300ms. The analyze/repair/evaluate loop stops after18 completed full samples. V56 preserves three quiet SCcontext frames while sharing initial grasp observations, and seats1.5s above the public1s requirement. Rule transport and explicit RGB/public-state insertion use unchanged perception weights; no learned BCactor or RLactions. Failures and unqualified fits are preserved. This is one selected public-sample pass, with small SCdepth margin and unresolved unusual-SFP-grasp coverage; final scenes stay sealed. Earlier sections are historical. [Results, commands and videos](docs/experiments/2026-10-18-five-repair-cycles.md).
+# Robotic cable insertion — completed prototype
 
-## October 18: gated close-up pose update and SC insertion result
+Rule transport, requested-port visual perception and an explicit contact-aware controller insert SFP and SC cable connectors around circuit cards. The selected local replay of the published qualification config scored **276.34/300**; a fixed 19-run batch achieved **53/57 trial insertions**. These are exposed-scene prototype results.
 
-V34 passes **4/4 matched SC development cases** (zero/five obstacle cards, both ports), followed by a passing SC round in the unchanged public sample: **15.510 mm depth, 0.141 mm lateral error, 0.469° orientation**, toolkit completion, no harm. Five fresh agreeing images support one bounded plug-pose update at 25 mm; the port frame stays fixed. Tighter lateral centering and stronger lateral tracking are also needed. All used-stage p95 timings pass; these are explicit RGB/public-state control results, not BC or RL.
+[Project writeup](docs/robotic_cable_insertion_project.md) · [Final videos and GIFs](docs/media/final_evaluation/README.md) · [Experiments](docs/EXPERIMENTS.md) · [Rootless workflow](docs/LOCAL_WORKFLOW.md) · [Future work](docs/FUTURE_WORK.md)
 
-The complete sample is **170.57/300, 2/3 strict** because SFP trial 2 has a 3.53° biased grasp estimate before contact. Its actual roll exceeds the original SFP training range; close-up predictions remain wrong. Repeats stop, and the next targeted repair is SFP orientation coverage rather than a stiffness-only change. No new training or collection is running. The SC model's original 1.026° qualification failure remains explicit; four successful development cases do not establish general reliability. Final scenes remain sealed.
+![SC-to-SC transport around three cards and successful insertion, 2x preview](docs/media/final_evaluation/sc_three_cards.gif)
 
-[Detailed evidence, commands, images and next repair](docs/experiments/2026-10-18-sc-explicit-controller-continuation.md).
+This repository is a fork of Intrinsic's AIC toolkit. The original toolkit guide follows; the project documentation starts at [docs/README.md](docs/README.md).
 
-# AI for Industry Challenge Toolkit
-
-> **October 17 current pipeline:** rule-based SC/SFP transport → requested-port coarse/native-image refinement and visual acquisition → explicit visual/proprioceptive approach to about **25 mm** → shared full-connector-pose BC insertion actor. Frozen sample-derived transport/handoff: **119/124** (SC22/24, SFP97/100); separate exposed released scenes **2/6**. Four-rollout insertion diagnostic: **SFP1/2, SC0/2**; subsequent complete sample **165.42/300 points but0/3strict insertions**. No recovery or newRL in either test. The actor no longer owns the entire150mm approach in this diagnostic. See [milestones and remaining gaps](docs/STATUS.md#major-milestones--transport-handoff-and-insertion-october-17). Earlier dated running/queued statements are historical; step5 remains open.
-
-
-> October 1 supervised continuation: the project is testing a three-model system: one shared SFP/SC temporal transport actor, a separate task-conditioned selected-port perception model, and a separate port-relative insertion actor. The earlier four single-observation BC transport variants reached 0/16 stable near-port handoffs; the new bounded temporal comparison also failed its offline route-subgoal gate. Perception, insertion, backtracking, and RL remain gated. See [current status](docs/STATUS.md) and the [temporal continuation record](docs/experiments/2026-10-01-temporal-three-model-continuation.md).
-
-> October 1 experiment status: the SC Low Lateral Bypass teacher data has an audited motion-safe cleaned BC derivative. Four supervised transport checkpoints completed 16 matched Gazebo development rollouts; none passed insertion or the stable transport handoff gate. See [current status](docs/STATUS.md) and the [SC cleaned BC record](docs/experiments/2026-10-01-sc-llb-cleaned-bc.md) before using a checkpoint.
-
-**September 30 latest:** teacher transport gate accepted. Two same-world Cartesian SC teachers fully inserted, providing v9 with 1,751 transport and 503 local chunks, plus the verified SFP source. The balanced-port BC retry finished 1,500 updates and failed both autonomous development starts: final planned-standoff errors 103 and 603 mm versus 76 and 74 mm for the prior masked actor; neither reached handoff or inserted. A bounded trace/video audit found early wrong-route commands without sustained cable snag. Stop routine feed-forward BC. A checkpoint-provenance audit found that this run reused the full action head from an older mixed-SC-route model and had only two new SC episodes; it was not a clean test of the new Low Lateral Bypass route. Audit clean route data and initialization before deciding on a route-subgoal model. No new training was started for this audit. True visibility, autonomous two-actor insertion and RL remain gated; reserved final scenes stay sealed. [Evidence and exact artifacts](docs/experiments/2026-09-30-transport-to-two-actor-continuation.md).
-
-> **Transport continuation:** the user accepted the transport gate; four changed-card-layout routes reached standoff/handoff. Verified successful SC command targets are prepared separately for transport and local BC. True-visibility label checks are ongoing; autonomous two-actor insertion and RL gates remain open. [Current execution](docs/experiments/2026-09-30-transport-to-two-actor-continuation.md).
-
-> **2026-09-30 update:** [Oracle force diagnosis](docs/experiments/2026-09-30-force-oracle.md) identified plug/SC-port contact in a reproduced old-route failure, corrected a Gazebo contact-reporting bug, and validated the explicit tilt-before-return route with collisions intact. These are privileged development trials; autonomous policy and new-start generality gates remain open.
-
-> **Returning to `feat/hybrid-train`?** Start with the [working documentation](docs/README.md):
-> [current status](docs/STATUS.md), [experiment history](docs/EXPERIMENTS.md),
-> [rootless setup and local model testing](docs/LOCAL_WORKFLOW.md), and
-> [artifact locations](outputs_README.md). Reviewed 2026-09-24. The frozen
-> natural-cable pose estimate reached 0.322/0.626 mm lateral median/p95. Generic
-> pose concatenation and an additive correction both failed their control
-> gates. The repaired controller now predicts four complete connector
-> waypoints at 50 ms intervals relative to the port, learned from the recorded
-> teacher target commands. Fixes cover blended-versus-target labels, lost
-> within-chunk paths, checkpoint selection, and live clipping. A deterministic
-> 2.00M-parameter AIC-RPDP BC arm achieved **6/6 local 8 mm seating events** on
-> the fixed near-port development set and **8/8** on eight additional near-port
-> starts, at 19.86 ms p95 inference. A later recorded five-start check reached
-> **4/5** at 20.12 ms p95. These configs override the physical approximately
-> 45.8--48.72 mm SFP depth with an 8 mm surrogate and use privileged near-mouth
-> resets, so they are local-control results rather than normal full-task
-> insertions. The
-> matched diffusion arm reached 2/6; the earlier valid DPPO arm
-> remains at 1/6 and was not continued. The supervised candidate passes its
-> development gate, while the reserved final split remains sealed. See the
-> [RPDP/DPPO execution record](docs/experiments/2026-09-22-rpdp-dppo.md),
-> [generic controller record](docs/experiments/2026-09-22-pose-conditioned-gru-policy.md),
-> and [explicit-correction record](docs/experiments/2026-09-22-explicit-pose-correction.md).
-> The subsequent four-mode SERL continuation exposed policy-mode collapse,
-> repaired full-mixture anchoring and optimizer learning-rate restoration, and
-> recovered the frozen **3/8** metrics-only result without improving it. A new
-> three-camera rerun recorded **1/8 BC, 1/8 selected RL, and 3/8 selected RL
-> plus measured-path backtracking**. Per-episode review shows mainly lateral
-> divergence and port-lip stalls; it does not establish cable-snag recovery.
-> The selected policy remains an SFP-to-NIC near-port diagnostic. SC-to-SC and
-> multi-card cable routing have not been validated. See the
-> [SERL experiment](docs/experiments/2026-09-22-serl-mixture-recovery.md),
-> [video failure analysis](docs/experiments/2026-09-23-serl-video-failure-analysis.md),
-> and [ordered SC cable-snag plan](docs/SC_CABLE_SNAG_RECOVERY_PLAN.md).
-> A later five-card Gazebo route probe produced an abrupt high-force approach
-> stall, but did not identify a named contact pair. The proposed core
-> continuation is [hierarchical recovery](docs/HIERARCHICAL_RECOVERY.md):
-> measured-pose local retreat, then an earlier route checkpoint and a different
-> cable corridor after repeated blockage. This is a research hypothesis, not
-> a validated insertion gain. The first 17-trace force/TCP audit and two fresh
-> five-card Gazebo controls are diagnostic only. The later Isaac mechanics
-> repair and SC label audit passed their bounded checks. The active
-> [shared SFP/SC execution plan](docs/experiments/2026-09-24-shared-actor-sc-serl-execution.md)
-> is testing native-image SC perception on new resets before collecting the
-> missing successful SC demonstrations and training one full-task actor. A
-> frozen eight-scene pose check is running; no shared BC or SC RL result exists.
-> Superseded plans, reports, and handoffs are in the [historical archive](obsolete/README.md).
+---
 
 [![build](https://github.com/intrinsic-dev/aic/actions/workflows/build.yml/badge.svg)](https://github.com/intrinsic-dev/aic/actions/workflows/build.yml)
 [![style](https://github.com/intrinsic-dev/aic/actions/workflows/style.yml/badge.svg)](https://github.com/intrinsic-dev/aic/actions/workflows/style.yml)
-
-![](../media/aic_banner.png)
 
 The **AI for Industry Challenge** is an open competition for developers and roboticists aimed at solving some of the hardest, high-impact problems in robotics and manufacturing.
 
@@ -120,7 +57,6 @@ Follow the sections below to navigate through each phase of the process.
 
 ## Toolkit Architecture
 
-![AIC Competition Components](../media/aic_competition_components.png)
 
 The AI for Industry Challenge toolkit is divided into **two main components**:
 

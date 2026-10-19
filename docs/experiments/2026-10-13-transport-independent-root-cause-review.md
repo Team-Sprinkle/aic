@@ -1,6 +1,6 @@
 # Transport review: endpoint contract, lost terminal labels, and model priorities
 
-**October 14 plan update:** Use the [consolidated transport and handoff plan](../TRANSPORT_HANDOFF_IMPROVEMENT_PLAN.md) for subsequent execution. It retains these findings and adds an early bounded rule-based SC transport branch before broad retraining.
+**October 14 plan update:** Use the [consolidated transport and handoff plan](../../obsolete/docs/2026-10-19-retired-plans/TRANSPORT_HANDOFF_IMPROVEMENT_PLAN.md) for subsequent execution. It retains these findings and adds an early bounded rule-based SC transport branch before broad retraining.
 
 Date: 2026-10-13. Analysis only: existing checkpoints, code, recorded Gazebo traces, images, and primary research. No training, collection, simulation, or GPU inference was launched. Active processes were inspected and left untouched. Final scenes remain sealed. The reserved evaluation results and existing artifacts are unchanged.
 

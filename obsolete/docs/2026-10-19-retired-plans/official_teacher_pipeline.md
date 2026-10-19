@@ -1,3 +1,5 @@
+> Retired plan: preserved for provenance. The [current experiment summary](../../../docs/EXPERIMENTS.md) and [single future-work plan](../../../docs/FUTURE_WORK.md) supersede its active/queued instructions.
+
 # Official Teacher Trajectory Pipeline
 
 ## Why move away from Gazebo-gym stepping

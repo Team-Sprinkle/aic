@@ -1,9 +1,11 @@
+> Retired plan: preserved for provenance. The [current experiment summary](../../../docs/EXPERIMENTS.md) and [single future-work plan](../../../docs/FUTURE_WORK.md) supersede its active/queued instructions.
+
 # Isaac Online RL
 
 > Historical implementation and smoke-run guide. The adapter-first “future”
 > direction below predates the June architecture review; use the
-> [direct visual policy](DIRECT_VISUAL_POLICY.md) and [current status](STATUS.md)
-> for design decisions, and [local workflow](LOCAL_WORKFLOW.md) for rootless
+> [direct visual policy](DIRECT_VISUAL_POLICY.md) and [current status](../../../docs/answers/archive/2026-10-19-documentation/status_full_history.md)
+> for design decisions, and [local workflow](../../../docs/answers/archive/2026-10-19-documentation/local_workflow_full_history.md) for rootless
 > operation. Reward geometry, success checks, and actor modes changed in later
 > experiments; use each run's resolved config.
 
@@ -28,7 +30,7 @@ before PPO training.
 - Training in this legacy mode: ACT frozen, adapter and critics trainable.
 - Host launcher: `aic_utils/aic_isaac/scripts/train_isaac_online_serl.py`.
 - Isaac trainer: `aic_utils/aic_isaac/aic_isaaclab/scripts/serl/train.py`.
-- Historical design: [original ACT-adapter proposal](../obsolete/aic_utils/aic_isaac/docs/isaac_online_serl_design.md).
+- Historical design: [original ACT-adapter proposal](../../aic_utils/aic_isaac/docs/isaac_online_serl_design.md).
 - Current status: short-run capable. It loads an ACT TorchScript export, keeps
   Isaac camera sensors enabled, reads raw camera RGB tensors, collects replay,
   updates critics and adapter, and saves a real online checkpoint.
@@ -350,7 +352,7 @@ pixi run python aic_utils/aic_isaac/scripts/check_policy_checkpoint_compatibilit
 - Direct visual inference/training and checkpoint loading passed model checks.
   Isaac then loaded it for live zero-action reset/terminal diagnostics; learned
   actions were not evaluated in those probes. Cameras and terminal accounting
-  ran, but resets drifted. See the [live report](experiments/2026-09-17-live-validation.md).
+  ran, but resets drifted. See the [live report](../../../docs/experiments/2026-09-17-live-validation.md).
   ACT TorchScript plus the trained adapter remains for explicit legacy checkpoints.
 - Isaac PPO warm-start from offline SERL is a partial action-prior
   initialization, not full actor-critic hidden-layer transfer for the current

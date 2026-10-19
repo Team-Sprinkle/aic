@@ -195,7 +195,7 @@ The selected score report can be regenerated from the five bulk roots:
 
 The user suggested that the remembered snag might have come from the **agent/VLM
 transport route**, rather than stock CheatCode. This is consistent with an
-older [SC NIC bypass template](../expert_matrix_template_fixes.md#sc-to-sc-nic-bypass-full-insertion-template):
+older [SC NIC bypass template](../../obsolete/docs/2026-10-19-retired-plans/expert_matrix_template_fixes.md#sc-to-sc-nic-bypass-full-insertion-template):
 for a one-SC-port, five-NIC-card run seeded `51500`, a previous center-camera
 review recorded the cable catching on the NIC stack. The subsequent
 outside-left route was accepted with score `89.17`. In this collector the VLM

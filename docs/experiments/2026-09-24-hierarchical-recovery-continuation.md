@@ -20,7 +20,7 @@ override passed a short [three-camera SC smoke test](2026-09-24-isaac-sc-fidelit
 One scene and four static frames cannot pass the 0–5-card SC mechanics,
 moving-cable appearance, or autonomous-policy gates.
 
-The [core controller design](../HIERARCHICAL_RECOVERY.md) explains the safety
+The [core controller design](../../obsolete/docs/2026-10-19-retired-plans/HIERARCHICAL_RECOVERY.md) explains the safety
 supervisor, checkpoint escalation, learned actor boundary, and prior art.
 The [September 23 ranking](2026-09-23-ranked-failure-scenarios.md) and
 [five-card route evidence](2026-09-23-fixed-five-card-route-probe.md) are

@@ -14,7 +14,7 @@ The experiment deliberately keeps predictive world models, SEER, Gazebo adaptati
 
 The actor predicts a distribution over the complete four-waypoint connector trajectory in the port-opening frame. Each waypoint has 3D translation and a rotation vector, for 24 stochastic coordinates. A deterministic calibrated SE(3) adapter converts the selected trajectory into the same four TCP-body-frame commands used by the successful supervised controller.
 
-This is a full trajectory policy. It does not predict a correction to a frozen BC action. See [the architecture explanation](../SERL_PROBABILISTIC_ACTOR.md).
+This is a full trajectory policy. It does not predict a correction to a frozen BC action. See [the architecture explanation](../../obsolete/docs/2026-10-19-retired-plans/SERL_PROBABILISTIC_ACTOR.md).
 
 The distribution is a four-component mixture of low-rank Gaussians. Component 0 reproduces the BC mean exactly. For exploration, it starts at 70% probability while three coherent lateral alternatives receive 10% each. A chosen component is held for three 200 ms decisions so that exploration remains correlated for 600 ms.
 

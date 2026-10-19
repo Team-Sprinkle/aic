@@ -18,7 +18,7 @@ The challenge uses a two-component architecture:
 
 **Source code for both components is available in this toolkit.** Since the Evaluation Component will not change during the competition, we publish a Docker image (`aic_eval`) for convenience that you can reuse—this is the **recommended workflow**. Advanced users who prefer to build from source can follow the [Building from Source](./build_eval.md) guide.
 
-For a detailed explanation of the architecture, packages, and interfaces, see the [Toolkit Architecture](../README.md#toolkit-architecture) section in the README.
+For a detailed explanation of the architecture, packages, and interfaces, see the [Toolkit Architecture](answers/archive/2026-10-19-documentation/root_readme_full_history.md#toolkit-architecture) section in the README.
 
 ---
 
@@ -221,4 +221,4 @@ You've successfully completed the Quick Start guide! You now have:
 ## Next Steps
 
 Now that your environment is set up, run the same evluation container but with different [baseline solutions](../aic_example_policies/README.md).
-Then proceed with the **💻 Develop Your Policy** section in the [Toolkit Guide](../README.md#toolkit-guide).
+Then proceed with the **💻 Develop Your Policy** section in the [Toolkit Guide](answers/archive/2026-10-19-documentation/root_readme_full_history.md#toolkit-guide).

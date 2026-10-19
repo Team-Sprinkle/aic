@@ -9,7 +9,7 @@ Normal privileged SFP teachers generally traversed this region without a
 demonstrated cable snag; the later one-scene Gazebo replay below adds no SC
 evidence. The SC MoveIt/lateral-bypass experiments are recorded separately
 in [the SC pilot](2026-09-29-moveit-sc-route-pilot.md) and
-[SC recovery plan](../SC_CABLE_SNAG_RECOVERY_PLAN.md).
+[SC recovery plan](../../obsolete/docs/2026-10-19-retired-plans/SC_CABLE_SNAG_RECOVERY_PLAN.md).
 
 **The arm-planning hypothesis works, but the safe route-label gate remains
 open.** From six previously saved, nonfinal, five-second SFP actor takeovers,

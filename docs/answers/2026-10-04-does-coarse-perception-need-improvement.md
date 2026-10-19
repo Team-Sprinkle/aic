@@ -10,4 +10,4 @@ The highest-value coarse repair is to use the **whole board view** to identify n
 
 There is no fundamental requirement for two separate neural networks. If a precise task-selected model can run often enough within the **300 ms complete inference budget**, it could also provide the coarse pause signal. The important distinction is **two decisions with different evidence thresholds**: whether to hold for inspection, and whether the verified pose is safe enough for insertion.
 
-Related: [handoff design](../SELECTED_PORT_HANDOFF_PLAN.md), [SFP fresh identity test](../experiments/2026-10-04-sfp-fresh-anchor-shadow.md), [context/history audit](../experiments/2026-10-04-sfp-context-sufficiency-audit.md).
+Related: [handoff design](../../obsolete/docs/2026-10-19-retired-plans/SELECTED_PORT_HANDOFF_PLAN.md), [SFP fresh identity test](../experiments/2026-10-04-sfp-fresh-anchor-shadow.md), [context/history audit](../experiments/2026-10-04-sfp-context-sufficiency-audit.md).

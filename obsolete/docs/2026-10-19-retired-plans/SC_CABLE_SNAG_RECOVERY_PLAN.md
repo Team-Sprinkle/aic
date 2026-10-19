@@ -1,3 +1,5 @@
+> Retired plan: preserved for provenance. The [current experiment summary](../../../docs/EXPERIMENTS.md) and [single future-work plan](../../../docs/FUTURE_WORK.md) supersede its active/queued instructions.
+
 # SC-to-SC cable-snag recovery plan
 
 **September 26 route sensitivity:** On a fixed five-card all-left-rail Gazebo
@@ -6,7 +8,7 @@ beside and beyond the row improved the teacher route. It fully inserted in
 6/7 one-axis ±10 mm tests, but the shortened forward traverse partially
 inserted; a separate forward-margin gate also failed. The route is still not
 qualified as robust or proven cable-contact-free. See the
-[scores, videos, and metric caveats](experiments/2026-09-26-sc-far-return-route-sensitivity.md).
+[scores, videos, and metric caveats](../../../docs/experiments/2026-09-26-sc-far-return-route-sensitivity.md).
 The [selected-port visibility and two-actor handoff](POSE_VISIBILITY_HANDOFF.md)
 is proposed supervised work, not an autonomous result. Keep RL and final
 scenes gated.
@@ -18,7 +20,7 @@ clearance of 11.50 and 13.81 mm from simplified main PCB boxes; another
 full-insertion route came within 2.11 mm and is excluded from BC admission.
 A wider-lane rerun failed insertion. The wide-view recording, exact commands,
 failed cases, and the proposed visibility-gated transport/local-policy handoff
-are in the [lateral bypass experiment](experiments/2026-09-25-sc-lateral-bypass-and-policy-handoff.md).
+are in the [lateral bypass experiment](../../../docs/experiments/2026-09-25-sc-lateral-bypass-and-policy-handoff.md).
 These are privileged teacher routes, not autonomous policy successes or
 verified cable-snag recoveries. The supervised full-start insertion gate
 remains open; RL remains deferred.
@@ -28,7 +30,7 @@ one constructed Isaac five-card SC mechanics scene now passes, and a short
 three-camera smoke test works after a container-local driver-check override;
 broader scene, moving-cable visuals, and cable-snag gates remain open
 
-The later [Isaac SC fidelity repair](experiments/2026-09-24-isaac-sc-fidelity-fix.md)
+The later [Isaac SC fidelity repair](../../../docs/experiments/2026-09-24-isaac-sc-fidelity-fix.md)
 fixed the gripped-end calibration, port collision frame, and internal contact
 artifacts. One full-start scripted five-card scene reached the Gazebo-derived
 SC tip target with normal scene collisions; two deliberate lateral offsets
@@ -36,14 +38,14 @@ yielded local plug/port blockages. This overturns the earlier provisional
 Isaac gripper/card incident as a training label. No corrected-scene cable/card
 snag, visual RL episode, or autonomous SC insertion is established.
 
-Subsequent [corrected-asset route probes](experiments/2026-09-24-isaac-sc-contact-routes.md)
+Subsequent [corrected-asset route probes](../../../docs/experiments/2026-09-24-isaac-sc-contact-routes.md)
 do reproduce a named gripper/card jam on a deliberate crossing route and a
 separate plug/card jam. Cable/card contact occurs during the gripper jam;
 there is still no isolated cable-snag episode or visual replay. This updates
 the provisional statement above only for those new, deliberately bad routes.
 
 The current ordered plan is
-[hierarchical recovery continuation](experiments/2026-09-24-hierarchical-recovery-continuation.md),
+[hierarchical recovery continuation](../../../docs/experiments/2026-09-24-hierarchical-recovery-continuation.md),
 with its controller rationale in [hierarchical recovery](HIERARCHICAL_RECOVERY.md).
 The seven 20 Hz wide-view five-card repeats added one high-force no-insertion
 run, but no named contact pair; it is an ambiguous obstruction, not a causal
@@ -56,7 +58,7 @@ targets can be expressed in their selected port base frames, but exact
 fixed-timing connector chunks and an observation-only SC port estimate remain
 open. No SC BC or RL training has been promoted.
 
-The latest [fixed five-card route probe](experiments/2026-09-23-fixed-five-card-route-probe.md)
+The latest [fixed five-card route probe](../../../docs/experiments/2026-09-23-fixed-five-card-route-probe.md)
 created a route-sensitive candidate in collision-normal Gazebo: one of three
 across-card traversals failed with the cable extremely close to a card and
 nearly stationary during the later stalled approach. The other across-card
@@ -70,7 +72,7 @@ is recorded separately. The opposite cable end is free and unconnected.
 Continue with perception, port-relative supervised control, and gated online
 RL. Do not restart the parked world-model branch for this experiment.
 
-The [ranked failure audit](experiments/2026-09-23-ranked-failure-scenarios.md)
+The [ranked failure audit](../../../docs/experiments/2026-09-23-ranked-failure-scenarios.md)
 now controls execution order. Alignment drift and local axial blockage are
 Priority 1; large approach blockage is Priority 2. Cable snag is Priority 3
 because it remains plausible but has not been reproduced causally in a valid
@@ -115,7 +117,7 @@ separate evidence.
 The next required result is a collision-faithful and reachable SC grasp/scene
 contract. Then repeat scripted insertion for every card count 0--5 before
 continuing the bounded discovery set. See the
-[mechanics and routing record](experiments/2026-09-23-sc-mechanics-and-routing.md).
+[mechanics and routing record](../../../docs/experiments/2026-09-23-sc-mechanics-and-routing.md).
 
 A subsequent ten-trial Gazebo suite added three exact controls, two five-card
 runs to each SC rail, and three bounded grasp repeats. Exact and grasp groups
@@ -124,7 +126,7 @@ rail-0 runs both had large tracking failures. The cable remained visibly clear
 of the cards. These episodes support local axial and large approach recovery
 curricula, but still provide no accepted cable-snag incident.
 
-The later [ordinary and VLM-route follow-up](experiments/2026-09-23-ordinary-development-cable-audit.md)
+The later [ordinary and VLM-route follow-up](../../../docs/experiments/2026-09-23-ordinary-development-cable-audit.md)
 expanded stock CheatCode to 19 clean scenes and found 13 full, five partial,
 and one no insertion. No causal cable snag was established in that route.
 An older expert-generator note does record a five-card **VLM/MoveIt path**
@@ -168,8 +170,8 @@ it does not authorize the discovery set.
   so the two extra recovery-arm successes cannot be causally attributed to the
   hard-coded backtracking state machine.
 
-See the [matched SERL experiment](experiments/2026-09-22-serl-mixture-recovery.md)
-and [video failure analysis](experiments/2026-09-23-serl-video-failure-analysis.md).
+See the [matched SERL experiment](../../../docs/experiments/2026-09-22-serl-mixture-recovery.md)
+and [video failure analysis](../../../docs/experiments/2026-09-23-serl-video-failure-analysis.md).
 
 ## Proposed controller structure
 

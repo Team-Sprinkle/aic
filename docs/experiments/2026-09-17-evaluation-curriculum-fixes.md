@@ -52,7 +52,7 @@ measurement and progression; it supplies no new evidence of learned insertion.
 
 ## Validation
 
-The full command is in [local workflow](../LOCAL_WORKFLOW.md#2-inspect-a-saved-model-without-starting-simulation).
+The full command is in [local workflow](../answers/archive/2026-10-19-documentation/local_workflow_full_history.md#2-inspect-a-saved-model-without-starting-simulation).
 Result: **85 passed in 8.64 seconds**. Local test output:
 `outputs/local_checks/evaluation_curriculum_20260917/pytest.txt` (ignored by Git).
 

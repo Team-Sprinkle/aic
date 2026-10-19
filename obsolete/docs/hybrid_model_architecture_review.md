@@ -4,7 +4,7 @@
 > See the [maintained documentation](../../docs/README.md) for current status and workflows.
 > Status, recommendations, and commands below describe the original work.
 
-> Historical May 1 source review. See [current architecture direction](../../docs/STATUS.md#architecture-direction)
+> Historical May 1 source review. See [current architecture direction](../../docs/answers/archive/2026-10-19-documentation/status_full_history.md#architecture-direction)
 > for the June 17 critique and the distinction between offline and Isaac
 > `act_direct` implementations. This page is preserved as an earlier snapshot.
 

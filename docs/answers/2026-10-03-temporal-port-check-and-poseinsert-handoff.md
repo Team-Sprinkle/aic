@@ -26,4 +26,4 @@ I would start with an **event/distance-based keyframe buffer**, not dense video:
 
 The earlier local port-frame actor did **not** establish this capability: SC near-port runs still scored zero insertions and sometimes developed much larger orientation error during approach. Conversely, an earlier PoseInsert-inspired model succeeded on local Isaac SFP-to-NIC development starts; that does not establish SC or normal-start Gazebo capability. A retrained, attached actor needs its own evaluation.
 
-See the [handoff plan](../SELECTED_PORT_HANDOFF_PLAN.md), [current SC orientation audit](../experiments/2026-10-03-sc-orientation-identity-repair.md), and [local actor diagnosis](../experiments/2026-10-02-two-family-perception-local-bc.md).
+See the [handoff plan](../../obsolete/docs/2026-10-19-retired-plans/SELECTED_PORT_HANDOFF_PLAN.md), [current SC orientation audit](../experiments/2026-10-03-sc-orientation-identity-repair.md), and [local actor diagnosis](../experiments/2026-10-02-two-family-perception-local-bc.md).

@@ -10,7 +10,7 @@ VLM/MoveIt transport route rather than stock CheatCode? The
 CheatCode over 19 development scenes, replayed a saved low-score three-card
 agent route, and ran stock CheatCode on a regenerated five-card seed. It did
 **not** deliberately drive the cable across the five-card row. The historical
-[outside-left template](../expert_matrix_template_fixes.md#sc-to-sc-nic-bypass-full-insertion-template)
+[outside-left template](../../obsolete/docs/2026-10-19-retired-plans/expert_matrix_template_fixes.md#sc-to-sc-nic-bypass-full-insertion-template)
 reports a cable catch on an earlier seed-51500 run, but the failed raw
 trajectory and video are absent from the checked archives.
 

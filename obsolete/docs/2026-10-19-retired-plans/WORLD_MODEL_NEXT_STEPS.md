@@ -1,4 +1,6 @@
-> **October 18 score target achieved:** **290.19/300**, all three public-sample insertions pass independent depth/lateral/orientation checks; all used-stage p95 inference is below300ms. The analyze/repair/evaluate loop stops after18 completed full samples. V56 preserves three quiet SCcontext frames while sharing initial grasp observations, and seats1.5s above the public1s requirement. Rule transport and explicit RGB/public-state insertion use unchanged perception weights; no learned BCactor or RLactions. Failures and unqualified fits are preserved. This is one selected public-sample pass, with small SCdepth margin and unresolved unusual-SFP-grasp coverage; final scenes stay sealed. Earlier sections are historical. [Results, commands and videos](experiments/2026-10-18-five-repair-cycles.md).
+> Retired plan: preserved for provenance. The [current experiment summary](../../../docs/EXPERIMENTS.md) and [single future-work plan](../../../docs/FUTURE_WORK.md) supersede its active/queued instructions.
+
+> **October 18 score target achieved:** **290.19/300**, all three public-sample insertions pass independent depth/lateral/orientation checks; all used-stage p95 inference is below300ms. The analyze/repair/evaluate loop stops after18 completed full samples. V56 preserves three quiet SCcontext frames while sharing initial grasp observations, and seats1.5s above the public1s requirement. Rule transport and explicit RGB/public-state insertion use unchanged perception weights; no learned BCactor or RLactions. Failures and unqualified fits are preserved. This is one selected public-sample pass, with small SCdepth margin and unresolved unusual-SFP-grasp coverage; final scenes stay sealed. Earlier sections are historical. [Results, commands and videos](../../../docs/experiments/2026-10-18-five-repair-cycles.md).
 
 ## October 18: gated close-up pose update and SC insertion result
 
@@ -6,7 +8,7 @@ V34 passes **4/4 matched SC development cases** (zero/five obstacle cards, both 
 
 The complete sample is **170.57/300, 2/3 strict** because SFP trial 2 has a 3.53° biased grasp estimate before contact. Its actual roll exceeds the original SFP training range; close-up predictions remain wrong. Repeats stop, and the next targeted repair is SFP orientation coverage rather than a stiffness-only change. No new training or collection is running. The SC model's original 1.026° qualification failure remains explicit; four successful development cases do not establish general reliability. Final scenes remain sealed.
 
-[Detailed evidence, commands, images and next repair](experiments/2026-10-18-sc-explicit-controller-continuation.md).
+[Detailed evidence, commands, images and next repair](../../../docs/experiments/2026-10-18-sc-explicit-controller-continuation.md).
 
 ## Full insertion evaluation continuation
 
@@ -19,32 +21,32 @@ The complete sample is **170.57/300, 2/3 strict** because SFP trial 2 has a 3.53
 
 # World-model follow-up: visual fidelity, dynamics, and control
 
-> **October 16 active direction:** world dynamics, imagination and reward-model training remain parked. The current work is [rule transport + retrained SC/SFP perception + one150mm insertion/recovery actor](experiments/2026-10-15-rule-perception-hierarchical-execution.md), with mandatory fresh reacquisition after large retreats. Matched all-data BC and controlled acquisition tests are active; full-system insertion/RL promotion remains open. Read [STATUS](STATUS.md) before earlier proposals below.
+> **October 16 active direction:** world dynamics, imagination and reward-model training remain parked. The current work is [rule transport + retrained SC/SFP perception + one150mm insertion/recovery actor](../../../docs/experiments/2026-10-15-rule-perception-hierarchical-execution.md), with mandatory fresh reacquisition after large retreats. Matched all-data BC and controlled acquisition tests are active; full-system insertion/RL promotion remains open. Read [STATUS](../../../docs/answers/archive/2026-10-19-documentation/status_full_history.md) before earlier proposals below.
 
 
-**October 14 current execution:** Supported normal-board SC rule transport and RGB handoff passed small screens. Matched corrective-data, decoder and 6-second robot-history repairs did not pass autonomous full insertion. A separately frozen observation-only approach reached **29.12 mm before the opening / 0.148 mm lateral**, then the unchanged trained actor achieved **11.07 mm insertion depth / 0.413 mm lateral / 0.94° orientation error** on one reused start. Official score 75, but the unchanged ≥14 mm physical gate failed. Logs confirm contact-triggered completion and end-effector locking; no cable snag explains this run. This is meaningful approach progress, not a promoted insertion policy. All new jobs finished; no routine collection, RL, world-model work or final-scene access. SFP local insertion, rotated SC and port-0 rail minimum remain unapproved. [Execution record](experiments/2026-10-14-transport-handoff-execution.md) · [Easy explanation](answers/2026-10-14-autonomous-execution-outcome.md).
+**October 14 current execution:** Supported normal-board SC rule transport and RGB handoff passed small screens. Matched corrective-data, decoder and 6-second robot-history repairs did not pass autonomous full insertion. A separately frozen observation-only approach reached **29.12 mm before the opening / 0.148 mm lateral**, then the unchanged trained actor achieved **11.07 mm insertion depth / 0.413 mm lateral / 0.94° orientation error** on one reused start. Official score 75, but the unchanged ≥14 mm physical gate failed. Logs confirm contact-triggered completion and end-effector locking; no cable snag explains this run. This is meaningful approach progress, not a promoted insertion policy. All new jobs finished; no routine collection, RL, world-model work or final-scene access. SFP local insertion, rotated SC and port-0 rail minimum remain unapproved. [Execution record](../../../docs/experiments/2026-10-14-transport-handoff-execution.md) · [Easy explanation](../../../docs/answers/2026-10-14-autonomous-execution-outcome.md).
 
-**October 12 transport prerequisite:** The public qualification-family coverage retrain did not pass autonomous transport: 0/3 SFP and 0/3 SC safe-buffer arrivals for both matched actors, despite improved held-out teacher-state SC actions. The new actor's SC complete inference p95 also exceeded 300 ms. The next bounded work is on-policy corrective transport labeling and latency diagnosis; insertion handoff, RL, world dynamics, reward/imagination, actor-Q and final-scene evaluation remain gated. [Coverage experiment and evidence](experiments/2026-10-11-public-evaluation-coverage-retrain.md).
+**October 12 transport prerequisite:** The public qualification-family coverage retrain did not pass autonomous transport: 0/3 SFP and 0/3 SC safe-buffer arrivals for both matched actors, despite improved held-out teacher-state SC actions. The new actor's SC complete inference p95 also exceeded 300 ms. The next bounded work is on-policy corrective transport labeling and latency diagnosis; insertion handoff, RL, world dynamics, reward/imagination, actor-Q and final-scene evaluation remain gated. [Coverage experiment and evidence](../../../docs/experiments/2026-10-11-public-evaluation-coverage-retrain.md).
 
-**October 4 SFP board-reference check:** Ten existing nonfinal teacher camera pairs yielded exact five-slot occupancy on 4/10, with no exact sparse-card maps in a blind audit. The board-origin prerequisite for a slot-first requested-port model fails here. No world-model, perception, actor or RL training followed. Examine actual autonomous transport pauses for local selected-port evidence before another supervised fit; final scenes remain sealed. [Audit and artifacts](experiments/2026-10-04-sfp-board-slot-reference.md).
+**October 4 SFP board-reference check:** Ten existing nonfinal teacher camera pairs yielded exact five-slot occupancy on 4/10, with no exact sparse-card maps in a blind audit. The board-origin prerequisite for a slot-first requested-port model fails here. No world-model, perception, actor or RL training followed. Examine actual autonomous transport pauses for local selected-port evidence before another supervised fit; final scenes remain sealed. [Audit and artifacts](../../../docs/experiments/2026-10-04-sfp-board-slot-reference.md).
 
-**October 4 active supervised gate:** The requested SFP port crop model with three-camera causal history failed early safe identity. A guarded wider original-RGB observation on four reused nonfinal scenes showed more row context, but blind review could not certify requested numbered-slot identity from the images alone, and one view action failed its unchanged measured-pose tolerance. The predeclared wide-view gate failed; no new model or autonomous actor was promoted. Next audit a visible board-slot reference and checked selected-opening visibility on existing frames before any new grouped model fit. Keep world dynamics, reward/imagination, actor-Q, and RL parked; final scenes remain sealed. [View audit](experiments/2026-10-04-sfp-wide-observation-gate.md).
+**October 4 active supervised gate:** The requested SFP port crop model with three-camera causal history failed early safe identity. A guarded wider original-RGB observation on four reused nonfinal scenes showed more row context, but blind review could not certify requested numbered-slot identity from the images alone, and one view action failed its unchanged measured-pose tolerance. The predeclared wide-view gate failed; no new model or autonomous actor was promoted. Next audit a visible board-slot reference and checked selected-opening visibility on existing frames before any new grouped model fit. Keep world dynamics, reward/imagination, actor-Q, and RL parked; final scenes remain sealed. [View audit](../../../docs/experiments/2026-10-04-sfp-wide-observation-gate.md).
 
 # October 4 SFP supervised handoff update
 
-The current SFP coarse-anchor branch is an observation-selected rail crop plus frozen RGB locators. Its exploratory four-model union reached 9/10 early anchors on ten reused development starts, but has no independent fresh-scene or full live latency result. Do not start world-model, reward/imagination, actor-Q, or RL training based on this result. With minimal rootless startup restored at 199/200 keys, run fresh Gazebo containers sequentially without interrupting the active Isaac container, then perform the frozen non-final ten-request shadow gate described in [the experiment](experiments/2026-10-04-sfp-observed-rail-crop.md). Final scenes remain sealed.
+The current SFP coarse-anchor branch is an observation-selected rail crop plus frozen RGB locators. Its exploratory four-model union reached 9/10 early anchors on ten reused development starts, but has no independent fresh-scene or full live latency result. Do not start world-model, reward/imagination, actor-Q, or RL training based on this result. With minimal rootless startup restored at 199/200 keys, run fresh Gazebo containers sequentially without interrupting the active Isaac container, then perform the frozen non-final ten-request shadow gate described in [the experiment](../../../docs/experiments/2026-10-04-sfp-observed-rail-crop.md). Final scenes remain sealed.
 
-**October 4 SFP supervised perception update:** One bounded all-slot original-RGB repair improved accepted SFP anchor observations but still missed the 9/10 early complete-episode coverage gate at 7/10. Card-index swaps across cameras remain the specific failure; no transport actor, PoseInsert, world-model dynamics, imagination or RL was resumed. The next supervised test is observation-only rail-slot association or safe active viewing on fresh development starts. [Result](experiments/2026-10-04-sfp-middle-card-identity-repair.md).
+**October 4 SFP supervised perception update:** One bounded all-slot original-RGB repair improved accepted SFP anchor observations but still missed the 9/10 early complete-episode coverage gate at 7/10. Card-index swaps across cameras remain the specific failure; no transport actor, PoseInsert, world-model dynamics, imagination or RL was resumed. The next supervised test is observation-only rail-slot association or safe active viewing on fresh development starts. [Result](../../../docs/experiments/2026-10-04-sfp-middle-card-identity-repair.md).
 
-**October 3 supervised SFP anchor update:** The one-GPU, 2,000-update selected-port wide-RGB probe is complete. It had 0 accepted wrong identities and 2.65 mm accepted 3D p95 but only 4/10 episode-level anchor acquisitions, with none for cards 1–3. The predeclared numeric precision gate therefore did not imply useful route coverage. No actor continuation or live test was started; world model, imagination and RL remain parked. [Experiment](experiments/2026-10-03-sfp-selected-anchor.md).
+**October 3 supervised SFP anchor update:** The one-GPU, 2,000-update selected-port wide-RGB probe is complete. It had 0 accepted wrong identities and 2.65 mm accepted 3D p95 but only 4/10 episode-level anchor acquisitions, with none for cards 1–3. The predeclared numeric precision gate therefore did not imply useful route coverage. No actor continuation or live test was started; world model, imagination and RL remain parked. [Experiment](../../../docs/experiments/2026-10-03-sfp-selected-anchor.md).
 
-**October 3 supervised route update:** A bounded observation-based SFP stage/waypoint probe passed stage recognition (98.7%) but failed the coarse waypoint gate (48.2 mm p95 versus ≤20 mm), so no conditioned actor or live rollout followed. The next proposed repair is a selected-target spatial anchor from original-resolution views; world-model, Seer and RL training remain parked. [Probe and stopping rule](experiments/2026-10-03-sfp-route-stage-waypoint-probe.md).
+**October 3 supervised route update:** A bounded observation-based SFP stage/waypoint probe passed stage recognition (98.7%) but failed the coarse waypoint gate (48.2 mm p95 versus ≤20 mm), so no conditioned actor or live rollout followed. The next proposed repair is a selected-target spatial anchor from original-resolution views; world-model, Seer and RL training remain parked. [Probe and stopping rule](../../../docs/experiments/2026-10-03-sfp-route-stage-waypoint-probe.md).
 
-**October 3 transport gate update:** A same-architecture supervised actor trained on ten audited post-deviation CheatCode recoveries improved offline action error but reached **0/3** autonomous SFP buffered arrivals and 2/3 scored contact on fixed development starts. It is not promoted. The next bounded supervised hypothesis is explicit route-stage/subgoal representation using existing teacher scenes; automatic perception handoff, insertion, world-model, Seer and RL remain parked, and final scenes are sealed. [Transport result](experiments/2026-10-03-sfp-balanced-arrival-onpolicy-check.md#october-3-bounded-corrective-full-action-continuation-failed-live-gate).
+**October 3 transport gate update:** A same-architecture supervised actor trained on ten audited post-deviation CheatCode recoveries improved offline action error but reached **0/3** autonomous SFP buffered arrivals and 2/3 scored contact on fixed development starts. It is not promoted. The next bounded supervised hypothesis is explicit route-stage/subgoal representation using existing teacher scenes; automatic perception handoff, insertion, world-model, Seer and RL remain parked, and final scenes are sealed. [Transport result](../../../docs/experiments/2026-10-03-sfp-balanced-arrival-onpolicy-check.md#october-3-bounded-corrective-full-action-continuation-failed-live-gate).
 
-**October 3 geometric handoff update:** A frozen SC board-rail estimator and SFP cross-view candidate gate repaired the measured offline orientation/identity failures on grouped development observations, but no integrated autonomous handoff or full insertion has passed. Reviewed visibility, coherent wrong-port cases, complete live latency and safe pause/resume are next. World-model, Seer and RL training remain parked. [Geometric repair record](experiments/2026-10-03-geometric-handoff-repair.md).
+**October 3 geometric handoff update:** A frozen SC board-rail estimator and SFP cross-view candidate gate repaired the measured offline orientation/identity failures on grouped development observations, but no integrated autonomous handoff or full insertion has passed. Reviewed visibility, coherent wrong-port cases, complete live latency and safe pause/resume are next. World-model, Seer and RL training remain parked. [Geometric repair record](../../../docs/experiments/2026-10-03-geometric-handoff-repair.md).
 
-**October 3 active gate:** The native requested-port crop comparison and one bounded SC orientation repair did not pass the automatic handoff gate: SC near-port orientation remained above 3° and the SFP same-card candidate verifier retained false accepts. Steps for integrated handoff, insertion actor, full rollouts and RL remain closed; world-model and Seer branches stay parked. The next plan revision should establish full port-face orientation and cross-view request correspondence with an explicit invalid decision before any control promotion. [Experiment and stopping decision](experiments/2026-10-03-native-crop-handoff-gate.md).
+**October 3 active gate:** The native requested-port crop comparison and one bounded SC orientation repair did not pass the automatic handoff gate: SC near-port orientation remained above 3° and the SFP same-card candidate verifier retained false accepts. Steps for integrated handoff, insertion actor, full rollouts and RL remain closed; world-model and Seer branches stay parked. The next plan revision should establish full port-face orientation and cross-view request correspondence with an explicit invalid decision before any control promotion. [Experiment and stopping decision](../../../docs/experiments/2026-10-03-native-crop-handoff-gate.md).
 
 **October 2 active direction:** World-model and Seer work remain parked. The
 current supervised sequence is [transport arrival proposal → one-requested-port
@@ -54,21 +56,21 @@ learned pose confidence is deferred. Autonomous full insertion has not passed,
 so the world-model and RL gates below remain closed. Older dated paragraphs on
 this page record the prior world-model branch, not the current handoff plan.
 
-**September 30 latest:** teacher transport gate accepted. Two same-world Cartesian SC teachers fully inserted, providing v9 with 1,751 transport and 503 local chunks, plus the verified SFP source. The balanced-port BC retry finished 1,500 updates and failed both autonomous development starts: final planned-standoff errors 103 and 603 mm versus 76 and 74 mm for the prior masked actor; neither reached handoff or inserted. A bounded trace/video audit found early wrong-route commands without sustained cable snag. Stop routine feed-forward BC. A checkpoint-provenance audit found that this run reused the full action head from an older mixed-SC-route model and had only two new SC episodes; it was not a clean test of the new Low Lateral Bypass route. Audit clean route data and initialization before deciding on a route-subgoal model. No new training was started for this audit. True visibility, autonomous two-actor insertion and RL remain gated; reserved final scenes stay sealed. [Evidence and exact artifacts](experiments/2026-09-30-transport-to-two-actor-continuation.md).
+**September 30 latest:** teacher transport gate accepted. Two same-world Cartesian SC teachers fully inserted, providing v9 with 1,751 transport and 503 local chunks, plus the verified SFP source. The balanced-port BC retry finished 1,500 updates and failed both autonomous development starts: final planned-standoff errors 103 and 603 mm versus 76 and 74 mm for the prior masked actor; neither reached handoff or inserted. A bounded trace/video audit found early wrong-route commands without sustained cable snag. Stop routine feed-forward BC. A checkpoint-provenance audit found that this run reused the full action head from an older mixed-SC-route model and had only two new SC episodes; it was not a clean test of the new Low Lateral Bypass route. Audit clean route data and initialization before deciding on a route-subgoal model. No new training was started for this audit. True visibility, autonomous two-actor insertion and RL remain gated; reserved final scenes stay sealed. [Evidence and exact artifacts](../../../docs/experiments/2026-09-30-transport-to-two-actor-continuation.md).
 
-**September 30 continuation:** transport gate accepted. Four changed-card-layout MoveIt replays reached handoff/standoff; one fully inserted, one failed local insertion and is excluded from expert BC, two were transport-only validation. Four full-success SC teacher episodes now provide 3,001 transport and 1,000 local training chunks, with 1,751 held-out transport chunks. True-visibility recorder checks caught invalid auxiliary depth during tilt; labels are being repaired before training. Autonomous two-actor insertion and RL remain pending. [Execution record](experiments/2026-09-30-transport-to-two-actor-continuation.md).
+**September 30 continuation:** transport gate accepted. Four changed-card-layout MoveIt replays reached handoff/standoff; one fully inserted, one failed local insertion and is excluded from expert BC, two were transport-only validation. Four full-success SC teacher episodes now provide 3,001 transport and 1,000 local training chunks, with 1,751 held-out transport chunks. True-visibility recorder checks caught invalid auxiliary depth during tilt; labels are being repaired before training. Autonomous two-actor insertion and RL remain pending. [Execution record](../../../docs/experiments/2026-09-30-transport-to-two-actor-continuation.md).
 
-**September 30 continuation update:** world-model and training branches remain parked. The [oracle SC force diagnosis](experiments/2026-09-30-force-oracle.md) reproduced plug/port catching; the exact earlier 3.5 N event lacked complete contact logs. New reporting distinguishes sensor-frame wrist delta, corrected normal point forces, and commanded versus measured retreat. Explicit tilt-before-return validation continues without disabling collisions. Step 4 generalization and Step 5 teacher admission remain open.
+**September 30 continuation update:** world-model and training branches remain parked. The [oracle SC force diagnosis](../../../docs/experiments/2026-09-30-force-oracle.md) reproduced plug/port catching; the exact earlier 3.5 N event lacked complete contact logs. New reporting distinguishes sensor-frame wrist delta, corrected normal point forces, and commanded versus measured retreat. Explicit tilt-before-return validation continues without disabling collisions. Step 4 generalization and Step 5 teacher admission remain open.
 
 **Current branch, September 24:** world dynamics remains parked. The approved
 work is [hierarchical measured-pose recovery](HIERARCHICAL_RECOVERY.md) with an
-[ordered SC BC, recovery, and SERL plan](experiments/2026-09-24-hierarchical-recovery-continuation.md).
+[ordered SC BC, recovery, and SERL plan](../../../docs/experiments/2026-09-24-hierarchical-recovery-continuation.md).
 The fixed five-card Gazebo stop is reproducible as an ambiguous high-force
 obstruction, but its contact pair is not yet known.
 The continuation has not opened SC BC/RL: the tared force/stall trigger was
 nonspecific on seven fixed-scene repeats, a post-hoc tracking-error candidate
 has only two fresh full/partial controls, and SC pose/connector-chunk labels
-plus faithful Isaac mechanics remain gated. See the [execution record](experiments/2026-09-24-hierarchical-recovery-continuation.md#current-gate-disposition).
+plus faithful Isaac mechanics remain gated. See the [execution record](../../../docs/experiments/2026-09-24-hierarchical-recovery-continuation.md#current-gate-disposition).
 
 ## Parked after the bounded RPDP plus model-free RL evaluation (2026-09-23)
 
@@ -78,7 +80,7 @@ trajectories and used a deterministic adapter to the TCP-body-frame command
 contract. Its first valid DPPO round stayed at 1/6 and did not pass promotion.
 A deterministic trajectory-regression version later became the selected
 supervised controller. Details are in the
-[RPDP/DPPO experiment](experiments/2026-09-22-rpdp-dppo.md). None of these
+[RPDP/DPPO experiment](../../../docs/experiments/2026-09-22-rpdp-dppo.md). None of these
 results authorizes imagination, reward-model, or predictive planning work.
 
 The subsequent probabilistic SERL continuation implemented a mixture actor,
@@ -87,7 +89,7 @@ final trust-region actor retained the frozen BC result at 3/8 local successes
 but did not improve it. Backtracking saw no qualifying force plus measured-stall
 event after its false-trigger bug was repaired. This result does not reopen
 predictive dynamics or imagination; see the
-[SERL experiment](experiments/2026-09-22-serl-mixture-recovery.md).
+[SERL experiment](../../../docs/experiments/2026-09-22-serl-mixture-recovery.md).
 
 A later three-camera rerun does not change that decision. It recorded 1/8 BC,
 1/8 selected RL, and 3/8 selected RL plus recovery, but compact recovery-mode
@@ -105,15 +107,15 @@ gates), but this used privileged IK waypoints and is not policy evidence. No SC
 BC, RL, world-model, or Seer training was started. Repair the collision-faithful
 SC grasp and pass card-count 0--5 scripted validation before resuming data
 collection. See the
-[mechanics record](experiments/2026-09-23-sc-mechanics-and-routing.md).
+[mechanics record](../../../docs/experiments/2026-09-23-sc-mechanics-and-routing.md).
 Reconsider temporal or predictive dynamics only if observation history remains
 the measured bottleneck after those supervised and model-free stages.
 
 This is the next-work handoff for the September 18 Dreamer-style pilot. Read
-the [current status](STATUS.md), [pilot record](experiments/2026-09-18-dreamer-pilot.md),
-[dataset guide](DATASETS.md), and [geometry/scoring terms](scoring.md) before
+the [current status](../../../docs/answers/archive/2026-10-19-documentation/status_full_history.md), [pilot record](../../../docs/experiments/2026-09-18-dreamer-pilot.md),
+[dataset guide](../../../docs/answers/archive/2026-10-19-documentation/datasets_full_history.md), and [geometry/scoring terms](../../../docs/scoring.md) before
 starting. The frozen paired final and the first visual/dynamics follow-up are
-now documented in the [completed follow-up record](experiments/2026-09-18-world-followup.md).
+now documented in the [completed follow-up record](../../../docs/experiments/2026-09-18-world-followup.md).
 Preserve the frozen pilot and final-scene records.
 
 ## Current direction (2026-09-20)
@@ -160,8 +162,8 @@ split validation by episode, and require autonomous success on new development
 starts before opening the reserved final split. Actor Q training and Gazebo
 transfer remain gated. Predictive imagination remains disabled because the
 learned dynamics loses to persistence at every measured horizon. See the
-[Isaac execution record](experiments/2026-09-20-isaac-world-policy-rl.md) and
-[contract summary](../outputs/experiments/2026-09-20_isaac_world_rl/contract_gate_summary.json).
+[Isaac execution record](../../../docs/experiments/2026-09-20-isaac-world-policy-rl.md) and
+[contract summary](../../../outputs/experiments/2026-09-20_isaac_world_rl/contract_gate_summary.json).
 
 ### Approved supervised continuation
 
@@ -191,7 +193,7 @@ Use new development starts and keep the four reserved final IK configurations
 sealed. Actor-Q, Gazebo adaptation, and imagination stay disabled until an
 autonomous supervised policy inserts reliably with acceptable force/contact.
 The detailed gates and stop rules are in the
-[Isaac execution record](experiments/2026-09-20-isaac-world-policy-rl.md#approved-next-experiment-object-to-target-pose-supervision).
+[Isaac execution record](../../../docs/experiments/2026-09-20-isaac-world-policy-rl.md#approved-next-experiment-object-to-target-pose-supervision).
 
 **Execution update:** the frozen-feature probe and original native-crop probe
 failed, and the old crop labels were then found to describe a module centroid
@@ -242,7 +244,7 @@ therefore it cannot test the cable-occlusion hypothesis well. Collect varied
 cable shapes and occlusion positions with depth-derived visibility labels
 before another causal model. Keep predictive dynamics, conditioned policy
 training, and RL disabled. See the
-[executed plan](experiments/2026-09-21-temporal-multiview-perception-plan.md#executed-bounded-continuation).
+[executed plan](../../../docs/experiments/2026-09-21-temporal-multiview-perception-plan.md#executed-bounded-continuation).
 
 The requested force-safe cable continuation is now complete. A privileged
 collection-only controller settles each recorded cable state, rejects high
@@ -265,7 +267,7 @@ now parked. The frozen estimate may be tested as an input to a matched
 supervised controller diagnostic, while retaining its failed gate in the
 record. RL still requires autonomous insertion by that controller on new
 development starts. See the
-[cable/visibility record](experiments/2026-09-22-cable-visibility-perception.md).
+[cable/visibility record](../../../docs/experiments/2026-09-22-cable-visibility-perception.md).
 
 The matched supervised controller diagnostic is also complete. Two identical
 546,686-parameter six-step GRUs were trained on the same complete-template
@@ -283,7 +285,7 @@ supervised attempt must use balanced corrective data and an explicitly
 structured correction residual, with a counterfactual pose-to-command sign
 test before live rollout. It must pass autonomous insertion before actor-Q.
 World dynamics, SEER, reward learning, and imagination remain parked. See the
-[controller execution record](experiments/2026-09-22-pose-conditioned-gru-policy.md).
+[controller execution record](../../../docs/experiments/2026-09-22-pose-conditioned-gru-policy.md).
 
 The explicit continuation is now complete as well. Force-safe balanced
 collection produced 322 fit rows from 25 episodes and 124 paired-direction
@@ -296,7 +298,7 @@ shuffled pose slightly beat correct pose on calibration, and zero pose was
 better on offline development. The new live development recipe was therefore
 not opened. This keeps actor-Q, world dynamics, SEER, and final evaluation
 disabled. See the
-[explicit-correction record](experiments/2026-09-22-explicit-pose-correction.md).
+[explicit-correction record](../../../docs/experiments/2026-09-22-explicit-pose-correction.md).
 
 ### Supervised RPDP repair update
 
@@ -316,7 +318,7 @@ gate without using a world model, guide, guard, exploration, or privileged
 evaluation input. The reserved final split remains sealed. Any later RL should
 start from this frozen BC anchor and use a matched comparison; the earlier 1/6
 DPPO update is not evidence for continuing RL unchanged. See the
-[RPDP repair record](experiments/2026-09-22-rpdp-dppo.md#supervised-bc-repair-continuation).
+[RPDP repair record](../../../docs/experiments/2026-09-22-rpdp-dppo.md#supervised-bc-repair-continuation).
 
 ### Decision on any future use of dynamics
 
@@ -414,7 +416,7 @@ need, contact/terminal recall is useful, and complete live latency remains below
 
 The active non-world-model continuation, including the rationale and promotion
 gates, is recorded in the
-[perception and model-free RL plan](experiments/2026-09-20-perception-supervised-rl.md).
+[perception and model-free RL plan](../../../docs/experiments/2026-09-20-perception-supervised-rl.md).
 
 The repository's task names are `sfp_to_nic` and `sc_to_sc`. The latter is the
 likely meaning of “SFP-to-SFP” when referring to the fiber cable obstructing
@@ -483,10 +485,10 @@ and is not a material improvement. Complete trunk-plus-crop inference is
 policy comparison was skipped by its stop rule. The four final configurations
 remain sealed; actor-Q, Gazebo adaptation, reward learning, and imagination
 remain disabled. See the
-[probe result](experiments/2026-09-20-isaac-world-policy-rl.md#causal-replay-audit-and-frozen-feature-probe).
+[probe result](../../../docs/experiments/2026-09-20-isaac-world-policy-rl.md#causal-replay-audit-and-frozen-feature-probe).
 
 The approved implementation is now tracked in the
-[September 19 full-training record](experiments/2026-09-19-full-world-training.md).
+[September 19 full-training record](../../../docs/experiments/2026-09-19-full-world-training.md).
 It completed a fresh tokenizer on the canonical 250/39 split under a held-out
 validation plateau rule, then trained dynamics and supervised control using
 native observed endpoints and actual executed TCP-delta commands. The tokenizer
@@ -506,7 +508,7 @@ artifacts.
   average; predicting no movement misses by 2.29 mm across all 924 strict
   held-out windows. The earlier three-window probe reported 10.33/1.85 mm. This is a future-state prediction
   test, not controller target-tracking error. The longer-horizon fidelity gates
-  also failed. See [metric explanation](STATUS.md#september-18-work).
+  also failed. See [metric explanation](../../../docs/answers/archive/2026-10-19-documentation/status_full_history.md#september-18-work).
 - All 74 pilot expert bags have an official correct-port insertion event, but
   none of their native saved images/states occurs at or after that event. These
   are successful command demonstrations; they supply no synchronized post-event
@@ -566,7 +568,7 @@ exposing sparse longer-horizon coverage. They are not authoritative contact
 labels. Prediction error still compares predicted future measured TCP with the
 actual future measured TCP, not a command target.
 
-The [opening-distance report](../outputs/experiments/2026-09-18_dreamer60_pilot/world_opening_geometry_audit/report.json)
+The [opening-distance report](../../../outputs/experiments/2026-09-18_dreamer60_pilot/world_opening_geometry_audit/report.json)
 contains start/end distance bins, all denominators and exclusion reasons.
 Its archive includes compressed full records, exact TF snapshots, timing/source
 hashes and scripts. The first broad reader's timeout is preserved; the completed
@@ -578,8 +580,8 @@ It runs in a CPU-only rootless container; no policy or model was changed.
 
 Two representative windows were selected using recorded motion and time, before examining prediction error:
 
-- [Largest recorded 600 ms motion: all three cameras](../outputs/experiments/2026-09-18_dreamer60_pilot/world_future_latent_audit/largest_true_600ms_motion_full_cameras.png): episode 139, start 2.15 s, 18.42 mm displacement.
-- [Latest valid 600 ms window in a different episode: all three cameras](../outputs/experiments/2026-09-18_dreamer60_pilot/world_future_latent_audit/latest_600ms_other_episode_full_cameras.png): episode 193, start 21.5 s, 0.511 mm displacement; its endpoint is still 2.85 s before the last native recording.
+- [Largest recorded 600 ms motion: all three cameras](../../../outputs/experiments/2026-09-18_dreamer60_pilot/world_future_latent_audit/largest_true_600ms_motion_full_cameras.png): episode 139, start 2.15 s, 18.42 mm displacement.
+- [Latest valid 600 ms window in a different episode: all three cameras](../../../outputs/experiments/2026-09-18_dreamer60_pilot/world_future_latent_audit/latest_600ms_other_episode_full_cameras.png): episode 193, start 21.5 s, 0.511 mm displacement; its endpoint is still 2.85 s before the last native recording.
 
 Each sheet shows recorded RGB, decoded true latent, decoded actual-action future, decoded persistence, and decoded shuffled-action future at 200/400/600 ms. Additional sheets show all three contact crops. Decoding shares the same true observed prefix; predicted decoders receive no true future latents. Both full-camera sheets were visually reviewed.
 
@@ -597,7 +599,7 @@ All 74 original bag metadata hashes were checked against the prior event audit, 
 
 This distinction corrects an overly broad reading of “no post-insertion states”: native RGB/state training examples are absent, while raw state-only tails exist. A timestamp after an event does not by itself establish sustained insertion. Matching scoring geometry and events could support a separately audited state-only reward or outcome model; it cannot recover missing RGB frames or justify assigning success to the last saved image. No reward labels, split or training run was changed.
 
-The [all-verified metadata extension](../outputs/experiments/2026-09-18_world_followup/verified_bag_metadata_audit.json)
+The [all-verified metadata extension](../../../outputs/experiments/2026-09-18_world_followup/verified_bag_metadata_audit.json)
 locates an unambiguous ROS bag for each of the **149 aligned** verified episodes,
 including 23 archived bags. All 149 have insertion-event and controller-state
 topics, and **zero have camera/image/video topics**. The other 140 historical
@@ -606,15 +608,15 @@ link them to ROS bags or event timestamps. Metadata alone does not determine
 post-event state-tail duration in the additional 75 aligned bags, and it
 does not establish historical video frames after insertion.
 
-Evidence is in [the raw-bag coverage report](../outputs/experiments/2026-09-18_dreamer60_pilot/post_event_raw_bag_audit/report.json), with all 74 metadata files and the hashed controller/event reports. This conclusion is scoped to the strict 74, not automatically to all 289 expert episodes.
+Evidence is in [the raw-bag coverage report](../../../outputs/experiments/2026-09-18_dreamer60_pilot/post_event_raw_bag_audit/report.json), with all 74 metadata files and the hashed controller/event reports. This conclusion is scoped to the strict 74, not automatically to all 289 expert episodes.
 
 ## Completion and remaining work
 
-- **Completed:** both frozen final sets are archived (20 valid trials each, zero full insertions); all 40 scored rollouts have post-run plug-tip/port-opening geometry; the 289-episode visual provenance and leakage-safe split audit, matched 74-versus-expanded tokenizer comparison, contact-resolution ablation, strict held-out future-latent decoding at 200/400/600 ms, pose/rotation and persistence/shuffled controls, native near-opening TF bins, visual review, and strict-74 raw-bag topic coverage are recorded. See the [follow-up record](experiments/2026-09-18-world-followup.md).
-- **Completed full-data continuation:** the fresh tokenizer reached the declared plateau at 78,000 updates and selected update 75,000. Dynamics and supervised policy also reached their declared plateau rules. The sealed final20 evaluation completed 20/20 valid scenes with 2 full insertions, 9 partials, mean 45.14, and 80.77 ms pooled live p95 latency. Dynamics remained worse than persistence, so the planning gate is closed. See the [full-training record](experiments/2026-09-19-full-world-training.md).
+- **Completed:** both frozen final sets are archived (20 valid trials each, zero full insertions); all 40 scored rollouts have post-run plug-tip/port-opening geometry; the 289-episode visual provenance and leakage-safe split audit, matched 74-versus-expanded tokenizer comparison, contact-resolution ablation, strict held-out future-latent decoding at 200/400/600 ms, pose/rotation and persistence/shuffled controls, native near-opening TF bins, visual review, and strict-74 raw-bag topic coverage are recorded. See the [follow-up record](../../../docs/experiments/2026-09-18-world-followup.md).
+- **Completed full-data continuation:** the fresh tokenizer reached the declared plateau at 78,000 updates and selected update 75,000. Dynamics and supervised policy also reached their declared plateau rules. The sealed final20 evaluation completed 20/20 valid scenes with 2 full insertions, 9 partials, mean 45.14, and 80.77 ms pooled live p95 latency. Dynamics remained worse than persistence, so the planning gate is closed. See the [full-training record](../../../docs/experiments/2026-09-19-full-world-training.md).
 - **Remaining for dynamics diagnosis:** authoritative contact-phase labels and enough near-opening long-horizon transitions are unavailable: no valid 600 ms native window starts within 15 mm of the opening. If state-only outcomes become useful, audit event-relative tails in the additional 75 aligned bags; establish the historical videos' timing before treating them as post-event observations.
-- **Separate supervised comparison completed:** both same-architecture arms finished 2,500 BC updates and 4/4 valid new development scenes; neither achieved a full insertion. The selected-world arm had one official partial and modestly lower held-out command error, but its fresh-world control used a different seeded random draw from the original world-pretraining ancestor. See the [comparison record](experiments/2026-09-18-world-supervised-init-ablation.md) and [paired live scores](../outputs/experiments/2026-09-18_world_followup/supervised_world_development_archive/paired_summary.json). A stronger repeat should use the exact preserved ancestral random initialization and multiple seeds. Improved near-static state-change prediction and complete near-contact/failure trajectories are still needed; these diagnostics do not authorize imagination RL.
-- **Isaac supervised gate completed:** corrected varied resets and two adaptive intervention passes produced successful guided data, but three autonomous heads each scored 0/4 on heldout starts. The best controlled ablation reached the opening plane consistently while remaining 3.25--3.89 mm laterally off center. The reserved final starts, Gazebo transfer, actor-Q updates, and imagination updates were not opened. See the [Isaac execution record](experiments/2026-09-20-isaac-world-policy-rl.md).
+- **Separate supervised comparison completed:** both same-architecture arms finished 2,500 BC updates and 4/4 valid new development scenes; neither achieved a full insertion. The selected-world arm had one official partial and modestly lower held-out command error, but its fresh-world control used a different seeded random draw from the original world-pretraining ancestor. See the [comparison record](../../../docs/experiments/2026-09-18-world-supervised-init-ablation.md) and [paired live scores](../../../outputs/experiments/2026-09-18_world_followup/supervised_world_development_archive/paired_summary.json). A stronger repeat should use the exact preserved ancestral random initialization and multiple seeds. Improved near-static state-change prediction and complete near-contact/failure trajectories are still needed; these diagnostics do not authorize imagination RL.
+- **Isaac supervised gate completed:** corrected varied resets and two adaptive intervention passes produced successful guided data, but three autonomous heads each scored 0/4 on heldout starts. The best controlled ablation reached the opening plane consistently while remaining 3.25--3.89 mm laterally off center. The reserved final starts, Gazebo transfer, actor-Q updates, and imagination updates were not opened. See the [Isaac execution record](../../../docs/experiments/2026-09-20-isaac-world-policy-rl.md).
 
 ## Work sequence
 
@@ -695,8 +697,8 @@ and held-out dynamics fidelity support them.
 
 ### September 30 continuation: deployment input audit
 
-The transport gate is accepted; full insertion remains a separate gate. SC dataset v5 fixes canonical TCP quaternions and the raw ROS joint-prefix order: all 4,752 transport rows exactly match the live state assembler. Earlier v3 BC is retained as an invalid-input diagnostic. Corrected rootless GPU7 BC is bounded at 1,500 updates; auxiliary depth visibility remains rejected. See [the continuation record](experiments/2026-09-30-transport-to-two-actor-continuation.md). Autonomous handoff and RL have not passed.
+The transport gate is accepted; full insertion remains a separate gate. SC dataset v5 fixes canonical TCP quaternions and the raw ROS joint-prefix order: all 4,752 transport rows exactly match the live state assembler. Earlier v3 BC is retained as an invalid-input diagnostic. Corrected rootless GPU7 BC is bounded at 1,500 updates; auxiliary depth visibility remains rejected. See [the continuation record](../../../docs/experiments/2026-09-30-transport-to-two-actor-continuation.md). Autonomous handoff and RL have not passed.
 
 ## October 16 current work: rule transport, retrained perception, shared150mm actor
 
-World dynamics, imagination and reward-model training remain parked. The active supervised continuation is [rule/perception/hierarchical execution](experiments/2026-10-15-rule-perception-hierarchical-execution.md): full SC+SFP native refiners, audited coarse coverage, one shared full-target actor for the150mmapproach, measured-path hierarchical recovery and fresh port/grasp reacquisition after a large retreat. Actor BC uses67,039rows/500usable source episodes/377physicalreset groups. Matched initial fits and controlled perception tests are active; no new RL or full-system promotion has occurred. Read STATUS's current snapshot before older world-policy experiment proposals.
+World dynamics, imagination and reward-model training remain parked. The active supervised continuation is [rule/perception/hierarchical execution](../../../docs/experiments/2026-10-15-rule-perception-hierarchical-execution.md): full SC+SFP native refiners, audited coarse coverage, one shared full-target actor for the150mmapproach, measured-path hierarchical recovery and fresh port/grasp reacquisition after a large retreat. Actor BC uses67,039rows/500usable source episodes/377physicalreset groups. Matched initial fits and controlled perception tests are active; no new RL or full-system promotion has occurred. Read STATUS's current snapshot before older world-policy experiment proposals.

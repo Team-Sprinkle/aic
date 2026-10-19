@@ -1,8 +1,10 @@
+> Retired plan: preserved for provenance. The [current experiment summary](../../../docs/EXPERIMENTS.md) and [single future-work plan](../../../docs/FUTURE_WORK.md) supersede its active/queued instructions.
+
 ## October 19: short local recovery added to transport
 
 The deployed rule transport for both connector families now has the same *local* recovery concept previously available during insertion. Its trigger requires a sustained wrench load increase from a quiet free-space reference plus stalled measured progress toward the current route waypoint. The recent measured TCP travel vector defines the axial direction for this maneuver; a horizontal perpendicular vector defines the sideways retry. It retreats 8 mm (up to 12 mm if load persists), verifies unloading, moves sideways with measured axial drift limited to 3 mm, and resumes the same intermediate route stage with shifted remaining waypoints. A failed clearance aborts; visual-acquisition timeout is not a blockage signal. This does not by itself establish the larger hierarchical checkpoint retreat or an RL recovery policy.
 
-The first live five-card SC diagnostic reached the correct visual handoff after 8.4 mm retreat and 9.5 mm lateral movement, with no insertion phase. The matched released three-round run had no recovery trigger and remained 1/3 strict insertions. The technique is an implemented, bounded recovery path, not a demonstrated full-insertion improvement. [Trace, failure variants, code and video](experiments/2026-10-19-transport-local-recovery.md).
+The first live five-card SC diagnostic reached the correct visual handoff after 8.4 mm retreat and 9.5 mm lateral movement, with no insertion phase. The matched released three-round run had no recovery trigger and remained 1/3 strict insertions. The technique is an implemented, bounded recovery path, not a demonstrated full-insertion improvement. [Trace, failure variants, code and video](../../../docs/experiments/2026-10-19-transport-local-recovery.md).
 
 ## October 18: gated close-up pose update and SC insertion result
 
@@ -10,13 +12,13 @@ V34 passes **4/4 matched SC development cases** (zero/five obstacle cards, both 
 
 The complete sample is **170.57/300, 2/3 strict** because SFP trial 2 has a 3.53° biased grasp estimate before contact. Its actual roll exceeds the original SFP training range; close-up predictions remain wrong. Repeats stop, and the next targeted repair is SFP orientation coverage rather than a stiffness-only change. No new training or collection is running. The SC model's original 1.026° qualification failure remains explicit; four successful development cases do not establish general reliability. Final scenes remain sealed.
 
-[Detailed evidence, commands, images and next repair](experiments/2026-10-18-sc-explicit-controller-continuation.md).
+[Detailed evidence, commands, images and next repair](../../../docs/experiments/2026-10-18-sc-explicit-controller-continuation.md).
 
-> **October18 live milestone:** the discrete25mmRGBheld-plug pose update passes one failedSCdevelopment start and then **3/3strict insertions** in the unchanged public three-trial sample(257.36/300). A matched controller without the update failsSC. One local recovery occurs in the development success; this is **not evidence of hierarchical superiority or newRL**. Public-sample timing/guard repairs continue with failures preserved; model original subgroup1.026°stillfails1°. [Evidence and limits](experiments/2026-10-18-sc-explicit-controller-continuation.md#first-live25mm-update-full-sc-physical-insertion).
+> **October18 live milestone:** the discrete25mmRGBheld-plug pose update passes one failedSCdevelopment start and then **3/3strict insertions** in the unchanged public three-trial sample(257.36/300). A matched controller without the update failsSC. One local recovery occurs in the development success; this is **not evidence of hierarchical superiority or newRL**. Public-sample timing/guard repairs continue with failures preserved; model original subgroup1.026°stillfails1°. [Evidence and limits](../../../docs/experiments/2026-10-18-sc-explicit-controller-continuation.md#first-live25mm-update-full-sc-physical-insertion).
 
 ## October 18: explicit-controller recovery and near-view pose repair
 
-SC recovery has not yet passed the strict full-insertion gate. Two complete public samples pass both SFP trials, while SC receives toolkit credit at about15.48mm, just below15.5mm. Current improvements do not establish hierarchical-backoff superiority. The next repair targets visual grasp bias: a discrete, gated re-estimate at25mm, with the port pose fixed and actual issued reference retained to avoid a jump. Repeated frames or persistent large disagreement must not authorize forward motion. [Controller versions, failures and tests](experiments/2026-10-18-sc-explicit-controller-continuation.md).
+SC recovery has not yet passed the strict full-insertion gate. Two complete public samples pass both SFP trials, while SC receives toolkit credit at about15.48mm, just below15.5mm. Current improvements do not establish hierarchical-backoff superiority. The next repair targets visual grasp bias: a discrete, gated re-estimate at25mm, with the port pose fixed and actual issued reference retained to avoid a jump. Repeated frames or persistent large disagreement must not authorize forward motion. [Controller versions, failures and tests](../../../docs/experiments/2026-10-18-sc-explicit-controller-continuation.md).
 
 # Hierarchical recovery for cable insertion
 
@@ -26,11 +28,11 @@ The official SC TouchPlugin can latch the cable/gripper after1second of shallow 
 
 A measured physical waypoint differs from the API command reference under impedance control. Public free-space tracking error was about6mm while the first retreat reference moved only2–3mm; retaining that offset enables measured retreat. Constant compensation still left0.91mmerror against a0.75mm lateral arrival tolerance. Integrating moving clipped steps then produced windup. The corrected retry ramps a **fixed measured lateral goal**, resets its integral at the phase boundary, and uses the actual issued reference to restart insertion.
 
-The sensitive low-force detector must be phase-specific: it was interrupting free-space angular alignment8–17mm before the port. The latest test uses it only within5mm of the estimated opening; the generic8Nguard remains global. Candidate angular retries are bounded, observation-only exploration. None of this is learnedRL, and completed retreats are not full insertions. Hierarchical superiority over local recovery has not been established. [Full experiment record](experiments/2026-10-18-three-trial-insertion-repair-cycle.md).
+The sensitive low-force detector must be phase-specific: it was interrupting free-space angular alignment8–17mm before the port. The latest test uses it only within5mm of the estimated opening; the generic8Nguard remains global. Candidate angular retries are bounded, observation-only exploration. None of this is learnedRL, and completed retreats are not full insertions. Hierarchical superiority over local recovery has not been established. [Full experiment record](../../../docs/experiments/2026-10-18-three-trial-insertion-repair-cycle.md).
 
 ## October 18: insertion-repair follow-up queued
 
-After the current converged-training and frozen rollout comparisons finish, run identical development starts with **none, local, and hierarchical** recovery. This is a trained-BC actor comparison, not newRL. Keep image-only explicit-controller successes separate. Preserve the full measured approach path beyond the short actor context; cancel pending chunks and reseed the command governor after lateral retry. Repeated blockage escalates to an earlier checkpoint and fresh RGB acquisition. Only improved independent full insertion without harm supports promotion. [Executable protocol and artifacts](experiments/2026-10-17-insertion-control-and-grasp-repair.md#queued-executable-backoff-screen).
+After the current converged-training and frozen rollout comparisons finish, run identical development starts with **none, local, and hierarchical** recovery. This is a trained-BC actor comparison, not newRL. Keep image-only explicit-controller successes separate. Preserve the full measured approach path beyond the short actor context; cancel pending chunks and reseed the command governor after lateral retry. Repeated blockage escalates to an earlier checkpoint and fresh RGB acquisition. Only improved independent full insertion without harm supports promotion. [Executable protocol and artifacts](../../../docs/experiments/2026-10-17-insertion-control-and-grasp-repair.md#queued-executable-backoff-screen).
 
 <!-- current-continuation:start -->
 ## Current approved continuation — October 16
@@ -47,7 +49,7 @@ The hierarchical runtime is implemented, including retained pre-return RGB/state
 
 Next: finish matched BC fits and current frozen SC acquisition evaluation; verify corrected runtime settings; run fresh autonomous full-depth development rollouts, diagnose failures, then compare no/local/hierarchical recovery with identical actors and scenes. Advance to RL only after the supervised insertion gate.
 
-See [execution record](experiments/2026-10-15-rule-perception-hierarchical-execution.md) and artifact `state.json` for exact commands, failures, comparisons and paths.
+See [execution record](../../../docs/experiments/2026-10-15-rule-perception-hierarchical-execution.md) and artifact `state.json` for exact commands, failures, comparisons and paths.
 
 **Additional SC coverage repair:** the29 existing rail-expansion episodes added4,526 RGB-proposed native crops (22/7 complete train/validation episodes) after label/split/visual QA. The joint SC+SFP repair reached a validation plateau at4,000updates. It passes9/9 previously rejected SC probes versus0/9 for both baselines, and improves new-rail accepted components166→211. Overall accepted components3722→3711 is a small regression; zero wrong/absent accepts remain. The original strict gate failure is preserved. A separately documented20-scene live diagnostic is running; the new checkpoint is **not promoted**. Black-gripper-only crops explain some large pixel-error tails and are not evidence of visible targets. Active frozen models/scenes remain unchanged.
 
@@ -68,7 +70,7 @@ See [execution record](experiments/2026-10-15-rule-perception-hierarchical-execu
 
 Preflight fixes for the upcoming actor: complete port-frame targets for both families, exact recorded force/trajectory profile, plug-based near-port phase weighting, command-feedback masking in BOTH current and historical state, and identical native-JPEG preprocessing during training and deployment. The old 15 mm command cap would clip about 11% of SC and 27% of SFP expert chunks; the new controlled runtime must use the audited 60 mm component cap. Visual warm starts now reject silently empty/incompatible transfers; the comparison retains fresh current-data state normalization. Four real history offsets are planned, with the history-masking ablation OFF.
 
-Rootless runs use private bridge networks and unique Gazebo partitions. Cooperative per-GPU locks serialize future rollout/training workers without interrupting active jobs. Legacy GPU0 is untouched. Current work uses GPUs3/4/5 plus that legacy allocation. Final scenes remain sealed; reward/imagination and new actor-Q training remain gated. See the [execution record](experiments/2026-10-15-rule-perception-hierarchical-execution.md) for commands, failed comparisons and artifact paths.
+Rootless runs use private bridge networks and unique Gazebo partitions. Cooperative per-GPU locks serialize future rollout/training workers without interrupting active jobs. Legacy GPU0 is untouched. Current work uses GPUs3/4/5 plus that legacy allocation. Final scenes remain sealed; reward/imagination and new actor-Q training remain gated. See the [execution record](../../../docs/experiments/2026-10-15-rule-perception-hierarchical-execution.md) for commands, failed comparisons and artifact paths.
 
 ### Latest: rail coverage, clean simulation isolation and rule pilots
 
@@ -84,7 +86,7 @@ BC preparation now has **53,921 command rows from 454 qualified source episodes*
 
 A confirmed infrastructure bug affected two later runs: concurrent host-network containers shared Zenoh port 7447 and Gazebo discovery despite separate ROS domains. Both launchers now use private bridge networks and unique Gazebo partitions. Audits found no conflict warnings in the 454 admitted original sources or the frozen 12-run SC comparison. Failed infrastructure runs remain preserved and excluded from policy evidence.
 
-See the [execution record](experiments/2026-10-15-rule-perception-hierarchical-execution.md) and artifact-root `state.json` for commands, exact counts, failures and subsequent updates. Earlier October 15 paragraphs below are intermediate history where they describe running jobs or older derivatives.
+See the [execution record](../../../docs/experiments/2026-10-15-rule-perception-hierarchical-execution.md) and artifact-root `state.json` for commands, exact counts, failures and subsequent updates. Earlier October 15 paragraphs below are intermediate history where they describe running jobs or older derivatives.
 
 ### Latest acquisition gate and BC-data preparation
 
@@ -110,29 +112,29 @@ The wider SC teacher now demonstrates full insertion from all three diagnostic s
 
 The frozen six-configuration/two-arm SC acquisition comparison has completed and failed its gate. The legacy-veto replacement also failed a wrong-port test; see the latest update below. No final scenes have been opened.
 
-Artifacts and exact commands: `/home/nas/chmin/aic_archives/2026-10-15_rule_perception_hierarchical_v1/`. Detailed chronology: [execution record](experiments/2026-10-15-rule-perception-hierarchical-execution.md).
+Artifacts and exact commands: `/home/nas/chmin/aic_archives/2026-10-15_rule_perception_hierarchical_v1/`. Detailed chronology: [execution record](../../../docs/experiments/2026-10-15-rule-perception-hierarchical-execution.md).
 
 
-**October 15 execution update:** Broad SC/SFP native refinement now improves opening-position accuracy: conditional SC lateral p95 is 0.20 mm; the stronger SFP coarse pipeline plus the new refiner improves lateral p95 from 0.82 to 0.29 mm on 70 validation recordings, with zero observed wrong-port accepts in that comparison. Training continues because the first 12,000-update fit was still improving. Coarse identity repair remains experimental: rejecting known wrong handoffs also rejects some correct ones. Wider 150/180 mm SC teacher pilots now reach full seating after measured alignment and a corrected completion condition; broader data admission is still gated. New insertion BC, deployed hierarchy and RL have not passed their gates. [Evidence and active execution](experiments/2026-10-15-rule-perception-hierarchical-execution.md).
+**October 15 execution update:** Broad SC/SFP native refinement now improves opening-position accuracy: conditional SC lateral p95 is 0.20 mm; the stronger SFP coarse pipeline plus the new refiner improves lateral p95 from 0.82 to 0.29 mm on 70 validation recordings, with zero observed wrong-port accepts in that comparison. Training continues because the first 12,000-update fit was still improving. Coarse identity repair remains experimental: rejecting known wrong handoffs also rejects some correct ones. Wider 150/180 mm SC teacher pilots now reach full seating after measured alignment and a corrected completion condition; broader data admission is still gated. New insertion BC, deployed hierarchy and RL have not passed their gates. [Evidence and active execution](../../../docs/experiments/2026-10-15-rule-perception-hierarchical-execution.md).
 
 
-**October 1 scope:** Hierarchical backtracking remains a core recovery proposal but is not enabled in the current supervised transport → perception → insertion baseline. Once that baseline reaches autonomous official full-depth Gazebo insertion, compare the same frozen actors and scenes under no backtracking, local backtracking, and hierarchical backtracking. RL is also gated until the supervised insertion result. [Current three-model sequence](experiments/2026-10-01-temporal-three-model-continuation.md).
+**October 1 scope:** Hierarchical backtracking remains a core recovery proposal but is not enabled in the current supervised transport → perception → insertion baseline. Once that baseline reaches autonomous official full-depth Gazebo insertion, compare the same frozen actors and scenes under no backtracking, local backtracking, and hierarchical backtracking. RL is also gated until the supervised insertion result. [Current three-model sequence](../../../docs/experiments/2026-10-01-temporal-three-model-continuation.md).
 
-**September 30 latest:** teacher transport gate accepted. Two same-world Cartesian SC teachers fully inserted, providing v9 with 1,751 transport and 503 local chunks, plus the verified SFP source. The balanced-port BC retry finished 1,500 updates and failed both autonomous development starts: final planned-standoff errors 103 and 603 mm versus 76 and 74 mm for the prior masked actor; neither reached handoff or inserted. A bounded trace/video audit found early wrong-route commands without sustained cable snag. Stop routine feed-forward BC. A checkpoint-provenance audit found that this run reused the full action head from an older mixed-SC-route model and had only two new SC episodes; it was not a clean test of the new Low Lateral Bypass route. Audit clean route data and initialization before deciding on a route-subgoal model. No new training was started for this audit. True visibility, autonomous two-actor insertion and RL remain gated; reserved final scenes stay sealed. [Evidence and exact artifacts](experiments/2026-09-30-transport-to-two-actor-continuation.md).
+**September 30 latest:** teacher transport gate accepted. Two same-world Cartesian SC teachers fully inserted, providing v9 with 1,751 transport and 503 local chunks, plus the verified SFP source. The balanced-port BC retry finished 1,500 updates and failed both autonomous development starts: final planned-standoff errors 103 and 603 mm versus 76 and 74 mm for the prior masked actor; neither reached handoff or inserted. A bounded trace/video audit found early wrong-route commands without sustained cable snag. Stop routine feed-forward BC. A checkpoint-provenance audit found that this run reused the full action head from an older mixed-SC-route model and had only two new SC episodes; it was not a clean test of the new Low Lateral Bypass route. Audit clean route data and initialization before deciding on a route-subgoal model. No new training was started for this audit. True visibility, autonomous two-actor insertion and RL remain gated; reserved final scenes stay sealed. [Evidence and exact artifacts](../../../docs/experiments/2026-09-30-transport-to-two-actor-continuation.md).
 
-**September 30 continuation:** transport gate accepted. Four changed-card-layout MoveIt replays reached handoff/standoff; one fully inserted, one failed local insertion and is excluded from expert BC, two were transport-only validation. Four full-success SC teacher episodes now provide 3,001 transport and 1,000 local training chunks, with 1,751 held-out transport chunks. True-visibility recorder checks caught invalid auxiliary depth during tilt; labels are being repaired before training. Autonomous two-actor insertion and RL remain pending. [Execution record](experiments/2026-09-30-transport-to-two-actor-continuation.md).
+**September 30 continuation:** transport gate accepted. Four changed-card-layout MoveIt replays reached handoff/standoff; one fully inserted, one failed local insertion and is excluded from expert BC, two were transport-only validation. Four full-success SC teacher episodes now provide 3,001 transport and 1,000 local training chunks, with 1,751 held-out transport chunks. True-visibility recorder checks caught invalid auxiliary depth during tilt; labels are being repaired before training. Autonomous two-actor insertion and RL remain pending. [Execution record](../../../docs/experiments/2026-09-30-transport-to-two-actor-continuation.md).
 
 ## September 30: measured retreat and force-reporting audit
 
-The [oracle SC insertion diagnosis](experiments/2026-09-30-force-oracle.md) found a reproduced plug/port catch. A commanded 24 mm retreat moved the TCP only 0.00623 mm. Count a backoff as completed only from measured movement and release evidence; commanded distance is insufficient. The trace now names commanded and measured distances separately. A confirmed legacy Gazebo contact-reporting bug is corrected for diagnostics while preserving the raw wrist sensor and collision physics. The newer tilt-before-return route inserted in 2/2 oracle repeats, but recovery authority and cross-start generality have not been established by those successes. No new RL training or promotion occurred.
+The [oracle SC insertion diagnosis](../../../docs/experiments/2026-09-30-force-oracle.md) found a reproduced plug/port catch. A commanded 24 mm retreat moved the TCP only 0.00623 mm. Count a backoff as completed only from measured movement and release evidence; commanded distance is insufficient. The trace now names commanded and measured distances separately. A confirmed legacy Gazebo contact-reporting bug is corrected for diagnostics while preserving the raw wrist sensor and collision physics. The newer tilt-before-return route inserted in 2/2 oracle repeats, but recovery authority and cross-start generality have not been established by those successes. No new RL training or promotion occurred.
 
 Status: proposed core controller; not yet validated as an improvement (2026-09-24)
 
-The [September 24 Isaac SC repair](experiments/2026-09-24-isaac-sc-fidelity-fix.md)
+The [September 24 Isaac SC repair](../../../docs/experiments/2026-09-24-isaac-sc-fidelity-fix.md)
 now reaches the Gazebo-derived SC target in one normal-collision five-card
 scripted scene and reproduces two local plug/port blockages. It also shows
 that the earlier gripper/card item-2 collision vanished on the centered route
-after calibrating the grasp. [Deliberate corrected-asset route probes](experiments/2026-09-24-isaac-sc-contact-routes.md)
+after calibrating the grasp. [Deliberate corrected-asset route probes](../../../docs/experiments/2026-09-24-isaac-sc-contact-routes.md)
 then reproduced named gripper/card and plug/card jams; cable/card contact
 occurred only alongside a gripper jam. These traces support specific contact
 mechanics, not an isolated route-level cable snag or autonomous recovery. A
@@ -140,7 +142,7 @@ container-local RTX driver-check override later passed a short three-wrist-camer
 SC smoke test, with an orange cable visible in a separate diagnostic view.
 Longer moving-cable, observation-contract, and policy gates remain open.
 
-The [first read-only trace replay](experiments/2026-09-24-hierarchical-recovery-continuation.md#trace-diagnostic-command-and-interpretation)
+The [first read-only trace replay](../../../docs/experiments/2026-09-24-hierarchical-recovery-continuation.md#trace-diagnostic-command-and-interpretation)
 found that a correctly vector-tared two-sample force-plus-stall trigger fires
 on all seven retained 20 Hz repeats, including six partial insertions. A longer
 force-history and motion-progress rule also fires on all seven. Subtracting
@@ -167,7 +169,7 @@ backoff**: a force-and-progress supervisor that retraces measured motion to a
 verified safe checkpoint, then escalates to an earlier route checkpoint and a
 new corridor when a local retry repeats the same obstruction.
 
-The [five-card Gazebo route probe](experiments/2026-09-23-fixed-five-card-route-probe.md)
+The [five-card Gazebo route probe](../../../docs/experiments/2026-09-23-fixed-five-card-route-probe.md)
 is the motivating example. In one across-card run the cable lay close to a
 card, a cable link became nearly stationary, and the TCP stopped despite
 advancing commands. A later 20 Hz rerun visibly draped the cable over cards
@@ -246,11 +248,11 @@ tension remains after reaching B, escalate to earlier checkpoint D. The
 thresholds, number of retries, and route candidates must be selected on
 development episodes, then frozen before held-out comparison.
 
-The [current Isaac recovery code](../aic_utils/aic_isaac/aic_isaaclab/scripts/serl/measured_path_recovery.py)
+The [current Isaac recovery code](../../../aic_utils/aic_isaac/aic_isaaclab/scripts/serl/measured_path_recovery.py)
 stores only recent TCP positions and implements a local 1 mm minimum/10 mm
 maximum retreat with a 12-decision near-lateral retry. It counts backtrack
 events but has no orientation history, safe-checkpoint stack, route-level
-escalation, or Gazebo deployment parity. The [matched SFP result](experiments/2026-09-22-serl-mixture-recovery.md)
+escalation, or Gazebo deployment parity. The [matched SFP result](../../../docs/experiments/2026-09-22-serl-mixture-recovery.md)
 is inconclusive for recovery and has no proven cable snag.
 
 ## Learning and evidence boundary
@@ -307,20 +309,20 @@ performance claim is warranted yet.
 
 ## Execution
 
-The [September 24 continuation plan](experiments/2026-09-24-hierarchical-recovery-continuation.md)
+The [September 24 continuation plan](../../../docs/experiments/2026-09-24-hierarchical-recovery-continuation.md)
 contains the ranked failure matrix, data requirements, BC/RL sequence,
 simulator gates, matched ablations, and Gazebo transfer plan. Current failure
-artifacts are mapped in [outputs_README.md](../outputs_README.md).
+artifacts are mapped in [outputs_README.md](../../../outputs_README.md).
 
 ### October 16 continuation
 
-Mandatory SC/SFP native refiner retraining is complete to plateau. The targeted SFP coarse repair also plateaued; on the same 1,120 held-out triplets it accepts 917 versus the old 913, with zero wrong ports. Native refinement rejects all 14 new coarse absent-target false positives. The ten-case live gate is still running; this small component change is **not** a live success claim. Its first failure reaches the correct image region but exceeds the native geometric residual gate. See the [execution record](experiments/2026-10-15-rule-perception-hierarchical-execution.md) for the inspected predicted/label overlays, full metrics and bounded diagnosis.
+Mandatory SC/SFP native refiner retraining is complete to plateau. The targeted SFP coarse repair also plateaued; on the same 1,120 held-out triplets it accepts 917 versus the old 913, with zero wrong ports. Native refinement rejects all 14 new coarse absent-target false positives. The ten-case live gate is still running; this small component change is **not** a live success claim. Its first failure reaches the correct image region but exceeds the native geometric residual gate. See the [execution record](../../../docs/experiments/2026-10-15-rule-perception-hierarchical-execution.md) for the inspected predicted/label overlays, full metrics and bounded diagnosis.
 
 The new `RunRuleThenSharedRecovery` integration is implemented but unvalidated: SC/SFP rule transport -> fresh RGB port/grasp locks -> one shared actor owning the entire150mm approach -> measured-path local/hierarchical backtrack. Large retreats return to the measured acquisition checkpoint and require fresh perception. Pending chunks/history are cleared, contact never retares initial load, and supervisor commands are logged separately. **No new insertion BC or RL has been trained yet.** Wider training/held-out demonstrations and matched fresh versus visual-warm BC remain in progress. Final scenes remain sealed and the project limit is four GPUs including the untouched legacy allocation.
 
-SC's targeted separate-GPU latency case passed (active p95 239ms, opening error0.414mm); the earlier seven-case single-GPU strict result remains6/7. Current status and exact artifacts are in [STATUS.md](STATUS.md) and the execution record.
+SC's targeted separate-GPU latency case passed (active p95 239ms, opening error0.414mm); the earlier seven-case single-GPU strict result remains6/7. Current status and exact artifacts are in [STATUS.md](../../../docs/answers/archive/2026-10-19-documentation/status_full_history.md) and the execution record.
 ## October16: live phase-level transport recovery
 
 A new **sample-derived Gazebo transport** diagnostic now demonstrates measured route retreat and an alternate-side retry, with no RL or privileged deployment geometry. In one exercised SC case, a static corridor force-stopped; after fixing the progress index for tiny waypoints, the robot reached its earlier pre-lateral checkpoint, discarded the old visual lock, switched sides, and handed off at155.23mmstand-off/2.00mmlateral. Opening estimate error0.109mm and active perceptionp95153.2ms; no scored harmful contact.
 
-This is one successful **phase-level transport recovery**, not validation of the full multi-level insertion hierarchy. The original fixed corridor passes6/7SCdevelopmentcases and a fixed opposite corridor4/7; adaptiveSC7-casevalidation is active before the frozen two-per-setting evaluation. No insertion actor or RL is evaluated here. [Complete variants, force/contact diagnosis, actual progress bug and artifacts](experiments/2026-10-16-sample-conservative-rule-transport.md). Development uses pre-release sample/specification only; exposed post-release settings do not guide the repair.
+This is one successful **phase-level transport recovery**, not validation of the full multi-level insertion hierarchy. The original fixed corridor passes6/7SCdevelopmentcases and a fixed opposite corridor4/7; adaptiveSC7-casevalidation is active before the frozen two-per-setting evaluation. No insertion actor or RL is evaluated here. [Complete variants, force/contact diagnosis, actual progress bug and artifacts](../../../docs/experiments/2026-10-16-sample-conservative-rule-transport.md). Development uses pre-release sample/specification only; exposed post-release settings do not guide the repair.

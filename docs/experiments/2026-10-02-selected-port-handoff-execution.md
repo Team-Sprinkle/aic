@@ -1,6 +1,6 @@
 # Selected-port handoff execution
 
-Date: 2026-10-02. Active plan: [selected-port handoff](../SELECTED_PORT_HANDOFF_PLAN.md). This record separates completed diagnostics from gates still open. Reserved final configurations remain sealed. No active job was interrupted. `/data1` had about 1.2 GB free at startup, so this continuation writes only small manifests/diagnostics there and will place any large new artifacts on NAS.
+Date: 2026-10-02. Active plan: [selected-port handoff](../../obsolete/docs/2026-10-19-retired-plans/SELECTED_PORT_HANDOFF_PLAN.md). This record separates completed diagnostics from gates still open. Reserved final configurations remain sealed. No active job was interrupted. `/data1` had about 1.2 GB free at startup, so this continuation writes only small manifests/diagnostics there and will place any large new artifacts on NAS.
 
 ## Gate 1: frozen baselines — complete
 

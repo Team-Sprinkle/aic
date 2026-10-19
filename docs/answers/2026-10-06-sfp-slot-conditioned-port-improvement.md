@@ -16,4 +16,4 @@ Keep the frozen crop selector and detector backbone, retain several candidate he
 
 Transport still reached **0/3 safe buffered arrivals** in its latest autonomous diagnostic. That is an independent prerequisite before switching to the refiner and insertion actor. The final scenes remain sealed; automatic handoff, PoseInsert insertion, and RL remain disabled.
 
-Details and exact commands: [experiment record](../experiments/2026-10-06-sfp-slot-conditioned-crop-feasibility.md), [machine summary](../experiments/2026-10-06-sfp-slot-conditioned-crop-feasibility.summary.json), [current status](../STATUS.md), and [handoff plan](../SELECTED_PORT_HANDOFF_PLAN.md).
+Details and exact commands: [experiment record](../experiments/2026-10-06-sfp-slot-conditioned-crop-feasibility.md), [machine summary](../experiments/2026-10-06-sfp-slot-conditioned-crop-feasibility.summary.json), [current status](../STATUS.md), and [handoff plan](../../obsolete/docs/2026-10-19-retired-plans/SELECTED_PORT_HANDOFF_PLAN.md).

@@ -3,7 +3,7 @@
 Status: frozen final diagnosis, matched tokenizer studies, and the bounded
 same-architecture supervised comparison completed on 2026-09-18. This
 record extends the [pilot](2026-09-18-dreamer-pilot.md) and the
-[work sequence](../WORLD_MODEL_NEXT_STEPS.md). It does not change either
+[work sequence](../../obsolete/docs/2026-10-19-retired-plans/WORLD_MODEL_NEXT_STEPS.md). It does not change either
 frozen final policy or its scene manifest.
 
 ## Frozen paired final result
@@ -200,7 +200,7 @@ integrated resolution change still needs a fresh live under-300-ms check.
 
 ## Dynamics, reward labels, and next supervised control comparison
 
-The [full future-latent audit](../WORLD_MODEL_NEXT_STEPS.md#selected-dynamics-future-latent-and-pose-audit)
+The [full future-latent audit](../../obsolete/docs/2026-10-19-retired-plans/WORLD_MODEL_NEXT_STEPS.md#selected-dynamics-future-latent-and-pose-audit)
 compares true-next-latent decoding with actual-command predicted latents,
 persistence and shuffled verified actions at strict 200/400/600 ms horizons.
 Future measured TCP position errors are 12.06/14.92/21.92 mm for the selected

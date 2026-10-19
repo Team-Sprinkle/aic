@@ -1,3 +1,5 @@
+> Retired plan: preserved for provenance. The [current experiment summary](../../../docs/EXPERIMENTS.md) and [single future-work plan](../../../docs/FUTURE_WORK.md) supersede its active/queued instructions.
+
 # SERL Recovery Strategy
 
 **Status:** Implemented and bounded-evaluated; no promoted recovery improvement

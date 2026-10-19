@@ -2,8 +2,8 @@
 
 This package contains a [LeRobot](https://huggingface.co/lerobot) interface for the AIC robot.
 
-For current local model experiments, see the [direct visual policy](../../docs/DIRECT_VISUAL_POLICY.md)
-and [experiment ledger](../../docs/EXPERIMENTS.md).
+For historical model experiments, see the [archived direct visual policy](../../obsolete/docs/2026-10-19-retired-plans/DIRECT_VISUAL_POLICY.md).
+The [experiment summary](../../docs/EXPERIMENTS.md) describes the completed project.
 
 ## Usage
 

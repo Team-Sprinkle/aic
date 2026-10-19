@@ -12,7 +12,7 @@ does not show that the cable took a desirable path. On a five-card scene,
 historical across-card videos show the cable draping over the card stack;
 an older outside-left diagnostic was sometimes better. The [previous
 route probe](2026-09-23-fixed-five-card-route-probe.md) and
-[historical bypass template](../expert_matrix_template_fixes.md#sc-to-sc-nic-bypass-full-insertion-template)
+[historical bypass template](../../obsolete/docs/2026-10-19-retired-plans/expert_matrix_template_fixes.md#sc-to-sc-nic-bypass-full-insertion-template)
 motivated this targeted repair. Existing over-card SC clips should not be
 treated as route-quality demonstrations merely because a teacher inserted.
 

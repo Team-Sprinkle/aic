@@ -1,6 +1,6 @@
 # Agreed handoff plan and documentation update
 
-I documented the revised design in [the active handoff plan](../SELECTED_PORT_HANDOFF_PLAN.md) and linked it from the main [status](../STATUS.md), [docs index](../README.md), [experiment ledger](../EXPERIMENTS.md), and [project overview](../robotic_cable_insertion_project.md). The [older handoff proposal](../POSE_VISIBILITY_HANDOFF.md), [world-model next steps](../WORLD_MODEL_NEXT_STEPS.md), and [direct-visual policy](../DIRECT_VISUAL_POLICY.md) now point to the active plan. These are documentation changes; they do not claim a new trained model or autonomous insertion result.
+I documented the revised design in [the active handoff plan](../../obsolete/docs/2026-10-19-retired-plans/SELECTED_PORT_HANDOFF_PLAN.md) and linked it from the main [status](../STATUS.md), [docs index](../README.md), [experiment ledger](../EXPERIMENTS.md), and [project overview](../robotic_cable_insertion_project.md). The [older handoff proposal](../../obsolete/docs/2026-10-19-retired-plans/POSE_VISIBILITY_HANDOFF.md), [world-model next steps](../../obsolete/docs/2026-10-19-retired-plans/WORLD_MODEL_NEXT_STEPS.md), and [direct-visual policy](../../obsolete/docs/2026-10-19-retired-plans/DIRECT_VISUAL_POLICY.md) now point to the active plan. These are documentation changes; they do not claim a new trained model or autonomous insertion result.
 
 ## The plan in order
 

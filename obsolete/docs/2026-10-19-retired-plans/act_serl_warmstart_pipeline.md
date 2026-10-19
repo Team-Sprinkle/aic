@@ -1,3 +1,5 @@
+> Retired plan: preserved for provenance. The [current experiment summary](../../../docs/EXPERIMENTS.md) and [single future-work plan](../../../docs/FUTURE_WORK.md) supersede its active/queued instructions.
+
 # ACT Warm-Start Smoke Pipeline
 
 > Legacy ACT workflow and historical smoke results. New experiments should use
@@ -27,7 +29,7 @@ The runtime policy/control interfaces are left untouched. In particular,
 
 For the historical Stage 1-4 hybrid cleanup commands and 2026-04-30 runtime
 results, see
-[`hybrid_stage1_to_4_nominal_warmstart.md`](../obsolete/docs/hybrid_stage1_to_4_nominal_warmstart.md).
+[`hybrid_stage1_to_4_nominal_warmstart.md`](../hybrid_stage1_to_4_nominal_warmstart.md).
 The current ACT-aligned offline SERL path is the vision trainer documented in
 [`offline_serl_pretrain.md`](offline_serl_pretrain.md#vision-offline-serl).
 
@@ -167,7 +169,7 @@ Use `--dry-run` to print the exact command first.
 10. Repeat coarse Isaac <-> Gazebo loop.
 11. Final official Gazebo eval.
 
-For current next steps, follow [status](STATUS.md) and the
+For current next steps, follow [status](../../../docs/answers/archive/2026-10-19-documentation/status_full_history.md) and the
 [direct visual comparison plan](DIRECT_VISUAL_POLICY.md#next-comparisons).
 Same-state Gazebo recovery automation and live validation remain open. The PPO
 actor uses a separate camera-feature-conditioned MLP architecture.

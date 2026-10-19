@@ -37,7 +37,7 @@ This implements the direction in the
   approach remains for other starts. This is an expert handoff rule; it does
   not establish insertion success. Live contact behavior is still unverified.
 
-See [architecture and commands](../DIRECT_VISUAL_POLICY.md). The RL loop remains
+See [architecture and commands](../../obsolete/docs/2026-10-19-retired-plans/DIRECT_VISUAL_POLICY.md). The RL loop remains
 a deterministic twin-critic actor-critic; complete SAC or TD3 was not added.
 DINOv2 support here is for the actor; critic encoder options are unchanged.
 
@@ -132,4 +132,4 @@ Then audit demonstrations and compare ACT-initialized ResNet, ImageNet ResNet,
 DINOv2, and scratch initialization under matched data and evaluation. Contact
 history, finer visual crops, and a complete TD3-style update with image
 augmentation are later controlled experiments; see the
-[comparison plan](../DIRECT_VISUAL_POLICY.md#next-comparisons).
+[comparison plan](../../obsolete/docs/2026-10-19-retired-plans/DIRECT_VISUAL_POLICY.md#next-comparisons).

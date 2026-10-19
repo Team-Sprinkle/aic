@@ -31,4 +31,4 @@ The following are **planned experiments**, not completed results. Existing trans
 
 The first immediate experiment is **Steps 1–4: sparse history versus the frozen single-frame verifier**. It answers whether approach memory fixes the current valid-port false rejection without losing absent/wrong-port rejection. PoseInsert data preparation can be audited alongside it, but attaching or claiming insertion success waits for the handoff gate.
 
-Background: [selected-port handoff plan](../SELECTED_PORT_HANDOFF_PLAN.md), [orientation/identity result](../experiments/2026-10-03-sc-orientation-identity-repair.md), and [PoseInsert/historical actor status](../STATUS.md).
+Background: [selected-port handoff plan](../../obsolete/docs/2026-10-19-retired-plans/SELECTED_PORT_HANDOFF_PLAN.md), [orientation/identity result](../experiments/2026-10-03-sc-orientation-identity-repair.md), and [PoseInsert/historical actor status](../STATUS.md).

@@ -1,3 +1,5 @@
+> October 19 completion cleanup: [retired project plans](docs/2026-10-19-retired-plans/README.md). The current roadmap is [FUTURE_WORK.md](../docs/FUTURE_WORK.md).
+
 # Historical documentation archive
 
 Archived on 2026-09-17. These 62 documents are retained as experiment evidence

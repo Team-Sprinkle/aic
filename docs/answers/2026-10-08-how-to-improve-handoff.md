@@ -8,7 +8,7 @@ The immediate objective is a **repeatable, observation-only arrival at the reque
 2. **Did we identify the requested port?** The coarse model should either identify that one port in the current three-camera images and history or abstain. The precise refiner then measures its pose. A neighboring port with a plausible pose must be rejected.
 3. **Is the robot in a state the insertion actor can use?** Check measured plug-to-port axial and lateral displacement, orientation, view quality, low motion, and contact/force. Require these conditions over several actual control decisions before switching. If they are not met, continue transport or make a small visual correction; do not treat a good crop alone as permission to insert.
 
-The existing SFP pause proposer was timely on 26/27 grouped **teacher** routes but missed the broad pause window on one of three saved actor routes. The selected-port crop worked well on an 18-scene stress set, but other identity checks were less consistent. This supports using pause as a request to inspect, with a separate accept decision, while continuing to test both on autonomous routes. [Selected-port handoff status](../SELECTED_PORT_HANDOFF_PLAN.md)
+The existing SFP pause proposer was timely on 26/27 grouped **teacher** routes but missed the broad pause window on one of three saved actor routes. The selected-port crop worked well on an 18-scene stress set, but other identity checks were less consistent. This supports using pause as a request to inspect, with a separate accept decision, while continuing to test both on autonomous routes. [Selected-port handoff status](../../obsolete/docs/2026-10-19-retired-plans/SELECTED_PORT_HANDOFF_PLAN.md)
 
 ## 2. Fix arrival before tuning the switch threshold
 

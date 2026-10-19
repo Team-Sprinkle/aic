@@ -22,4 +22,4 @@ The perception system currently produces information about the requested opening
 
 An earlier **PoseInsert-inspired port-frame insertion actor was trained and tested separately**, but it is **not attached to these current transport/shadow-verifier runs**. The runner explicitly stops or resumes after its inspection rather than starting insertion. We have therefore not demonstrated that this current three-part stack can insert autonomously end to end. Attaching the insertion actor is gated on a reliable selected-port handoff, and that gate currently fails for some valid SC arrivals.
 
-See the [selected-port handoff plan](../SELECTED_PORT_HANDOFF_PLAN.md) and [orientation audit](../experiments/2026-10-03-sc-orientation-identity-repair.md) for the detailed intended interface and latest result.
+See the [selected-port handoff plan](../../obsolete/docs/2026-10-19-retired-plans/SELECTED_PORT_HANDOFF_PLAN.md) and [orientation audit](../experiments/2026-10-03-sc-orientation-identity-repair.md) for the detailed intended interface and latest result.

@@ -16,7 +16,7 @@ For a deeper architecture and file-by-file explanation, see [`PIPELINE.md`](PIPE
 The shared actor consumes camera features and state and predicts the entire TCP
 command. It needs no ACT export. Use `--policy-kind direct_visual` with the
 transfer validator, or `aic_example_policies.ros.RunDirectVisualSERL` for the
-official runtime evaluator. See the [direct visual guide](../../docs/DIRECT_VISUAL_POLICY.md)
+official runtime evaluator. See the [historical direct visual guide](../../obsolete/docs/2026-10-19-retired-plans/DIRECT_VISUAL_POLICY.md)
 for commands, one-step execution, and checkpoint requirements. The actor
 completed a scored Gazebo trial without insertion; see the
 [live report and videos](../../docs/experiments/2026-09-17-live-validation.md).

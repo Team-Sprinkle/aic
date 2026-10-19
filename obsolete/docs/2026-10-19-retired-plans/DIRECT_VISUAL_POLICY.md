@@ -1,4 +1,6 @@
-> **October 18 score target achieved:** **290.19/300**, all three public-sample insertions pass independent depth/lateral/orientation checks; all used-stage p95 inference is below300ms. The analyze/repair/evaluate loop stops after18 completed full samples. V56 preserves three quiet SCcontext frames while sharing initial grasp observations, and seats1.5s above the public1s requirement. Rule transport and explicit RGB/public-state insertion use unchanged perception weights; no learned BCactor or RLactions. Failures and unqualified fits are preserved. This is one selected public-sample pass, with small SCdepth margin and unresolved unusual-SFP-grasp coverage; final scenes stay sealed. Earlier sections are historical. [Results, commands and videos](experiments/2026-10-18-five-repair-cycles.md).
+> Retired plan: preserved for provenance. The [current experiment summary](../../../docs/EXPERIMENTS.md) and [single future-work plan](../../../docs/FUTURE_WORK.md) supersede its active/queued instructions.
+
+> **October 18 score target achieved:** **290.19/300**, all three public-sample insertions pass independent depth/lateral/orientation checks; all used-stage p95 inference is below300ms. The analyze/repair/evaluate loop stops after18 completed full samples. V56 preserves three quiet SCcontext frames while sharing initial grasp observations, and seats1.5s above the public1s requirement. Rule transport and explicit RGB/public-state insertion use unchanged perception weights; no learned BCactor or RLactions. Failures and unqualified fits are preserved. This is one selected public-sample pass, with small SCdepth margin and unresolved unusual-SFP-grasp coverage; final scenes stay sealed. Earlier sections are historical. [Results, commands and videos](../../../docs/experiments/2026-10-18-five-repair-cycles.md).
 
 ## October 18: gated close-up pose update and SC insertion result
 
@@ -6,7 +8,7 @@ V34 passes **4/4 matched SC development cases** (zero/five obstacle cards, both 
 
 The complete sample is **170.57/300, 2/3 strict** because SFP trial 2 has a 3.53° biased grasp estimate before contact. Its actual roll exceeds the original SFP training range; close-up predictions remain wrong. Repeats stop, and the next targeted repair is SFP orientation coverage rather than a stiffness-only change. No new training or collection is running. The SC model's original 1.026° qualification failure remains explicit; four successful development cases do not establish general reliability. Final scenes remain sealed.
 
-[Detailed evidence, commands, images and next repair](experiments/2026-10-18-sc-explicit-controller-continuation.md).
+[Detailed evidence, commands, images and next repair](../../../docs/experiments/2026-10-18-sc-explicit-controller-continuation.md).
 
 ## Current execution branch — October 18
 
@@ -14,17 +16,17 @@ The working pipeline uses rule-based transport, perception of the requested port
 
 This update now gives full SC insertion in four completed public-sample SC trials. It improves the matched development grid from 1/4 to 3/4; five-card / port 1 remains open. The model is still not generally qualified: its original near validation p95 is 1.026°, so live tests use explicit, limited experimental scopes.
 
-The latest hard SC case passes at 15.538 mm / 0.127 mm / 0.305° after combining the gated close-up estimate with tighter centering and lateral stiffness 500, while keeping axial stiffness 90 and all force limits. The 240 lateral setting fails. V34 adds bit-exact shared JPEG preprocessing and is rerunning all four matched SC cases before three unchanged public samples. No new training or dataset collection is queued. [Current scores and decisions](STATUS.md#october-18-current-explicit-insertion-continuation).
+The latest hard SC case passes at 15.538 mm / 0.127 mm / 0.305° after combining the gated close-up estimate with tighter centering and lateral stiffness 500, while keeping axial stiffness 90 and all force limits. The 240 lateral setting fails. V34 adds bit-exact shared JPEG preprocessing and is rerunning all four matched SC cases before three unchanged public samples. No new training or dataset collection is queued. [Current scores and decisions](../../../docs/answers/archive/2026-10-19-documentation/status_full_history.md#october-18-current-explicit-insertion-continuation).
 
 ## October 18: current insertion repair
 
-**October 18 current result:** the unchanged three-trial public sample improves152.61→176.85/300 after an explicit-controller seating hold fix, with2/3combined successes(bothSFP). SCstillstopsnear2mm/2.17degrees; learnedBCremains0/8and is not the source of the SFP successes. An exact shared-JPEG preprocessing repair passes3/3liveSFP repeats with acquisitionp95<228ms. Current SC recovery work uses only RGB/public robot state; no newRL or final scenes. [Current cycle and gates](experiments/2026-10-18-three-trial-insertion-repair-cycle.md).
+**October 18 current result:** the unchanged three-trial public sample improves152.61→176.85/300 after an explicit-controller seating hold fix, with2/3combined successes(bothSFP). SCstillstopsnear2mm/2.17degrees; learnedBCremains0/8and is not the source of the SFP successes. An exact shared-JPEG preprocessing repair passes3/3liveSFP repeats with acquisitionp95<228ms. Current SC recovery work uses only RGB/public robot state; no newRL or final scenes. [Current cycle and gates](../../../docs/experiments/2026-10-18-three-trial-insertion-repair-cycle.md).
 
 Port perception and held-plug perception are different components. The requested-port stack estimates the opening; a separate RGB grasp estimator estimates where the plug tip is and how it is rotated relative to the gripper. Both estimates are locked during an attempt. Stable predictions can still be biased: SC's old grasp model is stable but inaccurate on nominal-centred grasps missing from its training set.
 
 Current deployment diagnostics use rule transport, fresh visual acquisition, a controlled150→25mm approach, then the full-connector H4 BC actor. Measured transport/approach history survives handoff. A reference governor reduces command jumps but has not improved insertion: its corrected control-only comparison is0/4. It is not promoted. A matched full-data BC comparison tests public controller-reference error as input; its previous-command persistence baseline is strong, so only live alignment/progress/insertion can establish improvement.
 
-A separate two-run SFP image-only servo diagnostic replaces learned insertion with an explicit alignment/advance controller. Its purpose is to test perception/control feasibility, and any success must be labeled rule-controlled, not BC or RL. No newRL/world-model training or reserved-final evaluation is enabled. [Current evidence and plan](experiments/2026-10-17-insertion-control-and-grasp-repair.md).
+A separate two-run SFP image-only servo diagnostic replaces learned insertion with an explicit alignment/advance controller. Its purpose is to test perception/control feasibility, and any success must be labeled rule-controlled, not BC or RL. No newRL/world-model training or reserved-final evaluation is enabled. [Current evidence and plan](../../../docs/experiments/2026-10-17-insertion-control-and-grasp-repair.md).
 
 # Direct visual policy
 
@@ -43,7 +45,7 @@ The hierarchical runtime is implemented, including retained pre-return RGB/state
 
 Next: finish matched BC fits and current frozen SC acquisition evaluation; verify corrected runtime settings; run fresh autonomous full-depth development rollouts, diagnose failures, then compare no/local/hierarchical recovery with identical actors and scenes. Advance to RL only after the supervised insertion gate.
 
-See [execution record](experiments/2026-10-15-rule-perception-hierarchical-execution.md) and artifact `state.json` for exact commands, failures, comparisons and paths.
+See [execution record](../../../docs/experiments/2026-10-15-rule-perception-hierarchical-execution.md) and artifact `state.json` for exact commands, failures, comparisons and paths.
 
 **Additional SC coverage repair:** the29 existing rail-expansion episodes added4,526 RGB-proposed native crops (22/7 complete train/validation episodes) after label/split/visual QA. The joint SC+SFP repair reached a validation plateau at4,000updates. It passes9/9 previously rejected SC probes versus0/9 for both baselines, and improves new-rail accepted components166→211. Overall accepted components3722→3711 is a small regression; zero wrong/absent accepts remain. The original strict gate failure is preserved. A separately documented20-scene live diagnostic is running; the new checkpoint is **not promoted**. Black-gripper-only crops explain some large pixel-error tails and are not evidence of visible targets. Active frozen models/scenes remain unchanged.
 
@@ -64,7 +66,7 @@ See [execution record](experiments/2026-10-15-rule-perception-hierarchical-execu
 
 Preflight fixes for the upcoming actor: complete port-frame targets for both families, exact recorded force/trajectory profile, plug-based near-port phase weighting, command-feedback masking in BOTH current and historical state, and identical native-JPEG preprocessing during training and deployment. The old 15 mm command cap would clip about 11% of SC and 27% of SFP expert chunks; the new controlled runtime must use the audited 60 mm component cap. Visual warm starts now reject silently empty/incompatible transfers; the comparison retains fresh current-data state normalization. Four real history offsets are planned, with the history-masking ablation OFF.
 
-Rootless runs use private bridge networks and unique Gazebo partitions. Cooperative per-GPU locks serialize future rollout/training workers without interrupting active jobs. Legacy GPU0 is untouched. Current work uses GPUs3/4/5 plus that legacy allocation. Final scenes remain sealed; reward/imagination and new actor-Q training remain gated. See the [execution record](experiments/2026-10-15-rule-perception-hierarchical-execution.md) for commands, failed comparisons and artifact paths.
+Rootless runs use private bridge networks and unique Gazebo partitions. Cooperative per-GPU locks serialize future rollout/training workers without interrupting active jobs. Legacy GPU0 is untouched. Current work uses GPUs3/4/5 plus that legacy allocation. Final scenes remain sealed; reward/imagination and new actor-Q training remain gated. See the [execution record](../../../docs/experiments/2026-10-15-rule-perception-hierarchical-execution.md) for commands, failed comparisons and artifact paths.
 
 ### Latest: rail coverage, clean simulation isolation and rule pilots
 
@@ -80,7 +82,7 @@ BC preparation now has **53,921 command rows from 454 qualified source episodes*
 
 A confirmed infrastructure bug affected two later runs: concurrent host-network containers shared Zenoh port 7447 and Gazebo discovery despite separate ROS domains. Both launchers now use private bridge networks and unique Gazebo partitions. Audits found no conflict warnings in the 454 admitted original sources or the frozen 12-run SC comparison. Failed infrastructure runs remain preserved and excluded from policy evidence.
 
-See the [execution record](experiments/2026-10-15-rule-perception-hierarchical-execution.md) and artifact-root `state.json` for commands, exact counts, failures and subsequent updates. Earlier October 15 paragraphs below are intermediate history where they describe running jobs or older derivatives.
+See the [execution record](../../../docs/experiments/2026-10-15-rule-perception-hierarchical-execution.md) and artifact-root `state.json` for commands, exact counts, failures and subsequent updates. Earlier October 15 paragraphs below are intermediate history where they describe running jobs or older derivatives.
 
 ### Latest acquisition gate and BC-data preparation
 
@@ -106,13 +108,13 @@ The wider SC teacher now demonstrates full insertion from all three diagnostic s
 
 The frozen six-configuration/two-arm SC acquisition comparison has completed and failed its gate. The legacy-veto replacement also failed a wrong-port test; see the latest update below. No final scenes have been opened.
 
-Artifacts and exact commands: `/home/nas/chmin/aic_archives/2026-10-15_rule_perception_hierarchical_v1/`. Detailed chronology: [execution record](experiments/2026-10-15-rule-perception-hierarchical-execution.md).
+Artifacts and exact commands: `/home/nas/chmin/aic_archives/2026-10-15_rule_perception_hierarchical_v1/`. Detailed chronology: [execution record](../../../docs/experiments/2026-10-15-rule-perception-hierarchical-execution.md).
 
 
-**October 15 execution update:** Broad SC/SFP native refinement now improves opening-position accuracy: conditional SC lateral p95 is 0.20 mm; the stronger SFP coarse pipeline plus the new refiner improves lateral p95 from 0.82 to 0.29 mm on 70 validation recordings, with zero observed wrong-port accepts in that comparison. Training continues because the first 12,000-update fit was still improving. Coarse identity repair remains experimental: rejecting known wrong handoffs also rejects some correct ones. Wider 150/180 mm SC teacher pilots now reach full seating after measured alignment and a corrected completion condition; broader data admission is still gated. New insertion BC, deployed hierarchy and RL have not passed their gates. [Evidence and active execution](experiments/2026-10-15-rule-perception-hierarchical-execution.md).
+**October 15 execution update:** Broad SC/SFP native refinement now improves opening-position accuracy: conditional SC lateral p95 is 0.20 mm; the stronger SFP coarse pipeline plus the new refiner improves lateral p95 from 0.82 to 0.29 mm on 70 validation recordings, with zero observed wrong-port accepts in that comparison. Training continues because the first 12,000-update fit was still improving. Coarse identity repair remains experimental: rejecting known wrong handoffs also rejects some correct ones. Wider 150/180 mm SC teacher pilots now reach full seating after measured alignment and a corrected completion condition; broader data admission is still gated. New insertion BC, deployed hierarchy and RL have not passed their gates. [Evidence and active execution](../../../docs/experiments/2026-10-15-rule-perception-hierarchical-execution.md).
 
 
-**October 14 current execution:** Supported normal-board SC rule transport and RGB handoff passed small screens. Matched corrective-data, decoder and 6-second robot-history repairs did not pass autonomous full insertion. A separately frozen observation-only approach reached **29.12 mm before the opening / 0.148 mm lateral**, then the unchanged trained actor achieved **11.07 mm insertion depth / 0.413 mm lateral / 0.94° orientation error** on one reused start. Official score 75, but the unchanged ≥14 mm physical gate failed. Logs confirm contact-triggered completion and end-effector locking; no cable snag explains this run. This is meaningful approach progress, not a promoted insertion policy. All new jobs finished; no routine collection, RL, world-model work or final-scene access. SFP local insertion, rotated SC and port-0 rail minimum remain unapproved. [Execution record](experiments/2026-10-14-transport-handoff-execution.md) · [Easy explanation](answers/2026-10-14-autonomous-execution-outcome.md).
+**October 14 current execution:** Supported normal-board SC rule transport and RGB handoff passed small screens. Matched corrective-data, decoder and 6-second robot-history repairs did not pass autonomous full insertion. A separately frozen observation-only approach reached **29.12 mm before the opening / 0.148 mm lateral**, then the unchanged trained actor achieved **11.07 mm insertion depth / 0.413 mm lateral / 0.94° orientation error** on one reused start. Official score 75, but the unchanged ≥14 mm physical gate failed. Logs confirm contact-triggered completion and end-effector locking; no cable snag explains this run. This is meaningful approach progress, not a promoted insertion policy. All new jobs finished; no routine collection, RL, world-model work or final-scene access. SFP local insertion, rotated SC and port-0 rail minimum remain unapproved. [Execution record](../../../docs/experiments/2026-10-14-transport-handoff-execution.md) · [Easy explanation](../../../docs/answers/2026-10-14-autonomous-execution-outcome.md).
 
 **Current handoff direction (October 2):** This page documents the older
 direct-visual actor and transport comparisons. The active supervised plan is
@@ -122,18 +124,18 @@ integrated switch and autonomous full insertion remain open.
 
 ## October 1 controlled transport comparison
 
-A fresh frozen ImageNet three-camera representation was used to compare current-frame and 60-second causal-history transport heads, predicted route stage/subgoal/handoff, a four-target diffusion transformer, and separate SFP and SC heads. Each predicts complete TCP-body target poses; live actors receive only ordinary images, measured state, and public task encoding. The long-history head reached 8 mm of the teacher SFP pre-insertion standoff on one bounded development scene but still had 6.9° orientation error and no insertion. It regressed on one SC five-card scene. Explicit route subgoal p95 remained 44.5 mm, diffusion first-action p95 about 12–13 mm, and task-specific heads did not beat the shared deterministic head. No actor was promoted; [the complete experiment record](experiments/2026-10-01-transport-five-way-comparison.md) has commands, metrics, traces, and videos. A previous 16-second history candidate that reused failed policy features was only evaluated offline; this new history candidate was also tested live.
+A fresh frozen ImageNet three-camera representation was used to compare current-frame and 60-second causal-history transport heads, predicted route stage/subgoal/handoff, a four-target diffusion transformer, and separate SFP and SC heads. Each predicts complete TCP-body target poses; live actors receive only ordinary images, measured state, and public task encoding. The long-history head reached 8 mm of the teacher SFP pre-insertion standoff on one bounded development scene but still had 6.9° orientation error and no insertion. It regressed on one SC five-card scene. Explicit route subgoal p95 remained 44.5 mm, diffusion first-action p95 about 12–13 mm, and task-specific heads did not beat the shared deterministic head. No actor was promoted; [the complete experiment record](../../../docs/experiments/2026-10-01-transport-five-way-comparison.md) has commands, metrics, traces, and videos. A previous 16-second history candidate that reused failed policy features was only evaluated offline; this new history candidate was also tested live.
 
 ## September 30 transport continuation
 
 **Current matched data:** v9 has two fully inserted Cartesian SC episodes (one per port in the exact same five-card world): 1,751 transport and 503 local training chunks. The older failed-insertion transport prefix remains archived in v8 and is excluded from v9. The paired teacher scored 75 at Tier 3. The equal-port shared transport BC run completed 1,500 updates, but failed on both autonomous development starts (103/603 mm planned-standoff error, 0/2 insertion). This is not an autonomous insertion result.
-The teacher transport gate is accepted. The current two-actor continuation is documented in [the execution record](experiments/2026-09-30-transport-to-two-actor-continuation.md). This does not mark autonomous full insertion as successful. Control-matched SC dataset v8 has one fully inserted source and one reviewed transport-only prefix; failed insertion actions are excluded. Existing 268 SFP episodes retain their physical-reset split. The original successful SC local data remains separate. Ten learned candidate rollouts across the same two held-out starts failed; the controller-error mask improved v8 behavior but v9 paired-port training regressed. Routine feed-forward transport BC is stopped pending a bounded route-subgoal/progress diagnosis. No new RL or final-scene evaluation is started. Historical model results below refer to their own checkpoints and evaluation gates.
+The teacher transport gate is accepted. The current two-actor continuation is documented in [the execution record](../../../docs/experiments/2026-09-30-transport-to-two-actor-continuation.md). This does not mark autonomous full insertion as successful. Control-matched SC dataset v8 has one fully inserted source and one reviewed transport-only prefix; failed insertion actions are excluded. Existing 268 SFP episodes retain their physical-reset split. The original successful SC local data remains separate. Ten learned candidate rollouts across the same two held-out starts failed; the controller-error mask improved v8 behavior but v9 paired-port training regressed. Routine feed-forward transport BC is stopped pending a bounded route-subgoal/progress diagnosis. No new RL or final-scene evaluation is started. Historical model results below refer to their own checkpoints and evaluation gates.
 
 
 Implemented 2026-09-17 from the
 [June 17 architecture notes](https://github.com/yoonjung0705/tutorials/blob/master/python/libraries/tutorial_aic.md#617-2026-hybrid-train-branch-model-training-especially-for-isaac).
-See the [model checks](experiments/2026-09-17-direct-visual-policy.md) for measured
-results and [live validation](experiments/2026-09-17-live-validation.md) for
+See the [model checks](../../../docs/experiments/2026-09-17-direct-visual-policy.md) for measured
+results and [live validation](../../../docs/experiments/2026-09-17-live-validation.md) for
 scored trials, videos, and the current reset/control/data blockers.
 
 ## Architecture
@@ -148,7 +150,7 @@ flowchart LR
 ```
 
 `actor_mode=direct_visual` is the offline CLI default. The same
-[actor implementation](../aic_utils/lerobot_robot_aic/lerobot_robot_aic/direct_visual_actor.py)
+[actor implementation](../../../aic_utils/lerobot_robot_aic/lerobot_robot_aic/direct_visual_actor.py)
 loads in offline learning, Isaac, and Gazebo. Images directly affect the action
 head. There is no ACT action proposal, residual addition, correction clip, or
 ACT preservation objective. TCP delta pose remains the controller's command
@@ -182,7 +184,7 @@ keep the total across concurrent work at **four GPUs or fewer**. Routine command
 use the existing user environment and require no sudo.
 
 The existing dataset has label and split problems found by the
-[demonstration audit](experiments/2026-09-17-live-validation.md#demonstration-audit).
+[demonstration audit](../../../docs/experiments/2026-09-17-live-validation.md#demonstration-audit).
 The command below reproduces an implementation smoke; repair those problems
 before using it for an architecture comparison.
 
@@ -243,12 +245,12 @@ execution with zero residual/preservation penalties. Preview the command first:
   --steps 20 --updates 0 --dry-run
 ```
 
-This generates a plan only. A real run needs the [Isaac container setup](LOCAL_WORKFLOW.md#4-work-with-isaac-without-losing-artifacts),
+This generates a plan only. A real run needs the [Isaac container setup](../../../docs/answers/archive/2026-10-19-documentation/local_workflow_full_history.md#4-work-with-isaac-without-losing-artifacts),
 an explicit episode/reset configuration, and recorded success geometry. Use
 zero updates/exploration for evaluation. History and runtime clipping overrides
 are rejected when they would change the saved direct actor contract.
 
-For official Gazebo evaluation, follow the [dedicated-container workflow](LOCAL_WORKFLOW.md#3-test-act-through-the-gazebo-challenge-runtime),
+For official Gazebo evaluation, follow the [dedicated-container workflow](../../../docs/answers/archive/2026-10-19-documentation/local_workflow_full_history.md#3-test-act-through-the-gazebo-challenge-runtime),
 changing the evaluator selection to:
 
 ```bash
@@ -265,13 +267,13 @@ so small insertion commands are preserved. The bridge transfer validator also
 accepts `--policy-kind direct_visual` without an ACT export. Runtime commands
 were exercised live: the direct actor completed one official Gazebo trial
 without insertion, and Isaac loaded it for zero-action reset diagnostics. The
-Isaac checks did not evaluate learned actions. See the [live report](experiments/2026-09-17-live-validation.md).
+Isaac checks did not evaluate learned actions. See the [live report](../../../docs/experiments/2026-09-17-live-validation.md).
 
 ## Next comparisons
 
 Live checks and the dataset audit are now complete, with blocking findings.
 The following sequence remains gated on repairing those findings; see
-[current priorities](STATUS.md#next-experiments-in-order).
+[current priorities](../../../docs/answers/archive/2026-10-19-documentation/status_full_history.md#next-experiments-in-order).
 
 1. **Validate resets, action direction, and the expert start fix.** The two
    CheatCode variants now preserve depth for aligned final-descent starts.
@@ -294,8 +296,8 @@ The following sequence remains gated on repairing those findings; see
 
 ### October 16 continuation
 
-Mandatory SC/SFP native refiner retraining is complete to plateau. The targeted SFP coarse repair also plateaued; on the same 1,120 held-out triplets it accepts 917 versus the old 913, with zero wrong ports. Native refinement rejects all 14 new coarse absent-target false positives. The ten-case live gate is still running; this small component change is **not** a live success claim. Its first failure reaches the correct image region but exceeds the native geometric residual gate. See the [execution record](experiments/2026-10-15-rule-perception-hierarchical-execution.md) for the inspected predicted/label overlays, full metrics and bounded diagnosis.
+Mandatory SC/SFP native refiner retraining is complete to plateau. The targeted SFP coarse repair also plateaued; on the same 1,120 held-out triplets it accepts 917 versus the old 913, with zero wrong ports. Native refinement rejects all 14 new coarse absent-target false positives. The ten-case live gate is still running; this small component change is **not** a live success claim. Its first failure reaches the correct image region but exceeds the native geometric residual gate. See the [execution record](../../../docs/experiments/2026-10-15-rule-perception-hierarchical-execution.md) for the inspected predicted/label overlays, full metrics and bounded diagnosis.
 
 The new `RunRuleThenSharedRecovery` integration is implemented but unvalidated: SC/SFP rule transport -> fresh RGB port/grasp locks -> one shared actor owning the entire150mm approach -> measured-path local/hierarchical backtrack. Large retreats return to the measured acquisition checkpoint and require fresh perception. Pending chunks/history are cleared, contact never retares initial load, and supervisor commands are logged separately. **No new insertion BC or RL has been trained yet.** Wider training/held-out demonstrations and matched fresh versus visual-warm BC remain in progress. Final scenes remain sealed and the project limit is four GPUs including the untouched legacy allocation.
 
-SC's targeted separate-GPU latency case passed (active p95 239ms, opening error0.414mm); the earlier seven-case single-GPU strict result remains6/7. Current status and exact artifacts are in [STATUS.md](STATUS.md) and the execution record.
+SC's targeted separate-GPU latency case passed (active p95 239ms, opening error0.414mm); the earlier seven-case single-GPU strict result remains6/7. Current status and exact artifacts are in [STATUS.md](../../../docs/answers/archive/2026-10-19-documentation/status_full_history.md) and the execution record.

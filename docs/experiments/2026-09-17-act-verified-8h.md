@@ -47,7 +47,7 @@ Read the [20 official results](../../outputs/experiments/2026-09-17_act_verified
 [model bundle](../../outputs/experiments/2026-09-17_act_verified_8h/selected_act_final/README.md),
 [video review](../../outputs/experiments/2026-09-17_act_verified_8h/review/index.html), and
 [all run summaries](../../outputs/experiments/2026-09-17_act_verified_8h/results_latest.md).
-[Local reproduction](../LOCAL_WORKFLOW.md#test-the-frozen-september-act-model)
+[Local reproduction](../answers/archive/2026-10-19-documentation/local_workflow_full_history.md#test-the-frozen-september-act-model)
 includes an exact rootless evaluation command. Models/data/videos are local
 ignored artifacts, not an external backup.
 
@@ -81,7 +81,7 @@ The final result above supersedes their provisional status statements.
 
 - 668 accepted episodes audited: 393 verified official insertions with matching
   raw state/action arrays, 212 scored non-insertions, 63 unresolved mappings.
-  See [dataset eligibility](../DATASETS.md#verified-insertion-episodes).
+  See [dataset eligibility](../answers/archive/2026-10-19-documentation/datasets_full_history.md#verified-insertion-episodes).
 - Inspected sampled three-camera final frames and preceding seconds for every
   source family. Representative raw/accepted CheatCode end frames match within
   compression differences. The decoded 130-episode cache checks frame PTS at

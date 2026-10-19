@@ -6,7 +6,7 @@
 
 > Historical selection, not a current recommended model. Referenced handoff
 > weights and evaluation files are absent locally on 2026-09-17. See
-> [current status](../../docs/STATUS.md) and [available artifacts](../../docs/EXPERIMENTS.md#artifact-locators).
+> [current status](../../docs/STATUS.md) and [available artifacts](../../docs/answers/archive/2026-10-19-documentation/experiments_full_history.md#artifact-locators).
 
 Generated: 2026-05-14 UTC
 

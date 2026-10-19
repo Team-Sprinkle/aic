@@ -44,4 +44,4 @@ transport or recovery.
 
 Relevant records: [SFP route audit](../experiments/2026-10-08-sfp-requested-port-corridor-audit.md),
 [SC MoveIt pilot](../experiments/2026-09-29-moveit-sc-route-pilot.md), and
-[SC cable-snag recovery plan](../SC_CABLE_SNAG_RECOVERY_PLAN.md).
+[SC cable-snag recovery plan](../../obsolete/docs/2026-10-19-retired-plans/SC_CABLE_SNAG_RECOVERY_PLAN.md).

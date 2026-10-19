@@ -20,7 +20,7 @@ Artifacts: `outputs/experiments/2026-09-18_act_all_verified_6h50/`.
 
 ## Dataset and scope
 
-See [DATASETS.md](../DATASETS.md#canonical-expert-collection-2026-09-18).
+See [DATASETS.md](../answers/archive/2026-10-19-documentation/datasets_full_history.md#canonical-expert-collection-2026-09-18).
 The first materialization contains all 251 eligible SFP episodes across NIC
 counts 1–5; 223 train / 28 validation, with identical scene/task configurations
 grouped. All 253 successful historical agent recordings remain pending action
@@ -115,7 +115,7 @@ not establish coverage of hard fixture layouts. Port 0 covers NIC counts 1–3;
 port 1 covers only NIC1 and initially had no held-out demonstration. Six SC episodes are
 training data and three are validation data. The append workflow preserves all
 251 existing SFP records and their splits. Source details and limitations are
-in [DATASETS.md](../DATASETS.md#canonical-expert-collection-2026-09-18).
+in [DATASETS.md](../answers/archive/2026-10-19-documentation/datasets_full_history.md#canonical-expert-collection-2026-09-18).
 
 ## Mixed-task continuation
 

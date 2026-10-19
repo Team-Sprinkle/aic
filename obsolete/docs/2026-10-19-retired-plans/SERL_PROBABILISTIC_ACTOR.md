@@ -1,3 +1,5 @@
+> Retired plan: preserved for provenance. The [current experiment summary](../../../docs/EXPERIMENTS.md) and [single future-work plan](../../../docs/FUTURE_WORK.md) supersede its active/queued instructions.
+
 # Probabilistic Trajectory Actor for SERL
 
 **Status:** Implemented and evaluated; final tight trust-region run retained BC at 3/8 but did not improve it
@@ -20,7 +22,7 @@ insertion. The tight-trust continuation retained the frozen 3/8 metrics-only
 result without improving it. A separate video rerun scored 1/8 BC, 1/8 selected
 RL, and 3/8 selected RL plus recovery, but run variability and missing
 recovery-mode traces prevent a causal or promotion claim. See the
-[video analysis](experiments/2026-09-23-serl-video-failure-analysis.md) and
+[video analysis](../../../docs/experiments/2026-09-23-serl-video-failure-analysis.md) and
 [SC recovery plan](SC_CABLE_SNAG_RECOVERY_PLAN.md).
 
 ## 1. Does SERL require a probabilistic actor?

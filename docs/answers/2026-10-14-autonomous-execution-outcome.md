@@ -36,7 +36,7 @@ The full-insertion gate, broad supported-setting expansion, recovery/SERL and Ga
 
 - [Execution record](../experiments/2026-10-14-transport-handoff-execution.md)
 - [Machine-readable state](../experiments/2026-10-14-transport-handoff-execution.json)
-- [Current high-level plan](../TRANSPORT_HANDOFF_IMPROVEMENT_PLAN.md)
+- [Current high-level plan](../../obsolete/docs/2026-10-19-retired-plans/TRANSPORT_HANDOFF_IMPROVEMENT_PLAN.md)
 - [Status](../STATUS.md)
 
 Bulk artifacts, exact commands, frozen gates, selected/last checkpoints, scored streams, failed trials and videos are under `/home/nas/chmin/aic_archives/2026-10-14_transport_handoff_execution_v1/`. Originals remain preserved.
