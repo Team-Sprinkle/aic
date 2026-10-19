@@ -52,4 +52,32 @@ The root of all diagnostics is `/home/nas/chmin/aic_archives/2026-10-19_sc_route
 
 The source and target artifact hashes are captured in each run's `source_hashes.json`. No frozen final scene was opened. Promotion requires repeated SC cases with measured progress, acceptable force, correct visual handoff, and no evidence of cable snag; a single handoff does not satisfy this gate.
 
-**Decision:** retain `sc skip back` plus early tilt as an opt-in SC transport candidate. Keep `sc old` as the default until a broader independent sample-derived SC scene screen passes the physical and p95 gates. The tested route resolves the specific blocked five-card start in two runs; the seven-case screen has an unresolved one-run latency miss. SFP has not been changed or retested in this experiment.
+**Decision:** retain `sc skip back` plus early tilt as an opt-in SC transport candidate. Keep `sc old` as the default while independent coverage and latency are checked; the route remains an opt-in candidate. The tested route resolves the specific blocked five-card start in two runs; the seven-case screen has an unresolved one-run latency miss. SFP has not been changed or retested in this experiment.
+
+## Independent sample-derived SC coverage after route freeze
+
+After the route/source/spec were frozen and pushed, `scripts/prepare_sample_conservative_transport.py --phase evaluation` generated a **new sample-derived held-out set** with its separate fixed seed `2026101673`: zero through five cards, both SC ports, two repeats = 24 SC cases. This is **not** the later released production `eval_config.yaml`. All 24 were run sequentially with the exact same early-tilt candidate, opposite-side corridor, policy and perception weights. No route parameter was changed while the batch ran. The generated scene plan is `/home/nas/chmin/aic_archives/2026-10-19_sc_route_sample_heldout_v1/plan.json`; frozen input hashes, per-case generated configs, traces, contacts, metrics and `summary.json` are under `/home/nas/chmin/aic_archives/2026-10-19_sc_route_origin_review/sc_skip_back_early_tilt_heldout24_v1/`.
+
+```bash
+.pixi/envs/default/bin/python scripts/prepare_sample_conservative_transport.py \
+  --output /home/nas/chmin/aic_archives/2026-10-19_sc_route_sample_heldout_v1 \
+  --phase evaluation
+.pixi/envs/default/bin/python scripts/run_sample_rule_development.py \
+  --root /home/nas/chmin/aic_archives/2026-10-19_sc_route_sample_heldout_v1 \
+  --output /home/nas/chmin/aic_archives/2026-10-19_sc_route_origin_review/sc_skip_back_early_tilt_heldout24_v1 \
+  --family sc --policy RunSampleTransportRecovery \
+  --sc-route sc_skip_back --sc-early-tilt \
+  --spec /home/nas/chmin/aic_archives/2026-10-16_sample_conservative_development_v3/transport_spec_SC_opposite_side_v4.json \
+  --gpu 4
+```
+
+**Result: 22/24 strict correct-port handoffs (91.7%), zero wrong-port accepts and zero scored harm.** By card count, passes were 3/4 at zero cards, 4/4 at one, 3/4 at two, and **4/4 each at three, four and five cards**. In particular, all eight four/five-card starts passed. Twenty-three of 24 cases met active inference p95 below 300 ms; the sole 521.9 ms miss was the physically blocked two-card case. The two strict failures were:
+
+1. `evaluation_sc_n0_p0_r1`: transport reached visual search, but no accepted lock before the search budget expired (`requested_projection_not_in_all_views`). Terminal posthoc geometry was 164.3 mm axial and 26.8 mm lateral, just outside the 25 mm handoff corridor. This was a visual acquisition failure, not a detected cable stall.
+2. `evaluation_sc_n2_p0_r1`: the first sideways/down leg triggered sustained force plus stalled measured progress twice, at 10.9 and 19.2 simulated seconds. Local recovery did not clear the obstruction; terminal distance remained 234.7 mm from the opening. This is a real remaining transport blockage. The oracle contacts should be inspected only for diagnosis, never used to choose its route or to tune this held-out scene.
+
+For the blocked two-card run, the saved oracle trace has persistent cable-to-NIC-card contact from 9–20 s; the one-second overhead sheet (`evaluation_sc_n2_p0_r1_overhead_1hz.jpg` in the held-out batch root) and five-camera 20 fps H.264 video (`evaluation_sc_n2_p0_r1/five_cameras_20fps_grid_h264.mp4`) show the tool barely changing position after the first contact. This supports cable/card snag rather than a wrong-port visual rejection as the immediate transport failure. The contact messages' per-pair wrench values are not a calibrated cable-tension measurement, so the measured TCP load and stalled motion remain the causal runtime evidence.
+
+Three passing cases used local recovery at least once (`n4_p1_r0`, `n5_p1_r0`, `n4_p0_r1`); the blocked case used it twice. Four cases had a brief toolkit force excursion above 20 N (maximum reported 40.56 N, lasting at most 0.20 s), but none exceeded the toolkit's 1 s penalty duration. These excursions still merit inspection before claiming physical robustness. No insertion actor or explicit insertion controller ran in this 24-case screen.
+
+The broader screen supports the early-tilt route as a promising way through dense SC rows, but **does not establish a universal SC fix**. It also means the earlier decision to keep the route opt-in remains appropriate: one start still blocks on contact and another misses visual acquisition. Any repair for those classes should use newly generated development starts, not the held-out geometry above. The frozen held-out results must stay unchanged.

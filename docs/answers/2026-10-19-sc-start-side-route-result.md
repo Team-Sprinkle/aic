@@ -12,7 +12,7 @@ I named the routes as requested:
 
 Neither new route worked with the original left-side corridor on the difficult five-card start. `sc skip back` on the opposite side initially worked, but one of seven development repeats snagged while tilting. More sideways or forward clearance did not fix it. The strongest candidate is **sc skip back with an early tilt**: move to the far-side corridor, rotate the tool while still outside the card row, then sweep toward the port. In the seven SC development cases it achieved **7/7 correct-port visual handoffs**, with no scored harm or local recovery. **6/7 passed the complete gate** because the five-card port-0 run had active perception p95 **391 ms**, over the 300 ms limit. A repeat of that exact case passed at **190 ms p95**. The difficult five-card port-1 case passed twice with early tilt.
 
-This establishes a promising **transport and visual handoff** route for the tested starts, not a full insertion result. The cable can brush cards and the route has not been qualified across the broader independent SC settings. The new route is opt-in; the default remains `sc old` until broader testing. SFP was not changed.
+A separate frozen 24-case SC screen from the predeadline sample generator then achieved **22/24 strict correct-port handoffs (91.7%)**, with all eight four/five-card cases passing, no wrong ports and no scored harm. One zero-card case reached visual search but timed out; one two-card case blocked twice during the first sideways/down move despite local recovery; the saved one-second overhead sheet and oracle contacts show the cable remaining against NIC card hardware. This establishes a promising **transport and visual handoff** route for dense-card starts, not a full insertion result or a universal SC fix. The cable can brush cards. The new route remains opt-in; the default remains `sc old` while those failures are addressed on new development starts. SFP was not changed.
 
 Review:
 
@@ -21,3 +21,6 @@ Review:
 - Early-tilt overhead sheet, one frame each second: `/home/nas/chmin/aic_archives/2026-10-19_sc_route_origin_review/sc_skip_back_short_side_early_tilt_v1/overhead_every_second_first35.jpg`
 - Early-tilt five-camera 20 fps video: `/home/nas/chmin/aic_archives/2026-10-19_sc_route_origin_review/sc_skip_back_short_side_early_tilt_v1/development_sc_n5_p1_r0/five_cameras_20fps_grid_h264.mp4`
 - Seven-case metrics and raw traces: `/home/nas/chmin/aic_archives/2026-10-19_sc_route_origin_review/sc_skip_back_short_side_early_tilt_all7_v1/`
+- Independent 24-case summary: `/home/nas/chmin/aic_archives/2026-10-19_sc_route_origin_review/sc_skip_back_early_tilt_heldout24_v1/summary.json`
+- Remaining two-card snag, one-second overhead sheet: `/home/nas/chmin/aic_archives/2026-10-19_sc_route_origin_review/sc_skip_back_early_tilt_heldout24_v1/evaluation_sc_n2_p0_r1_overhead_1hz.jpg`
+- Remaining snag, five-camera 20 fps video: `/home/nas/chmin/aic_archives/2026-10-19_sc_route_origin_review/sc_skip_back_early_tilt_heldout24_v1/evaluation_sc_n2_p0_r1/five_cameras_20fps_grid_h264.mp4`
