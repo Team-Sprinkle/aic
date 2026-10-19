@@ -62,3 +62,7 @@ Existing unrelated files already on `main` should not be deleted as part of this
 ## Stopping rule
 
 Do not publish a supposedly ready final-submission PR that only works because the research checkout or private archive directory is mounted. If an artifact cannot be located or the extracted implementation does not reproduce the frozen runtime, keep the PR in draft and report the exact missing requirement. Keep all original code and assets on the experiment branch so extraction remains reversible.
+
+## Execution update
+
+The focused extraction and full three-trial runtime gate passed: 276.17/300 with the existing numerical libraries, then 275.91/300 with the newly installed locked environment; both 3/3 insertion awards. Artifacts and curated results are published on the separate release branch. [Draft PR #13](https://github.com/Team-Sprinkle/aic/pull/13) contains 94 changed files in three commits. The self-contained image build remains unverified due to insufficient rootless Docker storage; the PR remains draft. See the [execution summary](2026-10-19-focused-final-runtime-pr.md) for reproduction links and qualifications.
