@@ -1,0 +1,95 @@
+{
+  "schema": "final_visual_artifacts/v1",
+  "files": {
+    "port/backbone.pt": {
+      "sha256": "0ec53cfdd1c243ec712e78dfa64836c441c6aca988ae60c11e7fd80ff411068f",
+      "bytes": 48772751,
+      "role": "backbone"
+    },
+    "port/sc_coarse.pt": {
+      "sha256": "b07bac925fb6da39f8564a446cf999980db7903d7fb9491d49cf41a03af85b04",
+      "bytes": 1034435,
+      "role": "sc_coarse"
+    },
+    "port/sfp_coarse.pt": {
+      "sha256": "37c032f14701d72fa3a0beff9daae5dce030271f828214add5e6f33a48bedf28",
+      "bytes": 1037571,
+      "role": "sfp_coarse"
+    },
+    "port/sfp_native_refiner.pt": {
+      "sha256": "c80828b0b6640575a4e82b6e973a287f4c565c277657ce9caa016a1c51dd958c",
+      "bytes": 48666915,
+      "role": "sfp_native_refiner"
+    },
+    "port/mount_priors.json": {
+      "sha256": "b0b33b3277efdf593776a4a4a613256a5095e3e9de77232ba9f9369de84b3560",
+      "bytes": 618,
+      "role": "mount_priors"
+    },
+    "port/sc_native_refiner.pt": {
+      "sha256": "87be5c70c8b4657e859b242398ab95286aa60c423d50ecdb3bf7276999b9aa69",
+      "bytes": 48666915,
+      "role": "sc_native_refiner"
+    },
+    "grasp/sc_grasp.pt": {
+      "sha256": "d10db9f6e27acb0d18f4b8a58d659e0173f62f3f483f2077eb5268040d41b14f",
+      "bytes": 12969245,
+      "role": "SC far position"
+    },
+    "grasp/sfp_grasp.pt": {
+      "sha256": "e19cc1ff555b2c6f67b94aea84360ec7aa60e4904482e8c7d6c14c836ba3f095",
+      "bytes": 12966085,
+      "role": "SFP far position"
+    },
+    "grasp/sfp_grasp_approval.json": {
+      "sha256": "d0eda89ff09fd26c9719c29ec746977dad22da15ad227267f3ba4fd0bd13b67d",
+      "bytes": 1013,
+      "role": "SFP position approval"
+    },
+    "empty_row/model.pt": {
+      "sha256": "52e65729aa21e91340f9d5fb4d7182743247243e34aa80ae349a566f4abaad67",
+      "bytes": 11996893,
+      "role": "empty-row perception"
+    },
+    "empty_row/approval.json": {
+      "sha256": "01d417b1f19a43c3416cefc50a8ac199512a6c565b915c3b969de3890d8765ff",
+      "bytes": 433,
+      "role": "empty-row approval"
+    },
+    "close/rotation.pt": {
+      "sha256": "11c3aab1efc395eb99c34e9a7b18dbf68824d6eb052c42412c83f8fecf17e4b8",
+      "bytes": 40792976,
+      "role": "SC near pose component or approval"
+    },
+    "close/translation.pt": {
+      "sha256": "438007e6d3c49b13ca0ca3e4b5a431a10c2a761e93413538c0e9afcb115f5ad2",
+      "bytes": 33364603,
+      "role": "SC near pose component or approval"
+    },
+    "close/rotation_approval.json": {
+      "sha256": "0c99652c5daca6eb78bef328217d707f86cf4ade4f266c0a68d82a392b3c6762",
+      "bytes": 347,
+      "role": "SC near pose component or approval"
+    },
+    "close/translation_approval.json": {
+      "sha256": "4fb90b18949edb3b22a7c3462ee70042057af98076bb8b8e8bd7a5bc73d1132c",
+      "bytes": 361,
+      "role": "SC near pose component or approval"
+    },
+    "close/approval.json": {
+      "sha256": "6ff91130afb23b1b983b0e7733d694689f047688a563737d65447cd84afdb818",
+      "bytes": 921,
+      "role": "SC near pose component or approval"
+    },
+    "connector_models/sfp_direct_pose/best.pt": {
+      "sha256": "f55b629757c9d610c04d8699eecdf34de75e604c320d50178b75fd0a41290856",
+      "bytes": 16639367,
+      "role": "far connector orientation"
+    },
+    "connector_models/sc_orientation_jitter_v2/best.pt": {
+      "sha256": "325135b46cc9f49bf9a15ef959edd4a36cab10f6baee7aff13c62e37e6190cd8",
+      "bytes": 16639495,
+      "role": "far connector orientation"
+    }
+  }
+}

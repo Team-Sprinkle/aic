@@ -1,0 +1,22 @@
+{
+  "schema": "final_submission_image_build/v1",
+  "build_passed": true,
+  "image": "aic-final-controller:v1",
+  "image_id": "sha256:03e8c45b980aadbcc1394433cebab52471c27af06a81afb65b239ec2fec05e1b",
+  "base_image": "ghcr.io/intrinsic-dev/aic/aic_eval@sha256:9aa2ffdbb946d38edde1bac7b5f02a44cfbea26e3b04a9c74e09f14c97472923",
+  "builder_image": "mambaorg/micromamba:2.3.3@sha256:800e7ade3ffe29c9a9ac2026163131495f8197c3852e572c5835beb4e8a33cd6",
+  "build_file_sha256": {
+    "docker/final_controller/Dockerfile": "8f78b774c6f53741434675e6c36d26361c20e324672df164a8136aa365a3455a",
+    "docker/final_controller/entrypoint.sh": "634604048006b2b51bd3af3e72b3cd3fa2d98eeb7ec3848c26e3a45b92e42437",
+    "docker/final_controller/conda-linux-64.lock": "3aa7bde0c415054bf95557684f9027d8ad726c39146d27310de89a7aa79e1ba2",
+    "docker/final_controller/requirements.lock": "d4df5c3b245d14ca3c85d550e15173b86a78c8f62d45f29498eed49b0c963e51"
+  },
+  "model_container_host_mounts": [
+    "output directory only; no source, environment or model mounts"
+  ],
+  "evaluation": "published qualification config, all three trials, one physical GPU shared by evaluation/model containers",
+  "toolkit_score_total": 275.9141314940118,
+  "insertion_awards": 3,
+  "startup_fix": "Disable nounset while sourcing generated colcon setup, then restore it",
+  "cache_cleanup": "Only unused Docker build cache removed; existing images, containers, volumes and experiment artifacts preserved"
+}

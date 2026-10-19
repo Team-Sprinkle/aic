@@ -1,0 +1,29 @@
+{
+  "schema": "final_visual_controller/v1",
+  "environment": {
+    "AIC_SC_TRANSPORT_ROUTE": "sc_marker_scout",
+    "AIC_SC_EARLY_TILT": "1",
+    "AIC_SFP_FALLBACK_LIFT_M": "0.06",
+    "AIC_SHARED_RECOVERY_MODE": "local",
+    "AIC_SHARED_RECOVERY_EXPLORATION_SEED": "20261016",
+    "AIC_SHARED_RECOVERY_SIM_BUDGET_S": "180",
+    "AIC_SC_CLOSE_DIAGNOSTIC_TRIAL": "1",
+    "AIC_SHARED_PORT_TCP_CONTROL_CLOCK": "simulation",
+    "AIC_SHARED_PORT_TCP_CONTROL_HZ": "20",
+    "AIC_SHARED_PORT_TCP_MAX_SIMULATION_SEC": "180",
+    "AIC_SHARED_PORT_TCP_MAX_RUNTIME_SEC": "300",
+    "AIC_SHARED_PORT_TCP_MAX_TRANSLATION_DELTA": ".06",
+    "AIC_SHARED_PORT_TCP_MAX_ROTATION_DELTA": ".2",
+    "AIC_SHARED_PORT_TCP_CARTESIAN_STIFFNESS": "[240,240,240,50,50,50]",
+    "AIC_SHARED_PORT_TCP_CARTESIAN_DAMPING": "[50,50,50,20,20,20]"
+  },
+  "artifact_environment": {
+    "AIC_LOCKED_GRASP_CHECKPOINT": "grasp/sc_grasp.pt",
+    "AIC_SFP_GRASP_CHECKPOINT": "grasp/sfp_grasp.pt",
+    "AIC_SFP_GRASP_APPROVAL": "grasp/sfp_grasp_approval.json",
+    "AIC_EMPTY_ROW_CHECKPOINT": "empty_row/model.pt",
+    "AIC_EMPTY_ROW_APPROVAL": "empty_row/approval.json",
+    "AIC_SC_CLOSE_GRASP_CHECKPOINT": "close/rotation.pt",
+    "AIC_SC_CLOSE_GRASP_APPROVAL": "close/approval.json"
+  }
+}

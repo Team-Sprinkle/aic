@@ -1,5 +1,12 @@
 # AI for Industry Challenge Toolkit
 
+## Final cable-insertion controller
+
+[Project writeup and videos](docs/robotic_cable_insertion_project.md) · [Reproduce the evaluation](docs/FINAL_SUBMISSION.md) · [Experiments](docs/EXPERIMENTS.md)
+
+The final controller uses rule transport, requested-port RGB perception, explicit insertion and local force-aware recovery for SFP-to-NIC and SC-to-SC. The clean runtime reproduced **275.91/300 with 3/3 insertions** using a fresh locked inference environment on the exposed published qualification configuration; this is not an unseen-test score. Research implementations and bulk artifacts remain on `feat/hybrid-train`.
+
+
 [![build](https://github.com/intrinsic-dev/aic/actions/workflows/build.yml/badge.svg)](https://github.com/intrinsic-dev/aic/actions/workflows/build.yml)
 [![style](https://github.com/intrinsic-dev/aic/actions/workflows/style.yml/badge.svg)](https://github.com/intrinsic-dev/aic/actions/workflows/style.yml)
 

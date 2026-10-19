@@ -1,0 +1,12 @@
+{
+  "total": 275.9115736310612,
+  "trial_totals": {
+    "trial_1": 95.23783433797186,
+    "trial_2": 95.28428315061188,
+    "trial_3": 85.38945614247746
+  },
+  "insertions": 3,
+  "evaluation_config": "released",
+  "config_sha256": "9f987c07174481474eec2c4fa21faf7d84dae4743a037b809ed7945efb2e5ef5",
+  "raw_score": "results/scoring.yaml"
+}
