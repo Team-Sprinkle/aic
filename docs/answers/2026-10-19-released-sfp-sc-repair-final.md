@@ -5,4 +5,6 @@ Both failed rounds now insert in the released `eval_config.yaml` local replay. F
 
 No model was retrained; these runs use rule transport and the explicit visual insertion controller. Active transport-decision p95 stayed below 300 ms, with one trial at 299.4 ms. These are repeated tests on a **published, exposed configuration**. Broader SC reliability remains open: 2/4 separate sample-derived SC starts inserted. The reserved internal final scenes remain sealed.
 
+The changes and records were committed in three reviewable commits and pushed to `origin/feat/hybrid-train`.
+
 [Experiment record](/data1/chmin/yj/ws_aic/src/aic/docs/experiments/2026-10-19-released-sfp-sc-visual-route-repair.md) · [Current status](/data1/chmin/yj/ws_aic/src/aic/docs/STATUS.md)
