@@ -39,3 +39,7 @@ Choose a free GPU and domain. Read `summary.json` and `results/scoring.yaml` und
 ## Remaining gate
 
 The PR remains **draft** because the fully self-contained Docker image build was not validated: the rootless Docker filesystem does not have sufficient space for the CUDA/runtime layers. The passing fresh-environment test mounts the explicit runtime and artifacts in the pinned simulator image; it is not mislabeled as a completed image-build test. The Dockerfile and build command are included for that remaining gate. No merge or auto-merge was performed.
+
+## Follow-up: image gate passed
+
+After user-authorized removal of unused build cache, the self-contained image built successfully. A separate model/evaluation-container replay scored **275.9141/300, with 3/3 insertion awards**. The model container had no host source, numerical environment or model mounts. A colcon shell/nounset startup issue was fixed. Commit `d2f2301` adds the two-container command, build provenance and raw scores. PR #13 now contains **98 changed files in four commits** and is ready for review; no merge or auto-merge was performed. The original draft gate above is historical and has been resolved.
