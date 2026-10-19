@@ -1,0 +1,815 @@
+{
+  "source_commit": "0d6f6a8b281a15638790611ae7e4be841965ebc7",
+  "source_runtime": "RunVisualConnectorServoQuietContextV56",
+  "local_action_models_removed": true,
+  "retained_classes": [
+    "InsertionState",
+    "ObservationContractError",
+    "RecoveryTransfer",
+    "RunContinuousConnectorInsertion",
+    "RunContinuousConnectorInsertionV2",
+    "RunFullConnectorInsertion",
+    "RunHistoryChunkedInsertion",
+    "RunObservedDirectEmptySCV49",
+    "RunObservedDirectSFPTransportV44",
+    "RunObservedEarlyVisualAcquireV45",
+    "RunObservedEarlyVisualAcquireV46",
+    "RunObservedEmptyBoardTransport",
+    "RunObservedEmptyBoardWindowV40",
+    "RunObservedShortSFPTransportV43",
+    "RunPredictedPortLocal",
+    "RunRuleThenSharedRecovery",
+    "RunRuleTransport",
+    "RunSample25mmThenInsertion",
+    "RunSampleConservativeTransport",
+    "RunSampleThenSharedInsertion",
+    "RunSampleTransportRecovery",
+    "RunSharedPortTCP",
+    "RunVisualConnectorServoAcquireInPlaceV45",
+    "RunVisualConnectorServoAcquireInPlaceV46",
+    "RunVisualConnectorServoAlignedV29",
+    "RunVisualConnectorServoBiasSeedV31",
+    "RunVisualConnectorServoContextV28",
+    "RunVisualConnectorServoDiagnosticV2",
+    "RunVisualConnectorServoDiagnosticV3",
+    "RunVisualConnectorServoDiagnosticV4",
+    "RunVisualConnectorServoDirectEmptySCV49",
+    "RunVisualConnectorServoDirectSFPV44",
+    "RunVisualConnectorServoFastApproachV43",
+    "RunVisualConnectorServoFreeApproachV50",
+    "RunVisualConnectorServoJointAcquisitionV55",
+    "RunVisualConnectorServoOldPoseEfficientV39",
+    "RunVisualConnectorServoPacketTimeV54",
+    "RunVisualConnectorServoPersistentApproachV47",
+    "RunVisualConnectorServoPersistentApproachV48",
+    "RunVisualConnectorServoPrewarmedFreeV51",
+    "RunVisualConnectorServoQuietContextV56",
+    "RunVisualConnectorServoRecoveryFastV34",
+    "RunVisualConnectorServoRecoveryV10",
+    "RunVisualConnectorServoRecoveryV12",
+    "RunVisualConnectorServoRecoveryV13",
+    "RunVisualConnectorServoRecoveryV21",
+    "RunVisualConnectorServoRecoveryV26",
+    "RunVisualConnectorServoRecoveryV5",
+    "RunVisualConnectorServoRecoveryV6",
+    "RunVisualConnectorServoRecoveryV7",
+    "RunVisualConnectorServoRecoveryV8",
+    "RunVisualConnectorServoResponsiveV52",
+    "RunVisualConnectorServoSCEmptyDiagnosticV38",
+    "RunVisualConnectorServoSFPStableV42",
+    "RunVisualConnectorServoStableApproachV41",
+    "RunVisualConnectorServoStiffV32",
+    "RunVisualConnectorServoStiffV33",
+    "RunVisualConnectorServoUniqueForceV53",
+    "RunVisualConnectorServoWindowV40",
+    "RuntimeBudgetReached",
+    "TransportLocalContact",
+    "TransportRecoveryBudget"
+  ],
+  "retained_methods": [
+    [
+      "InsertionState",
+      "__init__"
+    ],
+    [
+      "InsertionState",
+      "_control_sim_time"
+    ],
+    [
+      "InsertionState",
+      "_trace"
+    ],
+    [
+      "InsertionState",
+      "bind_predicted_body_tip"
+    ],
+    [
+      "InsertionState",
+      "bind_visual_handoff"
+    ],
+    [
+      "InsertionState",
+      "insert_cable"
+    ],
+    [
+      "InsertionState",
+      "reset_for_task"
+    ],
+    [
+      "InsertionState",
+      "retain_history_observation"
+    ],
+    [
+      "RecoveryTransfer",
+      "__init__"
+    ],
+    [
+      "RunContinuousConnectorInsertion",
+      "_approach_tcp_rotation"
+    ],
+    [
+      "RunContinuousConnectorInsertion",
+      "_command"
+    ],
+    [
+      "RunContinuousConnectorInsertionV2",
+      "_make_local_actor"
+    ],
+    [
+      "RunFullConnectorInsertion",
+      "__init__"
+    ],
+    [
+      "RunFullConnectorInsertion",
+      "_fresh_report"
+    ],
+    [
+      "RunFullConnectorInsertion",
+      "_lock"
+    ],
+    [
+      "RunHistoryChunkedInsertion",
+      "__init__"
+    ],
+    [
+      "RunHistoryChunkedInsertion",
+      "_fresh_report"
+    ],
+    [
+      "RunHistoryChunkedInsertion",
+      "_lock"
+    ],
+    [
+      "RunHistoryChunkedInsertion",
+      "insert_cable"
+    ],
+    [
+      "RunObservedDirectEmptySCV49",
+      "__init__"
+    ],
+    [
+      "RunObservedDirectEmptySCV49",
+      "_reset"
+    ],
+    [
+      "RunObservedDirectEmptySCV49",
+      "_setup"
+    ],
+    [
+      "RunObservedDirectEmptySCV49",
+      "_tcp_goal"
+    ],
+    [
+      "RunObservedDirectSFPTransportV44",
+      "_build_stages"
+    ],
+    [
+      "RunObservedDirectSFPTransportV44",
+      "_tcp_goal"
+    ],
+    [
+      "RunObservedEarlyVisualAcquireV45",
+      "_build_stages"
+    ],
+    [
+      "RunObservedEarlyVisualAcquireV45",
+      "_inspect"
+    ],
+    [
+      "RunObservedEarlyVisualAcquireV45",
+      "_reset"
+    ],
+    [
+      "RunObservedEarlyVisualAcquireV45",
+      "_setup"
+    ],
+    [
+      "RunObservedEarlyVisualAcquireV45",
+      "_tcp_goal"
+    ],
+    [
+      "RunObservedEarlyVisualAcquireV45",
+      "predict_chunk"
+    ],
+    [
+      "RunObservedEarlyVisualAcquireV46",
+      "_build_stages"
+    ],
+    [
+      "RunObservedEarlyVisualAcquireV46",
+      "_fallback_from_port"
+    ],
+    [
+      "RunObservedEarlyVisualAcquireV46",
+      "_inspect"
+    ],
+    [
+      "RunObservedEarlyVisualAcquireV46",
+      "_reset"
+    ],
+    [
+      "RunObservedEarlyVisualAcquireV46",
+      "predict_chunk"
+    ],
+    [
+      "RunObservedEmptyBoardTransport",
+      "__init__"
+    ],
+    [
+      "RunObservedEmptyBoardTransport",
+      "_reset"
+    ],
+    [
+      "RunObservedEmptyBoardWindowV40",
+      "__init__"
+    ],
+    [
+      "RunObservedEmptyBoardWindowV40",
+      "_inspect"
+    ],
+    [
+      "RunObservedEmptyBoardWindowV40",
+      "_setup"
+    ],
+    [
+      "RunObservedShortSFPTransportV43",
+      "_tcp_goal"
+    ],
+    [
+      "RunPredictedPortLocal",
+      "raw_rgb"
+    ],
+    [
+      "RunRuleThenSharedRecovery",
+      "__init__"
+    ],
+    [
+      "RunRuleThenSharedRecovery",
+      "_command"
+    ],
+    [
+      "RunRuleThenSharedRecovery",
+      "_force"
+    ],
+    [
+      "RunRuleThenSharedRecovery",
+      "_initial_force_reference"
+    ],
+    [
+      "RunRuleThenSharedRecovery",
+      "_lock"
+    ],
+    [
+      "RunRuleThenSharedRecovery",
+      "_retreat"
+    ],
+    [
+      "RunRuleThenSharedRecovery",
+      "_supervise"
+    ],
+    [
+      "RunRuleThenSharedRecovery",
+      "_trace"
+    ],
+    [
+      "RunRuleThenSharedRecovery",
+      "_warm_actor"
+    ],
+    [
+      "RunRuleThenSharedRecovery",
+      "_warm_grasp"
+    ],
+    [
+      "RunRuleThenSharedRecovery",
+      "insert_cable"
+    ],
+    [
+      "RunRuleTransport",
+      "native"
+    ],
+    [
+      "RunSample25mmThenInsertion",
+      "__init__"
+    ],
+    [
+      "RunSample25mmThenInsertion",
+      "_approach_orientation_tolerance"
+    ],
+    [
+      "RunSample25mmThenInsertion",
+      "_lock"
+    ],
+    [
+      "RunSampleConservativeTransport",
+      "__init__"
+    ],
+    [
+      "RunSampleConservativeTransport",
+      "_build_stages"
+    ],
+    [
+      "RunSampleConservativeTransport",
+      "_inspect"
+    ],
+    [
+      "RunSampleConservativeTransport",
+      "_inspect_transport_handoff"
+    ],
+    [
+      "RunSampleConservativeTransport",
+      "_replan_from_observed_board"
+    ],
+    [
+      "RunSampleConservativeTransport",
+      "_reset"
+    ],
+    [
+      "RunSampleConservativeTransport",
+      "_setup"
+    ],
+    [
+      "RunSampleConservativeTransport",
+      "_should_stop_transport"
+    ],
+    [
+      "RunSampleConservativeTransport",
+      "_tcp_goal"
+    ],
+    [
+      "RunSampleConservativeTransport",
+      "predict_chunk"
+    ],
+    [
+      "RunSampleConservativeTransport",
+      "reset_for_task"
+    ],
+    [
+      "RunSampleThenSharedInsertion",
+      "_execute"
+    ],
+    [
+      "RunSampleThenSharedInsertion",
+      "_fresh_report"
+    ],
+    [
+      "RunSampleTransportRecovery",
+      "__init__"
+    ],
+    [
+      "RunSampleTransportRecovery",
+      "_calibrate_transport_force"
+    ],
+    [
+      "RunSampleTransportRecovery",
+      "_command_local"
+    ],
+    [
+      "RunSampleTransportRecovery",
+      "_move_local"
+    ],
+    [
+      "RunSampleTransportRecovery",
+      "_recover_local"
+    ],
+    [
+      "RunSampleTransportRecovery",
+      "_trace"
+    ],
+    [
+      "RunSampleTransportRecovery",
+      "insert_cable"
+    ],
+    [
+      "RunSampleTransportRecovery",
+      "predict_chunk"
+    ],
+    [
+      "RunSampleTransportRecovery",
+      "reset_for_task"
+    ],
+    [
+      "RunSharedPortTCP",
+      "__init__"
+    ],
+    [
+      "RunSharedPortTCP",
+      "_body_delta"
+    ],
+    [
+      "RunSharedPortTCP",
+      "_bound_transport_target"
+    ],
+    [
+      "RunSharedPortTCP",
+      "_cartesian_gains"
+    ],
+    [
+      "RunSharedPortTCP",
+      "_control_sim_time"
+    ],
+    [
+      "RunSharedPortTCP",
+      "_report_latency"
+    ],
+    [
+      "RunSharedPortTCP",
+      "_target_anchor"
+    ],
+    [
+      "RunSharedPortTCP",
+      "_trace"
+    ],
+    [
+      "RunSharedPortTCP",
+      "clear_pending_actions"
+    ],
+    [
+      "RunSharedPortTCP",
+      "insert_cable"
+    ],
+    [
+      "RunSharedPortTCP",
+      "reset_for_task"
+    ],
+    [
+      "RunSharedPortTCP",
+      "task_vector"
+    ],
+    [
+      "RunVisualConnectorServoAcquireInPlaceV45",
+      "_command"
+    ],
+    [
+      "RunVisualConnectorServoAcquireInPlaceV45",
+      "_lock"
+    ],
+    [
+      "RunVisualConnectorServoAlignedV29",
+      "_close_pose_servo"
+    ],
+    [
+      "RunVisualConnectorServoBiasSeedV31",
+      "_close_pose_servo"
+    ],
+    [
+      "RunVisualConnectorServoContextV28",
+      "_fresh_report"
+    ],
+    [
+      "RunVisualConnectorServoContextV28",
+      "_lock"
+    ],
+    [
+      "RunVisualConnectorServoContextV28",
+      "_prepare_far_orientation"
+    ],
+    [
+      "RunVisualConnectorServoContextV28",
+      "_reestimate_close_grasp"
+    ],
+    [
+      "RunVisualConnectorServoDiagnosticV2",
+      "_execute"
+    ],
+    [
+      "RunVisualConnectorServoDiagnosticV3",
+      "_warm_grasp"
+    ],
+    [
+      "RunVisualConnectorServoDirectEmptySCV49",
+      "_make_cached_transport"
+    ],
+    [
+      "RunVisualConnectorServoFastApproachV43",
+      "__init__"
+    ],
+    [
+      "RunVisualConnectorServoFastApproachV43",
+      "_approach_speed"
+    ],
+    [
+      "RunVisualConnectorServoFastApproachV43",
+      "_close_pose_servo"
+    ],
+    [
+      "RunVisualConnectorServoFastApproachV43",
+      "_lock"
+    ],
+    [
+      "RunVisualConnectorServoFreeApproachV50",
+      "_approach_tcp_rotation"
+    ],
+    [
+      "RunVisualConnectorServoFreeApproachV50",
+      "_lock"
+    ],
+    [
+      "RunVisualConnectorServoFreeApproachV50",
+      "_public_reference"
+    ],
+    [
+      "RunVisualConnectorServoFreeApproachV50",
+      "_transfer_approach_gains"
+    ],
+    [
+      "RunVisualConnectorServoJointAcquisitionV55",
+      "_make_cached_transport"
+    ],
+    [
+      "RunVisualConnectorServoOldPoseEfficientV39",
+      "_execute"
+    ],
+    [
+      "RunVisualConnectorServoPacketTimeV54",
+      "_make_cached_transport"
+    ],
+    [
+      "RunVisualConnectorServoPersistentApproachV48",
+      "_approach_tcp_rotation"
+    ],
+    [
+      "RunVisualConnectorServoPrewarmedFreeV51",
+      "__init__"
+    ],
+    [
+      "RunVisualConnectorServoRecoveryFastV34",
+      "_warm_grasp"
+    ],
+    [
+      "RunVisualConnectorServoRecoveryV10",
+      "__init__"
+    ],
+    [
+      "RunVisualConnectorServoRecoveryV10",
+      "_command"
+    ],
+    [
+      "RunVisualConnectorServoRecoveryV10",
+      "_retreat"
+    ],
+    [
+      "RunVisualConnectorServoRecoveryV12",
+      "_lateral_retry"
+    ],
+    [
+      "RunVisualConnectorServoRecoveryV13",
+      "_supervise_servo_stall"
+    ],
+    [
+      "RunVisualConnectorServoRecoveryV21",
+      "__init__"
+    ],
+    [
+      "RunVisualConnectorServoRecoveryV21",
+      "_close_pose_servo"
+    ],
+    [
+      "RunVisualConnectorServoRecoveryV21",
+      "_execute"
+    ],
+    [
+      "RunVisualConnectorServoRecoveryV21",
+      "_lateral_retry"
+    ],
+    [
+      "RunVisualConnectorServoRecoveryV21",
+      "_lock"
+    ],
+    [
+      "RunVisualConnectorServoRecoveryV21",
+      "_visual_servo_insert"
+    ],
+    [
+      "RunVisualConnectorServoRecoveryV21",
+      "_warm_grasp"
+    ],
+    [
+      "RunVisualConnectorServoRecoveryV26",
+      "_close_pose_servo"
+    ],
+    [
+      "RunVisualConnectorServoRecoveryV5",
+      "__init__"
+    ],
+    [
+      "RunVisualConnectorServoRecoveryV5",
+      "_command"
+    ],
+    [
+      "RunVisualConnectorServoRecoveryV5",
+      "_execute"
+    ],
+    [
+      "RunVisualConnectorServoRecoveryV5",
+      "_lock"
+    ],
+    [
+      "RunVisualConnectorServoRecoveryV5",
+      "_supervise"
+    ],
+    [
+      "RunVisualConnectorServoRecoveryV7",
+      "__init__"
+    ],
+    [
+      "RunVisualConnectorServoRecoveryV7",
+      "_lock"
+    ],
+    [
+      "RunVisualConnectorServoRecoveryV8",
+      "_supervise_servo_stall"
+    ],
+    [
+      "RunVisualConnectorServoResponsiveV52",
+      "_initial_force_reference"
+    ],
+    [
+      "RunVisualConnectorServoResponsiveV52",
+      "_make_cached_transport"
+    ],
+    [
+      "RunVisualConnectorServoResponsiveV52",
+      "_warm_grasp"
+    ],
+    [
+      "RunVisualConnectorServoSCEmptyDiagnosticV38",
+      "_make_rule_transport"
+    ],
+    [
+      "RunVisualConnectorServoSFPStableV42",
+      "_approach_tcp_rotation"
+    ],
+    [
+      "RunVisualConnectorServoSFPStableV42",
+      "_close_pose_servo"
+    ],
+    [
+      "RunVisualConnectorServoSFPStableV42",
+      "_prepare_far_orientation"
+    ],
+    [
+      "RunVisualConnectorServoSFPStableV42",
+      "_warm_grasp"
+    ],
+    [
+      "RunVisualConnectorServoStiffV32",
+      "_execute"
+    ],
+    [
+      "RunVisualConnectorServoUniqueForceV53",
+      "_close_pose_servo"
+    ],
+    [
+      "RunVisualConnectorServoWindowV40",
+      "_command"
+    ],
+    [
+      "RunVisualConnectorServoWindowV40",
+      "_execute"
+    ],
+    [
+      "RunVisualConnectorServoWindowV40",
+      "_initial_force_reference"
+    ]
+  ],
+  "helper_modules": {
+    "insertion_reference_governor_v2": "insertion_reference_governor_v2",
+    "sc_spatial_grasp_observation": "sc_spatial_grasp_observation",
+    "evaluate_sc_native_triangulation": "geometry_sc_native_triangulation",
+    "train_sc_native_keypoints": "models_sc_native_keypoints",
+    "build_sc_native_pose_labels": "build_sc_native_pose_labels",
+    "sc_native_grasp_observation": "sc_native_grasp_observation",
+    "sc_qualified_close_orientation_observation": "sc_qualified_close_orientation_observation",
+    "native_connector_pose_observation": "native_connector_pose_observation",
+    "fine_connector_orientation": "fine_connector_orientation",
+    "train_native_connector_pose": "models_native_connector_pose",
+    "shared_port_tcp_geometry": "shared_port_tcp_geometry",
+    "sc_qualified_close_composite_observation": "sc_qualified_close_composite_observation",
+    "public_packet_camera_timing": "public_packet_camera_timing",
+    "transport_local_recovery": "transport_local_recovery",
+    "causal_force_reference": "causal_force_reference",
+    "hierarchical_recovery": "hierarchical_recovery",
+    "correlated_lateral_retry": "correlated_lateral_retry",
+    "requested_native_port_pose": "requested_native_port_pose",
+    "native_keypoint_pose_geometry": "native_keypoint_pose_geometry",
+    "native_requested_opening_refiner": "native_requested_opening_refiner",
+    "train_native_requested_pose_keypoints": "models_native_requested_pose_keypoints",
+    "train_joint_native_opening_refiner": "models_joint_native_opening_refiner",
+    "sc_requested_history_observation": "sc_requested_history_observation",
+    "train_sc_requested_history_locator": "models_sc_requested_history_locator",
+    "train_two_family_port_locator": "models_two_family_port_locator",
+    "approach_reference": "approach_reference",
+    "approach_orientation_reference": "approach_orientation_reference",
+    "empty_row_observation": "empty_row_observation",
+    "stable_pose_window": "stable_pose_window",
+    "lerobot_robot_aic.runtime_features": "lerobot_robot_aic_runtime_features",
+    "shared_grasp_training_jpeg": "shared_grasp_training_jpeg",
+    "parallel_training_jpeg": "parallel_training_jpeg",
+    "empty_scene_receipt": "empty_scene_receipt",
+    "sfp_native_grasp_observation": "sfp_native_grasp_observation",
+    "train_sfp_native_grasp_keypoints": "models_sfp_native_grasp_keypoints",
+    "lerobot_robot_aic.task_encoding": "lerobot_robot_aic_task_encoding",
+    "lerobot_robot_aic.contact_recovery_features": "lerobot_robot_aic_contact_recovery_features",
+    "observed_board_marker": "observed_board_marker",
+    "close_grasp_consensus": "close_grasp_consensus",
+    "cartesian_hold_gain_transfer": "cartesian_hold_gain_transfer"
+  },
+  "sources": {
+    "RunContinuousConnectorInsertionV2.py": "e1b23617482462ec74d071842c25a5af096b76247fcbd8b556243702a4c1600e",
+    "RunVisualConnectorServoSFPStableV42.py": "0a1c67c2010868a8d67c6071351169cd54ab2f292772de4e69958c5b18ab5f22",
+    "RunVisualConnectorServoFreeApproachV50.py": "e3deca910dd5458be182b769f5b21e8daaca66e137e570310b528ddbb3c90d59",
+    "RunVisualConnectorServoAcquireInPlaceV45.py": "d49aaf8b44ec87fc7a9adf612db5c22dfa994d81015d3f0ce4d32ba7c50b429a",
+    "RunRuleThenSharedRecovery.py": "087a960b7ab7377305e4aec121a53a864b0b7892af8016e4bf28b385eca2ab17",
+    "RunVisualConnectorServoDiagnosticV3.py": "88ff03cf80025e37def1009fafad0d4b56e9aba6089d9dcedfeeec890344a1d5",
+    "RunVisualConnectorServoUniqueForceV53.py": "027b56106537a0b2aaf0c6acaa0cb0d092476f11c1564845634a33a637664d15",
+    "RunVisualConnectorServoPersistentApproachV48.py": "766c41928fcd2651063c02375939a44a3d8e753d15948937f308c977f58017df",
+    "RunVisualConnectorServoStiffV32.py": "fc798d01b3a642730c6eb2bfbb33a250b35d57b6ff0022a9638838de45f0d654",
+    "RunVisualConnectorServoStableApproachV41.py": "9d1e390f248b7a7c171c1b613df4ee5219129d788fed4d0714e7787f212b19f7",
+    "RunVisualConnectorServoSCEmptyDiagnosticV38.py": "a66369e56745b0f3812c8c5b5bc8e5ef7e6fd8524f698f42c2c4dccfa27bd83f",
+    "RunVisualConnectorServoContextV28.py": "e713169e4dc9de8553a290877715bc8ad6b26f23c2b10f897895bb29e423879a",
+    "RunVisualConnectorServoDiagnosticV2.py": "f80aaefe3258c2db1afe9fa65317fa29657f42e9583c808b6057da2e3a06aecb",
+    "RunSampleConservativeTransport.py": "5eb64c9272d78c0e747fffd7ef1bf0e1258c1ac098ed526d152a934d560d877d",
+    "RunSharedPortTCP.py": "064b327e4b6b30795a3ab97397fbcdfad172d7372fd2bc8be86f8033584bc67f",
+    "RunVisualConnectorServoAcquireInPlaceV46.py": "0c752d15b499b0639fe6740a4a7d0dd97e9346b219b4c527ccf528710a84b7aa",
+    "RunVisualConnectorServoOldPoseEfficientV39.py": "d3cd4b083dc2217d545c4fd230a5ef4a8f0f3ef6c10cf0afe05d48241ab082d1",
+    "RunVisualConnectorServoAlignedV29.py": "55c742b5e105b20b1a54399b9dabf37a459aedb74ce198e3a118cfc7256a3c97",
+    "RunVisualConnectorServoPacketTimeV54.py": "c41ebf793d60d35d827f9b9cbde83e7b52baffe7b3154649fb7c1f4c273b8617",
+    "RunVisualConnectorServoDirectSFPV44.py": "48812469cba97182f8d470ecb7e1f5465ef1018b0c1cb8d08681a88b7c599d6d",
+    "RunVisualConnectorServoStiffV33.py": "1906bab26754694cd00c3eab7ca38d8c22ee9265256fef71206ccc4e3cf626c8",
+    "RunVisualConnectorServoDiagnosticV4.py": "f09d327cfd13b5536b90c1f2b520a025b60767b6699586a85d6c420f495fbf6d",
+    "RunVisualConnectorServoWindowV40.py": "f6e59b4e6db6f96e5e29a21acd0ef5cb3d4a6ae7d996ff9ba3c856c89a60fda9",
+    "RunVisualConnectorServoRecoveryV7.py": "6776203acc6db0d1f9625ed9f2540dcc72c3594902460bb5b7a722862b1847dd",
+    "RunVisualConnectorServoPersistentApproachV47.py": "7ed862ae79d7fa902e355250cf941a5dedf503c237ddfea34196b08ae03935a0",
+    "RunVisualConnectorServoRecoveryV8.py": "f7f45a9e828ffd4b18f318c88db1b813b752c36a12523571a859633f661745ed",
+    "RunSampleThenSharedInsertion.py": "1c97be868420557600bcfe90fc5868f4a3cc3d6db9f28b7418c6269bc3ac390c",
+    "RunVisualConnectorServoJointAcquisitionV55.py": "f3e0966e50a35701ad0eacd123de4becd42acde6f311b80e8954a06db1e61526",
+    "RunObservedEmptyBoardWindowV40.py": "b897f3bb4a17b07abcccbc33de2eb4cf71b363d5a6046f31fb29f2c017abdd9d",
+    "RunVisualConnectorServoRecoveryFastV34.py": "ca8af37dc24bd5a2614c42675032f81857cfa4c1694abae2337b3d1cbafd7fde",
+    "RunPredictedPortLocal.py": "6e32dfd121c4ffbd24d14a2bd4c6da82a6db1deb3c2e3e7a17f6a95acd10b9cb",
+    "RunVisualConnectorServoRecoveryV13.py": "a8391b0fc04346756ceafb00da5291d27733dc5b7f89fccce177c610564e2ccd",
+    "RunVisualConnectorServoQuietContextV56.py": "67470ced884a05a4986babcace34834026802f34654958b99c92ceb9e6e661ec",
+    "RunHistoryChunkedInsertion.py": "5efe9b76966aa5e7c0fda3ef9712f2cccdeb4c97287b0aad24b2911e32f7de9e",
+    "RunVisualConnectorServoDirectEmptySCV49.py": "25696593189eff48ae3114f6fccbe31f56959c22f14dc0c068eb10484e57720c",
+    "RunSampleTransportRecovery.py": "b42e92b275e89d554864a3b7005bc5cfb6379a384381925f3a1de9fb25b70916",
+    "RunVisualConnectorServoRecoveryV6.py": "d5ad2662ad107c3e69f784f4c062e4907bcec43c7d23f8b96d14b48db372a6bf",
+    "RunVisualConnectorServoRecoveryV5.py": "062147695b50f0b08269aa02573d2c7a752a9eeb357aeb021de5d63850b74bf5",
+    "RunObservedShortSFPTransportV43.py": "de4ddd82e5df6e9fc497012ad83e84f5f5e4f467e97da306f1806286246a32a3",
+    "RunObservedEmptyBoardTransport.py": "87b3e3ecb9e31c65af2236cc81492f80d14fee59a56b2d1712a34e3235dd629c",
+    "RunContinuousConnectorInsertion.py": "31a07b7e6c99917a3ea1ba4ff5a1156cf5a588dd5ee648c922443bcd82ef259a",
+    "RunObservedDirectEmptySCV49.py": "8522c1e14c71c81c81ecd6d5c027d93172c3e0b6d925de66acda6113167952db",
+    "RunVisualConnectorServoPrewarmedFreeV51.py": "9f8241ee10eb6f98f78c95a046807fa21e28c3841a80e81d47fab6d6512915e1",
+    "RunObservedEarlyVisualAcquireV46.py": "e88aa5d830f747ccca852c1de0c1a21d3a84e6c0215892e797e09dcf3b519ae8",
+    "RunRuleTransport.py": "c270d0731221a10d823df4695bb6e0daef3451805046255c75dcf0a8318a279c",
+    "RunSample25mmThenInsertion.py": "f35668aab7462392c8ef80f04ef3e6abd8a7a10c48a1f2720019efcac0700ffa",
+    "RunVisualConnectorServoFastApproachV43.py": "4d6c75aadeb07c6fe054099e4e4b849af253f432e1973bfb121fbfc75b9ac2d6",
+    "RunVisualConnectorServoRecoveryV10.py": "8b4e8be8896b48e22ab4fa9c451f9a8d7b879bd2286bf124838edfdd35050616",
+    "RunVisualConnectorServoResponsiveV52.py": "0db14f06b56ad5c84e9d9fa5819616ed067b0aae92380a9cb3ca988e3729f2a3",
+    "RunVisualConnectorServoBiasSeedV31.py": "f6651e7a1b7b7b2345263d1b401135d30e971118997ee667655c24d808521651",
+    "RunVisualConnectorServoRecoveryV12.py": "253264741429a9b356d012b56dabee2e11cd6cdf7a115883137276d026a57a35",
+    "RunObservedEarlyVisualAcquireV45.py": "bd08d7d35d1479507d723b787c0e03a41d0d78d90ef178ed23cccf0885e203ec",
+    "RunVisualConnectorServoRecoveryV26.py": "6cdd83db7f738b0037b1b3a13eea26cd213cb83436c8013156a794d586ebeab4",
+    "RunFullConnectorInsertion.py": "c5d2ca85866f884b3b9c12b15a930d9aa730b96ddde6d0d1d9fac755867ff448",
+    "RunObservedDirectSFPTransportV44.py": "ce6cdbb54ebbabfd99372c45dab7b8ad1ab81d151bfa46f5aa34112e29694d89",
+    "RunVisualConnectorServoRecoveryV21.py": "bd404cd95df4658fae268faf0fa5de61af47c3e802f28b6b33fb5bd895555371",
+    "insertion_reference_governor_v2.py": "336940a816b56132cde0fb59e087d84b716a212b161176a0c3b3ef6205b2231d",
+    "sc_spatial_grasp_observation.py": "34fd3db9a6fe984379dd9556ed57c115784e5e3f30f924de116003984fdf02a6",
+    "evaluate_sc_native_triangulation.py": "7631f287a24bd8430f5be7157454dcfd937f51fb8e0eec728d6d59e47b487595",
+    "train_sc_native_keypoints.py": "4bb80e7f872af5060dda3c2b589d629c1835790c5b872ee2d90273218f9a2fa8",
+    "build_sc_native_pose_labels.py": "42b5cb8715ba201ac866758789c628cb63fc83ba542956cc61fb1ee03044a867",
+    "sc_native_grasp_observation.py": "1d7edb48da2ad6bdc3a9c1414cb6a65435a3eb470549a221554b1ab0a73cd72b",
+    "sc_qualified_close_orientation_observation.py": "501fc052b4809271ac556b24e255c7d5a5ba4b6b26704e9f7274aab923307c7a",
+    "native_connector_pose_observation.py": "0fc6fe364af54c0e242582f059ae6499e9771c0bd2d2b80823a6915c26012b1f",
+    "fine_connector_orientation.py": "522b62db23e59b8f2bfc1ba9c9504df9875264ffca3b4ca7c9044b0a7fd76036",
+    "train_native_connector_pose.py": "50e50b14fbf2f10558c053a766a384fc650ede21c7c3ef9be5f4d574a17dc36b",
+    "shared_port_tcp_geometry.py": "c31ab8b8d3fbc6bdcf493d390f2c81fde71dd5f5da42d9d68553e7f2c002f137",
+    "sc_qualified_close_composite_observation.py": "2c55e6d0cd4a8d23fea2addecf864df1e060d4e03eea01137afba8cd1c0ee9f3",
+    "public_packet_camera_timing.py": "41916beeab3bc40f3e63273c5ed4a7b9729db7dbc7041b5756b6967e14e2240f",
+    "transport_local_recovery.py": "15020990310cbd68efb12e6f15f8936fe296c824d0ad220d8a2e4ef4678849ee",
+    "causal_force_reference.py": "055f93eed2679df849550795af853c1d3a32a584d537234dfd62c944f0639673",
+    "hierarchical_recovery.py": "9bb7d488f56260e9872b4654fac4462d9060b720436e5d03e08db5f19b346ea9",
+    "correlated_lateral_retry.py": "280018d4b06874b841818dede52cf021a4ab1f0ce1d751ea2caa6789395aba4f",
+    "requested_native_port_pose.py": "b7922cd5fc202e6182e74f8ecb82c174e7ccbbe43efa47e75828e6ce3ef6ed0f",
+    "native_keypoint_pose_geometry.py": "88a76407865668f890acc2432609d6b3e091cc5e5221c3e1c2e7e1c95df27cb2",
+    "native_requested_opening_refiner.py": "3e20be21cb467b6a229924852efefe3b662715afafdac0406c2a7617abb8e024",
+    "train_native_requested_pose_keypoints.py": "fbe28fc6463d92af50555eecf542f06ee94abf5b792664fd537b9d34dc2adf1c",
+    "train_joint_native_opening_refiner.py": "95ff16ab2a97fa7682126fba3c2ba4e38c8b695d6a0b9e8dc787e4d5fe0cfe49",
+    "sc_requested_history_observation.py": "84fe43202935befe820598d6802599fa11df08046dc4f7bc2c3f48b195a35276",
+    "train_sc_requested_history_locator.py": "71013fb67d671807f7cf398fe888cd366037391a6302679aab99622616e481a0",
+    "train_two_family_port_locator.py": "d27eb0bcafe73fcf17f20276cfd7a62fa4c3dd393a77810580edce76c9ec361f",
+    "approach_reference.py": "1aebb7db726e000b1a594e1caeb072c5dc272b0f298eb9be56ff80bf4bc2fe84",
+    "approach_orientation_reference.py": "04b1545de49f99487e092f5bada2b6735a5181c4aca29b31a2549410bbfbb0ef",
+    "empty_row_observation.py": "3760420aeaf6b9a297f50d72f8a8b27212366598dc1a0c9e0c7d2853158a5e6a",
+    "stable_pose_window.py": "f8279cbd40af65f05a90622fc39d40281e912cf5ce5cf017234be67c051aaf7e",
+    "runtime_features.py": "87cc5caff5ae92cc771941cdca724e578e93cb0336b5243884b323e02d3bb29a",
+    "shared_grasp_training_jpeg.py": "362bc11cc63c5b34c73a56fbc63b1d4fb952d9fcbe9d93807e92ffc25dd9393c",
+    "parallel_training_jpeg.py": "fb72dd0538f26a80faa047e0d2e06b46f3533fe29a8d674c13c7294ad85e7e4c",
+    "empty_scene_receipt.py": "f221b43cecc33b5db0c77eb955e52fd863438b1c4d8a7375b862a0f4ab2b0eac",
+    "sfp_native_grasp_observation.py": "da27712ef0ba2cc1cb4533b38d4a78cb9d08e63e4fbd0546ce3ecb0bc75e6b45",
+    "train_sfp_native_grasp_keypoints.py": "9e7a3ec85b76efe4907418037e40461f656d5802c071131220b73fad01d09f00",
+    "task_encoding.py": "84a5c3992747d2e371c4393117e5f1c0e2f3796d824400b4e3ed3b4f1b7b37d1",
+    "contact_recovery_features.py": "02a443eed9173e543829b8afd02598efea7980f977969737bfb79ec8fd2e7e0b",
+    "observed_board_marker.py": "329029312bbab6e56432e592f28ddb2009bacb9ff8e37c1ee49bcfdc41a975f6",
+    "close_grasp_consensus.py": "9388467c95820e1233bbf446433b15ff6f4044123f4b53654f534122a5cb5202",
+    "cartesian_hold_gain_transfer.py": "1b07e6f4a54ab9ab9bc1550224500c46591fb059a772560636b2900ed945b526"
+  }
+}

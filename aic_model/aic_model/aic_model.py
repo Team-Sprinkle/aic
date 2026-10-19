@@ -234,14 +234,17 @@ class AicModel(LifecycleNode):
         goal_handle.publish_feedback(feedback_msg)
 
     def action_thread_func(self, goal_handle: ServerGoalHandle):
-        self._action_thread_result = self._policy.insert_cable(
-            task=goal_handle.request.task,
-            get_observation=lambda: self.observation_callable(),
-            move_robot=lambda motion_update=None, joint_motion_update=None: self.move_robot(
-                motion_update, joint_motion_update
-            ),
-            send_feedback=lambda feedback: self.send_feedback(goal_handle, feedback),
-        )
+        try:
+            self._action_thread_result = self._policy.insert_cable(
+                task=goal_handle.request.task,
+                get_observation=lambda: self.observation_callable(),
+                move_robot=lambda motion_update=None, joint_motion_update=None: self.move_robot(motion_update, joint_motion_update),
+                send_feedback=lambda feedback: self.send_feedback(goal_handle, feedback),
+            )
+        except Exception:
+            import traceback
+            self.get_logger().error(f"Policy execution failed:\n{traceback.format_exc()}")
+            self._action_thread_result = False
         if self._action_thread_result is None:
             self.get_logger().warn("insert_cable() returned None. Assuming False...")
             self._action_thread_result = False
@@ -260,17 +263,10 @@ class AicModel(LifecycleNode):
         while rclpy.ok():
             self.get_logger().info("insert_cable execute loop")
 
-            # First, wait a bit so this loop doesn't consume much CPU time.
-            # This must be an async wait in order for other callbacks to run.
-            wait_future = Future()
-
-            def done_waiting():
-                wait_future.set_result(None)
-
-            wait_timer = self.create_timer(1.0, done_waiting, clock=self.get_clock())
-            await wait_future
-            wait_timer.cancel()
-            self.destroy_timer(wait_timer)
+            # Completion must be checked even when the simulator clock stops.
+            sleep_future = Future()
+            threading.Timer(1.0, lambda: sleep_future.set_result(True)).start()
+            await sleep_future
 
             # Check if a cancellation request has arrived.
             if goal_handle.is_cancel_requested:
