@@ -144,7 +144,7 @@ def score(run,case,arm):
     sfp_rule=family=='sfp' and 'SFP_rule_visual_inspection' in events
     acquired=any(r['event']=='rule_terminal' and r.get('acquired') for r in trace)
     rule_terminal=next((r for r in reversed(trace) if r['event']=='rule_terminal'),{})
-    inspections=[r for r in trace if r['event'] in ('rule_visual_inspection','SFP_rule_visual_inspection')]
+    inspections=[r for r in trace if r['event'] in ('rule_visual_inspection','SFP_rule_visual_inspection','rule_cached_visual_handoff')]
     last_visual=inspections[-1].get('report',{}) if inspections else {}
     acquisition_geometry=None
     if family=='sc':
@@ -165,7 +165,7 @@ def score(run,case,arm):
     local_started='locked_local_perception' in events
     wrong=None;opening_error=None
     if (family=='sc' or sfp_rule) and acquired:
-        inspections=[r for r in trace if r['event'] in ('rule_visual_inspection','SFP_rule_visual_inspection') and r.get('report',{}).get('valid')]
+        inspections=[r for r in trace if r['event'] in ('rule_visual_inspection','SFP_rule_visual_inspection','rule_cached_visual_handoff') and r.get('report',{}).get('valid')]
         if inspections:
             report=inspections[-1]['report'];pred=np.r_[report['predicted_opening_base_m'],1.]
             predworld=(worldbase@pred)[:3];dist={p:float(np.linalg.norm(predworld-m[:3,3])) for p,m in all_ports.items()}

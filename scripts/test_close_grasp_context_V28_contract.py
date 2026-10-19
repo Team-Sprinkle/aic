@@ -65,6 +65,9 @@ assert not accepted and count==10
 assert np.array_equal(c.local.visual_body_tip,body)
 assert any(x['event']=='close_grasp_large_disagreement_second_window' for x in events)
 assert events[-1]['reason']=='persistent_large_disagreement_reacquisition_required'
+accepted,c,events,count,body,_=run(3.1)
+assert accepted and count==10
+assert any(x['event']=='close_grasp_two_window_confirmation' and x['accepted'] for x in events)
 accepted,c,events,count,body,_=run(2.,force=8.)
 assert not accepted and count==1 and np.array_equal(c.local.visual_body_tip,body)
 accepted,c,events,count,body,_=run(2.,rotation_only=True)

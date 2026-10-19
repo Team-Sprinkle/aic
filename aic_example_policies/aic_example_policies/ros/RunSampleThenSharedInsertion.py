@@ -40,7 +40,12 @@ class RunSampleThenSharedInsertion(RunRuleThenSharedRecovery):
         report = dict(valid=False, reason=prediction['reason'], runtime_true_geometry=False)
         if prediction['accepted']:
             port = np.asarray(prediction['base_port_matrix'])
-            within = np.linalg.norm(port[:3, 3] - self.rule.nominal_port[:3, 3]) <= .20
+            # Use the same broad SFP envelope as transport. The sample-derived
+            # nominal can be >0.20 m from a valid released-board placement;
+            # the requested three-view fit and fresh temporal lock still gate
+            # this pose before any insertion command.
+            envelope = .35 if task_vector[0] == 1 else .20
+            within = np.linalg.norm(port[:3, 3] - self.rule.nominal_port[:3, 3]) <= envelope
             report.update(valid=bool(within),
                 reason='fresh_requested_native_pose' if within else 'outside_public_sample_search_envelope',
                 predicted_opening_base_m=port[:3, 3].tolist(),

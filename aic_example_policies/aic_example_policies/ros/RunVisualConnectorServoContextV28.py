@@ -128,10 +128,25 @@ class RunVisualConnectorServoContextV28(RunVisualConnectorServoRecoveryV26):
                     consensus.last_stamps = tuple(stamps)
                     self._trace(event='close_grasp_large_disagreement_second_window', **change, geometry_input=False)
                     continue
-                self._trace(event='close_grasp_update_rejected', reason='persistent_large_disagreement_reacquisition_required',
-                            first_candidate=first_candidate, candidate=candidate, **change, geometry_input=False)
-                # Safe abort, not unvalidated interpolation or forward motion.
-                return False
+                # A second independent window can resolve a small disagreement
+                # with the far estimate. Keep the correction bounded; a stable
+                # prediction alone is not proof of absolute accuracy.
+                repeat_mm=float(np.linalg.norm(np.asarray(first_candidate['position_m'])-
+                                               np.asarray(candidate['position_m']))*1000)
+                repeat_deg=float(np.degrees(Rotation.from_matrix(
+                    np.asarray(first_candidate['rotation']).T@
+                    np.asarray(candidate['rotation'])).magnitude()))
+                confirmed=bool(change['translation_change_mm']<=1. and
+                    change['rotation_change_deg']<=4. and repeat_mm<=.2 and repeat_deg<=.5)
+                self._trace(event='close_grasp_two_window_confirmation',
+                            accepted=confirmed,repeat_translation_mm=repeat_mm,
+                            repeat_rotation_deg=repeat_deg,old_to_near_rotation_deg=change['rotation_change_deg'],
+                            geometry_input=False)
+                if not confirmed:
+                    self._trace(event='close_grasp_update_rejected', reason='persistent_large_disagreement_reacquisition_required',
+                                first_candidate=first_candidate, candidate=candidate, **change, geometry_input=False)
+                    return False
+                change=dict(change,accept_update=True,two_window_confirmation=True)
             self.local.visual_body_tip = np.asarray(candidate['position_m'])
             self.local.visual_body_connector_rotation = np.asarray(candidate['rotation'])
             self.locked_connector_rotation = self.local.visual_body_connector_rotation.copy()
