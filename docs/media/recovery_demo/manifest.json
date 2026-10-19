@@ -1,0 +1,78 @@
+{
+  "source_rollout": "2026-10-19_sc_sfp_released_repair_cycle8_sc_marker/repeat_1/rollout",
+  "source_trace_sha256": "7f43f997ac75af9e149b7bdea0bc221b422759e46450a1cbb33a85cd7a318eb4",
+  "video": "gazebo_backoff_realign_insert.mp4",
+  "gif": "gazebo_backoff_realign_insert.gif",
+  "video_sha256": "43448bfa51042ed0ff54ce4b8877eec00d013b52d01b90cdc02fdeeb5c4e8f52",
+  "gif_sha256": "88a9a597eb07e47a8c2857fafc74df6a53aa014bb1c84b838d640fd7138e684a",
+  "start_sim_s": 84.8,
+  "end_sim_s": 101.9,
+  "video_fps": 20,
+  "gif_playback_speed": 2,
+  "max_source_frame_gap_s": {
+    "center": 0.29999999999999716,
+    "side": 0.29999999999999716
+  },
+  "local_backoffs": 1,
+  "hierarchical_route_resets": 0,
+  "measured_net_retreat_mm": 18.411276575688067,
+  "measured_lateral_retry_mm": 3.1553078106429395,
+  "trigger": {
+    "event": "loaded_servo_stall_recovery",
+    "sim_time": 87.3,
+    "load_change_n": 1.6855425951346665,
+    "progress_window_s": 0.25,
+    "axial_gain_mm": -0.0018099664818305161,
+    "excess_axial_tracking_pressure_mm": 2.5833217951027976,
+    "reason": "early_actual_load_and_excess_forward_tracking_pressure",
+    "synthetic_force_used": false,
+    "geometry_input": false,
+    "level": "local"
+  },
+  "retreat": {
+    "event": "measured_retreat_complete",
+    "sim_time": 91.9,
+    "level": "local",
+    "total_backoffs": 1,
+    "route_resets": 0
+  },
+  "lateral": {
+    "event": "lateral_retry_complete",
+    "sim_time": 94.75,
+    "route_level": false,
+    "measured_displacement_m": [
+      -0.002516418695449829,
+      0.0018291771411895752,
+      -0.0005269870162010193
+    ],
+    "sampled_direction_base": [
+      -0.7985888009470513,
+      0.6018553511922388,
+      0.005105217254688884
+    ],
+    "amplitude_m": 0.003,
+    "seed": 20261016,
+    "actor_owned": false,
+    "exploration_source": "supervisor_coherent_direction_not_RL",
+    "geometry_input": false
+  },
+  "oracle_input": false,
+  "RL_actor": false,
+  "pose_overlay": "docs/images/cable_insertion/gazebo_predicted_port_landmarks.png",
+  "pose_overlay_sha256": "72534a06354f9172f6857c5cb34a3d89d310bedc538b4e5fc63a6919f86a8fef",
+  "pose_overlay_sources": [
+    {
+      "sim_time": 33.0,
+      "event": "SFP_rule_visual_inspection",
+      "requested_port": 1,
+      "requested_card": 4
+    },
+    {
+      "sim_time": 72.15,
+      "event": "rule_visual_inspection",
+      "requested_port": 1,
+      "requested_card": null
+    }
+  ],
+  "pose_overlay_ground_truth_points": false
+}

@@ -1,0 +1,18 @@
+{
+  "schema": "final_extraction_numerical_parity/v1",
+  "cases": [
+    {
+      "family": "sfp",
+      "coarse_max_abs_pixel_difference": 0.0,
+      "native_landmark_max_abs_pixel_difference": 0.0,
+      "connector_rotation_max_abs_matrix_difference": 0.0
+    },
+    {
+      "family": "sc",
+      "coarse_max_abs_pixel_difference": 0.0,
+      "native_landmark_max_abs_pixel_difference": 0.0,
+      "connector_rotation_max_abs_matrix_difference": 0.0
+    }
+  ],
+  "reference": "frozen V56 perception code; identical recorded images, public state and task inputs; CPU float32"
+}
