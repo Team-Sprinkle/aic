@@ -245,12 +245,12 @@ execution with zero residual/preservation penalties. Preview the command first:
   --steps 20 --updates 0 --dry-run
 ```
 
-This generates a plan only. A real run needs the [Isaac container setup](../../../docs/answers/archive/2026-10-19-documentation/local_workflow_full_history.md#4-work-with-isaac-without-losing-artifacts),
+This generates a plan only. A real run needs the [Isaac container setup](../../../docs/WORKFLOW.md),
 an explicit episode/reset configuration, and recorded success geometry. Use
 zero updates/exploration for evaluation. History and runtime clipping overrides
 are rejected when they would change the saved direct actor contract.
 
-For official Gazebo evaluation, follow the [dedicated-container workflow](../../../docs/answers/archive/2026-10-19-documentation/local_workflow_full_history.md#3-test-act-through-the-gazebo-challenge-runtime),
+For official Gazebo evaluation, follow the [dedicated-container workflow](../../../docs/WORKFLOW.md),
 changing the evaluator selection to:
 
 ```bash

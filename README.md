@@ -2,7 +2,7 @@
 
 Rule transport, requested-port visual perception and an explicit contact-aware controller insert SFP and SC cable connectors around circuit cards. The selected local replay of the published qualification config scored **276.34/300**; a fixed 19-run batch achieved **53/57 trial insertions**. These are exposed-scene prototype results.
 
-[Project writeup](docs/robotic_cable_insertion_project.md) · [Final videos and GIFs](docs/media/final_evaluation/README.md) · [Experiments](docs/EXPERIMENTS.md) · [Rootless workflow](docs/LOCAL_WORKFLOW.md) · [Future work](docs/FUTURE_WORK.md)
+[Project writeup](docs/robotic_cable_insertion_project.md) · [Final videos and GIFs](docs/media/final_evaluation/README.md) · [Experiments](docs/EXPERIMENTS.md) · [Rootless workflow](docs/WORKFLOW.md) · [Future work](docs/FUTURE_WORK.md)
 
 ![SC-to-SC transport around three cards and successful insertion, 2x preview](docs/media/final_evaluation/sc_three_cards.gif)
 

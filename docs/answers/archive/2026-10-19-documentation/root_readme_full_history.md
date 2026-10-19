@@ -27,7 +27,7 @@ The complete sample is **170.57/300, 2/3 strict** because SFP trial 2 has a 3.53
 
 > **Returning to `feat/hybrid-train`?** Start with the [working documentation](documentation_index_full_history.md):
 > [current status](status_full_history.md), [experiment history](experiments_full_history.md),
-> [rootless setup and local model testing](local_workflow_full_history.md), and
+> [rootless setup and local model testing](../../../WORKFLOW.md), and
 > [artifact locations](../../../../outputs_README.md). Reviewed 2026-09-24. The frozen
 > natural-cable pose estimate reached 0.322/0.626 mm lateral median/p95. Generic
 > pose concatenation and an additive correction both failed their control

@@ -1,7 +1,7 @@
 # Gazebo RL
 
 > For current limitations and direct rootless Docker commands, see
-> [status](../../docs/STATUS.md) and [local workflow](../../docs/LOCAL_WORKFLOW.md).
+> [status](../../docs/STATUS.md) and [local workflow](../../docs/WORKFLOW.md).
 > The September repair uses official per-trial Tier 3 insertion outcomes;
 > Tier 1 is model validity. Old summaries may contain the former incorrect label.
 

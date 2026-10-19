@@ -7,7 +7,7 @@
 > **Historical May 14 handoff; incomplete locally as of 2026-09-17.** The
 > referenced artifact/evaluation directories and `docker/aic_submission/Dockerfile`
 > are absent in this checkout. The recommendations and scores below are historical.
-> Use [current status](../../docs/STATUS.md) and [local testing](../../docs/LOCAL_WORKFLOW.md)
+> Use [current status](../../docs/STATUS.md) and [local testing](../../docs/WORKFLOW.md)
 > before selecting a model or rebuilding a submission.
 
 Generated: 2026-05-14 UTC

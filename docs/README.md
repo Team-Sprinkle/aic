@@ -9,7 +9,7 @@ The completed prototype uses rule transport, requested-port perception and an ex
 | Current completion snapshot | [STATUS.md](STATUS.md) |
 | What worked, failed and changed | [EXPERIMENTS.md](EXPERIMENTS.md) |
 | Runtime, claims, artifacts and detailed explanation | [Completion notes](answers/2026-10-19-final-project-completion-notes.md) |
-| Sudo-free reproduction and output locations | [LOCAL_WORKFLOW.md](LOCAL_WORKFLOW.md) |
+| Sudo-free reproduction and output locations | [LOCAL_WORKFLOW.md](WORKFLOW.md) |
 | Model, recording and bulk-data locations | [Artifact map](../outputs_README.md) |
 | Verified data and action/label contracts | [DATASETS.md](DATASETS.md) |
 | Sample versus released evaluation and held-out scenes | [EVALUATION_PROTOCOL.md](EVALUATION_PROTOCOL.md) |

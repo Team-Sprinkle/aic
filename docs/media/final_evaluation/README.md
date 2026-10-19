@@ -16,6 +16,6 @@ GIFs omit initialization using the first sustained **measured** TCP movement, wi
 
 The controller is rule transport → requested-port RGB perception and guarded handoff → explicit insertion, with local contact recovery. No learned BC/RL actor or true simulator target pose steers these demonstrations. The published configuration was used for diagnosis: this is a selected successful recording, not an unseen-test result. The fixed repeat batch achieved **15/19 full passes and 53/57 individual insertion awards**. The simpler `sample_config.yaml` videos are separate.
 
-[manifest.json](manifest.json) stores hashes, original archive paths, scores and trim provenance. Reproduce the exports with `scripts/export_final_project_media.py`; see [workflow](../../LOCAL_WORKFLOW.md). The three MP4s and three GIFs total about 24 MB and are intentionally versioned; bulk bags, datasets and model checkpoints remain outside Git.
+[manifest.json](manifest.json) stores hashes, original archive paths, scores and trim provenance. Reproduce the exports with `scripts/export_final_project_media.py`; see [workflow](../../WORKFLOW.md). The three MP4s and three GIFs total about 24 MB and are intentionally versioned; bulk bags, datasets and model checkpoints remain outside Git.
 
 [Project summary](../../robotic_cable_insertion_project.md) · [Experiments and limits](../../EXPERIMENTS.md)

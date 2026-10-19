@@ -47,7 +47,7 @@ Read the [20 official results](../../outputs/experiments/2026-09-17_act_verified
 [model bundle](../../outputs/experiments/2026-09-17_act_verified_8h/selected_act_final/README.md),
 [video review](../../outputs/experiments/2026-09-17_act_verified_8h/review/index.html), and
 [all run summaries](../../outputs/experiments/2026-09-17_act_verified_8h/results_latest.md).
-[Local reproduction](../answers/archive/2026-10-19-documentation/local_workflow_full_history.md#test-the-frozen-september-act-model)
+[Local reproduction](../WORKFLOW.md)
 includes an exact rootless evaluation command. Models/data/videos are local
 ignored artifacts, not an external backup.
 

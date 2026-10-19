@@ -8,7 +8,7 @@ commands describe earlier work and are not the current operating guide.
 
 Start with the [maintained documentation](../docs/README.md),
 [current status](../docs/STATUS.md), [experiment ledger](../docs/EXPERIMENTS.md),
-and [local workflow](../docs/LOCAL_WORKFLOW.md).
+and [local workflow](../docs/WORKFLOW.md).
 
 Original directory structure is preserved beneath `obsolete/`. For example,
 `docs/<report>.md` moved to `obsolete/docs/<report>.md`. Markdown links were

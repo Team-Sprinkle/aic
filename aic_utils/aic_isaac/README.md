@@ -1,7 +1,7 @@
 # AIC Isaac Lab Integration
 
 > Local hybrid experiments: [status](../../docs/STATUS.md),
-> [history](../../docs/EXPERIMENTS.md), and [rootless workflow](../../docs/LOCAL_WORKFLOW.md).
+> [history](../../docs/EXPERIMENTS.md), and [rootless workflow](../../docs/WORKFLOW.md).
 > Historical actor architecture and launcher usage: [archived direct visual policy](../../obsolete/docs/2026-10-19-retired-plans/DIRECT_VISUAL_POLICY.md).
 > The administrator setup commands below are not the routine path on the
 > already provisioned cluster. Isaac reward/success metrics are separate from

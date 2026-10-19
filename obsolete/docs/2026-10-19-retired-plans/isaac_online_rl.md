@@ -5,7 +5,7 @@
 > Historical implementation and smoke-run guide. The adapter-first “future”
 > direction below predates the June architecture review; use the
 > [direct visual policy](DIRECT_VISUAL_POLICY.md) and [current status](../../../docs/answers/archive/2026-10-19-documentation/status_full_history.md)
-> for design decisions, and [local workflow](../../../docs/answers/archive/2026-10-19-documentation/local_workflow_full_history.md) for rootless
+> for design decisions, and [local workflow](../../../docs/WORKFLOW.md) for rootless
 > operation. Reward geometry, success checks, and actor modes changed in later
 > experiments; use each run's resolved config.
 

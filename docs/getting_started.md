@@ -1,6 +1,6 @@
 # Getting Started
 
-> For this branch on a machine without sudo, start with [local rootless workflow](LOCAL_WORKFLOW.md).
+> For this branch on a machine without sudo, start with [local rootless workflow](WORKFLOW.md).
 > It incorporates the local Docker guide, distinguishes the two checkouts, and
 > gives an explicit saved-model evaluation command. The general toolkit setup follows.
 

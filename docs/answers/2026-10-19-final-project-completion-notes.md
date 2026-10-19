@@ -107,7 +107,7 @@ The GIF exporter finds three distinct motion samples with TCP speed above 3 mm/s
   --source /home/nas/chmin/aic_archives/2026-10-19_sc_sfp_released_repair_twenty_frozen/repeat_10/rollout
 ```
 
-Only this curated media directory is exempted from the global MP4 ignore rule. Datasets, arbitrary generated videos, raw bags and model checkpoints remain external. Three videos plus three GIFs total about 24 MB, with each GIF below 8 MB. [LOCAL_WORKFLOW.md](../LOCAL_WORKFLOW.md) gives the rootless complete-evaluation and sample-recording commands.
+Only this curated media directory is exempted from the global MP4 ignore rule. Datasets, arbitrary generated videos, raw bags and model checkpoints remain external. Three videos plus three GIFs total about 24 MB, with each GIF below 8 MB. [LOCAL_WORKFLOW.md](../WORKFLOW.md) gives the rootless complete-evaluation and sample-recording commands.
 
 ## 7. Artifact map
 

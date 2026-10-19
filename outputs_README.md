@@ -15,4 +15,4 @@ The curated project-completion media are versioned in [docs/media/final_evaluati
 
 A rollout contains the source config, actual container environment, policy trace, synchronized frames, scored MCAP bags and scoring YAML. Keep pre-reset terminal records and failures. The repo media are selected successful demonstrations from the exposed published config; repeat-batch insertion was 53/57, not 100%.
 
-[Reproduction and sudo-free operation](docs/LOCAL_WORKFLOW.md) · [Technical artifact map](docs/answers/2026-10-19-final-project-completion-notes.md) · [Previous full artifact history](docs/answers/archive/2026-10-19-documentation/outputs_artifact_map_full_history.md)
+[Reproduction and sudo-free operation](docs/WORKFLOW.md) · [Technical artifact map](docs/answers/2026-10-19-final-project-completion-notes.md) · [Previous full artifact history](docs/answers/archive/2026-10-19-documentation/outputs_artifact_map_full_history.md)

@@ -7,7 +7,7 @@
 > Historical recipe with missing prerequisites in this checkout:
 > `docker/aic_submission/Dockerfile` and the packaged handoff weights are absent
 > as of 2026-09-17. See [current status](../../docs/STATUS.md) and
-> [local workflow](../../docs/LOCAL_WORKFLOW.md) before attempting these commands.
+> [local workflow](../../docs/WORKFLOW.md) before attempting these commands.
 
 This document is the repeatable path for preparing a new submission image after
 the model checkpoint or runtime policy code changes.

@@ -30,3 +30,7 @@ pixi.lock
 generated_videos/
 isaac_visible_debug/
 artifacts/
+
+# Host-specific operational notes stay local.
+/docs/LOCAL_WORKFLOW.md
+/docs/answers/archive/2026-10-19-documentation/local_workflow_full_history.md

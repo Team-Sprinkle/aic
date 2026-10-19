@@ -5,7 +5,7 @@
 > Status, recommendations, and commands below describe the original work.
 
 > Historical April status. For the maintained assessment see [STATUS.md](../../docs/STATUS.md).
-> Direct Docker support is available in current source; see [local workflow](../../docs/LOCAL_WORKFLOW.md).
+> Direct Docker support is available in current source; see [local workflow](../../docs/WORKFLOW.md).
 > The bridge parser's Tier 1/insertion label error was fixed on September 17;
 > historical summaries still need their official per-trial scores checked.
 

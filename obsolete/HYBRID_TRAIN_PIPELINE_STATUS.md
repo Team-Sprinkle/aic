@@ -6,7 +6,7 @@
 
 > **Historical April/May pipeline snapshot.** Maintained status is now in
 > [docs/STATUS.md](../docs/STATUS.md), with [experiment history](../docs/EXPERIMENTS.md)
-> and [local workflow](../docs/LOCAL_WORKFLOW.md). The adapter-first recommendation
+> and [local workflow](../docs/WORKFLOW.md). The adapter-first recommendation
 > below predates the June 17 architecture review. Preserve these commands and
 > results as historical evidence; artifact availability and performance vary.
 

@@ -384,7 +384,7 @@ and [current status](status_full_history.md).
 | Did a deliberately longer five-card route expose cable trapping, and is the old S3 video available? | [Fixed-scene across-card versus outside-left route probe, S3 audit, overhead/side cable views, and videos](../../../experiments/2026-09-23-fixed-five-card-route-probe.md) |
 | Where are the earlier simulator/control checks? | [Live validation report](../../../experiments/2026-09-17-live-validation.md) |
 | What did we try, and what evidence supports the result? | [Experiment ledger](experiments_full_history.md) |
-| How do I use rootless Docker and test a saved policy locally? | [Local workflow](local_workflow_full_history.md) |
+| How do I use rootless Docker and test a saved policy locally? | [Local workflow](../../../WORKFLOW.md) |
 | Where are datasets, checkpoints, logs, and videos saved? | [Artifact map](../../../../outputs_README.md) |
 | Where are the EC2/S3 CheatCode and agent demonstrations? | [Dataset locations and provenance](datasets_full_history.md) |
 | Where did the older plans, status notes, and reports go? | [Historical archive](../../../../obsolete/README.md) |

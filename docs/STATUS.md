@@ -15,6 +15,6 @@ The released configuration was inspected and used for repair after publication. 
 - [Short project writeup](robotic_cable_insertion_project.md)
 - [Experiments: what worked, what failed, and why](EXPERIMENTS.md)
 - [Technical completion notes and historical detail](answers/2026-10-19-final-project-completion-notes.md)
-- [One future-work plan](FUTURE_WORK.md) · [Rootless reproduction](LOCAL_WORKFLOW.md)
+- [One future-work plan](FUTURE_WORK.md) · [Rootless reproduction](WORKFLOW.md)
 
 `STATUS.md` remains a short entry point for existing links. Detailed experiment history lives in the linked records rather than accumulating here.

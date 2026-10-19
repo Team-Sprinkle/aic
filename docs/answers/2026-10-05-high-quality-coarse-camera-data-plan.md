@@ -76,4 +76,4 @@ If a category is missing or fails, collect **only that category**. For example, 
 
 The plan is practical because most raw ingredients already exist. Its main uncertainty is **whether the camera images contain enough information to identify the numbered middle slot in difficult views**. That is why the small blind-review pilot comes before another large training job. If the information is present, better labels and balanced hard examples are a plausible repair. If it is absent, the right fix is an observation or transport change, not more labels of the same view.
 
-See [existing coarse training and failures](../experiments/2026-10-04-coarse-shared-history-execution.md), [recent spatial diagnosis](../experiments/2026-10-05-spatial-transport-prerequisite.md), and [local workflow](../LOCAL_WORKFLOW.md).
+See [existing coarse training and failures](../experiments/2026-10-04-coarse-shared-history-execution.md), [recent spatial diagnosis](../experiments/2026-10-05-spatial-transport-prerequisite.md), and [local workflow](../WORKFLOW.md).

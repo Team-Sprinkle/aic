@@ -6,7 +6,7 @@
 
 > Historical branch-cleanup report. Its environment, branch names, and test
 > results describe that cleanup, not the present checkout. See
-> [current status](../docs/STATUS.md) and [local workflow](../docs/LOCAL_WORKFLOW.md).
+> [current status](../docs/STATUS.md) and [local workflow](../docs/WORKFLOW.md).
 
 ## Branches
 
