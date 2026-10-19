@@ -1,0 +1,3 @@
+Yes. The **272.70, 275.44, 273.14, and 276.26/300** results came from four complete local runs of the publicly released `aic_engine/config/eval_config.yaml`. Each run contained its three configured trials, and all **12/12 trials inserted**. The runner verified that the scene YAML was unchanged and matched the downloaded official file (SHA-256 `9f987c07174481474eec2c4fa21faf7d84dae4743a037b809ed7945efb2e5ef5`).
+
+This is a local replay of the **published qualification configuration**, which we used for diagnosis and repair after release. It is not a new hidden evaluation or proof of generalization to other scenes.
