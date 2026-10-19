@@ -24,6 +24,7 @@ def main():
     p=argparse.ArgumentParser(description=__doc__)
     p.add_argument('--output',type=Path,required=True)
     p.add_argument('--phase',choices=['pilot','development','evaluation'],default='pilot')
+    p.add_argument('--seed',type=int,help='Independent sample-derived scene seed; default preserves historical plans')
     a=p.parse_args();repo=Path.cwd()
     if a.output.exists():raise FileExistsError(a.output)
     a.output.mkdir(parents=True)
@@ -80,7 +81,8 @@ def main():
             bypass=dict(outside_board_x_m=-.27,behind_board_y_m=-.25,beyond_board_y_m=.15,low_tcp_z_m=.16),
             potential_margin_m=.20)
     (a.output/'transport_spec.json').write_text(json.dumps(spec,indent=2)+'\n')
-    cases=[];rng=np.random.default_rng(2026101627 if a.phase!='evaluation' else 2026101673)
+    scene_seed=a.seed if a.seed is not None else (2026101627 if a.phase!='evaluation' else 2026101673)
+    cases=[];rng=np.random.default_rng(scene_seed)
     world=repo/'configs/hierarchical_recovery/world_audit.sdf'
     bridge=repo/'configs/hierarchical_recovery/bridge_audit.yaml'
     if not bridge.exists():bridge=repo/'aic_bringup/config/ros_gz_bridge_config.yaml'
@@ -154,7 +156,7 @@ def main():
     plan=dict(cases=cases,planned=len(cases),gate='All3sample; >=90%development per family, zero wrong/harm; complete active latency p95<300ms. Diagnose only these development traces. Never use post-release evaluation results to repair rules.',
         sample_sha256=SAMPLE_SHA,rule_spec=str(a.output/'transport_spec.json'),bundle=bundle,
         final_scenes_opened=False,training_started=False,
-        phase=a.phase,
+        phase=a.phase,scene_seed=scene_seed,
         evaluation_after_gate='Freeze successful rules; 24SC (0..5cards x2ports x2repeats) +100SFP (1..5cards x5requestedcards x2ports x2repeats) =124heldout sample-derived runs. Post-release scenes, if rerun, evaluation-only afterfreeze; never tuning.')
     (a.output/'plan.json').write_text(json.dumps(plan,indent=2)+'\n')
     print(json.dumps(dict(output=str(a.output),development_cases=len(cases))))

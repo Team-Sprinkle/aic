@@ -18,10 +18,10 @@ def main():
     p=argparse.ArgumentParser(description=__doc__)
     p.add_argument('--root',type=Path,required=True);p.add_argument('--output',type=Path,required=True)
     p.add_argument('--limit',type=int,default=0);p.add_argument('--gpu',default='5')
-    p.add_argument('--case');p.add_argument('--spec',type=Path)
+    p.add_argument('--case',action='append');p.add_argument('--spec',type=Path)
     p.add_argument('--family',choices=['sc','sfp'])
     p.add_argument('--policy',default='RunSampleConservativeTransport')
-    p.add_argument('--sc-route',choices=['sc_old','sc_skip_back','sc_ascend'],default='sc_old')
+    p.add_argument('--sc-route',choices=['sc_old','sc_skip_back','sc_level_shift','sc_hover','sc_marker_scout','sc_ascend','sc_high_shift'],default='sc_old')
     p.add_argument('--sc-early-tilt',action='store_true')
     a=p.parse_args();repo=Path.cwd();plan=json.loads((a.root/'plan.json').read_text())
     if a.output.exists():raise FileExistsError('Preserve earlier development version')
@@ -33,7 +33,7 @@ def main():
     frozen={str(f):hashlib.sha256(f.read_bytes()).hexdigest() for f in files}
     (a.output/'source_hashes.json').write_text(json.dumps(frozen,indent=2)+'\n')
     for f in files: (a.output/f.name).write_bytes(f.read_bytes())
-    cases=[c for c in plan['cases'] if (not a.case or c['case']==a.case)
+    cases=[c for c in plan['cases'] if (not a.case or c['case'] in a.case)
            and (not a.family or c['family']==a.family)]
     if a.limit:cases=cases[:a.limit]
     if not cases:raise ValueError('No requested sample cases')
