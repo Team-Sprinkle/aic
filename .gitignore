@@ -25,3 +25,13 @@ outputs
 *.db3
 *.mcap
 pixi.lock
+
+# Final policy runtime/models/results are supplied separately.
+.runtime/
+final_artifacts/
+final_results/
+docs/LOCAL_WORKFLOW.md
+
+# Curated completion media only.
+!docs/media/final_evaluation/*.mp4
+!docs/media/recovery_demo/*.mp4

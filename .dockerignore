@@ -1,1 +1,9 @@
 .pixi
+
+.git
+AGENTS.md
+docs/LOCAL_WORKFLOW.md
+.runtime
+final_artifacts
+final_results
+outputs
