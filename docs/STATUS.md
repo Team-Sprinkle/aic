@@ -4,6 +4,7 @@ Updated October 19, 2026. The demonstration milestone is complete: both SFP-to-N
 
 | Evaluation | Result | Scope |
 | --- | --- | --- |
+| Self-contained model image, separate evaluator | **275.9141/300; 3/3 insertions** | [Image build and full-trial validation](validation/final_runtime/README.md) |
 | Clean release runtime, fresh locked environment | **275.91/300; 3/3 insertion awards** | [Reproduction and validation](FINAL_SUBMISSION.md) |
 | Released `eval_config.yaml`, selected repeat 10 | **276.34/300; 3/3 insertion awards** | Final demonstration; 1, 2 and 3 NIC cards across the trials |
 | Same frozen configuration, additional repeat batch | **15/19 complete passes; 53/57 trial insertions** | Four intermittent failures remain; repeat 20 was stopped at the user's request |

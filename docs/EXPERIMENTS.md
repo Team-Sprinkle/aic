@@ -6,6 +6,7 @@ The completed demonstration uses **rule transport, task-conditioned visual acqui
 
 | Test | Result | Interpretation |
 | --- | --- | --- |
+| Self-contained model image, separate evaluator | **275.9141/300; 3/3 insertions** | [Image build and full-trial validation](validation/final_runtime/README.md) |
 | Clean runtime extraction, fresh inference environment | **275.91/300; all 3 insert** | No experiment-source dependency or BC action network; [reproduce](FINAL_SUBMISSION.md) |
 | Published qualification config, selected repeat 10 | **276.3383/300; all 3 insert** | Final [videos and GIFs](media/final_evaluation/README.md); selected successful run |
 | Same frozen controller, 19 additional scored replays | **15/19 full passes; 53/57 trial insertions** | Best 276.34, median 275.71, mean 256.28 including failures |

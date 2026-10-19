@@ -7,3 +7,5 @@ docs/LOCAL_WORKFLOW.md
 final_artifacts
 final_results
 outputs
+**/__pycache__
+**/*.pyc

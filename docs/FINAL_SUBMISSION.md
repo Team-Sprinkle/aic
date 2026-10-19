@@ -75,7 +75,7 @@ The launcher checks these hashes, pins the simulator image, records runtime sour
 
 Outputs include `summary.json`, `manifest.json`, `policy.log`, `engine.log`, `runtime_trace.jsonl`, recorded trial bags and `results/scoring.yaml`. **The toolkit's tier-3 award establishes insertion**, rather than a controller return value. The summary reports each trial total and the number of 75-point insertion awards. Full source traces can contain thousands of events; start with the summary and error lines.
 
-## 5. Container packaging
+## 5. Self-contained submission image: verified
 
 To bake the same runtime and models into a submission image, use a modern Docker/BuildKit version supporting named build contexts:
 
@@ -85,11 +85,22 @@ docker build -f docker/final_controller/Dockerfile \
   -t aic-final-controller:v1 .
 ```
 
-Allow sufficient Docker storage for the CUDA runtime layers. The image starts the official `aic_model` lifecycle/action interface with the final policy selected. The evaluation network supplies `AIC_ROUTER_ADDR`; ACL mode additionally uses `AIC_ENABLE_ACL` and `AIC_MODEL_PASSWD`, following the official interface. Keep credentials in environment/secrets, never commit them. The all-trial runner above validates the clean source and pinned environment in the simulator container; image-build validation status is recorded separately in the validation record.
+Allow approximately 30 GB free in Docker's storage filesystem for the first build, in addition to existing base images. Building does not require a GPU. The image starts the official `aic_model` lifecycle/action interface with the final policy selected. The evaluation network supplies `AIC_ROUTER_ADDR`; ACL mode additionally uses `AIC_ENABLE_ACL` and `AIC_MODEL_PASSWD`, following the official interface. Keep credentials in environment/secrets, never commit them. The mounted-runtime workflow above does not require this derived image; it is a convenient local-development path. The derived image packages the code, models and libraries so a remote evaluator needs no directories from this machine. It reuses the provided image as its base rather than rebuilding the simulator.
+
+To test the actual model image against the provided evaluator, with **no host source or model mounts in the model container**:
+
+```bash
+python3 tools/final_submission/evaluate.py \
+  --policy-image aic-final-controller:v1 \
+  --output "$HOME/aic-final-results/packaged-001" \
+  --gpu 0 --domain 203 --config released
+```
+
+This starts a separate evaluator and model container on an isolated Docker network, sharing one selected GPU. The model connects to the evaluator's Zenoh router through `AIC_ROUTER_ADDR`. The only model-container bind mount is its output directory. This exact workflow was validated at **275.9141/300 with all three insertion awards**. See [build and evaluation provenance](validation/final_runtime/README.md).
 
 ## Results and limitations
 
-The clean runtime achieved **276.17/300** using the existing numerical environment, then **275.91/300** using a fresh installation of the supplied locks. Both runs received all three insertion awards, close to the earlier selected 276.34/300. The original frozen 19-replay batch had 15/19 complete passes and 53/57 trial insertions. Small score differences are expected from randomized starts and simulator timing; one passing replay is not a reliability estimate.
+The clean runtime achieved **276.17/300** using the existing numerical environment, then **275.91/300** using a fresh installation of the supplied locks. Both runs received all three insertion awards, close to the earlier selected 276.34/300. The subsequently built self-contained image also scored **275.9141/300 with 3/3 insertions**. The original frozen 19-replay batch had 15/19 complete passes and 53/57 trial insertions. Small score differences are expected from randomized starts and simulator timing; one passing replay is not a reliability estimate.
 
 Published scenes were exposed and used for development with permission. These are local reproduction results, not a new official leaderboard score or unseen-test performance. The separate reserved final split remains sealed. No claim is made that this configuration generalizes to every possible board pose, grasp or cable snag.
 

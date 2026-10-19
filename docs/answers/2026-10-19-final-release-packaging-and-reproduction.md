@@ -10,4 +10,4 @@ Recorded-input numerical comparisons for SFP and SC found zero difference in coa
 
 [Reproduction commands](../FINAL_SUBMISSION.md) cover artifact download/hash verification, dependency installation, all-trial execution, expected output paths and container packaging. [Validation](../validation/final_runtime/README.md) retains raw toolkit scores, source manifests and qualifications.
 
-The self-contained image build remains unverified because the rootless Docker filesystem lacks space for CUDA/runtime layers. This is explicitly recorded rather than equating a mounted-runtime test with a completed image build. The PR should remain draft until that build gate is exercised on adequate storage.
+The storage blocker was subsequently resolved by removing only unused Docker build cache. The self-contained image built successfully and scored **275.9141/300 with 3/3 insertions** in a separate model container, with no host source, numerical environment or model mounts. A ROS setup/nounset startup incompatibility was repaired. The final image gate has passed; this does not constitute an upload or submission to the challenge registry.

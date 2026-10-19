@@ -1,6 +1,9 @@
 #!/usr/bin/env bash
 set -euo pipefail
+# Colcon's generated setup scripts read optional variables without defaults.
+set +u
 source /ws_aic/install/setup.bash
+set -u
 export RMW_IMPLEMENTATION=rmw_zenoh_cpp
 export LD_LIBRARY_PATH="/opt/aic/runtime/lib:${LD_LIBRARY_PATH:-}"
 export LD_PRELOAD="/opt/aic/runtime/lib/libjpeg.so.8:/opt/aic/runtime/lib/libpng16.so.16"

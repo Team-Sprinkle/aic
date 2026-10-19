@@ -1,0 +1,16 @@
+{
+  "total": 275.9141314940118,
+  "trial_totals": {
+    "trial_1": 95.32172744224361,
+    "trial_2": 95.1723530278386,
+    "trial_3": 85.42005102392963
+  },
+  "insertions": 3,
+  "evaluation_config": "released",
+  "config_sha256": "9f987c07174481474eec2c4fa21faf7d84dae4743a037b809ed7945efb2e5ef5",
+  "raw_score": "results/scoring.yaml",
+  "policy_image": "aic-final-controller:v1",
+  "policy_image_id": "sha256:03e8c45b980aadbcc1394433cebab52471c27af06a81afb65b239ec2fec05e1b",
+  "self_contained_policy": true,
+  "host_code_or_model_mounts_in_policy": false
+}

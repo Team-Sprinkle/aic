@@ -1,5 +1,5 @@
 # The same pinned simulator/interface base used by the reproduction runner.
-FROM mambaorg/micromamba:2.3.3 AS mamba
+FROM mambaorg/micromamba:2.3.3@sha256:800e7ade3ffe29c9a9ac2026163131495f8197c3852e572c5835beb4e8a33cd6 AS mamba
 FROM ghcr.io/intrinsic-dev/aic/aic_eval@sha256:9aa2ffdbb946d38edde1bac7b5f02a44cfbea26e3b04a9c74e09f14c97472923
 USER root
 COPY --from=mamba /bin/micromamba /usr/local/bin/micromamba

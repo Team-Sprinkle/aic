@@ -18,8 +18,9 @@ HASHES = {'released': '9f987c07174481474eec2c4fa21faf7d84dae4743a037b809ed7945ef
 
 def main():
     p = argparse.ArgumentParser(description=__doc__)
-    p.add_argument('--artifacts', type=Path, required=True)
-    p.add_argument('--runtime-env', type=Path, required=True)
+    p.add_argument('--artifacts', type=Path, help='Required for mounted-runtime evaluation')
+    p.add_argument('--runtime-env', type=Path, help='Required for mounted-runtime evaluation')
+    p.add_argument('--policy-image', help='Test a self-contained policy image in a separate container; no model/code mounts')
     p.add_argument('--output', type=Path, required=True)
     p.add_argument('--gpu', type=int, required=True, help='One free host GPU; inspect active jobs first')
     p.add_argument('--domain', type=int, default=202)
@@ -28,11 +29,14 @@ def main():
     args = p.parse_args()
     if not 0 <= args.domain <= 232:
         p.error('ROS domain must be in [0, 232]')
-    artifacts, runtime, output = (x.resolve() for x in (args.artifacts, args.runtime_env, args.output))
-    if not (runtime/'bin/python').is_file():
-        p.error('Prepare the pinned runtime environment first')
-    if not (artifacts/'port/backbone.pt').is_file():
-        p.error('Unpack the final model artifact bundle first')
+    artifacts = args.artifacts.resolve() if args.artifacts else None
+    runtime = args.runtime_env.resolve() if args.runtime_env else None
+    output = args.output.resolve()
+    if not args.policy_image:
+        if runtime is None or not (runtime/'bin/python').is_file():
+            p.error('Prepare and specify --runtime-env first, or use --policy-image')
+        if artifacts is None or not (artifacts/'port/backbone.pt').is_file():
+            p.error('Unpack and specify --artifacts first, or use --policy-image')
     environment = os.environ.copy()
     environment.setdefault('DOCKER_HOST', f'unix:///run/user/{os.getuid()}/docker.sock')
     def docker(*command, **kw):
@@ -52,24 +56,35 @@ def main():
         locks.append(lock)
     output.mkdir(parents=True, exist_ok=False)
     name = f'aic-final-eval-{os.getpid()}-{int(time.time())}'
+    model_name = name+'-model'
     manifest = dict(config=args.config, config_sha256=digest, simulator_image=IMAGE,
                     policy='aic_example_policies.final.FinalInsertionPolicy',
                     oracle_runtime_input=False, action_model='explicit_visual_controller',
                     recovery_mode='local', project_gpu_count=1)
+    if args.policy_image:
+        image = json.loads(docker('image', 'inspect', args.policy_image, capture_output=True, text=True).stdout)[0]
+        manifest.update(policy_image=args.policy_image, policy_image_id=image['Id'],
+                        self_contained_policy=True, host_code_or_model_mounts_in_policy=False)
     source_files = list((ROOT/'aic_example_policies/aic_example_policies/final').rglob('*.py'))
     source_files += list((ROOT/'aic_example_policies/aic_example_policies/final/config').glob('*.json'))
     manifest['runtime_source_sha256'] = {str(x.relative_to(ROOT)): hashlib.sha256(x.read_bytes()).hexdigest() for x in sorted(source_files)}
     (output/'manifest.json').write_text(json.dumps(manifest, indent=2)+'\n')
     created = False
+    model_created = False
+    network_created = False
     try:
+        docker('network', 'create', name, capture_output=True)
+        network_created = True
+        mounts = ['-v', f'{ROOT}:/release:ro', '-v', f'{output}:/audit']
+        if not args.policy_image:
+            mounts += ['-v', f'{artifacts}:/opt/aic/artifacts:ro', '-v', f'{runtime}:{runtime}:ro']
         docker('run', '-d', '--name', name, '--gpus', f'device={args.gpu}', '--shm-size=4g',
-               '--network', 'bridge', '--entrypoint', '/bin/bash',
+               '--network', name, '--network-alias', 'eval', '--entrypoint', '/bin/bash',
                '-e', f'ROS_DOMAIN_ID={args.domain}', '-e', f'GZ_PARTITION={name}',
                '-e', 'NVIDIA_DRIVER_CAPABILITIES=all', '-e', 'NVIDIA_CONTAINER_CLI_NO_CGROUPS=true',
                '-e', 'AIC_ARTIFACT_ROOT=/opt/aic/artifacts', '-e', 'AIC_DEVICE=cuda:0',
                '-e', 'OPENBLAS_NUM_THREADS=1', '-e', 'MKL_NUM_THREADS=1',
-               '-v', f'{ROOT}:/release:ro', '-v', f'{artifacts}:/opt/aic/artifacts:ro',
-               '-v', f'{runtime}:{runtime}:ro', '-v', f'{output}:/audit',
+               *mounts,
                '-w', '/release', IMAGE, '-lc', 'sleep infinity', capture_output=True)
         created = True
         setup = 'source /ws_aic/install/setup.bash; export RMW_IMPLEMENTATION=rmw_zenoh_cpp; '
@@ -87,14 +102,24 @@ printf '%s\\n' "$?" > /audit/engine.exit'''
             if (output/'engine.exit').exists():
                 raise RuntimeError('Engine exited before policy startup; inspect engine.log')
             time.sleep(1)
-        prefix = shlex.quote(str(runtime))
-        policy = setup + f'''export LD_LIBRARY_PATH={prefix}/lib:$LD_LIBRARY_PATH;
+        if args.policy_image:
+            docker('run', '-d', '--name', model_name, '--gpus', f'device={args.gpu}',
+                   '--network', name, '--shm-size=1g',
+                   '-e', f'ROS_DOMAIN_ID={args.domain}',
+                   '-e', 'NVIDIA_DRIVER_CAPABILITIES=all', '-e', 'NVIDIA_CONTAINER_CLI_NO_CGROUPS=true',
+                   '-e', 'AIC_ROUTER_ADDR=eval:7447', '-e', 'AIC_DEVICE=cuda:0',
+                   '-e', 'AIC_SHARED_PORT_TCP_TRACE=/audit/runtime_trace.jsonl',
+                   '-v', f'{output}:/audit', args.policy_image, capture_output=True)
+            model_created = True
+        else:
+            prefix = shlex.quote(str(runtime))
+            policy = setup + f'''export LD_LIBRARY_PATH={prefix}/lib:$LD_LIBRARY_PATH;
 export LD_PRELOAD={prefix}/lib/libjpeg.so.8:{prefix}/lib/libpng16.so.16;
 export PYTHONPATH={prefix}/lib/python3.12/site-packages/cv2/python-3.12:/release/aic_example_policies:/release/aic_model:{prefix}/lib/python3.12/site-packages:$PYTHONPATH;
 export AIC_SHARED_PORT_TCP_TRACE=/audit/runtime_trace.jsonl;
 /usr/bin/python3 -m aic_model.aic_model --ros-args -p use_sim_time:=true -p policy:=aic_example_policies.final.FinalInsertionPolicy > /audit/policy.log 2>&1
 printf '%s\\n' "$?" > /audit/policy.exit'''
-        docker('exec', '-d', name, 'bash', '-lc', policy)
+            docker('exec', '-d', name, 'bash', '-lc', policy)
         while time.monotonic() < deadline:
             score = output/'results/scoring.yaml'
             log = (output/'engine.log').read_text(errors='replace')
@@ -102,6 +127,10 @@ printf '%s\\n' "$?" > /audit/policy.exit'''
                 break
             if (output/'policy.exit').is_file() and (output/'policy.exit').read_text().strip() != '0':
                 raise RuntimeError('Policy failed; inspect policy.log')
+            if model_created:
+                state = json.loads(docker('inspect', '--format', '{{json .State}}', model_name, capture_output=True, text=True).stdout)
+                if not state['Running'] and state['ExitCode'] != 0:
+                    raise RuntimeError('Packaged policy failed; inspect policy.log')
             time.sleep(2)
         else:
             raise TimeoutError('Evaluation exceeded wall-clock budget; logs retained')
@@ -115,12 +144,22 @@ printf '%s\\n' "$?" > /audit/policy.exit'''
         summary = dict(total=score['total'], trial_totals={k: sum(v['score'] for v in score[k].values()) for k in ('trial_1','trial_2','trial_3')},
                        insertions=sum(score[k]['tier_3']['score'] >= 75 for k in ('trial_1','trial_2','trial_3')),
                        evaluation_config=args.config, config_sha256=digest, raw_score='results/scoring.yaml')
+        if args.policy_image:
+            summary.update(policy_image=args.policy_image, policy_image_id=manifest['policy_image_id'],
+                           self_contained_policy=True, host_code_or_model_mounts_in_policy=False)
         (output/'summary.json').write_text(json.dumps(summary, indent=2)+'\n')
         print(json.dumps(summary, indent=2), flush=True)
     finally:
+        if model_created:
+            logs = subprocess.run(['docker','logs',model_name],env=environment,capture_output=True)
+            (output/'policy.log').write_bytes(logs.stdout+logs.stderr)
+            subprocess.run(['docker','stop',model_name],env=environment,stdout=subprocess.DEVNULL,stderr=subprocess.DEVNULL)
+            subprocess.run(['docker','rm',model_name],env=environment,stdout=subprocess.DEVNULL,stderr=subprocess.DEVNULL)
         if created:
             subprocess.run(['docker','stop',name],env=environment,stdout=subprocess.DEVNULL,stderr=subprocess.DEVNULL)
             subprocess.run(['docker','rm',name],env=environment,stdout=subprocess.DEVNULL,stderr=subprocess.DEVNULL)
+        if network_created:
+            subprocess.run(['docker','network','rm',name],env=environment,stdout=subprocess.DEVNULL,stderr=subprocess.DEVNULL)
 
 
 if __name__ == '__main__':

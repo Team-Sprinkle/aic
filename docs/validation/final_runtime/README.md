@@ -8,13 +8,14 @@ Validated October 19, 2026. The release branch is based on `main`; it does not m
 | --- | ---: | ---: | ---: | ---: | ---: |
 | Extracted code, existing numerical environment | 95.1865 | 95.3171 | 85.6648 | **276.1684** | **3/3** |
 | Extracted code, freshly installed locked environment | 95.2378 | 95.2843 | 85.3895 | **275.9116** | **3/3** |
+| Self-contained model image, separate evaluator/model containers | 95.3217 | 95.1724 | 85.4201 | **275.9141** | **3/3** |
 | Earlier selected research-branch recording | 95.2692 | 95.1533 | 85.9158 | **276.3383** | **3/3** |
 
-Both new runs used the exact exposed published qualification YAML, hash `9f987c07174481474eec2c4fa21faf7d84dae4743a037b809ed7945efb2e5ef5`. All six new trials received 75-point insertion awards, no scored off-limit contacts and no excessive-force penalty. Variations in duration, path efficiency and smoothness explain the modest score differences; deterministic score equality is not claimed.
+All three new runs used the exact exposed published qualification YAML, hash `9f987c07174481474eec2c4fa21faf7d84dae4743a037b809ed7945efb2e5ef5`. All nine new trials received 75-point insertion awards, no scored off-limit contacts and no excessive-force penalty. Variations in duration, path efficiency and smoothness explain the modest score differences; deterministic score equality is not claimed.
 
 [First raw toolkit score](released_existing_environment_scoring.yaml) · [Fresh-environment raw score](released_clean_environment_scoring.yaml) · [Fresh summary](released_clean_environment_summary.json) · [Runtime source manifest](released_clean_environment_manifest.json)
 
-The runtime source hashes in the fresh manifest identify the tested implementation. The frame/pose tests and code/artifact packaging did not tune routes, models or thresholds on these new runs. The separate internal final split was not opened. Two successful three-trial runs are packaging regression checks, not a broad reliability study; retain the earlier frozen-batch rate of 15/19 complete passes as separate evidence.
+The runtime source hashes in the fresh manifest identify the tested implementation. The frame/pose tests and code/artifact packaging did not tune routes, models or thresholds on these new runs. The separate internal final split was not opened. Three successful three-trial runs are packaging regression checks, not a broad reliability study; retain the earlier frozen-batch rate of 15/19 complete passes as separate evidence.
 
 ## Numerical and frame checks
 
@@ -26,8 +27,14 @@ On identical recorded SFP and SC triplets/public state/task codes, the extracted
 
 The first fresh-environment launch failed before policy rollout because the environment's Python did not include a ROS-provided YAML dependency. The runner now uses the pinned simulator's Python 3.12 interpreter with the locked numerical environment on its import/library paths; PyYAML is also pinned explicitly. The successful fresh-environment run above followed that repair. This was an environment defect, not a policy failure hidden from the score table.
 
-## Reproduction and remaining packaging gate
+## Self-contained image gate: passed
 
 Follow [FINAL_SUBMISSION.md](../../FINAL_SUBMISSION.md) for the downloadable artifact bundle, numerical environment and all-trial command. Model files are external release assets with checksums, not committed weights or private archive dependencies. Raw bags and full logs remain external; the compact score/provenance records are versioned here.
 
-The self-contained Dockerfile is supplied, but its full image build was **not validated** in this session: the rootless Docker storage filesystem has insufficient free space for the CUDA/runtime layers. The tested launcher runs the clean code and freshly installed pinned dependencies in the pinned simulator container with explicit read-only mounts. Keep the PR in draft until a build with adequate Docker storage validates the self-contained image as well; the passing mounted-runtime evaluation must not be represented as a completed image-build test.
+The self-contained image was subsequently built successfully after reclaiming unused Docker build cache. A generated colcon setup script was incompatible with shell `nounset`; startup now temporarily disables that option while sourcing ROS setup and restores it afterward. The Dockerfile also pins the micromamba base digest and excludes host bytecode from its build context.
+
+The packaged policy was evaluated in a separate container beside the provided evaluator, sharing one physical GPU. Its only host bind mount was the output directory: **no host source, numerical environment or model directories were mounted into the model container**. All three trials inserted for **275.9141/300**, with no scored contacts or excessive-force penalties. The controller, weights, routes, scene and thresholds were unchanged.
+
+[Build provenance](submission_image_build.json) · [Packaged-image raw score](released_self_contained_scoring.yaml) · [Summary](released_self_contained_summary.json) · [Run manifest](released_self_contained_manifest.json)
+
+Both the mounted-runtime reproduction path and the self-contained model-image path are now verified. No image was uploaded to the competition registry or submitted to its portal; the PR remains a source-code review, not an official new competition result.
